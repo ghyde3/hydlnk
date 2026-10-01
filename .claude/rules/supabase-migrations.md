@@ -15,5 +15,5 @@ The data model and access rules in `docs/PLAN.md` (Data model) are authoritative
 - **Server-only columns stay server-only:** `accounts.plan`, `stripe_customer_id`, `suspended_at`, `pages.published`, `pages.published_at`, `domains.status`, `domains.verified_at`. Add a test for each one that a user cannot change.
 - **Reserved handles and system themes (Noir, Ivory, Smoke) live in migrations** so they reach production. `supabase/seed.sql` is local demo data only (tenant `mara`). Enable `pg_cron` in a migration.
 - **Verify:** `pnpm db:reset && pnpm test:db && pnpm db:types`. Commit the regenerated `src/lib/supabase/database.types.ts` with the migration.
-- **Production:** never push migrations or config from here. `supabase db push` and `supabase config push` run only through the `release` skill, with Gary's approval. Diff `config.toml` against the dashboard auth settings before any config push.
+- **Production:** never push migrations or config from here. `supabase db push` and `supabase config push` run only through the `release` skill, with Gary's approval. Never `config push` while `config.toml` holds local auth values (`site_url` and redirect URLs on `app.localhost`): it would overwrite production's dashboard settings. Production auth changes only in the dashboard.
 - See the `db-change` skill for the full steps.
