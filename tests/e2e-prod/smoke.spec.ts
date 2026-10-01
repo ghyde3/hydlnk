@@ -6,8 +6,8 @@ import { expectNoHorizontalScroll } from "../e2e/helpers";
  * Status and redirect checks use the request fixture with maxRedirects 0 so a redirect is
  * reported as such instead of being followed. Production DNS is real, so Node resolves it fine.
  *
- * `app.hydlnk.com` is expected to answer 200 while the editor is a placeholder; revisit this when
- * the app host starts redirecting signed-out visitors to the sign-in page.
+ * `app.hydlnk.com` redirects a signed-out visitor to its log in page (M1-07), so "/" is a 307 to
+ * /login and /login answers 200.
  */
 test.describe("production smoke", { tag: "@prod" }, () => {
   test("hydlnk.com answers 200 over HTTPS", async ({ request }) => {
@@ -22,10 +22,17 @@ test.describe("production smoke", { tag: "@prod" }, () => {
     expect(response.headers()["location"]).toBe("https://hydlnk.com/");
   });
 
-  test("app.hydlnk.com answers 200 over HTTPS", async ({ request }) => {
-    const response = await request.get("https://app.hydlnk.com/", { maxRedirects: 0 });
-    expect(response.status()).toBe(200);
-    expect(response.url()).toMatch(/^https:\/\//);
+  test("app.hydlnk.com sends a signed-out visitor to /login over HTTPS", async ({ request }) => {
+    const root = await request.get("https://app.hydlnk.com/", { maxRedirects: 0 });
+    expect(root.status()).toBe(307);
+    expect(new URL(root.headers()["location"] ?? "", "https://app.hydlnk.com/").pathname).toBe(
+      "/login",
+    );
+    expect(root.headers()["cache-control"]).toContain("no-store");
+
+    const login = await request.get("https://app.hydlnk.com/login", { maxRedirects: 0 });
+    expect(login.status()).toBe(200);
+    expect(login.url()).toMatch(/^https:\/\//);
   });
 
   test("an unknown handle subdomain answers 404 over HTTPS", async ({ request }) => {

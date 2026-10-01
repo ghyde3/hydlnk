@@ -11,13 +11,13 @@ import {
   tenantRewritePath,
 } from "@/lib/routing/paths";
 import { rewriteWithSession } from "@/lib/routing/session";
-import { protocolFor } from "@/lib/routing/urls";
+import { appOrigin, protocolFor } from "@/lib/routing/urls";
 
 /**
  * Host routing (PLAN.md -> Architecture). Next.js 16's `proxy` is the renamed middleware and runs
  * on the Node.js runtime. Everything below keys off the Host header:
  *
- *   hydlnk.com, *.vercel.app  marketing, served as-is
+ *   hydlnk.com, *.vercel.app  marketing, served as-is (/login and /signup: 308 to the app host)
  *   www.hydlnk.com            308 to the root host
  *   app.hydlnk.com            rewrite to /app/..., refreshing the Supabase session (only here)
  *   <handle>.hydlnk.com       rewrite to /t/<handle>/...
@@ -53,6 +53,14 @@ export async function proxy(request: NextRequest) {
     }
 
     case "marketing":
+      // /login and /signup live on the app host only; a stale link or typed URL on the root host
+      // is sent there with its query string intact (M1-06).
+      if (pathname === "/login" || pathname === "/signup") {
+        return NextResponse.redirect(
+          new URL(`${pathname}${request.nextUrl.search}`, appOrigin(rootDomain)),
+          308,
+        );
+      }
       if (isInternalPath(pathname)) return NextResponse.rewrite(rewriteTo(NOT_FOUND_PATH));
       return NextResponse.next();
 

@@ -40,10 +40,12 @@ test.describe("host routing smoke", { tag: "@smoke" }, () => {
     });
   });
 
-  test("app host shows the editor placeholder", async ({ page }) => {
+  test("app host signed out lands on the log in page", async ({ page }) => {
+    // Since M1 the app host's "/" is gated: signed out goes to /login, which renders (200).
     const response = await page.goto(url("app"));
     expect(response?.status()).toBe(200);
-    await expect(page.getByRole("heading", { name: /editor/i }).first()).toBeVisible();
+    expect(page.url()).toBe(url("app", "/login"));
+    await expect(page.getByRole("heading", { level: 1, name: "Log in" })).toBeVisible();
   });
 
   test("tenant host shows the seeded demo page", async ({ page }) => {
@@ -86,7 +88,7 @@ test.describe("host routing smoke", { tag: "@smoke" }, () => {
 
     test("app page has no horizontal scroll", async ({ page }) => {
       await page.goto(url("app"));
-      await expect(page.getByRole("heading", { name: /editor/i }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Log in" })).toBeVisible();
       await expectNoHorizontalScroll(page);
     });
 
