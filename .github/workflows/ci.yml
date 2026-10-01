@@ -1,0 +1,135 @@
+name: CI
+
+# Runs on every pull request (any base branch) and on pushes to main.
+# One job: install, typecheck, lint, unit tests, db (RLS) tests against a local
+# Supabase, then Playwright at both viewports. No secrets are needed: everything
+# talks to the throwaway local Supabase stack started inside the job.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Explicit bash gives -eo pipefail, so a failure in the left side of a pipe fails the step.
+    shell: bash
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # No `version:` input: pnpm/action-setup reads it from package.json "packageManager".
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.109.0
+
+      # Keep: db, auth (always on), rest, kong, inbucket (the Mailpit mail catcher), plus
+      # storage and meta (storage-api creates the storage.* tables that migrations may
+      # reference). Skip the rest: studio, imgproxy, vector, analytics (Logflare),
+      # edge-runtime, realtime. The pooler is already disabled in config.toml.
+      - name: Start local Supabase
+        run: supabase start -x studio,imgproxy,vector,analytics,edge-runtime,realtime
+
+      # `start` only seeds a fresh database; reset applies migrations and seed.sql explicitly.
+      - name: Reset database (migrations + seed)
+        run: supabase db reset
+
+      - name: Database tests
+        run: pnpm test:db
+
+      # `supabase status -o env` prints KEY="value" lines; --override-name renames the
+      # three we need to the app's env var names (keep in step with scripts/init.sh).
+      - name: Write .env.local
+        run: |
+          # `|| true`: status can exit non-zero when optional services are stopped; the line count
+          # check below catches a real failure.
+          status="$(supabase status -o env \
+            --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
+            --override-name auth.publishable_key=NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            --override-name auth.secret_key=SUPABASE_SECRET_KEY || true)"
+          printf '%s\n' "$status" \
+            | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|SUPABASE_SECRET_KEY)=' \
+            > .env.local
+          echo 'NEXT_PUBLIC_ROOT_DOMAIN=localhost:3000' >> .env.local
+          if [ "$(wc -l < .env.local)" -ne 4 ]; then
+            echo "::error::.env.local is missing variables from 'supabase status -o env'"
+            exit 1
+          fi
+          # These are local-stack keys, but keep the secret key out of the job log anyway.
+          secret="$(sed -n 's/^SUPABASE_SECRET_KEY="\(.*\)"$/\1/p' .env.local)"
+          if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Both projects (390 and 1440). playwright.config.ts starts `pnpm dev` as the webServer.
+      - name: End-to-end tests
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report and traces
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screens
+          path: tmp/screens/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Supabase diagnostics
+        if: failure()
+        run: |
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}' || true
+          for c in $(docker ps -a --filter 'name=supabase_' --format '{{.Names}}'); do
+            echo "::group::$c (last 60 lines)"
+            docker logs --tail 60 "$c" 2>&1 || true
+            echo "::endgroup::"
+          done
