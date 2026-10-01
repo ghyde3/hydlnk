@@ -163,48 +163,70 @@ export async function signInAs(
 
   // Generating a link replaces the user's previous one, so two workers signing in as the same
   // address at once (phone and desktop projects) can invalidate each other's link. Retry with a
-  // fresh link until the session cookie lands.
+  // fresh link until the session cookie lands. Each attempt also has a time limit: on a slow CI
+  // runner a browser call (the cookie read in particular) has been seen to hang for the whole test
+  // timeout, and a fresh attempt gets past that where waiting does not.
   for (let attempt = 1; ; attempt++) {
     const link = await admin.auth.admin.generateLink({ type: "magiclink", email });
     const hashedToken = link.data?.properties?.hashed_token;
     if (link.error || !hashedToken) throw new Error(`generateLink failed: ${link.error?.message}`);
 
-    await openCallback(context, hashedToken);
-    const cookies = await context.cookies(url("app"));
-    if (cookies.some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"))) break;
-    if (attempt >= 5)
+    const signedIn = await withTimeout(openCallback(context, hashedToken), ATTEMPT_MS).catch(
+      () => false,
+    );
+    if (signedIn) break;
+    if (attempt >= 4)
       throw new Error("signInAs: the callback set no sb- auth cookie on app.localhost");
     await new Promise((r) => setTimeout(r, 150 + Math.random() * 500));
   }
   return { userId, email, handle: opts.handle, pageId };
 }
 
-/** Opens /auth/callback?token_hash=... in `context` and stops once the session cookie is set. */
+const ATTEMPT_MS = 12_000;
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
+  });
+  return Promise.race([work, limit]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Opens /auth/callback?token_hash=... in `context`, lets the redirect chain finish on a stub (the
+ * "/" gate and everything after the callback is irrelevant here) and resolves with whether the
+ * host-only auth cookie is now in the context. The cookies are read while the page is still open.
+ */
 export async function openCallback(
   context: BrowserContext,
   hashedToken: string,
   type = "email",
-): Promise<void> {
+): Promise<boolean> {
   const target = url(
     "app",
     `/auth/callback?token_hash=${encodeURIComponent(hashedToken)}&type=${type}`,
   );
   // A browser page, not context.request: Node's resolver does not reliably map *.localhost to
-  // loopback, Chromium does. The redirect chain is cut short once the cookie is stored.
+  // loopback, Chromium does.
   const page = await context.newPage();
   try {
     await page.route("**/*", async (route) => {
       const requested = new URL(route.request().url());
-      // Everything after the callback itself (the "/" gate and onward) is irrelevant here.
       if (requested.host === "app.localhost:3000" && requested.pathname !== "/auth/callback") {
         await route.fulfill({ status: 200, contentType: "text/plain", body: "signed in" });
       } else {
         await route.continue();
       }
     });
-    await page.goto(target, { waitUntil: "commit" });
+    await page.goto(target, { waitUntil: "load" });
+    const cookies = await context.cookies(url("app"));
+    return cookies.some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
   } finally {
-    await page.close();
+    // Closing is housekeeping: never let a slow close hold the test.
+    await Promise.race([
+      page.close().catch(() => undefined),
+      new Promise((r) => setTimeout(r, 5_000)),
+    ]);
   }
 }
 

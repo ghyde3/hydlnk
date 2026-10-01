@@ -53,7 +53,10 @@ test.describe("M1-21 sign out ends the session", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Log in" })).toBeVisible();
 
     // Signing out does not unclaim the handle: the tenant page is still served.
-    const tenant = await page.goto(url(handle));
+    // (A fresh page: the one above may still have a client-side navigation settling, which would
+    // abort a goto on it.)
+    const tenantPage = await context.newPage();
+    const tenant = await tenantPage.goto(url(handle));
     expect(tenant!.status()).toBe(200);
   });
 
