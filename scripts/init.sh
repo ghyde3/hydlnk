@@ -2,7 +2,7 @@
 #
 # HYDLNK session start. Safe to run every session, as often as you like.
 #
-#   1. pnpm install --frozen-lockfile
+#   1. pnpm install --frozen-lockfile, then playwright install chromium (no-op when present)
 #   2. start local Supabase if it is not already running
 #   3. write .env.local from `supabase status` (keys are never printed)
 #   4. supabase db reset (migrations + seed.sql)
@@ -86,6 +86,14 @@ install_deps() {
     {
       tail -n 30 "$ROOT/tmp/install.log" >&2
       die "pnpm install failed (full log: tmp/install.log)"
+    }
+  # The browser binary is not part of `pnpm install`; without it the smoke step fails on a fresh
+  # machine. A no-op (about a second) when this Playwright version's chromium is already cached.
+  say "ensuring the Playwright chromium browser is installed"
+  pnpm exec playwright install chromium >"$ROOT/tmp/playwright-install.log" 2>&1 ||
+    {
+      tail -n 30 "$ROOT/tmp/playwright-install.log" >&2
+      die "playwright install chromium failed (full log: tmp/playwright-install.log)"
     }
 }
 

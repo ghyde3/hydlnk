@@ -10,7 +10,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 - `pnpm test` (Vitest unit), `pnpm test:db` (pgTAP RLS), `pnpm test:e2e` (Playwright: phone 390x844 and desktop 1440x900), `pnpm test:e2e:prod` (production smoke, release only).
 - `pnpm screens <route> [--host app|<handle>]`: screenshots at both viewports into `tmp/screens/`.
 - `pnpm db:reset`: migrations + seed. `pnpm db:types`: regenerate `src/lib/supabase/database.types.ts`.
-- In a fresh shell run `source ~/.nvm/nvm.sh && nvm use` first (the default node is older).
+- Plain `pnpm ...` works in Claude Code sessions: the SessionStart hook `pin-node.sh` puts Node 24 (from `.nvmrc`) and corepack's pnpm 10 on the Bash tool's PATH. In your own terminal, or any shell outside Claude Code, run `source ~/.nvm/nvm.sh && nvm use` first (the default node is older).
 - Interactive browsing: gstack `/browse`, never `mcp__claude-in-chrome__*`. Playwright is the test runner only.
 
 ## Repo map
@@ -59,6 +59,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 `claude -p "/feature-loop" --permission-mode dontAsk`
 - `dontAsk` auto-denies anything that would prompt, so the ask rules (`supabase db push`, `gh pr merge`, `vercel`, `stripe`, the Supabase, Vercel and Stripe connectors) are refused. `auto` and `bypassPermissions` cannot come from project settings; the mode comes from the command line.
 - Run `claude` once interactively in this repo and accept the trust dialog first: in a never-trusted folder `claude -p` ignores the project's `permissions.allow` rules.
+- Node: `pin-node.sh` pins Node 24 for every Bash call, so no prefix is needed. If it reports it could not (Node 24 missing), `source ~/.nvm/nvm.sh >/dev/null && nvm use >/dev/null && pnpm ...` is also allowed.
 - Skills, subagents and the settings hooks work in `-p` mode. Needs Gary (secret, production, decision)? Log it in PROGRESS.md and stop.
 
 ## Area rules, agents, skills

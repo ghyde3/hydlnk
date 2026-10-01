@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Stop: if code changed since the last commit (src/ supabase/ tests/ scripts/), run
-# typecheck + lint + unit tests and block finishing while they fail.
-# Nothing changed (questions, plan-only turns) -> exit 0 immediately.
+# Stop: if anything other than docs changed since the last commit, run typecheck + lint + unit
+# tests and block finishing while they fail. "Anything" means every tracked or untracked file
+# (src/, supabase/, tests/, scripts/, root config such as package.json, next.config.ts,
+# tsconfig.json, playwright*.config.ts, vitest.config.mts, eslint.config.mjs, .github/, ...)
+# except docs/, design/, .claude/, any *.md (PROGRESS.md, KICKOFF_PROMPT.md, README.md, ...).
+# Gitignored files never show up in git status, so build output and tmp/ do not count.
+# Nothing changed, or only docs changed (questions, plan-only turns) -> exit 0 immediately.
 # After 3 consecutive blocks -> let Claude stop, with a note on stderr.
 #
 # Consecutive blocks are read from the hook input's consecutive_block_count. That field is not
@@ -24,8 +28,12 @@ STATE_DIR=$(jqr '.scratchpad_dir // empty')
 { [ -n "$STATE_DIR" ] && [ -d "$STATE_DIR" ] && [ -w "$STATE_DIR" ]; } || STATE_DIR=${TMPDIR:-/tmp}
 STATE="$STATE_DIR/hydlnk-stop-blocks-${SESSION//[^A-Za-z0-9_-]/_}"
 
-# Tracked diffs vs HEAD (staged or not) and untracked files. Missing pathspecs are fine.
-CHANGES=$(git status --porcelain -- src supabase tests scripts 2>/dev/null)
+# Tracked diffs vs HEAD (staged or not) and untracked files, minus the excluded paths. Pathspec
+# excludes (not text filtering of the output) so renames and quoted paths cannot confuse it; the
+# default pathspec `*.md` also matches nested files. Missing pathspecs are fine.
+CHANGES=$(git status --porcelain -- . \
+  ':(exclude)docs' ':(exclude)design' ':(exclude).claude' ':(exclude)*.md' \
+  ':(exclude)PROGRESS.md' ':(exclude)KICKOFF_PROMPT.md' 2>/dev/null)
 if [ -z "$CHANGES" ]; then
   rm -f "$STATE"
   exit 0
@@ -76,7 +84,7 @@ fi
 
 echo $((COUNT + 1)) >"$STATE" 2>/dev/null
 {
-  echo "Blocked: 'pnpm $FAILED' failed and files under src/ supabase/ tests/ scripts/ have uncommitted changes. Fix this before finishing (last 40 lines):"
+  echo "Blocked: 'pnpm $FAILED' failed and code or config files have uncommitted changes (anything outside docs/, design/, .claude/ and *.md). Fix this before finishing (last 40 lines):"
   tail -n 40 "$LOG"
 } >&2
 exit 2
