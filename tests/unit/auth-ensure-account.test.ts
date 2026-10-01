@@ -5,7 +5,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 /**
  * M1-05 integration test: runs against the local Supabase (supabase start) with the secret key from
  * .env.local. Skipped when the env file or the stack is missing, so `pnpm test` stays usable
- * without Docker.
+ * without Docker, unless REQUIRE_SUPABASE=1 (CI sets it in the step after the stack is up): then a
+ * missing stack fails the run instead of skipping the test.
  */
 vi.mock("server-only", () => ({}));
 
@@ -35,6 +36,12 @@ if (haveEnv) {
   } catch {
     stackUp = false;
   }
+}
+
+if (process.env.REQUIRE_SUPABASE === "1" && !(haveEnv && stackUp)) {
+  throw new Error(
+    "REQUIRE_SUPABASE=1, but the local Supabase stack or .env.local is not available",
+  );
 }
 
 describe.skipIf(!haveEnv || !stackUp)("M1-05 ensureAccount (integration, local Supabase)", () => {

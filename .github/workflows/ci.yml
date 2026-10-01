@@ -97,6 +97,14 @@ jobs:
           secret="$(sed -n 's/^SUPABASE_SECRET_KEY="\(.*\)"$/\1/p' .env.local)"
           if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
 
+      # The one Vitest file that needs the running stack (M1-05, ensureAccount against the real
+      # database) is skipped by the unit step above. REQUIRE_SUPABASE=1 makes a missing stack fail
+      # here instead of skipping.
+      - name: Integration tests (Vitest against local Supabase)
+        env:
+          REQUIRE_SUPABASE: "1"
+        run: pnpm exec vitest run tests/unit/auth-ensure-account.test.ts
+
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
