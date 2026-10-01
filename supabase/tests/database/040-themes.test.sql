@@ -253,7 +253,9 @@ select throws_ok(
 );
 
 -- Deleting the account takes its saved themes with it, never the system ones.
-delete from auth.users where id = tests.get_supabase_uid('c');
+-- (The uid lookup is wrapped in a sub-select so it runs once: unwrapped, Postgres re-runs it for
+-- every auth.users row it scans after c is gone, which fails once the table holds other users.)
+delete from auth.users where id = (select tests.get_supabase_uid('c'));
 select is_empty(
   $$ select 1 from public.themes t where t.owner_id is not null and not exists (select 1 from public.accounts a where a.id = t.owner_id) $$,
   'no saved theme outlives its account'

@@ -160,7 +160,9 @@ select ok(
 );
 
 -- Deleting the auth user takes the account with it.
-delete from auth.users where id = tests.get_supabase_uid('b');
+-- (The uid lookup is wrapped in a sub-select so it runs once: unwrapped, Postgres re-runs it for
+-- every auth.users row it scans after b is gone, which fails once the table holds other users.)
+delete from auth.users where id = (select tests.get_supabase_uid('b'));
 select is_empty(
   $$ select 1 from public.accounts a where not exists (select 1 from auth.users u where u.id = a.id) $$,
   'deleting the auth user deletes the account row (no orphaned accounts)'
