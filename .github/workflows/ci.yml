@@ -104,6 +104,22 @@ jobs:
       - name: End-to-end tests
         run: pnpm test:e2e
 
+      # The screens script needs a running dev server; Playwright stopped its own after the tests.
+      # Runs only when the e2e tests passed. Fills the "screens" artifact below.
+      - name: Screenshots at 390 and 1440
+        run: |
+          mkdir -p tmp
+          pnpm dev > tmp/dev.log 2>&1 &
+          dev_pid=$!
+          trap 'kill "$dev_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 60); do
+            if curl -s -o /dev/null --max-time 5 http://localhost:3000/; then break; fi
+            sleep 2
+          done
+          pnpm screens /
+          pnpm screens / --host app
+          pnpm screens / --host mara
+
       - name: Upload Playwright report and traces
         if: always()
         uses: actions/upload-artifact@v7
