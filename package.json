@@ -18,7 +18,7 @@
     "test:e2e:prod": "playwright test -c playwright.prod.config.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:db",
     "db:reset": "supabase db reset",
-    "db:types": "supabase gen types typescript --local --schema public > src/lib/supabase/database.types.ts",
+    "db:types": "scripts/db-types.sh",
     "screens": "tsx scripts/screens.ts"
   },
   "dependencies": {
