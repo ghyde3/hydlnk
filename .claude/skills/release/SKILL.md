@@ -1,0 +1,28 @@
+---
+name: release
+description: "The only path to production. Confirms verify and CI are green, shows the production migration plan, pushes migrations, merges the PR to main (Vercel deploys), waits for the deployment, runs the production smoke test and logs the release. Manual only; needs Gary in the session."
+disable-model-invocation: true
+---
+
+# Release to production
+
+Merging to `main` deploys production. Gary approves the two production steps (`supabase db push` and `gh pr merge` both prompt). If this is not an interactive session with Gary, stop now: unattended sessions never touch production.
+
+Production is Supabase project ref `pzcinnkzrlyrqkgyetqx`, Vercel project `hydlnk`, Stripe HYDLNK sandbox only. Never print or handle secret keys. Never run `vercel deploy --prod`; deployment happens only by merging to `main`.
+
+## Steps
+
+1. **Preconditions.** Working tree clean. `git branch --show-current` is the milestone branch. `gh pr view --json number,isDraft,state,mergeable,statusCheckRollup` shows an open PR. If it is a draft, tell Gary and run `gh pr ready` only after he agrees.
+2. **Green locally and in CI.** Run `pnpm verify` and `pnpm test:e2e`. Run `gh pr checks`. Every check must pass. Any failure: stop and report, do not continue.
+3. **Check the link.** The Supabase CLI must be linked to `pzcinnkzrlyrqkgyetqx` (`jq -r .ref supabase/.temp/linked-project.json`). If not, ask Gary to run `supabase link --project-ref pzcinnkzrlyrqkgyetqx` in his own terminal (he enters the database password; never ask for it in chat).
+4. **Plan the migrations.** Run `supabase db push --dry-run` and show Gary the exact list of migrations it would apply. Call out anything destructive (drops, type changes, backfills) and anything that touches auth. If `supabase/config.toml` auth settings changed, diff against the remote auth config first; `supabase config push` is a separate, explicit ask and may overwrite dashboard settings.
+5. **Push the migrations** with `supabase db push` (Gary approves the prompt). Skip when there is nothing to apply. If it fails partway, stop and report; do not retry blindly.
+6. **Merge.** `gh pr merge <number> --merge` (Gary approves the prompt; a merge commit keeps the one-commit-per-feature history). Never pass `--admin`. Vercel now deploys `main`.
+7. **Wait for the deployment.** Poll until Vercel's commit status for the merge commit is `success`:
+   `gh api repos/ghyde3/hydlnk/commits/$(git ls-remote origin main | cut -f1)/status --jq '.statuses[] | select(.context | test("Vercel"; "i")) | {state, target_url}'`
+   On `failure` or `error`, stop and report with the deployment URL. Do not redeploy or roll back yourself; Gary decides.
+8. **Production smoke test.** `pnpm test:e2e:prod`. It checks `hydlnk.com`, `app.hydlnk.com`, an unknown `*.hydlnk.com` handle, and that `www.hydlnk.com` redirects to the apex, over HTTPS.
+9. **Log it.** Add a PROGRESS.md entry: date, "Release", PR number, merge commit, migrations applied (names), deployment URL, smoke test result, known issues. Do not push to `main`: commit the entry on the next milestone branch, or on a `docs/release-<date>` branch with a PR if none exists.
+
+## If production smoke fails
+Report which check failed with the output. Offer options (a revert PR for the merge, or Gary rolls back in Vercel), but do not act without his decision. Keep the failure in PROGRESS.md.
