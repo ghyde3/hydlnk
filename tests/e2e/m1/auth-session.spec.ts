@@ -125,13 +125,18 @@ test.describe("M1-06 session cookies are host-only on the app host; auth routes 
     expect(cookie).toContain("sb-");
 
     for (const host of ["mara.localhost:3000", "localhost:3000"]) {
+      // The first request to a route compiles it in `next dev` and its HTML can differ a little
+      // from the later ones (asset links), so warm the route up, then bracket the request that
+      // carries the cookie between two that do not: it must look like either of them.
+      await rawRequest(host, "/");
       const without = await rawRequest(host, "/");
       const withCookie = await rawRequest(host, "/", { cookie });
+      const withoutAfter = await rawRequest(host, "/");
       expect(withCookie.status).toBe(without.status);
       expect(withCookie.setCookies, `${host} sets nothing`).toEqual([]);
       expect(withCookie.body).not.toContain(email);
       expect(withCookie.body).not.toContain(session.user!.id);
-      expect(withCookie.body.length).toBe(without.body.length);
+      expect([without.body.length, withoutAfter.body.length]).toContain(withCookie.body.length);
     }
 
     // The app host would refresh a session whose access token is past expiry (control) ...
