@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HYDLNK — Sign up</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./hydlnk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="font-family: 'Public Sans', system-ui, sans-serif; color: #1C1B1A; background: #FFFFFF; min-height: 100vh; display: flex; flex-wrap: wrap; align-content: flex-start; container-type: inline-size; container-name: hl">
+
+<aside class="hl-signup-aside" style="flex: 1 1 480px; min-width: 0; background: #1C1B1A; color: #F4F3F0; padding: 32px 48px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; gap: 48px; min-height: 100vh">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #F4F3F0; min-height: 44px; align-self: flex-start">
+<span style="width: 9px; height: 9px; background: #B8914F; display: inline-block; transform: rotate(45deg)"></span>
+<span style="font-weight: 700; letter-spacing: 0.14em; font-size: 15px">HYDLNK</span>
+</a>
+<div class="hl-hide-sm">
+<div style="font-weight: 700; font-size: 44px; line-height: 1.08; letter-spacing: -0.03em">Claim your name.</div>
+<div style="margin-top: 24px; display: inline-flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #45413B; border-radius: 6px; background: #2A2825; max-width: 100%; box-sizing: border-box">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: #A9A49B; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><rect x="5" y="11" width="14" height="9" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>
+<span style="font-family: 'Geist Mono', monospace; font-size: 18px; overflow-wrap: anywhere"><span style="color: #D9B877">{{shownHandle}}</span><span style="color: #A9A49B">.hydlnk.com</span></span>
+</div>
+<ul style="list-style: none; margin: 32px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; font-size: 15px; color: #D9D6D0">
+<li style="display: flex; gap: 10px; align-items: center"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: #B8914F; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Every block and the full theme system</li>
+<li style="display: flex; gap: 10px; align-items: center"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: #B8914F; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Per-link analytics from day one</li>
+<li style="display: flex; gap: 10px; align-items: center"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; fill: none; stroke: #B8914F; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>Bring your own domain whenever you’re ready</li>
+</ul>
+</div>
+<p class="hl-hide-sm" style="font-size: 13px; color: #A9A49B; margin: 0">Free forever. No card required.</p>
+</aside>
+
+<main class="hl-signup-main" style="flex: 1 1 520px; min-width: 0; display: flex; align-items: center; justify-content: center; padding: clamp(28px, 7cqi, 56px) clamp(20px, 5cqi, 24px); box-sizing: border-box; min-height: 100vh">
+<div style="width: 100%; max-width: 400px">
+<h1 style="font-weight: 700; font-size: clamp(26px, 6cqi, 32px); line-height: 1.15; letter-spacing: -0.02em; margin: 0">Create your page</h1>
+<p style="font-size: 15px; line-height: 1.5; color: #5E5A54; margin: 8px 0 0">Pick a handle and we’ll email you a sign-in link. No password to remember.</p>
+
+<form style="margin-top: 28px; display: flex; flex-direction: column; gap: 20px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="su-handle" style="font-size: 14px; font-weight: 600">Handle</label>
+<div style="display: flex; align-items: center; gap: 2px; background: #FFFFFF; border: 1px solid {{handleBorder}}; border-radius: 6px; padding: 0 12px; min-height: 48px">
+<input id="su-handle" type="text" value="{{handle}}" onChange="{{onHandle}}" autocomplete="off" spellcheck="false" aria-describedby="su-handle-status" style="flex: 1 1 auto; min-width: 0; background: transparent; border: 0; outline: none; color: #1C1B1A; font-family: 'Geist Mono', monospace; font-size: 16px; min-height: 44px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 16px; color: #7A766F">.hydlnk.com</span>
+</div>
+<div id="su-handle-status" aria-live="polite" style="font-size: 13px; min-height: 20px">
+<sc-if value="{{isOk}}" hint-placeholder-val="{{ true }}">
+<span style="display: inline-flex; align-items: center; gap: 6px; color: #2F7D4F"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>{{shownHandle}}.hydlnk.com is available</span>
+</sc-if>
+<sc-if value="{{isShort}}" hint-placeholder-val="{{ false }}">
+<span style="color: #5E5A54">At least 3 characters — letters, numbers and dashes.</span>
+</sc-if>
+<sc-if value="{{isReserved}}" hint-placeholder-val="{{ false }}">
+<span style="color: #B23A2B">That name is reserved. Try another.</span>
+</sc-if>
+<sc-if value="{{isTaken}}" hint-placeholder-val="{{ false }}">
+<span style="color: #B23A2B">That one’s taken. Try another.</span>
+</sc-if>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="su-email" style="font-size: 14px; font-weight: 600">Email</label>
+<input id="su-email" type="email" placeholder="you@example.com" autocomplete="email" style="background: #FFFFFF; border: 1px solid #C9C5BE; border-radius: 6px; padding: 0 12px; min-height: 48px; color: #1C1B1A; font-family: 'Public Sans', sans-serif; font-size: 16px; outline: none">
+</div>
+
+<a href="Editor.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 6px; background: #1C1B1A; color: #FFFFFF; font-weight: 600; font-size: 15px; text-decoration: none">Email me a sign-in link</a>
+
+<div style="display: flex; align-items: center; gap: 12px; color: #7A766F; font-size: 13px">
+<span style="flex: 1 1 auto; height: 1px; background: #E2DFD9; display: block"></span>or<span style="flex: 1 1 auto; height: 1px; background: #E2DFD9; display: block"></span>
+</div>
+
+<a href="Editor.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 6px; border: 1px solid #C9C5BE; color: #1C1B1A; font-weight: 600; font-size: 15px; text-decoration: none">Continue with Google</a>
+</form>
+
+<p style="font-size: 13px; line-height: 1.6; color: #5E5A54; margin: 24px 0 0">By continuing you agree to the <a href="#" style="color: #1C1B1A">Terms</a> and <a href="#" style="color: #1C1B1A">Privacy Policy</a>.</p>
+<p style="font-size: 14px; color: #5E5A54; margin: 16px 0 0">Already have a page? <a href="Editor.dc.html" style="color: #1C1B1A; font-weight: 600">Log in</a></p>
+</div>
+</main>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { handle: 'mara' };
+  }
+  renderVals() {
+    var raw = this.state.handle || '';
+    var clean = raw.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    var reserved = ['app', 'www', 'api', 'admin', 'help', 'support', 'billing', 'status', 'hydlnk'];
+    var taken = ['photo', 'design', 'music', 'shop'];
+    var isShort = clean.length < 3;
+    var isReserved = !isShort && reserved.indexOf(clean) !== -1;
+    var isTaken = !isShort && !isReserved && taken.indexOf(clean) !== -1;
+    var isOk = !isShort && !isReserved && !isTaken;
+    var self = this;
+    return {
+      handle: raw,
+      shownHandle: clean.length ? clean : 'yourname',
+      isShort: isShort,
+      isReserved: isReserved,
+      isTaken: isTaken,
+      isOk: isOk,
+      handleBorder: isOk ? '#C9C5BE' : (isShort ? '#D9D6D0' : '#B23A2B'),
+      onHandle: function (e) { self.setState({ handle: e.target.value }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

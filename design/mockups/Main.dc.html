@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HYDLNK — Landing page</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./hydlnk.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500&amp;family=Instrument+Serif:ital@0;1&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div id="top" style="font-family: 'Public Sans', system-ui, sans-serif; color: #1C1B1A; background: #FFFFFF; min-height: 100vh; container-type: inline-size; container-name: hl">
+
+<header style="background: #1C1B1A; color: #F4F3F0">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap">
+<a href="#top" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #F4F3F0; min-height: 44px">
+<span style="width: 9px; height: 9px; background: {{accent}}; display: inline-block; transform: rotate(45deg)"></span>
+<span style="font-weight: 700; letter-spacing: 0.14em; font-size: 15px">HYDLNK</span>
+</a>
+<nav aria-label="Main" style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap">
+<a href="#features" class="hl-hide-sm" style="color: #D9D6D0; text-decoration: none; font-size: 14px; padding: 12px">Features</a>
+<a href="#pricing" class="hl-hide-sm" style="color: #D9D6D0; text-decoration: none; font-size: 14px; padding: 12px">Pricing</a>
+<a href="#faq" class="hl-hide-sm" style="color: #D9D6D0; text-decoration: none; font-size: 14px; padding: 12px">FAQ</a>
+<a href="Signup.dc.html" style="color: #F4F3F0; text-decoration: none; font-size: 14px; padding: 12px">Log in</a>
+<a href="Signup.dc.html" class="hl-hide-sm" style="display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 6px; background: {{accent}}; color: #1C1B1A; font-weight: 600; font-size: 14px; text-decoration: none; margin-left: 8px">Claim your link</a>
+</nav>
+</div>
+</header>
+
+<section style="padding: clamp(48px, 10cqi, 88px) 0 clamp(56px, 11cqi, 96px); border-bottom: 1px solid #E2DFD9">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; display: flex; align-items: center; gap: clamp(36px, 7cqi, 64px); flex-wrap: wrap">
+<div style="flex: 1 1 520px; min-width: 0">
+<div style="display: inline-flex; align-items: center; gap: 8px; font-family: 'Geist Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #5E5A54; border: 1px solid #E2DFD9; border-radius: 4px; padding: 6px 10px"><span style="width: 6px; height: 6px; background: {{accent}}; display: inline-block"></span>Link in bio, with real design control</div>
+<h1 style="font-weight: 700; font-size: clamp(38px, 8.5cqi, 60px); line-height: 1.04; letter-spacing: -0.03em; margin: 24px 0 0">One link.<br>Designed like <span style="color: {{accentText}}">it’s yours.</span></h1>
+<p style="font-size: clamp(16px, 4.2cqi, 18px); line-height: 1.6; color: #5E5A54; max-width: 520px; margin: 20px 0 0">Block layouts, a full theme system and your own domain — so your link page looks like your brand, not ours.</p>
+<form style="margin-top: 32px; display: flex; align-items: center; gap: 6px; max-width: 500px; background: #FFFFFF; border: 1px solid #C9C5BE; border-radius: 6px; padding: 4px 4px 4px 14px; box-sizing: border-box; flex-wrap: wrap">
+<label for="hero-handle" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Choose your handle</label>
+<input id="hero-handle" type="text" placeholder="yourname" autocomplete="off" style="flex: 1 1 110px; min-width: 0; background: transparent; border: 0; outline: none; color: #1C1B1A; font-family: 'Geist Mono', monospace; font-size: 16px; min-height: 44px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 16px; color: #7A766F">.hydlnk.com</span>
+<a href="Signup.dc.html" class="hl-full-sm" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border-radius: 4px; background: #1C1B1A; color: #FFFFFF; font-weight: 600; font-size: 14px; text-decoration: none; margin-left: 6px">Claim it</a>
+</form>
+<p style="font-size: 13px; color: #5E5A54; margin: 14px 0 0">Free forever · No card required · Custom domains from $5/mo</p>
+</div>
+
+<div style="flex: 1 1 380px; min-width: 0; display: flex; justify-content: center">
+<div style="position: relative; width: 100%; max-width: 460px; height: 620px">
+<div style="width: 290px; height: 600px; margin: 10px auto 0; border-radius: 40px; border: 1px solid #C9C5BE; background: #1C1B1A; padding: 9px; box-sizing: border-box">
+<div style="height: 100%; border-radius: 32px; background: #16120E; color: #EFE8DC; overflow: hidden; padding: 34px 18px 18px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div style="width: 60px; height: 60px; border-radius: 50%; background: rgba(201, 168, 106, 0.16); border: 1px solid #C9A86A; display: flex; align-items: center; justify-content: center; font-family: 'Instrument Serif', serif; font-size: 22px; color: #C9A86A">MO</div>
+<div style="font-family: 'Instrument Serif', serif; font-size: 25px; line-height: 1.1; margin-top: 4px">Mara Okafor</div>
+<div style="font-size: 11.5px; color: #A79E90">Portrait &amp; studio photographer</div>
+<div style="display: flex; gap: 8px; margin: 4px 0 6px">
+<span style="width: 26px; height: 26px; border-radius: 50%; border: 1px solid #3A342D; display: inline-block"></span>
+<span style="width: 26px; height: 26px; border-radius: 50%; border: 1px solid #3A342D; display: inline-block"></span>
+<span style="width: 26px; height: 26px; border-radius: 50%; border: 1px solid #3A342D; display: inline-block"></span>
+<span style="width: 26px; height: 26px; border-radius: 50%; border: 1px solid #3A342D; display: inline-block"></span>
+</div>
+<div style="width: 100%; padding: 12px 14px; box-sizing: border-box; border-radius: 12px; background: #C9A86A; color: #15110B; font-size: 12.5px; font-weight: 600; text-align: center">Portrait sessions — fall dates</div>
+<div style="width: 100%; padding: 12px 14px; box-sizing: border-box; border-radius: 12px; border: 1px solid #C9A86A; font-size: 12.5px; text-align: center">Studio rental by the hour</div>
+<div style="width: 100%; padding: 12px 14px; box-sizing: border-box; border-radius: 12px; border: 1px solid #C9A86A; font-size: 12.5px; text-align: center">Prints &amp; archive</div>
+<div style="width: 100%; border-radius: 12px; border: 1px solid #3A342D; overflow: hidden; margin-top: 4px">
+<div style="height: 90px; background: #221B13; display: flex; align-items: flex-end; padding: 12px 14px; box-sizing: border-box"><span style="font-family: 'Instrument Serif', serif; font-style: italic; font-size: 28px; line-height: 1; color: #C9A86A">Night Market</span></div>
+<div style="padding: 10px 14px; font-size: 11.5px; color: #A79E90">New series — view the gallery</div>
+</div>
+</div>
+</div>
+
+<div class="hl-hide-sm" style="position: absolute; left: 0; top: 64px; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: #FFFFFF; border: 1px solid #D9D6D0; border-radius: 6px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #7A766F">fontHeading</span>
+<span style="font-size: 13px; font-weight: 600">Instrument Serif</span>
+</div>
+<div class="hl-hide-sm" style="position: absolute; right: 0; top: 190px; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: #FFFFFF; border: 1px solid #D9D6D0; border-radius: 6px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #7A766F">accent</span>
+<span style="display: flex; align-items: center; gap: 8px; font-family: 'Geist Mono', monospace; font-size: 13px"><span style="width: 14px; height: 14px; border-radius: 3px; background: #C9A86A; display: inline-block"></span>#C9A86A</span>
+</div>
+<div class="hl-hide-sm" style="position: absolute; left: 0; top: 404px; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: #FFFFFF; border: 1px solid #D9D6D0; border-radius: 6px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #7A766F">radius</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px">12px</span>
+</div>
+<div class="hl-hide-sm" style="position: absolute; right: 0; top: 500px; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; background: #FFFFFF; border: 1px solid #D9D6D0; border-radius: 6px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #7A766F">buttonStyle</span>
+<span style="font-family: 'Geist Mono', monospace; font-size: 13px">outline · fill on 1</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section id="features" style="background: #F4F3F0; padding: clamp(56px, 11cqi, 88px) 0; border-bottom: 1px solid #E2DFD9">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box">
+<div style="max-width: 720px">
+<div style="font-family: 'Geist Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #5E5A54">Free on every plan</div>
+<h2 style="font-weight: 700; font-size: clamp(28px, 6.5cqi, 40px); line-height: 1.12; letter-spacing: -0.025em; margin: 14px 0 0">Design control is the product, so it’s free.</h2>
+<p style="font-size: 17px; line-height: 1.6; color: #5E5A54; margin: 16px 0 0">Every plan gets every block and the whole theme system. You pay for your own domain or more pages — never to make your page look good.</p>
+</div>
+<div style="margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px">
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="width: 36px; height: 36px; border-radius: 6px; background: #F4F3F0; border: 1px solid #E2DFD9; color: {{accentText}}; display: flex; align-items: center; justify-content: center">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+</div>
+<h3 style="font-size: 16px; font-weight: 600; margin: 6px 0 0">Blocks, not just buttons</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Link buttons, cards, headers, text, images, video and music embeds, social rows and two-column grids, in any order.</p>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="width: 36px; height: 36px; border-radius: 6px; background: #F4F3F0; border: 1px solid #E2DFD9; color: {{accentText}}; display: flex; align-items: center; justify-content: center">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><circle cx="9" cy="6" r="2"></circle><circle cx="15" cy="12" r="2"></circle><circle cx="7" cy="18" r="2"></circle></svg>
+</div>
+<h3 style="font-size: 16px; font-weight: 600; margin: 6px 0 0">A real theme system</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Colors, type, shape, spacing and backgrounds are tokens. Change one and the whole page follows.</p>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="width: 36px; height: 36px; border-radius: 6px; background: #F4F3F0; border: 1px solid #E2DFD9; color: {{accentText}}; display: flex; align-items: center; justify-content: center">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M12 3l9 5-9 5-9-5 9-5z"></path><path d="M3 13l9 5 9-5"></path></svg>
+</div>
+<h3 style="font-size: 16px; font-weight: 600; margin: 6px 0 0">Saved themes</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Save a look once and apply it to any page, or start from a set of house themes.</p>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="width: 36px; height: 36px; border-radius: 6px; background: #F4F3F0; border: 1px solid #E2DFD9; color: {{accentText}}; display: flex; align-items: center; justify-content: center">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M4 20V11"></path><path d="M10 20V4"></path><path d="M16 20v-7"></path><path d="M21 20H3"></path></svg>
+</div>
+<h3 style="font-size: 16px; font-weight: 600; margin: 6px 0 0">Per-link analytics</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Views, clicks and click-through for every link on the free plan — not just one total.</p>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<div style="width: 36px; height: 36px; border-radius: 6px; background: #F4F3F0; border: 1px solid #E2DFD9; color: {{accentText}}; display: flex; align-items: center; justify-content: center">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9s1.3-6.4 3.8-9z"></path></svg>
+</div>
+<span style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B5226; background: #F6EEDF; border-radius: 4px; padding: 3px 8px">Pro</span>
+</div>
+<h3 style="font-size: 16px; font-weight: 600; margin: 6px 0 0">Your own domain</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Serve your page from links.yourbrand.com. Set one DNS record and SSL is issued automatically.</p>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="width: 36px; height: 36px; border-radius: 6px; background: #F4F3F0; border: 1px solid #E2DFD9; color: {{accentText}}; display: flex; align-items: center; justify-content: center">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"></path></svg>
+</div>
+<h3 style="font-size: 16px; font-weight: 600; margin: 6px 0 0">Fast and cookie-free</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Pages are cached at the edge, and analytics use no cookies — so visitors never see a consent banner.</p>
+</div>
+
+</div>
+</div>
+</section>
+
+<section id="design" style="padding: clamp(56px, 11cqi, 88px) 0; border-bottom: 1px solid #E2DFD9">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; display: flex; align-items: center; gap: clamp(36px, 7cqi, 64px); flex-wrap: wrap">
+<div style="flex: 1 1 420px; min-width: 0">
+<div style="font-family: 'Geist Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #5E5A54">The theme system</div>
+<h2 style="font-weight: 700; font-size: clamp(28px, 6.5cqi, 40px); line-height: 1.12; letter-spacing: -0.025em; margin: 14px 0 0">Every choice is a token.</h2>
+<p style="font-size: 17px; line-height: 1.6; color: #5E5A54; margin: 16px 0 0">Tokens become one set of styles on the page, and every block reads from them. That’s why a theme can be saved, swapped and reused without anything breaking.</p>
+<div style="font-family: 'Geist Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #5E5A54; margin-top: 28px">How a style resolves</div>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; font-family: 'Geist Mono', monospace; font-size: 13px">
+<span style="padding: 7px 10px; border: 1px solid #D9D6D0; border-radius: 4px; color: #5E5A54">system</span>
+<span aria-hidden="true" style="color: #7A766F">→</span>
+<span style="padding: 7px 10px; border: 1px solid #D9D6D0; border-radius: 4px">theme</span>
+<span aria-hidden="true" style="color: #7A766F">→</span>
+<span style="padding: 7px 10px; border: 1px solid #D9D6D0; border-radius: 4px">page</span>
+<span aria-hidden="true" style="color: #7A766F">→</span>
+<span style="padding: 7px 10px; border: 1px solid #1C1B1A; border-radius: 4px; background: #1C1B1A; color: #FFFFFF">block</span>
+</div>
+<p style="font-size: 14px; line-height: 1.6; color: #5E5A54; margin: 12px 0 0">Later wins. Block overrides cover color, button style and radius, so pages stay coherent.</p>
+</div>
+
+<div style="flex: 1 1 520px; min-width: 0; background: #FFFFFF; border: 1px solid #D9D6D0; border-radius: 6px; box-sizing: border-box; overflow: hidden; font-size: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #F4F3F0; border-bottom: 1px solid #E2DFD9"><span style="font-weight: 600">Theme · Noir</span><span style="font-family: 'Geist Mono', monospace; font-size: 12px; color: #5E5A54">12 tokens</span></div>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); border-bottom: 1px solid #E2DFD9"><span style="padding: 12px 16px; color: #5E5A54">Color</span><span style="padding: 10px 16px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center"><span style="width: 22px; height: 22px; border-radius: 4px; background: #16120E; display: inline-block"></span><span style="width: 22px; height: 22px; border-radius: 4px; background: #221B13; display: inline-block"></span><span style="width: 22px; height: 22px; border-radius: 4px; background: #EFE8DC; border: 1px solid #D9D6D0; display: inline-block; box-sizing: border-box"></span><span style="width: 22px; height: 22px; border-radius: 4px; background: #A79E90; display: inline-block"></span><span style="width: 22px; height: 22px; border-radius: 4px; background: #C9A86A; display: inline-block; outline: 2px solid #1C1B1A; outline-offset: 2px"></span></span></div>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); border-bottom: 1px solid #E2DFD9"><span style="padding: 12px 16px; color: #5E5A54">Type</span><span style="padding: 12px 16px; font-family: 'Geist Mono', monospace; font-size: 13px">Instrument Serif / Geist</span></div>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); border-bottom: 1px solid #E2DFD9"><span style="padding: 12px 16px; color: #5E5A54">Shape</span><span style="padding: 12px 16px; font-family: 'Geist Mono', monospace; font-size: 13px">radius 12 · border 1</span></div>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); border-bottom: 1px solid #E2DFD9"><span style="padding: 12px 16px; color: #5E5A54">Buttons</span><span style="padding: 8px 16px; display: flex; gap: 6px; flex-wrap: wrap; font-size: 13px"><span style="padding: 5px 10px; border-radius: 4px; background: #1C1B1A; color: #FFFFFF">Fill</span><span style="padding: 4px 10px; border-radius: 4px; border: 1px solid #1C1B1A">Outline</span><span style="padding: 5px 10px; border-radius: 4px; background: #F4F3F0">Soft</span><span style="padding: 5px 12px; border-radius: 999px; background: #1C1B1A; color: #FFFFFF">Pill</span></span></div>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr); border-bottom: 1px solid #E2DFD9"><span style="padding: 12px 16px; color: #5E5A54">Spacing</span><span style="padding: 12px 16px; font-family: 'Geist Mono', monospace; font-size: 13px">regular</span></div>
+<div style="display: grid; grid-template-columns: 120px minmax(0, 1fr)"><span style="padding: 12px 16px; color: #5E5A54">Background</span><span style="padding: 12px 16px; font-family: 'Geist Mono', monospace; font-size: 13px">solid</span></div>
+</div>
+</div>
+</section>
+
+<section style="background: #F4F3F0; padding: clamp(56px, 11cqi, 88px) 0; border-bottom: 1px solid #E2DFD9">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 12px">
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: clamp(20px, 5cqi, 28px); display: flex; flex-direction: column; gap: 12px">
+<span style="align-self: flex-start; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #6B5226; background: #F6EEDF; border-radius: 4px; padding: 3px 8px">Pro</span>
+<h3 style="font-weight: 700; font-size: clamp(22px, 5cqi, 26px); letter-spacing: -0.02em; margin: 0">Your domain, not ours.</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Add links.yourbrand.com, set the one DNS record we show you, and SSL is issued automatically. Click links stay on your domain too.</p>
+<div style="margin-top: 8px; border: 1px solid #D9D6D0; border-radius: 6px; overflow: hidden; font-family: 'Geist Mono', monospace; font-size: 13px">
+<div class="hl-dns" style="display: grid; grid-template-columns: 90px 90px minmax(0, 1fr); gap: 12px; padding: 10px 14px; background: #F4F3F0; color: #5E5A54; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase"><span>Type</span><span>Name</span><span>Value</span></div>
+<div class="hl-dns" style="display: grid; grid-template-columns: 90px 90px minmax(0, 1fr); gap: 12px; padding: 12px 14px; border-top: 1px solid #E2DFD9"><span>CNAME</span><span>links</span><span style="overflow-wrap: anywhere">cname.vercel-dns.com</span></div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-top: 1px solid #E2DFD9; color: #2F7D4F">
+<svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+<span>Verified · SSL issued</span>
+</div>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px; padding: clamp(20px, 5cqi, 28px); display: flex; flex-direction: column; gap: 12px">
+<span style="align-self: flex-start; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #5E5A54; background: #F4F3F0; border-radius: 4px; padding: 3px 8px">Every plan</span>
+<h3 style="font-weight: 700; font-size: clamp(22px, 5cqi, 26px); letter-spacing: -0.02em; margin: 0">Analytics that answer something.</h3>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 0">Views, clicks and click-through for every link, free. Pro adds a year of history with referrers, devices and countries.</p>
+<div style="margin-top: 8px; border: 1px solid #D9D6D0; border-radius: 6px; overflow: hidden; font-size: 13px">
+<div style="display: flex; justify-content: space-between; padding: 10px 14px; background: #F4F3F0; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #5E5A54"><span>Link · last 30 days</span><span>Clicks</span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid #E2DFD9"><span style="display: flex; flex-direction: column; gap: 6px"><span>Portrait sessions — fall dates</span><span style="height: 4px; width: 100%; background: {{accent}}; border-radius: 2px; display: block"></span></span><span style="text-align: right; font-family: 'Geist Mono', monospace">1,284</span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid #E2DFD9"><span style="display: flex; flex-direction: column; gap: 6px"><span>Night Market — new series</span><span style="height: 4px; width: 70%; background: {{accent}}; border-radius: 2px; display: block"></span></span><span style="text-align: right; font-family: 'Geist Mono', monospace">902</span></div>
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 80px; gap: 12px; align-items: center; padding: 10px 14px; border-top: 1px solid #E2DFD9"><span style="display: flex; flex-direction: column; gap: 6px"><span>Studio rental by the hour</span><span style="height: 4px; width: 54%; background: {{accent}}; border-radius: 2px; display: block"></span></span><span style="text-align: right; font-family: 'Geist Mono', monospace">688</span></div>
+</div>
+<span style="font-size: 12px; color: #7A766F">Sample numbers</span>
+</div>
+
+</div>
+</section>
+
+<section id="pricing" style="padding: clamp(56px, 11cqi, 88px) 0; border-bottom: 1px solid #E2DFD9">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box">
+<div style="max-width: 720px">
+<div style="font-family: 'Geist Mono', monospace; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #5E5A54">Pricing</div>
+<h2 style="font-weight: 700; font-size: clamp(28px, 6.5cqi, 40px); line-height: 1.12; letter-spacing: -0.025em; margin: 14px 0 0">Pay for your domain, not your design.</h2>
+<p style="font-size: 17px; line-height: 1.6; color: #5E5A54; margin: 16px 0 0">No commerce fees on any plan. Cancel anytime from your billing portal.</p>
+</div>
+<div style="margin-top: 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; align-items: stretch">
+
+<div style="background: #FFFFFF; border: 1px solid #D9D6D0; border-radius: 6px; padding: clamp(20px, 5cqi, 26px); display: flex; flex-direction: column; gap: 18px">
+<div>
+<div style="font-size: 15px; font-weight: 600">Free</div>
+<div style="display: flex; align-items: baseline; gap: 6px; margin-top: 8px"><span style="font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1">$0</span><span style="color: #5E5A54; font-size: 14px">forever</span></div>
+<p style="font-size: 14px; line-height: 1.5; color: #5E5A54; margin: 10px 0 0">One page that looks properly designed.</p>
+</div>
+<a href="Signup.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 6px; border: 1px solid #C9C5BE; color: #1C1B1A; font-weight: 600; font-size: 14px; text-decoration: none">Start free</a>
+<ul style="list-style: none; margin: 0; padding: 16px 0 0; border-top: 1px solid #E2DFD9; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>1 page</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Every block and the full theme system</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>3 saved themes</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>yourname.hydlnk.com</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Per-link clicks, last 30 days</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>10 MB of uploads</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start; color: #5E5A54"><span style="width: 16px; flex: 0 0 16px; text-align: center">–</span><span>Small “Made with HYDLNK” badge</span></li>
+</ul>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #1C1B1A; border-radius: 6px; overflow: hidden; display: flex; flex-direction: column">
+<div style="background: #1C1B1A; color: #F4F3F0; padding: 8px 16px; font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; display: flex; align-items: center; gap: 8px"><span style="width: 6px; height: 6px; background: {{accent}}; display: inline-block"></span>Recommended</div>
+<div style="padding: clamp(20px, 5cqi, 26px); display: flex; flex-direction: column; gap: 18px; flex: 1 1 auto">
+<div>
+<div style="font-size: 15px; font-weight: 600">Pro</div>
+<div style="display: flex; align-items: baseline; gap: 6px; margin-top: 8px; flex-wrap: wrap"><span style="font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1">$5</span><span style="color: #5E5A54; font-size: 14px">/ month · or $48 a year</span></div>
+<p style="font-size: 14px; line-height: 1.5; color: #5E5A54; margin: 10px 0 0">For creators and small brands on their own domain.</p>
+</div>
+<a href="Signup.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 6px; background: #1C1B1A; color: #FFFFFF; font-weight: 600; font-size: 14px; text-decoration: none">Go Pro</a>
+<ul style="list-style: none; margin: 0; padding: 16px 0 0; border-top: 1px solid #E2DFD9; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<li style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #5E5A54">Everything in Free, plus</li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: {{accentText}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>1 custom domain with SSL</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: {{accentText}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>3 pages</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: {{accentText}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>No badge</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: {{accentText}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Unlimited saved themes</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: {{accentText}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>1 year of analytics with referrers, devices and countries</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: {{accentText}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Scheduled links</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: {{accentText}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>100 MB of uploads</span></li>
+</ul>
+</div>
+</div>
+
+<div style="background: #FFFFFF; border: 1px solid #D9D6D0; border-radius: 6px; padding: clamp(20px, 5cqi, 26px); display: flex; flex-direction: column; gap: 18px">
+<div>
+<div style="font-size: 15px; font-weight: 600">Studio</div>
+<div style="display: flex; align-items: baseline; gap: 6px; margin-top: 8px"><span style="font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1">$15</span><span style="color: #5E5A54; font-size: 14px">/ month</span></div>
+<p style="font-size: 14px; line-height: 1.5; color: #5E5A54; margin: 10px 0 0">For agencies and teams running pages for others.</p>
+</div>
+<a href="Signup.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 6px; border: 1px solid #C9C5BE; color: #1C1B1A; font-weight: 600; font-size: 14px; text-decoration: none">Start Studio</a>
+<ul style="list-style: none; margin: 0; padding: 16px 0 0; border-top: 1px solid #E2DFD9; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<li style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #5E5A54">Everything in Pro, plus</li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>15 pages and 15 custom domains</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Invite editors per page</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>Themes shared across pages</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>CSV export</span></li>
+<li style="display: flex; gap: 10px; align-items: flex-start"><svg viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px; flex: 0 0 16px; margin-top: 2px; fill: none; stroke: #1C1B1A; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg><span>1 GB of uploads</span></li>
+</ul>
+</div>
+
+</div>
+</div>
+</section>
+
+<section id="faq" style="background: #F4F3F0; padding: clamp(56px, 11cqi, 88px) 0">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; display: flex; gap: clamp(24px, 6cqi, 64px); flex-wrap: wrap">
+<div style="flex: 1 1 300px">
+<h2 style="font-weight: 700; font-size: clamp(28px, 6.5cqi, 40px); line-height: 1.12; letter-spacing: -0.025em; margin: 0">Questions</h2>
+</div>
+<div style="flex: 2 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #E2DFD9; border-radius: 6px">
+<details open style="padding: 6px 18px 16px">
+<summary style="display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 16px; font-weight: 600; min-height: 48px">Is the free plan actually free?<span aria-hidden="true" style="color: #7A766F; font-size: 20px; font-weight: 400">+</span></summary>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 4px 0 0">Yes. One page, every block, the full theme system and per-link analytics — no time limit and no card on file.</p>
+</details>
+<details style="padding: 6px 18px; border-top: 1px solid #E2DFD9">
+<summary style="display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 16px; font-weight: 600; min-height: 48px">How do custom domains work?<span aria-hidden="true" style="color: #7A766F; font-size: 20px; font-weight: 400">+</span></summary>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 4px 0 12px">On Pro, add a domain like links.yourbrand.com and set the one DNS record we show you. We verify it and issue SSL automatically.</p>
+</details>
+<details style="padding: 6px 18px; border-top: 1px solid #E2DFD9">
+<summary style="display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 16px; font-weight: 600; min-height: 48px">Do you take a cut of sales?<span aria-hidden="true" style="color: #7A766F; font-size: 20px; font-weight: 400">+</span></summary>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 4px 0 12px">No. There are no commerce fees on any plan.</p>
+</details>
+<details style="padding: 6px 18px; border-top: 1px solid #E2DFD9">
+<summary style="display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 16px; font-weight: 600; min-height: 48px">What if my page gets a lot of traffic?<span aria-hidden="true" style="color: #7A766F; font-size: 20px; font-weight: 400">+</span></summary>
+<p style="font-size: 15px; line-height: 1.6; color: #5E5A54; margin: 4px 0 12px">It keeps serving. Pages are cached at the edge and built for traffic spikes, on every plan.</p>
+</details>
+</div>
+</div>
+</section>
+
+<section style="background: #1C1B1A; color: #F4F3F0; padding: clamp(56px, 12cqi, 96px) 0">
+<div style="max-width: 1200px; margin: 0 auto; padding: 0 24px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center">
+<h2 style="font-weight: 700; font-size: clamp(30px, 7cqi, 48px); line-height: 1.1; letter-spacing: -0.03em; margin: 0; max-width: 760px">Claim your name before someone else does.</h2>
+<form style="margin-top: 32px; display: flex; align-items: center; gap: 6px; width: 100%; max-width: 500px; background: #2A2825; border: 1px solid #45413B; border-radius: 6px; padding: 4px 4px 4px 14px; box-sizing: border-box; flex-wrap: wrap; text-align: left">
+<label for="cta-handle" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Choose your handle</label>
+<input id="cta-handle" type="text" placeholder="yourname" autocomplete="off" style="flex: 1 1 110px; min-width: 0; background: transparent; border: 0; outline: none; color: #F4F3F0; font-family: 'Geist Mono', monospace; font-size: 16px; min-height: 44px">
+<span style="font-family: 'Geist Mono', monospace; font-size: 16px; color: #A9A49B">.hydlnk.com</span>
+<a href="Signup.dc.html" class="hl-full-sm" style="display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border-radius: 4px; background: {{accent}}; color: #1C1B1A; font-weight: 600; font-size: 14px; text-decoration: none; margin-left: 6px">Claim it</a>
+</form>
+<p style="font-size: 13px; color: #A9A49B; margin: 14px 0 0">Free forever. Upgrade only when you want your own domain.</p>
+</div>
+</section>
+
+<footer style="background: #FFFFFF; border-top: 1px solid #E2DFD9">
+<div style="max-width: 1200px; margin: 0 auto; padding: 20px 24px; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 8px; height: 8px; background: {{accent}}; display: inline-block; transform: rotate(45deg)"></span>
+<span style="font-weight: 700; letter-spacing: 0.14em; font-size: 13px">HYDLNK</span>
+<span style="font-size: 13px; color: #5E5A54; margin-left: 6px">© 2026</span>
+</div>
+<nav aria-label="Footer" style="display: flex; gap: 4px; flex-wrap: wrap">
+<a href="#" style="color: #5E5A54; text-decoration: none; font-size: 13px; padding: 12px">Privacy</a>
+<a href="#" style="color: #5E5A54; text-decoration: none; font-size: 13px; padding: 12px">Terms</a>
+<a href="#" style="color: #5E5A54; text-decoration: none; font-size: 13px; padding: 12px">Report a page</a>
+</nav>
+</div>
+</footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#B8914F","options":["#B8914F","#3F6B8C","#4F7A5A","#8C4A3F"]},"$preview":{"width":1440,"height":4700}}'>
+class Component extends DCLogic {
+  shade(hex, f) {
+    var h = String(hex || '#B8914F').replace('#', '');
+    if (h.length === 3) { h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; }
+    var n = parseInt(h, 16);
+    var c = function (v) { var x = Math.max(0, Math.min(255, Math.round(v * f))).toString(16); return x.length === 1 ? '0' + x : x; };
+    return '#' + c((n >> 16) & 255) + c((n >> 8) & 255) + c(n & 255);
+  }
+  renderVals() {
+    var accent = this.props.accent ?? '#B8914F';
+    return { accent: accent, accentText: this.shade(accent, 0.72) };
+  }
+}
+</script>
+</body>
+</html>

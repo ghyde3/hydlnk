@@ -1,0 +1,193 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-01T13:52:00Z"
+  },
+  "title": "HYDLNK — Product Design",
+  "launch": {
+    "view": "canvas",
+    "page": "marketing"
+  },
+  "pages": [
+    {
+      "id": "marketing",
+      "name": "Marketing site"
+    },
+    {
+      "id": "app-phone",
+      "name": "App · phone"
+    },
+    {
+      "id": "app",
+      "name": "App · desktop"
+    },
+    {
+      "id": "public",
+      "name": "Public page"
+    }
+  ],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 4700,
+      "title": "Landing page · desktop",
+      "page": "marketing",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "MainPhone.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 390,
+      "h": 7700,
+      "title": "Landing page · phone",
+      "page": "marketing",
+      "is_interactive": true
+    },
+    "SignupPhone.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 760,
+      "title": "Sign up · phone",
+      "page": "app-phone",
+      "is_interactive": true
+    },
+    "EditorPhone.dc.html": {
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 2000,
+      "title": "Page editor · phone",
+      "page": "app-phone",
+      "is_interactive": true
+    },
+    "DesignPhone.dc.html": {
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 1480,
+      "title": "Design · phone",
+      "page": "app-phone",
+      "is_interactive": true
+    },
+    "AnalyticsPhone.dc.html": {
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 1940,
+      "title": "Analytics · phone",
+      "page": "app-phone",
+      "is_interactive": true
+    },
+    "DomainsPhone.dc.html": {
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 1460,
+      "title": "Domains · phone",
+      "page": "app-phone",
+      "is_interactive": true
+    },
+    "BillingPhone.dc.html": {
+      "x": 2350,
+      "y": 0,
+      "w": 390,
+      "h": 1720,
+      "title": "Settings & billing · phone",
+      "page": "app-phone",
+      "is_interactive": true
+    },
+    "Signup.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Sign up · claim handle",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Editor.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 1440,
+      "title": "Page editor",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Design.dc.html": {
+      "x": 0,
+      "y": 1560,
+      "w": 1440,
+      "h": 1040,
+      "title": "Design · theme tokens",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Analytics.dc.html": {
+      "x": 1520,
+      "y": 1560,
+      "w": 1440,
+      "h": 1200,
+      "title": "Analytics",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Domains.dc.html": {
+      "x": 0,
+      "y": 2880,
+      "w": 1440,
+      "h": 1000,
+      "title": "Domains",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Billing.dc.html": {
+      "x": 1520,
+      "y": 2880,
+      "w": 1440,
+      "h": 960,
+      "title": "Settings & billing",
+      "page": "app",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "Public.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 1320,
+      "title": "Public page · Mara Okafor",
+      "page": "public",
+      "expand": "fill"
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "MainPhone.dc.html",
+    "SignupPhone.dc.html",
+    "EditorPhone.dc.html",
+    "DesignPhone.dc.html",
+    "AnalyticsPhone.dc.html",
+    "DomainsPhone.dc.html",
+    "BillingPhone.dc.html",
+    "Signup.dc.html",
+    "Editor.dc.html",
+    "Design.dc.html",
+    "Analytics.dc.html",
+    "Domains.dc.html",
+    "Billing.dc.html",
+    "Public.dc.html"
+  ],
+  "notes": {},
+  "designSystems": []
+}

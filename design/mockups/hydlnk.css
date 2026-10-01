@@ -1,0 +1,58 @@
+/* HYDLNK — shared page basics and responsive rules.
+   Look: light surfaces, charcoal bars, brass highlights,
+   Public Sans + Geist Mono, 6px corners.
+   Each page root is a size container named "hl" (inline style:
+   container-type: inline-size; container-name: hl), so these rules
+   follow the page's own width — a phone frame on the canvas, or a
+   real phone in the full-window view. */
+
+body { margin: 0; background: #F4F3F0; }
+a { color: #1C1B1A; }
+a:hover { color: #000000; }
+input::placeholder { color: #9A958D; }
+select option { background: #FFFFFF; color: #1C1B1A; }
+summary { list-style: none; cursor: pointer; }
+summary::-webkit-details-marker { display: none; }
+:focus-visible { outline: 2px solid #B8914F; outline-offset: 2px; }
+
+/* Shown only on narrow widths. */
+.hl-show-sm { display: none !important; }
+
+@container hl (max-width: 760px) {
+  /* Visibility */
+  .hl-hide-sm { display: none !important; }
+  .hl-show-sm { display: flex !important; }
+
+  /* App shell: sidebar out, top bar + bottom tab bar in */
+  .hl-shell { align-content: flex-start !important; }
+  .hl-sidebar { display: none !important; }
+  .hl-mtabs {
+    display: flex !important;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+  }
+  .hl-main { padding-bottom: 84px !important; }
+
+  /* A control that takes its own full-width row */
+  .hl-full-sm { width: 100% !important; margin-left: 0 !important; flex: 1 1 100% !important; }
+
+  /* Editor / Design preview: drop the device bezel on a real phone */
+  .hl-bezel { width: 100% !important; height: auto !important; border: 0 !important; padding: 0 !important; background: transparent !important; border-radius: 0 !important; }
+  .hl-bezel-screen { height: auto !important; border-radius: 6px !important; }
+
+  /* Tighter indents */
+  .hl-pad-sm { padding-left: 16px !important; }
+
+  /* Analytics: link table drops the share bar */
+  .hl-linkrow { grid-template-columns: minmax(0, 1fr) 60px 52px !important; gap: 10px !important; }
+
+  /* Landing: DNS sample table */
+  .hl-dns { grid-template-columns: 58px 50px minmax(0, 1fr) !important; }
+
+  /* Sign up: brand panel collapses to a slim charcoal bar, form starts at the top */
+  .hl-signup-aside { flex: 1 1 100% !important; min-height: 0 !important; padding: 12px 20px !important; gap: 0 !important; }
+  .hl-signup-main { min-height: 0 !important; align-items: flex-start !important; }
+}
