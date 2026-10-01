@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/*
+ * HYDLNK UI tokens (docs/DESIGN.md). This file styles the marketing site and the editor app.
+ * Tenant pages never load it: they have their own root layout and their own --t-* variables, and
+ * the two token systems never mix.
+ */
+
+:root {
+  /* Color */
+  --hl-ink: #1c1b1a; /* primary text, primary buttons, charcoal bars */
+  --hl-ink-2: #3a3733; /* label text on light, borders on charcoal */
+  --hl-text-2: #5e5a54; /* secondary text, at least 6:1 on white */
+  --hl-text-3: #7a766f; /* tertiary and meta only, never body copy */
+  --hl-line: #e2dfd9; /* card borders, dividers */
+  --hl-line-2: #d9d6d0; /* strong dividers, segmented ring */
+  --hl-line-3: #c9c5be; /* input and secondary-button borders */
+  --hl-page: #f4f3f0; /* app canvas, alternating marketing sections */
+  --hl-track: #efede9; /* segmented track, meter track, neutral chips */
+  --hl-surface: #ffffff; /* cards, inputs, headers */
+  --hl-brass: #b8914f; /* highlights only: logo diamond, active marker, fills, focus ring */
+  --hl-brass-text: #846839; /* brass as text or icon on light, at least 4.5:1 */
+  --hl-brass-soft: #f6eedf; /* "Pro", "Unpublished changes", "Waiting for DNS" chips */
+  --hl-brass-soft-text: #6b5226;
+  --hl-good: #2f7d4f; /* live, verified, available */
+  --hl-good-bg: #e7f3ec;
+  --hl-bad: #b23a2b; /* errors, destructive buttons */
+  --hl-bad-line: #e8c4bd;
+
+  /* On charcoal (sidebar, top bars, nav) */
+  --hl-on-ink: #f4f3f0;
+  --hl-on-ink-muted: #a9a49b;
+  --hl-on-ink-muted-2: #b9b4ab;
+  --hl-ink-raised: #2a2825;
+  --hl-ink-raised-2: #2e2c29;
+  --hl-ink-line: #45413b;
+  --hl-ink-link: #d9b877;
+
+  /* Type */
+  --hl-font-ui: var(--font-public-sans), system-ui, sans-serif;
+  --hl-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Shape */
+  --hl-radius: 6px; /* cards, buttons, inputs, segmented track */
+  --hl-radius-sm: 4px; /* chips, segmented items, small buttons */
+
+  /* Focus */
+  --hl-focus-width: 2px;
+  --hl-focus-offset: 2px;
+}
+
+@theme inline {
+  /* Only HYDLNK colors and corners are available: no default palette, no large radii. */
+  --color-*: initial;
+  --color-ink: var(--hl-ink);
+  --color-ink-2: var(--hl-ink-2);
+  --color-text-2: var(--hl-text-2);
+  --color-text-3: var(--hl-text-3);
+  --color-line: var(--hl-line);
+  --color-line-2: var(--hl-line-2);
+  --color-line-3: var(--hl-line-3);
+  --color-page: var(--hl-page);
+  --color-track: var(--hl-track);
+  --color-surface: var(--hl-surface);
+  --color-brass: var(--hl-brass);
+  --color-brass-text: var(--hl-brass-text);
+  --color-brass-soft: var(--hl-brass-soft);
+  --color-brass-soft-text: var(--hl-brass-soft-text);
+  --color-good: var(--hl-good);
+  --color-good-bg: var(--hl-good-bg);
+  --color-bad: var(--hl-bad);
+  --color-bad-line: var(--hl-bad-line);
+  --color-on-ink: var(--hl-on-ink);
+  --color-on-ink-muted: var(--hl-on-ink-muted);
+  --color-on-ink-muted-2: var(--hl-on-ink-muted-2);
+  --color-ink-raised: var(--hl-ink-raised);
+  --color-ink-raised-2: var(--hl-ink-raised-2);
+  --color-ink-line: var(--hl-ink-line);
+  --color-ink-link: var(--hl-ink-link);
+
+  --radius-*: initial;
+  --radius-sm: var(--hl-radius-sm);
+  --radius-md: var(--hl-radius);
+
+  --font-sans: var(--hl-font-ui);
+  --font-mono: var(--hl-font-mono);
+
+  /* The one breakpoint (DESIGN.md): `hl:` applies from 760px up, base styles are the phone layout. */
+  --breakpoint-*: initial;
+  --breakpoint-hl: 760px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--hl-page);
+    color: var(--hl-ink);
+    font-family: var(--hl-font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    color: inherit;
+  }
+
+  :focus-visible {
+    outline: var(--hl-focus-width) solid var(--hl-brass);
+    outline-offset: var(--hl-focus-offset);
+  }
+
+  /* 16px keeps iOS Safari from zooming the page when an input is focused. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  input::placeholder {
+    color: var(--hl-text-3);
+  }
+}
