@@ -1,0 +1,16 @@
+# Source-of-truth documents and mockups are never reformatted
+docs/
+design/
+KICKOFF_PROMPT.md
+
+# Generated or machine-owned
+pnpm-lock.yaml
+.next/
+supabase/.temp/
+src/lib/supabase/database.types.ts
+
+# Scratch and test output
+tmp/
+playwright-report/
+test-results/
+coverage/
