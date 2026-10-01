@@ -2,6 +2,15 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-01 — Milestone 0 released to production
+
+- **Features:** none (Milestone 0). Next: `M1-01` on branch `m1-foundation`.
+- **Released:** PR #1 merged as `3dd24ab`; Vercel production deployment `dpl_DA5FQV5Mnv9TrvQQMfJP5rHGp7pB` READY on hydlnk.com, www.hydlnk.com (308 to apex), app.hydlnk.com and `*.hydlnk.com`.
+- **Database:** `supabase db push` applied `20261001000001_init_schema.sql` and `20261001000002_reference_data.sql` to project `pzcinnkzrlyrqkgyetqx` (Gary approved); `supabase migration list --linked` shows both local = remote. No seed data in production. Anon via PostgREST reads only the 3 system themes; `pages`, `accounts`, `events`, `reserved_handles`, `domains`, `daily_stats` all return 401 / 42501.
+- **Stripe (HYDLNK sandbox):** products Pro `prod_VMZbUSl0KCH7jv`, Studio `prod_VMZb2yh1S4FUcE`; placeholder prices `pro_monthly` $5, `pro_yearly` $48, `studio_monthly` $15 (no Studio yearly: PLAN.md sets none); default portal configuration `bpc_1ULqT9PPBBbR7vbmf0XgVkX3` (return URL https://app.hydlnk.com/settings); webhook `we_1ULoLxPPBBbR7vbmVyfD74JO` → https://app.hydlnk.com/api/stripe/webhook. Price ids and `NEXT_PUBLIC_ROOT_DOMAIN=hydlnk.com` set in Vercel Production.
+- **Evidence:** `pnpm test:e2e:prod` 12/12 passed (phone 390x844 and desktop 1440x900): apex 200, www 308, app 200, unknown handle 404, http→https, no sideways scroll. CI green on the merged head (run 36922472851).
+- **Known issues:** Docker Desktop credential helper can hang (handled by `scripts/lib/docker-env.sh`; a Docker Desktop restart fixes it). Google OAuth app is in Testing (test users only). Google sign-in is off locally until Gary puts the client secret in `supabase/.env`. Supabase CLI 2.119 is available (repo pins 2.109). Production Site URL / redirect list were set in the dashboard and are checked end to end by M1-28. Run `claude -p "Run: pnpm -v" --permission-mode dontAsk` once from the repo to confirm unattended permissions and the Node 24 pin.
+
 ## 2026-10-01 — Milestone 0 setup
 
 - **Features:** none (Milestone 0 is not listed in `docs/features.json`, which holds 146 features, all `passes: false`).
