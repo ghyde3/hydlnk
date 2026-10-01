@@ -63,7 +63,7 @@ Primary button (charcoal), secondary (white + `--hl-line-3` border), danger (whi
 | --- | --- | --- |
 | Landing | Charcoal nav, hero with handle claim + phone showing a tenant page, 6 free features, theme-token table, domain + analytics cards, 3 pricing tiers (Pro recommended), FAQ, charcoal CTA band, footer | `Main.dc.html` (phone: `MainPhone.dc.html`) |
 | Sign up | Charcoal brand panel (collapses to a bar on phones), handle field with live availability (reserved/taken/short states), email magic link, Google | `Signup.dc.html` |
-| Editor | Profile (photo upload/replace/remove with initials fallback, display name, bio 160), add-block chips, block list (type, title, URL, visibility toggle, per-block override chip), expanded block editor (label, link, button-style override, schedule [Pro], move, delete), live preview, publish state chip | `Editor.dc.html` |
+| Editor | Profile (photo upload/replace/remove with initials fallback, display name, bio 160), add-block chips, block list (type, title, URL, visibility toggle, per-block override chip), expanded block editor (label, link, button-style override, move, delete), live preview, publish state chip | `Editor.dc.html` |
 | Design | Saved themes (apply/save), accent swatches, color token list, heading font, button style, radius, spacing, background; live preview | `Design.dc.html` |
 | Analytics | Date range, KPI strip (views, clicks, CTR, uniques), daily views/clicks bars, clicks-by-link table, referrers, devices, countries; "sample data" until real | `Analytics.dc.html` |
 | Domains | hydlnk address card, custom domain with status chip, 3-step setup (added → DNS record → SSL), apex A-record note, check/remove, Studio upsell | `Domains.dc.html` |
@@ -79,3 +79,5 @@ Sentence case everywhere. Verb-first buttons ("Claim it", "Publish", "Check DNS 
 ## Mockup files
 
 `design/mockups/` contains the source of the design canvas: `*.dc.html` artboards, `hydlnk.css` (shared basics + responsive rules), `canvas.json` (frame layout). They use a proprietary canvas runtime (`support.js`, `<x-dc>`, `{{holes}}`, `sc-for`/`sc-if`) that isn't included — read them as annotated HTML: inline styles carry exact values, the `<script data-dc-script>` block shows each screen's state and interactions. Don't port the runtime or the markup; rebuild the screens as real components.
+
+Scope comes from `PLAN.md`, not the mockups. Ignore what's out of v1 (the link schedule control in the Editor), and still build what PLAN.md requires but the mockups leave out (the "Made with HYDLNK" footer badge on Free pages and the report link on every public page).
