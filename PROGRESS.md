@@ -18,7 +18,7 @@ Session log, newest first. Every session reads the top entry before starting and
   - Production smoke (`pnpm test:e2e:prod`, 12 tests listed) was not run: production deploys only through `/release`.
 - **Next:** review of the PR, then the production release (steps for Gary in KICKOFF_PROMPT.md section 5). After that Milestone 1, starting with M1-01 (handle rules), M1-02 (availability endpoint), M1-03 (log in page), M1-04 (auth callback), M1-05 (account row on first sign-in).
 - **Known issues:**
-  - `.claude/settings.pending.json` is not active; it becomes `.claude/settings.json` after review, so the hooks did not fire during the build.
+  - Hooks were activated after review (`.claude/settings.pending.json` renamed to `.claude/settings.json`); they did not fire during the build.
   - Docker Desktop's credential helper (`docker-credential-desktop get`) can hang on this Mac and stall `supabase start` and `supabase gen types`. `scripts/lib/docker-env.sh` probes it with a 5s limit and falls back to an empty `DOCKER_CONFIG` (`tmp/docker-config`) plus the Docker Desktop socket; it is a no-op on Linux and CI, and `~/.docker` is untouched. The hang was not reproducible after the leftover `docker-credential-desktop get` processes were killed, so the fallback was verified with a fake hanging helper instead. Restarting Docker Desktop fixes it for good.
   - `NEXT_PUBLIC_ROOT_DOMAIN=hydlnk.com` must be added to the Vercel Production environment before the first deploy; the env validation fails the build without it. Locally `init.sh` writes `localhost:3000`.
   - Google sign-in is disabled in the local stack until Gary puts the Google client secret in a git-ignored env file (KICKOFF_PROMPT.md section 5, step 3).
