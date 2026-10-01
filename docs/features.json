@@ -14,7 +14,7 @@
         "The module has no server-only imports: a Vitest test imports it in a jsdom environment (as the client signup form will) and in a node environment (as server actions will) with no error. Reserved and taken are not decided here, because the browser cannot read reserved_handles; the availability endpoint feature covers them."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-02",
@@ -31,7 +31,7 @@
         "Host scoping: http://mara.localhost:3000/api/handles/check?handle=zz and http://localhost:3000/api/handles/check?handle=zz both return 404."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-03",
@@ -50,7 +50,7 @@
         "At 1440x900 on the same URL: two columns with the charcoal panel left and a form column of max-width 400px, primary button 48px tall, and the sent state replaces the form in the same column."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-04",
@@ -69,7 +69,7 @@
         "At 1440x900 on the same URL: the error notice appears inside the form column above the Email field."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-05",
@@ -85,7 +85,7 @@
         "Read isolation: GET /rest/v1/accounts?select=* returns exactly the caller's own row, and ?id=eq.<another user's id> returns an empty array. A pgTAP file run by pnpm test:db covers the same cases."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-06",
@@ -119,7 +119,7 @@
         "No redirect or link ever carries a return-URL parameter: /login and /signup ignore ?next=, ?redirect_to= and ?return_to= entirely."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-08",
@@ -151,7 +151,7 @@
         "Abuse case (direct PostgREST, publishable key plus the user's JWT, role authenticated; pgTAP via pnpm test:db): POST /rest/v1/pages with {handle: 'zq-direct-1', owner_id: <own id>} is rejected (401/403, code 42501) and creates no row; the same with handle 'www' is rejected; a second page for an account that already has one is rejected; PATCH /rest/v1/pages?id=eq.<own page id> with {handle: 'zq-other'}, with {published: {}} and with {published_at: 'now'} each is rejected or updates 0 rows, values unchanged when re-read with the secret key; DELETE /rest/v1/pages?id=eq.<own page id> is rejected or deletes 0 rows; GET /rest/v1/pages?select=handle as a different user returns an empty array."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-10",
@@ -167,7 +167,7 @@
         "At 1440x900 on the same URL: panel on the left at least 480px wide, form column on the right with content centered at max-width 400px, 'Claim your name.' visible."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-11",
@@ -187,7 +187,7 @@
         "At 1440x900 on the same URL: the status line sits under the Handle field, and the value shows in the brand-panel pill, wrapping inside it (overflow-wrap: anywhere)."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-12",
@@ -204,7 +204,7 @@
         "At 1440x900 on the same URL: the sent state replaces the form inside the 400px column, with the brand panel pill still showing 'zq-su-1.hydlnk.com'."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-13",
@@ -237,7 +237,7 @@
         "At 1440x900 on the same URL: charcoal brand panel left, form column right with the 'Signed in as' line under the button."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-15",
@@ -256,7 +256,7 @@
         "At 1440x900 on the same URLs: the placeholder is a centered column constrained by the default theme's maxWidth with no horizontal scroll, and the 404 message and links are centered in a column of max-width 480px."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-16",
@@ -272,7 +272,7 @@
         "At 1440x900 on the same URL: sidebar plus main column fill the viewport with no horizontal scroll."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-17",
@@ -288,7 +288,7 @@
         "At 844x390 (phone landscape, width >= 760): the sidebar layout is used, there is no tab bar, and no horizontal scroll."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-18",
@@ -306,7 +306,7 @@
         "At 1440x900 on the same URL: the full handle shows in the sidebar button, the opened menu is anchored under it within the 240px sidebar, and the plan card sits above the user block at the bottom of the sidebar."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-19",
@@ -321,7 +321,7 @@
         "At 1440x900 on the same URLs: header bar and card sit in the main column to the right of the 240px sidebar with the card on a #F4F3F0 canvas."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-20",
@@ -337,7 +337,7 @@
         "At 1440x900 on the same URL: Email and Handle sit side by side (each flex-basis 260px), 'Sign out' sits left and 'Delete account' is pushed to the right of the same row."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-21",
@@ -355,7 +355,7 @@
         "At 1440x900 on the same URL: the Sign out button sits at the left of the account actions row."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-22",
@@ -373,7 +373,7 @@
         "At 1440x900 on the same URL: the dialog is centered at max-width 440px over a dimmed backdrop."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-23",
@@ -389,7 +389,7 @@
         "At 1440x900 on the same URL: copy column on the left and phone mock on the right side by side, all five nav items visible, the four token chips visible around the phone."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-24",
@@ -406,7 +406,7 @@
         "At 1440x900 on the same URL: input, '.hydlnk.com' suffix and 'Claim it' share one row inside the 500px-max container."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-25",
@@ -422,7 +422,7 @@
         "At 1440x900 on the same URL: feature cards in three columns, the theme section in two columns, and the domain and analytics cards side by side."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-26",
@@ -438,7 +438,7 @@
         "At 1440x900 on the same URL: three equal-height columns inside the 1200px container."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-27",
@@ -454,7 +454,7 @@
         "At 1440x900 on the same URL: the FAQ is a single readable column, the band form is one row of max-width 500px, and the footer is one row with the brand left and links right."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-28",
