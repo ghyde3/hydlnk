@@ -940,6 +940,30 @@ test.describe("M4-04 order independence: the webhook applies Stripe's current st
     expect((await row(account.id)).plan).toBe("free");
   });
 
+  test("M4-04 a signed event of the other Stripe mode (livemode true on this test deployment) is acknowledged and changes nothing", async () => {
+    const { account, subscription, base } = await fresh("livemode");
+    await addStubSubscription({
+      id: subscription,
+      customer: account.customer,
+      priceId: priceIds().studioMonthly,
+      status: "active",
+    });
+    const event = {
+      ...subscriptionEvent({ ...base, priceId: priceIds().studioMonthly }),
+      livemode: true,
+    };
+    const response = await deliver(event, { seed: false });
+    expect(response.status).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ received: true });
+    expect((await row(account.id)).plan).toBe("free");
+    expect(await stubRetrieves(subscription)).toHaveLength(0);
+    expect(await eventRecorded(event.id)).toBe(false);
+    // The same event as Stripe's test mode sends it is applied.
+    const test = { ...event, id: eventId(), livemode: false };
+    expect((await deliver(test, { seed: false })).status).toBe(200);
+    expect((await row(account.id)).plan).toBe("studio");
+  });
+
   test("M4-04 an event for a customer we do not know never asks Stripe anything", async () => {
     const subscription = subId();
     const response = await deliver(

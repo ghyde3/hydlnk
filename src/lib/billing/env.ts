@@ -61,14 +61,16 @@ export function readBillingEnv(): BillingEnv {
 }
 
 /**
- * What the webhook needs: the signing secret, the price ids and the API key. The key is for one
+ * What the webhook needs: the signing secret, the price ids, the API key and whether the
+ * deployment is in live mode (an event of the other mode is not this deployment's). The key is for one
  * call only: every subscription event is answered by retrieving the subscription's current state
  * from Stripe, so a webhook without the key cannot do its job and says so up front.
  */
-export function readWebhookEnv(): { webhookSecret: string; prices: PriceIds } {
+export function readWebhookEnv(): { webhookSecret: string; prices: PriceIds; liveMode: boolean } {
   const env = read();
   if (!env.STRIPE_SECRET_KEY) missing("STRIPE_SECRET_KEY");
   return {
+    liveMode: env.STRIPE_LIVE_MODE === "true",
     webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? missing("STRIPE_WEBHOOK_SECRET"),
     prices: {
       proMonthly: env.STRIPE_PRICE_PRO_MONTHLY ?? missing("STRIPE_PRICE_PRO_MONTHLY"),

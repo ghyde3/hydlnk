@@ -721,3 +721,58 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
     });
   });
 });
+
+describe("an event of the other Stripe mode is not this deployment's", () => {
+  const withMode = (livemode: boolean | undefined, overrides: Parameters<typeof subscriptionEvent>[0] = {}) => ({
+    ...subscriptionEvent(overrides),
+    ...(livemode === undefined ? {} : { livemode }),
+  });
+
+  it("a live event on a test deployment (STRIPE_LIVE_MODE unset or false) is acknowledged and writes nothing, asks nothing", async () => {
+    for (const mode of [undefined, "false"]) {
+      if (mode === undefined) delete process.env.STRIPE_LIVE_MODE;
+      else process.env.STRIPE_LIVE_MODE = mode;
+      const event = withMode(true);
+      seedFromEvent(event);
+      expect(await deliver(event, { seed: false })).toEqual({ status: 200, body: { received: true } });
+      expect(rpcCalls).toEqual([]);
+      expect(retrieve).not.toHaveBeenCalled();
+      expect(processed.size).toBe(0);
+      expect(invalidateAccountPages).not.toHaveBeenCalled();
+    }
+    delete process.env.STRIPE_LIVE_MODE;
+  });
+
+  it("a test event on a live deployment is ignored the same way, and a live one is processed", async () => {
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      STRIPE_LIVE_MODE: "true",
+      STRIPE_SECRET_KEY: "sk_live_unit_secret_key_value",
+      VERCEL_ENV: "production",
+    });
+    try {
+      const test = withMode(false);
+      seedFromEvent(test);
+      expect((await deliver(test, { seed: false })).status).toBe(200);
+      expect(rpcCalls).toEqual([]);
+      expect(retrieve).not.toHaveBeenCalled();
+
+      const live = withMode(true);
+      seedFromEvent(live);
+      expect((await deliver(live, { seed: false })).status).toBe(200);
+      expect(rpcCalls).toHaveLength(1);
+    } finally {
+      for (const name of ["STRIPE_LIVE_MODE", "VERCEL_ENV"]) delete process.env[name];
+      process.env.STRIPE_SECRET_KEY = saved.STRIPE_SECRET_KEY;
+    }
+  });
+
+  it("an event with livemode false on a test deployment (what Stripe sends) is processed, and one without the field too", async () => {
+    for (const livemode of [false, undefined]) {
+      rpcCalls.length = 0;
+      processed.clear();
+      expect((await deliver(withMode(livemode))).status).toBe(200);
+      expect(rpcCalls, String(livemode)).toHaveLength(1);
+    }
+  });
+});

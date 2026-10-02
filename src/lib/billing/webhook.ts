@@ -37,7 +37,8 @@ import { getStripe, isMissingResource } from "./stripe";
  *                                       nothing, the plan stays as it is
  *   anything else                       acknowledged, nothing written
  * The account is found by stripe_customer_id, falling back to subscription.metadata.account_id.
- * An unknown customer or price is acknowledged and ignored, and so is a subscription Stripe
+ * An unknown customer or price is acknowledged and ignored, and so is an event whose `livemode`
+ * is not this deployment's (STRIPE_LIVE_MODE), and so is a subscription Stripe
  * cannot find or one that belongs to another customer (never a downgrade: the payload is not
  * believed over Stripe). A failed retrieve answers 500 so Stripe redelivers. Events apply through
  * `apply_subscription_state`, then the account's cached pages are expired so the badge follows
@@ -73,6 +74,7 @@ const eventSchema = z.object({
   id: z.string().regex(/^evt_[A-Za-z0-9_]{1,200}$/),
   type: z.string().min(1).max(120),
   created: z.number().int().positive(),
+  livemode: z.boolean().optional(),
   data: z.object({ object: z.unknown() }),
 });
 
@@ -356,7 +358,13 @@ export async function processWebhook(
 
   const event = eventSchema.safeParse(verified);
   if (!event.success) return RECEIVED;
-  const { id, type, created, data } = event.data;
+  const { id, type, created, data, livemode } = event.data;
+  // Live and test never mix: an event of the other mode (STRIPE_LIVE_MODE says which this
+  // deployment is) is acknowledged and ignored, so a misrouted endpoint cannot move a plan.
+  if (livemode !== undefined && livemode !== env.liveMode) {
+    console.error("[stripe] ignoring an event whose mode does not match STRIPE_LIVE_MODE");
+    return RECEIVED;
+  }
 
   try {
     let outcome: Outcome = "ignored";
