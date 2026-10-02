@@ -1,0 +1,50 @@
+# Pushes supabase/migrations from a chosen ref to the production Supabase project.
+# Started by the orchestrator (gh workflow run) as part of /release, so a release
+# never depends on the Supabase CLI login stored in a Mac keychain.
+# Needs one repository secret: SUPABASE_ACCESS_TOKEN (a Supabase personal access token).
+name: Release migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or commit whose supabase/migrations to push"
+        required: true
+        default: main
+      apply:
+        description: "Apply the migrations (false = dry run only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-migrations
+  cancel-in-progress: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: pzcinnkzrlyrqkgyetqx
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.109.0
+      - name: Check the token is set
+        run: test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::Add the SUPABASE_ACCESS_TOKEN repository secret."; exit 1; }
+      - name: Link the production project
+        run: supabase link --project-ref "$PROJECT_REF"
+      - name: Migrations that would be pushed
+        run: supabase db push --dry-run
+      - name: Push migrations
+        if: ${{ inputs.apply }}
+        run: supabase db push --yes
+      - name: Migration history after the run
+        run: supabase migration list --linked
