@@ -1,10 +1,11 @@
 import "server-only";
 import { cache } from "react";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { handleSchema, publishedDocumentSchema, type PublishedDocument } from "@/lib/schemas";
+import { publishedDocSchema, type PublishDoc } from "@/lib/document";
+import { handleSchema } from "@/lib/schemas";
 
 export interface PublishedPage {
-  document: PublishedDocument;
+  document: PublishDoc;
   publishedAt: string | null;
 }
 
@@ -42,7 +43,7 @@ export const getTenantPageState = cache(async (handle: string): Promise<TenantPa
   if (!data) return { kind: "missing" };
   if (data.published === null) return { kind: "unpublished" };
 
-  const parsed = publishedDocumentSchema.safeParse(data.published);
+  const parsed = publishedDocSchema.safeParse(data.published);
   if (!parsed.success) {
     console.error(`Published document for "${handle}" failed validation`, parsed.error.issues);
     return { kind: "missing" };

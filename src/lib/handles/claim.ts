@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { claimHandleWithClient, type ClaimResult } from "./claim-core";
 
-export { emptyPageDraft, type ClaimError, type ClaimResult } from "./claim-core";
+export { type ClaimError, type ClaimResult } from "./claim-core";
 
 /**
  * Server-only handle claim (M1-09): creates the signed-in account's first page with the secret

@@ -118,7 +118,7 @@ async function ensurePage(admin: SupabaseClient, userId: string, handle: string)
   if (mara.error) throw new Error(`seed page 'mara' missing: ${mara.error.message}`);
   const rename = (doc: unknown) => {
     const copy = JSON.parse(JSON.stringify(doc));
-    copy.profile.displayName = handle;
+    copy.profile.name = handle;
     return copy;
   };
   const inserted = await admin

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import type { Block, PublishedDocument } from "@/lib/schemas";
+import { safeHref, type LinkBlock, type PublishDoc } from "@/lib/document";
+import { clientEnv } from "@/lib/env/client";
 import {
   BLOCK_OVERRIDE_KEYS,
   resolveBlockTokens,
@@ -8,8 +9,6 @@ import {
   type BlockOverrides,
   type TokenSet,
 } from "@/lib/theme";
-
-type LinkButtonBlock = Extract<Block, { type: "link_button" }>;
 
 /** "Mara Okafor" -> "MO". */
 function initialsOf(name: string): string {
@@ -36,28 +35,28 @@ function overrideVars(resolved: TokenSet, overrides: BlockOverrides | undefined)
 }
 
 /**
- * Placeholder tenant page: avatar, name, bio and the visible link buttons. M2 replaces it with the
- * shared block renderer that the editor preview uses too.
+ * Placeholder tenant page: avatar, name, bio and the visible link blocks. The Milestone 2 renderer
+ * feature replaces it with `PageRenderer`, the one component the editor preview uses too.
  *
  * Styling reads tenant variables only. The theme reaches the page as --t-* custom properties set
  * on the root element from the tokens frozen at publish time; tenant.css does the rest.
  * Everything tenant-controlled is rendered as React text or as an attribute, so it is escaped, and
- * every URL already passed safeUrlSchema when the document was parsed.
+ * every href comes from `safeHref`, so an invalid URL renders without one.
  */
 export function TenantPage({
   document,
   handle,
   rootOrigin,
 }: {
-  document: PublishedDocument;
+  document: PublishDoc;
   handle: string;
   /** Origin of the HYDLNK root host, for the badge and report links. */
   rootOrigin: string;
 }) {
-  const tokens = document.resolvedTokens;
+  const tokens = document.tokens;
   const { profile } = document;
   const links = document.blocks.filter(
-    (block): block is LinkButtonBlock => block.type === "link_button" && block.visible,
+    (block): block is LinkBlock => block.type === "link" && block.visible,
   );
 
   return (
@@ -69,22 +68,22 @@ export function TenantPage({
     >
       <main className="tenant-main">
         <div className="tenant-avatar" aria-hidden="true">
-          {profile.avatarUrl ? (
-            // A plain <img>: the URL is tenant-supplied, and uploads are already resized to 400px
-            // at upload time (PLAN.md), so next/image would add nothing but a remotePatterns list.
+          {profile.photo ? (
+            // A plain <img>: the path is an image reference (checked by the document schema) into
+            // the page-media bucket, so next/image would add nothing but a remotePatterns list.
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={profile.avatarUrl}
+              src={`${clientEnv.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/page-media/${profile.photo.path}`}
               alt=""
               width={96}
               height={96}
               referrerPolicy="no-referrer"
             />
           ) : (
-            initialsOf(profile.displayName)
+            initialsOf(profile.name)
           )}
         </div>
-        <h1 className="tenant-name">{profile.displayName}</h1>
+        <h1 className="tenant-name">{profile.name}</h1>
         {profile.bio ? <p className="tenant-bio">{profile.bio}</p> : null}
 
         {links.length > 0 ? (
@@ -95,7 +94,7 @@ export function TenantPage({
                 <li key={block.id}>
                   <a
                     className="tenant-link"
-                    href={block.url}
+                    href={safeHref(block.url)}
                     rel="noopener nofollow ugc"
                     data-button-style={blockTokens.buttonStyle}
                     style={overrideVars(blockTokens, block.overrides)}

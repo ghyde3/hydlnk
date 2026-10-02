@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { url } from "../helpers";
-import { claimHandleWithClient, emptyPageDraft } from "@/lib/handles/claim-core";
+import { emptyDraft } from "@/lib/document";
+import { claimHandleWithClient } from "@/lib/handles/claim-core";
 import { adminClient } from "../fixtures/auth";
 import {
   cleanupUsers,
@@ -38,12 +39,12 @@ test.describe("M1-09 server-only handle claim", () => {
       published: null,
       published_at: null,
     });
-    expect(pages[0]!.draft).toEqual(emptyPageDraft(handle));
+    expect(pages[0]!.draft).toEqual(emptyDraft(handle));
     expect(pages[0]!.draft).toMatchObject({
       version: 1,
-      profile: { displayName: handle, bio: "", avatarUrl: null },
-      themeId: null,
-      tokens: {},
+      rev: 0,
+      profile: { name: handle, bio: "", photo: null },
+      theme: { ref: null, overrides: {} },
       blocks: [],
     });
   });
@@ -128,7 +129,7 @@ test.describe("M1-09 server-only handle claim", () => {
     const user = await makeUser("case", { plan: "pro" });
     const { error } = await adminClient()
       .from("pages")
-      .insert({ owner_id: user.id, handle: "MARA", draft: emptyPageDraft("mara") });
+      .insert({ owner_id: user.id, handle: "MARA", draft: emptyDraft("mara") });
     // Refused by the database. Today the lowercase-only format check (23514) fires before the
     // unique index (23505); either way no differently-cased duplicate can exist.
     expect(error).not.toBeNull();

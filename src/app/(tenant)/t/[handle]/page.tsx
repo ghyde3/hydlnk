@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: PageProps<"/t/[handle]">): Pr
 
   if (state.kind === "published") {
     const { profile } = state.page.document;
-    return { title: profile.displayName, description: profile.bio || undefined };
+    return { title: profile.name, description: profile.bio || undefined };
   }
   if (state.kind === "unpublished") {
     return { title: `${handle}.${HANDLE_DISPLAY_DOMAIN}`, robots: { index: false } };
