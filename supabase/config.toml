@@ -245,24 +245,82 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# HYDLNK sign-in email (M1-03). The link goes to the app callback with the token hash
-# (token-hash flow, so it signs in in any browser, not only the one that asked for it).
-# New addresses get the "confirmation" template when email confirmations are on (production),
-# existing ones get "magic_link"; both use the same file. Production applies the same HTML by hand
-# in the Supabase dashboard (Authentication > Emails) through the release step.
+# HYDLNK auth emails. HYDLNK sign-in is passwordless (email link or Google), so every email either
+# carries the sign-in link or sends people to /login or /signup. Links go to the app callback with
+# the token hash (<site url>/auth/callback?token_hash=...&type=...), which signs in in any browser,
+# not only the one that asked for it. The callback accepts only type email, magiclink and
+# signup, so the confirmation and magic_link templates use type=email; the others never carry a
+# working sign-in link (email_change uses type=email_change on purpose, the callback rejects it).
+#
+# Locally these apply on the next `supabase start`. Production applies the same HTML by hand in the
+# Supabase dashboard (Authentication > Emails), file and subject as set here (see the release step).
+#
+# New addresses get "confirmation" when email confirmations are on (production), existing ones get
+# "magic_link". Both are the sign-in link.
+[auth.email.template.confirmation]
+subject = "Confirm your email for HYDLNK"
+content_path = "./supabase/templates/confirmation.html"
+
 [auth.email.template.magic_link]
 subject = "Your HYDLNK sign-in link"
 content_path = "./supabase/templates/magic-link.html"
 
-[auth.email.template.confirmation]
-subject = "Your HYDLNK sign-in link"
-content_path = "./supabase/templates/magic-link.html"
+# Safety nets: HYDLNK offers no email change, no passwords and no invites yet, so these should never
+# arrive. If one does, it points people to /login or /signup instead of a dead link.
+[auth.email.template.email_change]
+subject = "Confirm your new email for HYDLNK"
+content_path = "./supabase/templates/email-change.html"
 
-# Uncomment to customize notification email template
-# [auth.email.notification.password_changed]
-# enabled = true
-# subject = "Your password has been changed"
-# content_path = "./templates/password_changed_notification.html"
+[auth.email.template.recovery]
+subject = "Signing in to HYDLNK"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.invite]
+subject = "You're invited to HYDLNK"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.reauthentication]
+subject = "Your HYDLNK verification code"
+content_path = "./supabase/templates/reauthentication.html"
+
+# Security notifications. Nothing in HYDLNK triggers them today (no passwords, phone, MFA or manual
+# linking), so enabling them locally adds no mail to the inbox; they are wired so the wording is
+# reviewed with the rest. Production turns them on in the dashboard. The CLI resolves a notification's
+# content_path from the supabase/ directory (unlike the templates above, which use the repo root).
+[auth.email.notification.password_changed]
+enabled = true
+subject = "Your HYDLNK password was changed"
+content_path = "./templates/notification-password-changed.html"
+
+[auth.email.notification.email_changed]
+enabled = true
+subject = "Your HYDLNK email was changed"
+content_path = "./templates/notification-email-changed.html"
+
+[auth.email.notification.phone_changed]
+enabled = true
+subject = "Your HYDLNK phone number was changed"
+content_path = "./templates/notification-phone-changed.html"
+
+[auth.email.notification.identity_linked]
+enabled = true
+subject = "A sign-in method was linked to your HYDLNK account"
+content_path = "./templates/notification-identity-linked.html"
+
+[auth.email.notification.identity_unlinked]
+enabled = true
+subject = "A sign-in method was removed from your HYDLNK account"
+content_path = "./templates/notification-identity-unlinked.html"
+
+[auth.email.notification.mfa_factor_enrolled]
+enabled = true
+subject = "A verification method was added to your HYDLNK account"
+content_path = "./templates/notification-mfa-enrolled.html"
+
+[auth.email.notification.mfa_factor_unenrolled]
+enabled = true
+subject = "A verification method was removed from your HYDLNK account"
+content_path = "./templates/notification-mfa-unenrolled.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
