@@ -51,6 +51,54 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_audit: {
+        Row: {
+          account_id: string | null
+          action: string
+          admin_id: string
+          created_at: string
+          detail: Json
+          id: number
+          report_id: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          action: string
+          admin_id: string
+          created_at?: string
+          detail?: Json
+          id?: never
+          report_id?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          action?: string
+          admin_id?: string
+          created_at?: string
+          detail?: Json
+          id?: never
+          report_id?: string | null
+        }
+        Relationships: []
+      }
+      blocked_domains: {
+        Row: {
+          created_at: string
+          domain: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       daily_stats: {
         Row: {
           block_id: string
@@ -168,6 +216,50 @@ export type Database = {
           },
         ]
       }
+      image_cleanup_queue: {
+        Row: {
+          owner_id: string
+          path: string
+          queued_at: string
+        }
+        Insert: {
+          owner_id: string
+          path: string
+          queued_at?: string
+        }
+        Update: {
+          owner_id?: string
+          path?: string
+          queued_at?: string
+        }
+        Relationships: []
+      }
+      image_upload_hits: {
+        Row: {
+          hit_at: string
+          id: number
+          owner_id: string
+        }
+        Insert: {
+          hit_at?: string
+          id?: never
+          owner_id: string
+        }
+        Update: {
+          hit_at?: string
+          id?: never
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "image_upload_hits_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pages: {
         Row: {
           created_at: string
@@ -205,6 +297,80 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      report_attempts: {
+        Row: {
+          bucket: string
+          created_at: string
+          id: number
+        }
+        Insert: {
+          bucket: string
+          created_at?: string
+          id?: never
+        }
+        Update: {
+          bucket?: string
+          created_at?: string
+          id?: never
+        }
+        Relationships: []
+      }
+      reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          owner_id: string | null
+          page_handle: string | null
+          page_id: string | null
+          reason: string
+          reporter_email: string | null
+          reporter_hash: string | null
+          resolved_at: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          owner_id?: string | null
+          page_handle?: string | null
+          page_id?: string | null
+          reason: string
+          reporter_email?: string | null
+          reporter_hash?: string | null
+          resolved_at?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          owner_id?: string | null
+          page_handle?: string | null
+          page_id?: string | null
+          reason?: string
+          reporter_email?: string | null
+          reporter_hash?: string | null
+          resolved_at?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
             referencedColumns: ["id"]
           },
         ]
@@ -292,6 +458,27 @@ export type Database = {
           upload_bytes: number
         }[]
       }
+      admin_account_emails: {
+        Args: { p_ids: string[] }
+        Returns: {
+          email: string
+          id: string
+        }[]
+      }
+      admin_search_pages: {
+        Args: { p_limit?: number; p_offset?: number; p_query?: string }
+        Returns: {
+          handle: string
+          owner_email: string
+          owner_id: string
+          page_count: number
+          page_id: string
+          plan: string
+          published_at: string
+          suspended_at: string
+          total_count: number
+        }[]
+      }
       apply_subscription_state: {
         Args: {
           p_account_id: string
@@ -304,6 +491,30 @@ export type Database = {
         }
         Returns: string
       }
+      blocked_links_in: {
+        Args: { p_draft: Json }
+        Returns: {
+          block_id: string
+          field: string
+          host: string
+          item_id: string
+          reason: string
+        }[]
+      }
+      blocklist_pct_decode: { Args: { p_text: string }; Returns: string }
+      blocklist_url_host: { Args: { p_url: string }; Returns: string }
+      media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
+      media_paths_in_use: {
+        Args: { p_paths: string[]; p_uid: string }
+        Returns: string[]
+      }
+      media_upload_rate_hit: {
+        Args: { p_limit: number; p_uid: string; p_window_seconds: number }
+        Returns: {
+          allowed: boolean
+          retry_after: number
+        }[]
+      }
       plan_limits: {
         Args: { p_plan: string }
         Returns: {
@@ -315,8 +526,24 @@ export type Database = {
           max_upload_bytes: number
         }[]
       }
+      report_rate_limit_hit: {
+        Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
+        Returns: Json
+      }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
       run_nightly_maintenance: { Args: never; Returns: undefined }
+      submit_report: {
+        Args: {
+          p_details: string
+          p_email: string
+          p_hashes: string[]
+          p_page_cap?: number
+          p_page_handle: string
+          p_page_id: string
+          p_reason: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

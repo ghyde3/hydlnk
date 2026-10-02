@@ -45,7 +45,8 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "getting-started",
     title: "Getting started",
-    summary: "From sign-up to a published page in about ten minutes: handle, profile, blocks, theme and Publish.",
+    summary:
+      "From sign-up to a published page in about ten minutes: handle, profile, blocks, theme and Publish.",
     minutes: 6,
   },
   {
@@ -57,25 +58,29 @@ export const GUIDES: readonly Guide[] = [
   {
     slug: "designing-your-page",
     title: "Designing your page",
-    summary: "Themes, tokens, fonts, backgrounds and per-block overrides, with the choices that keep a page readable.",
+    summary:
+      "Themes, tokens, fonts, backgrounds and per-block overrides, with the choices that keep a page readable.",
     minutes: 7,
   },
   {
     slug: "connecting-a-domain",
     title: "Connecting a domain",
-    summary: "Point a domain you own at your page, step by step, and what to check if it doesn’t verify.",
+    summary:
+      "Point a domain you own at your page, step by step, and what to check if it doesn’t verify.",
     minutes: 6,
   },
   {
     slug: "understanding-analytics",
     title: "Understanding analytics",
-    summary: "What views, clicks, click-through rate, referrers, devices and countries tell you, and what they can’t.",
+    summary:
+      "What views, clicks, click-through rate, referrers, devices and countries tell you, and what they can’t.",
     minutes: 5,
   },
   {
     slug: "plans-and-billing",
     title: "Plans and billing",
-    summary: "What each plan includes, how upgrading and the billing portal work, and how to cancel or delete your account.",
+    summary:
+      "What each plan includes, how upgrading and the billing portal work, and how to cancel or delete your account.",
     minutes: 4,
   },
 ];
@@ -84,8 +89,11 @@ export function guideHref(slug: string): string {
   return `/learn/${slug}`;
 }
 
-/** Footer columns. Privacy and Terms are the legal pair the sign-up page links to as well. */
-export const FOOTER_COLUMNS: readonly { title: string; links: readonly { href: string; label: string }[] }[] = [
+/** Footer columns. Privacy and Terms are the legal pair the sign-up page links to as well; "Report a page" is not a guide, so it is not in the sitemap. */
+export const FOOTER_COLUMNS: readonly {
+  title: string;
+  links: readonly { href: string; label: string }[];
+}[] = [
   {
     title: "Product",
     links: [
@@ -110,6 +118,8 @@ export const FOOTER_COLUMNS: readonly { title: string; links: readonly { href: s
     links: [
       { href: "/privacy", label: "Privacy" },
       { href: "/terms", label: "Terms" },
+      // The target of every public page's "Report this page" link, with an address field (M5-05).
+      { href: "/report", label: "Report a page" },
     ],
   },
 ];
@@ -128,4 +138,5 @@ export const SITEMAP_PATHS: readonly string[] = [
 export const SUPPORT_EMAIL = "support@hydlnk.com";
 export const PRIVACY_EMAIL = "privacy@hydlnk.com";
 /** Where HYDLNK receives legal notices and privacy requests by post. */
-export const POSTAL_ADDRESS = "11156 Hanlon Terrace Alley, Winter Garden, Florida 34787, United States";
+export const POSTAL_ADDRESS =
+  "11156 Hanlon Terrace Alley, Winter Garden, Florida 34787, United States";

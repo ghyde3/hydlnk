@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { blockedLinksInPublished, checkBlocklist, loadBlockedDomains } from "@/lib/blocklist";
 import {
   collectPublishErrors,
   publishDocSchema,
@@ -19,7 +20,15 @@ import { mediaPathOf } from "@/lib/themes/bg-image";
 import { PUBLISH_STOPPED, friendlyPublishErrors } from "@/lib/themes/publish-errors";
 
 /** Why a publish did not happen, besides `invalid` (the draft has problems the editor can show). */
-export type PublishFailureReason = "unauthorized" | "forbidden" | "invalid" | "error";
+export type PublishFailureReason =
+  | "unauthorized"
+  | "forbidden"
+  | "invalid"
+  | "error"
+  /** The owner's account is suspended (M5-09): nothing is published until an admin unsuspends it. */
+  | "account_suspended"
+  /** A link in the saved draft points to a blocked site (M5-03); `errors` name each link and its host. */
+  | "blocked_link";
 
 export type PublishResult =
   | { ok: true; publishedAt: string }
@@ -52,7 +61,11 @@ const refuse = (
  *
  *   1. no session user: `unauthorized`; a page the user does not own (or that does not exist):
  *      `forbidden`. Nothing is read or written first;
- *   2. `publishDocSchema` on the stored draft (required fields, http(s) URLs, embed allowlist,
+ *   2. the link blocklist (M5-03) on the stored draft, the same database function the `pages` trigger
+ *      runs on every draft save: a site listed after the draft was saved is caught here. A link to
+ *      a blocked site returns `blocked_link` with one error per link (block, field, host); the
+ *      check failing is `error` (closed, never "clean");
+ *   2b. `publishDocSchema` on the stored draft (required fields, http(s) URLs, embed allowlist,
  *      no control or bidi characters, block limit, page and block token overrides): any issue
  *      returns `{ok:false, errors}` naming the block or the design field and how to fix it
  *      ("Publish stopped: bg isn’t a valid colour. Reset it in Design."), and writes nothing;
@@ -63,7 +76,9 @@ const refuse = (
  *      owns: the lookup is scoped to `owner_id` null or the page owner, so a draft that names
  *      someone else's theme, or a deleted one, resolves like no theme, as the editor does), then
  *      `publishedDocSchema` on the result: the frozen, fully resolved document;
- *   5. `pages.published` and `published_at` are written with the secret key, filtered on the owner.
+ *   5. the link blocklist again, now on the final published form with the platform's URL parser
+ *      (`blockedLinksInPublished`: the authority, see src/lib/blocklist/published.ts);
+ *   6. `pages.published` and `published_at` are written with the secret key, filtered on the owner.
  *
  * A failed gate writes nothing, so a failed Publish leaves the live page and its cache as they were.
  */
@@ -90,7 +105,32 @@ export async function publishPageCore(
   }
   if (!page.data || page.data.owner_id !== userId) return refuse("forbidden");
 
+  // A suspended owner cannot bring a page back by republishing (M5-08, M5-09). Read with the secret
+  // key, after the ownership check so it says nothing about anyone else's account; fails closed.
+  const account = await admin
+    .from("accounts")
+    .select("suspended_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (account.error) {
+    console.error("[publish] reading the account failed", account.error.message);
+    return refuse("error");
+  }
+  if (!account.data || account.data.suspended_at !== null) return refuse("account_suspended");
+
   const raw: unknown = page.data.draft;
+
+  // The blocklist again, on the stored draft (M5-03): the trigger checks every save, but a domain
+  // listed since then is only caught here. Nothing has been written yet.
+  let blocked;
+  try {
+    blocked = await checkBlocklist(admin, raw);
+  } catch (error) {
+    console.error("[publish] checking the link blocklist failed", error);
+    return refuse("error");
+  }
+  if (blocked.errors.length > 0) return refuse("blocked_link", blocked.errors);
+
   const parsed = publishDocSchema.safeParse(raw);
   if (!parsed.success) {
     const errors = friendlyPublishErrors(collectPublishErrors(raw));
@@ -133,6 +173,21 @@ export async function publishPageCore(
       { blockId: null, field: "document", message: "Fix this page before publishing." },
     ]);
   }
+
+  // The authoritative blocklist check (M5-03): on the FINAL form, the exact document about to be
+  // stored and served, with the platform's own URL parser (what a browser follows). The database
+  // check above (the same function the `pages` trigger runs) is the early, specific one; its Postgres
+  // reading of a URL can lag a browser's (Unicode tables, whitespace the schema trims), so this one
+  // decides. Fails closed: a blocklist that cannot be read publishes nothing.
+  let blockedDomains: string[];
+  try {
+    blockedDomains = await loadBlockedDomains(admin);
+  } catch (error) {
+    console.error("[publish] reading the blocked domains failed", error);
+    return refuse("error");
+  }
+  const blockedFinal = blockedLinksInPublished(checked.data, blockedDomains);
+  if (blockedFinal.length > 0) return refuse("blocked_link", blockedFinal);
 
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
   const written = await admin
@@ -254,7 +309,9 @@ async function checkBackground(
 
   const path = mediaPathOf(value, mediaOrigin());
   if (path === null || !path.startsWith(`${ownerId}/`)) {
-    return stopped("bgImage isn’t one of your uploaded images. Pick the background image again in Design.");
+    return stopped(
+      "bgImage isn’t one of your uploaded images. Pick the background image again in Design.",
+    );
   }
   if (!(await exists(path))) {
     return stopped("the background image is no longer available. Upload it again in Design.");
