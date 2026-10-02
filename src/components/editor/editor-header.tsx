@@ -1,7 +1,12 @@
 "use client";
 
+import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import type { SaveStatus } from "@/lib/editor/autosave";
-import { SAVE_INDICATOR, TOO_LARGE_MESSAGE } from "@/lib/editor/messages";
+import {
+  BLOCKED_PUBLISH_DISABLED_REASON,
+  SAVE_INDICATOR,
+  TOO_LARGE_MESSAGE,
+} from "@/lib/editor/messages";
 import { PUBLISH_STATUS_LABEL, type PublishStatus } from "@/lib/editor/status";
 
 const CHIP_STYLE: Record<PublishStatus, { background: string; color: string; dot?: string }> = {
@@ -49,6 +54,8 @@ function indicatorText(status: SaveStatus): string {
     case "error":
     case "invalid":
     case "conflict":
+    case "signed-out":
+    case "blocked":
       return SAVE_INDICATOR.failed;
     case "idle":
       return "";
@@ -77,6 +84,7 @@ export function EditorHeader({
   liveUrl,
   previewUrl,
   publishing,
+  blocked = false,
   onPublish,
 }: {
   breadcrumb: string;
@@ -87,8 +95,12 @@ export function EditorHeader({
   liveUrl: string | null;
   previewUrl: string;
   publishing: boolean;
+  /** A link on the page points to a blocked site (M5-03): nothing can be published until it is fixed. */
+  blocked?: boolean;
   onPublish: () => void;
 }) {
+  // A suspended owner cannot publish (M5-09): the server refuses it too (account_suspended).
+  const suspended = useAccountSuspended();
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-line bg-surface px-4 py-3.5 hl:px-8">
       <div className="min-w-0">
@@ -119,8 +131,11 @@ export function EditorHeader({
         <button
           type="button"
           onClick={onPublish}
-          disabled={publishing}
+          disabled={publishing || suspended || blocked}
           aria-busy={publishing}
+          title={
+            suspended ? SUSPENDED_REASON : blocked ? BLOCKED_PUBLISH_DISABLED_REASON : undefined
+          }
           className="min-h-11 rounded-md bg-ink px-4 text-sm font-semibold text-surface disabled:cursor-progress disabled:opacity-70"
         >
           {publishing ? "Publishing..." : "Publish"}

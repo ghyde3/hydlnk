@@ -5,21 +5,18 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@/components/app/screen";
 import { SaveAsThemeButton, SavedThemesCard, useThemeLibrary } from "@/components/themes";
+import { SaveBanner } from "@/components/editor/save-banner";
 import { useAutosave } from "@/components/editor/use-autosave";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { toPublishForm, type DraftDoc } from "@/lib/document";
 import { withToken } from "@/lib/design";
 import type { PageChrome } from "@/lib/editor/contracts";
-import {
-  CORRUPTED_NOTICE,
-  INVALID_MESSAGE,
-  SAVE_FAILED_MESSAGE,
-  STALE_MESSAGE,
-} from "@/lib/editor/messages";
+import { CORRUPTED_NOTICE, THEME_DELETED_NOTICE } from "@/lib/editor/messages";
 import { DesignSaveStatus } from "./design-save-status";
 import { resolveTokens, type TokenSet } from "@/lib/theme";
 import type { PlanId } from "@/lib/limits/table";
-import { themeTokensFor, type ThemeRow } from "@/lib/themes";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { fetchThemeLibrary, themeById, themeTokensFor, type ThemeRow } from "@/lib/themes";
 import { DesignPreview } from "./design-preview";
 import { DesignTabs, designPanelId, designTabId, type DesignView } from "./design-tabs";
 import { BackgroundSection, ShapeSection, SpacingSection } from "./external-sections";
@@ -41,6 +38,8 @@ export interface DesignScreenProps {
   repaired: boolean;
   /** Every theme the user may use (system and their own saved ones), read under RLS. */
   themes: ThemeRow[];
+  /** The server could not read the themes (`themes` is empty): the row says so and offers Retry (M5-16). */
+  themesFailed?: boolean;
   /** The preview's footer links, `pageChrome(plan, pageId)`. */
   chrome: PageChrome;
 }
@@ -71,6 +70,32 @@ export function DesignScreen(props: DesignScreenProps) {
   });
   const themes = library.themes;
 
+  // The themes the server could not read: the row shows the message and Retry; everything else on the
+  // screen keeps working (an unreadable list only means no theme tokens: the page resolves from the
+  // system default plus its own overrides). Retry reads the list from the browser, so it works
+  // without discarding what is being edited here.
+  const [themesFailed, setThemesFailed] = useState(props.themesFailed === true);
+  const [retryingThemes, setRetryingThemes] = useState(false);
+  const { replaceThemes } = library;
+  const retryThemes = useCallback(async () => {
+    setRetryingThemes(true);
+    try {
+      const result = await fetchThemeLibrary(createBrowserSupabase());
+      if (result.ok) {
+        replaceThemes(result.themes);
+        setThemesFailed(false);
+      }
+    } finally {
+      setRetryingThemes(false);
+    }
+  }, [replaceThemes]);
+
+  // The draft points at a theme that no longer exists (deleted with the secret key, or from another
+  // page): every reader resolves it to the default. Say so, and write nothing: the reference is only
+  // replaced when the person picks a theme, and the live page is what the last Publish froze.
+  const themeDeleted =
+    !themesFailed && draft.theme.ref !== null && themeById(themes, draft.theme.ref) === null;
+
   const themeTokens = useMemo(() => themeTokensFor(themes, draft.theme.ref), [themes, draft.theme.ref]);
   const resolved = useMemo(
     () => resolveTokens(themeTokens, draft.theme.overrides),
@@ -92,18 +117,11 @@ export function DesignScreen(props: DesignScreenProps) {
     ownerId,
   };
 
-  const saveProblem =
-    autosave.status === "conflict"
-      ? STALE_MESSAGE
-      : autosave.status === "invalid"
-        ? INVALID_MESSAGE
-        : autosave.status === "error"
-          ? SAVE_FAILED_MESSAGE
-          : null;
-
   // Done writes what is pending first, so the editor never loads a draft older than the edit.
   async function onDone(): Promise<void> {
-    if (await flush()) router.push("/editor");
+    // A link to a blocked site (M5-03) is fixed in the Editor, where the URL fields are: Done goes
+    // there instead of doing nothing while the save is refused.
+    if ((await flush()) || autosave.currentStatus() === "blocked") router.push("/editor");
   }
 
   return (
@@ -129,25 +147,9 @@ export function DesignScreen(props: DesignScreenProps) {
         </div>
       </header>
 
-      {saveProblem ? (
-        <div className="flex flex-col gap-2 px-4 pt-3 hl:px-8">
-          <div
-            role="alert"
-            className="flex max-w-[720px] flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-bad-line bg-surface py-1 pr-1 pl-4 text-sm text-bad"
-          >
-            <span className="py-2">{saveProblem}</span>
-            {autosave.status === "conflict" ? (
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="min-h-11 rounded-md border border-bad-line bg-surface px-4 text-[13px] font-semibold text-bad"
-              >
-                Reload
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden hl:px-8">
+        <SaveBanner status={autosave.status} blockedHosts={autosave.blocked?.hosts} editorLink />
+      </div>
 
       {isDesktop ? null : <DesignTabs view={view} onChange={setView} />}
 
@@ -169,7 +171,19 @@ export function DesignScreen(props: DesignScreenProps) {
               {CORRUPTED_NOTICE}
             </p>
           ) : null}
-          <SavedThemesCard library={library} />
+          {themeDeleted ? (
+            <p
+              role="status"
+              data-testid="theme-deleted-notice"
+              className="rounded-md border border-line-2 bg-surface px-4 py-3 text-sm text-ink-2"
+            >
+              {THEME_DELETED_NOTICE}
+            </p>
+          ) : null}
+          <SavedThemesCard
+            library={library}
+            loadFailed={themesFailed ? { onRetry: () => void retryThemes(), retrying: retryingThemes } : null}
+          />
           <div data-design-section="color">
             <Card className="flex flex-col gap-3.5">
               <h2 className="m-0 text-sm font-semibold">Color</h2>

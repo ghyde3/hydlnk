@@ -32,9 +32,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const to = fields.to !== undefined && isDowngradeTarget(fields.to) ? fields.to : undefined;
-    return answer(request, await openPortal(user, fields.intent, to));
+    return answer(request, await openPortal(user, fields.intent, to), "portal");
   } catch (error) {
     console.error("[billing] portal failed:", error instanceof Error ? error.message : "unknown");
-    return answer(request, { ok: false, status: 502, error: "stripe_unavailable" });
+    return answer(request, { ok: false, status: 502, error: "stripe_unavailable" }, "portal");
   }
 }

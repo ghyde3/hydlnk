@@ -1,3 +1,4 @@
+import { blockedPublishErrorHolds } from "@/lib/blocklist/fields";
 import {
   LIMITS,
   blockDefaults,
@@ -111,6 +112,12 @@ export function reconcileErrors(previous: PublishError[], draft: DraftDoc): Publ
   const current = new Map(collectPublishErrors(draft).map((error) => [errorKey(error), error]));
   const next: PublishError[] = [];
   for (const error of previous) {
+    // A blocked link (M5-03) is not something the draft schema knows: it stays for as long as the
+    // field still points at the host the Publish named, and goes the moment the URL is changed.
+    if (typeof (error as { host?: unknown }).host === "string") {
+      if (blockedPublishErrorHolds(draft, error)) next.push(error);
+      continue;
+    }
     const still = current.get(errorKey(error));
     if (still) next.push(still);
   }

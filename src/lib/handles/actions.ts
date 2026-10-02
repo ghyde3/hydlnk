@@ -4,9 +4,6 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/session";
 import { EMAIL_ERROR, emailSchema } from "@/lib/auth/email";
-import { clientEnv } from "@/lib/env/client";
-import { appOrigin } from "@/lib/routing/urls";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { checkHandle } from "./availability";
 import { claimHandle } from "./claim";
 import { normalizeHandle } from "./rules";
@@ -14,11 +11,12 @@ import {
   CHECK_UNAVAILABLE_MESSAGE,
   CLAIM_FAILED_MESSAGE,
   RATE_LIMITED_MESSAGE,
+  TOO_MANY_EMAILS_MESSAGE,
   SEND_FAILED_MESSAGE,
   SUSPENDED_MESSAGE,
   type HandleFormState,
 } from "./form-state";
-import { PENDING_HANDLE_COOKIE, PENDING_HANDLE_MAX_AGE_SECONDS } from "./pending";
+import { PENDING_HANDLE_COOKIE } from "./pending";
 import { sendSignupLink } from "./signup-link";
 
 /*
@@ -64,59 +62,24 @@ async function requestSignupLink(formData: FormData, resend: boolean): Promise<H
   const message =
     result.error === "rate_limited"
       ? RATE_LIMITED_MESSAGE
-      : result.error === "invalid_email"
-        ? EMAIL_ERROR
-        : SEND_FAILED_MESSAGE;
+      : result.error === "too_many_emails"
+        ? TOO_MANY_EMAILS_MESSAGE
+        : result.error === "invalid_email"
+          ? EMAIL_ERROR
+          : SEND_FAILED_MESSAGE;
   if (resend) return { kind: "sent", email: email.data, handle: checked.handle, error: message };
   return result.error === "invalid_email" ? { kind: "email", message } : { kind: "error", message };
 }
 
 /**
- * Sign up with Google (M1-13). The handle is validated first; only then does it ride to the OAuth
- * redirect in a short-lived, HttpOnly, host-only cookie (never in a URL), to be claimed by /claim
- * once the user is signed in. The redirect goes to Supabase's authorize endpoint (PKCE), whose
- * code verifier cookie is written by this same action.
- */
-async function startGoogleSignup(formData: FormData): Promise<HandleFormState> {
-  const checked = await requireAvailableHandle(field(formData, "handle"));
-  if ("failure" in checked) return checked.failure;
-
-  const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
-  const supabase = await createServerSupabase();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: `${appOrigin(rootDomain)}/auth/callback`, skipBrowserRedirect: true },
-  });
-  if (error || !data.url) {
-    console.error("[handles] starting Google sign-in failed", error?.code ?? error?.status);
-    return {
-      kind: "error",
-      message: "Google sign-in isn’t available right now. Try an email link.",
-    };
-  }
-
-  const cookieStore = await cookies();
-  cookieStore.set(PENDING_HANDLE_COOKIE, checked.handle, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: !appOrigin(rootDomain).startsWith("http://"),
-    path: "/",
-    maxAge: PENDING_HANDLE_MAX_AGE_SECONDS,
-    // No `domain`: host-only, so tenant subdomains never receive it.
-  });
-  redirect(data.url);
-}
-
-/**
- * The signup form's one action (M1-12, M1-13). Which button was pressed arrives as `intent`:
- * "email" (default, also what Enter in a field submits) or "google". `resend=1` marks the sent
- * state's 'Resend link' form.
+ * The signup form's one action (M1-12): the email link. `resend=1` marks the sent state's 'Resend
+ * link' form. Google sign-up does not come through here: Google's own button hands an ID token to
+ * `signInWithGoogle` (src/lib/auth/google-actions.ts, M1-30), which judges the handle itself.
  */
 export async function submitSignup(
   _previous: HandleFormState,
   formData: FormData,
 ): Promise<HandleFormState> {
-  if (field(formData, "intent") === "google") return startGoogleSignup(formData);
   return requestSignupLink(formData, field(formData, "resend") === "1");
 }
 

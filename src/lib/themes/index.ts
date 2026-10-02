@@ -56,6 +56,7 @@ export {
 } from "./overrides";
 export {
   deleteSavedTheme,
+  fetchThemeLibrary,
   insertSavedTheme,
   renameSavedTheme,
   toThemeRow,

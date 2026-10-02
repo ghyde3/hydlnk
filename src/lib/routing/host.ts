@@ -34,6 +34,27 @@ function normalizeHost(value: string): string {
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "[::1]", "0.0.0.0"]);
 
 /**
+ * The label of a host that is exactly one DNS label under the root domain but is not a handle
+ * ("ab.hydlnk.com", "-x1.hydlnk.com", "a--b-.hydlnk.com", a 31 character label), or null (M5-20).
+ * `classifyHost` calls such a host "custom", which would end in the plain 404; the proxy sends it to
+ * the tenant route instead so the address can say what is wrong with it ("That address isn’t
+ * valid."). Only a plain DNS label is passed on (lower case letters, digits and hyphens, at most 63
+ * characters), so nothing else ever reaches the tenant route as a handle. Two labels
+ * ("a.b.hydlnk.com"), the root, `www`, `app`, deployment hosts and real custom domains are never
+ * returned: ask `classifyHost` first and call this for "custom" only.
+ */
+export function invalidHandleLabel(host: string, rootDomain: string): string | null {
+  const requested = normalizeHost(host);
+  const root = normalizeHost(rootDomain);
+  if (requested === "" || root === "") return null;
+  const suffix = `.${root}`;
+  if (!requested.endsWith(suffix)) return null;
+  const label = requested.slice(0, -suffix.length);
+  if (HANDLE_PATTERN.test(label)) return null;
+  return /^[a-z0-9-]{1,63}$/.test(label) ? label : null;
+}
+
+/**
  * @param host        the request's Host header (a port is part of it: "mara.localhost:3000")
  * @param rootDomain  NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000" locally, "hydlnk.com" in production
  */

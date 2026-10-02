@@ -89,6 +89,8 @@ export interface ThemeLibrary {
   rename: (id: string, input: string) => Promise<RenameResult>;
   /** M3-24: delete a saved theme. Resolves true when it is gone. */
   remove: (id: string) => Promise<boolean>;
+  /** M5-16: the list the screen could not load on the server arrived (Retry): replace what is held. */
+  replaceThemes: (rows: ThemeRow[]) => void;
 }
 
 /** Shallow equality of two override sets: every value is a primitive. */
@@ -313,7 +315,10 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
   const applied = useMemo(() => themeById(themes, draft.theme.ref), [themes, draft.theme.ref]);
   const edited = useMemo(() => isEdited(themes, draft.theme), [themes, draft.theme]);
   const statusLabel = useMemo(() => themeStatusLabel(themes, draft.theme), [themes, draft.theme]);
-  const tagFor = useCallback((id: string) => cardTag(themes, draft.theme, id), [themes, draft.theme]);
+  const tagFor = useCallback(
+    (id: string) => cardTag(themes, draft.theme, id),
+    [themes, draft.theme],
+  );
 
   return {
     themes,
@@ -330,5 +335,6 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
     updateApplied,
     rename,
     remove,
+    replaceThemes: setThemes,
   };
 }

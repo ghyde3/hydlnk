@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   if (!user) return unauthenticated(request);
   if (!isSameOrigin(request)) return jsonError(403, "forbidden_origin");
   if (!readPaidPlansOpen()) {
-    return answer(request, { ok: false, status: 403, error: "plans_closed" });
+    return answer(request, { ok: false, status: 403, error: "plans_closed" }, "checkout");
   }
 
   const fields = await readFields(request, ["plan", "interval"]);
@@ -34,9 +34,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    return answer(request, await startCheckout(user, fields.plan, fields.interval));
+    return answer(request, await startCheckout(user, fields.plan, fields.interval), "checkout");
   } catch (error) {
     console.error("[billing] checkout failed:", error instanceof Error ? error.message : "unknown");
-    return answer(request, { ok: false, status: 502, error: "stripe_unavailable" });
+    return answer(request, { ok: false, status: 502, error: "stripe_unavailable" }, "checkout");
   }
 }

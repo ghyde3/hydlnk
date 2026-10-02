@@ -198,7 +198,8 @@ export async function seedStubFromEvent(event: {
   await addStubSubscription({
     id: object.id,
     customer: object.customer,
-    status: event.type === "customer.subscription.deleted" ? "canceled" : (object.status ?? "active"),
+    status:
+      event.type === "customer.subscription.deleted" ? "canceled" : (object.status ?? "active"),
     priceId: item?.price?.id ?? "price_unset",
     ...(item?.id ? { itemId: item.id } : {}),
     cancelAtPeriodEnd: object.cancel_at_period_end ?? false,
@@ -211,6 +212,35 @@ export async function stubSubscriptionStatus(id: string): Promise<string | null>
   const res = await fetch(stubUrl(`/__stub/subscription?id=${encodeURIComponent(id)}`));
   if (!res.ok) return null;
   return ((await res.json()) as { status: string }).status;
+}
+
+export interface StubSession {
+  id: string;
+  customer: string | null;
+  status: "open" | "complete" | "expired";
+  /** Unix seconds. */
+  created: number;
+}
+
+/** Every Checkout Session the stub holds for `customer`, whatever its status: what can still be paid, and what cannot. */
+export async function stubCustomerSessions(customer: string): Promise<StubSession[]> {
+  const res = await fetch(
+    stubUrl(`/__stub/customer-sessions?customer=${encodeURIComponent(customer)}`),
+  );
+  return (await res.json()) as StubSession[];
+}
+
+/** Makes the next `times` stub requests of `method` whose path, query or body contains `contains` wait `ms` first (an in-flight window). */
+export async function delayStub(
+  method: string,
+  contains: string,
+  ms: number,
+  times = 1,
+): Promise<void> {
+  await fetch(stubUrl("/__stub/delay"), {
+    method: "POST",
+    body: JSON.stringify({ method, contains, ms, times }),
+  });
 }
 
 /** Makes the next `times` stub requests of `method` whose path, query or body contains `contains` fail with `status`. */

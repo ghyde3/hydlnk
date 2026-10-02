@@ -1,0 +1,105 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+/**
+ * The fault switch of the end-to-end specs (src/lib/testing/faults.ts): a cookie that makes the
+ * Editor, Design and Settings reads fail so their failure screens can be proven. It must never do
+ * anything in production, whatever a request carries, and nothing but those three screens may
+ * call it.
+ */
+
+let cookieValue: string | undefined;
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) =>
+      name === "hl-fault" && cookieValue !== undefined ? { name, value: cookieValue } : undefined,
+  }),
+}));
+
+const { FAULT_COOKIE, faultsEnabled, injectedFault, failIfInjected } =
+  await import("@/lib/testing/faults");
+
+const env = process.env as Record<string, string | undefined>;
+const saved = env.NODE_ENV;
+beforeEach(() => {
+  cookieValue = undefined;
+});
+afterEach(() => {
+  env.NODE_ENV = saved;
+});
+
+describe("faults are a development and test switch only", () => {
+  it("the cookie is the one the specs set", () => {
+    expect(FAULT_COOKIE).toBe("hl-fault");
+  });
+
+  it("in production nothing is injected, whatever the cookie says", async () => {
+    env.NODE_ENV = "production";
+    expect(faultsEnabled()).toBe(false);
+    for (const value of [
+      "draft-load",
+      "themes-load",
+      "route-throw",
+      "draft-load,themes-load,route-throw",
+    ]) {
+      cookieValue = value;
+      for (const name of ["draft-load", "themes-load", "route-throw"] as const) {
+        expect(await injectedFault(name), `${value} / ${name}`).toBe(false);
+      }
+      await expect(failIfInjected("draft-load")).resolves.toBeUndefined();
+    }
+  });
+
+  it("in development the named fault is injected and only that one", async () => {
+    env.NODE_ENV = "development";
+    expect(faultsEnabled()).toBe(true);
+    cookieValue = "themes-load";
+    expect(await injectedFault("themes-load")).toBe(true);
+    expect(await injectedFault("draft-load")).toBe(false);
+    expect(await injectedFault("route-throw")).toBe(false);
+    await expect(failIfInjected("themes-load")).rejects.toThrow("Injected fault: themes-load");
+    await expect(failIfInjected("draft-load")).resolves.toBeUndefined();
+  });
+
+  it("several faults can be named; no cookie and an unknown name inject nothing", async () => {
+    env.NODE_ENV = "test";
+    cookieValue = "draft-load,route-throw";
+    expect(await injectedFault("draft-load")).toBe(true);
+    expect(await injectedFault("route-throw")).toBe(true);
+    expect(await injectedFault("themes-load")).toBe(false);
+    cookieValue = "everything";
+    expect(await injectedFault("draft-load")).toBe(false);
+    cookieValue = undefined;
+    expect(await injectedFault("draft-load")).toBe(false);
+  });
+});
+
+describe("only the three screens that own a failure state call the switch", () => {
+  const root = resolve(process.cwd(), "src");
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      return statSync(path).isDirectory() ? walk(path) : /\.(ts|tsx)$/.test(name) ? [path] : [];
+    });
+
+  it("no other module under src imports @/lib/testing/faults", () => {
+    const importers = walk(root)
+      .filter((file) => /from "@\/lib\/testing\/faults"/.test(readFileSync(file, "utf8")))
+      .map((file) => relative(root, file).split("\\").join("/"))
+      .sort();
+    expect(importers).toEqual([
+      "app/(editor)/app/(screens)/design/page.tsx",
+      "app/(editor)/app/(screens)/editor/page.tsx",
+      "app/(editor)/app/(screens)/settings/page.tsx",
+    ]);
+  });
+
+  it("the module is server-only, so a client component can never ship it", () => {
+    const source = readFileSync(join(root, "lib/testing/faults.ts"), "utf8");
+    expect(source).toContain('import "server-only"');
+    expect(source).toContain('process.env.NODE_ENV !== "production"');
+  });
+});

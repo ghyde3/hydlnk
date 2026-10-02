@@ -14,6 +14,8 @@ export function saveStatusText(status: SaveStatus): string {
     case "error":
     case "invalid":
     case "conflict":
+    case "signed-out":
+    case "blocked":
       return SAVE_INDICATOR.failed;
     case "idle":
       return "";

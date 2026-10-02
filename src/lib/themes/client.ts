@@ -57,6 +57,28 @@ function failure(error: { code?: string } | null): ThemeOpFailure {
   }
 }
 
+/**
+ * Every theme the caller may use, system ones first (the same list and order as the server's
+ * `loadThemeLibrary`), read from the browser: the Design screen's Retry when the server could not
+ * read them (M5-16). Resolves; a failure is `{ ok: false }`, never a throw.
+ */
+export async function fetchThemeLibrary(
+  client: Client,
+): Promise<{ ok: true; themes: ThemeRow[] } | { ok: false }> {
+  try {
+    const { data, error } = await client
+      .from("themes")
+      .select(COLUMNS)
+      .order("owner_id", { ascending: true, nullsFirst: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    if (error || !data) return { ok: false };
+    return { ok: true, themes: data.map(toThemeRow) };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** M3-21: a new saved theme for `ownerId` (the caller). Block-level overrides are never part of it. */
 export async function insertSavedTheme(
   client: Client,

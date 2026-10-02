@@ -46,6 +46,14 @@ interface Session {
   id: string;
   customer: string | null;
   status: "open" | "complete" | "expired";
+  /** Unix seconds, like Stripe's. A session seeded through the control API is an hour old unless said otherwise. */
+  created: number;
+}
+interface Delay {
+  method: string;
+  contains: string;
+  ms: number;
+  times: number;
 }
 
 const requests: Recorded[] = [];
@@ -54,6 +62,15 @@ const customerByIdempotencyKey = new Map<string, string>();
 const subs = new Map<string, Sub>();
 const sessions = new Map<string, Session>();
 const failures: Failure[] = [];
+const delays: Delay[] = [];
+/**
+ * Idempotency keys of POST /v1/checkout/sessions, like Stripe's: the same key with the same body
+ * replays the first answer (even after that session was expired); the same key with another body is
+ * an idempotency_error; the same key while the first request is still being served (see the
+ * /__stub/delay control) is a 409 idempotency_key_in_use.
+ */
+const sessionByKey = new Map<string, { fingerprint: string; body: unknown }>();
+const keysInFlight = new Set<string>();
 let counter = 0;
 let lastActivity = Date.now();
 
@@ -87,6 +104,7 @@ function sessionJson(session: Session, form: Fields = {}) {
     object: "checkout.session",
     mode: form.mode ?? "subscription",
     status: session.status,
+    created: session.created,
     customer: session.customer,
     client_reference_id: form.client_reference_id ?? null,
     url: session.status === "open" ? `${base}/c/pay/${session.id}` : null,
@@ -113,6 +131,17 @@ function send(res: http.ServerResponse, status: number, body: unknown, type = "a
   res.writeHead(status, { "content-type": type, "content-length": Buffer.byteLength(text) });
   res.end(text);
 }
+
+function takeDelay(method: string, haystack: string): number {
+  const index = delays.findIndex((d) => d.method === method && haystack.includes(d.contains));
+  if (index < 0) return 0;
+  const delay = delays[index]!;
+  delay.times -= 1;
+  if (delay.times <= 0) delays.splice(index, 1);
+  return delay.ms;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function takeFailure(method: string, haystack: string): Failure | undefined {
   const index = failures.findIndex((f) => f.method === method && haystack.includes(f.contains));
@@ -149,9 +178,29 @@ async function control(req: http.IncomingMessage, res: http.ServerResponse, url:
     // Seeds a Checkout Session without going through the recorded API (an open one, by default).
     const input = JSON.parse(await readBody(req)) as Partial<Session>;
     const id = `cs_test_seed_${Date.now().toString(36)}_${++counter}`;
-    const session: Session = { id, customer: input.customer ?? null, status: input.status ?? "open" };
+    const session: Session = {
+      id,
+      customer: input.customer ?? null,
+      status: input.status ?? "open",
+      created: input.created ?? Math.floor(Date.now() / 1000) - 3600,
+    };
     sessions.set(id, session);
     return send(res, 200, session);
+  }
+  if (path === "/__stub/customer-sessions" && req.method === "GET") {
+    // Every session of one customer, whatever its status: the spec's view of what can still be paid.
+    const customer = url.searchParams.get("customer");
+    return send(
+      res,
+      200,
+      [...sessions.values()].filter((s) => s.customer === customer),
+    );
+  }
+  if (path === "/__stub/delay" && req.method === "POST") {
+    // Makes the next `times` matching requests wait `ms` before they are served (an in-flight window).
+    const input = JSON.parse(await readBody(req)) as Delay;
+    delays.push({ ...input, times: input.times ?? 1 });
+    return send(res, 200, { ok: true });
   }
   if (path === "/__stub/session" && req.method === "GET") {
     const session = sessions.get(url.searchParams.get("id") ?? "");
@@ -224,9 +273,55 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
   }
 
   if (method === "POST" && path === "/v1/checkout/sessions") {
-    const id = `cs_test_stub_${Date.now().toString(36)}_${counter}`;
-    sessions.set(id, { id, customer: form.customer ?? null, status: "open" });
-    return send(res, 200, sessionJson(sessions.get(id)!, form));
+    const key = (req.headers["idempotency-key"] as string | undefined) ?? null;
+    const fingerprint = JSON.stringify(Object.entries(form).sort());
+    const known = key ? sessionByKey.get(key) : undefined;
+    if (known) {
+      if (known.fingerprint !== fingerprint) {
+        return send(res, 400, {
+          error: {
+            type: "idempotency_error",
+            message:
+              "Keys for idempotent requests can only be used with the same parameters they were first used with.",
+          },
+        });
+      }
+      return send(res, 200, known.body);
+    }
+    if (key && keysInFlight.has(key)) {
+      return send(res, 409, {
+        error: {
+          type: "idempotency_error",
+          code: "idempotency_key_in_use",
+          message:
+            "There is currently another in-progress request using this Idempotent Request key.",
+        },
+      });
+    }
+    if (key) keysInFlight.add(key);
+    try {
+      const wait = takeDelay(method, `${url.pathname}${url.search} ${raw}`);
+      if (wait > 0) await sleep(wait);
+      const id = `cs_test_stub_${Date.now().toString(36)}_${counter}_${Math.random().toString(36).slice(2, 8)}`;
+      sessions.set(id, {
+        id,
+        customer: form.customer ?? null,
+        status: "open",
+        created: Math.floor(Date.now() / 1000),
+      });
+      const body = sessionJson(sessions.get(id)!, form);
+      if (key) sessionByKey.set(key, { fingerprint, body });
+      return send(res, 200, body);
+    } finally {
+      if (key) keysInFlight.delete(key);
+    }
+  }
+
+  if (method === "GET" && (match = path.match(/^\/v1\/checkout\/sessions\/([^/]+)$/))) {
+    const session = sessions.get(match[1]!);
+    return session
+      ? send(res, 200, sessionJson(session))
+      : send(res, 404, notFound("checkout session").body);
   }
 
   if (method === "GET" && path === "/v1/checkout/sessions") {
@@ -246,7 +341,7 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
       return send(res, 400, {
         error: {
           type: "invalid_request_error",
-          message: "Only Checkout Sessions with a status in [\"open\"] can be expired.",
+          message: 'Only Checkout Sessions with a status in ["open"] can be expired.',
         },
       });
     }

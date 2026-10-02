@@ -70,9 +70,14 @@ test.describe("M4-07 the portal endpoint (API)", () => {
   }) => {
     const user = await billingUser(context, { label: "po-former", customer: true });
     expect((await portal(context, { intent: "manage" })).status).toBe(303);
-    const json = await postForm(context, "/api/billing/portal", JSON.stringify({ intent: "manage" }), {
-      "content-type": "application/json",
-    });
+    const json = await postForm(
+      context,
+      "/api/billing/portal",
+      JSON.stringify({ intent: "manage" }),
+      {
+        "content-type": "application/json",
+      },
+    );
     expect(json.status).toBe(303);
     const calls = await portalCalls(user.customer!);
     expect(calls).toHaveLength(2);
@@ -83,7 +88,9 @@ test.describe("M4-07 the portal endpoint (API)", () => {
     context,
   }) => {
     await billingUser(context, { label: "po-none" });
-    const before = (await stubRequests()).filter((r) => r.path === "/v1/billing_portal/sessions").length;
+    const before = (await stubRequests()).filter(
+      (r) => r.path === "/v1/billing_portal/sessions",
+    ).length;
     for (const intent of ["manage", "switch_yearly", "upgrade_studio", "downgrade"]) {
       const response = await portal(context, { intent });
       expect(response.status, intent).toBe(409);
@@ -92,7 +99,9 @@ test.describe("M4-07 the portal endpoint (API)", () => {
         message: "Nothing to manage yet.",
       });
     }
-    const after = (await stubRequests()).filter((r) => r.path === "/v1/billing_portal/sessions").length;
+    const after = (await stubRequests()).filter(
+      (r) => r.path === "/v1/billing_portal/sessions",
+    ).length;
     expect(after).toBe(before);
   });
 
@@ -139,7 +148,11 @@ test.describe("M4-07 the portal endpoint (API)", () => {
     context,
   }) => {
     for (const interval of ["month", "year"] as const) {
-      const user = await billingUser(context, { label: `po-up-${interval}`, plan: "pro", interval });
+      const user = await billingUser(context, {
+        label: `po-up-${interval}`,
+        plan: "pro",
+        interval,
+      });
       const response = await portal(context, { intent: "upgrade_studio" });
       expect(response.status, interval).toBe(303);
       const [call] = await portalCalls(user.customer!);
@@ -171,7 +184,9 @@ test.describe("M4-07 the portal endpoint (API)", () => {
     });
     // `to=free` on a Pro account is the same flow.
     expect((await portal(context, { intent: "downgrade", to: "free" })).status).toBe(303);
-    expect((await portalCalls(pro.customer!))[1]!.form["flow_data[type]"]).toBe("subscription_cancel");
+    expect((await portalCalls(pro.customer!))[1]!.form["flow_data[type]"]).toBe(
+      "subscription_cancel",
+    );
 
     for (const interval of ["month", "year"] as const) {
       const studio = await billingUser(context, {
@@ -226,7 +241,11 @@ test.describe("M4-07 the portal endpoint (API)", () => {
       expect(response.status, label).toBe(400);
       expect(JSON.parse(response.body), label).toMatchObject({ error: "invalid_request" });
     }
-    const queryOnly = await postForm(context, "/api/billing/portal?intent=manage&customer=cus_x", "");
+    const queryOnly = await postForm(
+      context,
+      "/api/billing/portal?intent=manage&customer=cus_x",
+      "",
+    );
     expect(queryOnly.status).toBe(400);
     expect(await portalCalls(user.customer!)).toHaveLength(0);
     const all = await stubRequests();
@@ -287,7 +306,10 @@ test.describe("M4-07 the portal endpoint (API)", () => {
   }) => {
     const attacker = await billingUser(context, { label: "po-evil", plan: "pro" });
     // Corrupt the row (no client can) so it names a subscription of someone else's customer.
-    const foreign = { id: `sub_zqforeign${Math.random().toString(36).slice(2, 8)}`, customer: "cus_zqforeign" };
+    const foreign = {
+      id: `sub_zqforeign${Math.random().toString(36).slice(2, 8)}`,
+      customer: "cus_zqforeign",
+    };
     await addStubSubscription({ ...foreign, priceId: priceFor("studio", "month") });
     const { error } = await adminClient()
       .from("accounts")
@@ -301,7 +323,9 @@ test.describe("M4-07 the portal endpoint (API)", () => {
     }
     expect(await portalCalls(attacker.customer!)).toHaveLength(0);
     expect(await stubCalls("POST", "/v1/billing_portal/sessions", foreign.id)).toHaveLength(0);
-    expect(await stubCalls("POST", "/v1/billing_portal/sessions", foreign.customer)).toHaveLength(0);
+    expect(await stubCalls("POST", "/v1/billing_portal/sessions", foreign.customer)).toHaveLength(
+      0,
+    );
   });
 
   test("M4-07 a paid account whose subscription id was never stored is resolved from its own customer's subscriptions", async ({
@@ -327,9 +351,13 @@ test.describe("M4-07 the portal endpoint (API)", () => {
     expect(response.status).toBe(502);
     expect(JSON.parse(response.body)).toMatchObject({ error: "stripe_unavailable" });
     await failStub("POST", user.customer!);
-    const navigation = await portal(context, { intent: "manage" }, { "sec-fetch-mode": "navigate" });
+    const navigation = await portal(
+      context,
+      { intent: "manage" },
+      { "sec-fetch-mode": "navigate" },
+    );
     expect(navigation.status).toBe(303);
-    expect(navigation.location).toBe(`${APP_ORIGIN}/settings?billing_error=stripe_unavailable`);
+    expect(navigation.location).toBe(`${APP_ORIGIN}/settings?billing_error=portal_failed`);
     expect((await accountRow(user.userId)).plan).toBe("pro");
     expect((await portal(context, { intent: "manage" })).status).toBe(303);
   });
@@ -373,7 +401,9 @@ test.describe("M4-07 the portal buttons on Settings", () => {
     const yearly = page.getByRole("button", { name: /^Switch to yearly/ });
     await expect(manage).toBeVisible();
     await expect(yearly).toBeVisible();
-    await expect(page.getByText("Card, invoices and cancellation open in Stripe’s secure customer portal.")).toBeVisible();
+    await expect(
+      page.getByText("Card, invoices and cancellation open in Stripe’s secure customer portal."),
+    ).toBeVisible();
     await expectNoHorizontalScroll(page);
 
     const width = page.viewportSize()!.width;
@@ -435,14 +465,20 @@ test.describe("M4-07 the portal buttons on Settings", () => {
   }) => {
     const user = await billingUser(context, { label: "ui-plans", plan: "pro", interval: "year" });
     await page.goto(settings());
-    await page.locator('[data-plan-card="studio"]').getByRole("button", { name: "Upgrade to Studio" }).click();
+    await page
+      .locator('[data-plan-card="studio"]')
+      .getByRole("button", { name: "Upgrade to Studio" })
+      .click();
     await page.waitForURL(/127\.0\.0\.1:12111\/p\/session\//);
     let calls = await portalCalls(user.customer!);
     expect(calls[0]!.form[`${FLOW}[items][0][price]`]).toBe(priceFor("studio", "year"));
     expect(await stubCalls("POST", "/v1/checkout/sessions", user.userId)).toHaveLength(0);
 
     await page.goto(settings());
-    await page.locator('[data-plan-card="free"]').getByRole("button", { name: "Downgrade" }).click();
+    await page
+      .locator('[data-plan-card="free"]')
+      .getByRole("button", { name: "Downgrade" })
+      .click();
     await page.waitForURL(/127\.0\.0\.1:12111\/p\/session\//);
     calls = await portalCalls(user.customer!);
     expect(calls[1]!.form["flow_data[type]"]).toBe("subscription_cancel");
@@ -456,7 +492,7 @@ test.describe("M4-07 the portal buttons on Settings", () => {
     await page.goto(settings());
     await failStub("POST", user.customer!);
     await page.getByRole("button", { name: /^Manage billing/ }).click();
-    await page.waitForURL(/\/settings\?billing_error=stripe_unavailable/);
+    await page.waitForURL(/\/settings\?billing_error=portal_failed/);
     await expect(page.locator("[data-plan-band]")).toBeVisible();
   });
 });
