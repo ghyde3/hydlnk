@@ -11,6 +11,7 @@ import {
   tenantRewritePath,
 } from "@/lib/routing/paths";
 import { rewriteWithSession } from "@/lib/routing/session";
+import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import { appOrigin, protocolFor } from "@/lib/routing/urls";
 
 /**
@@ -67,14 +68,21 @@ export async function proxy(request: NextRequest) {
     case "app":
       return rewriteWithSession(request, rewriteTo(appRewritePath(pathname)));
 
-    case "tenant":
-      return NextResponse.rewrite(rewriteTo(tenantRewritePath(handle ?? "", pathname)));
+    case "tenant": {
+      const response = NextResponse.rewrite(rewriteTo(tenantRewritePath(handle ?? "", pathname)));
+      setTenantHeaders(response.headers);
+      return response;
+    }
 
     case "custom": {
       // TODO(M4): resolveCustomDomain looks the host up in `domains`; unknown hosts get the plain
       // tenant 404 (the /sites/[pageId] stub always answers notFound until then).
       const pageId = await resolveCustomDomain(host);
-      return NextResponse.rewrite(rewriteTo(siteRewritePath(pageId ?? UNKNOWN_SITE_ID, pathname)));
+      const response = NextResponse.rewrite(
+        rewriteTo(siteRewritePath(pageId ?? UNKNOWN_SITE_ID, pathname)),
+      );
+      setTenantHeaders(response.headers);
+      return response;
     }
   }
 }

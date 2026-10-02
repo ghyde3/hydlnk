@@ -136,7 +136,13 @@ test.describe("M1-06 session cookies are host-only on the app host; auth routes 
       expect(withCookie.setCookies, `${host} sets nothing`).toEqual([]);
       expect(withCookie.body).not.toContain(email);
       expect(withCookie.body).not.toContain(session.user!.id);
-      expect([without.body.length, withoutAfter.body.length]).toContain(withCookie.body.length);
+      // Compared without <script> elements: in `next dev` the inline flight payload of a page with
+      // client components (the embed facade, since Milestone 2) carries per-request ids whose
+      // lengths vary, which says nothing about the cookie.
+      const markup = (body: string) => body.replace(/<script\b[\s\S]*?<\/script>/g, "");
+      expect([markup(without.body).length, markup(withoutAfter.body).length]).toContain(
+        markup(withCookie.body).length,
+      );
     }
 
     // The app host would refresh a session whose access token is past expiry (control) ...
