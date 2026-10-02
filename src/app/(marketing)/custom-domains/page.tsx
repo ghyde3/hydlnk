@@ -15,6 +15,7 @@ import {
 } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
+import { perMonthBilledYearlyText } from "@/lib/marketing/prices";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/custom-domains",
@@ -86,7 +87,7 @@ export default function DomainsPage() {
           </span>
         }
         title="Your page, on your domain."
-        lead="Every page has a free address at yourname.hydlnk.com. On Pro and Studio you can also serve it from a domain you own, like links.yourbrand.com, with an SSL certificate issued for you."
+        lead="Every page has a free address at yourname.hydlnk.com. On Pro and Studio you can also connect a domain you already own, bought at any registrar, like links.yourbrand.com. HYDLNK doesn’t sell or register domains, and SSL is automatic."
         secondary={{ href: guideHref("connecting-a-domain"), label: "Step-by-step guide" }}
         aside={<DomainSetupMock />}
       />
@@ -114,9 +115,9 @@ export default function DomainsPage() {
             </Chip>
             <h3 className="font-mono text-lg">links.yourbrand.com</h3>
             <p className="text-[15px] leading-[1.6] text-text-2">
-              A domain you already own, pointed at your page with one DNS record. Pro includes one
-              custom domain and Studio fifteen; each custom domain serves one page. Click tracking
-              stays on your domain too.
+              A domain you already own, bought at any registrar, pointed at your page with one DNS
+              record. Pro includes 1 custom domain and Studio 15; each custom domain serves one
+              page, and SSL is automatic. Click tracking stays on your domain too.
             </p>
           </div>
         </div>
@@ -235,7 +236,7 @@ export default function DomainsPage() {
 
       <CtaBand
         title="Claim your name now. Bring your domain later."
-        note="Your hydlnk.com address is free forever. Custom domains start at $5 a month."
+        note={`Your hydlnk.com address is free forever. Connect a domain you already own on Pro, ${perMonthBilledYearlyText("pro")}.`}
       />
     </MarketingShell>
   );

@@ -143,7 +143,9 @@ test.describe("M1-23 header and hero", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.getByText("Free forever · No card required · Custom domains from $5/mo", { exact: true }),
+      page.getByText("Free forever · No card required · Bring your own domain from $5/mo, billed yearly", {
+        exact: true,
+      }),
     ).toBeVisible();
 
     // The HYDLNK UI is Public Sans; tenant fonts appear only inside the demo pages.
@@ -561,19 +563,24 @@ test.describe("M1-26 pricing", () => {
     await open(page);
     const pricing = page.locator("#pricing");
     await expect(pricing.getByText("Pricing", { exact: true })).toBeVisible();
-    await expect(pricing.getByRole("heading", { level: 2, name: "Pay for your domain, not your design." })).toBeVisible();
+    await expect(pricing.getByRole("heading", { level: 2, name: "Design is never the paywall." })).toBeVisible();
     await expect(
       pricing.getByText("No commerce fees on any plan. Cancel anytime from your billing portal.", { exact: true }),
     ).toBeVisible();
     await expect(pricing.getByRole("heading", { level: 3 })).toHaveText(["Free", "Pro", "Studio"]);
     const lists = async (name: string) => (await card(page, name).locator("li").allTextContents()).map((t) => t.trim());
 
-    await expect(card(page, "Free")).toContainText("$0");
-    await expect(card(page, "Free")).toContainText("forever");
-    await expect(card(page, "Pro")).toContainText("$5");
-    await expect(card(page, "Pro")).toContainText("or $48 a year");
-    await expect(card(page, "Studio")).toContainText("$15");
-    await expect(card(page, "Studio")).toContainText("Billed monthly");
+    // Yearly is the default view. innerText is what is on screen: the monthly price sits in the
+    // DOM too, hidden by CSS, and textContent would see it.
+    const shown = { useInnerText: true };
+    await expect(card(page, "Free")).toContainText("$0", shown);
+    await expect(card(page, "Free")).toContainText("forever", shown);
+    await expect(card(page, "Pro")).toContainText("$5 / month, billed yearly", shown);
+    await expect(card(page, "Pro")).toContainText("$60 a year, save $48", shown);
+    await expect(card(page, "Pro")).not.toContainText("$9", shown);
+    await expect(card(page, "Studio")).toContainText("$15 / month, billed yearly", shown);
+    await expect(card(page, "Studio")).toContainText("$180 a year, save $60", shown);
+    await expect(card(page, "Studio")).not.toContainText("$20", shown);
 
     expect(await lists("Free")).toEqual([
       "1 page",
@@ -586,7 +593,7 @@ test.describe("M1-26 pricing", () => {
     ]);
     expect(await lists("Pro")).toEqual([
       "Everything in Free, plus",
-      "1 custom domain with SSL",
+      "1 custom domain you own, with automatic SSL",
       "3 pages",
       "No badge",
       "Unlimited saved themes",
@@ -595,7 +602,7 @@ test.describe("M1-26 pricing", () => {
     ]);
     expect(await lists("Studio")).toEqual([
       "Everything in Pro, plus",
-      "15 pages and 15 custom domains",
+      "15 pages and 15 custom domains you own",
       "Themes shared across pages",
       "1 GB of uploads",
     ]);

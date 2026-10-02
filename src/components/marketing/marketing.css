@@ -42,6 +42,87 @@
   }
 }
 
+/* Billing toggle (plan cards on the home page and /pricing) -----------------------------------
+   Monthly | Yearly is a pair of radio buttons inside [data-billing-root]; no JavaScript. A paid
+   plan's price is rendered twice, once per period, and the checked radio decides which one shows.
+   Yearly is checked in the markup, so it is also the view before and without any interaction.
+   The segmented control is the HYDLNK one: a track with a white, ringed selected item. */
+
+.bt {
+  display: inline-flex;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--hl-radius);
+  background: var(--hl-track);
+}
+
+.bt-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--hl-radius-sm);
+  color: var(--hl-text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bt-option:hover {
+  color: var(--hl-ink);
+}
+
+.bt-option:has(input:checked) {
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+  box-shadow: 0 0 0 1px var(--hl-line-2);
+}
+
+.bt-option:has(input:focus-visible) {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+.bt-save {
+  padding: 2px 6px;
+  border-radius: var(--hl-radius-sm);
+  background: var(--hl-brass-soft);
+  color: var(--hl-brass-soft-text);
+  font-family: var(--hl-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+[data-billing-view="monthly"] {
+  display: none;
+}
+
+[data-billing-root]:has(input[name="billing"][value="monthly"]:checked) [data-billing-view="monthly"] {
+  display: block;
+}
+
+[data-billing-root]:has(input[name="billing"][value="monthly"]:checked) [data-billing-view="yearly"] {
+  display: none;
+}
+
+/* Forced colours drop backgrounds and shadows: underline the selected period instead. */
+@media (forced-colors: active) {
+  .bt-option:has(input:checked) {
+    text-decoration: underline 2px;
+    text-underline-offset: 5px;
+  }
+}
+
 /* Long-form text ------------------------------------------------------------------------------ */
 
 .prose-hl {

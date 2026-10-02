@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { priceSentence, usd } from "@/lib/marketing/prices";
 import { SUPPORT_EMAIL } from "../site-map";
 import type { GuideBody } from "./types";
 
@@ -30,24 +31,30 @@ export const plansAndBilling: GuideBody = {
         <tbody>
           <tr>
             <td>Free</td>
-            <td>$0</td>
+            <td>{usd(0)}</td>
             <td>1 page, 3 saved themes, per-link clicks for 30 days, 10 MB of uploads, a small “Made with HYDLNK” badge</td>
           </tr>
           <tr>
             <td>Pro</td>
-            <td>$5 a month or $48 a year</td>
-            <td>1 custom domain, 3 pages, no badge, unlimited saved themes, a year of analytics with referrers, devices and countries, 100 MB of uploads</td>
+            <td>{priceSentence("pro")}</td>
+            <td>1 custom domain you own, 3 pages, no badge, unlimited saved themes, a year of analytics with referrers, devices and countries, 100 MB of uploads</td>
           </tr>
           <tr>
             <td>Studio</td>
-            <td>$15 a month</td>
-            <td>15 pages and 15 custom domains, themes shared across pages, 1 GB of uploads</td>
+            <td>{priceSentence("studio")}</td>
+            <td>15 pages and 15 custom domains you own, themes shared across pages, 1 GB of uploads</td>
           </tr>
         </tbody>
       </table>
       <p>
-        See <Link href="/pricing#compare">the full comparison</Link>. There are no commerce fees
-        on any plan.
+        Prices are in US dollars. Paying yearly costs less than twelve monthly payments, and the
+        monthly figure for a yearly plan is always shown with “billed yearly”: you pay the whole
+        year at once. See <Link href="/pricing#compare">the full comparison</Link>. There are no
+        commerce fees on any plan.
+      </p>
+      <p>
+        HYDLNK doesn’t sell or register domains. Pro includes 1 custom domain and Studio 15; you
+        connect a domain you already own, bought at any registrar, and SSL is automatic.
       </p>
 
       <h2 id="upgrade">Upgrading</h2>
@@ -62,7 +69,7 @@ export const plansAndBilling: GuideBody = {
       <ul>
         <li>update your card,</li>
         <li>download invoices and receipts,</li>
-        <li>switch Pro between monthly and yearly billing,</li>
+        <li>switch between monthly and yearly billing,</li>
         <li>cancel your plan.</li>
       </ul>
 

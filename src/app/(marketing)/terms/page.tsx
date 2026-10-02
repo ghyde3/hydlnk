@@ -143,10 +143,11 @@ export default function TermsPage() {
 
       <h2 id="domains">Custom domains</h2>
       <p>
-        You may connect only domains you own or are authorised to use. You’re responsible for your
-        domain’s registration and DNS. We verify domains and arrange their SSL certificates through
-        our hosting provider, but we can’t control DNS providers, registrars or how long changes
-        take to spread. When you remove a domain or your plan no longer includes it, we stop
+        HYDLNK doesn’t sell or register domains. You may connect only domains you already own or
+        are authorised to use, bought at any registrar. You’re responsible for your domain’s
+        registration, renewal and DNS. We verify domains and arrange their SSL certificates
+        through our hosting provider, but we can’t control DNS providers, registrars or how long
+        changes take to spread. When you remove a domain or your plan no longer includes it, we stop
         serving your page on it.
       </p>
 

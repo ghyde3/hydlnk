@@ -15,12 +15,16 @@ import {
 } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
+import {
+  monthlyText,
+  perMonthBilledYearlyText,
+  yearlyText,
+} from "@/lib/marketing/prices";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/pricing",
   title: "Pricing",
-  description:
-    "Free forever for one page with every block and the full theme system. Pro is $5 a month or $48 a year for a custom domain; Studio is $15 a month for 15 pages and domains.",
+  description: `Free forever, with every block and the full theme system. Pro is ${monthlyText("pro")} or ${yearlyText("pro")} (${perMonthBilledYearlyText("pro")}) and connects a domain you own. Studio is ${monthlyText("studio")} or ${yearlyText("studio")}.`,
   image: "pricing",
 });
 
@@ -40,7 +44,7 @@ const BILLING = [
   },
   {
     title: "Managing billing",
-    body: "Manage billing opens Stripe’s customer portal: change your card, download invoices, switch Pro between monthly and yearly, or cancel.",
+    body: "Manage billing opens Stripe’s customer portal: change your card, download invoices, switch between monthly and yearly billing, or cancel.",
   },
   {
     title: "Cancelling",
@@ -48,7 +52,7 @@ const BILLING = [
   },
   {
     title: "Prices",
-    body: "Prices are in US dollars. Pro is $5 a month or $48 a year; Studio is $15 a month. Free costs nothing and has no time limit.",
+    body: `Prices are in US dollars. Pro is ${monthlyText("pro")} or ${yearlyText("pro")} (${perMonthBilledYearlyText("pro")}); Studio is ${monthlyText("studio")} or ${yearlyText("studio")} (${perMonthBilledYearlyText("studio")}). Free costs nothing and has no time limit.`,
   },
 ];
 
@@ -58,8 +62,8 @@ export default function PricingPage() {
     <MarketingShell current="pricing">
       <PageHero
         eyebrow="Pricing"
-        title="Pay for your domain, not your design."
-        lead="Every plan gets every block and the whole theme system. Upgrade when you want your own domain, more pages or a year of analytics. No commerce fees on any plan."
+        title="Design is never the paywall."
+        lead="Every plan gets every block and the whole theme system. Upgrade when you want to connect a domain you own, more pages or a year of analytics. No commerce fees on any plan."
         secondary={{ href: "#compare", label: "Compare plans" }}
       />
 
@@ -129,7 +133,8 @@ export default function PricingPage() {
           </table>
         </div>
         <p className="mt-4 text-sm leading-[1.6] text-text-2">
-          Custom domains need a domain you own. HYDLNK doesn’t sell domains.
+          HYDLNK doesn’t sell or register domains: you connect a domain you already own, bought at
+          any registrar. Pro includes 1 custom domain and Studio 15, and SSL is automatic.
         </p>
       </Section>
 

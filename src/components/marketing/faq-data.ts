@@ -1,6 +1,9 @@
+import { priceSentence } from "@/lib/marketing/prices";
+
 /**
  * Questions for /faq (all groups) and the home page (the `home` subset). Answers describe only
  * what PLAN.md puts in v1. Plain strings, so the same text feeds the FAQPage structured data.
+ * Prices come from src/lib/marketing/prices.ts.
  */
 
 export interface FaqItem {
@@ -79,7 +82,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "How do custom domains work?",
         answer:
-          "On Pro and Studio, add a domain like links.yourbrand.com in the editor and add the DNS record it shows you at your domain provider. We check it automatically and issue SSL, so your page is served over https.",
+          "On Pro and Studio you connect a domain you already own, like links.yourbrand.com: add it in the editor, then add the DNS record it shows you at your domain provider. We check the record automatically and issue SSL, so your page is served over https. Pro includes 1 custom domain and Studio 15.",
         home: 4,
       },
       {
@@ -88,9 +91,9 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
           "Yes. A root domain uses an A record instead of a CNAME, and the editor shows you the exact value. If your main website already lives on that domain, use a subdomain such as links.yourbrand.com instead.",
       },
       {
-        question: "Do I have to buy a domain from HYDLNK?",
+        question: "Does HYDLNK sell domains?",
         answer:
-          "No. Use a domain you already own, from any registrar. HYDLNK doesn’t sell domains.",
+          "No. HYDLNK doesn’t sell or register domains. You connect a domain you already own, bought at any registrar. Pro includes 1 custom domain, Studio includes 15, and SSL is automatic.",
       },
     ],
   },
@@ -131,8 +134,8 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
           "Upgrade from your account settings through Stripe Checkout. Change your card, download invoices or cancel at any time in the Stripe billing portal, under Manage billing.",
       },
       {
-        question: "Is there a yearly price?",
-        answer: "Pro is $5 a month or $48 a year. Studio is $15 a month.",
+        question: "How much do Pro and Studio cost, and is there a yearly price?",
+        answer: `Pro is ${priceSentence("pro")}. Studio is ${priceSentence("studio")}. Paying yearly costs less than twelve monthly payments. Prices are in US dollars, and Free costs nothing with no time limit.`,
       },
     ],
   },

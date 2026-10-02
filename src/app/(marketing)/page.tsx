@@ -19,12 +19,12 @@ import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
 import { ThemeTokens } from "@/components/marketing/theme-tokens";
 import { marketingMetadata } from "@/components/marketing/metadata";
+import { monthlyText, perMonthBilledYearlyText } from "@/lib/marketing/prices";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/",
   title: { absolute: "HYDLNK — Link in bio, with real design control" },
-  description:
-    "Block layouts, a full theme system and your own domain — so your link page looks like your brand, not ours. Free forever, custom domains from $5 a month.",
+  description: `Block layouts, a full theme system and your own domain — so your link page looks like your brand, not ours. Free forever; connect a domain you own on Pro, ${monthlyText("pro")} or ${perMonthBilledYearlyText("pro")}.`,
   image: "home",
 });
 
@@ -46,7 +46,7 @@ const STEPS = [
   {
     number: "03",
     title: "Style it, then publish",
-    body: "Start from a theme or set every token yourself. Nothing reaches your live page until you press Publish, and you can add your own domain on Pro.",
+    body: "Start from a theme or set every token yourself. Nothing reaches your live page until you press Publish, and on Pro you can connect a domain you already own.",
     href: guideHref("designing-your-page"),
     link: "Designing your page",
   },
@@ -109,7 +109,7 @@ export default function HomePage() {
           eyebrow="Free on every plan"
           titleId="blocks-title"
           title="Nine blocks. Any order. Every plan."
-          lead="Every plan gets every block and the whole theme system. You pay for your own domain or more pages — never to make your page look good."
+          lead="Every plan gets every block and the whole theme system. You pay to connect your own domain or for more pages — never to make your page look good."
         />
         <ul className="mt-10 grid gap-3 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3">
           {BLOCK_CATALOG.map((block) => (
@@ -142,7 +142,7 @@ export default function HomePage() {
           <SectionIntro
             eyebrow="Pricing"
             titleId="pricing-title"
-            title="Pay for your domain, not your design."
+            title="Design is never the paywall."
             lead="No commerce fees on any plan. Cancel anytime from your billing portal."
           />
           <ButtonLink href="/pricing" variant="secondary">

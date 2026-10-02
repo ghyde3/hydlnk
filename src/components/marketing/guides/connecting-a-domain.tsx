@@ -15,14 +15,17 @@ export const connectingADomain: GuideBody = {
     <>
       <p>
         Your page always has its free address, <code>yourname.hydlnk.com</code>. On Pro and
-        Studio you can also serve it from a domain you own. It takes one DNS record, and most of
-        the work after that happens on its own.
+        Studio you can also serve it from a domain you already own. It takes one DNS record, and
+        the rest, including SSL, happens on its own.
       </p>
 
       <h2 id="before">Before you start</h2>
       <ul>
         <li>A Pro plan (one custom domain) or Studio (fifteen).</li>
-        <li>A domain you own, bought from any registrar. HYDLNK doesn’t sell domains.</li>
+        <li>
+          A domain you already own, bought from any registrar. HYDLNK doesn’t sell or register
+          domains.
+        </li>
         <li>Access to the DNS settings for that domain, usually your registrar’s dashboard.</li>
       </ul>
 

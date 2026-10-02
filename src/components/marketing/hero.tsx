@@ -1,4 +1,5 @@
 import { clientEnv } from "@/lib/env/client";
+import { perMonthBilledYearlyText } from "@/lib/marketing/prices";
 import { ClaimForm } from "./claim-form";
 import { Container, H1 } from "./primitives";
 import { Showreel } from "./showreel";
@@ -33,7 +34,8 @@ export function Hero() {
               <ClaimForm id="hero-handle" rootDomain={clientEnv.NEXT_PUBLIC_ROOT_DOMAIN} />
             </div>
             <p className="mt-3.5 text-[13px] text-text-2">
-              Free forever · No card required · Custom domains from $5/mo
+              Free forever · No card required · Bring your own domain from{" "}
+              {perMonthBilledYearlyText("pro")}
             </p>
           </div>
         </div>

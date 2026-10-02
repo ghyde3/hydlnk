@@ -78,8 +78,9 @@ export function DomainAnalytics() {
         </Chip>
         <h3 className={CARD_TITLE}>Your domain, not ours.</h3>
         <p className={CARD_BODY}>
-          Add links.yourbrand.com, set the one DNS record the editor shows you, and SSL is issued
-          automatically. Click links stay on your domain too.
+          Connect a domain you already own, bought at any registrar: add links.yourbrand.com, set
+          the one DNS record the editor shows you, and SSL is issued automatically. HYDLNK doesn’t
+          sell domains.
         </p>
         <div className="mt-2">
           <DnsExample />

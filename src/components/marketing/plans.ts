@@ -1,15 +1,34 @@
+import {
+  PRICES,
+  monthlyText,
+  perMonthBilledYearlyText,
+  perMonthWhenYearly,
+  usd,
+  yearlySavings,
+  yearlyText,
+  type BillingInterval,
+} from "@/lib/marketing/prices";
+
 /**
  * Plans as PLAN.md's monetization table describes them, limited to what ships in v1: scheduled
- * links, team access and CSV export are later, so they are not listed. Prices are in US dollars.
+ * links, team access and CSV export are later, so they are not listed. Every dollar amount comes
+ * from src/lib/marketing/prices.ts.
  */
+
+export interface PlanPrice {
+  /** The big figure. */
+  amount: string;
+  /** Right after it: "/ month". */
+  per: string;
+  /** Second price line, under the main one. */
+  note: string;
+}
 
 export interface Plan {
   id: "free" | "pro" | "studio";
   name: string;
-  price: string;
-  per: string;
-  /** Second price line, under the main one. */
-  note: string;
+  /** What the card shows for each billing period; Free is the same object for both. */
+  price: Record<BillingInterval, PlanPrice>;
   blurb: string;
   cta: string;
   featured?: boolean;
@@ -18,13 +37,13 @@ export interface Plan {
   dash?: string;
 }
 
+const FREE_PRICE: PlanPrice = { amount: usd(0), per: "forever", note: "No card required" };
+
 export const PLANS: readonly Plan[] = [
   {
     id: "free",
     name: "Free",
-    price: "$0",
-    per: "forever",
-    note: "No card required",
+    price: { monthly: FREE_PRICE, yearly: FREE_PRICE },
     blurb: "One page that looks properly designed.",
     cta: "Start free",
     items: [
@@ -40,15 +59,20 @@ export const PLANS: readonly Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    price: "$5",
-    per: "/ month",
-    note: "or $48 a year",
+    price: {
+      monthly: { amount: usd(PRICES.pro.monthly), per: "/ month", note: "Billed monthly" },
+      yearly: {
+        amount: usd(perMonthWhenYearly("pro")),
+        per: "/ month, billed yearly",
+        note: `${yearlyText("pro")}, save ${usd(yearlySavings("pro"))}`,
+      },
+    },
     blurb: "For creators and small brands on their own domain.",
     cta: "Go Pro",
     featured: true,
     lead: "Everything in Free, plus",
     items: [
-      "1 custom domain with SSL",
+      "1 custom domain you own, with automatic SSL",
       "3 pages",
       "No badge",
       "Unlimited saved themes",
@@ -59,25 +83,45 @@ export const PLANS: readonly Plan[] = [
   {
     id: "studio",
     name: "Studio",
-    price: "$15",
-    per: "/ month",
-    note: "Billed monthly",
+    price: {
+      monthly: { amount: usd(PRICES.studio.monthly), per: "/ month", note: "Billed monthly" },
+      yearly: {
+        amount: usd(perMonthWhenYearly("studio")),
+        per: "/ month, billed yearly",
+        note: `${yearlyText("studio")}, save ${usd(yearlySavings("studio"))}`,
+      },
+    },
     blurb: "For agencies and teams running pages for others.",
     cta: "Start Studio",
     lead: "Everything in Pro, plus",
-    items: ["15 pages and 15 custom domains", "Themes shared across pages", "1 GB of uploads"],
+    items: [
+      "15 pages and 15 custom domains you own",
+      "Themes shared across pages",
+      "1 GB of uploads",
+    ],
   },
 ];
 
 /** The comparison table on /pricing: one row per line of PLAN.md's table that ships in v1. */
 export const COMPARISON: readonly { label: string; values: [string, string, string] }[] = [
-  { label: "Price", values: ["$0", "$5 a month or $48 a year", "$15 a month"] },
+  {
+    label: "Price, billed monthly",
+    values: [usd(0), monthlyText("pro"), monthlyText("studio")],
+  },
+  {
+    label: "Price, billed yearly",
+    values: [
+      usd(0),
+      `${yearlyText("pro")} (${perMonthBilledYearlyText("pro")})`,
+      `${yearlyText("studio")} (${perMonthBilledYearlyText("studio")})`,
+    ],
+  },
   { label: "Pages", values: ["1", "3", "15"] },
   { label: "Blocks and design tokens", values: ["All", "All", "All"] },
   { label: "Saved themes", values: ["3", "Unlimited", "Unlimited, shared across pages"] },
   {
     label: "Address",
-    values: ["yourname.hydlnk.com", "+ 1 custom domain", "15 custom domains"],
+    values: ["yourname.hydlnk.com", "+ 1 custom domain you own", "+ 15 custom domains you own"],
   },
   { label: "SSL for custom domains", values: ["—", "Automatic", "Automatic"] },
   { label: "Footer badge", values: ["“Made with HYDLNK”", "Removable", "Removable"] },
