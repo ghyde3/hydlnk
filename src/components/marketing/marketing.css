@@ -145,7 +145,8 @@
   border-top: 1px solid var(--hl-line);
   text-align: left;
   vertical-align: top;
-  overflow-wrap: anywhere;
+  /* Words stay whole (the table widens their column); long code values can still break. */
+  overflow-wrap: break-word;
 }
 
 .prose-hl thead th {
