@@ -40,12 +40,19 @@ interface Sub {
   itemId: string;
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: number;
+  metadata: Fields;
+}
+interface Session {
+  id: string;
+  customer: string | null;
+  status: "open" | "complete" | "expired";
 }
 
 const requests: Recorded[] = [];
 const customers = new Map<string, { id: string; email: string | null; metadata: Fields }>();
 const customerByIdempotencyKey = new Map<string, string>();
 const subs = new Map<string, Sub>();
+const sessions = new Map<string, Session>();
 const failures: Failure[] = [];
 let counter = 0;
 let lastActivity = Date.now();
@@ -59,7 +66,7 @@ function subJson(sub: Sub) {
     customer: sub.customer,
     status: sub.status,
     cancel_at_period_end: sub.cancelAtPeriodEnd,
-    metadata: {},
+    metadata: sub.metadata,
     items: {
       object: "list",
       data: [
@@ -71,6 +78,18 @@ function subJson(sub: Sub) {
         },
       ],
     },
+  };
+}
+
+function sessionJson(session: Session, form: Fields = {}) {
+  return {
+    id: session.id,
+    object: "checkout.session",
+    mode: form.mode ?? "subscription",
+    status: session.status,
+    customer: session.customer,
+    client_reference_id: form.client_reference_id ?? null,
+    url: session.status === "open" ? `${base}/c/pay/${session.id}` : null,
   };
 }
 
@@ -121,9 +140,22 @@ async function control(req: http.IncomingMessage, res: http.ServerResponse, url:
       itemId: input.itemId ?? `si_${input.id.replace(/^sub_/, "")}`,
       cancelAtPeriodEnd: input.cancelAtPeriodEnd ?? false,
       currentPeriodEnd: input.currentPeriodEnd ?? Math.floor(Date.now() / 1000) + 30 * 86400,
+      metadata: input.metadata ?? {},
     };
     subs.set(sub.id, sub);
     return send(res, 200, subJson(sub));
+  }
+  if (path === "/__stub/sessions" && req.method === "POST") {
+    // Seeds a Checkout Session without going through the recorded API (an open one, by default).
+    const input = JSON.parse(await readBody(req)) as Partial<Session>;
+    const id = `cs_test_seed_${Date.now().toString(36)}_${++counter}`;
+    const session: Session = { id, customer: input.customer ?? null, status: input.status ?? "open" };
+    sessions.set(id, session);
+    return send(res, 200, session);
+  }
+  if (path === "/__stub/session" && req.method === "GET") {
+    const session = sessions.get(url.searchParams.get("id") ?? "");
+    return session ? send(res, 200, session) : send(res, 404, { error: "unknown" });
   }
   if (path === "/__stub/subscription" && req.method === "GET") {
     const sub = subs.get(url.searchParams.get("id") ?? "");
@@ -193,14 +225,33 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
 
   if (method === "POST" && path === "/v1/checkout/sessions") {
     const id = `cs_test_stub_${Date.now().toString(36)}_${counter}`;
-    return send(res, 200, {
-      id,
-      object: "checkout.session",
-      mode: form.mode,
-      customer: form.customer ?? null,
-      client_reference_id: form.client_reference_id ?? null,
-      url: `${base}/c/pay/${id}`,
-    });
+    sessions.set(id, { id, customer: form.customer ?? null, status: "open" });
+    return send(res, 200, sessionJson(sessions.get(id)!, form));
+  }
+
+  if (method === "GET" && path === "/v1/checkout/sessions") {
+    const customer = url.searchParams.get("customer");
+    const status = url.searchParams.get("status");
+    const data = [...sessions.values()]
+      .filter((s) => !customer || s.customer === customer)
+      .filter((s) => !status || s.status === status)
+      .map((s) => sessionJson(s));
+    return send(res, 200, { object: "list", data, has_more: false, url: "/v1/checkout/sessions" });
+  }
+
+  if (method === "POST" && (match = path.match(/^\/v1\/checkout\/sessions\/([^/]+)\/expire$/))) {
+    const session = sessions.get(match[1]!);
+    if (!session) return send(res, 404, notFound("checkout session").body);
+    if (session.status !== "open") {
+      return send(res, 400, {
+        error: {
+          type: "invalid_request_error",
+          message: "Only Checkout Sessions with a status in [\"open\"] can be expired.",
+        },
+      });
+    }
+    session.status = "expired";
+    return send(res, 200, sessionJson(session));
   }
 
   if (method === "POST" && path === "/v1/billing_portal/sessions") {

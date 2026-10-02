@@ -2,9 +2,15 @@ import Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * M4-03 / M4-04 / M4-08: the webhook handler against an in-memory database. The signature,
- * idempotency and invalidation rules are checked here without a server; the same rules run over
- * HTTP against the real database in tests/e2e/m4/billing-webhook.spec.ts.
+ * M4-03 / M4-04 / M4-08: the webhook handler against an in-memory database and a fake Stripe. The
+ * signature, idempotency, invalidation and retrieve-the-current-state rules are checked here
+ * without a server; the same rules run over HTTP against the real database and the Stripe stub in
+ * tests/e2e/m4/billing-webhook.spec.ts.
+ *
+ * The handler never believes an event's payload about a subscription: it asks Stripe (here, the
+ * `stripeState` map behind `subscriptions.retrieve`) and applies that. `deliver` makes that map
+ * match the event first (the in-order case); a test that sets `stripeState` itself and passes
+ * `{ seed: false }` stages out-of-order delivery.
  */
 
 vi.mock("server-only", () => ({}));
@@ -22,6 +28,7 @@ Object.assign(process.env, {
   NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000",
   SUPABASE_SECRET_KEY: "sb_secret_unit",
   STRIPE_WEBHOOK_SECRET: SECRET,
+  STRIPE_SECRET_KEY: "sk_test_unit_secret_key_value",
   ...PRICES,
 });
 
@@ -90,6 +97,24 @@ const fakeDb = {
 };
 vi.mock("@/lib/billing/account", () => ({ billingDb: () => fakeDb }));
 
+/** What Stripe currently says about each subscription id; an Error is thrown, a missing id is a 404. */
+const stripeState = new Map<string, unknown>();
+const retrieve = vi.fn(async (id: string) => {
+  const state = stripeState.get(id);
+  if (state instanceof Error) throw state;
+  if (state === undefined) {
+    throw Object.assign(new Error(`No such subscription: ${id}`), { code: "resource_missing" });
+  }
+  return state;
+});
+vi.mock("@/lib/billing/stripe", () => ({
+  getStripe: () => ({ subscriptions: { retrieve } }),
+  isMissingResource: (error: unknown) =>
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === "resource_missing",
+}));
+
 const invalidateAccountPages = vi.fn<(accountId: string) => Promise<number>>(async () => 1);
 vi.mock("@/lib/publish/invalidate", () => ({ invalidateAccountPages }));
 
@@ -148,7 +173,47 @@ const sign = (payload: object | string, secret = SECRET, timestamp?: number) => 
     }),
   };
 };
-const deliver = (payload: object) => {
+/** Stripe's subscription object, as `subscriptions.retrieve` returns it. */
+function stripeSubscription(
+  overrides: {
+    id?: string;
+    status?: string;
+    price?: string;
+    customer?: string;
+    cancel?: boolean;
+  } = {},
+) {
+  return {
+    id: overrides.id ?? "sub_unit_1",
+    object: "subscription",
+    customer: overrides.customer ?? CUSTOMER,
+    status: overrides.status ?? "active",
+    cancel_at_period_end: overrides.cancel ?? true,
+    metadata: {},
+    items: {
+      data: [
+        {
+          current_period_end: 1_795_000_000,
+          price: { id: overrides.price ?? PRICES.STRIPE_PRICE_PRO_MONTHLY },
+        },
+      ],
+    },
+  };
+}
+
+/** Makes Stripe's current state of the event's subscription match the event (a deleted event is canceled). */
+function seedFromEvent(payload: object) {
+  const event = payload as { type: string; data?: { object?: Record<string, unknown> } };
+  if (!event.type?.startsWith("customer.subscription.")) return;
+  const object = event.data?.object as ReturnType<typeof subscriptionEvent>["data"]["object"];
+  stripeState.set(object.id, {
+    ...object,
+    status: event.type === "customer.subscription.deleted" ? "canceled" : object.status,
+  });
+}
+
+const deliver = (payload: object, options: { seed?: boolean } = {}) => {
+  if (options.seed !== false) seedFromEvent(payload);
   const { body, signature } = sign(payload);
   return processWebhook(body, signature);
 };
@@ -158,6 +223,8 @@ beforeEach(() => {
   accounts.clear();
   processed.clear();
   rpcCalls.length = 0;
+  stripeState.clear();
+  retrieve.mockClear();
   touched = 0;
   rpcResult = "applied";
   recordFails = false;
@@ -279,7 +346,7 @@ describe("M4-04 what a verified subscription event writes", () => {
     }
   }
 
-  for (const status of ["canceled", "unpaid", "incomplete", "incomplete_expired", "paused"]) {
+  for (const status of ["canceled", "unpaid", "incomplete_expired", "paused"]) {
     it(`${status} applies the free plan, with no interval or period`, async () => {
       await deliver(subscriptionEvent({ status }));
       expect(rpcCalls).toHaveLength(1);
@@ -287,7 +354,15 @@ describe("M4-04 what a verified subscription event writes", () => {
     });
   }
 
-  it("customer.subscription.deleted applies the free plan whatever the status says", async () => {
+  it("incomplete is transient: it neither grants nor takes away, and the event is recorded", async () => {
+    const event = subscriptionEvent({ status: "incomplete" });
+    expect((await deliver(event)).status).toBe(200);
+    expect(rpcCalls).toEqual([]);
+    expect(invalidateAccountPages).not.toHaveBeenCalled();
+    expect(processed.has(event.id)).toBe(true);
+  });
+
+  it("customer.subscription.deleted on a subscription Stripe reports as canceled applies the free plan", async () => {
     await deliver(subscriptionEvent({ type: "customer.subscription.deleted", status: "active" }));
     expect(rpcCalls[0]).toMatchObject({ p_plan: "free", p_interval: null });
   });
@@ -325,7 +400,7 @@ describe("M4-04 what a verified subscription event writes", () => {
     }
   });
 
-  it("checkout.session.completed saves the customer id when there is none and never calls the plan writer", async () => {
+  it("checkout.session.completed without a subscription saves the customer id and never calls the plan writer", async () => {
     accounts.set(ACCOUNT, { id: ACCOUNT, stripe_customer_id: null });
     const result = await deliver({
       id: "evt_unit_checkout",
@@ -338,6 +413,7 @@ describe("M4-04 what a verified subscription event writes", () => {
     expect(result.status).toBe(200);
     expect(accounts.get(ACCOUNT)?.stripe_customer_id).toBe("cus_unit_co");
     expect(rpcCalls).toEqual([]);
+    expect(retrieve).not.toHaveBeenCalled();
   });
 });
 
@@ -350,6 +426,7 @@ describe("M4-04 / M4-08 idempotency, retries and the cache", () => {
   it("an event with the same id is acknowledged without being applied again", async () => {
     const event = subscriptionEvent({ id: "evt_unit_replayed" });
     const { body, signature } = sign(event);
+    seedFromEvent(event);
     expect((await processWebhook(body, signature)).status).toBe(200);
     expect(processed.has("evt_unit_replayed")).toBe(true);
     expect((await processWebhook(body, signature)).status).toBe(200);
@@ -385,5 +462,262 @@ describe("M4-04 / M4-08 idempotency, retries and the cache", () => {
   it("a failure to record the event answers 500 (the redelivery is a harmless no-op)", async () => {
     recordFails = true;
     expect((await deliver(subscriptionEvent())).status).toBe(500);
+  });
+});
+
+/** The events a subscription's checkout produces, in the shapes Stripe sends them. */
+const at = (created: number, event: ReturnType<typeof subscriptionEvent>) => ({ ...event, created });
+const T = 1_790_000_000;
+
+describe("M4-04 the webhook applies Stripe's current state, not the event's payload", () => {
+  it("retrieves the subscription once per subscription event and applies what Stripe says", async () => {
+    for (const type of [
+      "customer.subscription.created",
+      "customer.subscription.updated",
+      "customer.subscription.deleted",
+    ]) {
+      retrieve.mockClear();
+      rpcCalls.length = 0;
+      stripeState.set("sub_unit_1", stripeSubscription({ status: "active" }));
+      const event = subscriptionEvent({ type, status: "canceled" });
+      expect((await deliver(event, { seed: false })).status, type).toBe(200);
+      expect(retrieve.mock.calls, type).toEqual([["sub_unit_1"]]);
+      // The payload said canceled; Stripe says active on Pro monthly.
+      expect(rpcCalls, type).toHaveLength(1);
+      expect(rpcCalls[0], type).toMatchObject({ p_plan: "pro", p_interval: "month" });
+    }
+  });
+
+  it("an event that says active while Stripe says canceled applies Free", async () => {
+    stripeState.set("sub_unit_1", stripeSubscription({ status: "canceled" }));
+    await deliver(subscriptionEvent({ status: "active" }), { seed: false });
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({ p_plan: "free", p_interval: null, p_period_end: null });
+  });
+
+  it("uses the price and period Stripe reports now (a plan change the payload predates)", async () => {
+    stripeState.set(
+      "sub_unit_1",
+      stripeSubscription({ price: PRICES.STRIPE_PRICE_STUDIO_YEARLY, cancel: false }),
+    );
+    await deliver(
+      subscriptionEvent({ price: PRICES.STRIPE_PRICE_PRO_MONTHLY, status: "active" }),
+      { seed: false },
+    );
+    expect(rpcCalls[0]).toMatchObject({
+      p_plan: "studio",
+      p_interval: "year",
+      p_cancel_at_period_end: false,
+    });
+  });
+
+  // Same-second ties: both orders end in the state Stripe holds, because both events read it.
+  describe("two events with the same created second, in either order", () => {
+    const orders = (first: string, second: string) =>
+      [
+        [first, second],
+        [second, first],
+      ] as const;
+
+    it("updated(active) and created(incomplete): the account ends on the paid plan, never on Free", async () => {
+      const active = at(T, subscriptionEvent({ type: "customer.subscription.updated", status: "active" }));
+      const incomplete = at(
+        T,
+        subscriptionEvent({ type: "customer.subscription.created", status: "incomplete" }),
+      );
+      const events = { active, incomplete };
+      for (const order of orders("active", "incomplete")) {
+        rpcCalls.length = 0;
+        processed.clear();
+        // Stripe's state after the payment went through: active.
+        stripeState.set("sub_unit_1", stripeSubscription({ status: "active" }));
+        for (const name of order) {
+          expect((await deliver(events[name as keyof typeof events], { seed: false })).status).toBe(200);
+        }
+        expect(rpcCalls.length, order.join(">")).toBeGreaterThan(0);
+        for (const call of rpcCalls) {
+          expect(call, order.join(">")).toMatchObject({ p_plan: "pro", p_interval: "month" });
+        }
+      }
+    });
+
+    it("updated(active) and deleted: the account ends on Free, whichever arrives last", async () => {
+      const active = at(T, subscriptionEvent({ type: "customer.subscription.updated", status: "active" }));
+      const deleted = at(
+        T,
+        subscriptionEvent({ type: "customer.subscription.deleted", status: "canceled" }),
+      );
+      const events = { active, deleted };
+      for (const order of orders("active", "deleted")) {
+        rpcCalls.length = 0;
+        processed.clear();
+        // Stripe's state once the cancel happened: canceled.
+        stripeState.set("sub_unit_1", stripeSubscription({ status: "canceled" }));
+        for (const name of order) {
+          expect((await deliver(events[name as keyof typeof events], { seed: false })).status).toBe(200);
+        }
+        expect(rpcCalls.length, order.join(">")).toBeGreaterThan(0);
+        for (const call of rpcCalls) {
+          expect(call, order.join(">")).toMatchObject({ p_plan: "free", p_interval: null });
+        }
+      }
+    });
+  });
+
+  it("an incomplete subscription leaves the plan alone and the same event, replayed, asks Stripe only once", async () => {
+    stripeState.set("sub_unit_1", stripeSubscription({ status: "incomplete" }));
+    const event = subscriptionEvent({ type: "customer.subscription.created", status: "active" });
+    const { body, signature } = sign(event);
+    expect((await processWebhook(body, signature)).status).toBe(200);
+    expect((await processWebhook(body, signature)).status).toBe(200);
+    expect(rpcCalls).toEqual([]);
+    expect(retrieve).toHaveBeenCalledTimes(1);
+    expect(invalidateAccountPages).not.toHaveBeenCalled();
+  });
+
+  it("a replayed event is acknowledged without asking Stripe or writing again", async () => {
+    const event = subscriptionEvent({ id: "evt_unit_replay_stripe" });
+    const { body, signature } = sign(event);
+    seedFromEvent(event);
+    await processWebhook(body, signature);
+    await processWebhook(body, signature);
+    await processWebhook(body, signature);
+    expect(retrieve).toHaveBeenCalledTimes(1);
+    expect(rpcCalls).toHaveLength(1);
+  });
+
+  it("a subscription Stripe cannot find is ignored: no write, no downgrade, not recorded, no payload in the log", async () => {
+    // Nothing in stripeState: Stripe answers resource_missing.
+    const event = subscriptionEvent({ type: "customer.subscription.deleted", status: "canceled" });
+    const result = await deliver(event, { seed: false });
+    expect(result).toEqual({ status: 200, body: { received: true } });
+    expect(retrieve).toHaveBeenCalledTimes(1);
+    expect(rpcCalls).toEqual([]);
+    expect(processed.size).toBe(0);
+    expect(invalidateAccountPages).not.toHaveBeenCalled();
+    expect(errors).toHaveBeenCalled();
+    const logged = JSON.stringify(errors.mock.calls);
+    for (const fragment of [CUSTOMER, "sub_unit_1", "1795000000"]) {
+      expect(logged).not.toContain(fragment);
+    }
+  });
+
+  it("any other Stripe failure answers 500 and records nothing, so Stripe redelivers", async () => {
+    stripeState.set("sub_unit_1", new Error("Stripe is down"));
+    const result = await deliver(subscriptionEvent(), { seed: false });
+    expect(result).toEqual({ status: 500, body: { error: "processing_failed" } });
+    expect(rpcCalls).toEqual([]);
+    expect(processed.size).toBe(0);
+    // And it works on the redelivery.
+    stripeState.set("sub_unit_1", stripeSubscription());
+    expect((await deliver(subscriptionEvent(), { seed: false })).status).toBe(200);
+    expect(rpcCalls).toHaveLength(1);
+  });
+
+  it("a subscription that belongs to another customer than the account's is ignored", async () => {
+    stripeState.set("sub_unit_1", stripeSubscription({ customer: "cus_unit_other" }));
+    expect((await deliver(subscriptionEvent(), { seed: false })).status).toBe(200);
+    expect(rpcCalls).toEqual([]);
+    expect(processed.size).toBe(0);
+  });
+
+  it("a retrieved object for another subscription id, or an unreadable one, is ignored", async () => {
+    stripeState.set("sub_unit_1", stripeSubscription({ id: "sub_unit_other" }));
+    expect((await deliver(subscriptionEvent(), { seed: false })).status).toBe(200);
+    stripeState.set("sub_unit_1", { id: "sub_unit_1", object: "subscription" });
+    expect((await deliver(subscriptionEvent(), { seed: false })).status).toBe(200);
+    expect(rpcCalls).toEqual([]);
+  });
+
+  it("an unknown customer, an unhandled type and a bad signature never ask Stripe", async () => {
+    await deliver(subscriptionEvent({ customer: "cus_nobody" }));
+    await deliver({
+      id: "evt_unit_invoice2",
+      type: "invoice.paid",
+      created: T,
+      data: { object: { id: "in_1", customer: CUSTOMER } },
+    });
+    const { body } = sign(subscriptionEvent());
+    await processWebhook(body, "t=1,v1=00");
+    expect(retrieve).not.toHaveBeenCalled();
+  });
+
+  it("without STRIPE_SECRET_KEY the webhook cannot read Stripe's state: 500 webhook_not_configured, nothing processed", async () => {
+    const saved = process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_SECRET_KEY;
+    try {
+      const { body, signature } = sign(subscriptionEvent());
+      expect(await processWebhook(body, signature)).toEqual({
+        status: 500,
+        body: { error: "webhook_not_configured" },
+      });
+      expect(touched).toBe(0);
+    } finally {
+      process.env.STRIPE_SECRET_KEY = saved;
+    }
+  });
+
+  describe("checkout.session.completed", () => {
+    const session = (extra: Record<string, unknown> = {}) => ({
+      id: "evt_unit_co",
+      type: "checkout.session.completed",
+      created: T,
+      data: {
+        object: {
+          mode: "subscription",
+          customer: CUSTOMER,
+          client_reference_id: ACCOUNT,
+          ...extra,
+        },
+      },
+    });
+
+    it("that names its subscription applies the subscription's current state", async () => {
+      stripeState.set("sub_unit_1", stripeSubscription({ price: PRICES.STRIPE_PRICE_STUDIO_MONTHLY }));
+      const result = await deliver(session({ subscription: "sub_unit_1" }));
+      expect(result.status).toBe(200);
+      expect(retrieve.mock.calls).toEqual([["sub_unit_1"]]);
+      expect(rpcCalls).toEqual([
+        expect.objectContaining({
+          p_account_id: ACCOUNT,
+          p_event_created: new Date(T * 1000).toISOString(),
+          p_subscription_id: "sub_unit_1",
+          p_plan: "studio",
+          p_interval: "month",
+        }),
+      ]);
+      expect(invalidateAccountPages.mock.calls).toEqual([[ACCOUNT]]);
+    });
+
+    it("accepts the subscription as an expanded object, and saves a missing customer id first", async () => {
+      accounts.set(ACCOUNT, { id: ACCOUNT, stripe_customer_id: null });
+      stripeState.set("sub_unit_1", stripeSubscription({ customer: "cus_unit_co" }));
+      await deliver(
+        session({ customer: "cus_unit_co", subscription: { id: "sub_unit_1" } }),
+      );
+      expect(accounts.get(ACCOUNT)?.stripe_customer_id).toBe("cus_unit_co");
+      expect(rpcCalls).toHaveLength(1);
+      expect(rpcCalls[0]).toMatchObject({ p_plan: "pro" });
+    });
+
+    it("whose subscription is still incomplete changes nothing", async () => {
+      stripeState.set("sub_unit_1", stripeSubscription({ status: "incomplete" }));
+      await deliver(session({ subscription: "sub_unit_1" }));
+      expect(rpcCalls).toEqual([]);
+    });
+
+    it("in payment mode, or for another account's customer, never reads a subscription", async () => {
+      await deliver(session({ mode: "payment", subscription: "sub_unit_1" }));
+      expect(retrieve).not.toHaveBeenCalled();
+      // The account named by client_reference_id holds another customer: the customer is not saved
+      // and the subscription is reconciled only for the account that really owns that customer.
+      stripeState.set("sub_unit_1", stripeSubscription({ customer: "cus_unit_other" }));
+      await deliver({
+        ...session({ customer: "cus_unit_other", subscription: "sub_unit_1" }),
+        id: "evt_unit_co_other",
+      });
+      expect(rpcCalls).toHaveLength(1);
+      expect(rpcCalls[0]).toMatchObject({ p_account_id: OTHER });
+    });
   });
 });

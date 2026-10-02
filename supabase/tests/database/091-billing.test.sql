@@ -1,8 +1,16 @@
 -- M4-04: subscription state on accounts is server-written only, apply_subscription_state is the one
 -- writer (idempotent and order-safe), and stripe_events is a server-only table.
+--
+-- Event order (2026-10-02 release fix): `created` has one-second resolution, so two events about
+-- one subscription can carry the same second and arrive in either order. The webhook therefore
+-- never applies what an event says: for every subscription event it retrieves the subscription's
+-- CURRENT state from Stripe and applies that, so tied events agree, and the transient `incomplete`
+-- status is never sent here at all (the plan is left alone). What this function owes the webhook is
+-- a well-defined clock: strictly older is stale, the same second is not (the later arrival wins,
+-- harmlessly, because the two carry the same state). The "same second" block below pins that.
 
 begin;
-select plan(68);
+select plan(75);
 
 select tests.create_supabase_user('a', 'a@example.test');
 select tests.create_supabase_user('b', 'b@example.test');
@@ -194,6 +202,54 @@ select is(
   (select stripe_event_created_at from public.accounts where id = tests.get_supabase_uid('a')),
   '2026-10-02 13:00:00+00'::timestamptz,
   'an ignored event does not move the event clock'
+);
+
+-- Same second as the last event applied (13:00): not stale. The webhook retrieves Stripe's current
+-- state for every event, so two events that tie carry the same state and either order ends the same.
+select is(
+  public.apply_subscription_state(
+    tests.get_supabase_uid('a'), '2026-10-02 13:00:00+00', 'sub_2', 'studio', 'year', '2027-10-02 13:00:00+00', false
+  ),
+  'applied',
+  'an event from the same second as the last one applied is not stale'
+);
+select is(
+  (select row(plan, stripe_subscription_id, billing_interval)::text from public.accounts where id = tests.get_supabase_uid('a')),
+  '(studio,sub_2,year)',
+  'and its state is what the row holds (the later arrival of two tied events wins)'
+);
+select is(
+  public.apply_subscription_state(
+    tests.get_supabase_uid('a'), '2026-10-02 13:00:00+00', 'sub_2', 'free', null, null, false
+  ),
+  'applied',
+  'a cancel from that same second applies too (the webhook only sends it once Stripe says the subscription is over)'
+);
+select is(
+  (select row(plan, stripe_subscription_id, billing_interval, current_period_end, cancel_at_period_end)::text
+     from public.accounts where id = tests.get_supabase_uid('a')),
+  '(free,,,,f)',
+  'and clears the subscription columns'
+);
+select is(
+  public.apply_subscription_state(
+    tests.get_supabase_uid('a'), '2026-10-02 12:59:59+00', 'sub_2', 'pro', 'year', '2027-10-02 13:00:00+00', false
+  ),
+  'stale',
+  'one second older than the last event applied is still stale'
+);
+select is(
+  public.apply_subscription_state(
+    tests.get_supabase_uid('a'), '2026-10-02 14:00:00+00', 'sub_2', 'pro', 'year', '2027-10-02 14:00:00+00', false
+  ),
+  'applied',
+  'a newer event applies after it'
+);
+select is(
+  (select row(plan, stripe_subscription_id, billing_interval, stripe_event_created_at)::text
+     from public.accounts where id = tests.get_supabase_uid('a')),
+  '(pro,sub_2,year,"2026-10-02 14:00:00+00")',
+  'and the account is back on sub_2 for the checks below'
 );
 
 select is(

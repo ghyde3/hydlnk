@@ -87,10 +87,24 @@ export async function ensureStripeStub(): Promise<void> {
   throw new Error("the Stripe stub did not start");
 }
 
+let ready: Promise<void> | undefined;
+/** ensureStripeStub, once per worker: the seeding helpers call it so a spec need not remember to. */
+function stubReady(): Promise<void> {
+  ready ??= ensureStripeStub().catch((error) => {
+    ready = undefined;
+    throw error;
+  });
+  return ready;
+}
+
 export async function stubRequests(): Promise<StubRequest[]> {
   const res = await fetch(stubUrl("/__stub/requests"));
   return (await res.json()) as StubRequest[];
 }
+
+/** The `GET /v1/subscriptions/{id}` requests the stub saw: how often the webhook asked Stripe for this subscription. */
+export const stubRetrieves = (subscriptionId: string): Promise<StubRequest[]> =>
+  stubCalls("GET", `/v1/subscriptions/${subscriptionId}`);
 
 /** Every API request the stub saw whose path matches and that mentions `needle` (an id) in its form or query. */
 export async function stubCalls(
@@ -115,16 +129,81 @@ export async function stubCalls(
   });
 }
 
-export async function addStubSubscription(sub: {
+export interface StubSubscription {
   id: string;
   customer: string;
   priceId: string;
   status?: string;
   itemId?: string;
-}): Promise<void> {
-  await fetch(stubUrl("/__stub/subscriptions"), {
+  cancelAtPeriodEnd?: boolean;
+  /** Unix seconds. */
+  currentPeriodEnd?: number;
+  metadata?: Record<string, string>;
+}
+
+/**
+ * Makes Stripe's CURRENT state of a subscription what `sub` says (posting an id again overwrites
+ * it). The webhook asks the stub for this state whenever an event arrives, so a spec decides what
+ * Stripe "knows" here and what the events say separately: that is how out-of-order delivery is set up.
+ */
+export async function addStubSubscription(sub: StubSubscription): Promise<void> {
+  await stubReady();
+  const res = await fetch(stubUrl("/__stub/subscriptions"), {
     method: "POST",
     body: JSON.stringify(sub),
+  });
+  if (!res.ok) throw new Error(`seeding the stub subscription failed: HTTP ${res.status}`);
+}
+
+/** Same as addStubSubscription, with the name that reads right when a spec changes a subscription. */
+export const setStubSubscription = addStubSubscription;
+
+/** Seeds a Checkout Session the stub did not create through the API (open unless said otherwise). */
+export async function addStubSession(
+  customer: string,
+  status: "open" | "complete" | "expired" = "open",
+): Promise<string> {
+  await stubReady();
+  const res = await fetch(stubUrl("/__stub/sessions"), {
+    method: "POST",
+    body: JSON.stringify({ customer, status }),
+  });
+  return ((await res.json()) as { id: string }).id;
+}
+
+export async function stubSessionStatus(id: string): Promise<string | null> {
+  const res = await fetch(stubUrl(`/__stub/session?id=${encodeURIComponent(id)}`));
+  if (!res.ok) return null;
+  return ((await res.json()) as { status: string }).status;
+}
+
+/**
+ * Makes Stripe's current state of the event's subscription what the event says (a deleted event
+ * means canceled). The common, in-order case: the event is the newest thing that happened.
+ */
+export async function seedStubFromEvent(event: {
+  type?: string;
+  data?: { object?: unknown };
+}): Promise<void> {
+  if (!event.type?.startsWith("customer.subscription.")) return;
+  const object = event.data?.object as {
+    id: string;
+    customer: string;
+    status?: string;
+    cancel_at_period_end?: boolean;
+    metadata?: Record<string, string>;
+    items?: { data?: { id?: string; current_period_end?: number; price?: { id?: string } }[] };
+  };
+  const item = object.items?.data?.[0];
+  await addStubSubscription({
+    id: object.id,
+    customer: object.customer,
+    status: event.type === "customer.subscription.deleted" ? "canceled" : (object.status ?? "active"),
+    priceId: item?.price?.id ?? "price_unset",
+    ...(item?.id ? { itemId: item.id } : {}),
+    cancelAtPeriodEnd: object.cancel_at_period_end ?? false,
+    ...(item?.current_period_end ? { currentPeriodEnd: item.current_period_end } : {}),
+    metadata: object.metadata ?? {},
   });
 }
 
@@ -219,6 +298,8 @@ export function checkoutCompletedEvent(input: {
   customer: string;
   accountId: string;
   mode?: string;
+  /** The subscription the session created (sub_...), as a completed subscription Checkout names it. */
+  subscription?: string;
 }) {
   return {
     id: input.id ?? eventId(),
@@ -233,6 +314,7 @@ export function checkoutCompletedEvent(input: {
         mode: input.mode ?? "subscription",
         customer: input.customer,
         client_reference_id: input.accountId,
+        ...(input.subscription ? { subscription: input.subscription } : {}),
       },
     },
   };
@@ -269,8 +351,18 @@ export function postWebhook(
   });
 }
 
-/** Signs `payload` with the local secret and delivers it to the app host. */
-export function deliver(payload: object, opts?: Parameters<typeof signed>[1]) {
-  const { body, signature } = signed(payload, opts);
+/**
+ * Signs `payload` with the local secret and delivers it to the app host. A subscription event
+ * first makes the stub's current state of its subscription match the event (see
+ * seedStubFromEvent), because the webhook reads that state, not the payload; pass
+ * `{ seed: false }` when the spec has set the stub's state itself.
+ */
+export async function deliver(
+  payload: object,
+  opts: NonNullable<Parameters<typeof signed>[1]> & { seed?: boolean } = {},
+) {
+  const { seed = true, ...signing } = opts;
+  if (seed) await seedStubFromEvent(payload as Parameters<typeof seedStubFromEvent>[0]);
+  const { body, signature } = signed(payload, signing);
   return postWebhook(body, signature);
 }
