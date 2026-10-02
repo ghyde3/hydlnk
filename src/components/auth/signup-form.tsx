@@ -3,8 +3,9 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { submitSignup } from "@/lib/handles/actions";
 import { IDLE_FORM_STATE, type HandleFormState } from "@/lib/handles/form-state";
-import { handleDisplayHost } from "@/lib/handles/rules";
-import { OrDivider } from "./google-button";
+import { handleDisplayHost, normalizeHandle } from "@/lib/handles/rules";
+import { GoogleButton, OrDivider } from "./google-button";
+import { useGoogleHandleGate } from "./google-handle-gate";
 import { HandleField, type ServerHandleResult } from "./handle-field";
 
 const primaryButton =
@@ -12,27 +13,41 @@ const primaryButton =
 const secondaryButton =
   "flex min-h-12 w-full cursor-pointer items-center justify-center rounded-md border border-line-3 bg-surface px-4 text-[15px] font-semibold text-ink disabled:cursor-default disabled:opacity-70";
 
+const HANDLE_FIELD_ID = "su-handle";
+
 /**
- * The signup column (M1-11, M1-12, M1-13, Signup.dc.html): Handle field with live availability,
- * Email, "Email me a sign-in link", an "or" rule and "Continue with Google". The page around it
- * (heading, legal line, log in link) belongs to the signup page.
+ * The signup column (M1-11, M1-12, M1-13, M1-30, Signup.dc.html): Handle field with live
+ * availability, Email, "Email me a sign-in link", an "or" rule and Google's own sign-in button. The
+ * page around it (heading, legal line, log in link) belongs to the signup page.
  *
- * One Server Action answers both buttons (submitSignup, told apart by `intent`). It validates the
- * handle on the server before any email goes out or any cookie is set, and its verdict comes back
- * here as the same status line the live check shows. After a successful request the form gives way
- * to the "Check your email" state; the form stays mounted (hidden) so "Use a different email"
- * returns to it with the handle still filled in.
+ * The email button's Server Action (submitSignup) validates the handle on the server before any
+ * email goes out or any cookie is set, and its verdict comes back here as the same status line the
+ * live check shows. After a successful request the form gives way to the "Check your email" state;
+ * the form stays mounted (hidden) so "Use a different email" returns to it with the handle still
+ * filled in.
+ *
+ * Google's button is a separate flow (GoogleButton): it carries the handle to its own Server
+ * Action, which validates it again before signing anyone in. The button can't be pressed until the
+ * handle is known to be usable (useGoogleHandleGate); a press while it isn't moves focus to the
+ * handle field, whose status line already says why.
  */
 export function SignupForm({ initialHandle = "" }: { initialHandle?: string }) {
   const [state, action, pending] = useActionState(submitSignup, IDLE_FORM_STATE);
   const [email, setEmail] = useState("");
   const [dismissed, setDismissed] = useState<HandleFormState | null>(null);
+  const [googleRefusal, setGoogleRefusal] = useState<ServerHandleResult | null>(null);
+  // Tracks what is typed in the handle field (the field itself is HandleField's), through the
+  // input events that bubble up to the form.
+  const [handle, setHandle] = useState(() => normalizeHandle(initialHandle));
+  const googleGate = useGoogleHandleGate(handle);
   const emailRef = useRef<HTMLInputElement>(null);
 
-  const serverResult = useMemo<ServerHandleResult | null>(
+  const emailServerResult = useMemo<ServerHandleResult | null>(
     () => (state.kind === "handle" ? { handle: state.handle, status: state.status } : null),
     [state],
   );
+  // Whichever verdict came last: the email action's (re-created per submit) or Google's.
+  const serverResult = googleRefusal ?? emailServerResult;
   const showSent = state.kind === "sent" && dismissed !== state;
 
   useEffect(() => {
@@ -50,8 +65,24 @@ export function SignupForm({ initialHandle = "" }: { initialHandle?: string }) {
 
   return (
     <>
-      <form action={action} noValidate hidden={showSent} className="flex flex-col gap-5">
-        <HandleField id="su-handle" initialValue={initialHandle} serverResult={serverResult} />
+      <form
+        action={action}
+        noValidate
+        hidden={showSent}
+        className="flex flex-col gap-5"
+        onInput={(event) => {
+          const target = event.target;
+          if (target instanceof HTMLInputElement && target.name === "handle") {
+            setHandle(normalizeHandle(target.value));
+            setGoogleRefusal(null);
+          }
+        }}
+      >
+        <HandleField
+          id={HANDLE_FIELD_ID}
+          initialValue={initialHandle}
+          serverResult={serverResult}
+        />
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="su-email" className="text-sm font-semibold">
@@ -97,16 +128,14 @@ export function SignupForm({ initialHandle = "" }: { initialHandle?: string }) {
 
         <OrDivider />
 
-        <button
-          type="submit"
-          name="intent"
-          value="google"
-          formNoValidate
-          disabled={pending}
-          className={secondaryButton}
-        >
-          Continue with Google
-        </button>
+        <GoogleButton
+          handle={handle}
+          blocked={googleGate.blocked}
+          onBlockedPress={() => document.getElementById(HANDLE_FIELD_ID)?.focus()}
+          onHandleRefused={({ handle: refused, status }) =>
+            setGoogleRefusal({ handle: refused, status })
+          }
+        />
       </form>
 
       {showSent && state.kind === "sent" ? (

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/env/client";
+import { setAppHeaders } from "./app-headers";
 import { hostOnlyCookie } from "./cookies";
 
 /**
@@ -46,13 +47,6 @@ export async function rewriteWithSession(
     console.error("[proxy] session refresh failed", error);
   }
 
-  // Everything the app host serves depends on the session cookie: never stored by a browser
-  // (back button after sign-out) or a shared cache (M1-07).
-  response.headers.set("Cache-Control", "no-store");
-  // The app host holds Sign out, Delete account and the claim form: never inside someone else's frame.
-  response.headers.set("Content-Security-Policy", "frame-ancestors 'none'");
-  response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  setAppHeaders(response.headers);
   return response;
 }

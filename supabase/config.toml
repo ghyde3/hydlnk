@@ -402,11 +402,16 @@ skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
 
-# Google sign-in. Disabled by default so `supabase start` works without the secret.
-# To enable it locally (Gary only): put SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET=<secret> in the
-# git-ignored supabase/.env, set enabled = true and client_id to the OAuth client id from the Google
-# Cloud project "HYDLNK" in your working copy, and do not commit those two changes. The Google client
-# already allows the local redirect URI http://127.0.0.1:54321/auth/v1/callback.
+# Google sign-in (M1-29, M1-30). The app signs in with a Google ID token (Google Identity Services:
+# `signInWithIdToken`), not with the redirect flow, and it checks the token's nonce and audience
+# itself. Disabled by default so `supabase start` works without the secret, and the Playwright specs
+# stub Google's script, so none of this is needed to run the suite.
+# To try the real thing locally (Gary only): put SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET=<secret> in
+# the git-ignored supabase/.env, set enabled = true and client_id to the Web client id of the Google
+# Cloud project "HYDLNK" (the same id as NEXT_PUBLIC_GOOGLE_CLIENT_ID) in your working copy, and do
+# not commit those two changes. Leave skip_nonce_check = false: the page sends a hashed nonce and
+# Supabase must verify it. Google's popup also needs the page's origin among the client's authorized
+# JavaScript origins.
 [auth.external.google]
 enabled = false
 client_id = ""
@@ -416,7 +421,7 @@ secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
 redirect_uri = ""
 # Overrides the default auth provider URL.
 url = ""
-# If enabled, the nonce check will be skipped. Only needed for signInWithIdToken, not the redirect flow.
+# Keep false: the Google button sends sha256 of a nonce and Supabase verifies it against the ID token.
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false

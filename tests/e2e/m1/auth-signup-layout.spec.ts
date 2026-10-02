@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { routeGoogleScript, stubFace } from "../fixtures/google-stub";
 
 const SIGNUP = url("app", "/signup");
 const css = (page: Page, selector: string, prop: string) =>
@@ -9,7 +10,8 @@ const css = (page: Page, selector: string, prop: string) =>
     .evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), prop);
 
 test.describe("M1-10 signup page layout with brand panel and form", () => {
-  test("M1-10 title and form column copy", async ({ page }) => {
+  test("M1-10 title and form column copy", async ({ page, context }) => {
+    await routeGoogleScript(context);
     const response = await page.goto(SIGNUP);
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("HYDLNK \u2014 Sign up");
@@ -23,7 +25,8 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Email me a sign-in link" })).toBeVisible();
     await expect(page.getByText("or", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    // Google's own button (stubbed here, M1-30) follows the "or" rule.
+    await expect(stubFace(page)).toBeVisible();
     await expect(page.getByText("By continuing you agree to the")).toBeVisible();
     await expect(page.getByRole("link", { name: "Terms" })).toHaveAttribute(
       "href",
@@ -65,9 +68,20 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     expect(primary).toEqual({ h: 48, bg: "rgb(28, 27, 26)", color: "rgb(255, 255, 255)" });
   });
 
-  test("M1-10 tab order and a 2px brass focus outline with 2px offset", async ({ page }) => {
+  test("M1-10 tab order and a 2px brass focus outline with 2px offset", async ({
+    page,
+    context,
+  }) => {
+    await routeGoogleScript(context);
     await page.goto(SIGNUP);
     await page.getByRole("heading", { level: 1 }).waitFor();
+    // Wait for Google's button to be drawn: until then a disabled placeholder holds its space, and
+    // it is not focusable. With no handle yet it is covered by an aria-disabled "Continue with
+    // Google" button (M1-30), which only exists once the placeholder is gone.
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     const seen: string[] = [];
     for (let i = 0; i < 9; i++) {
       await page.keyboard.press("Tab");
@@ -103,6 +117,8 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     expect(seen[1]).toBe("input:su-handle"); // handle
     expect(seen[2]).toBe("input:su-email"); // email
     expect(seen[3]).toBe("button:Email me a sign-in link");
+    // With no handle yet Google's button is covered by an aria-disabled "Continue with Google"
+    // button (M1-30), and that cover is the focus stop: the iframe under it is inert.
     expect(seen[4]).toBe("button:Continue with Google");
     expect(seen[5]).toBe("a:Terms");
     expect(seen[6]).toBe("a:Privacy Policy");

@@ -8,7 +8,6 @@ export const metadata: Metadata = { title: { absolute: "HYDLNK — Log in" } };
 /** Copy for the `?error=` codes /auth/callback redirects here with. Unknown codes show nothing. */
 const NOTICES: Record<string, string> = {
   link_invalid: "That sign-in link expired or was already used. Request a new one.",
-  google_cancelled: "Google sign-in didn’t finish. Try again or use an email link.",
 };
 
 export default async function LoginPage({ searchParams }: PageProps<"/app/login">) {

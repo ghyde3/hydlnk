@@ -11,7 +11,10 @@
 #     sandbox's earlier ids, the Studio yearly one is invented. The amounts the app shows come from
 #     src/lib/billing/prices.ts, never from these ids;
 #   * STRIPE_API_HOST points the Stripe SDK at the stub the billing specs start on 127.0.0.1:12111;
-#   * VERCEL_API_BASE_URL points the Vercel client at the stub Playwright starts on 127.0.0.1:12112.
+#   * VERCEL_API_BASE_URL points the Vercel client at the stub Playwright starts on 127.0.0.1:12112;
+#   * NEXT_PUBLIC_GOOGLE_CLIENT_ID is a placeholder client id (public, not secret): it makes the Google
+#     button render so the Playwright specs, which stub Google's script, can exercise it. Google's
+#     real script answers it with an error, so use a real id only to try the real popup.
 # STRIPE_API_HOST and VERCEL_API_BASE_URL are test-only: env validation refuses both when
 # VERCEL_ENV=production, and a missing VERCEL_API_TOKEN / VERCEL_PROJECT_ID makes a domain removal
 # fail closed, so production never talks to a stub and never skips the call.
@@ -42,6 +45,7 @@ VERCEL_API_TOKEN=local_placeholder_not_a_real_token
 VERCEL_PROJECT_ID=prj_local_placeholder
 VERCEL_TEAM_ID=team_local_placeholder
 VERCEL_API_BASE_URL=http://127.0.0.1:12112
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=local-placeholder-client-id.apps.googleusercontent.com
 EOF_PLACEHOLDERS
   chmod 600 "$file"
   echo "$added"

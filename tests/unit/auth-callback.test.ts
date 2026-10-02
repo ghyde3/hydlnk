@@ -113,9 +113,9 @@ describe("M1-08 auth callback: Google", () => {
     expect(location(response)).toBe(`${APP}/`);
   });
 
-  it("redirects a provider error to /login?error=google_cancelled without a session", async () => {
+  it("redirects a provider error to /login?error=link_invalid without a session", async () => {
     const response = await call("?error=access_denied&error_description=User+cancelled");
-    expect(location(response)).toBe(`${APP}/login?error=google_cancelled`);
+    expect(location(response)).toBe(`${APP}/login?error=link_invalid`);
     expect(exchangeCodeForSession).not.toHaveBeenCalled();
     expect(response.headers.get("set-cookie")).toBeNull();
   });
