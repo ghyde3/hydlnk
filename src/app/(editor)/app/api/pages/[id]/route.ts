@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
+import { ACCOUNT_SUSPENDED_CODE } from "@/lib/admin/suspension";
 import { getSessionUser } from "@/lib/auth/session";
 import { clientEnv } from "@/lib/env/client";
 import { deletePage } from "@/lib/pages/delete-page";
@@ -21,6 +22,7 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  *   404  not_found: another account's page, an unknown id and a malformed id all read the same
  *   400  confirmation_mismatch (the typed text must equal the page's handle, checked here)
  *        or a body that is not JSON
+ *   403  account_suspended (code too): a suspended owner cannot delete a page, nothing is touched
  *   502  domain_removal_failed: a custom domain could not be removed from the hosting project;
  *        the page and its domain rows are intact
  *   200  {handle, remaining, redirectTo}: `redirectTo` is "/claim" when that was the last page;
@@ -58,7 +60,12 @@ export async function DELETE(
     const result = await deletePage(user.id, id, confirm);
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error, message: result.message },
+        {
+          error: result.error,
+          message: result.message,
+          // A suspended owner gets the stable code too (M5-09).
+          ...(result.error === "account_suspended" ? { code: ACCOUNT_SUSPENDED_CODE } : {}),
+        },
         { status: result.status, headers: NO_STORE },
       );
     }

@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { isAccountSuspended } from "@/lib/admin/suspension";
 import { getSessionUser } from "@/lib/auth/session";
 import { cancelAccountBilling } from "@/lib/billing/cancel";
 import { expireDeletedPages } from "@/lib/publish/invalidate";
@@ -17,6 +18,10 @@ export type DeleteAccountState = { error: string } | null;
 const BILLING_ERROR = "We couldn’t cancel your subscription. Try again.";
 const DOMAIN_ERROR = "We couldn’t remove your custom domain. Try again.";
 const MEDIA_ERROR = "We couldn’t remove your uploaded images. Try again.";
+/** A suspended account cannot be deleted (M5-09): that would erase the suspension and free its handle. */
+const SUSPENDED_ERROR =
+  "Your account is suspended, so it can’t be deleted. Contact support to appeal.";
+const SUSPENDED_CHECK_ERROR = "We couldn’t check your account. Try again.";
 
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : "unknown");
 
@@ -52,6 +57,12 @@ const ACCOUNT_DELETED_PATH = "/login?deleted=1";
  *   2. each custom domain of the user's pages is removed from the Vercel project;
  *   3. the user's objects under `{uid}/` in the `page-media` bucket are removed.
  * Every step is safe to run again, so a retry after a failure picks up where it stopped.
+ *
+ * M5-09: a suspended account cannot be deleted. The account is read first (secret key, fresh) and a
+ * suspended one, one that cannot be read, or one with no account row is refused before anything
+ * else runs: no Stripe call, no domain, no image, no auth deletion. Without this a suspended owner
+ * could delete the account, which erases `suspended_at`, frees the handle and wipes the page the
+ * admin needs to review.
  */
 export async function deleteAccount(
   _previous: DeleteAccountState,
@@ -59,6 +70,13 @@ export async function deleteAccount(
 ): Promise<DeleteAccountState> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+
+  try {
+    if (await isAccountSuspended(user.id)) return { error: SUSPENDED_ERROR };
+  } catch (error) {
+    console.error("[account] reading the account before a delete failed", errorText(error));
+    return { error: SUSPENDED_CHECK_ERROR };
+  }
 
   const confirmation = formData.get("confirm");
   const supabase = await createServerSupabase();

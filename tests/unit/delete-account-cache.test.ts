@@ -35,6 +35,9 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
+const isAccountSuspended = vi.fn();
+vi.mock("@/lib/admin/suspension", () => ({ isAccountSuspended }));
+
 const deleteUser = vi.fn();
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminSupabase: () => ({ auth: { admin: { deleteUser } } }),
@@ -42,7 +45,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 
 // M4-34: the steps that run before the delete (billing, Vercel domains, uploaded images) have their
 // own tests (billing-delete-account.test.ts); here they are no-ops.
-vi.mock("@/lib/billing/cancel", () => ({ cancelAccountBilling: async () => 0 }));
+const cancelBilling_ = vi.fn(async () => 0);
+vi.mock("@/lib/billing/cancel", () => ({ cancelAccountBilling: cancelBilling_ }));
 vi.mock("@/lib/pages/delete-domains", () => ({ removeAccountDomains: async () => undefined }));
 vi.mock("@/lib/pages/delete-media", () => ({ removeAccountMedia: async () => undefined }));
 
@@ -60,6 +64,7 @@ function form(confirm: string): FormData {
 beforeEach(() => {
   vi.clearAllMocks();
   getSessionUser.mockResolvedValue({ id: "user-1" });
+  isAccountSuspended.mockResolvedValue(false);
   cookieStore.get.mockReturnValue(undefined);
   deleteUser.mockResolvedValue({ error: null });
   pages = [
@@ -115,5 +120,37 @@ describe("M1-22 / M2-26 deleting an account expires the cache for each of its pa
     await expect(deleteAccount(null, form("mara"))).rejects.toMatchObject({
       to: "/login?deleted=1",
     });
+  });
+});
+
+const cancelBilling = cancelBilling_;
+describe("M5-09 a suspended account cannot be deleted", () => {
+  it("is refused before anything else runs: no delete, no cache expiry, and the answer says why", async () => {
+    isAccountSuspended.mockResolvedValue(true);
+    await expect(deleteAccount(null, form("mara"))).resolves.toEqual({
+      error: "Your account is suspended, so it can’t be deleted. Contact support to appeal.",
+    });
+    expect(isAccountSuspended).toHaveBeenCalledWith("user-1");
+    expect(deleteUser).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+    expect(cancelBilling).not.toHaveBeenCalled();
+  });
+
+  it("fails closed: an account that cannot be read is not deleted either", async () => {
+    isAccountSuspended.mockRejectedValue(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await expect(deleteAccount(null, form("mara"))).resolves.toEqual({
+      error: "We couldn’t check your account. Try again.",
+    });
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("unsuspended, the same call goes through", async () => {
+    isAccountSuspended.mockResolvedValue(false);
+    await expect(deleteAccount(null, form("mara"))).rejects.toMatchObject({
+      to: "/login?deleted=1",
+    });
+    expect(deleteUser).toHaveBeenCalledWith("user-1");
   });
 });

@@ -660,9 +660,21 @@ test.describe("M2-30 OG image and social metadata", () => {
     expect(res.body.length).toBeGreaterThan(5_000);
     expect(res.headers["cache-control"]).toMatch(/public/);
     expect(res.headers["cache-control"]).toMatch(/s-maxage=\d+|max-age=\d+/);
-    // The exact URL of the metadata is immutable; the bare /og is cached briefly.
+    // The exact URL of the metadata is immutable; the bare /og is cached briefly. Neither may sit in a
+    // CDN for more than five minutes (M5-08): nothing purges a CDN copy, and a suspended page's name,
+    // bio and photo must not outlive its 404.
     expect(res.headers["cache-control"]).toMatch(/immutable/);
+    const longest = (value: unknown) =>
+      Math.max(
+        ...[
+          ...String(value).matchAll(
+            /(?:s-)?maxage=(\d+)|max-age=(\d+)|stale-while-revalidate=(\d+)/g,
+          ),
+        ].map((m) => Number(m[1] ?? m[2] ?? m[3])),
+      );
+    expect(longest(res.headers["cache-control"])).toBeLessThanOrEqual(300);
     const bare = await tenantGet("mara", "/og");
+    expect(longest(bare.headers["cache-control"])).toBeLessThanOrEqual(300);
     expect(bare.headers["cache-control"]).toMatch(/public/);
     expect(bare.body.equals(res.body)).toBe(true);
   });

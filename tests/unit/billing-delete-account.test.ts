@@ -51,6 +51,10 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminSupabase: () => ({ auth: { admin: { deleteUser } } }),
 }));
 
+// M5-09: a suspended account cannot be deleted; this file is about the order of the steps of an
+// ordinary deletion (the suspended case is in delete-account-cache.test.ts).
+vi.mock("@/lib/admin/suspension", () => ({ isAccountSuspended: async () => false }));
+
 const cancelAccountBilling = vi.fn<(id: string) => Promise<number>>(async () => {
   order.push("billing");
   return 1;

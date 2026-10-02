@@ -55,7 +55,12 @@ function query(table: string) {
     },
     async maybeSingle() {
       if (entry.select.startsWith("id,"))
-        return { data: page ? { id: PAGE_ID } : null, error: null };
+        return {
+          data: page
+            ? { id: PAGE_ID, accounts: { suspended_at: page.accounts.suspended_at } }
+            : null,
+          error: null,
+        };
       return { data: page, error: null };
     },
   };
@@ -144,16 +149,20 @@ describe("M2-22 / M2-28 what the query returns", () => {
     expect(await getTenantPageState("mara")).toEqual({ kind: "unpublished", pageId: PAGE_ID });
   });
 
-  it("an unknown handle, a suspended owner, a malformed handle and a broken document are missing", async () => {
-    page = null;
-    expect(await getTenantPageState("nobody")).toEqual({ kind: "missing" });
-
+  it("a suspended owner is `suspended` (M5-08): no document is read for it, and the handle is not missing", async () => {
     page = {
       published: fullPublished,
       published_at: "2026-10-02T00:00:00.000Z",
       accounts: { plan: "free", suspended_at: "2026-10-01T00:00:00.000Z" },
     };
-    expect(await getTenantPageState("mara")).toEqual({ kind: "missing" });
+    expect(await getTenantPageState("mara")).toEqual({ kind: "suspended" });
+    // Only the handle lookup ran: the published column of a suspended page is never selected.
+    expect(calls.map((c) => c.select)).toEqual(["id, accounts!inner(suspended_at)"]);
+  });
+
+  it("an unknown handle, a malformed handle and a broken document are missing", async () => {
+    page = null;
+    expect(await getTenantPageState("nobody")).toEqual({ kind: "missing" });
 
     calls.length = 0;
     expect(await getTenantPageState("Not A Handle!")).toEqual({ kind: "missing" });

@@ -466,7 +466,10 @@ describe("M4-04 / M4-08 idempotency, retries and the cache", () => {
 });
 
 /** The events a subscription's checkout produces, in the shapes Stripe sends them. */
-const at = (created: number, event: ReturnType<typeof subscriptionEvent>) => ({ ...event, created });
+const at = (created: number, event: ReturnType<typeof subscriptionEvent>) => ({
+  ...event,
+  created,
+});
 const T = 1_790_000_000;
 
 describe("M4-04 the webhook applies Stripe's current state, not the event's payload", () => {
@@ -500,10 +503,9 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
       "sub_unit_1",
       stripeSubscription({ price: PRICES.STRIPE_PRICE_STUDIO_YEARLY, cancel: false }),
     );
-    await deliver(
-      subscriptionEvent({ price: PRICES.STRIPE_PRICE_PRO_MONTHLY, status: "active" }),
-      { seed: false },
-    );
+    await deliver(subscriptionEvent({ price: PRICES.STRIPE_PRICE_PRO_MONTHLY, status: "active" }), {
+      seed: false,
+    });
     expect(rpcCalls[0]).toMatchObject({
       p_plan: "studio",
       p_interval: "year",
@@ -520,7 +522,10 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
       ] as const;
 
     it("updated(active) and created(incomplete): the account ends on the paid plan, never on Free", async () => {
-      const active = at(T, subscriptionEvent({ type: "customer.subscription.updated", status: "active" }));
+      const active = at(
+        T,
+        subscriptionEvent({ type: "customer.subscription.updated", status: "active" }),
+      );
       const incomplete = at(
         T,
         subscriptionEvent({ type: "customer.subscription.created", status: "incomplete" }),
@@ -532,7 +537,9 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
         // Stripe's state after the payment went through: active.
         stripeState.set("sub_unit_1", stripeSubscription({ status: "active" }));
         for (const name of order) {
-          expect((await deliver(events[name as keyof typeof events], { seed: false })).status).toBe(200);
+          expect((await deliver(events[name as keyof typeof events], { seed: false })).status).toBe(
+            200,
+          );
         }
         expect(rpcCalls.length, order.join(">")).toBeGreaterThan(0);
         for (const call of rpcCalls) {
@@ -542,7 +549,10 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
     });
 
     it("updated(active) and deleted: the account ends on Free, whichever arrives last", async () => {
-      const active = at(T, subscriptionEvent({ type: "customer.subscription.updated", status: "active" }));
+      const active = at(
+        T,
+        subscriptionEvent({ type: "customer.subscription.updated", status: "active" }),
+      );
       const deleted = at(
         T,
         subscriptionEvent({ type: "customer.subscription.deleted", status: "canceled" }),
@@ -554,7 +564,9 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
         // Stripe's state once the cancel happened: canceled.
         stripeState.set("sub_unit_1", stripeSubscription({ status: "canceled" }));
         for (const name of order) {
-          expect((await deliver(events[name as keyof typeof events], { seed: false })).status).toBe(200);
+          expect((await deliver(events[name as keyof typeof events], { seed: false })).status).toBe(
+            200,
+          );
         }
         expect(rpcCalls.length, order.join(">")).toBeGreaterThan(0);
         for (const call of rpcCalls) {
@@ -673,7 +685,10 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
     });
 
     it("that names its subscription applies the subscription's current state", async () => {
-      stripeState.set("sub_unit_1", stripeSubscription({ price: PRICES.STRIPE_PRICE_STUDIO_MONTHLY }));
+      stripeState.set(
+        "sub_unit_1",
+        stripeSubscription({ price: PRICES.STRIPE_PRICE_STUDIO_MONTHLY }),
+      );
       const result = await deliver(session({ subscription: "sub_unit_1" }));
       expect(result.status).toBe(200);
       expect(retrieve.mock.calls).toEqual([["sub_unit_1"]]);
@@ -692,9 +707,7 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
     it("accepts the subscription as an expanded object, and saves a missing customer id first", async () => {
       accounts.set(ACCOUNT, { id: ACCOUNT, stripe_customer_id: null });
       stripeState.set("sub_unit_1", stripeSubscription({ customer: "cus_unit_co" }));
-      await deliver(
-        session({ customer: "cus_unit_co", subscription: { id: "sub_unit_1" } }),
-      );
+      await deliver(session({ customer: "cus_unit_co", subscription: { id: "sub_unit_1" } }));
       expect(accounts.get(ACCOUNT)?.stripe_customer_id).toBe("cus_unit_co");
       expect(rpcCalls).toHaveLength(1);
       expect(rpcCalls[0]).toMatchObject({ p_plan: "pro" });
@@ -723,7 +736,10 @@ describe("M4-04 the webhook applies Stripe's current state, not the event's payl
 });
 
 describe("an event of the other Stripe mode is not this deployment's", () => {
-  const withMode = (livemode: boolean | undefined, overrides: Parameters<typeof subscriptionEvent>[0] = {}) => ({
+  const withMode = (
+    livemode: boolean | undefined,
+    overrides: Parameters<typeof subscriptionEvent>[0] = {},
+  ) => ({
     ...subscriptionEvent(overrides),
     ...(livemode === undefined ? {} : { livemode }),
   });
@@ -734,7 +750,10 @@ describe("an event of the other Stripe mode is not this deployment's", () => {
       else process.env.STRIPE_LIVE_MODE = mode;
       const event = withMode(true);
       seedFromEvent(event);
-      expect(await deliver(event, { seed: false })).toEqual({ status: 200, body: { received: true } });
+      expect(await deliver(event, { seed: false })).toEqual({
+        status: 200,
+        body: { received: true },
+      });
       expect(rpcCalls).toEqual([]);
       expect(retrieve).not.toHaveBeenCalled();
       expect(processed.size).toBe(0);
@@ -749,6 +768,7 @@ describe("an event of the other Stripe mode is not this deployment's", () => {
       STRIPE_LIVE_MODE: "true",
       STRIPE_SECRET_KEY: "sk_live_unit_secret_key_value",
       VERCEL_ENV: "production",
+      NEXT_PUBLIC_ROOT_DOMAIN: "hydlnk.com", // a localhost root domain is refused in production
     });
     try {
       const test = withMode(false);
@@ -764,6 +784,7 @@ describe("an event of the other Stripe mode is not this deployment's", () => {
     } finally {
       for (const name of ["STRIPE_LIVE_MODE", "VERCEL_ENV"]) delete process.env[name];
       process.env.STRIPE_SECRET_KEY = saved.STRIPE_SECRET_KEY;
+      process.env.NEXT_PUBLIC_ROOT_DOMAIN = saved.NEXT_PUBLIC_ROOT_DOMAIN;
     }
   });
 

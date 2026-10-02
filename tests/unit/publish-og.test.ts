@@ -169,13 +169,33 @@ describe("M2-30 the avatar is loaded only from the configured Storage origin", (
     expect(calls[0]!.init?.redirect).toBe("error");
   });
 
+  it("an uploaded WebP (every avatar since M5-11) is redrawn as a PNG the renderer can draw, at most 400px", async () => {
+    const sharp = (await import("sharp")).default;
+    const webp = await sharp({
+      create: { width: 600, height: 300, channels: 3, background: { r: 200, g: 40, b: 40 } },
+    })
+      .webp()
+      .toBuffer();
+    globalThis.fetch = vi.fn(
+      async () => new Response(new Uint8Array(webp), { headers: { "content-type": "image/webp" } }),
+    ) as unknown as typeof fetch;
+    const uri = await og.avatarDataUri(PHOTO);
+    expect(uri).toMatch(/^data:image\/png;base64,/);
+    const png = Buffer.from(uri!.split(",")[1]!, "base64");
+    expect(png.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+    expect(pngSizeOf(png)).toEqual({ width: 400, height: 200 });
+    // And a page with such an avatar renders.
+    const page = await og.renderOgPng(input({ photo: PHOTO }));
+    expect(pngSizeOf(page)).toEqual({ width: 1200, height: 630 });
+  });
+
   it.each([
     [
       "a non-image content type",
       () => new Response("<html>", { headers: { "content-type": "text/html" } }),
     ],
     [
-      "a WebP (the renderer cannot draw it)",
+      "a WebP that is not a real image",
       () => new Response(new Uint8Array(4), { headers: { "content-type": "image/webp" } }),
     ],
     ["an SVG", () => new Response("<svg/>", { headers: { "content-type": "image/svg+xml" } })],

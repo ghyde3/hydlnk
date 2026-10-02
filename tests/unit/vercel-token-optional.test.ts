@@ -9,7 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/cache", () => ({ updateTag: vi.fn(), revalidateTag: vi.fn(), unstable_cache: vi.fn() }));
+vi.mock("next/cache", () => ({
+  updateTag: vi.fn(),
+  revalidateTag: vi.fn(),
+  unstable_cache: vi.fn(),
+}));
 
 class Redirected extends Error {
   constructor(readonly to: string) {
@@ -21,12 +25,18 @@ vi.mock("next/navigation", () => ({
     throw new Redirected(to);
   },
 }));
-vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined, delete: () => undefined }) }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined, delete: () => undefined }),
+}));
 
 const getSessionUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({ getSessionUser }));
 
-const PAGE = { id: "00000000-0000-4000-8000-0000000000a1", handle: "mara", created_at: "2026-01-01" };
+const PAGE = {
+  id: "00000000-0000-4000-8000-0000000000a1",
+  handle: "mara",
+  created_at: "2026-01-01",
+};
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabase: async () => ({
     from: () => ({
@@ -53,6 +63,8 @@ vi.mock("@/lib/supabase/admin", () => ({
     auth: { admin: { deleteUser } },
   }),
 }));
+// M5-09: a suspended account cannot delete (covered in delete-account-cache.test.ts); here it is active.
+vi.mock("@/lib/admin/suspension", () => ({ isAccountSuspended: async () => false }));
 const cancelAccountBilling = vi.fn<(id: string) => Promise<number>>(async () => 0);
 vi.mock("@/lib/billing/cancel", () => ({ cancelAccountBilling }));
 const removeAccountMedia = vi.fn<(id: string) => Promise<void>>(async () => undefined);
@@ -124,7 +136,10 @@ const { deleteAccount } = await import("@/lib/pages/delete-account");
 describe("startup and build do not need the token", () => {
   it("the server env module imports on a production deployment without VERCEL_API_TOKEN", async () => {
     vi.resetModules();
-    Object.assign(process.env, M4_ENV, { VERCEL_ENV: "production" });
+    Object.assign(process.env, M4_ENV, {
+      VERCEL_ENV: "production",
+      NEXT_PUBLIC_ROOT_DOMAIN: "hydlnk.com",
+    });
     const { serverEnv } = await import("@/lib/env/server");
     expect(serverEnv.VERCEL_API_TOKEN).toBeUndefined();
     expect(serverEnv.VERCEL_PROJECT_ID).toBe("prj_unit");
@@ -132,7 +147,10 @@ describe("startup and build do not need the token", () => {
 
   it("and still stops the build when another required variable is missing, naming it", async () => {
     vi.resetModules();
-    Object.assign(process.env, M4_ENV, { VERCEL_ENV: "production" });
+    Object.assign(process.env, M4_ENV, {
+      VERCEL_ENV: "production",
+      NEXT_PUBLIC_ROOT_DOMAIN: "hydlnk.com",
+    });
     delete process.env.CRON_SECRET;
     await expect(import("@/lib/env/server")).rejects.toThrow(/CRON_SECRET/);
   });
@@ -165,7 +183,10 @@ describe("what calls the Vercel API fails closed without the token", () => {
     });
     process.env.VERCEL_API_BASE_URL = "http://127.0.0.1:12112/";
     delete process.env.VERCEL_TEAM_ID;
-    expect(readVercelApiConfig()).toMatchObject({ baseUrl: "http://127.0.0.1:12112", teamId: undefined });
+    expect(readVercelApiConfig()).toMatchObject({
+      baseUrl: "http://127.0.0.1:12112",
+      teamId: undefined,
+    });
   });
 
   it("an empty token counts as unset", () => {
@@ -175,12 +196,15 @@ describe("what calls the Vercel API fails closed without the token", () => {
 
   it("removing a custom domain throws the clear error and makes no request", async () => {
     await expect(removeVercelDomain("links.example.com")).rejects.toThrow(VercelNotConfiguredError);
-    await expect(removeVercelDomain("links.example.com")).rejects.toThrow(/VERCEL_API_TOKEN is not set/);
+    await expect(removeVercelDomain("links.example.com")).rejects.toThrow(
+      /VERCEL_API_TOKEN is not set/,
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("also in production: the call is refused, not skipped", async () => {
     process.env.VERCEL_ENV = "production";
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = "hydlnk.com"; // restored with the rest of BASE_ENV
     await expect(removeVercelDomain("links.example.com")).rejects.toThrow(/not set/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -230,9 +254,9 @@ describe("deleting an account with no domain rows never needs the token", () => 
     expect(removeAccountMedia).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
     // The reason is in the server log, in words.
-    expect(JSON.stringify((console.error as unknown as { mock: { calls: unknown[] } }).mock.calls)).toMatch(
-      /VERCEL_API_TOKEN is not set/,
-    );
+    expect(
+      JSON.stringify((console.error as unknown as { mock: { calls: unknown[] } }).mock.calls),
+    ).toMatch(/VERCEL_API_TOKEN is not set/);
   });
 });
 
@@ -245,7 +269,21 @@ describe("deleting a page with no domain rows never needs the token", () => {
     const admin = {
       from(table: string) {
         if (table === "domains") {
-          return { select: () => ({ eq: async () => ({ data: hosts.map((hostname) => ({ hostname })), error: null }) }) };
+          return {
+            select: () => ({
+              eq: async () => ({ data: hosts.map((hostname) => ({ hostname })), error: null }),
+            }),
+          };
+        }
+        if (table === "accounts") {
+          // The suspension check of a page delete (M5-09): an active account.
+          return {
+            select: () => ({
+              eq: () => ({
+                maybeSingle: async () => ({ data: { suspended_at: null }, error: null }),
+              }),
+            }),
+          };
         }
         return {
           select: (_columns: string, options?: { head?: boolean }) =>
@@ -253,7 +291,12 @@ describe("deleting a page with no domain rows never needs the token", () => {
               ? { eq: async () => ({ count: 0, error: null }) }
               : {
                   eq: () => ({
-                    eq: () => ({ maybeSingle: async () => ({ data: { id: PAGE.id, handle: PAGE.handle }, error: null }) }),
+                    eq: () => ({
+                      maybeSingle: async () => ({
+                        data: { id: PAGE.id, handle: PAGE.handle },
+                        error: null,
+                      }),
+                    }),
                   }),
                 },
           delete: () => ({

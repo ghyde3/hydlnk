@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { adminUserIdsSchema, isLocalRootDomain, supportEmailSchema } from "@/lib/admin/env";
 import { parseEnv, publicEnvSchema, readPublicEnv } from "./shared";
 
 /**
@@ -52,7 +53,8 @@ export const stripeSecretKeySchema = nonEmpty.superRefine((key, ctx) => {
   if (stripeKeyKind(key) === "unknown") {
     ctx.addIssue({
       code: "custom",
-      message: "expected a Stripe secret or restricted key (sk_test_..., or sk_live_... in live mode)",
+      message:
+        "expected a Stripe secret or restricted key (sk_test_..., or sk_live_... in live mode)",
     });
   }
 });
@@ -91,6 +93,8 @@ export const SERVER_ENV_KEYS = [
   "STRIPE_LIVE_MODE",
   "PAID_PLANS_OPEN",
   "VERCEL_API_TOKEN",
+  "ADMIN_USER_IDS",
+  "SUPPORT_EMAIL",
   ...M4_REQUIRED_KEYS,
   "VERCEL_API_BASE_URL",
   "STRIPE_API_HOST",
@@ -129,6 +133,13 @@ function baseShape() {
     STRIPE_API_HOST: apiHostSchema.default(STRIPE_API_DEFAULT_HOST),
     /** Test-only: point the Vercel client at a local stub. Rejected when VERCEL_ENV=production. */
     VERCEL_API_BASE_URL: z.url().default(VERCEL_API_DEFAULT_BASE_URL),
+    /**
+     * Comma-separated auth user UUIDs of the admins (M5-04). Optional: empty or unset means nobody
+     * is an admin. A value that is not a list of UUIDs fails startup naming the variable.
+     */
+    ADMIN_USER_IDS: adminUserIdsSchema,
+    /** Where a suspended owner is told to write (M5-09). Defaults to support@hydlnk.com. */
+    SUPPORT_EMAIL: supportEmailSchema,
     VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
     NODE_ENV: z.string().optional(),
   };
@@ -189,8 +200,33 @@ function refuseRedirectsInProduction(env: RedirectCheckInput, ctx: z.RefinementC
   }
 }
 
-function refineEnvironment(env: RedirectCheckInput & StripeModeInput, ctx: z.RefinementCtx): void {
+/**
+ * The production deployment never runs with a localhost root domain. A localhost root domain turns
+ * on the local-only test admin marker (`app_metadata.hydlnk_local_admin`, src/lib/admin/principal.ts),
+ * which only the secret key can set; refusing the combination at startup means that door cannot be
+ * open in production even by a configuration mistake.
+ */
+function refuseLocalRootInProduction(
+  env: {
+    NEXT_PUBLIC_ROOT_DOMAIN: string;
+    VERCEL_ENV?: "production" | "preview" | "development" | undefined;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (env.VERCEL_ENV !== "production" || !isLocalRootDomain(env.NEXT_PUBLIC_ROOT_DOMAIN)) return;
+  ctx.addIssue({
+    code: "custom",
+    path: ["NEXT_PUBLIC_ROOT_DOMAIN"],
+    message: "must not be a localhost host when VERCEL_ENV=production (use the real root domain)",
+  });
+}
+
+function refineEnvironment(
+  env: RedirectCheckInput & StripeModeInput & { NEXT_PUBLIC_ROOT_DOMAIN: string },
+  ctx: z.RefinementCtx,
+): void {
   refuseRedirectsInProduction(env, ctx);
+  refuseLocalRootInProduction(env, ctx);
   enforceStripeMode(env, ctx);
 }
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { ImageResponse } from "next/og";
+import sharp from "sharp";
 import {
   IMAGE_PATH_PATTERN,
   codePointLength,
@@ -60,7 +61,9 @@ export function drawable(text: string, font: Pick<OgFont, "has">): string {
  * The avatar as a data URI, or null (initials are drawn instead). Only an image reference that
  * matches the schema is followed, and only to the configured Supabase Storage origin: a `path`
  * that does not match is never fetched (SSRF guard), a redirect is an error, and anything that is
- * not a small PNG or JPEG falls back to initials. Never throws.
+ * not a small PNG, JPEG or WebP falls back to initials. Every upload is a WebP since M5-11 and the
+ * renderer cannot draw one, so a WebP is redrawn as a PNG first (at most 400 pixels: that is all the
+ * pipeline ever stores). Never throws.
  */
 export async function avatarDataUri(photo: ImageRef | null): Promise<string | null> {
   if (!photo) return null;
@@ -72,11 +75,19 @@ export async function avatarDataUri(photo: ImageRef | null): Promise<string | nu
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(4000) });
     if (!response.ok) return null;
     const type = (response.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
-    if (type !== "image/png" && type !== "image/jpeg") return null;
+    if (type !== "image/png" && type !== "image/jpeg" && type !== "image/webp") return null;
     const declared = Number(response.headers.get("content-length") ?? "0");
     if (declared > AVATAR_MAX_BYTES) return null;
     const bytes = Buffer.from(await response.arrayBuffer());
     if (bytes.length === 0 || bytes.length > AVATAR_MAX_BYTES) return null;
+    if (type === "image/webp") {
+      // Not a real image (or a bomb past the pixel cap): sharp throws and the initials are drawn.
+      const png = await sharp(bytes, { limitInputPixels: 16_000_000 })
+        .resize({ width: 400, height: 400, fit: "inside", withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      return `data:image/png;base64,${png.toString("base64")}`;
+    }
     return `data:${type};base64,${bytes.toString("base64")}`;
   } catch {
     return null;
