@@ -11,9 +11,12 @@ import {
   type PublishError,
 } from "@/lib/document";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
+import { mediaOrigin } from "@/lib/media/url";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
+import { mediaPathOf } from "@/lib/themes/bg-image";
+import { PUBLISH_STOPPED, friendlyPublishErrors } from "@/lib/themes/publish-errors";
 
 /** Why a publish did not happen, besides `invalid` (the draft has problems the editor can show). */
 export type PublishFailureReason = "unauthorized" | "forbidden" | "invalid" | "error";
@@ -50,11 +53,15 @@ const refuse = (
  *   1. no session user: `unauthorized`; a page the user does not own (or that does not exist):
  *      `forbidden`. Nothing is read or written first;
  *   2. `publishDocSchema` on the stored draft (required fields, http(s) URLs, embed allowlist,
- *      no control or bidi characters, block limit): any issue returns `{ok:false, errors}` naming
- *      the block, and writes nothing;
- *   3. every image path of a visible block starts with the owner's uid and exists in `page-media`;
+ *      no control or bidi characters, block limit, page and block token overrides): any issue
+ *      returns `{ok:false, errors}` naming the block or the design field and how to fix it
+ *      ("Publish stopped: bg isn’t a valid colour. Reset it in Design."), and writes nothing;
+ *   3. every image path of a visible block starts with the owner's uid and exists in `page-media`,
+ *      and so does the resolved background image (M3-05): a `bgImage` is only ever one of the
+ *      owner's own uploads, whether it came from the page overrides or from a saved theme;
  *   4. `toPublishForm` with the tokens of the draft's theme row (a system theme or one the owner
- *      owns; a missing or foreign one resolves like no theme, as the editor does), then
+ *      owns: the lookup is scoped to `owner_id` null or the page owner, so a draft that names
+ *      someone else's theme, or a deleted one, resolves like no theme, as the editor does), then
  *      `publishedDocSchema` on the result: the frozen, fully resolved document;
  *   5. `pages.published` and `published_at` are written with the secret key, filtered on the owner.
  *
@@ -86,7 +93,7 @@ export async function publishPageCore(
   const raw: unknown = page.data.draft;
   const parsed = publishDocSchema.safeParse(raw);
   if (!parsed.success) {
-    const errors = collectPublishErrors(raw);
+    const errors = friendlyPublishErrors(collectPublishErrors(raw));
     return refuse(
       "invalid",
       errors.length > 0
@@ -108,7 +115,11 @@ export async function publishPageCore(
 
   let mediaErrors: PublishError[];
   try {
-    mediaErrors = await checkImages(form, userId, deps.mediaExists ?? storageExists(admin));
+    const exists = deps.mediaExists ?? storageExists(admin);
+    mediaErrors = [
+      ...(await checkImages(form, userId, exists)),
+      ...(await checkBackground(form, draft.theme.overrides.bgImage !== undefined, userId, exists)),
+    ];
   } catch (error) {
     console.error("[publish] checking the images failed", error);
     return refuse("error");
@@ -220,6 +231,35 @@ async function checkImages(
     }
   }
   return errors;
+}
+
+/**
+ * The resolved background image (M3-05). `bgImage` is a URL in the token set, so the schema alone
+ * would let a draft point every visitor's browser at any host, or at another user's upload. Here it
+ * must be exactly one of this project's `page-media` URLs, inside the page owner's own folder, and
+ * the object must exist. `fromOverrides` says where the value came from, for the message.
+ */
+async function checkBackground(
+  form: PublishDoc,
+  fromOverrides: boolean,
+  ownerId: string,
+  exists: (path: string) => Promise<boolean>,
+): Promise<PublishError[]> {
+  const value = form.tokens.bgImage;
+  if (value === null) return [];
+  const field = fromOverrides ? "theme.overrides.bgImage" : "theme.bgImage";
+  const stopped = (message: string): PublishError[] => [
+    { blockId: null, field, message: `${PUBLISH_STOPPED} ${message}` },
+  ];
+
+  const path = mediaPathOf(value, mediaOrigin());
+  if (path === null || !path.startsWith(`${ownerId}/`)) {
+    return stopped("bgImage isn’t one of your uploaded images. Pick the background image again in Design.");
+  }
+  if (!(await exists(path))) {
+    return stopped("the background image is no longer available. Upload it again in Design.");
+  }
+  return [];
 }
 
 function storageExists(admin: SupabaseClient<Database>) {

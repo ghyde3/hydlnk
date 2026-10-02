@@ -250,9 +250,18 @@ describe("M2-15 link form", () => {
     expect(input(host, "label").getAttribute("aria-invalid")).toBe("true");
   });
 
-  it("renders no override controls (Milestone 3)", () => {
+  it("renders the three per-block override controls and nothing else (Milestone 3: M3-17, M3-18)", () => {
     const { host } = mountForm(blockDefaults.link());
-    expect(host.querySelector("select")).toBeNull();
+    const controls = host.querySelector('[data-testid="override-controls"]');
+    expect(controls).not.toBeNull();
+    // Button style and Corner radius are selects, Color a swatch plus a hex field: three controls.
+    expect([...controls!.querySelectorAll("select")].map((el) => el.dataset.field)).toEqual([
+      "override-button-style",
+      "override-radius",
+    ]);
+    expect(controls!.querySelector('input[data-field="override-color"]')).not.toBeNull();
+    // No font, spacing or background control exists on a block.
+    expect(controls!.textContent).not.toMatch(/font|spacing|density|background|width/i);
   });
 });
 
