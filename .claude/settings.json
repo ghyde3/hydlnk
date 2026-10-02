@@ -32,8 +32,6 @@
       "Read(./.env.local)",
       "Read(./.env.*.local)",
       "Read(./supabase/.env)",
-      "Bash(vercel deploy --prod*)",
-      "Bash(vercel --prod*)",
       "Bash(rm -rf *)",
       "Bash(git push --force*)",
       "Bash(git push -f*)",
@@ -45,8 +43,7 @@
       "Bash(supabase db reset*--db-url*)",
       "Bash(supabase migration repair*)",
       "Bash(supabase migration up*--linked*)",
-      "Bash(supabase migration up*--db-url*)",
-      "Bash(supabase config push*)"
+      "Bash(supabase migration up*--db-url*)"
     ]
   },
   "enabledMcpjsonServers": [
