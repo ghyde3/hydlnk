@@ -1,59 +1,97 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ShowreelCuts } from "./showreel";
 
 type State = "unready" | "playing" | "paused";
+type CutName = keyof ShowreelCuts;
 
-/** The <video> CSS is showing for this viewport (the other cut is display: none). */
-function visibleVideo(box: Element | null): HTMLVideoElement | null {
-  if (!box) return null;
-  const videos = Array.from(box.querySelectorAll("video"));
-  return videos.find((video) => getComputedStyle(video).display !== "none") ?? null;
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+/** Gives the video the sources of one cut (WebM first, MP4 for Safari) and reloads it. */
+function attach(video: HTMLVideoElement, name: CutName, cuts: ShowreelCuts): void {
+  if (video.dataset.cut === name) return;
+  const cut = cuts[name];
+  const sources = [
+    [cut.webm, 'video/webm; codecs="vp9"'],
+    [cut.mp4, "video/mp4"],
+  ].map(([src, type]) => {
+    const source = document.createElement("source");
+    source.src = src!;
+    source.type = type!;
+    return source;
+  });
+  video.replaceChildren(...sources);
+  video.dataset.cut = name;
+  video.load();
 }
 
 /**
- * Play/pause control for the hero showreel, bottom right of the video. It stays hidden until it
- * is hydrated, so it never shows as a dead button. When reduced motion kept every <source> from
- * matching, the video has no source: the first press loads the cut for this viewport and plays it.
+ * Runs the hero showreel and is its play/pause button (bottom right; hidden until hydrated, so it
+ * never shows as a dead control).
+ *
+ * After the page's load event the video gets the cut for the viewport (4:5 below 760px, 16:9
+ * above) and its autoplay attribute starts it; the video fades in over the poster once it plays.
+ * With prefers-reduced-motion: reduce nothing loads and the button offers Play instead. If the
+ * viewport crosses 760px later, the other cut takes over.
  */
-export function ShowreelToggle() {
+export function ShowreelToggle({ cuts }: { cuts: ShowreelCuts }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<State>("unready");
 
   useEffect(() => {
-    const box = ref.current?.closest("[data-showreel]") ?? null;
-    const videos = box ? Array.from(box.querySelectorAll("video")) : [];
-    const sync = () => {
-      const video = visibleVideo(box);
-      setState(video && !video.paused ? "playing" : "paused");
+    const video = ref.current?.closest("[data-showreel]")?.querySelector("video");
+    if (!video) return;
+    const narrow = window.matchMedia(cuts.tall.media);
+    const cutForViewport = (): CutName => (narrow.matches ? "tall" : "wide");
+
+    const sync = () => setState(video.paused ? "paused" : "playing");
+    const reveal = () => {
+      video.dataset.shown = "true";
     };
-    for (const video of videos) {
-      video.addEventListener("play", sync);
-      video.addEventListener("pause", sync);
-    }
+    video.addEventListener("play", sync);
+    video.addEventListener("pause", sync);
+    video.addEventListener("playing", reveal);
+
+    let timer = 0;
+    const start = () => {
+      if (window.matchMedia(REDUCED_MOTION).matches) return;
+      attach(video, cutForViewport(), cuts);
+    };
+    const onLoad = () => {
+      timer = window.setTimeout(start, 0);
+    };
+    if (document.readyState === "complete") onLoad();
+    else window.addEventListener("load", onLoad, { once: true });
+
+    const onViewportChange = () => {
+      if (!video.dataset.cut) return;
+      const wasPlaying = !video.paused;
+      attach(video, cutForViewport(), cuts);
+      if (wasPlaying) void video.play().catch(() => undefined);
+    };
+    narrow.addEventListener("change", onViewportChange);
+
     sync();
     return () => {
-      for (const video of videos) {
-        video.removeEventListener("play", sync);
-        video.removeEventListener("pause", sync);
-      }
+      window.clearTimeout(timer);
+      window.removeEventListener("load", onLoad);
+      narrow.removeEventListener("change", onViewportChange);
+      video.removeEventListener("play", sync);
+      video.removeEventListener("pause", sync);
+      video.removeEventListener("playing", reveal);
     };
-  }, []);
+  }, [cuts]);
 
   const toggle = () => {
-    const video = visibleVideo(ref.current?.closest("[data-showreel]") ?? null);
+    const video = ref.current?.closest("[data-showreel]")?.querySelector("video");
     if (!video) return;
     if (!video.paused) {
       video.pause();
       return;
     }
-    if (!video.currentSrc) {
-      const webm = video.dataset.webm;
-      const mp4 = video.dataset.mp4;
-      const useWebm = webm && video.canPlayType('video/webm; codecs="vp9"') !== "";
-      const source = useWebm ? webm : mp4;
-      if (!source) return;
-      video.src = source;
+    if (!video.dataset.cut) {
+      attach(video, window.matchMedia(cuts.tall.media).matches ? "tall" : "wide", cuts);
     }
     void video.play().catch(() => setState("paused"));
   };

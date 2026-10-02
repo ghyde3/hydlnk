@@ -147,8 +147,7 @@ test("home showreel: the cut for the viewport plays, and the toggle pauses it", 
   await page.goto(url());
   const toggle = page.locator("[data-showreel] button");
   await expect(toggle).toHaveAttribute("aria-label", "Pause showreel");
-  const video = page.locator("[data-showreel] video").filter({ visible: true });
-  await expect(video).toHaveCount(1);
+  const video = page.locator("[data-showreel] video");
   expect(await video.evaluate((el: HTMLVideoElement) => el.currentSrc)).toMatch(
     isMobile ? /showreel-4x5\.(webm|mp4)$/ : /showreel-16x9\.(webm|mp4)$/,
   );
@@ -166,17 +165,20 @@ test("home showreel with reduced motion: poster only, until Play is pressed", as
     hasTouch: isMobile,
   });
   const page = await context.newPage();
-  await page.goto(url());
+  await page.goto(url(), { waitUntil: "load" });
   const toggle = page.locator("[data-showreel] button");
   await expect(toggle).toHaveAttribute("aria-label", "Play showreel");
   await expect(toggle).toBeVisible();
-  const video = page.locator("[data-showreel] video").filter({ visible: true });
-  // No <source> matches under reduced motion: nothing loads, the poster stays.
+  const video = page.locator("[data-showreel] video");
+  // Nothing loads under reduced motion: no source, the poster stays.
+  await page.waitForTimeout(500);
   expect(await video.evaluate((el: HTMLVideoElement) => el.currentSrc)).toBe("");
-  await expect(video).toHaveAttribute("poster", /poster\.webp$/);
+  await expect(page.locator("[data-showreel] picture img")).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-label", "Pause showreel");
-  expect(await video.evaluate((el: HTMLVideoElement) => el.currentSrc)).toMatch(/showreel-(4x5|16x9)\./);
+  expect(await video.evaluate((el: HTMLVideoElement) => el.currentSrc)).toMatch(
+    isMobile ? /showreel-4x5\./ : /showreel-16x9\./,
+  );
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => !el.paused)).toBe(true);
   await context.close();
 });

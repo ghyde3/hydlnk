@@ -157,7 +157,7 @@ test.describe("M1-23 header and hero", () => {
     expect(await demoName.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Fraunces/);
   });
 
-  test("M1-23 showreel box: fixed ratio, art-directed cut, poster and autoplay attributes", async ({
+  test("M1-23 showreel box: fixed ratio, art-directed poster, autoplay attributes, cut per viewport", async ({
     page,
     isMobile,
   }) => {
@@ -165,21 +165,22 @@ test.describe("M1-23 header and hero", () => {
     const stage = page.locator("[data-showreel]");
     const b = await box(stage);
     expect(b.height / b.width).toBeCloseTo(isMobile ? 1.25 : 0.5625, 2);
-    const videos = stage.locator("video");
-    await expect(videos).toHaveCount(2);
-    const shown = await videos.evaluateAll((els) =>
-      els
-        .filter((el) => getComputedStyle(el).display !== "none")
-        .map((el) => (el as HTMLVideoElement).dataset.cut),
+    // The poster image paints first (and is what LCP measures); the video fades in over it.
+    const poster = stage.locator("picture img");
+    await expect(poster).toHaveAttribute("fetchpriority", "high");
+    expect(await poster.evaluate((img: HTMLImageElement) => img.currentSrc)).toMatch(
+      isMobile ? /showreel-4x5-poster\.webp$/ : /showreel-16x9-poster\.webp$/,
     );
-    expect(shown).toEqual([isMobile ? "1080x1350" : "1920x1080"]);
-    for (const video of await videos.all()) {
-      for (const attribute of ["autoplay", "muted", "loop", "playsinline"]) {
-        await expect(video).toHaveAttribute(attribute, "");
-      }
-      await expect(video).toHaveAttribute("preload", "metadata");
-      await expect(video).toHaveAttribute("poster", /\/marketing\/showreel\/showreel-.*-poster\.webp$/);
+    const video = stage.locator("video");
+    await expect(video).toHaveCount(1);
+    for (const attribute of ["autoplay", "muted", "loop", "playsinline"]) {
+      await expect(video).toHaveAttribute(attribute, "");
     }
+    await expect(video).toHaveAttribute("preload", "metadata");
+    await expect(video).toHaveAttribute("poster", /\/marketing\/showreel\/showreel-4x5-poster\.webp$/);
+    // After the page has loaded, the cut for the viewport is attached and plays.
+    await expect(video).toHaveAttribute("data-cut", isMobile ? "tall" : "wide");
+    await expect(video).toHaveAttribute("data-shown", "true");
   });
 
   test("M1-23 phone layout: logo, Log in and a Menu; copy above the showreel", async ({
