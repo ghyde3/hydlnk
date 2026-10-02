@@ -19,6 +19,11 @@ INPUT=$(cat)
 ROOT=${CLAUDE_PROJECT_DIR:-$(pwd)}
 cd "$ROOT" || exit 0
 
+# Orchestrated waves: while parallel agents are writing, the orchestrator's tree is dirty with
+# half-finished files that aren't its own. The marker pauses this hook; the integration step runs
+# the real checks, and the marker is removed before any release.
+[ -f "$ROOT/tmp/orchestrating" ] && exit 0
+
 jqr() { printf '%s' "$INPUT" | jq -r "$1" 2>/dev/null; }
 
 FIELD=$(jqr '.consecutive_block_count // empty')

@@ -198,3 +198,73 @@ body {
   line-height: 1.5;
   opacity: 0.7;
 }
+
+/* Claimed handle with nothing published yet (M1-15): one centered column, system theme tokens. */
+.tenant-root.tenant-placeholder {
+  justify-content: center;
+  padding-top: 24px;
+}
+
+.tenant-note {
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(1rem * var(--t-scale));
+  overflow-wrap: anywhere;
+}
+
+/*
+ * 404 for an unclaimed handle (M1-15): layout only. The HYDLNK UI colors are inline on the
+ * component (see unclaimed-panel.tsx), so no HYDLNK color ever sits in this shared stylesheet.
+ */
+.tenant-unclaimed {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  font-family: system-ui, sans-serif;
+}
+
+.tenant-unclaimed-column {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  text-align: center;
+}
+
+.tenant-unclaimed-eyebrow {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.tenant-unclaimed h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.tenant-unclaimed-copy {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.tenant-unclaimed-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}

@@ -53,6 +53,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 ## Git workflow
 - One branch per milestone: `m<N>-<slug>` (for example `m1-foundation`). Open a draft PR with `gh pr create --draft` as soon as the branch exists, so CI runs on every push.
 - Conventional commits, one per feature, feature id in the message. Never force push; never push to `main`.
+- Orchestrated waves (Gary's fast track, 2026-10-01): parallel agents build feature groups; one commit per feature group with every id in the message; only the integration agent flips `passes` in features.json, after running the tests itself; security-reviewer runs once per wave that touches auth, data, routing or payments. `tmp/orchestrating` pauses the Stop hook during a wave and is removed before release.
 - Unattended sessions never merge. Merging to `main` deploys production, so it goes only through `/release`, which asks Gary.
 
 ## Unattended runs

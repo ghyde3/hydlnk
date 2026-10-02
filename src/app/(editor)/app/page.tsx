@@ -1,18 +1,11 @@
-import type { Metadata } from "next";
-import { AppShell } from "@/components/app/app-shell";
-import { clientEnv } from "@/lib/env/client";
+import { redirect } from "next/navigation";
+import { requireAppUser } from "@/lib/auth/gate";
 
-export const metadata: Metadata = { title: "Editor" };
-
-export default function EditorPage() {
-  return (
-    <AppShell title="Editor" breadcrumb={`app.${clientEnv.NEXT_PUBLIC_ROOT_DOMAIN} / editor`}>
-      <div className="max-w-[640px] rounded-md border border-line bg-surface p-5">
-        <h2 className="text-sm font-semibold">Coming in Milestone 1</h2>
-        <p className="mt-2 text-[15px] leading-relaxed text-text-2">
-          The editor arrives in Milestone 1, together with sign-in and handle claim.
-        </p>
-      </div>
-    </AppShell>
-  );
+/**
+ * The app host's landing route. It renders nothing: signed out goes to /login, signed in without a
+ * page to /claim, signed in with a page to /editor (see requireAppUser). No return-URL parameter.
+ */
+export default async function AppHome(): Promise<never> {
+  await requireAppUser();
+  redirect("/editor");
 }
