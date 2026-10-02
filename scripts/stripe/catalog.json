@@ -1,0 +1,62 @@
+{
+  "_notice": "Source of truth for the HYDLNK Stripe catalog (prices confirmed by Gary, 2026-10-02). A price cannot be edited in Stripe once it exists: changing an amount here makes setup-live.sh create a new price and move the lookup key to it. Change an amount only on purpose, and update docs/PLAN.md and src/lib/billing/prices.ts with it.",
+  "_howto": "setup-live.sh finds or creates each product and each price (matched by lookup_key) from this file. unit_amount is in cents. A price with enabled=false is never created and is left out of the customer portal. Product metadata is also copied onto its prices, together with the interval. tax_code is left alone while it is null; set it (for example txcd_10103001, SaaS for business use) once the tax decision in docs/stripe-go-live.md is made. pricesConfirmed is the explicit go-ahead: setup-live.sh refuses --live --apply unless it is true.",
+  "pricesConfirmed": true,
+  "currency": "usd",
+  "products": [
+    {
+      "plan": "pro",
+      "name": "HYDLNK Pro",
+      "description": "3 pages, 1 custom domain, a year of analytics, no badge.",
+      "tax_code": null,
+      "metadata": { "app": "hydlnk", "plan": "pro" },
+      "prices": [
+        {
+          "lookup_key": "pro_monthly",
+          "env": "STRIPE_PRICE_PRO_MONTHLY",
+          "nickname": "Pro monthly",
+          "unit_amount": 900,
+          "interval": "month",
+          "enabled": true,
+          "note": "$9/mo."
+        },
+        {
+          "lookup_key": "pro_yearly",
+          "env": "STRIPE_PRICE_PRO_YEARLY",
+          "nickname": "Pro yearly",
+          "unit_amount": 6000,
+          "interval": "year",
+          "enabled": true,
+          "note": "$60/yr, shown to customers as $5/mo billed yearly."
+        }
+      ]
+    },
+    {
+      "plan": "studio",
+      "name": "HYDLNK Studio",
+      "description": "15 pages, 15 custom domains, shared saved themes.",
+      "tax_code": null,
+      "metadata": { "app": "hydlnk", "plan": "studio" },
+      "prices": [
+        {
+          "lookup_key": "studio_monthly",
+          "env": "STRIPE_PRICE_STUDIO_MONTHLY",
+          "nickname": "Studio monthly",
+          "unit_amount": 2000,
+          "interval": "month",
+          "enabled": true,
+          "note": "$20/mo."
+        },
+        {
+          "lookup_key": "studio_yearly",
+          "env": "STRIPE_PRICE_STUDIO_YEARLY",
+          "nickname": "Studio yearly",
+          "unit_amount": 18000,
+          "interval": "year",
+          "enabled": true,
+          "note": "$180/yr, shown to customers as $15/mo billed yearly."
+        }
+      ]
+    }
+  ]
+}
