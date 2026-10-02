@@ -7,6 +7,8 @@ import { PlanBand } from "@/components/settings/plan-band";
 import { PlanCards } from "@/components/settings/plan-cards";
 import { UsageCard } from "@/components/settings/usage-card";
 import { signOut } from "@/lib/auth/actions";
+import { readPaidPlansOpen } from "@/lib/billing/env";
+import { CHECKOUT_PARAM, parseCheckoutReturn } from "@/lib/billing/return";
 import { buildMeters } from "@/lib/limits";
 import { loadAccountUsage } from "@/lib/limits/usage";
 import { getAppContext } from "@/lib/pages/context";
@@ -32,9 +34,18 @@ const FIELD_VALUE =
  * below is read, so no plan data is rendered for it. Everything shown is the signed-in user's own:
  * the plan, the subscription columns and the usage numbers are keyed by the verified session user.
  * Over a plan's limits (after a downgrade) the meters say so and nothing is removed.
+ *
+ * The Upgrade buttons are off in two cases, both decided here on the server: paid plans are not
+ * open (PAID_PLANS_OPEN=false) and a Free account has just come back from Checkout
+ * (`?checkout=success`, the "Confirming your upgrade" wait). The URL only ever turns a button off.
  */
-export default async function SettingsScreen() {
+export default async function SettingsScreen({ searchParams }: PageProps<"/app/settings">) {
   const { user, pages, current, plan } = await getAppContext();
+  const query = await searchParams;
+  const checkoutParam = query[CHECKOUT_PARAM];
+  const confirming =
+    parseCheckoutReturn(Array.isArray(checkoutParam) ? checkoutParam[0] : checkoutParam) ===
+      "success" && plan === "free";
   const [summary, usage] = await Promise.all([
     loadBillingSummary(user.id),
     loadAccountUsage(user.id),
@@ -50,7 +61,7 @@ export default async function SettingsScreen() {
         <CheckoutReturnNotice plan={plan} />
         <PlanBand summary={account} text={describeBand(account, cardLast4)} />
         <UsageCard meters={buildMeters(plan, usage)} />
-        <PlanCards current={plan} />
+        <PlanCards current={plan} paidPlansOpen={readPaidPlansOpen()} confirming={confirming} />
         <PagesCard
           pages={pages.map((page) => ({
             id: page.id,

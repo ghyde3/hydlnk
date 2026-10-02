@@ -2,12 +2,16 @@ import { expect, test } from "@playwright/test";
 import { formatCardPrice } from "@/lib/billing/prices";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import {
+  addStubSession,
+  addStubSubscription,
   ensureStripeStub,
   failStub,
   priceIds,
+  seedStubFromEvent,
   signed,
   stubCalls,
   stubRequests,
+  stubSessionStatus,
   subscriptionEvent,
 } from "../fixtures/stripe-stub";
 import { expectNoHorizontalScroll, url } from "../helpers";
@@ -43,7 +47,9 @@ const settings = () => url("app", "/settings");
  * The session cookie is host-only, so signing in on :3000 works for either.
  */
 const returnPage = (query: string) => `http://app.localhost:${SERVER_PORT}/settings${query}`;
-function deliverToServer(payload: object) {
+async function deliverToServer(payload: object) {
+  // The webhook reads the subscription's current state from Stripe (the stub): make it match.
+  await seedStubFromEvent(payload);
   const { body, signature } = signed(payload);
   return rawBuffer(`app.localhost:${SERVER_PORT}`, "/api/stripe/webhook", {
     method: "POST",
@@ -254,6 +260,130 @@ test.describe("M4-06 the Checkout endpoint (API)", () => {
     }
   });
 
+  for (const status of ["active", "trialing", "past_due", "incomplete"]) {
+    test(`M4-06 a Free account whose customer already has a ${status} subscription in Stripe gets 409 already_subscribed and no session`, async ({
+      context,
+    }) => {
+      // The webhook has not caught up yet: the database still says Free.
+      const user = await billingUser(context, { label: `co-live-${status.replace("_", "-")}`, customer: true });
+      await addStubSubscription({
+        id: `sub_zq${Math.random().toString(36).slice(2, 12)}`,
+        customer: user.customer!,
+        priceId: priceIds().proMonthly,
+        status,
+      });
+      for (const combo of COMBOS) {
+        const response = await checkout(context, combo);
+        expect(response.status, `${status} ${combo.plan}/${combo.interval}`).toBe(409);
+        expect(JSON.parse(response.body)).toMatchObject({ error: "already_subscribed" });
+      }
+      expect(await sessionCalls(user.userId)).toHaveLength(0);
+      expect((await accountRow(user.userId)).plan).toBe("free");
+      // Stripe was asked about this customer's subscriptions, every status.
+      const listed = await stubCalls("GET", "/v1/subscriptions", user.customer!);
+      expect(listed.length).toBeGreaterThan(0);
+      // A browser form that hits it lands back on Settings with the code.
+      const navigation = await checkout(
+        context,
+        { plan: "pro", interval: "month" },
+        { "sec-fetch-mode": "navigate" },
+      );
+      expect(navigation.status).toBe(303);
+      expect(navigation.location).toBe(`${APP_ORIGIN}/settings?billing_error=already_subscribed`);
+    });
+  }
+
+  test("M4-06 subscriptions that are over (canceled, incomplete_expired) do not block a new Checkout", async ({
+    context,
+  }) => {
+    const user = await billingUser(context, { label: "co-ended", customer: true });
+    for (const status of ["canceled", "incomplete_expired"]) {
+      await addStubSubscription({
+        id: `sub_zq${Math.random().toString(36).slice(2, 12)}`,
+        customer: user.customer!,
+        priceId: priceIds().proMonthly,
+        status,
+      });
+    }
+    const response = await checkout(context, { plan: "pro", interval: "month" });
+    expect(response.status).toBe(303);
+    expect(await sessionCalls(user.userId)).toHaveLength(1);
+  });
+
+  test("M4-06 another customer's live subscription does not block this account", async ({
+    context,
+  }) => {
+    const user = await billingUser(context, { label: "co-neighbour", customer: true });
+    await addStubSubscription({
+      id: `sub_zq${Math.random().toString(36).slice(2, 12)}`,
+      customer: `cus_zq_someone_else_${Math.random().toString(36).slice(2, 8)}`,
+      priceId: priceIds().proMonthly,
+      status: "active",
+    });
+    expect((await checkout(context, { plan: "pro", interval: "month" })).status).toBe(303);
+    expect(await sessionCalls(user.userId)).toHaveLength(1);
+  });
+
+  test("M4-06 the customer's other open Checkout Sessions are expired before the new one is created", async ({
+    context,
+  }) => {
+    const user = await billingUser(context, { label: "co-expire", customer: true });
+    const open = [await addStubSession(user.customer!), await addStubSession(user.customer!)];
+    const complete = await addStubSession(user.customer!, "complete");
+    const elsewhere = await addStubSession(`cus_zq_other_${Math.random().toString(36).slice(2, 8)}`);
+
+    const response = await checkout(context, { plan: "studio", interval: "month" });
+    expect(response.status).toBe(303);
+    const created = (await sessionCalls(user.userId))[0]!;
+
+    for (const id of open) expect(await stubSessionStatus(id), id).toBe("expired");
+    // Not this customer's open sessions: left alone.
+    expect(await stubSessionStatus(complete)).toBe("complete");
+    expect(await stubSessionStatus(elsewhere)).toBe("open");
+    // The new session is the one that can be paid.
+    const newId = response.location!.split("/").pop()!;
+    expect(await stubSessionStatus(newId)).toBe("open");
+
+    const expires = (await stubRequests()).filter(
+      (request) =>
+        request.method === "POST" &&
+        open.some((id) => request.path === `/v1/checkout/sessions/${id}/expire`),
+    );
+    expect(expires).toHaveLength(2);
+    // Expired first, then created.
+    for (const request of expires) expect(request.n).toBeLessThan(created.n);
+  });
+
+  test("M4-06 starting Checkout again expires the earlier session: only the newest link can be paid", async ({
+    context,
+  }) => {
+    const user = await billingUser(context, { label: "co-twice", customer: true });
+    const first = await checkout(context, { plan: "pro", interval: "month" });
+    const second = await checkout(context, { plan: "pro", interval: "year" });
+    expect(first.status).toBe(303);
+    expect(second.status).toBe(303);
+    const firstId = first.location!.split("/").pop()!;
+    const secondId = second.location!.split("/").pop()!;
+    expect(firstId).not.toBe(secondId);
+    expect(await stubSessionStatus(firstId)).toBe("expired");
+    expect(await stubSessionStatus(secondId)).toBe("open");
+    expect(await sessionCalls(user.userId)).toHaveLength(2);
+  });
+
+  test("M4-06 when Stripe cannot list the subscriptions the answer is 502 and no session is created (fail closed)", async ({
+    context,
+  }) => {
+    const user = await billingUser(context, { label: "co-list-500", customer: true });
+    await failStub("GET", `customer=${user.customer}`, 500, 1);
+    // The first Stripe call of the flow (listing open sessions) takes the failure.
+    const response = await checkout(context, { plan: "pro", interval: "month" });
+    expect(response.status).toBe(502);
+    expect(JSON.parse(response.body)).toMatchObject({ error: "stripe_unavailable" });
+    expect(await sessionCalls(user.userId)).toHaveLength(0);
+    // And once Stripe is back it works.
+    expect((await checkout(context, { plan: "pro", interval: "month" })).status).toBe(303);
+  });
+
   test("M4-06 a Free account that once subscribed starts Checkout on its existing customer", async ({
     context,
   }) => {
@@ -368,6 +498,62 @@ test.describe("M4-06 upgrade from the Settings screen", () => {
   });
 });
 
+test.describe("M4-06 a second upgrade is not offered while the first is being confirmed", () => {
+  test("M4-06 on ?checkout=success a Free account sees disabled 'Upgrade pending' buttons, 44px tall, and no checkout form", async ({
+    page,
+    context,
+  }) => {
+    await billingUser(context, { label: "ui-pending", customer: true });
+    await page.goto(returnPage("?checkout=success"));
+    await expect(page.getByText("Confirming your upgrade")).toBeVisible();
+    const pending = page.locator('[data-unavailable="pending"]');
+    await expect(pending).toHaveCount(2);
+    for (const button of await pending.all()) {
+      await expect(button).toBeDisabled();
+      await expect(button).toHaveText("Upgrade pending");
+      expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    }
+    await expect(page.locator('form[action="/api/billing/checkout"]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Upgrade to / })).toHaveCount(0);
+    // The plans and their prices stay.
+    await expect(page.locator("[data-plan-card]")).toHaveCount(3);
+    await expect(page.locator('[data-plan-card="pro"] [data-plan-price]')).toHaveText(
+      formatCardPrice("pro", "month"),
+    );
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("M4-06 ?checkout=canceled and a plain visit still offer Upgrade", async ({ page, context }) => {
+    await billingUser(context, { label: "ui-notpending" });
+    for (const query of ["?checkout=canceled", ""]) {
+      await page.goto(returnPage(query));
+      await expect(page.getByRole("button", { name: "Upgrade to Pro" })).toBeEnabled();
+      await expect(page.locator('[data-unavailable="pending"]')).toHaveCount(0);
+    }
+  });
+
+  test("M4-06 clicking Upgrade while Stripe already has the subscription (the webhook is late) shows the already-subscribed message", async ({
+    page,
+    context,
+  }) => {
+    const user = await billingUser(context, { label: "ui-late", customer: true });
+    await addStubSubscription({
+      id: `sub_zq${Math.random().toString(36).slice(2, 12)}`,
+      customer: user.customer!,
+      priceId: priceIds().proMonthly,
+      status: "active",
+    });
+    await page.goto(settings());
+    await page.getByRole("button", { name: "Upgrade to Pro" }).click();
+    await page.waitForURL(/\/settings\?billing_error=already_subscribed/);
+    await expect(page.getByRole("alert")).toContainText(
+      "You already have a paid plan. Use Manage billing to change it.",
+    );
+    expect(await sessionCalls(user.userId)).toHaveLength(0);
+    expect((await accountRow(user.userId)).plan).toBe("free");
+  });
+});
+
 test.describe("M4-06 coming back from Checkout", () => {
   test("M4-06 abuse: /settings?checkout=success for an account that never paid leaves it on Free", async ({
     page,
@@ -379,6 +565,9 @@ test.describe("M4-06 coming back from Checkout", () => {
     await page.waitForTimeout(2500); // one polling round
     await expect(page.locator("[data-band-plan]")).toHaveText("Free");
     expect((await accountRow(user.userId)).plan).toBe("free");
+    // While the wait is showing nothing offers a second upgrade; without the parameter it is back.
+    await expect(page.getByRole("button", { name: "Upgrade to Pro" })).toHaveCount(0);
+    await page.goto(returnPage(""));
     await expect(page.getByRole("button", { name: "Upgrade to Pro" })).toBeVisible();
   });
 

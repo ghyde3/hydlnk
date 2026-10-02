@@ -4,7 +4,7 @@ import {
   SwitchToYearlyButton,
   UpgradeToStudioButton,
 } from "@/components/billing/portal-button";
-import { UpgradeButton } from "@/components/billing/upgrade-button";
+import { UpgradeButton, type UpgradeBlock } from "@/components/billing/upgrade-button";
 import type { BillablePlan, BillingInterval } from "@/lib/billing/prices";
 import type { PlanId } from "@/lib/limits";
 
@@ -30,7 +30,8 @@ export function CurrentPlanTile() {
 /**
  * The action at the foot of one plan card.
  *   the account's own plan   an inert "Current plan" tile
- *   Free account             "Upgrade to Pro" / "Upgrade to Studio" (Checkout, at the chosen interval)
+ *   Free account             "Upgrade to Pro" / "Upgrade to Studio" (Checkout, at the chosen interval),
+ *                            disabled when `blocked` says why (see UpgradeButton)
  *   Pro account              Free: "Downgrade" (cancel in the portal); Studio: "Upgrade to Studio" (portal)
  *   Studio account           Free and Pro: "Downgrade" (portal)
  */
@@ -38,14 +39,18 @@ export function PlanCardAction({
   card,
   current,
   interval,
+  blocked,
 }: {
   card: PlanId;
   current: PlanId;
   interval: BillingInterval;
+  blocked?: UpgradeBlock | undefined;
 }) {
   if (card === current) return <CurrentPlanTile />;
   if (current === "free") {
-    return card === "free" ? null : <UpgradeButton plan={card} interval={interval} />;
+    return card === "free" ? null : (
+      <UpgradeButton plan={card} interval={interval} blocked={blocked} />
+    );
   }
   if (card === "free") return <DowngradeButton to="free" />;
   if (current === "pro" && card === "studio") return <UpgradeToStudioButton />;

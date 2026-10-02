@@ -67,3 +67,32 @@ export function BillingFormButton({
     </form>
   );
 }
+
+/**
+ * The stand-in for a billing button that cannot be used right now: the same 44px box, disabled,
+ * and no form, so there is nothing to submit. `reason` is what `data-unavailable` carries
+ * ("closed" while paid plans are not open yet, "pending" while an upgrade is being confirmed).
+ */
+export function UnavailableBillingButton({
+  children,
+  reason,
+  variant = "primary",
+  className = "",
+}: {
+  children: ReactNode;
+  reason: string;
+  variant?: BillingButtonVariant;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-disabled="true"
+      data-unavailable={reason}
+      className={`${BASE} ${VARIANTS[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}

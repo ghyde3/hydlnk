@@ -129,6 +129,7 @@ export const PORTAL_PATH = "/api/billing/portal";
 /** Error codes the endpoints answer with, and the sentence a page can show for each. */
 export const BILLING_MESSAGES: Record<string, string> = {
   already_subscribed: "You already have a paid plan. Use Manage billing to change it.",
+  plans_closed: "Paid plans open soon.",
   no_customer: "Nothing to manage yet.",
   no_subscription: "There is no subscription to change.",
   already_yearly: "You are already billed yearly.",

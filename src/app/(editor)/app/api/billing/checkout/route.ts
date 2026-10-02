@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { answer, isSameOrigin, jsonError, readFields, unauthenticated } from "@/lib/billing/http";
 import { startCheckout } from "@/lib/billing/checkout";
+import { readPaidPlansOpen } from "@/lib/billing/env";
 import { isBillablePlan, isBillingInterval } from "@/lib/billing/prices";
 
 export const dynamic = "force-dynamic";
@@ -13,13 +14,19 @@ export const dynamic = "force-dynamic";
  * Input is exactly `plan` (pro or studio) and `interval` (month or year). Any other field, a
  * price id or customer id included, is a 400; the price is looked up from the environment and the
  * customer is the account's own. The account is the verified session user. No session is a 401
- * with no Stripe call, and an account that is already on a paid plan is a 409 `already_subscribed`.
- * This endpoint never changes the plan: only the signed webhook does.
+ * with no Stripe call, and an account that already has a subscription (a paid plan, or a live
+ * subscription in Stripe that the webhook has not applied yet) is a 409 `already_subscribed`.
+ * With PAID_PLANS_OPEN=false every signed-in same-origin request is a 403 `plans_closed`, checked
+ * before the input is read and before anything is called. This endpoint never changes the plan:
+ * only the signed webhook does.
  */
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) return unauthenticated(request);
   if (!isSameOrigin(request)) return jsonError(403, "forbidden_origin");
+  if (!readPaidPlansOpen()) {
+    return answer(request, { ok: false, status: 403, error: "plans_closed" });
+  }
 
   const fields = await readFields(request, ["plan", "interval"]);
   if (!fields || !isBillablePlan(fields.plan) || !isBillingInterval(fields.interval)) {

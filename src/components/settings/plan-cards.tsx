@@ -7,6 +7,7 @@ import {
   type BillablePlan,
   type BillingInterval,
 } from "@/lib/billing/prices";
+import type { UpgradeBlock } from "@/components/billing/upgrade-button";
 import { PLAN_IDS, PLAN_LABELS, planBlurb, type PlanId } from "@/lib/limits";
 import { PlanCardAction } from "./plan-actions";
 
@@ -24,10 +25,28 @@ function cardPrice(plan: PlanId, interval: BillingInterval): string {
  * "Monthly | Yearly" control above the cards, which switches the Pro and Studio prices and the
  * interval its Upgrade buttons send. Nothing here mentions what v1 does not have.
  *
+ * Two things switch the Upgrade buttons off while the cards and their prices stay: paid plans not
+ * being open yet (`paidPlansOpen` false, from PAID_PLANS_OPEN: "Paid plans open soon") and the
+ * "Confirming your upgrade" wait after Checkout (`confirming`: "Upgrade pending"), so a second
+ * subscription is never offered while the first is still being confirmed.
+ *
  * `/settings#plans` is where every "See plans" link lands: the section scrolls into view and the
  * Studio card's heading takes focus.
  */
-export function PlanCards({ current }: { current: PlanId }) {
+export function PlanCards({
+  current,
+  paidPlansOpen = true,
+  confirming = false,
+}: {
+  current: PlanId;
+  paidPlansOpen?: boolean;
+  confirming?: boolean;
+}) {
+  const blocked: UpgradeBlock | undefined = !paidPlansOpen
+    ? "closed"
+    : confirming
+      ? "pending"
+      : undefined;
   const [interval, setInterval] = useState<BillingInterval>("month");
 
   useEffect(() => {
@@ -104,7 +123,12 @@ export function PlanCards({ current }: { current: PlanId }) {
               </div>
               <p className="text-[13px] leading-normal text-text-2">{planBlurb(plan)}</p>
               <div className="mt-auto flex flex-col pt-1">
-                <PlanCardAction card={plan} current={current} interval={interval} />
+                <PlanCardAction
+                  card={plan}
+                  current={current}
+                  interval={interval}
+                  blocked={blocked}
+                />
               </div>
             </div>
           );
