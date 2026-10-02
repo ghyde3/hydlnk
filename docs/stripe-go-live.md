@@ -18,7 +18,7 @@ Use the live HYDLNK account (the switch at the top left says "Live", not "Sandbo
 
 1. **Activate the account.** Business details, bank account for payouts, identity check: <https://dashboard.stripe.com/account/onboarding>. Live charges stay off until this is done.
 2. **Public details** (Settings > Business > Public details): business name **HYDLNK** (the setup script refuses any account not named HYDLNK), support email, website `https://hydlnk.com`, statement descriptor **HYDLNK** and a short descriptor (also HYDLNK, it is what appears on card statements), terms of service `https://hydlnk.com/terms`, privacy policy `https://hydlnk.com/privacy`. The customer portal uses these two links.
-3. **Branding** (Settings > Branding): HYDLNK icon and logo, brand colour **#B8914F**, accent colour **#1C1B1A**. Check the preview: Checkout, the portal and receipts all use it.
+3. **Branding** (Settings > Branding): HYDLNK icon and logo, brand colour **#1C1B1A** (HYDLNK's primary button colour, `--hl-ink` in `docs/DESIGN.md`) and accent colour **#B8914F** (the brass highlight). Check the preview of Checkout, the portal and receipts, and swap the two if it looks wrong.
 4. **Customer emails** (Settings > Customer emails): turn on emails for **successful payments** and **refunds**.
 5. **Failed payments** (Settings > Billing > Subscriptions and emails): turn on **Smart Retries**, turn on the failed-payment and expiring-card emails, and set what happens when the retries run out to **cancel the subscription**. The webhook then moves the account back to Free (`customer.subscription.deleted`). While Stripe is still retrying, the account keeps its paid plan (`past_due`).
 6. **Tax: pick one.** You need to decide before step f, because each is a small code change. Tell Claude which.
@@ -72,7 +72,7 @@ It creates or updates, in the live account: the two products, the four prices, t
 5. Put the four price ids in Vercel Production. The script prints the exact commands at the end (`vercel env rm ... --yes`, then `printf '%s' price_... | vercel env add ... production`). Run them from a checkout linked to the Vercel project (`vercel link --scope ghyde3s-projects`). The ids are not secrets. The app needs all four set.
 6. If the script warns that the portal configuration is **not the default**: Dashboard > Settings > Billing > Customer portal, press Save once, run the script again. The app opens the portal without naming a configuration, so Stripe must have a default.
 
-The script refuses to run if: the profile has no live key, the account is not named HYDLNK or is the sandbox, `STRIPE_API_KEY` is set in your shell, `pricesConfirmed` in the catalog is not true, or it has no interactive terminal for the account-id confirmation.
+The script refuses to run if the profile has no live key, the account is not named HYDLNK or is the sandbox, or `STRIPE_API_KEY` is set in your shell. It refuses `--live --apply` if `pricesConfirmed` in the catalog is not true or there is no interactive terminal for the account-id confirmation.
 
 ## e. The webhook
 
