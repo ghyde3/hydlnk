@@ -17,7 +17,7 @@ export const SYSTEM_DEFAULT_TOKENS: Readonly<TokenSet> = Object.freeze({
   fontBody: "Inter",
   scale: 1,
   weightHeading: 600,
-  letterCase: "none",
+  letterCase: "normal",
   radius: 12,
   borderWidth: 1,
   buttonStyle: "fill",

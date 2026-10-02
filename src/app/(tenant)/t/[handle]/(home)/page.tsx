@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { TenantFonts } from "@/components/design/tenant-fonts";
 import { TenantPage } from "@/components/tenant/tenant-page";
 import { UnpublishedPlaceholder } from "@/components/tenant/unpublished-placeholder";
 import { HANDLE_DISPLAY_DOMAIN } from "@/lib/handles/rules";
@@ -55,5 +56,10 @@ export default async function TenantRoute({ params }: PageProps<"/t/[handle]">) 
   if (state.kind === "unpublished") return <UnpublishedPlaceholder handle={handle} />;
 
   const { page } = state;
-  return <TenantPage document={page.document} pageId={page.pageId} plan={page.plan} />;
+  return (
+    <>
+      <TenantFonts tokens={page.document.tokens} />
+      <TenantPage document={page.document} pageId={page.pageId} plan={page.plan} />
+    </>
+  );
 }

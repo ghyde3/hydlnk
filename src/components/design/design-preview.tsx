@@ -1,21 +1,18 @@
 "use client";
 
 import type { MouseEvent } from "react";
-import { PreviewFonts } from "@/components/design/tenant-fonts";
-import type { PublishDoc } from "@/lib/document";
 import { PageRenderer, type PageChrome } from "@/lib/editor/contracts";
-import { panelId, tabId, type EditorView } from "./view-tabs";
+import type { PublishDoc } from "@/lib/document";
+import { PreviewFonts } from "./tenant-fonts";
+import { designPanelId, designTabId, type DesignView } from "./design-tabs";
 
 /**
- * The live preview (M2-06): `PageRenderer` fed with the draft's publish form, in a 310x660 phone
- * bezel at 760px and up and full width, with no bezel, on the phone's Preview tab. The renderer is
- * the same component the public page uses, so what shows here is what Publish will show.
- *
- * Inside the frame only tenant styling applies: no HYDLNK token reaches the renderer. The frame
- * stops clicks on links so a tap on a link or social icon never leaves the editor (the renderer
- * leaves the hrefs alone so the markup stays identical everywhere).
+ * The Design screen's live preview (M3-06): `PageRenderer` fed with the draft's publish form, the
+ * same component the public page uses, in a 310x660 phone bezel at 760px and up and full width,
+ * with no bezel, on the phone's Preview tab. The frame stops clicks on links so a tap on a link
+ * never leaves the screen (the renderer leaves the hrefs alone so the markup stays identical).
  */
-export function PreviewPanel({
+export function DesignPreview({
   doc,
   pageId,
   chrome,
@@ -24,10 +21,9 @@ export function PreviewPanel({
 }: {
   doc: PublishDoc;
   pageId: string;
-  /** The footer links, from `pageChrome(plan, pageId)`: the same decision the live page makes (M2-28, M2-29). */
   chrome: PageChrome;
   /** Phone only: which tab is open. At 760px and up the preview is always shown. */
-  view: EditorView;
+  view: DesignView;
   isDesktop: boolean;
 }) {
   function stopNavigation(event: MouseEvent<HTMLDivElement>): void {
@@ -36,9 +32,9 @@ export function PreviewPanel({
 
   return (
     <section
-      id={panelId("preview")}
+      id={designPanelId("preview")}
       aria-label={isDesktop ? "Live preview" : undefined}
-      aria-labelledby={isDesktop ? undefined : tabId("preview")}
+      aria-labelledby={isDesktop ? undefined : designTabId("preview")}
       role={isDesktop ? undefined : "tabpanel"}
       className={`min-w-0 flex-col items-center gap-2.5 hl:sticky hl:top-4 hl:flex hl:w-[330px] hl:shrink-0 hl:self-start ${
         view === "preview" ? "flex" : "hidden"
@@ -48,7 +44,7 @@ export function PreviewPanel({
         <span className="font-mono text-[13px] font-semibold tracking-[0.06em] text-text-2 uppercase">
           Live preview
         </span>
-        <span className="text-xs text-text-2">Your page&apos;s own theme</span>
+        <span className="text-xs text-text-2">Block overrides still win</span>
       </div>
       <div
         data-testid="preview-bezel"

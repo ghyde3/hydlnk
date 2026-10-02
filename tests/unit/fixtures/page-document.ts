@@ -16,7 +16,7 @@ export const noirTokens: TokenSet = {
   fontBody: "Geist",
   scale: 1,
   weightHeading: 400,
-  letterCase: "none",
+  letterCase: "normal",
   radius: 12,
   borderWidth: 1,
   buttonStyle: "fill",

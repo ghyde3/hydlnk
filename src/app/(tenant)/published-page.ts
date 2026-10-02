@@ -7,6 +7,7 @@ import { countPublicQuery } from "@/lib/publish/query-counter";
 import {
   MISSING_REVALIDATE_SECONDS,
   PAGE_REVALIDATE_SECONDS,
+  PUBLIC_READ_CACHE_VERSION,
   handleTag,
   pageTag,
 } from "@/lib/publish/tags";
@@ -67,12 +68,15 @@ async function readPublic(pageId: string): Promise<PublicRead> {
  * autosave never touches it. The tag has to be known when the cache entry is made, so the page id
  * is looked up first: that one-row read happens only when the page is (re)generated, not per view.
  *
+ * The cache key carries `PUBLIC_READ_CACHE_VERSION`: the Data Cache outlives a deployment, so a
+ * release that tightens the document schema bumps it instead of serving 404s from old entries.
+ *
  * `next dev` renders every request on demand and never caches pages; the data cache would still
  * hold a published document across requests there, so development reads Postgres every time.
  */
 function readPublicCached(pageId: string): Promise<PublicRead> {
   if (process.env.NODE_ENV !== "production") return readPublic(pageId);
-  return unstable_cache(readPublic, ["tenant-page", pageId], {
+  return unstable_cache(readPublic, ["tenant-page", PUBLIC_READ_CACHE_VERSION, pageId], {
     tags: [pageTag(pageId)],
     revalidate: PAGE_REVALIDATE_SECONDS,
   })(pageId);

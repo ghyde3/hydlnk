@@ -49,6 +49,9 @@ function cssValue(key: TokenKey, tokens: TokenSet): string {
     case "maxWidth":
     case "blur":
       return `${tokens[key]}px`;
+    case "letterCase":
+      // `normal` is not a `text-transform` value: it is the absence of a transform.
+      return tokens.letterCase === "normal" ? "none" : tokens.letterCase;
     case "bgImage":
       // A custom property has to carry the whole value: url(var(--x)) is not valid CSS.
       return tokens.bgImage === null ? "none" : `url(${cssString(tokens.bgImage)})`;

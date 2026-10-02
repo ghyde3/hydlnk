@@ -623,7 +623,7 @@ describe("block overrides", () => {
       { radius: -5 },
       { radius: 33 },
       { accent: "red" },
-      { accent: "#FFF" },
+      { accent: "#GGGGGG" },
       { buttonStyle: "glow" },
       { buttonText: 12 },
       { radius: "4" },

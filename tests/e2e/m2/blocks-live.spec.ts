@@ -153,7 +153,8 @@ test.describe("M2-15 link button", () => {
     expect(looks.outline.border).toBe(RGB.accent);
     expect(looks.soft.bg).not.toBe("rgba(0, 0, 0, 0)");
     expect(looks.soft.bg).not.toBe(RGB.accent);
-    expect(looks.soft.bg).toMatch(/0\.18|\/ 0\.18/);
+    // Soft is the accent at 16% alpha (M3-11; the Milestone 2 renderer drew 18%).
+    expect(looks.soft.bg).toMatch(/0\.16|\/ 0\.16/);
     expect(looks.shadow.shadow).not.toBe("none");
     expect(looks.pill.radius).toBe("999px");
     expect(looks.pill.bg).toBe(RGB.accent);
@@ -383,7 +384,11 @@ test.describe("M2-17 social icons", () => {
     }
     expect(await css(nav, "column-gap")).toBe("10px");
     expect(await css(nav, "flex-wrap")).toBe("wrap");
-    expect([...hosts]).toEqual([new URL(live.url).host]);
+    // The page's own host, plus the two hosts of its Google Fonts stylesheet and files (M3-04): the
+    // one stylesheet link for the two chosen families is the only outside request a tenant page makes.
+    expect([...hosts].sort()).toEqual(
+      [new URL(live.url).host, "fonts.googleapis.com", "fonts.gstatic.com"].sort(),
+    );
   });
 
   test("M2-17 eight icons wrap on a phone and are centered in the column on a desktop", async ({
@@ -554,9 +559,13 @@ test.describe("M2-19 embeds", () => {
     const facade = page.locator("[data-block-type=embed] button");
     await expect(facade).toBeVisible();
     await page.waitForTimeout(1000);
-    const third = requests.filter((u) =>
-      /youtube|youtu\.be|google|ytimg|gstatic|doubleclick/i.test(new URL(u).host),
-    );
+    // The page's own Google Fonts stylesheet and files (M3-04) are expected; nothing else google,
+    // and no YouTube host at all, until Play is pressed.
+    const fontHosts = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
+    const third = requests.filter((u) => {
+      const host = new URL(u).host;
+      return !fontHosts.has(host) && /youtube|youtu\.be|google|ytimg|gstatic|doubleclick/i.test(host);
+    });
     expect(third).toEqual([]);
     await expect(page.locator("iframe")).toHaveCount(0);
 
