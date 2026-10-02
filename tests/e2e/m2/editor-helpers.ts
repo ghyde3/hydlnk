@@ -96,15 +96,29 @@ export function draftWith(
   return { ...emptyDraft(handle), blocks, ...extra } as DraftDoc;
 }
 
-/** Opens the editor and waits until the screen is interactive (rendered and hydrated). */
-export async function openEditor(page: Page): Promise<void> {
-  await page.goto(EDITOR_URL);
-  await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
-  // The server-rendered markup is visible before React has attached its handlers; wait for them.
+/** Waits until the editor's inputs have React handlers: the server-rendered markup shows before that. */
+export async function waitForEditorHydrated(page: Page): Promise<void> {
   await page.waitForFunction(() => {
     const input = document.querySelector("input[autocomplete='name']");
     return !!input && Object.keys(input).some((key) => key.startsWith("__reactProps$"));
   });
+}
+
+/** Opens the editor and waits until the screen is interactive (rendered and hydrated). */
+export async function openEditor(page: Page): Promise<void> {
+  await page.goto(EDITOR_URL);
+  await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
+  await waitForEditorHydrated(page);
+}
+
+/**
+ * Reloads the editor and waits until it is interactive again. A fill right after a bare reload can
+ * land on the server-rendered input before React attaches, and hydration then drops it.
+ */
+export async function reloadEditor(page: Page): Promise<void> {
+  await page.reload();
+  await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
+  await waitForEditorHydrated(page);
 }
 
 export const saveIndicator = (page: Page): Locator => page.locator("[data-save-status]");

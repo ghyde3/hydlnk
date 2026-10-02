@@ -12,6 +12,7 @@ import {
   mark,
   openEditor,
   pageRow,
+  reloadEditor,
   saveIndicator,
   seededUser,
 } from "./editor-helpers";
@@ -95,7 +96,7 @@ test.describe("M2-04 autosave", () => {
     await expect(saveIndicator(page)).toHaveText("Saved");
     await expect(saveIndicator(page)).toHaveAttribute("aria-live", "polite");
 
-    await page.reload();
+    await reloadEditor(page);
     await expect(NAME(page)).toHaveValue(text);
 
     const after = await pageRow(user.pageId);

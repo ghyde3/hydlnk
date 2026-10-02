@@ -9,6 +9,7 @@ import {
   expectDraft,
   openEditor,
   previewScreen,
+  reloadEditor,
   rowOf,
   rows,
   saveIndicator,
@@ -113,7 +114,7 @@ test.describe("M2-14 drag handles", () => {
       "Four",
       "Five",
     ]);
-    await page.reload();
+    await reloadEditor(page);
     expect(await order(page)).toEqual(expected);
   });
 
@@ -127,12 +128,20 @@ test.describe("M2-14 drag handles", () => {
     await h.focus();
     await page.keyboard.press("Space");
     await expect(liveRegion(page)).toContainText("Picked up One");
-    await page.keyboard.press("ArrowDown");
-    // The next key needs the first move to have settled (dnd-kit re-measures the list): wait for
-    // its announcement instead of a fixed pause.
-    await expect(liveRegion(page)).toContainText("One moved to position 2 of 5");
-    await page.keyboard.press("ArrowDown");
-    await expect(liveRegion(page)).toContainText("One moved to position 3 of 5");
+    // dnd-kit starts listening for the arrow keys a tick after the lift (and re-measures the list
+    // after each move), so under load a key pressed at once can be lost: press again until the move
+    // is announced, but never once the announcement is there.
+    for (const position of [2, 3]) {
+      await expect(async () => {
+        const said = await liveRegion(page).innerText();
+        if (!said.includes(`One moved to position ${position} of 5`)) {
+          await page.keyboard.press("ArrowDown");
+        }
+        await expect(liveRegion(page)).toContainText(`One moved to position ${position} of 5`, {
+          timeout: 1000,
+        });
+      }).toPass({ timeout: 15_000 });
+    }
     await page.keyboard.press("Space");
     const expected = [FIVE[1], FIVE[2], FIVE[0], FIVE[3], FIVE[4]];
     await expect.poll(() => order(page)).toEqual(expected);

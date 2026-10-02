@@ -13,6 +13,7 @@ import {
   openEditor,
   pageRow,
   previewScreen,
+  reloadEditor,
   rowOf,
   rows,
   saveIndicator,
@@ -445,7 +446,7 @@ test.describe("M2-12 visibility toggle", () => {
       user.pageId,
       (d) => d.blocks.find((b) => b.id === IDS.link2)?.visible === false,
     );
-    await page.reload();
+    await reloadEditor(page);
     await expect(toggle(page, IDS.link2)).toHaveAttribute("aria-pressed", "false");
 
     await toggle(page, IDS.link2).click();
@@ -467,7 +468,7 @@ test.describe("M2-12 visibility toggle", () => {
     await expect(saveIndicator(page)).toHaveText("Saved");
     const draft = await expectDraft(user.pageId, (d) => d.blocks.every((b) => b.visible === false));
     expect(new Set(draft.blocks.map((b) => b.type)).size).toBe(9);
-    await page.reload();
+    await reloadEditor(page);
     for (const id of ids) await expect(toggle(page, id)).toHaveAttribute("aria-pressed", "false");
   });
 
@@ -646,7 +647,7 @@ test.describe("M2-13 delete with undo", () => {
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
     await expect(previewScreen(page)).not.toContainText("Only block here");
     await expect(saveIndicator(page)).toHaveText("Saved");
-    await page.reload();
+    await reloadEditor(page);
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
     expect(await pageRow(user.pageId).then((r) => r.draft.blocks)).toEqual([]);
     const live = await rawRequest(`${user.handle}.localhost:3000`, "/");

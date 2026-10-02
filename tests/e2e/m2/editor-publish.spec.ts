@@ -12,6 +12,7 @@ import {
   openEditor,
   pageRow,
   previewScreen,
+  reloadEditor,
   rowOf,
   saveIndicator,
   seededUser,
@@ -319,7 +320,7 @@ test.describe("M2-27 the status chip", () => {
       .eq("id", user.pageId)
       .throwOnError();
     await page.waitForTimeout(1200);
-    await page.reload();
+    await reloadEditor(page);
     await expect(chip).toHaveText("Not published");
     expect(await css(chip, "background-color")).toBe("rgb(239, 237, 233)");
     expect(await css(chip, "color")).toBe("rgb(94, 90, 84)");
@@ -349,13 +350,13 @@ test.describe("M2-27 the status chip", () => {
     await page.unroute("**/rest/v1/pages?*");
     await expectDraft(user.pageId, (d) => d.profile.bio.endsWith("(edited)"));
 
-    await page.reload();
+    await reloadEditor(page);
     await expect(statusChip(page)).toHaveText("Unpublished changes");
 
     await page.getByLabel("Bio", { exact: true }).fill(original);
     await expect(statusChip(page)).toHaveText("Published");
     await expect(saveIndicator(page)).toHaveText("Saved");
-    await page.reload();
+    await reloadEditor(page);
     await expect(statusChip(page)).toHaveText("Published");
   });
 
@@ -440,7 +441,7 @@ test.describe("M2-27 the status chip", () => {
     await expect(statusChip(page)).toHaveText("Unpublished changes"); // the theme ref differs
     await publishButton(page).click();
     await expect(statusChip(page)).toHaveText("Published");
-    await page.reload();
+    await reloadEditor(page);
     await expect(statusChip(page)).toHaveText("Published");
 
     const changed = {
@@ -450,7 +451,7 @@ test.describe("M2-27 the status chip", () => {
     };
     const updated = await admin.from("themes").update({ tokens: changed }).eq("id", theme.data!.id);
     expect(updated.error).toBeNull();
-    await page.reload();
+    await reloadEditor(page);
     await expect(statusChip(page)).toHaveText("Unpublished changes");
     // The preview resolves the new theme values.
     await expect

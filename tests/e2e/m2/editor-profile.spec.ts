@@ -11,6 +11,7 @@ import {
   openEditor,
   pageRow,
   previewScreen,
+  reloadEditor,
   saveIndicator,
   seededUser,
 } from "./editor-helpers";
@@ -123,7 +124,7 @@ test.describe("M2-07 display name and bio", () => {
     const stored = await expectDraft(user.pageId, (d) => d.profile.bio === bio);
     expect(stored.profile.name).toBe(name);
 
-    await page.reload();
+    await reloadEditor(page);
     await expect(NAME(page)).toHaveValue(name);
     await expect(BIO(page)).toHaveValue(bio);
 

@@ -1,11 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import {
-  emptyDraft,
-  toPublishForm,
-  type Block,
-  type DraftDoc,
-  type PublishDoc,
-} from "@/lib/document";
+import { emptyDraft, toPublishForm, type Block, type PublishDoc } from "@/lib/document";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import {

@@ -484,7 +484,22 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     // Outside click closes the menu and returns focus to the button.
     await button.click();
     await expect(menu).toBeVisible();
-    await page.mouse.click(300, 600);
+    // Click somewhere inert: a fixed coordinate can land on a button or an input of the real editor
+    // (which then takes the focus), depending on the page's content and fonts. Scan below the menu
+    // and right of the sidebar for a point whose element is not interactive.
+    const inert = await page.evaluate(() => {
+      const interactive =
+        'a, button, input, textarea, select, label, summary, [tabindex], [role="menu"], [contenteditable]';
+      for (let y = 300; y < window.innerHeight - 8; y += 24) {
+        for (let x = 260; x < window.innerWidth - 8; x += 24) {
+          const el = document.elementFromPoint(x, y);
+          if (el && !el.closest(interactive)) return { x, y };
+        }
+      }
+      return null;
+    });
+    expect(inert, "an inert point to click").not.toBeNull();
+    await page.mouse.click(inert!.x, inert!.y);
     await expect(menu).toBeHidden();
     await expect(button).toBeFocused();
   });
