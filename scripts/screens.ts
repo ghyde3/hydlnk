@@ -8,14 +8,15 @@
  *
  * Writes tmp/screens/<host>-<slug>-<width>.png (host is "root" when --host is omitted; slug is
  * the route with non-alphanumerics turned into "-", "index" for "/") and prints the absolute paths.
- * Assumes the dev server is already running (pnpm dev, or scripts/init.sh).
+ * Assumes the dev server is already running (pnpm dev, or scripts/init.sh). It is looked for on
+ * port 3000, or on HL_DEV_PORT when set (HL_DEV_PORT=3200 pnpm screens / for a worktree server).
  */
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 import { DESKTOP, PHONE } from "./lib/viewports";
 
-const DEV_PORT = 3000;
+const DEV_PORT = Number(process.env.HL_DEV_PORT ?? 3000);
 const OUT_DIR = path.resolve(process.cwd(), "tmp", "screens");
 
 const USAGE =

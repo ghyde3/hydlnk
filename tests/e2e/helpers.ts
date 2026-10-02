@@ -1,7 +1,10 @@
 import { expect, type Page } from "@playwright/test";
 
-/** Port the local dev server listens on. Matches baseURL in playwright.config.ts. */
-export const DEV_PORT = 3000;
+/**
+ * Port the local dev server listens on: 3000, or HL_DEV_PORT when set. Matches baseURL in
+ * playwright.config.ts.
+ */
+export const DEV_PORT = Number(process.env.HL_DEV_PORT ?? 3000);
 
 /**
  * Builds a local dev URL.
