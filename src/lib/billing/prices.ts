@@ -1,9 +1,10 @@
 /**
  * Plan price display config and the request vocabulary of the billing endpoints. No secrets and no
- * server-only import: the Billing screen (server), the buttons (client) and the landing page's
- * pricing section all read it, and it is the ONE place a price amount is written down. Every price
- * the app shows (plan cards, the plan band, "Switch to yearly", the landing page) is formatted from
- * `PLAN_PRICES` by the functions below; no component spells an amount.
+ * server-only import: the Billing screen (server), the buttons (client) and the marketing site all
+ * read it, and it is the ONE place a price amount is written down. Every price the app shows (plan
+ * cards, the plan band, "Switch to yearly") is formatted from `PLAN_PRICES` by the functions below,
+ * and the marketing site's own wording (src/lib/marketing/prices.ts) is derived from the same
+ * table; no component spells an amount.
  *
  * The amounts are what the screen shows; what Stripe charges is decided by the price ids in the
  * environment (src/lib/billing/price-map.ts), so a change here is made together with the four
@@ -28,14 +29,14 @@ const MONTHS: Record<BillingInterval, number> = { month: 1, year: 12 };
 const SUFFIX: Record<BillingInterval, string> = { month: "mo", year: "yr" };
 
 /** A whole-dollar amount as "$9"; anything with cents keeps two decimals ("$4.50"). */
-function dollars(amount: number): string {
+export function dollars(amount: number): string {
   return Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`;
 }
 
 /** Free costs nothing; the one place that says so. */
 export const FREE_PRICE_AMOUNT = 0;
 
-/** Free's price as shown on a card or the landing page: "$0". */
+/** Free's price as shown on a card or the marketing site: "$0". */
 export function formatFreePrice(): string {
   return dollars(FREE_PRICE_AMOUNT);
 }
@@ -77,25 +78,6 @@ export function formatBandPrice(plan: BillablePlan, interval: BillingInterval): 
   return interval === "month"
     ? `${amount} / month · billed monthly`
     : `${amount} / year · billed yearly`;
-}
-
-/**
- * A plan on the landing page: the headline price ("$9") and what follows it ("/ month · or $60 a
- * year ($5/mo billed yearly)"). Free has no yearly price.
- */
-export function formatLandingPrice(plan: BillablePlan): { price: string; per: string } {
-  return {
-    price: dollars(priceAmount(plan, "month")),
-    per: `/ month · or ${dollars(priceAmount(plan, "year"))} a year (${formatPerMonth(plan, "year")} billed yearly)`,
-  };
-}
-
-/** The lowest per-month price of any paid plan, for "Custom domains from $5/mo". */
-export function lowestPaidPerMonth(): string {
-  const all = BILLABLE_PLANS.flatMap((plan) =>
-    BILLING_INTERVALS.map((interval) => monthlyEquivalent(plan, interval)),
-  );
-  return `${dollars(Math.min(...all))}/mo`;
 }
 
 export function isBillablePlan(value: unknown): value is BillablePlan {

@@ -9,10 +9,8 @@ import {
   formatBandPrice,
   formatCardPrice,
   formatFreePrice,
-  formatLandingPrice,
   formatPerMonth,
   formatPrice,
-  lowestPaidPerMonth,
   monthlyEquivalent,
   isBillablePlan,
   isBillingInterval,
@@ -100,18 +98,9 @@ describe("M4-06 the display prices (decided 2026-10-02, docs/PLAN.md)", () => {
     expect(formatFreePrice()).toBe("$0");
   });
 
-  it("the band, the landing page and the hero line are formatted from the same table", () => {
+  it("the plan band is formatted from the same table", () => {
     expect(formatBandPrice("pro", "month")).toBe("$9 / month · billed monthly");
     expect(formatBandPrice("studio", "year")).toBe("$180 / year · billed yearly");
-    expect(formatLandingPrice("pro")).toEqual({
-      price: "$9",
-      per: "/ month · or $60 a year ($5/mo billed yearly)",
-    });
-    expect(formatLandingPrice("studio")).toEqual({
-      price: "$20",
-      per: "/ month · or $180 a year ($15/mo billed yearly)",
-    });
-    expect(lowestPaidPerMonth()).toBe("$5/mo");
   });
 
   it("every plan has a yearly price that is cheaper per month than its monthly price", () => {

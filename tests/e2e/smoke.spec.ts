@@ -35,7 +35,7 @@ test.describe("host routing smoke", { tag: "@smoke" }, () => {
       .filter({ visible: true })
       .first();
     await submit.click();
-    await page.waitForURL(`http://app.localhost:3000/signup?handle=${handle}`, {
+    await page.waitForURL(url("app", `/signup?handle=${handle}`), {
       waitUntil: "commit",
     });
   });

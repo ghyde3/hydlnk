@@ -1,0 +1,807 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #1c1b1a;
+}
+
+#root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1c1b1a;
+  color: #f4f3f0;
+  font-family: "Public Sans", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  position: absolute;
+  inset: 0;
+}
+
+.abs {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* Background: a slow dot grid and a brass glow ------------------------------------------- */
+
+#bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+#grid {
+  position: absolute;
+  inset: -96px;
+  background-image: radial-gradient(circle, #34312d 1.6px, transparent 1.9px);
+  background-size: 48px 48px;
+}
+
+#glow {
+  position: absolute;
+  width: 1200px;
+  height: 1200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(184, 145, 79, 0.26) 0%, rgba(184, 145, 79, 0.1) 38%, rgba(184, 145, 79, 0) 70%);
+}
+
+#vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 50%, rgba(28, 27, 26, 0) 55%, rgba(18, 17, 16, 0.75) 100%);
+}
+
+/* Kinetic headlines ----------------------------------------------------------------------- */
+
+.hl {
+  position: absolute;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hl-line {
+  display: block;
+  overflow: hidden;
+  padding: 0.04em 0 0.12em;
+  margin-bottom: -0.1em;
+}
+
+.hl-line > span {
+  display: inline-block;
+  transform-origin: 0% 100%;
+}
+
+.hl em {
+  font-style: normal;
+  color: #c9a15d;
+}
+
+.hl-center {
+  text-align: center;
+}
+
+/* Token panel (16:9) and token ticker (4:5) ----------------------------------------------- */
+
+.panel {
+  position: absolute;
+  overflow: hidden;
+  border: 2px solid #45413b;
+  border-radius: 14px;
+  background: #242220;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 76px;
+  padding: 0 28px;
+  border-bottom: 2px solid #3a3733;
+  background: #2a2825;
+}
+
+.panel-title {
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.panel-count {
+  color: #a9a49b;
+  font-family: "Geist Mono", monospace;
+  font-size: 20px;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 74px;
+  padding: 0 28px;
+  border-bottom: 2px solid #34312d;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row-k {
+  color: #b9b4ab;
+  font-family: "Geist Mono", monospace;
+  font-size: 23px;
+}
+
+.row-v {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 40px;
+  overflow: hidden;
+  font-family: "Geist Mono", monospace;
+  font-size: 24px;
+  font-weight: 500;
+}
+
+.row-v .val {
+  display: inline-block;
+}
+
+.swatch {
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  border: 2px solid #5a554d;
+  border-radius: 7px;
+}
+
+.row-hi {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 74px;
+  background: #34302a;
+}
+
+.row-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 6px;
+  height: 74px;
+  background: #b8914f;
+}
+
+.ticker {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  height: 80px;
+  border: 2px solid #45413b;
+  border-radius: 14px;
+  background: #242220;
+  font-family: "Geist Mono", monospace;
+  white-space: nowrap;
+}
+
+.ticker .dot {
+  width: 14px;
+  height: 14px;
+  background: #b8914f;
+  transform: rotate(45deg);
+}
+
+.ticker .tk-k {
+  color: #b9b4ab;
+  font-size: 25px;
+}
+
+.ticker .tk-v {
+  font-size: 28px;
+  font-weight: 500;
+}
+
+/* Block palette (16:9) -------------------------------------------------------------------- */
+
+.palette {
+  position: absolute;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 76px;
+  padding: 0 20px;
+  border: 2px solid #45413b;
+  border-radius: 12px;
+  background: #2a2825;
+  font-size: 25px;
+  font-weight: 600;
+}
+
+.chip svg {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  fill: none;
+  stroke: #d9b877;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.publish {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 76px;
+  border-radius: 12px;
+  background: #b8914f;
+  color: #1c1b1a;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+/* Device: a phone that becomes a browser window -------------------------------------------- */
+
+.device {
+  position: absolute;
+  overflow: hidden;
+  border: 2px solid #46423c;
+  background: #0f0e0d;
+  box-shadow:
+    0 40px 90px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.speaker {
+  position: absolute;
+  left: 50%;
+  top: 22px;
+  width: 92px;
+  height: 8px;
+  margin-left: -46px;
+  border-radius: 4px;
+  background: #2a2825;
+}
+
+.chrome {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 64px;
+  padding: 0 24px;
+  background: #2a2825;
+  border-bottom: 2px solid #3a3733;
+}
+
+.chrome .dots {
+  display: flex;
+  gap: 10px;
+}
+
+.chrome .dots i {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4a463f;
+}
+
+.url {
+  position: absolute;
+  left: 50%;
+  top: 11px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 560px;
+  height: 42px;
+  margin-left: -280px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: #1c1b1a;
+  font-family: "Geist Mono", monospace;
+  font-size: 21px;
+  color: #f4f3f0;
+}
+
+.url svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: #8fd3a8;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.url .caret {
+  display: inline-block;
+  width: 2px;
+  height: 24px;
+  margin-left: -8px;
+  background: #d9b877;
+}
+
+.ssl {
+  position: absolute;
+  right: 22px;
+  top: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #e7f3ec;
+  color: #2b7448;
+  font-family: "Geist Mono", monospace;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.ssl svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.screen {
+  position: absolute;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* The demo page (tenant theme values, drawn with --t-* variables) -------------------------- */
+
+.pg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--t-bg);
+  color: var(--t-text);
+  font-family: "Geist", sans-serif;
+}
+
+.pg-gradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 60% at 50% 0%, var(--t-glow) 0%, rgba(0, 0, 0, 0) 75%);
+}
+
+.pg-photo {
+  position: absolute;
+  inset: -30px;
+  background-image: url("assets/img/fennmoor-card.webp");
+  background-size: cover;
+  background-position: 50% 50%;
+}
+
+.pg-overlay {
+  position: absolute;
+  inset: 0;
+  background: #14100c;
+}
+
+.pg-col {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 380px;
+  margin-left: -190px;
+  padding: 70px 26px 26px;
+  text-align: center;
+  transform-origin: 50% 0;
+}
+
+.pg-col > * {
+  flex: none;
+}
+
+.pg-avatar {
+  width: 96px;
+  height: 96px;
+  overflow: hidden;
+  border: 2px solid var(--t-accent);
+  border-radius: 50%;
+}
+
+.pg-avatar img,
+.pg-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pg-name {
+  position: relative;
+  margin-top: 16px;
+  font-family: var(--t-font-heading);
+  font-size: 38px;
+  font-weight: var(--t-weight);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+
+.pg-bio {
+  max-width: 290px;
+  margin-top: 10px;
+  color: var(--t-muted);
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.pg-social {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pg-social i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1.5px solid var(--t-border);
+  border-radius: 50%;
+}
+
+.pg-social svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--t-muted);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pg-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--t-gap);
+  width: 100%;
+  margin-top: 22px;
+}
+
+.pg-blocks > * {
+  flex: none;
+}
+
+.pg-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 62px;
+  border: 1.5px solid var(--t-btn-border);
+  border-radius: var(--t-btn-radius);
+  background: var(--t-btn-bg);
+  color: var(--t-btn-text);
+  font-size: 19px;
+  font-weight: var(--t-btn-weight);
+}
+
+.pg-card {
+  position: relative;
+  overflow: hidden;
+  border: 1.5px solid var(--t-border);
+  border-radius: var(--t-radius);
+  text-align: left;
+}
+
+.pg-card-banner {
+  position: relative;
+  height: 132px;
+  background-image: url("assets/img/fennmoor-card.webp");
+  background-size: cover;
+  background-position: 50% 50%;
+}
+
+.pg-card-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--t-scrim) 0%, rgba(0, 0, 0, 0) 85%);
+}
+
+.pg-card-title {
+  position: absolute;
+  left: 18px;
+  bottom: 12px;
+  color: var(--t-accent);
+  font-family: var(--t-font-heading);
+  font-size: 32px;
+  font-weight: var(--t-weight);
+  line-height: 1;
+}
+
+.pg-card-foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 13px 18px;
+  font-size: 15px;
+}
+
+.pg-card-foot b {
+  color: var(--t-accent);
+  font-weight: 400;
+}
+
+.pg-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pg-cell {
+  padding: 16px 16px 15px;
+  border: 1.5px solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+  text-align: left;
+}
+
+.pg-cell-t {
+  font-family: var(--t-font-heading);
+  font-size: 22px;
+  font-weight: var(--t-weight);
+  line-height: 1.1;
+}
+
+.pg-cell-s {
+  margin-top: 4px;
+  color: var(--t-muted);
+  font-size: 14px;
+}
+
+/* Analytics card -------------------------------------------------------------------------- */
+
+.ana {
+  position: absolute;
+  padding: 26px 30px;
+  border: 2px solid #e2dfd9;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #1c1b1a;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35);
+}
+
+.ana-eyebrow {
+  display: flex;
+  justify-content: space-between;
+  color: #5e5a54;
+  font-family: "Geist Mono", monospace;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ana-kpis {
+  display: flex;
+  gap: 36px;
+  margin-top: 18px;
+}
+
+.ana-kpi span {
+  display: block;
+  color: #5e5a54;
+  font-size: 18px;
+}
+
+.ana-kpi b {
+  display: block;
+  margin-top: 4px;
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ana-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 92px;
+  margin-top: 22px;
+  border-bottom: 2px solid #e2dfd9;
+}
+
+.ana-bars i {
+  display: block;
+  flex: 1;
+  height: 100%;
+  border-radius: 3px 3px 0 0;
+  background: #b8914f;
+  transform-origin: 50% 100%;
+}
+
+/* Live chip ------------------------------------------------------------------------------- */
+
+.live {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 20px;
+  border: 2px solid #45413b;
+  border-radius: 12px;
+  background: #2a2825;
+  font-family: "Geist Mono", monospace;
+  font-size: 21px;
+  white-space: nowrap;
+}
+
+.live .led {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #5fbf86;
+}
+
+/* The mark: a brass diamond that becomes the claim field, then the phone ------------------- */
+
+.claim {
+  position: absolute;
+  overflow: hidden;
+  border-style: solid;
+}
+
+.claim-row {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 14px 0 36px;
+  white-space: nowrap;
+}
+
+.claim-text {
+  font-family: "Geist Mono", monospace;
+  font-size: 50px;
+  color: #f4f3f0;
+}
+
+.claim-caret {
+  display: inline-block;
+  width: 4px;
+  height: 56px;
+  margin: 0 2px;
+  background: #d9b877;
+}
+
+.claim-suffix {
+  font-family: "Geist Mono", monospace;
+  font-size: 50px;
+  color: #a9a49b;
+}
+
+.claim-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100% - 28px);
+  margin-left: auto;
+  padding: 0 34px;
+  border-radius: 8px;
+  background: #b8914f;
+  color: #1c1b1a;
+  font-family: "Public Sans", sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.claim-screen {
+  position: absolute;
+  background: #f3eee4;
+}
+
+.ring {
+  position: absolute;
+  border: 3px solid #b8914f;
+}
+
+.avail {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 20px;
+  border-radius: 10px;
+  background: #e7f3ec;
+  color: #2b7448;
+  font-family: "Geist Mono", monospace;
+  font-size: 22px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.avail svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pg-head {
+  display: inline-block;
+}
+
+/* Selection box: outlines the page element a token beat is changing. */
+.sel {
+  position: absolute;
+  inset: -9px;
+  z-index: 5;
+  border: 2px solid #c9a15d;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sel b {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #c9a15d;
+  background: #1c1b1a;
+}
+
+.sel b:nth-child(1) { left: -6px; top: -6px; }
+.sel b:nth-child(2) { right: -6px; top: -6px; }
+.sel b:nth-child(3) { left: -6px; bottom: -6px; }
+.sel b:nth-child(4) { right: -6px; bottom: -6px; }
+
+.pg-card > .sel {
+  inset: 5px;
+}
+
+.pg > .sel {
+  inset: 14px;
+  border-radius: 34px;
+}
+
+.pg > .sel b {
+  display: none;
+}

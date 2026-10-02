@@ -88,9 +88,16 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Skip Next.js internals (including dev HMR), the framework's metadata files and static assets.
-  // The pattern has to be a literal so Next.js can analyse it at build time.
+  // Skip Next.js internals (including dev HMR), the framework's metadata files and static assets:
+  // any path ending in a static file extension, video included (the showreel in public/marketing
+  // is .mp4 and .webm). Those requests never need a host decision, and the proxy would otherwise
+  // run once per image and per video range request. tests/unit/routing-proxy-matcher.test.ts
+  // checks that every file in public/ is covered. There is deliberately no /marketing/ prefix
+  // rule: a path that is not a file must still get its host's routing and 404. robots.txt and
+  // sitemap.xml are route handlers that read the Host header themselves
+  // (src/lib/marketing/seo.ts), so they stay unmatched. The pattern has to be a literal so
+  // Next.js can analyse it at build time.
   matcher: [
-    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?)$).*)",
+    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm)$).*)",
   ],
 };
