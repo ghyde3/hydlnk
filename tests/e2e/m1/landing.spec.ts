@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
+import { perMonthBilledYearlyText } from "@/lib/marketing/prices";
 import { axeViolations } from "../fixtures/a11y";
+import { SHOWN_PRICES } from "../fixtures/prices";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
@@ -143,9 +145,10 @@ test.describe("M1-23 header and hero", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.getByText("Free forever · No card required · Bring your own domain from $5/mo, billed yearly", {
-        exact: true,
-      }),
+      page.getByText(
+        `Free forever · No card required · Bring your own domain from ${perMonthBilledYearlyText("pro")}`,
+        { exact: true },
+      ),
     ).toBeVisible();
 
     // The HYDLNK UI is Public Sans; tenant fonts appear only inside the demo pages.
@@ -573,14 +576,15 @@ test.describe("M1-26 pricing", () => {
     // Yearly is the default view. innerText is what is on screen: the monthly price sits in the
     // DOM too, hidden by CSS, and textContent would see it.
     const shown = { useInnerText: true };
-    await expect(card(page, "Free")).toContainText("$0", shown);
+    // The amounts come from the one price table (src/lib/billing/prices.ts), never spelled here.
+    await expect(card(page, "Free")).toContainText(SHOWN_PRICES.free, shown);
     await expect(card(page, "Free")).toContainText("forever", shown);
-    await expect(card(page, "Pro")).toContainText("$5 / month, billed yearly", shown);
-    await expect(card(page, "Pro")).toContainText("$60 a year, save $48", shown);
-    await expect(card(page, "Pro")).not.toContainText("$9", shown);
-    await expect(card(page, "Studio")).toContainText("$15 / month, billed yearly", shown);
-    await expect(card(page, "Studio")).toContainText("$180 a year, save $60", shown);
-    await expect(card(page, "Studio")).not.toContainText("$20", shown);
+    await expect(card(page, "Pro")).toContainText(SHOWN_PRICES.yearlyHeadline("pro"), shown);
+    await expect(card(page, "Pro")).toContainText(SHOWN_PRICES.yearlyNote("pro"), shown);
+    await expect(card(page, "Pro")).not.toContainText(SHOWN_PRICES.monthlyAmount("pro"), shown);
+    await expect(card(page, "Studio")).toContainText(SHOWN_PRICES.yearlyHeadline("studio"), shown);
+    await expect(card(page, "Studio")).toContainText(SHOWN_PRICES.yearlyNote("studio"), shown);
+    await expect(card(page, "Studio")).not.toContainText(SHOWN_PRICES.monthlyAmount("studio"), shown);
 
     expect(await lists("Free")).toEqual([
       "1 page",

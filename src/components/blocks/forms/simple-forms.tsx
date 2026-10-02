@@ -3,28 +3,35 @@
 import { LIMITS } from "@/lib/document";
 import { TextAreaField, TextField } from "../text-field";
 import { UrlField } from "../url-field";
+import { OverrideControls } from "./override-controls";
 import { fieldError, type BlockFormProps } from "./types";
 
-/** Link button: label and address. The per-block style override is Milestone 3. */
+/**
+ * Link button: label and address, then the block's three override controls (Button style, Color,
+ * Corner radius: M3-17, M3-18). There is no schedule field: scheduled links are out of v1.
+ */
 export function LinkForm({ block, onChange, errors }: BlockFormProps) {
   if (block.type !== "link") return null;
   return (
-    <div className="flex flex-wrap gap-3">
-      <TextField
-        label="Label"
-        field="label"
-        max={LIMITS.linkLabel}
-        value={block.label}
-        error={fieldError(errors, block.id, "label")}
-        onChange={(label) => onChange({ ...block, label })}
-        className="flex-1 basis-[220px]"
-      />
-      <UrlField
-        value={block.url}
-        error={fieldError(errors, block.id, "url")}
-        onChange={(url) => onChange({ ...block, url })}
-        className="flex-1 basis-[220px]"
-      />
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-3">
+        <TextField
+          label="Label"
+          field="label"
+          max={LIMITS.linkLabel}
+          value={block.label}
+          error={fieldError(errors, block.id, "label")}
+          onChange={(label) => onChange({ ...block, label })}
+          className="flex-1 basis-[220px]"
+        />
+        <UrlField
+          value={block.url}
+          error={fieldError(errors, block.id, "url")}
+          onChange={(url) => onChange({ ...block, url })}
+          className="flex-1 basis-[220px]"
+        />
+      </div>
+      <OverrideControls block={block} onChange={onChange} errors={errors} />
     </div>
   );
 }

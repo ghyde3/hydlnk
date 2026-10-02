@@ -40,6 +40,12 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminSupabase: () => ({ auth: { admin: { deleteUser } } }),
 }));
 
+// M4-34: the steps that run before the delete (billing, Vercel domains, uploaded images) have their
+// own tests (billing-delete-account.test.ts); here they are no-ops.
+vi.mock("@/lib/billing/cancel", () => ({ cancelAccountBilling: async () => 0 }));
+vi.mock("@/lib/pages/delete-domains", () => ({ removeAccountDomains: async () => undefined }));
+vi.mock("@/lib/pages/delete-media", () => ({ removeAccountMedia: async () => undefined }));
+
 const { deleteAccount } = await import("@/lib/pages/delete-account");
 
 const PAGE_A = "00000000-0000-4000-8000-0000000000a1";

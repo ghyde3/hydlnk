@@ -1014,7 +1014,7 @@
         "Vitest: the fontHeading and fontBody Zod schemas accept every allowlisted family and reject each invalid string above. End-to-end abuse cases (a direct draft write of a hostile font name) are asserted in the tenant fonts and Publish validation features."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-02",
@@ -1031,7 +1031,7 @@
         "Direct-API abuse: with mara's session and the publishable key, PATCH http://127.0.0.1:54321/rest/v1/pages?id=eq.<mara page id> setting draft overrides bg to 'red;}</style><script>window.__x=1</script>' (RLS allows draft writes); opening http://app.localhost:3000/editor shows a preview root that contains no script element, window.__x is undefined, and the bg falls back to the resolved default."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-03",
@@ -1045,7 +1045,7 @@
         "Direct-API abuse: with a user JWT and the publishable key at http://127.0.0.1:54321/rest/v1/themes, PATCH and DELETE on a row with owner_id is null change nothing (zero rows affected, row unchanged on re-read), and an INSERT with owner_id null is rejected."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-04",
@@ -1061,7 +1061,7 @@
         "At 1440x900 on the same URL: headings and body render in the two chosen families with no horizontal scroll."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-05",
@@ -1078,7 +1078,7 @@
         "At 1440x900 on the same URL: the message sits in the block column header area and stays readable."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-06",
@@ -1094,7 +1094,7 @@
         "After choosing radius 20 on the Tokens tab at 390x844, the Preview tab shows link buttons with a 20px computed radius. At 1440x900 the tablist is not visible; at viewport width 759 the tabs appear and at 761 they do not."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-07",
@@ -1111,7 +1111,7 @@
         "At 1440x900 on the same URL: the status sits in the header next to the buttons with no horizontal scroll."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-08",
@@ -1127,7 +1127,7 @@
         "At 1440x900 the layout matches the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-09",
@@ -1142,7 +1142,7 @@
         "At 1440x900 it matches the mockup's segmented/list styling."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-10",
@@ -1157,7 +1157,7 @@
         "At 390x844 and 1440x900: no horizontal scroll (`scrollWidth <= innerWidth`) with the largest scale and uppercase on, long names wrap, and each control option is at least 44px tall at 390."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-11",
@@ -1173,7 +1173,7 @@
         "At 1440x900 the control matches the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-12",
@@ -1188,7 +1188,7 @@
         "At 1440x900 they match the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-13",
@@ -1204,7 +1204,7 @@
         "At 1440x900 the options match the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-14",
@@ -1219,7 +1219,7 @@
         "At 1440x900 they match the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-15",
@@ -1235,7 +1235,7 @@
         "At 1440x900 the control matches the mockup, and the live page at http://mara.localhost:3000 shows the image background with no horizontal scroll at both sizes."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-16",
@@ -1250,7 +1250,7 @@
         "At 1440x900 they match the mockup layout."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-17",
@@ -1266,7 +1266,7 @@
         "At 1440x900 the select and chip sit in the expanded panel as in Editor.dc.html."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-18",
@@ -1284,7 +1284,7 @@
         "At 1440x900 on the same URL: both controls sit in the expanded panel without horizontal scroll."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-19",
@@ -1300,7 +1300,7 @@
         "At 1440x900 the grid matches the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-20",
@@ -1316,7 +1316,7 @@
         "At 1440x900 the message and Undo sit near the card grid as in the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-21",
@@ -1331,7 +1331,7 @@
         "At 1440x900 the button sits in the header next to 'Done' and the confirmation is visible."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-22",
@@ -1346,7 +1346,7 @@
         "At 1440x900 the message sits above the saved themes grid."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-23",
@@ -1362,7 +1362,7 @@
         "At 1440x900 they sit on the theme card and header as in the mockup."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-24",
@@ -1378,7 +1378,7 @@
         "At 1440x900 the dialog is centered at max-width 440px over a dimmed backdrop."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-25",
@@ -1393,7 +1393,7 @@
         "Every step above passes at 390x844 and 1440x900 with `scrollWidth <= innerWidth` on both live pages and all tappable targets at least 44px at 390."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-01",
@@ -1408,7 +1408,7 @@
         "After pnpm build, grep -r over .next/static finds none of the values of VERCEL_API_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, CRON_SECRET or VISITOR_HASH_SECRET, and a throwaway client component that imports the Vercel client or Stripe client module makes the build fail through server-only."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-02",
@@ -1422,7 +1422,7 @@
         "Direct-API check: POST /rest/v1/rpc/plan_limits with the publishable key returns only the public numbers above and no per-account data; no feature in this milestone hard-codes a limit number outside this table (grep of src/ for the literals 10485760, 104857600 and 1073741824 matches only the table module)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-03",
@@ -1455,7 +1455,7 @@
         "Abuse case (pgTAP and curl): with a user's JWT and the publishable key, PATCH /rest/v1/accounts?id=eq.<me> setting plan, stripe_customer_id, suspended_at or any new column updates no row (permission denied or zero rows), while selecting own row still works and selecting another account's row returns nothing."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-05",
@@ -1473,7 +1473,7 @@
         "At 1440x900 on the same URL: the 240px sidebar shows 'Settings & billing' active, the content column is capped at 920px and the three cards sit in one row."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-06",
@@ -1698,7 +1698,7 @@
         "At 1440x900 on the same URL: the screen sits in the main column to the right of the 240px sidebar, and the switcher menu opens below the sidebar button."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-19",
@@ -1714,7 +1714,7 @@
         "At 1440x900 on the same URL: the dialog is centered at max-width 440px over a dimmed backdrop."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-20",
@@ -1904,7 +1904,7 @@
         "At 1440x900 on the same URL: the message sits under the Profile photo buttons and the same limit applies to the Design background upload."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-32",
@@ -1921,7 +1921,7 @@
         "At 1440x900 on the same URL: the meters wrap in the grid inside the 920px column."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-33",

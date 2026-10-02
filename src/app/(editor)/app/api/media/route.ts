@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { clientEnv } from "@/lib/env/client";
+import { adminUploadQuota } from "@/lib/media/quota";
 import { processUpload } from "@/lib/media/upload";
 import { appOrigin } from "@/lib/routing/urls";
 
@@ -17,6 +18,10 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  * field in the form is ignored, and a caller without a session gets a 401 and nothing is stored.
  * A cross-origin Origin header is refused, so a cross-site form cannot upload as the signed-in
  * user. Everything else (size cap, magic bytes, dimensions, storage) is `processUpload`.
+ *
+ * The per-account cap (M4-31) is `adminUploadQuota`: the plan is read from `accounts.plan` and the
+ * bytes already stored from the bucket, and an upload past 10 MiB (Free), 100 MiB (Pro) or 1 GiB
+ * (Studio) is 413 `upload_quota`. A missing or suspended account is 403.
  */
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -30,7 +35,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await processUpload(request, user.id);
+    const result = await processUpload(request, user.id, undefined, adminUploadQuota(user.id));
     if (!result.ok) {
       return NextResponse.json(
         { error: result.error, message: result.message },

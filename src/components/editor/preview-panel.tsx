@@ -1,6 +1,7 @@
 "use client";
 
 import type { MouseEvent } from "react";
+import { PreviewFonts } from "@/components/design/tenant-fonts";
 import type { PublishDoc } from "@/lib/document";
 import { PageRenderer, type PageChrome } from "@/lib/editor/contracts";
 import { panelId, tabId, type EditorView } from "./view-tabs";
@@ -59,6 +60,7 @@ export function PreviewPanel({
           onClickCapture={stopNavigation}
           className="h-auto overflow-x-hidden rounded-md hl:h-full hl:overflow-y-auto hl:rounded-[30px]"
         >
+          <PreviewFonts tokens={doc.tokens} />
           <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} />
         </div>
       </div>

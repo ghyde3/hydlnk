@@ -8,7 +8,15 @@ import { blockRowSummary } from "@/lib/editor/contracts";
  * before publishing." and one line per failing block, by its title, with what to do. Profile and
  * page-level problems are listed too. The failing rows themselves carry the inline messages.
  */
-export function PublishAlert({ errors, blocks }: { errors: PublishError[]; blocks: Block[] }) {
+export function PublishAlert({
+  errors,
+  blocks,
+  onDismiss,
+}: {
+  errors: PublishError[];
+  blocks: Block[];
+  onDismiss?: () => void;
+}) {
   if (errors.length === 0) return null;
 
   const failing = blocks
@@ -30,7 +38,18 @@ export function PublishAlert({ errors, blocks }: { errors: PublishError[]; block
       role="alert"
       className="flex flex-col gap-2 rounded-md border border-bad-line bg-surface p-4"
     >
-      <span className="text-sm font-semibold text-bad">{heading}</span>
+      <div className="flex items-start justify-between gap-3">
+        <span className="py-3 text-sm font-semibold text-bad">{heading}</span>
+        {onDismiss ? (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="min-h-11 shrink-0 rounded-md border border-bad-line bg-surface px-4 text-[13px] font-semibold text-bad"
+          >
+            Dismiss
+          </button>
+        ) : null}
+      </div>
       <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[13px] text-ink">
         {profile.length > 0 ? (
           <li>

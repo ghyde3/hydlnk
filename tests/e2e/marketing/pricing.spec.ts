@@ -1,6 +1,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { SHOWN_PRICES } from "../fixtures/prices";
 import { expectNoHorizontalScroll, url } from "../helpers";
+import { monthlyText, perMonthBilledYearlyText, yearlyText } from "@/lib/marketing/prices";
 
 /**
  * The Monthly | Yearly toggle on the plan cards (home page and /pricing), at both projects (phone
@@ -25,21 +27,21 @@ const period = (page: Page, name: "Monthly" | "Yearly") => page.getByRole("radio
 const label = (page: Page, name: "Monthly" | "Yearly") => page.locator(".bt-option", { hasText: new RegExp(`^${name}`) });
 
 async function expectYearlyView(page: Page) {
-  await expect(card(page, "Pro")).toContainText("$5 / month, billed yearly", SHOWN);
-  await expect(card(page, "Pro")).toContainText("$60 a year, save $48", SHOWN);
-  await expect(card(page, "Pro")).not.toContainText("$9", SHOWN);
-  await expect(card(page, "Studio")).toContainText("$15 / month, billed yearly", SHOWN);
-  await expect(card(page, "Studio")).toContainText("$180 a year, save $60", SHOWN);
-  await expect(card(page, "Studio")).not.toContainText("$20", SHOWN);
+  await expect(card(page, "Pro")).toContainText(SHOWN_PRICES.yearlyHeadline("pro"), SHOWN);
+  await expect(card(page, "Pro")).toContainText(SHOWN_PRICES.yearlyNote("pro"), SHOWN);
+  await expect(card(page, "Pro")).not.toContainText(SHOWN_PRICES.monthlyAmount("pro"), SHOWN);
+  await expect(card(page, "Studio")).toContainText(SHOWN_PRICES.yearlyHeadline("studio"), SHOWN);
+  await expect(card(page, "Studio")).toContainText(SHOWN_PRICES.yearlyNote("studio"), SHOWN);
+  await expect(card(page, "Studio")).not.toContainText(SHOWN_PRICES.monthlyAmount("studio"), SHOWN);
 }
 
 async function expectMonthlyView(page: Page) {
-  await expect(card(page, "Pro")).toContainText("$9 / month", SHOWN);
+  await expect(card(page, "Pro")).toContainText(SHOWN_PRICES.monthlyHeadline("pro"), SHOWN);
   await expect(card(page, "Pro")).toContainText("Billed monthly", SHOWN);
   await expect(card(page, "Pro")).not.toContainText("billed yearly", SHOWN);
-  await expect(card(page, "Studio")).toContainText("$20 / month", SHOWN);
+  await expect(card(page, "Studio")).toContainText(SHOWN_PRICES.monthlyHeadline("studio"), SHOWN);
   await expect(card(page, "Studio")).toContainText("Billed monthly", SHOWN);
-  await expect(card(page, "Studio")).not.toContainText("$180", SHOWN);
+  await expect(card(page, "Studio")).not.toContainText(SHOWN_PRICES.yearlyAmount("studio"), SHOWN);
 }
 
 for (const path of ["/", "/pricing"]) {
@@ -51,15 +53,15 @@ for (const path of ["/", "/pricing"]) {
       await expect(group.getByRole("radio")).toHaveCount(2);
       await expect(period(page, "Yearly")).toBeChecked();
       await expect(period(page, "Monthly")).not.toBeChecked();
-      // The saving is stated on the option, from the numbers in src/lib/marketing/prices.ts.
-      await expect(label(page, "Yearly")).toContainText("Save up to 44%");
+      // The saving is stated on the option, derived from the price table.
+      await expect(label(page, "Yearly")).toContainText(SHOWN_PRICES.saveUpTo);
       for (const name of ["Monthly", "Yearly"] as const) {
         const box = await label(page, name).boundingBox();
         expect(box!.height, `${name} option height`).toBeGreaterThanOrEqual(44);
       }
       await expectYearlyView(page);
       // Free is the same in both views and is never part of the toggle.
-      await expect(card(page, "Free")).toContainText("$0", SHOWN);
+      await expect(card(page, "Free")).toContainText(SHOWN_PRICES.free, SHOWN);
     });
 
     test("Monthly shows the monthly prices and Yearly brings the yearly ones back", async ({ page }) => {
@@ -67,7 +69,7 @@ for (const path of ["/", "/pricing"]) {
       await label(page, "Monthly").click();
       await expect(period(page, "Monthly")).toBeChecked();
       await expectMonthlyView(page);
-      await expect(card(page, "Free")).toContainText("$0", SHOWN);
+      await expect(card(page, "Free")).toContainText(SHOWN_PRICES.free, SHOWN);
       await label(page, "Yearly").click();
       await expect(period(page, "Yearly")).toBeChecked();
       await expectYearlyView(page);
@@ -121,13 +123,14 @@ for (const path of ["/", "/pricing"]) {
 test("the comparison table lists the monthly and the yearly price side by side", async ({ page }) => {
   await page.goto(url(null, "/pricing"));
   const row = (name: string) => page.getByRole("row", { name: new RegExp(`^${name}`) });
-  await expect(row("Price, billed monthly")).toContainText("$9 a month");
-  await expect(row("Price, billed monthly")).toContainText("$20 a month");
-  await expect(row("Price, billed yearly")).toContainText("$60 a year ($5/mo, billed yearly)");
-  await expect(row("Price, billed yearly")).toContainText("$180 a year ($15/mo, billed yearly)");
+  const yearly = (plan: "pro" | "studio") => `${yearlyText(plan)} (${perMonthBilledYearlyText(plan)})`;
+  await expect(row("Price, billed monthly")).toContainText(monthlyText("pro"));
+  await expect(row("Price, billed monthly")).toContainText(monthlyText("studio"));
+  await expect(row("Price, billed yearly")).toContainText(yearly("pro"));
+  await expect(row("Price, billed yearly")).toContainText(yearly("studio"));
   // Whatever the toggle says, the table keeps both rows.
   await label(page, "Monthly").click();
-  await expect(row("Price, billed yearly")).toContainText("$60 a year ($5/mo, billed yearly)");
+  await expect(row("Price, billed yearly")).toContainText(yearly("pro"));
 });
 
 test("domains are connected, never sold: pricing and domains pages say so", async ({ page }) => {
@@ -139,6 +142,6 @@ test("domains are connected, never sold: pricing and domains pages say so", asyn
   await expect(page.locator("main")).toContainText("HYDLNK doesn’t sell or register domains");
   await expect(page.locator("main")).toContainText("domain you already own");
   await expect(page.locator("main")).toContainText(
-    "Connect a domain you already own on Pro, $5/mo, billed yearly.",
+    `Connect a domain you already own on Pro, ${perMonthBilledYearlyText("pro")}.`,
   );
 });

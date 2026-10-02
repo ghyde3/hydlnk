@@ -6,6 +6,7 @@ import { memo, useEffect, useLayoutEffect, useRef, type Dispatch } from "react";
 import type { Block, PublishError } from "@/lib/document";
 import { BLOCK_FORMS, blockRowSummary } from "@/lib/editor/contracts";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
+import { OverrideChip } from "@/components/themes";
 import { GripIcon } from "./icons";
 
 /** A text control to start typing in: the file input of an image control is hidden, so it is skipped. */
@@ -182,6 +183,7 @@ export const BlockRow = memo(function BlockRow({
             ) : null}
           </button>
         </div>
+        <OverrideChip block={block} />
         {hidden ? (
           <span className="hidden shrink-0 rounded-sm bg-track px-[7px] py-[3px] font-mono text-[11px] whitespace-nowrap text-text-2 hl:inline-block">
             Hidden

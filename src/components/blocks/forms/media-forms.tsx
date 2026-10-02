@@ -4,6 +4,7 @@ import { LIMITS, parseEmbed, type ImageRef } from "@/lib/document";
 import { ImageUploadControl } from "@/components/editor/image-upload-control";
 import { TextField } from "../text-field";
 import { UrlField } from "../url-field";
+import { OverrideControls } from "./override-controls";
 import { fieldError, imageError, type BlockFormProps } from "./types";
 
 /**
@@ -37,7 +38,10 @@ function ImageField({
   );
 }
 
-/** Link card: title, caption, address and the banner image (upload, replace, remove). */
+/**
+ * Link card: title, caption, address and the banner image (upload, replace, remove), then the
+ * card's two override controls (Color and Corner radius: M3-18; a card has no button style).
+ */
 export function CardForm({ block, onChange, onImage, errors }: BlockFormProps) {
   if (block.type !== "card") return null;
   return (
@@ -74,6 +78,7 @@ export function CardForm({ block, onChange, onImage, errors }: BlockFormProps) {
         error={imageError(errors, block.id)}
         onChange={onImage}
       />
+      <OverrideControls block={block} onChange={onChange} errors={errors} />
     </div>
   );
 }

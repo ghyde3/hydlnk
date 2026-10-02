@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { PublishDoc } from "@/lib/document";
 import { tokensToCssVars } from "@/lib/theme";
+import { backgroundImageUrl } from "./background";
 import { BlockView, type BlockContext } from "./blocks";
 import { PageFooter, type PageChrome } from "./footer";
 import { Profile } from "./profile";
@@ -38,14 +39,31 @@ export interface PageRendererProps {
 export function PageRenderer({ doc, pageId, mode, chrome, footer }: PageRendererProps) {
   const { tokens } = doc;
   const ctx: BlockContext = { pageId, tokens, mode };
+  // The background image is drawn only from the owner's page-media bucket: the URL is rebuilt from
+  // a validated path, and anything else (a third-party address, a bad row) draws no image.
+  const image = backgroundImageUrl(tokens);
+  const vars: Record<string, string> = tokensToCssVars(tokens);
+  vars["--t-bg-image"] = image === null ? "none" : `url("${image}")`;
+  const backgroundType =
+    image !== null ? "image" : tokens.bgType === "gradient" ? "gradient" : "solid";
   return (
     <div
       className="pg-root"
       data-page-root=""
       data-density={tokens.density}
       data-align={tokens.align}
-      style={tokensToCssVars(tokens) as CSSProperties}
+      data-bg-type={backgroundType}
+      style={vars as CSSProperties}
     >
+      {image === null ? null : (
+        // Behind the content, inside the root so it fills the whole page: the picture (blurred on
+        // its own, so text and buttons never are) with the page color laid over it at the overlay
+        // opacity. Decorative, so hidden from assistive technology.
+        <div className="pg-bg" aria-hidden="true">
+          <div className="pg-bg-image" data-bg-layer="image" />
+          <div className="pg-bg-overlay" data-bg-layer="overlay" />
+        </div>
+      )}
       <div className="pg-column">
         <Profile profile={doc.profile} />
         <main className="pg-blocks">

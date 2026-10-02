@@ -12,6 +12,7 @@ import {
 import { editorReducer, initialEditorState } from "@/lib/editor/state";
 import { computePublishStatus } from "@/lib/editor/status";
 import type { TokenSet } from "@/lib/theme";
+import { PageTokensProvider } from "@/components/themes";
 import { AddBlockCard } from "./add-block-card";
 import { BlockList } from "./block-list";
 import { EditorHeader } from "./editor-header";
@@ -185,7 +186,11 @@ export function EditorScreen(props: EditorScreenProps) {
               {CORRUPTED_NOTICE}
             </p>
           ) : null}
-          <PublishAlert errors={state.publishErrors} blocks={state.draft.blocks} />
+          <PublishAlert
+            errors={state.publishErrors}
+            blocks={state.draft.blocks}
+            onDismiss={() => dispatch({ type: "publish/clear-errors" })}
+          />
           <ProfileCard
             name={state.draft.profile.name}
             bio={state.draft.profile.bio}
@@ -195,15 +200,17 @@ export function EditorScreen(props: EditorScreenProps) {
             dispatch={dispatch}
           />
           <AddBlockCard blockCount={state.draft.blocks.length} dispatch={dispatch} />
-          <BlockList
-            blocks={state.draft.blocks}
-            expandedId={state.expandedId}
-            errors={state.publishErrors}
-            focus={state.focus}
-            announcement={state.announcement}
-            announceSeq={state.announceSeq}
-            dispatch={dispatch}
-          />
+          <PageTokensProvider tokens={form.tokens}>
+            <BlockList
+              blocks={state.draft.blocks}
+              expandedId={state.expandedId}
+              errors={state.publishErrors}
+              focus={state.focus}
+              announcement={state.announcement}
+              announceSeq={state.announceSeq}
+              dispatch={dispatch}
+            />
+          </PageTokensProvider>
         </section>
 
         <PreviewPanel

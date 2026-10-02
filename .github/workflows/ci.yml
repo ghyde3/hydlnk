@@ -96,9 +96,15 @@ jobs:
           # These are local-stack keys, but keep the secret key out of the job log anyway.
           secret="$(sed -n 's/^SUPABASE_SECRET_KEY="\(.*\)"$/\1/p' .env.local)"
           if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
+          # Milestone 4: the local Stripe and Vercel placeholders (never real keys) the billing and
+          # account-deletion specs need, from the same list scripts/init.sh uses.
+          . scripts/lib/local-env-placeholders.sh
+          ensure_local_env_placeholders .env.local > /dev/null
 
       # The Vitest files that need the running stack (M1-05 ensureAccount, M2-23/M2-25 the publish
-      # gate, and the seeded mara rows, all against the real database) are skipped by the unit step
+      # gate, the seeded mara rows, the system themes, the token and theme publish gate, the plan
+      # limits parity, page create and delete, and the upload quota, all against the real database)
+      # are skipped by the unit step
       # above. REQUIRE_SUPABASE=1 makes a missing stack fail here instead of skipping.
       - name: Integration tests (Vitest against local Supabase)
         env:
@@ -108,6 +114,11 @@ jobs:
           tests/unit/auth-ensure-account.test.ts
           tests/unit/publish-core.test.ts
           tests/unit/document-seed.test.ts
+          tests/unit/themes-system.test.ts
+          tests/unit/themes-publish.test.ts
+          tests/unit/limits-parity.test.ts
+          tests/unit/limits-pages.test.ts
+          tests/unit/limits-upload-stack.test.ts
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -116,23 +127,53 @@ jobs:
       - name: End-to-end tests
         run: pnpm test:e2e
 
-      # M2-26 needs a production build: x-nextjs-cache only exists there. The root domain is baked
+      # M2-26, M4-08 and M4-19 need a production build: x-nextjs-cache only exists there; the second server
+      # (PAID_PLANS_OPEN=false) is the only way to see that startup setting in a browser. The root domain is baked
       # into the build, so the port in it is the server's port; the dev server that Playwright starts
       # on :3000 (no such variables) is only used to sign users in. See the header of the spec.
-      - name: Production build and cache checks (M2-26)
+      - name: Production build, cache checks and the closed-plans switch (M2-26, M4-08, M4-19)
         run: |
           mkdir -p tmp
           NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build
           # The client bundle holds no secret key (M2-22): skipped by the unit step, which has no build.
           pnpm exec vitest run tests/unit/publish-bundle.test.ts
-          NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm start -p 3100 > tmp/start-3100.log 2>&1 &
-          prod_pid=$!
+          # The servers run as `next start` itself, not through `pnpm start`: $! must be the server, because
+          # killing the pnpm wrapper does not reliably stop it, and the usual way to find the leftover (lsof)
+          # is not on the runner image. That is how the closed-plans spec first ran against the open server.
+          start_prod() { # $1: log file; the rest: extra environment settings for this server
+            env NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 "${@:2}" ./node_modules/.bin/next start -p 3100 > "$1" 2>&1 &
+            prod_pid=$!
+            for _ in $(seq 1 60); do
+              if ! kill -0 "$prod_pid" 2>/dev/null; then
+                echo "::error::next start exited before it answered on :3100"; cat "$1"; exit 1
+              fi
+              if curl -s -o /dev/null --max-time 5 http://localhost:3100/; then return 0; fi
+              sleep 1
+            done
+            echo "::error::next start did not answer on :3100"; cat "$1"; exit 1
+          }
+          stop_prod() {
+            kill "$prod_pid" 2>/dev/null || true
+            for _ in $(seq 1 20); do
+              if ! kill -0 "$prod_pid" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            if kill -0 "$prod_pid" 2>/dev/null; then kill -9 "$prod_pid" 2>/dev/null || true; fi
+            # Never go on while something still answers on the port: the next spec would test that server.
+            for _ in $(seq 1 10); do
+              if ! curl -s -o /dev/null --max-time 2 http://localhost:3100/; then return 0; fi
+              sleep 1
+            done
+            echo "::error::something still answers on :3100 after the server was stopped"; exit 1
+          }
           trap 'kill "$prod_pid" 2>/dev/null || true' EXIT
-          for _ in $(seq 1 60); do
-            if curl -s -o /dev/null --max-time 5 http://localhost:3100/; then break; fi
-            sleep 1
-          done
-          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts
+          start_prod tmp/start-3100.log
+          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts tests/e2e/m4/billing-badge.spec.ts
+          # PAID_PLANS_OPEN is read when the server starts: stop this one, start the same build with the
+          # plans closed and run its spec.
+          stop_prod
+          start_prod tmp/start-3100-closed.log PAID_PLANS_OPEN=false
+          HL_PROD_PORT=3100 HL_PLANS_CLOSED=1 pnpm exec playwright test tests/e2e/m4/billing-plans-closed.spec.ts
 
       # The screens script needs a running dev server; Playwright stopped its own after the tests.
       # Runs only when the e2e tests passed. Fills the "screens" artifact below.
@@ -169,6 +210,16 @@ jobs:
           path: tmp/screens/
           if-no-files-found: ignore
           retention-days: 14
+
+      # What was listening on the production-server port, and what the servers said (the step above).
+      - name: Production server diagnostics
+        if: failure()
+        run: |
+          ps -eo pid,ppid,etime,args | grep -E 'next|pnpm' | grep -v grep || true
+          ss -ltnp 2>/dev/null | grep -E ':(3000|3100)\b' || true
+          for f in tmp/start-3100.log tmp/start-3100-closed.log; do
+            if [ -f "$f" ]; then echo "::group::$f (last 40 lines)"; tail -40 "$f"; echo "::endgroup::"; fi
+          done
 
       - name: Supabase diagnostics
         if: failure()

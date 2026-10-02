@@ -11,26 +11,41 @@ export type Database = {
     Tables: {
       accounts: {
         Row: {
+          billing_interval: string | null
+          cancel_at_period_end: boolean
           created_at: string
+          current_period_end: string | null
           id: string
           plan: string
           stripe_customer_id: string | null
+          stripe_event_created_at: string | null
+          stripe_subscription_id: string | null
           suspended_at: string | null
           updated_at: string
         }
         Insert: {
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
           created_at?: string
+          current_period_end?: string | null
           id: string
           plan?: string
           stripe_customer_id?: string | null
+          stripe_event_created_at?: string | null
+          stripe_subscription_id?: string | null
           suspended_at?: string | null
           updated_at?: string
         }
         Update: {
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
           created_at?: string
+          current_period_end?: string | null
           id?: string
           plan?: string
           stripe_customer_id?: string | null
+          stripe_event_created_at?: string | null
+          stripe_subscription_id?: string | null
           suspended_at?: string | null
           updated_at?: string
         }
@@ -206,6 +221,27 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_events: {
+        Row: {
+          id: string
+          received_at: string
+          stripe_created_at: string
+          type: string
+        }
+        Insert: {
+          id: string
+          received_at?: string
+          stripe_created_at: string
+          type: string
+        }
+        Update: {
+          id?: string
+          received_at?: string
+          stripe_created_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
       themes: {
         Row: {
           created_at: string
@@ -246,9 +282,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_upload_bytes: { Args: { p_uid: string }; Returns: number }
+      account_usage: {
+        Args: { p_uid: string }
+        Returns: {
+          domains: number
+          pages: number
+          saved_themes: number
+          upload_bytes: number
+        }[]
+      }
+      apply_subscription_state: {
+        Args: {
+          p_account_id: string
+          p_cancel_at_period_end: boolean
+          p_event_created: string
+          p_interval: string
+          p_period_end: string
+          p_plan: string
+          p_subscription_id: string
+        }
+        Returns: string
+      }
       plan_limits: {
         Args: { p_plan: string }
         Returns: {
+          analytics_breakdowns: boolean
+          analytics_history_days: number
           max_domains: number
           max_pages: number
           max_saved_themes: number

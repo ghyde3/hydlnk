@@ -114,9 +114,9 @@ Each ends in something you can click. The gate to opening signup is running Gary
 
 ## Monetization
 
-Design control is free; pay starts where HYDLNK carries real cost or the user is clearly a business. No commerce fees, ever. Prices are placeholders until final.
+Design control is free; pay starts where HYDLNK carries real cost or the user is clearly a business. No commerce fees, ever. Prices are final (see Decided); the app reads every amount from one table, `src/lib/billing/prices.ts`.
 
-| | Free | Pro, ~$5/mo ($48/yr) | Studio, ~$15/mo |
+| | Free | Pro, $9/mo ($60/yr, $5/mo billed yearly) | Studio, $20/mo ($180/yr, $15/mo billed yearly) |
 | --- | --- | --- | --- |
 | Pages | 1 | 3 | 15 |
 | Blocks and design tokens | All | All | All |
@@ -149,6 +149,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 
 - Free plan is free forever, capped at 1 page; Pro 3, Studio 15.
 - Custom domains start at Pro.
+- Prices (2026-10-02): Pro $9/mo or $60/yr ($5/mo billed yearly); Studio $20/mo or $180/yr ($15/mo billed yearly). Custom domains = connecting a domain the customer already owns (HYDLNK doesn't sell domains).
 - Billing through Stripe Checkout and Stripe's hosted customer portal.
 - Tenant pages are subdomains only (`handle.hydlnk.com`); a `hydlnk.com/handle` redirect can come later.
 - While testing: Vercel Hobby, a free Supabase project in its own "HYDLNK" org (connected to Vercel through the Supabase integration), Stripe HYDLNK sandbox. Move to Vercel Pro and Stripe live before taking real payments.

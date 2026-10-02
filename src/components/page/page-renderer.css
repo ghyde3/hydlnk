@@ -9,9 +9,10 @@
  *   - every selector is scoped under [data-page-root], and everything the page needs is set
  *     explicitly, so it looks the same on the tenant host (no reset stylesheet) and inside the
  *     editor (Tailwind's preflight).
- * Enum tokens (density, align, buttonStyle) arrive as data attributes, because CSS cannot branch
- * on the value of a variable. Not styled yet (Milestone 3): background image, gradient, overlay
- * and blur, and web fonts.
+ * Enum tokens (density, align, buttonStyle, and the background type as data-bg-type) arrive as
+ * data attributes, because CSS cannot branch on the value of a variable. The background image is
+ * the one picture the owner uploaded (see background.ts), drawn on its own layer so the blur never
+ * touches the content. Not styled yet: web fonts.
  */
 
 /* Root: the size container, the full-viewport background and the base type ---------------------- */
@@ -24,6 +25,8 @@
 }
 
 [data-page-root] {
+  position: relative;
+  isolation: isolate;
   container-type: inline-size;
   display: flex;
   justify-content: center;
@@ -41,6 +44,43 @@
 /* A framed mount (the editor's phone bezel) fills its frame instead of the viewport. */
 [data-page-frame] [data-page-root] {
   min-height: 100%;
+}
+
+/* Background: solid is the bg token above; gradient runs surface to bg over the page; an image
+   sits on its own layer (.pg-bg) with the bg token as the color behind it. --------------------- */
+
+[data-page-root][data-bg-type="gradient"] {
+  background: linear-gradient(180deg, var(--t-surface) 0%, var(--t-bg) 55%);
+}
+
+/* The layer fills the whole page and clips the picture, which is drawn larger than the layer by
+   three blur radii on every side: a blur fades out at the picture's own edge, and this keeps that
+   fade outside the visible area, so the blurred page has no unblurred or see-through margin. */
+[data-page-root] .pg-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+[data-page-root] .pg-bg-image {
+  position: absolute;
+  inset: calc(var(--t-blur) * -3);
+  background-color: var(--t-bg);
+  background-image: var(--t-bg-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: blur(var(--t-blur));
+}
+
+/* The page color over the picture, at the overlay opacity. Never blurred. */
+[data-page-root] .pg-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--t-bg);
+  opacity: var(--t-overlay-opacity);
 }
 
 [data-page-root] a {
@@ -65,6 +105,8 @@
 /* Column: capped by the maxWidth token, always centered; `align` aligns what is inside ------------ */
 
 [data-page-root] .pg-column {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -187,8 +229,10 @@
   min-height: 64px;
 }
 
+/* An outline button never drops below 1px, so it stays visible at border width 0. */
 [data-page-root] .pg-link[data-button-style="outline"] {
   border-color: var(--t-accent);
+  border-width: max(var(--t-border-width), 1px);
   background: transparent;
   color: var(--t-text);
   font-weight: 500;
@@ -196,7 +240,7 @@
 
 [data-page-root] .pg-link[data-button-style="soft"] {
   border-color: transparent;
-  background: color-mix(in srgb, var(--t-button-bg) 18%, transparent);
+  background: color-mix(in srgb, var(--t-accent) 16%, transparent);
   color: var(--t-text);
   font-weight: 500;
 }
@@ -218,7 +262,7 @@
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--t-border);
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
   color: var(--t-text);
 }
@@ -409,7 +453,7 @@
   aspect-ratio: 16 / 9;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--t-border);
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
   background: hsl(0 0% 2%);
   color: white;
@@ -438,7 +482,7 @@
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: 0;
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
 }
 
@@ -446,7 +490,7 @@
   display: block;
   width: 100%;
   max-width: 100%;
-  border: 0;
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
 }
 
@@ -481,7 +525,7 @@
   min-width: 0;
   min-height: 44px;
   padding: 16px;
-  border: 1px solid var(--t-border);
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
   color: var(--t-text);
   overflow-wrap: anywhere;

@@ -3,6 +3,7 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { FAQ_GROUPS } from "@/components/marketing/faq-data";
 import { COMPARISON, PLANS } from "@/components/marketing/plans";
+import { PLAN_PRICES, formatPerMonth, priceAmount } from "@/lib/billing/prices";
 import {
   MAX_YEARLY_SAVINGS_PERCENT,
   PRICES,
@@ -23,6 +24,16 @@ describe("marketing prices", () => {
       pro: { monthly: 9, yearly: 60 },
       studio: { monthly: 20, yearly: 180 },
     });
+  });
+
+  it("own no amount: they are the billing table's PLAN_PRICES, renamed", () => {
+    for (const plan of ["pro", "studio"] as const) {
+      expect(PRICES[plan].monthly).toBe(PLAN_PRICES[plan].month.amount);
+      expect(PRICES[plan].yearly).toBe(PLAN_PRICES[plan].year.amount);
+      expect(PRICES[plan].yearly).toBe(priceAmount(plan, "year"));
+      // The per-month figure is the billing screen's own, so the two surfaces cannot drift.
+      expect(perMonthBilledYearlyText(plan)).toBe(`${formatPerMonth(plan, "year")}, billed yearly`);
+    }
   });
 
   it("show a yearly price as a whole-dollar monthly figure that is always billed yearly", () => {
@@ -94,13 +105,14 @@ describe("plan cards and comparison read the same numbers", () => {
 });
 
 /**
- * One module owns the numbers: no marketing source file may write a dollar amount itself (a stale
- * "$5" in a sentence is how the old prices would survive a change here). Tests are not scanned, so
- * they can still assert on the rendered text.
+ * One table owns the numbers (src/lib/billing/prices.ts, which the marketing module only renames):
+ * no marketing source file, src/lib/marketing/prices.ts included, may write a dollar amount itself
+ * (a stale "$5" in a sentence is how the old prices would survive a change in the table). Comments
+ * count too. Tests are not scanned, so they can still assert on the rendered text. The same rule
+ * for the rest of src/ is in billing-prices.test.ts.
  */
 describe("no hard-coded dollar amounts in the marketing site", () => {
   const ROOTS = ["src/app/(marketing)", "src/components/marketing", "src/lib/marketing"];
-  const SKIP = "src/lib/marketing/prices.ts";
 
   function sources(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
@@ -110,10 +122,9 @@ describe("no hard-coded dollar amounts in the marketing site", () => {
     });
   }
 
-  it("only src/lib/marketing/prices.ts has them", () => {
+  it("none of its source files has one", () => {
     const offenders: string[] = [];
     for (const file of ROOTS.flatMap((root) => sources(root))) {
-      if (relative(process.cwd(), file) === SKIP) continue;
       readFileSync(file, "utf8")
         .split("\n")
         .forEach((line, index) => {

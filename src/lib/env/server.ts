@@ -1,28 +1,41 @@
 import "server-only";
-import { z } from "zod";
-import { parseEnv, publicEnvSchema, readPublicEnv } from "./shared";
+import {
+  M4_REQUIRED_KEYS,
+  parseServerEnv,
+  readServerEnvSource,
+  type M4RequiredKey,
+  type ServerEnv,
+} from "./server-schema";
 
-const serverEnvSchema = publicEnvSchema.extend({
-  /** `sb_secret_...`. Bypasses RLS. Server code only; the admin client is the sole consumer. */
-  SUPABASE_SECRET_KEY: z.string().min(1),
-  // Milestone 4: the variables exist in Vercel already, nothing reads them until then.
-  STRIPE_SECRET_KEY: z.string().min(1).optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
-});
+export { M4_REQUIRED_KEYS };
+export type { M4RequiredKey, ServerEnv };
 
 /**
  * Every server and public variable, validated when this module is first imported.
  * `server-only` makes importing it from a Client Component a build error.
+ *
+ * The eight required Milestone 4 variables (Vercel project and team, Stripe price ids, cron and
+ * visitor-hash secrets) are required whenever VERCEL_ENV is set, i.e. on every Vercel build and
+ * deployment, so a missing one stops the build with a message that names it. `VERCEL_API_TOKEN` is
+ * the exception: it may be unset everywhere, and what needs it fails closed where it is used. Off
+ * Vercel (a local `next dev`, CI) the rest may be unset until the feature that reads them runs;
+ * read them with `requireServerEnv`, which throws the same kind of error at the point of use.
+ * `STRIPE_SECRET_KEY` is sandbox-only unless STRIPE_LIVE_MODE=true on the production deployment
+ * (live keys fail validation anywhere else, test keys fail validation in live mode), and
+ * `STRIPE_API_HOST` / `VERCEL_API_BASE_URL` (test-only redirects to a local stub) fail validation
+ * when VERCEL_ENV=production. Values never appear in an error.
  */
-export const serverEnv = parseEnv(
-  serverEnvSchema,
-  {
-    ...readPublicEnv(),
-    SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY,
-    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
-  },
-  "server",
-);
+export const serverEnv: ServerEnv = parseServerEnv(readServerEnvSource(), {
+  requireM4: Boolean(process.env.VERCEL_ENV),
+});
 
-export type ServerEnv = typeof serverEnv;
+/** A Milestone 4 variable that must be present where it is used; throws naming it when it is not. */
+export function requireServerEnv(name: M4RequiredKey): string {
+  const value = serverEnv[name];
+  if (!value) {
+    throw new Error(
+      `Missing server environment variable ${name}. Local values are written to .env.local by scripts/init.sh; production values live in the Vercel project settings. See .env.example.`,
+    );
+  }
+  return value;
+}

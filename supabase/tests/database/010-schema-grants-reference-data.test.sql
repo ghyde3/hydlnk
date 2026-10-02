@@ -2,7 +2,7 @@
 -- a loosened grant or a function that became callable through the API.
 
 begin;
-select plan(36);
+select plan(37);
 
 -- ---------------------------------------------------------------------------
 -- RLS is on for every public table
@@ -15,6 +15,7 @@ select tests.rls_enabled('public', 'domains');
 select tests.rls_enabled('public', 'events');
 select tests.rls_enabled('public', 'daily_stats');
 select tests.rls_enabled('public', 'reserved_handles');
+select tests.rls_enabled('public', 'stripe_events');
 
 select is_empty(
   $$
@@ -29,7 +30,7 @@ select is_empty(
 -- A new table fails this test until it is added here, with its policies and test.
 select tables_are(
   'public',
-  array['accounts', 'pages', 'themes', 'domains', 'events', 'daily_stats', 'reserved_handles'],
+  array['accounts', 'pages', 'themes', 'domains', 'events', 'daily_stats', 'reserved_handles', 'stripe_events'],
   'public holds exactly the contract tables'
 );
 
@@ -106,21 +107,27 @@ select set_eq(
       ('events|service_role|SELECT|*'),
       ('events|service_role|INSERT|*'),
       ('daily_stats|service_role|SELECT|*'),
-      ('reserved_handles|service_role|SELECT|*')
+      ('reserved_handles|service_role|SELECT|*'),
+      ('stripe_events|service_role|SELECT|*'),
+      ('stripe_events|service_role|INSERT|*'),
+      ('stripe_events|service_role|DELETE|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );
 
-select is_empty(
+-- plan_limits (M4-02) is the one deliberate exception: it takes a plan name and returns the public
+-- pricing numbers, nothing per account. Anything else added here must be justified the same way.
+select set_eq(
   $$
-    select p.proname
+    select p.proname::text
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and (has_function_privilege('anon', p.oid, 'EXECUTE')
            or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
   $$,
-  'no function in public is executable by anon or authenticated'
+  $$ values ('plan_limits') $$,
+  'the only function in public executable by anon or authenticated is plan_limits'
 );
 
 select is_empty(
@@ -144,18 +151,18 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint) $$,
-  'free: 1 page, 3 saved themes, 0 domains, 10 MB'
+  $$ values (1, 3, 0, 10485760::bigint, 30, false) $$,
+  'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint) $$,
-  'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB'
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true) $$,
+  'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint) $$,
-  'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB'
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true) $$,
+  'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns'
 );
 select throws_ok(
   $$ select * from public.plan_limits('platinum') $$,
@@ -169,8 +176,8 @@ select throws_ok(
 
 select set_eq(
   $$ select name from public.themes where owner_id is null $$,
-  $$ values ('Noir'), ('Ivory'), ('Smoke') $$,
-  'the system themes are Noir, Ivory and Smoke'
+  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember') $$,
+  'the system themes are Noir, Ivory, Smoke, Paper, Sage, Midnight and Ember'
 );
 
 select is_empty(

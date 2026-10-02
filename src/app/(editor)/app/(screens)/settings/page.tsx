@@ -1,9 +1,21 @@
 import type { Metadata } from "next";
 import { DeleteAccountDialog } from "@/components/app/delete-account-dialog";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
+import { CheckoutReturnNotice } from "@/components/billing/checkout-return";
+import { PagesCard } from "@/components/settings/pages-card";
+import { PlanBand } from "@/components/settings/plan-band";
+import { PlanCards } from "@/components/settings/plan-cards";
+import { UsageCard } from "@/components/settings/usage-card";
 import { signOut } from "@/lib/auth/actions";
+import { readPaidPlansOpen } from "@/lib/billing/env";
+import { CHECKOUT_PARAM, parseCheckoutReturn } from "@/lib/billing/return";
+import { buildMeters } from "@/lib/limits";
+import { loadAccountUsage } from "@/lib/limits/usage";
 import { getAppContext } from "@/lib/pages/context";
 import { PRODUCT_DOMAIN, handleAddress } from "@/lib/pages/plans";
+import { describeBand, wantsCardLookup } from "@/lib/settings/band";
+import { loadBillingSummary } from "@/lib/settings/billing-summary";
+import { lookupCardLast4 } from "@/lib/settings/card";
 
 export const metadata: Metadata = { title: "Settings & billing" };
 
@@ -12,17 +24,52 @@ const FIELD_VALUE =
   "m-0 flex min-h-11 items-center rounded-md border border-line-3 bg-surface px-3 text-sm break-all";
 
 /**
- * Settings & billing. Milestone 1 holds the Account card only: the session user's email and the
- * current page's handle (read-only; changing either is not in the v1 scope), Sign out and Delete
- * account. The plan band, usage meters and plan cards land above it in Milestone 4.
+ * Settings & billing (Billing.dc.html). Top to bottom: the "Current plan" band (the account's plan,
+ * its price and renewal, the portal buttons), Usage (pages, custom domains, uploads, saved themes
+ * against the plan's limits), Plans (Free, Pro, Studio and what each button does), Pages (delete a
+ * page) and Account (Milestone 1: the session user's email, the current page's handle, Sign out and
+ * Delete account).
+ *
+ * The gate runs first (`getAppContext`): a signed-out request redirects to sign-in before anything
+ * below is read, so no plan data is rendered for it. Everything shown is the signed-in user's own:
+ * the plan, the subscription columns and the usage numbers are keyed by the verified session user.
+ * Over a plan's limits (after a downgrade) the meters say so and nothing is removed.
+ *
+ * The Upgrade buttons are off in two cases, both decided here on the server: paid plans are not
+ * open (PAID_PLANS_OPEN=false) and a Free account has just come back from Checkout
+ * (`?checkout=success`, the "Confirming your upgrade" wait). The URL only ever turns a button off.
  */
-export default async function SettingsScreen() {
-  const { user, pages, current } = await getAppContext();
+export default async function SettingsScreen({ searchParams }: PageProps<"/app/settings">) {
+  const { user, pages, current, plan } = await getAppContext();
+  const query = await searchParams;
+  const checkoutParam = query[CHECKOUT_PARAM];
+  const confirming =
+    parseCheckoutReturn(Array.isArray(checkoutParam) ? checkoutParam[0] : checkoutParam) ===
+      "success" && plan === "free";
+  const [summary, usage] = await Promise.all([
+    loadBillingSummary(user.id),
+    loadAccountUsage(user.id),
+  ]);
+  // The plan on this screen is the one the rest of the shell shows (read once, with the session).
+  const account = { ...summary, plan };
+  const cardLast4 = wantsCardLookup(account) ? await lookupCardLast4(account) : null;
 
   return (
     <>
       <ScreenHeader breadcrumb="Account" title="Settings & billing" />
       <ScreenBody maxWidth="max-w-[920px]">
+        <CheckoutReturnNotice plan={plan} />
+        <PlanBand summary={account} text={describeBand(account, cardLast4)} />
+        <UsageCard meters={buildMeters(plan, usage)} />
+        <PlanCards current={plan} paidPlansOpen={readPaidPlansOpen()} confirming={confirming} />
+        <PagesCard
+          pages={pages.map((page) => ({
+            id: page.id,
+            handle: page.handle,
+            published: page.published_at !== null,
+          }))}
+        />
+
         <Card className="flex flex-col gap-3.5">
           <h2 className="text-sm font-semibold">Account</h2>
           <dl className="flex flex-wrap gap-3">
