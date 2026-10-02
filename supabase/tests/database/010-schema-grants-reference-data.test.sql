@@ -2,7 +2,7 @@
 -- a loosened grant or a function that became callable through the API.
 
 begin;
-select plan(34);
+select plan(36);
 
 -- ---------------------------------------------------------------------------
 -- RLS is on for every public table
@@ -260,19 +260,28 @@ select is(
   'the seeded mara page belongs to a seeded account'
 );
 select is(
-  (select p.draft->>'themeId' from public.pages p where p.handle = 'mara'),
+  (select p.draft->'theme'->>'ref' from public.pages p where p.handle = 'mara'),
   '00000000-0000-4000-8000-000000000001',
   'mara uses the Noir theme'
 );
 select is(
-  (select p.published->'resolvedTokens' from public.pages p where p.handle = 'mara'),
+  (select p.published->'tokens' from public.pages p where p.handle = 'mara'),
   (select t.tokens from public.themes t where t.name = 'Noir' and t.owner_id is null),
   'mara''s published copy froze the Noir tokens'
 );
 select is(
-  (select p.draft = (p.published - 'resolvedTokens') from public.pages p where p.handle = 'mara'),
-  true,
-  'mara''s draft and published content match (no unpublished changes)'
+  (select p.published - 'tokens' - 'blocks' from public.pages p where p.handle = 'mara'),
+  (select p.draft - 'rev' - 'blocks' from public.pages p where p.handle = 'mara'),
+  'mara''s published profile and theme match her draft (the publish form has no rev)'
+);
+select is(
+  (select p.published->'blocks' from public.pages p where p.handle = 'mara'),
+  (
+    select jsonb_agg(b.block order by b.ord)
+    from public.pages p, jsonb_array_elements(p.draft->'blocks') with ordinality as b(block, ord)
+    where p.handle = 'mara' and coalesce((b.block->>'visible')::boolean, true)
+  ),
+  'mara''s published blocks are her draft''s visible blocks, in order (no unpublished changes)'
 );
 select set_eq(
   $$
@@ -281,10 +290,15 @@ select set_eq(
     where p.handle = 'mara'
   $$,
   $$
-    values ('social_row'), ('header'), ('link_button'), ('link_card'), ('embed'),
-           ('grid2'), ('divider'), ('text')
+    values ('link'), ('card'), ('header'), ('text'), ('image'), ('social'), ('embed'),
+           ('grid'), ('divider')
   $$,
-  'mara''s page covers every block type except image'
+  'mara''s draft covers all nine block types'
+);
+select is(
+  (select count(*)::int from public.pages p, jsonb_array_elements(p.published->'blocks') b where p.handle = 'mara' and b->>'type' = 'image'),
+  0,
+  'the hidden image block (no uploaded file in a seed) is not published'
 );
 
 select * from finish();

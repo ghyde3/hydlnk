@@ -12,9 +12,9 @@ update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('d'
 
 insert into public.pages (owner_id, handle, draft) values
   (tests.get_supabase_uid('a'), 'alpha-page',
-   '{"version":1,"profile":{"displayName":"A","bio":"","avatarUrl":null},"themeId":null,"tokens":{},"blocks":[],"marker":"original-a"}'),
+   '{"version":1,"rev":0,"profile":{"name":"A","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[],"marker":"original-a"}'),
   (tests.get_supabase_uid('b'), 'bravo-page',
-   '{"version":1,"profile":{"displayName":"B","bio":"","avatarUrl":null},"themeId":null,"tokens":{},"blocks":[],"marker":"original-b"}');
+   '{"version":1,"rev":0,"profile":{"name":"B","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[],"marker":"original-b"}');
 
 -- ---------------------------------------------------------------------------
 -- Anon: no access to pages at all, drafts or published
@@ -75,7 +75,7 @@ select is_empty(
 );
 
 select lives_ok(
-  $$ update public.pages set draft = '{"version":1,"profile":{"displayName":"A2","bio":"","avatarUrl":null},"themeId":null,"tokens":{},"blocks":[],"marker":"edited-a"}' where handle = 'alpha-page' $$,
+  $$ update public.pages set draft = '{"version":1,"rev":0,"profile":{"name":"A2","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[],"marker":"edited-a"}' where handle = 'alpha-page' $$,
   'a user can update their own draft'
 );
 select is(
@@ -180,7 +180,7 @@ reset role;
 select tests.authenticate_as_service_role();
 
 select lives_ok(
-  $$ update public.pages set published = draft || '{"resolvedTokens":{}}', published_at = now() where handle = 'alpha-page' $$,
+  $$ update public.pages set published = (draft - 'rev' - 'theme') || '{"theme":{"ref":null,"overrides":{}},"tokens":{}}', published_at = now() where handle = 'alpha-page' $$,
   'the server can publish'
 );
 select throws_ok(

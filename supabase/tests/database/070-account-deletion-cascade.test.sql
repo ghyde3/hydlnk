@@ -60,7 +60,7 @@ update public.accounts set plan = 'pro' where id = (select doomed from ids);
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000000d1', (select doomed from ids), 'zq-doomed-1',
-   '{"version":1,"profile":{"displayName":"D","bio":"","avatarUrl":null},"themeId":null,"tokens":{},"blocks":[]}');
+   '{"version":1,"rev":0,"profile":{"name":"D","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');
 insert into public.themes (owner_id, name, tokens) values ((select doomed from ids), 'doomed theme', '{}');
 insert into public.domains (page_id, hostname) values ('00000000-0000-4000-8000-0000000000d1', 'zq-doomed.example.test');
 insert into public.events (page_id, type, visitor_hash) values ('00000000-0000-4000-8000-0000000000d1', 'view', 'zq');
