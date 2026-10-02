@@ -1,8 +1,8 @@
 /**
  * The visitor's IP as the platform reports it, for the report form's limit and its hashed reporter
- * id. Never taken from the body. On Vercel `x-vercel-forwarded-for` and `x-forwarded-for` are set by
- * the platform and cannot be supplied by the client; on a dev machine the specs send
- * `x-forwarded-for` themselves. A request with no usable header lands in one shared "unknown"
+ * id. Never taken from the body. On Vercel `x-vercel-forwarded-for` is set by the platform and cannot
+ * be supplied by the client (and is the only header read there); on a dev machine and in CI the
+ * specs send `x-forwarded-for` themselves. A request with no usable header lands in one shared "unknown"
  * bucket, so leaving the header out never skips the limit.
  */
 export const UNKNOWN_IP = "unknown";
@@ -10,11 +10,17 @@ export const UNKNOWN_IP = "unknown";
 const IP_TEXT = /^[0-9a-f:.]{2,45}$/i;
 
 export function clientIpOf(headers: Pick<Headers, "get">): string {
-  const candidates = [
-    headers.get("x-vercel-forwarded-for"),
-    headers.get("x-forwarded-for"),
-    headers.get("x-real-ip"),
-  ];
+  // On Vercel only `x-vercel-forwarded-for` is the platform's own word: the edge sets it and a client
+  // cannot. The other two are what a client (or a proxy in front of a self-hosted copy) may send,
+  // so there they are not believed: a request without the platform header lands in the shared
+  // unknown bucket instead of letting a client mint a new "reporter" per request.
+  const candidates = process.env.VERCEL
+    ? [headers.get("x-vercel-forwarded-for")]
+    : [
+        headers.get("x-vercel-forwarded-for"),
+        headers.get("x-forwarded-for"),
+        headers.get("x-real-ip"),
+      ];
   for (const value of candidates) {
     const first = value?.split(",", 1)[0]?.trim().toLowerCase();
     if (first && IP_TEXT.test(first)) return first;

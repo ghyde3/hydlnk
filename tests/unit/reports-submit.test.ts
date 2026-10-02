@@ -174,7 +174,7 @@ describe("M5-05 submitReport", () => {
       store: vi.fn(async () => (order.push("store"), "created" as const)),
     });
     await submitReport(valid, IP, deps);
-    expect(order).toEqual(["limit", "limit", "lookup", "store"]); // the reporter, the whole form, then the page
+    expect(order).toEqual(["limit", "lookup", "limit", "store"]); // the reporter, the page, the whole form, then the store
     expect(deps.limiter).toHaveBeenCalledWith(reporterHashes(IP, "secret", NOW), 5, 3600);
   });
 
@@ -272,7 +272,6 @@ describe("M5-05 submitReport", () => {
       body: { ok: false, message: "Too many reports. Try again later." },
       headers: { "Retry-After": "600" },
     });
-    expect(full.findPageById).not.toHaveBeenCalled();
     expect(full.store).not.toHaveBeenCalled();
 
     keys.length = 0;
@@ -284,5 +283,21 @@ describe("M5-05 submitReport", () => {
     expect(keys[0]![0]).not.toBe(REPORT_GLOBAL_KEY);
     expect(REPORT_GLOBAL_KEY).toMatch(/^[0-9a-f]{64}$/);
     expect(REPORT_GLOBAL_RATE.limit).toBeGreaterThan(5);
+  });
+
+  it("a report about a page that does not exist never touches the whole-form counter (anyone can send those in any number)", async () => {
+    const keys: string[] = [];
+    const deps = makeDeps({
+      limiter: vi.fn(async (hashes) => (keys.push(hashes[0]!), { allowed: true, retryAfter: 0 })),
+    });
+    const outcome = await submitReport(
+      { page: "00000000-0000-4000-8000-0000000000ff", reason: "spam" },
+      IP,
+      deps,
+    );
+    expect(outcome.status).toBe(404);
+    expect(keys).toHaveLength(1);
+    expect(keys[0]).not.toBe(REPORT_GLOBAL_KEY);
+    expect(deps.store).not.toHaveBeenCalled();
   });
 });

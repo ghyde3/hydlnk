@@ -112,17 +112,41 @@ export function blockedLinksInPublished(
 /** The part of a Supabase client `loadBlockedDomains` needs, so a test can stand in for it. */
 export interface BlockedDomainsReader {
   from(table: "blocked_domains"): {
-    select(columns: "domain"): PromiseLike<{
-      data: { domain: string }[] | null;
-      error: { message: string } | null;
-    }>;
+    select(columns: "domain"): {
+      order(column: "domain"): {
+        range(
+          from: number,
+          to: number,
+        ): PromiseLike<{
+          data: { domain: string }[] | null;
+          error: { message: string } | null;
+        }>;
+      };
+    };
   };
 }
 
-/** Every blocked domain (the table is a few dozen rows). Throws when it cannot be read: fail closed. */
+/** Rows read per request: PostgREST answers at most 1000 rows whatever the request asks for. */
+const PAGE = 1000;
+
+/**
+ * Every blocked domain. The list is read in ordered pages, so a table longer than PostgREST's row
+ * cap is never silently cut (the check would then miss the domains past the cut). Throws when any
+ * page cannot be read: fail closed.
+ */
 export async function loadBlockedDomains(admin: BlockedDomainsReader): Promise<string[]> {
-  const { data, error } = await admin.from("blocked_domains").select("domain");
-  if (error) throw new Error(`Reading the blocked domains failed: ${error.message}`);
-  if (!Array.isArray(data)) throw new Error("Reading the blocked domains returned no list.");
-  return data.map((row) => row.domain);
+  const domains: string[] = [];
+  // 100 pages is 100,000 domains: far past anything this table will hold, and a stop for a loop bug.
+  for (let page = 0; page < 100; page++) {
+    const { data, error } = await admin
+      .from("blocked_domains")
+      .select("domain")
+      .order("domain")
+      .range(page * PAGE, page * PAGE + PAGE - 1);
+    if (error) throw new Error(`Reading the blocked domains failed: ${error.message}`);
+    if (!Array.isArray(data)) throw new Error("Reading the blocked domains returned no list.");
+    domains.push(...data.map((row) => row.domain));
+    if (data.length < PAGE) return domains;
+  }
+  throw new Error("The list of blocked domains is longer than this check reads.");
 }

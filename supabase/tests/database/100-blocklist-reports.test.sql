@@ -3,7 +3,7 @@
 -- server-only: anon and authenticated get permission denied, service_role does the work.
 
 begin;
-select plan(130);
+select plan(132);
 
 select tests.create_supabase_user('a', 'a-100@example.test');
 select tests.create_supabase_user('b', 'b-100@example.test');
@@ -185,6 +185,18 @@ select is(
   )),
   'no error', 'a draft with 200 blocks is still saved (Publish is what refuses more than 50)');
 select is(pg_temp.hosts_of('https://' || repeat('a', 2100) || '.blocked.example/'), '', 'a URL over 2048 characters is skipped (Publish never accepts one)');
+-- A long host padded with soft hyphens (which the browser ignores) is read as itself: the tail of a
+-- long host is taken after the ignored code points are gone, not before.
+select is(
+  pg_temp.hosts_of('https://' || (select string_agg(c || repeat(U&'\00AD', 45), '') from regexp_split_to_table('blocked.example', '') c) || '/'),
+  'blocked.example', 'a host padded with soft hyphens past 512 characters is still read as itself');
+-- The size cap comes first (the CHECK would only run after the trigger has scanned the draft).
+select is(
+  left(pg_temp.update_error('blk-a', jsonb_build_object('version', 1, 'rev', 1,
+    'profile', jsonb_build_object('name', 'A', 'bio', '', 'photo', null),
+    'theme', jsonb_build_object('ref', null, 'overrides', '{}'::jsonb),
+    'blocks', '[]'::jsonb, 'pad', repeat('x', 270000))), 22),
+  '23514|draft_too_large|', 'a draft over 256 KB is refused by the trigger before anything is scanned');
 select is(
   pg_temp.hosts_of('https://' || repeat('a', 600) || '.blocked.example/'),
   repeat('a', 496) || '.blocked.example', 'a very long host keeps its suffix: the blocked domain is still found');

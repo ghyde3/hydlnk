@@ -22,8 +22,9 @@ import { parseReportInput, type ReportErrors } from "./schema";
  *   2. Zod validation, field by field (400);
  *   3. the per-reporter limit, keyed on the IPv4 address or the IPv6 /64 prefix: every valid
  *      submission counts, duplicates and unknown pages included, so the sixth one in an hour is the
- *      one refused (429); then the hourly limit on the whole form (also 429);
- *   4. the page lookup (404 with the address error);
+ *      one refused (429);
+ *   4. the page lookup (404 with the address error), then the hourly limit on the whole form, counted
+ *      only for a page that exists (also 429);
  *   5. one transaction that refuses a repeat inside 24 hours and a flood against one page, and
  *      otherwise files the report. Duplicates and caps answer exactly like a filed report.
  */
@@ -116,19 +117,20 @@ export async function submitReport(
   const hashes = reporterHashes(ipBucketOf(ip), deps.secret, now);
   const limit = await deps.limiter(hashes, REPORT_RATE.limit, REPORT_RATE.windowSeconds);
   if (!limit.allowed) return tooMany(limit.retryAfter);
-  // The whole form's hourly cap, after the per-reporter one so a flooder is refused before it can
-  // touch the shared counter.
+  const page = input.page
+    ? await deps.findPageById(input.page)
+    : await deps.findPageByAddress(address as ReportAddress);
+  if (!page) return notFound(input.page ? "page" : "address");
+
+  // The whole form's hourly cap, counted only for a report about a page that exists: addresses that
+  // name nothing (which anyone can send in any number) must not be able to use it up for everyone.
+  // After the per-reporter limit, so a flooder is refused before it can touch the shared counter.
   const overall = await deps.limiter(
     [REPORT_GLOBAL_KEY],
     REPORT_GLOBAL_RATE.limit,
     REPORT_GLOBAL_RATE.windowSeconds,
   );
   if (!overall.allowed) return tooMany(overall.retryAfter);
-
-  const page = input.page
-    ? await deps.findPageById(input.page)
-    : await deps.findPageByAddress(address as ReportAddress);
-  if (!page) return notFound(input.page ? "page" : "address");
 
   await deps.store({
     pageId: page.id,

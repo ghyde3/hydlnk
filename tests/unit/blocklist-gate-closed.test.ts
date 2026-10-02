@@ -55,13 +55,15 @@ function fakeAdmin(
     const chain: Record<string, unknown> = {};
     chain.select = () => {
       if (table !== "blocked_domains") return chain;
-      // The list of blocked domains is read without a filter, as a plain await.
+      // The list of blocked domains is read in ordered pages: select().order().range().
       const domains = opts.domains ?? [{ domain: "blocked.example" }];
-      return Promise.resolve(
-        "error" in domains
-          ? { data: null, error: { message: domains.error } }
-          : { data: domains, error: null },
-      );
+      const answer = (from: number, to: number) =>
+        Promise.resolve(
+          "error" in domains
+            ? { data: null, error: { message: domains.error } }
+            : { data: domains.slice(from, to + 1), error: null },
+        );
+      return { order: () => ({ range: answer }) };
     };
     chain.eq = () => chain;
     chain.maybeSingle = async () => ({ data: reads[table] ?? null, error: null });

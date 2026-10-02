@@ -63,6 +63,23 @@ describe("M5-05 client ip", () => {
     expect(clientIpOf(headers({ "x-real-ip": "2001:DB8::1" }))).toBe("2001:db8::1");
   });
 
+  it("on Vercel only the platform's own header is believed: a client-sent x-forwarded-for or x-real-ip mints no new reporter", () => {
+    const before = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      expect(
+        clientIpOf(
+          headers({ "x-vercel-forwarded-for": "198.51.100.1", "x-forwarded-for": "203.0.113.7" }),
+        ),
+      ).toBe("198.51.100.1");
+      expect(clientIpOf(headers({ "x-forwarded-for": "203.0.113.7" }))).toBe(UNKNOWN_IP);
+      expect(clientIpOf(headers({ "x-real-ip": "203.0.113.7" }))).toBe(UNKNOWN_IP);
+    } finally {
+      if (before === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = before;
+    }
+  });
+
   it("no usable header lands in one shared bucket instead of skipping the limit", () => {
     expect(clientIpOf(headers({}))).toBe(UNKNOWN_IP);
     expect(clientIpOf(headers({ "x-forwarded-for": "" }))).toBe(UNKNOWN_IP);
