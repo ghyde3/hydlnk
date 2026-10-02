@@ -85,7 +85,7 @@ export function DomainAnalytics() {
           <DnsExample />
         </div>
         <span className="text-xs text-text-3">Example record</span>
-        <ArrowLink href="/domains" className="self-start">
+        <ArrowLink href="/custom-domains" className="self-start">
           How custom domains work
         </ArrowLink>
       </div>
@@ -103,7 +103,7 @@ export function DomainAnalytics() {
           <AnalyticsSample />
         </div>
         <span className="text-xs text-text-3">Sample numbers</span>
-        <ArrowLink href="/analytics" className="self-start">
+        <ArrowLink href="/link-analytics" className="self-start">
           What analytics measure
         </ArrowLink>
       </div>

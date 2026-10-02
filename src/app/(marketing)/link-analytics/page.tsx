@@ -14,7 +14,7 @@ import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
 
 export const metadata: Metadata = marketingMetadata({
-  path: "/analytics",
+  path: "/link-analytics",
   title: "Analytics",
   description:
     "Views, clicks and click-through rate for every link, plus referrers, devices and countries on Pro. No cookies, no consent banner from HYDLNK, no tracking across sites.",

@@ -17,7 +17,7 @@ import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
 
 export const metadata: Metadata = marketingMetadata({
-  path: "/domains",
+  path: "/custom-domains",
   title: "Custom domains",
   description:
     "Serve your HYDLNK page from a domain you own, like links.yourbrand.com. Add one DNS record, we verify it and issue SSL automatically. How DNS, CNAME and A records work, step by step.",

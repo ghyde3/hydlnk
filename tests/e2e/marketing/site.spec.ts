@@ -15,9 +15,9 @@ const OUT_OF_SCOPE = /schedul|csv|invite editors|team access|custom css|version 
 
 const PAGES: { path: string; title: RegExp; current: string | null }[] = [
   { path: "/features", title: /^Features \| HYDLNK$/, current: "Features" },
-  { path: "/design", title: /^Design \| HYDLNK$/, current: "Design" },
-  { path: "/domains", title: /^Custom domains \| HYDLNK$/, current: "Domains" },
-  { path: "/analytics", title: /^Analytics \| HYDLNK$/, current: "Analytics" },
+  { path: "/design-control", title: /^Design \| HYDLNK$/, current: "Design" },
+  { path: "/custom-domains", title: /^Custom domains \| HYDLNK$/, current: "Domains" },
+  { path: "/link-analytics", title: /^Analytics \| HYDLNK$/, current: "Analytics" },
   { path: "/pricing", title: /^Pricing \| HYDLNK$/, current: "Pricing" },
   { path: "/learn", title: /^Learn \| HYDLNK$/, current: "Learn" },
   { path: "/learn/getting-started", title: /^Getting started · Learn \| HYDLNK$/, current: "Learn" },
@@ -127,7 +127,7 @@ test("privacy names the processors and the cookieless analytics; terms cover acc
 test("design playground: radio groups restyle the demo page without JavaScript", async ({ browser }) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
-  await page.goto(url(null, "/design"));
+  await page.goto(url(null, "/design-control"));
   const demo = page.locator(".tp .dp");
   const bg = () => demo.evaluate((el) => getComputedStyle(el).backgroundColor);
   const before = await bg();

@@ -16,7 +16,7 @@ import { guideHref } from "@/components/marketing/site-map";
 import { NoirTokenCard, ResolveChain } from "@/components/marketing/theme-tokens";
 
 export const metadata: Metadata = marketingMetadata({
-  path: "/design",
+  path: "/design-control",
   title: "Design",
   description:
     "Every visual choice on a HYDLNK page is one of 23 tokens: colour, type, shape, space and background. Start from a theme, override what you like, save it and reuse it.",

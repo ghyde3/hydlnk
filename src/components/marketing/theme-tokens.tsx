@@ -103,7 +103,7 @@ export function ThemeTokens() {
         <p className="mt-3 text-sm leading-[1.6] text-text-2">
           Later wins. Block overrides cover colour, button style and radius, so pages stay coherent.
         </p>
-        <ArrowLink href="/design" className="mt-4">
+        <ArrowLink href="/design-control" className="mt-4">
           Explore the design system
         </ArrowLink>
       </div>

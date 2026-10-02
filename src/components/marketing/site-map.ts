@@ -25,9 +25,9 @@ export interface NavItem {
 /** The header's page links, left to right. "Log in" and "Claim your link" sit after them. */
 export const MAIN_NAV: readonly NavItem[] = [
   { key: "features", href: "/features", label: "Features" },
-  { key: "design", href: "/design", label: "Design" },
-  { key: "domains", href: "/domains", label: "Domains" },
-  { key: "analytics", href: "/analytics", label: "Analytics" },
+  { key: "design", href: "/design-control", label: "Design" },
+  { key: "domains", href: "/custom-domains", label: "Domains" },
+  { key: "analytics", href: "/link-analytics", label: "Analytics" },
   { key: "pricing", href: "/pricing", label: "Pricing" },
   { key: "learn", href: "/learn", label: "Learn" },
 ];
@@ -90,9 +90,9 @@ export const FOOTER_COLUMNS: readonly { title: string; links: readonly { href: s
     title: "Product",
     links: [
       { href: "/features", label: "Features" },
-      { href: "/design", label: "Design" },
-      { href: "/domains", label: "Custom domains" },
-      { href: "/analytics", label: "Analytics" },
+      { href: "/design-control", label: "Design" },
+      { href: "/custom-domains", label: "Custom domains" },
+      { href: "/link-analytics", label: "Analytics" },
       { href: "/pricing", label: "Pricing" },
     ],
   },

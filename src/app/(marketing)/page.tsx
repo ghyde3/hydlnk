@@ -91,7 +91,7 @@ export default function HomePage() {
             title="Your page should look like your brand."
             lead="A pottery studio, a coffee roaster and a photographer, built from the same nine blocks. Only the tokens change."
           />
-          <ButtonLink href="/design" variant="secondary">
+          <ButtonLink href="/design-control" variant="secondary">
             See how themes work
           </ButtonLink>
         </div>

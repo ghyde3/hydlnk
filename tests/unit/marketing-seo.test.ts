@@ -63,6 +63,14 @@ describe("marketing site map", () => {
     expect(hrefs).toContain("/terms");
   });
 
+  it("never takes a path the app host owns (M1-06: those 404 on the root host)", () => {
+    const appPaths = ["/login", "/signup", "/claim", "/auth", "/editor", "/design", "/analytics", "/domains", "/settings", "/api", "/pages", "/admin", "/billing"];
+    for (const path of SITEMAP_PATHS) {
+      const first = `/${path.split("/")[1] ?? ""}`;
+      expect(appPaths, `${path} shadows an app path`).not.toContain(first);
+    }
+  });
+
   it("has unique guide slugs that are valid path segments", () => {
     const slugs = GUIDES.map((guide) => guide.slug);
     expect(new Set(slugs).size).toBe(slugs.length);

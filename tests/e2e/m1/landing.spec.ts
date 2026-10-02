@@ -21,9 +21,9 @@ const BRASS = "rgb(184, 145, 79)";
 
 const PAGE_LINKS = [
   ["Features", "/features"],
-  ["Design", "/design"],
-  ["Domains", "/domains"],
-  ["Analytics", "/analytics"],
+  ["Design", "/design-control"],
+  ["Domains", "/custom-domains"],
+  ["Analytics", "/link-analytics"],
   ["Pricing", "/pricing"],
   ["Learn", "/learn"],
 ] as const;
@@ -460,7 +460,7 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
     for (const row of ["Color", "Type", "Shape", "Buttons", "Spacing", "Background"]) {
       await expect(design.getByText(row, { exact: true })).toBeVisible();
     }
-    await expect(design.getByRole("link", { name: "Explore the design system" })).toHaveAttribute("href", "/design");
+    await expect(design.getByRole("link", { name: "Explore the design system" })).toHaveAttribute("href", "/design-control");
   });
 
   test("M1-25 #blocks: the nine v1 block types", async ({ page }) => {
@@ -489,7 +489,7 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
     const status = domain.getByText("Verified · SSL issued", { exact: true });
     await expect(status.locator("xpath=..")).toHaveCSS("background-color", "rgb(231, 243, 236)");
     await expect(status).toHaveCSS("color", "rgb(43, 116, 72)");
-    await expect(domain.getByRole("link", { name: "How custom domains work" })).toHaveAttribute("href", "/domains");
+    await expect(domain.getByRole("link", { name: "How custom domains work" })).toHaveAttribute("href", "/custom-domains");
 
     const analytics = page
       .getByRole("heading", { level: 3, name: "Analytics that answer something." })

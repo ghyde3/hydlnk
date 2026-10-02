@@ -136,7 +136,7 @@ export const connectingADomain: GuideBody = {
         <code>yourname.hydlnk.com</code>. Then delete the record at your DNS provider so the name
         doesn’t point anywhere unexpected. To switch to a different domain, remove the old one and
         add the new one. For background on how DNS works, see{" "}
-        <Link href="/domains#dns">DNS in plain words</Link>.
+        <Link href="/custom-domains#dns">DNS in plain words</Link>.
       </p>
     </>
   ),

@@ -18,7 +18,7 @@ export const designingYourPage: GuideBody = {
       <p>
         Everything you see on a HYDLNK page is set by a token: 23 of them, in five groups. You
         don’t need to touch all of them. Start from a theme, change three or four, and you’ll have
-        a page that looks like yours. The <Link href="/design">design page</Link> lets you try
+        a page that looks like yours. The <Link href="/design-control">design page</Link> lets you try
         this on a demo first.
       </p>
 
