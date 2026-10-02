@@ -44,7 +44,7 @@ export default async function GuidePage({ params }: PageProps<"/learn/[slug]">) 
             <nav aria-label="Breadcrumb" className="font-mono text-xs tracking-[0.06em] uppercase">
               <ol className="flex flex-wrap items-center gap-x-2 text-text-2">
                 <li>
-                  <Link href="/learn" className="inline-flex min-h-11 items-center underline-offset-4 hover:underline">
+                  <Link href="/learn" className="inline-flex min-h-11 min-w-11 items-center underline-offset-4 hover:underline">
                     Learn
                   </Link>
                 </li>

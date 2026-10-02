@@ -70,7 +70,7 @@ export function MenuDisclosure({
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       </summary>
-      <div className={panelClassName}>{children}</div>
+      <div className={`hidden group-open/menu:block ${panelClassName}`}>{children}</div>
     </details>
   );
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { FOOTER_COLUMNS, SUPPORT_EMAIL } from "./site-map";
 
 const FOOTER_LINK =
-  "inline-flex min-h-11 items-center text-sm text-text-2 hover:text-ink hover:underline underline-offset-4";
+  "inline-flex min-h-11 min-w-11 items-center text-sm text-text-2 hover:text-ink hover:underline underline-offset-4";
 
 /**
  * White footer with a 1px top divider: the brand, three link columns (Product, Learn, Legal) and
