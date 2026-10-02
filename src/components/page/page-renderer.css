@@ -1,0 +1,554 @@
+/*
+ * Styles of the shared page renderer (PageRenderer): the public page and the editor preview.
+ *
+ * Rules, checked by tests/unit/renderer-static.test.ts:
+ *   - colors come from --t-* variables only (the resolved tenant tokens on [data-page-root]); no
+ *     color literals, so a theme change reaches every block and the two token systems never mix;
+ *   - sizing uses container queries on [data-page-root], never viewport media queries or vw: the
+ *     editor preview is narrower than the viewport;
+ *   - every selector is scoped under [data-page-root], and everything the page needs is set
+ *     explicitly, so it looks the same on the tenant host (no reset stylesheet) and inside the
+ *     editor (Tailwind's preflight).
+ * Enum tokens (density, align, buttonStyle) arrive as data attributes, because CSS cannot branch
+ * on the value of a variable. Not styled yet (Milestone 3): background image, gradient, overlay
+ * and blur, and web fonts.
+ */
+
+/* Root: the size container, the full-viewport background and the base type ---------------------- */
+
+[data-page-root],
+[data-page-root] *,
+[data-page-root] *::before,
+[data-page-root] *::after {
+  box-sizing: border-box;
+}
+
+[data-page-root] {
+  container-type: inline-size;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--t-bg);
+  color: var(--t-text);
+  font-family: var(--t-font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  text-align: start;
+}
+
+/* A framed mount (the editor's phone bezel) fills its frame instead of the viewport. */
+[data-page-frame] [data-page-root] {
+  min-height: 100%;
+}
+
+[data-page-root] a {
+  color: inherit;
+  text-decoration: none;
+}
+
+[data-page-root] a[href]:hover {
+  opacity: 0.9;
+}
+
+[data-page-root] img {
+  display: block;
+  max-width: 100%;
+}
+
+[data-page-root] :focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* Column: capped by the maxWidth token, always centered; `align` aligns what is inside ------------ */
+
+[data-page-root] .pg-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--t-max-width);
+  min-width: 0;
+  padding: 56px 24px 24px;
+}
+
+[data-page-root] .pg-blocks {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+[data-page-root][data-density="compact"] .pg-blocks {
+  gap: 8px;
+}
+
+[data-page-root][data-density="airy"] .pg-blocks {
+  gap: 18px;
+}
+
+/* Profile ------------------------------------------------------------------------------------ */
+
+[data-page-root] .pg-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+}
+
+[data-page-root][data-align="left"] .pg-profile {
+  align-items: flex-start;
+  text-align: left;
+}
+
+[data-page-root] .pg-avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  overflow: hidden;
+  border: var(--t-border-width) solid var(--t-accent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--t-accent) 14%, transparent);
+  color: var(--t-accent);
+  font-family: var(--t-font-heading);
+  font-size: calc(36px * var(--t-scale));
+  line-height: 1;
+}
+
+[data-page-root] .pg-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+[data-page-root] .pg-name {
+  max-width: 100%;
+  min-width: 0;
+  margin: 8px 0 0;
+  font-family: var(--t-font-heading);
+  font-size: calc(40px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.05;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-bio {
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(15px * var(--t-scale));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Link button -------------------------------------------------------------------------------- */
+
+[data-page-root] .pg-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 58px;
+  padding: 12px 18px;
+  border: var(--t-border-width) solid var(--t-button-bg);
+  border-radius: var(--t-radius);
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root][data-density="compact"] .pg-link {
+  min-height: 48px;
+  padding-block: 8px;
+}
+
+[data-page-root][data-density="airy"] .pg-link {
+  min-height: 64px;
+}
+
+[data-page-root] .pg-link[data-button-style="outline"] {
+  border-color: var(--t-accent);
+  background: transparent;
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+[data-page-root] .pg-link[data-button-style="soft"] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--t-button-bg) 18%, transparent);
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+/* The shadow sits between the text and the page color, so it shows on dark and light themes and
+   never melts into a button of the same color. */
+[data-page-root] .pg-link[data-button-style="shadow"] {
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+}
+
+[data-page-root] .pg-link[data-button-style="pill"] {
+  border-radius: 999px;
+}
+
+/* Link card ---------------------------------------------------------------------------------- */
+
+[data-page-root] .pg-card {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-card-banner {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  aspect-ratio: 5 / 2;
+  padding: 16px 18px;
+  background: var(--t-surface);
+}
+
+[data-page-root] .pg-card-image {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A scrim keeps the title readable on any picture, in the theme's own background color. */
+[data-page-root] .pg-card-banner[data-has-image]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--t-bg) 88%, transparent),
+    transparent 75%
+  );
+}
+
+[data-page-root] .pg-card-title {
+  min-width: 0;
+  color: var(--t-accent);
+  font-family: var(--t-font-heading);
+  font-size: calc(clamp(24px, 9cqi, 40px) * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.05;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 14px 18px;
+  font-size: calc(14px * var(--t-scale));
+}
+
+[data-page-root] .pg-card-caption {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-card-arrow {
+  flex: none;
+  color: var(--t-accent);
+}
+
+/* Header, text and divider ------------------------------------------------------------------- */
+
+[data-page-root] .pg-header {
+  margin: 12px 0 0;
+  font-family: var(--t-font-heading);
+  font-size: calc(26px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.15;
+  text-align: center;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-text {
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(15px * var(--t-scale));
+  line-height: 1.5;
+  text-align: center;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root][data-align="left"] .pg-header,
+[data-page-root][data-align="left"] .pg-text,
+[data-page-root][data-align="left"] .pg-embed-caption {
+  text-align: left;
+}
+
+[data-page-root] .pg-divider {
+  flex: none;
+  width: 60%;
+  height: 1px;
+  margin: 6px auto;
+  border: 0;
+  background: var(--t-border);
+}
+
+/* Image -------------------------------------------------------------------------------------- */
+
+[data-page-root] .pg-image {
+  width: 100%;
+  min-width: 0;
+}
+
+[data-page-root] .pg-image-link {
+  display: block;
+}
+
+[data-page-root] .pg-image-img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--t-radius);
+}
+
+/* What an empty image or an unusable embed shows in the editor preview (never on the live page). */
+[data-page-root] .pg-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 120px;
+  border: 1px dashed var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text-muted);
+  font-size: calc(12px * var(--t-scale));
+}
+
+/* Social icons ------------------------------------------------------------------------------- */
+
+[data-page-root] .pg-social {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+
+[data-page-root][data-align="left"] .pg-social {
+  justify-content: flex-start;
+}
+
+[data-page-root] .pg-social-link {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--t-border);
+  border-radius: 50%;
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-social-glyph {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Embed: a click-to-play poster for YouTube, a lazy player for Spotify ------------------------ */
+
+[data-page-root] .pg-embed {
+  width: 100%;
+  min-width: 0;
+}
+
+/* The poster and the play glyph are the one fixed look: a near-black screen with a white glyph,
+   whatever the theme. hsl() and named colors keep this stylesheet free of hex and rgb literals. */
+[data-page-root] .pg-embed-play {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: hsl(0 0% 2%);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+[data-page-root] .pg-embed-play-disc {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: hsl(0 0% 100% / 14%);
+}
+
+[data-page-root] .pg-embed-play-glyph {
+  width: 22px;
+  height: 22px;
+  fill: currentcolor;
+  stroke: none;
+}
+
+[data-page-root] .pg-embed-iframe {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: var(--t-radius);
+}
+
+[data-page-root] .pg-embed-spotify {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  border: 0;
+  border-radius: var(--t-radius);
+}
+
+[data-page-root] .pg-embed-caption {
+  margin: 8px 0 0;
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Two-column grid ---------------------------------------------------------------------------- */
+
+[data-page-root] .pg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-page-root][data-density="compact"] .pg-grid {
+  gap: 6px;
+}
+
+[data-page-root][data-density="airy"] .pg-grid {
+  gap: 14px;
+}
+
+[data-page-root] .pg-cell {
+  display: block;
+  min-width: 0;
+  min-height: 44px;
+  padding: 16px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-cell-title {
+  display: block;
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+[data-page-root] .pg-cell-subtitle {
+  display: block;
+  margin-top: 4px;
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+  line-height: 1.4;
+}
+
+/* Footer slot (badge and report link) --------------------------------------------------------- */
+
+[data-page-root] .pg-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 4px;
+  margin-top: auto;
+  padding-top: 28px;
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+}
+
+[data-page-root] .pg-footer-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Narrow containers: the editor's 310px phone bezel. Real phones are at least 320px wide. -------- */
+
+@container (max-width: 319px) {
+  [data-page-root] .pg-column {
+    padding: 30px 18px 18px;
+  }
+
+  [data-page-root] .pg-avatar {
+    width: 64px;
+    height: 64px;
+    font-size: calc(24px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-name {
+    margin-top: 0;
+    font-size: calc(26px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-bio {
+    font-size: calc(12px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-header {
+    font-size: calc(20px * var(--t-scale));
+  }
+}
