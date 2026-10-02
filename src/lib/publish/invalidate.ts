@@ -43,6 +43,17 @@ export function invalidateHandle(handle: string): void {
 }
 
 /**
+ * Expires what the cache holds for one page that was just deleted (M4-19): its tag (so the stored
+ * page and OG image are dropped) and its handle's cached 404. The Route Handler counterpart of
+ * `expireDeletedPages`: `revalidateTag` with immediate expiry, because `updateTag` is Server
+ * Actions only. Call it after the delete has succeeded. Throws when the cache API does.
+ */
+export function expireDeletedPage(page: { id: string; handle: string }): void {
+  revalidateTag(pageTag(page.id), { expire: 0 });
+  invalidateHandle(page.handle);
+}
+
+/**
  * Expires what the cache holds for pages that were just deleted: each page's tag (so the stored
  * page and OG image are dropped) and each handle's cached 404. Server Actions only, because
  * `updateTag` is: account deletion is the one caller. Call it after the delete has succeeded, so a

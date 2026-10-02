@@ -456,12 +456,18 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     await expect(items.nth(1)).toContainText(`${secondHandle}.hydlnk.com`);
     await expectTapTargets(page, "[role='menu']");
 
-    // Arrow keys move between items; the current item has focus when the menu opens.
+    // Arrow keys move between items; the current item has focus when the menu opens. Below the
+    // pages the menu offers "New page" (M4-18; M1-18 allows it), which is part of the same cycle.
+    const newPage = menu.getByRole("menuitem", { name: "New page" });
     await expect(items.nth(0)).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(items.nth(1)).toBeFocused();
     await page.keyboard.press("ArrowDown");
+    await expect(newPage).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(items.nth(0)).toBeFocused();
+    await page.keyboard.press("ArrowUp");
+    await expect(newPage).toBeFocused();
     await page.keyboard.press("ArrowUp");
     await expect(items.nth(1)).toBeFocused();
 
@@ -741,15 +747,9 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
 });
 
 test.describe("M1-19 placeholder screens", () => {
-  // /editor is a real screen since Milestone 2; its own specs live in tests/e2e/m2.
+  // /editor is a real screen since Milestone 2 (specs in tests/e2e/m2) and /design since
+  // Milestone 3 (tests/e2e/m3); /settings has been real since M1-20.
   const SCREENS = [
-    {
-      path: "/design",
-      title: "Design — HYDLNK",
-      h1: "Design",
-      crumb: () => /^Theme/,
-      sentence: /./,
-    },
     {
       path: "/analytics",
       title: "Analytics — HYDLNK",

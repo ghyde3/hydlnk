@@ -40,9 +40,12 @@ select throws_ok($$ delete from public.events $$, '42501', null, 'authenticated 
 select throws_ok($$ select * from public.reserved_handles $$, '42501', null, 'authenticated cannot read reserved_handles');
 select throws_ok($$ insert into public.reserved_handles (handle) values ('mine') $$, '42501', null, 'authenticated cannot add reserved handles');
 select throws_ok($$ delete from public.reserved_handles $$, '42501', null, 'authenticated cannot delete reserved handles');
-select throws_ok(
-  $$ select * from public.plan_limits('free') $$,
-  '42501', null, 'authenticated cannot call plan_limits through the API'
+-- M4-02: plan_limits is the one deliberate exception. It takes a plan name and returns the public
+-- pricing numbers (nothing per account), so the client can show them; 010 pins it as the only
+-- function anon or authenticated may execute, and an unknown plan still raises.
+select is(
+  (select max_pages from public.plan_limits('free')), 1,
+  'authenticated can call plan_limits (it returns the public plan numbers, M4-02)'
 );
 select throws_ok(
   $$ select public.run_nightly_maintenance() $$,

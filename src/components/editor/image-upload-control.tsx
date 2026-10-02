@@ -46,11 +46,22 @@ export function ImageUploadControl({
   const helpId = useId();
   const errorId = useId();
   const fileRef = useRef<HTMLInputElement>(null);
+  /** The last file sent, so "Try again" can send it again (kept only while a retry makes sense). */
+  const retryFile = useRef<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
+
+  function fail(message: string, retryable = false, file?: File): void {
+    retryFile.current = retryable ? (file ?? null) : null;
+    setCanRetry(retryable && file !== undefined);
+    setError(message);
+  }
 
   async function upload(file: File): Promise<void> {
     setError(null);
+    setCanRetry(false);
+    retryFile.current = null;
     if (file.size > MAX_UPLOAD_BYTES) {
       setError(TOO_BIG_MESSAGE);
       return;
@@ -66,21 +77,30 @@ export function ImageUploadControl({
       body.append("kind", kind);
       const response = await fetch("/api/media", { method: "POST", body });
       if (!response.ok) {
-        setError(messageForStatus(response.status));
+        // Over the plan's total (M4-31): the route's own sentence says which plan and what to do,
+        // and sending the same file again is worth offering once the person has made room.
+        const quota = response.status === 413 ? await quotaMessage(response) : null;
+        if (quota) fail(quota, true, file);
+        else fail(messageForStatus(response.status), response.status >= 500, file);
         return;
       }
       const parsed = imageRefSchema.safeParse(await response.json());
       if (!parsed.success) {
-        setError(FAILED_MESSAGE);
+        fail(FAILED_MESSAGE, true, file);
         return;
       }
       // Only the reference goes into the draft: the route's public url is derived from the path.
       onChange({ path: parsed.data.path, width: parsed.data.width, height: parsed.data.height });
     } catch {
-      setError(FAILED_MESSAGE);
+      fail(FAILED_MESSAGE, true, file);
     } finally {
       setBusy(false);
     }
+  }
+
+  function onRetry(): void {
+    const file = retryFile.current;
+    if (file) void upload(file);
   }
 
   function onPick(event: ChangeEvent<HTMLInputElement>): void {
@@ -128,6 +148,7 @@ export function ImageUploadControl({
               disabled={busy}
               onClick={() => {
                 setError(null);
+                setCanRetry(false);
                 onChange(null);
               }}
               className="min-h-11 rounded-md border border-bad-line bg-surface px-3 text-[13px] font-semibold text-bad disabled:opacity-60"
@@ -144,9 +165,40 @@ export function ImageUploadControl({
             {error}
           </span>
         ) : null}
+        {error && canRetry ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRetry}
+            className="inline-flex min-h-11 w-fit items-center rounded-md border border-line-3 bg-surface px-3 text-[13px] font-semibold text-ink disabled:cursor-progress disabled:opacity-60"
+          >
+            Try again
+          </button>
+        ) : null}
       </div>
     </div>
   );
+}
+
+/**
+ * The route's `upload_quota` sentence from a 413 body (`{error, message}`), or null for any other
+ * 413 or a body that is not that JSON. Shared with the Design screen's background upload, so both
+ * show the plan's own message ("Uploads are limited to 10 MB on Free. Delete an image or upgrade.").
+ */
+export function quotaMessageFromText(text: string): string | null {
+  try {
+    const body = JSON.parse(text) as { error?: unknown; message?: unknown };
+    if (body.error === "upload_quota" && typeof body.message === "string" && body.message) {
+      return body.message;
+    }
+  } catch {
+    // Not JSON: the generic 413 sentence applies.
+  }
+  return null;
+}
+
+async function quotaMessage(response: Response): Promise<string | null> {
+  return quotaMessageFromText(await response.text().catch(() => ""));
 }
 
 function messageForStatus(status: number): string {

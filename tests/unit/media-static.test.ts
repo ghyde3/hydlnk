@@ -35,7 +35,15 @@ describe("M2-08 Storage stays server-only", () => {
       .filter((f) => /\.storage\b|storage\.from\(/.test(f.text.replace(COMMENTS, "")))
       .map((f) => f.path)
       .sort();
-    expect(users).toEqual(["src/lib/media/upload.ts", "src/lib/publish/core.ts"]);
+    // upload.ts (the route), quota.ts (M4-31: bytes stored per account, an over-quota upload removed),
+    // delete-media.ts (M4-34: an account's objects removed with it) and publish/core.ts (the
+    // background object must exist). Each imports "server-only", checked below.
+    expect(users).toEqual([
+      "src/lib/media/quota.ts",
+      "src/lib/media/upload.ts",
+      "src/lib/pages/delete-media.ts",
+      "src/lib/publish/core.ts",
+    ]);
     for (const path of users) {
       expect(files.find((f) => f.path === path)!.text, path).toMatch(/import "server-only"/);
     }
