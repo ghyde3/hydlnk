@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { SiteFooter } from "./site-footer";
 import { SiteHeader } from "./site-header";
 import type { NavKey } from "./site-map";
+import "./marketing.css";
 
 /**
  * Page chrome for every marketing page: skip link, charcoal header, <main id="main"> and footer.

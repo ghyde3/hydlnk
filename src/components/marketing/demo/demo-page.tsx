@@ -158,17 +158,20 @@ export function DemoPage({
   brand,
   theme = brand.theme,
   badge = false,
+  inlineTheme = true,
   className = "",
 }: {
   brand: DemoBrand;
   theme?: DemoTheme;
   badge?: boolean;
+  /** False when a stylesheet supplies the --t-* variables (the token playground). */
+  inlineTheme?: boolean;
   className?: string;
 }) {
   return (
     <div
       className={`dp ${DEMO_FONT_VARIABLES} ${className}`}
-      style={demoThemeVars(theme)}
+      style={inlineTheme ? demoThemeVars(theme) : undefined}
       data-density={theme.density}
       data-bg-type={theme.bgType}
       data-heading-font={theme.fontHeading}

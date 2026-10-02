@@ -1,0 +1,173 @@
+/*
+ * Marketing-only styles that utilities express poorly: the comparison table's phone layout and
+ * long-form prose (guides, privacy, terms). HYDLNK UI tokens only.
+ */
+
+/* Plan comparison: a normal table from 760px; below it, each row is the feature name over three
+   labelled cells. Roles on the elements keep the table semantics when display changes. */
+@media (max-width: 759px) {
+  .compare thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .compare tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .compare th[scope="row"] {
+    grid-column: 1 / -1;
+    padding-bottom: 2px;
+  }
+
+  .compare td {
+    padding-top: 6px;
+    overflow-wrap: anywhere;
+  }
+
+  .compare td::before {
+    content: attr(data-plan);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--hl-text-2);
+    font-family: var(--hl-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+}
+
+/* Long-form text ------------------------------------------------------------------------------ */
+
+.prose-hl {
+  max-width: 70ch;
+  color: var(--hl-ink);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.prose-hl > * + * {
+  margin-top: 1em;
+}
+
+.prose-hl h2 {
+  margin-top: 2.4em;
+  font-size: clamp(22px, 5vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  scroll-margin-top: 24px;
+}
+
+.prose-hl h3 {
+  margin-top: 1.8em;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  scroll-margin-top: 24px;
+}
+
+.prose-hl h2 + *,
+.prose-hl h3 + * {
+  margin-top: 0.6em;
+}
+
+.prose-hl p,
+.prose-hl li {
+  color: var(--hl-text-2);
+}
+
+.prose-hl strong {
+  color: var(--hl-ink);
+  font-weight: 600;
+}
+
+.prose-hl ul,
+.prose-hl ol {
+  padding-left: 1.4em;
+}
+
+.prose-hl ul {
+  list-style: disc;
+}
+
+.prose-hl ol {
+  list-style: decimal;
+}
+
+.prose-hl li + li {
+  margin-top: 0.45em;
+}
+
+.prose-hl li::marker {
+  color: var(--hl-text-3);
+}
+
+.prose-hl a {
+  color: var(--hl-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--hl-line-3);
+  text-underline-offset: 3px;
+}
+
+.prose-hl a:hover {
+  text-decoration-color: var(--hl-ink);
+}
+
+.prose-hl code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--hl-radius-sm);
+  background: var(--hl-track);
+  color: var(--hl-ink);
+  font-family: var(--hl-font-mono);
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
+}
+
+.prose-hl table {
+  width: 100%;
+  border: 1px solid var(--hl-line-2);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--hl-radius);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.prose-hl th,
+.prose-hl td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--hl-line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.prose-hl thead th {
+  border-top: 0;
+  background: var(--hl-page);
+  color: var(--hl-text-2);
+  font-family: var(--hl-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.prose-hl td {
+  color: var(--hl-text-2);
+}
+
+.prose-hl .callout {
+  padding: 14px 16px;
+  border: 1px solid var(--hl-line);
+  border-left: 0;
+  border-radius: var(--hl-radius);
+  background: var(--hl-page);
+  color: var(--hl-ink);
+}

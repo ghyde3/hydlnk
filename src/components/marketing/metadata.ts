@@ -31,7 +31,7 @@ export function marketingMetadata({
   const full = typeof title === "string" ? `${title} | HYDLNK` : title.absolute;
   const images = [
     {
-      url: `/marketing/og/${image}.png`,
+      url: `/marketing/og/${image}.jpg`,
       width: 1200,
       height: 630,
       alt: full,
