@@ -854,6 +854,22 @@ describe("one document schema in the codebase (static)", () => {
     }
   });
 
+  it("the editor, the Publish action and the public-page query import their schema from it", () => {
+    // M2-01 step 1: the editor (autosave and loading) validates with draftDocSchema, Publish with
+    // publishDocSchema, the public query with publishedDocSchema, all from "@/lib/document".
+    const importsFrom = (file: string, name: string) => {
+      const text = readFileSync(join(process.cwd(), file), "utf8");
+      const imports = [...text.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*"([^"]+)"/g)];
+      return imports.some(
+        ([, names, spec]) => spec === "@/lib/document" && new RegExp(`\\b${name}\\b`).test(names!),
+      );
+    };
+    expect(importsFrom("src/lib/editor/autosave.ts", "draftDocSchema")).toBe(true);
+    expect(importsFrom("src/lib/editor/load.ts", "draftDocSchema")).toBe(true);
+    expect(importsFrom("src/lib/publish/core.ts", "publishDocSchema")).toBe(true);
+    expect(importsFrom("src/app/(tenant)/published-page.ts", "publishedDocSchema")).toBe(true);
+  });
+
   it("the document module never imports the app, the database or the server", () => {
     for (const file of files.filter((f) => f.includes("src/lib/document/"))) {
       const imports = [...readFileSync(file, "utf8").matchAll(/from "([^"]+)"/g)].map((m) => m[1]!);
