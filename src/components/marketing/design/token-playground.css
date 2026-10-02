@@ -1,0 +1,254 @@
+/*
+ * Token playground (/design). The radio groups restyle the demo page with :has() only.
+ * Rules come in resolution order: the theme sets every token, then the override groups (button
+ * style, radius, heading font, background) replace single tokens. Same specificity throughout, so
+ * source order decides, as "later wins" does in the product. The --t-* variables here are tenant
+ * theme values inside the demo frame only.
+ */
+
+/* Segmented options (HYDLNK UI) -------------------------------------------------------------- */
+
+.tp-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: var(--hl-radius-sm);
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tp-option:hover {
+  border-color: var(--hl-ink-2);
+}
+
+.tp-option:has(input:checked) {
+  border-color: var(--hl-ink);
+  background: var(--hl-ink);
+  color: var(--hl-surface);
+  font-weight: 600;
+}
+
+.tp-option:has(input:focus-visible) {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+/* Base: Smoke ------------------------------------------------------------------------------- */
+
+.tp .dp {
+  --t-bg: #1c2023;
+  --t-surface: #262c30;
+  --t-text: #e6eaec;
+  --t-text-muted: #9aa4aa;
+  --t-accent: #9db3c4;
+  --t-button-bg: #9db3c4;
+  --t-button-text: #15110b;
+  --t-border: #404447;
+  --t-font-heading: var(--font-demo-geist), system-ui, sans-serif;
+  --t-font-body: var(--font-demo-geist), system-ui, sans-serif;
+  --t-weight-heading: 600;
+  --t-radius: 20px;
+  --t-overlay-opacity: 0.55;
+  --tp-name-size: 24px;
+  --tp-grad: 1;
+  --tp-img: 0;
+  --tp-btn-bg: var(--t-button-bg);
+  --tp-btn-border: var(--t-button-bg);
+  --tp-btn-text: var(--t-button-text);
+  --tp-btn-radius: 999px;
+  --tp-btn-shadow: none;
+  --tp-btn-weight: 600;
+}
+
+.tp .dp::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(
+    120% 70% at 50% 0%,
+    color-mix(in srgb, var(--t-accent) 26%, var(--t-bg)) 0%,
+    transparent 70%
+  );
+  opacity: var(--tp-grad);
+  transition: opacity 0.45s ease;
+}
+
+.tp .dp .dp-bg {
+  opacity: var(--tp-img);
+  transition: opacity 0.45s ease;
+}
+
+.tp .dp .dp-bg img {
+  filter: blur(2px);
+}
+
+.tp .dp .dp-name {
+  font-size: var(--tp-name-size);
+}
+
+.tp .dp .dp-link[data-button-style] {
+  border-color: var(--tp-btn-border);
+  border-radius: var(--tp-btn-radius);
+  background: var(--tp-btn-bg);
+  box-shadow: var(--tp-btn-shadow);
+  color: var(--tp-btn-text);
+  font-weight: var(--tp-btn-weight);
+}
+
+/* Themes: every token, including the defaults the override groups can replace -------------- */
+
+.tp:has(input[name="tp-theme"][value="noir"]:checked) .dp {
+  --t-bg: #16120e;
+  --t-surface: #221b13;
+  --t-text: #efe8dc;
+  --t-text-muted: #a79e90;
+  --t-accent: #c9a86a;
+  --t-button-bg: #c9a86a;
+  --t-button-text: #15110b;
+  --t-border: #3a342d;
+  --t-font-heading: var(--font-demo-instrument), Georgia, serif;
+  --t-weight-heading: 400;
+  --t-radius: 12px;
+  --tp-name-size: 27px;
+  --tp-grad: 0;
+  --tp-img: 0;
+  --tp-btn-bg: transparent;
+  --tp-btn-border: var(--t-accent);
+  --tp-btn-text: var(--t-text);
+  --tp-btn-radius: var(--t-radius);
+  --tp-btn-shadow: none;
+  --tp-btn-weight: 500;
+}
+
+.tp:has(input[name="tp-theme"][value="ivory"]:checked) .dp {
+  --t-bg: #f3eee4;
+  --t-surface: #e6ddcd;
+  --t-text: #1b1814;
+  --t-text-muted: #5e564b;
+  --t-accent: #1b1814;
+  --t-button-bg: #1b1814;
+  --t-button-text: #f7f3ec;
+  --t-border: #ccc7bf;
+  --t-font-heading: var(--font-demo-fraunces), Georgia, serif;
+  --t-weight-heading: 600;
+  --t-radius: 4px;
+  --tp-name-size: 24px;
+  --tp-grad: 0;
+  --tp-img: 0;
+  --tp-btn-bg: var(--t-button-bg);
+  --tp-btn-border: var(--t-button-bg);
+  --tp-btn-text: var(--t-button-text);
+  --tp-btn-radius: var(--t-radius);
+  --tp-btn-shadow: none;
+  --tp-btn-weight: 600;
+}
+
+/* Overrides: one token each, after the themes so they win ------------------------------------ */
+
+.tp:has(input[name="tp-button"][value="fill"]:checked) .dp {
+  --tp-btn-bg: var(--t-button-bg);
+  --tp-btn-border: var(--t-button-bg);
+  --tp-btn-text: var(--t-button-text);
+  --tp-btn-radius: var(--t-radius);
+  --tp-btn-shadow: none;
+  --tp-btn-weight: 600;
+}
+
+.tp:has(input[name="tp-button"][value="outline"]:checked) .dp {
+  --tp-btn-bg: transparent;
+  --tp-btn-border: var(--t-accent);
+  --tp-btn-text: var(--t-text);
+  --tp-btn-radius: var(--t-radius);
+  --tp-btn-shadow: none;
+  --tp-btn-weight: 500;
+}
+
+.tp:has(input[name="tp-button"][value="soft"]:checked) .dp {
+  --tp-btn-bg: color-mix(in srgb, var(--t-button-bg) 18%, transparent);
+  --tp-btn-border: transparent;
+  --tp-btn-text: var(--t-text);
+  --tp-btn-radius: var(--t-radius);
+  --tp-btn-shadow: none;
+  --tp-btn-weight: 500;
+}
+
+.tp:has(input[name="tp-button"][value="shadow"]:checked) .dp {
+  --tp-btn-bg: var(--t-button-bg);
+  --tp-btn-border: var(--t-button-bg);
+  --tp-btn-text: var(--t-button-text);
+  --tp-btn-radius: var(--t-radius);
+  --tp-btn-shadow: 3px 3px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+  --tp-btn-weight: 600;
+}
+
+.tp:has(input[name="tp-button"][value="pill"]:checked) .dp {
+  --tp-btn-bg: var(--t-button-bg);
+  --tp-btn-border: var(--t-button-bg);
+  --tp-btn-text: var(--t-button-text);
+  --tp-btn-radius: 999px;
+  --tp-btn-shadow: none;
+  --tp-btn-weight: 600;
+}
+
+.tp:has(input[name="tp-radius"][value="0"]:checked) .dp {
+  --t-radius: 0px;
+}
+
+.tp:has(input[name="tp-radius"][value="8"]:checked) .dp {
+  --t-radius: 8px;
+}
+
+.tp:has(input[name="tp-radius"][value="16"]:checked) .dp {
+  --t-radius: 16px;
+}
+
+.tp:has(input[name="tp-radius"][value="28"]:checked) .dp {
+  --t-radius: 28px;
+}
+
+.tp:has(input[name="tp-font"][value="fraunces"]:checked) .dp {
+  --t-font-heading: var(--font-demo-fraunces), Georgia, serif;
+  --t-weight-heading: 600;
+  --tp-name-size: 24px;
+}
+
+.tp:has(input[name="tp-font"][value="instrument"]:checked) .dp {
+  --t-font-heading: var(--font-demo-instrument), Georgia, serif;
+  --t-weight-heading: 400;
+  --tp-name-size: 27px;
+}
+
+.tp:has(input[name="tp-font"][value="geist"]:checked) .dp {
+  --t-font-heading: var(--font-demo-geist), system-ui, sans-serif;
+  --t-weight-heading: 600;
+  --tp-name-size: 24px;
+}
+
+.tp:has(input[name="tp-bg"][value="solid"]:checked) .dp {
+  --tp-grad: 0;
+  --tp-img: 0;
+}
+
+.tp:has(input[name="tp-bg"][value="gradient"]:checked) .dp {
+  --tp-grad: 1;
+  --tp-img: 0;
+}
+
+.tp:has(input[name="tp-bg"][value="image"]:checked) .dp {
+  --tp-grad: 0;
+  --tp-img: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp .dp,
+  .tp .dp *,
+  .tp .dp::before {
+    transition: none !important;
+  }
+}
