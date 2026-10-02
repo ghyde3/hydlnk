@@ -26,20 +26,7 @@
       "Glob",
       "Grep"
     ],
-    "ask": [
-      "Bash(supabase db push*)",
-      "Bash(supabase link*)",
-      "Bash(supabase config push*)",
-      "Bash(gh pr merge*)",
-      "Bash(vercel *)",
-      "Bash(stripe *)",
-      "mcp__fef92832-6d02-4698-b2ec-f2ef40930562",
-      "mcp__2eeb527b-3642-49c1-b2c0-8429c867c6fd",
-      "mcp__bfec649e-785c-4fec-8bd5-e5d60bcea909",
-      "mcp__claude_ai_Supabase",
-      "mcp__claude_ai_Vercel",
-      "mcp__claude_ai_Stripe"
-    ],
+    "ask": [],
     "deny": [
       "Read(./.env)",
       "Read(./.env.local)",
@@ -58,10 +45,13 @@
       "Bash(supabase db reset*--db-url*)",
       "Bash(supabase migration repair*)",
       "Bash(supabase migration up*--linked*)",
-      "Bash(supabase migration up*--db-url*)"
+      "Bash(supabase migration up*--db-url*)",
+      "Bash(supabase config push*)"
     ]
   },
-  "enabledMcpjsonServers": ["supabase-local"],
+  "enabledMcpjsonServers": [
+    "supabase-local"
+  ],
   "hooks": {
     "SessionStart": [
       {
