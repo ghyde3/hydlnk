@@ -370,19 +370,28 @@ test.describe("M4-06 the Checkout endpoint (API)", () => {
     expect(await sessionCalls(user.userId)).toHaveLength(2);
   });
 
-  test("M4-06 when Stripe cannot list the subscriptions the answer is 502 and no session is created (fail closed)", async ({
-    context,
-  }) => {
-    const user = await billingUser(context, { label: "co-list-500", customer: true });
-    await failStub("GET", `customer=${user.customer}`, 500, 1);
-    // The first Stripe call of the flow (listing open sessions) takes the failure.
-    const response = await checkout(context, { plan: "pro", interval: "month" });
-    expect(response.status).toBe(502);
-    expect(JSON.parse(response.body)).toMatchObject({ error: "stripe_unavailable" });
-    expect(await sessionCalls(user.userId)).toHaveLength(0);
-    // And once Stripe is back it works.
-    expect((await checkout(context, { plan: "pro", interval: "month" })).status).toBe(303);
-  });
+  for (const [what, contains] of [
+    ["open Checkout Sessions", "/v1/checkout/sessions?customer="],
+    ["subscriptions", "/v1/subscriptions?customer="],
+  ] as const) {
+    test(`M4-06 when Stripe cannot list the customer's ${what} the answer is 502 and no session is created (fail closed)`, async ({
+      context,
+    }) => {
+      const user = await billingUser(context, {
+        label: `co-list-${what.startsWith("open") ? "sessions" : "subs"}`,
+        customer: true,
+      });
+      await failStub("GET", `${contains}${user.customer}`, 500, 1);
+      const response = await checkout(context, { plan: "pro", interval: "month" });
+      expect(response.status).toBe(502);
+      expect(JSON.parse(response.body)).toMatchObject({ error: "stripe_unavailable" });
+      expect(await sessionCalls(user.userId)).toHaveLength(0);
+      expect((await accountRow(user.userId)).plan).toBe("free");
+      // And once Stripe is back it works.
+      expect((await checkout(context, { plan: "pro", interval: "month" })).status).toBe(303);
+      expect(await sessionCalls(user.userId)).toHaveLength(1);
+    });
+  }
 
   test("M4-06 a Free account that once subscribed starts Checkout on its existing customer", async ({
     context,

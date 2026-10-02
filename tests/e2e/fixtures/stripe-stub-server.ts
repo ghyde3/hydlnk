@@ -197,7 +197,7 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
     idempotencyKey: (req.headers["idempotency-key"] as string | undefined) ?? null,
   });
 
-  const injected = takeFailure(method, `${url.pathname}?${url.search} ${raw}`);
+  const injected = takeFailure(method, `${url.pathname}${url.search} ${raw}`);
   if (injected) {
     return send(res, injected.status, {
       error: { type: "api_error", message: "Injected failure from the stub" },
