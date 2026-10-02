@@ -32,6 +32,8 @@ set -euo pipefail
 # DOCKER_CONFIG and DOCKER_HOST for the supabase commands below when the probe fails.
 # shellcheck source=lib/docker-env.sh
 . "$ROOT/scripts/lib/docker-env.sh"
+# shellcheck source=lib/local-env-placeholders.sh
+. "$ROOT/scripts/lib/local-env-placeholders.sh"
 
 DEV_PORT=3000
 DEV_URL="http://localhost:${DEV_PORT}"
@@ -144,6 +146,17 @@ write_env_local() {
   say "wrote $(basename "$ENV_FILE") (Supabase URL and keys, root domain, preserved extras)"
 }
 
+# Adds the local placeholders for Stripe and Vercel (M4) that $ENV_FILE does not define yet: never a
+# real key or token. The list and what each value is for live in scripts/lib/local-env-placeholders.sh,
+# which CI sources too. A value already in the file, a real sandbox key from `stripe listen` for
+# instance, is never touched.
+ensure_m4_env_placeholders() {
+  [ -f "$ENV_FILE" ] || return 0
+  local added
+  added=$(ensure_local_env_placeholders "$ENV_FILE")
+  if [ "$added" -gt 0 ]; then say "added $added local Stripe/Vercel placeholder line(s) to $(basename "$ENV_FILE")"; fi
+}
+
 reset_db() {
   say "resetting database (migrations + seed)"
   supabase db reset >"$ROOT/tmp/db-reset.log" 2>&1 ||
@@ -250,6 +263,7 @@ main() {
   install_deps
   start_supabase
   write_env_local
+  ensure_m4_env_placeholders
   reset_db
   start_dev_server
   run_smoke

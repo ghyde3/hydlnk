@@ -1,3 +1,4 @@
+import { lowestPaidPerMonth } from "@/lib/billing/prices";
 import { clientEnv } from "@/lib/env/client";
 import { ClaimForm } from "./claim-form";
 import { PhoneMock } from "./phone-mock";
@@ -29,7 +30,7 @@ export function Hero() {
             <ClaimForm id="hero-handle" rootDomain={clientEnv.NEXT_PUBLIC_ROOT_DOMAIN} />
           </div>
           <p className="mt-3.5 text-[13px] text-text-2">
-            Free forever · No card required · Custom domains from $5/mo
+            Free forever · No card required · Custom domains from {lowestPaidPerMonth()}
           </p>
         </div>
 

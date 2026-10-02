@@ -96,9 +96,15 @@ jobs:
           # These are local-stack keys, but keep the secret key out of the job log anyway.
           secret="$(sed -n 's/^SUPABASE_SECRET_KEY="\(.*\)"$/\1/p' .env.local)"
           if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
+          # Milestone 4: the local Stripe and Vercel placeholders (never real keys) the billing and
+          # account-deletion specs need, from the same list scripts/init.sh uses.
+          . scripts/lib/local-env-placeholders.sh
+          ensure_local_env_placeholders .env.local > /dev/null
 
       # The Vitest files that need the running stack (M1-05 ensureAccount, M2-23/M2-25 the publish
-      # gate, and the seeded mara rows, all against the real database) are skipped by the unit step
+      # gate, the seeded mara rows, the system themes, the token and theme publish gate, the plan
+      # limits parity, page create and delete, and the upload quota, all against the real database)
+      # are skipped by the unit step
       # above. REQUIRE_SUPABASE=1 makes a missing stack fail here instead of skipping.
       - name: Integration tests (Vitest against local Supabase)
         env:
@@ -108,6 +114,11 @@ jobs:
           tests/unit/auth-ensure-account.test.ts
           tests/unit/publish-core.test.ts
           tests/unit/document-seed.test.ts
+          tests/unit/themes-system.test.ts
+          tests/unit/themes-publish.test.ts
+          tests/unit/limits-parity.test.ts
+          tests/unit/limits-pages.test.ts
+          tests/unit/limits-upload-stack.test.ts
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -116,10 +127,10 @@ jobs:
       - name: End-to-end tests
         run: pnpm test:e2e
 
-      # M2-26 needs a production build: x-nextjs-cache only exists there. The root domain is baked
+      # M2-26, M4-08 and M4-19 need a production build: x-nextjs-cache only exists there. The root domain is baked
       # into the build, so the port in it is the server's port; the dev server that Playwright starts
       # on :3000 (no such variables) is only used to sign users in. See the header of the spec.
-      - name: Production build and cache checks (M2-26)
+      - name: Production build and cache checks (M2-26, M4-08, M4-19)
         run: |
           mkdir -p tmp
           NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build
@@ -132,7 +143,7 @@ jobs:
             if curl -s -o /dev/null --max-time 5 http://localhost:3100/; then break; fi
             sleep 1
           done
-          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts
+          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts tests/e2e/m4/billing-badge.spec.ts
 
       # The screens script needs a running dev server; Playwright stopped its own after the tests.
       # Runs only when the e2e tests passed. Fills the "screens" artifact below.

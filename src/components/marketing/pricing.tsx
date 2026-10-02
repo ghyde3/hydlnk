@@ -1,3 +1,4 @@
+import { formatFreePrice, formatLandingPrice } from "@/lib/billing/prices";
 import { clientEnv } from "@/lib/env/client";
 import { appOrigin } from "@/lib/routing/urls";
 import { Container, Eyebrow, H2, LEAD, SECTION_Y } from "./primitives";
@@ -17,7 +18,7 @@ type Plan = {
 const PLANS: Plan[] = [
   {
     name: "Free",
-    price: "$0",
+    price: formatFreePrice(),
     per: "forever",
     blurb: "One page that looks properly designed.",
     cta: "Start free",
@@ -33,8 +34,7 @@ const PLANS: Plan[] = [
   },
   {
     name: "Pro",
-    price: "$5",
-    per: "/ month · or $48 a year",
+    ...formatLandingPrice("pro"),
     blurb: "For creators and small brands on their own domain.",
     cta: "Go Pro",
     featured: true,
@@ -50,8 +50,7 @@ const PLANS: Plan[] = [
   },
   {
     name: "Studio",
-    price: "$15",
-    per: "/ month",
+    ...formatLandingPrice("studio"),
     blurb: "For agencies and teams running pages for others.",
     cta: "Start Studio",
     lead: "Everything in Pro, plus",

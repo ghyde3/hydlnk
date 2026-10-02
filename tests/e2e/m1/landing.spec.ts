@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { formatFreePrice, formatLandingPrice, lowestPaidPerMonth } from "@/lib/billing/prices";
 import { axeViolations } from "../fixtures/a11y";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
@@ -136,9 +137,10 @@ test.describe("M1-23 landing header and hero", () => {
       ),
     ).toBeVisible();
     await expect(
-      page.getByText("Free forever · No card required · Custom domains from $5/mo", {
-        exact: true,
-      }),
+      page.getByText(
+        `Free forever · No card required · Custom domains from ${lowestPaidPerMonth()}`,
+        { exact: true },
+      ),
     ).toBeVisible();
 
     // Instrument Serif lives only inside the phone mock.
@@ -664,14 +666,15 @@ test.describe("M1-26 pricing", () => {
     const lists = async (name: string) =>
       (await card(name).locator("li").allTextContents()).map((t) => t.trim());
 
-    await expect(card("Free")).toContainText("$0");
+    await expect(card("Free")).toContainText(formatFreePrice());
     await expect(card("Free")).toContainText("forever");
     await expect(card("Free")).toContainText("One page that looks properly designed.");
-    await expect(card("Pro")).toContainText("$5");
-    await expect(card("Pro")).toContainText("/ month · or $48 a year");
+    // The prices come from the one table (src/lib/billing/prices.ts): $9, or $60 a year ($5/mo billed yearly).
+    await expect(card("Pro")).toContainText(formatLandingPrice("pro").price);
+    await expect(card("Pro")).toContainText(formatLandingPrice("pro").per);
     await expect(card("Pro")).toContainText("For creators and small brands on their own domain.");
-    await expect(card("Studio")).toContainText("$15");
-    await expect(card("Studio")).toContainText("/ month");
+    await expect(card("Studio")).toContainText(formatLandingPrice("studio").price);
+    await expect(card("Studio")).toContainText(formatLandingPrice("studio").per);
     await expect(card("Studio")).toContainText("For agencies and teams running pages for others.");
 
     expect(await lists("Free")).toEqual([
