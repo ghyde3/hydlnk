@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/marketing/legal-page";
 import { marketingMetadata } from "@/components/marketing/metadata";
-import { PRIVACY_EMAIL, SUPPORT_EMAIL } from "@/components/marketing/site-map";
+import { POSTAL_ADDRESS, PRIVACY_EMAIL, SUPPORT_EMAIL } from "@/components/marketing/site-map";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/privacy",
@@ -63,7 +63,8 @@ export default function PrivacyPage() {
         HYDLNK (“HYDLNK”, “we”, “us”) provides a service for building link-in-bio pages. We
         operate hydlnk.com, app.hydlnk.com, the pages at <code>handle.hydlnk.com</code> addresses
         and the custom domains our customers connect. For the information described here, HYDLNK
-        is the controller. You can reach us about privacy at {mail(PRIVACY_EMAIL)}.
+        is the controller. You can reach us about privacy at {mail(PRIVACY_EMAIL)}, or by post at
+        HYDLNK, {POSTAL_ADDRESS}.
       </p>
 
       <h2 id="collect">What we collect</h2>
@@ -285,8 +286,9 @@ export default function PrivacyPage() {
       </p>
       <p>
         You can change or delete most information yourself in the editor, and delete your account
-        in your account settings. For anything else, email {mail(PRIVACY_EMAIL)}. We may need to
-        confirm your identity first, and we reply within one month.
+        in your account settings. For anything else, email {mail(PRIVACY_EMAIL)} or write to us at
+        the postal address under Contact. We may need to confirm your identity first, and we reply
+        within one month.
       </p>
 
       <h2 id="children">Children</h2>
@@ -321,8 +323,8 @@ export default function PrivacyPage() {
 
       <h2 id="contact">Contact</h2>
       <p>
-        Privacy questions and requests: {mail(PRIVACY_EMAIL)}. Everything else:{" "}
-        {mail(SUPPORT_EMAIL)}.
+        Privacy questions and requests: {mail(PRIVACY_EMAIL)}, or by post to HYDLNK,{" "}
+        {POSTAL_ADDRESS}. Everything else: {mail(SUPPORT_EMAIL)}.
       </p>
     </LegalPage>
   );

@@ -127,3 +127,5 @@ export const SITEMAP_PATHS: readonly string[] = [
 /** Contact addresses shown on the site and in the legal pages. */
 export const SUPPORT_EMAIL = "support@hydlnk.com";
 export const PRIVACY_EMAIL = "privacy@hydlnk.com";
+/** Where HYDLNK receives legal notices and privacy requests by post. */
+export const POSTAL_ADDRESS = "11156 Hanlon Terrace Alley, Winter Garden, Florida 34787, United States";

@@ -12,6 +12,7 @@ import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 const SIGNUP = url("app", "/signup");
 const APP = url("app");
 const OUT_OF_SCOPE = /schedul|csv|invite editors|team access|custom css|version history/i;
+const POSTAL = "11156 Hanlon Terrace Alley, Winter Garden, Florida 34787, United States";
 
 const PAGES: { path: string; title: RegExp; current: string | null }[] = [
   { path: "/features", title: /^Features \| HYDLNK$/, current: "Features" },
@@ -114,14 +115,15 @@ test("privacy names the processors and the cookieless analytics; terms cover acc
 }) => {
   await page.goto(url(null, "/privacy"));
   const privacy = page.locator(".prose-hl");
-  for (const text of ["Vercel", "Supabase", "Stripe", "Resend", "Google", "daily", "90 days", "privacy@hydlnk.com"]) {
+  for (const text of ["Vercel", "Supabase", "Stripe", "Resend", "Google", "daily", "90 days", "privacy@hydlnk.com", POSTAL]) {
     await expect(privacy).toContainText(text);
   }
   await page.goto(url(null, "/terms"));
   const terms = page.locator(".prose-hl");
-  for (const text of ["Phishing", "Malware", "Impersonation", "Illegal content", "report link", "suspend", "100,000 views", "support@hydlnk.com"]) {
+  for (const text of ["Phishing", "Malware", "Impersonation", "Illegal content", "report link", "suspend", "100,000 views", "support@hydlnk.com", POSTAL, "State of Florida", "Orange County, Florida"]) {
     await expect(terms).toContainText(text);
   }
+  await expect(terms).not.toContainText("Delaware");
 });
 
 test("design playground: radio groups restyle the demo page without JavaScript", async ({ browser }) => {

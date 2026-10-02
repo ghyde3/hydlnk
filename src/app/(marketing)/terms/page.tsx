@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage } from "@/components/marketing/legal-page";
 import { marketingMetadata } from "@/components/marketing/metadata";
-import { SUPPORT_EMAIL } from "@/components/marketing/site-map";
+import { POSTAL_ADDRESS, SUPPORT_EMAIL } from "@/components/marketing/site-map";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/terms",
@@ -202,11 +202,11 @@ export default function TermsPage() {
 
       <h2 id="law">Governing law</h2>
       <p>
-        These terms are governed by the laws of the State of Delaware, United States, without
-        regard to its conflict-of-law rules. Disputes will be heard in the state or federal courts
-        located in Delaware, and you and HYDLNK both agree to their jurisdiction. If you’re a
-        consumer, you also keep the protection of the mandatory laws of the country where you live,
-        and you can bring proceedings in its courts.
+        These terms are governed by the laws of the State of Florida, United States, without
+        regard to its conflict-of-law rules. Disputes will be heard in the state and federal courts
+        located in Orange County, Florida, and you and HYDLNK both agree to their jurisdiction. If
+        you’re a consumer, you also keep the protection of the mandatory laws of the country where
+        you live, and you can bring proceedings in its courts.
       </p>
 
       <h2 id="changes">Changes to these terms</h2>
@@ -219,7 +219,8 @@ export default function TermsPage() {
 
       <h2 id="contact">Contact</h2>
       <p>
-        Questions about these terms, reports and complaints: {support}. Privacy questions: see the{" "}
+        Questions about these terms, reports and complaints: {support}. Legal notices can also be
+        sent by post to HYDLNK, {POSTAL_ADDRESS}. Privacy questions: see the{" "}
         <Link href="/privacy">privacy policy</Link>.
       </p>
     </LegalPage>
