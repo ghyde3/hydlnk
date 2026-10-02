@@ -10,7 +10,7 @@ Applies to the `(editor)` route group (`src/app/(editor)/app/**`).
 **Host and auth**
 - This code is served only on the app host (`app.hydlnk.com`, `app.localhost:3000`). It is the only place that sets auth cookies. Auth cookies are host-only: never pass a `domain` option to the Supabase cookie helpers, so tenant subdomains and custom domains never see a session.
 - The auth callback is `/auth/callback`. The proxy refreshes the session with `getClaims()`. Server code decides access from `getClaims()` or `getUser()`, never from `getSession()` or from client input.
-- The editor reads and edits drafts with the user's session, under RLS. Anything that needs validation, a plan limit or billing state is a Server Action that writes with the secret key, checks ownership itself (`pages.owner_id` equals the caller) and validates input with the Zod schemas from `@/lib/schemas`.
+- The editor reads and edits drafts with the user's session, under RLS. Anything that needs validation, a plan limit or billing state is a Server Action that writes with the secret key, checks ownership itself (`pages.owner_id` equals the caller) and validates input with the Zod schemas from `@/lib/document` (`draftDocSchema`, `publishDocSchema`).
 
 **Two token systems**
 - The editor chrome uses HYDLNK UI tokens (`--hl-*`, mapped into Tailwind `@theme`). Tenant tokens (`--t-*`) appear only on the preview root.

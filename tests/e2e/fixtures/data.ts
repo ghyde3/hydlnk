@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { BrowserContext, TestInfo } from "@playwright/test";
-import { emptyPageDraft } from "@/lib/handles/claim-core";
+import { emptyDraft } from "@/lib/document";
 import {
   adminClient,
   deleteUser,
@@ -163,7 +163,7 @@ export async function insertPage(
 ): Promise<string> {
   const { data, error } = await adminClient()
     .from("pages")
-    .insert({ owner_id: ownerId, handle, draft: emptyPageDraft(handle), ...extra })
+    .insert({ owner_id: ownerId, handle, draft: emptyDraft(handle), ...extra })
     .select("id")
     .single();
   if (error) throw new Error(`insertPage(${handle}) failed: ${error.message}`);

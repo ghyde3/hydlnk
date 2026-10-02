@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { url, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
-import { claimHandleWithClient, emptyPageDraft } from "@/lib/handles/claim-core";
+import { emptyDraft } from "@/lib/document";
+import { claimHandleWithClient } from "@/lib/handles/claim-core";
 import { adminClient, deleteUser } from "../fixtures/auth";
 import { cleanupUsers, makeUser, rand } from "../fixtures/data";
 import { NEVER_STORED, rawRequest } from "../fixtures/http";
@@ -57,8 +58,8 @@ test.describe("M1-15 placeholder for a claimed handle", () => {
 
   test("M1-15 renders only published: the draft never reaches the response", async () => {
     const { handle } = await claimed("dr");
-    const draft = emptyPageDraft(handle);
-    draft.profile.displayName = "DRAFT-MARKER-7f3a";
+    const draft = emptyDraft(handle);
+    draft.profile.name = "DRAFT-MARKER-7f3a";
     draft.profile.bio = "DRAFT-MARKER-7f3a";
     const { error } = await adminClient().from("pages").update({ draft }).eq("handle", handle);
     expect(error).toBeNull();

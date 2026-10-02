@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { safeUrlSchema } from "@/lib/schemas/url";
+import { httpUrl } from "@/lib/document/url";
 import { FONT_ALLOWLIST } from "./fonts";
 
 /**
@@ -43,7 +43,7 @@ const tokenShape = {
   align: z.enum(["left", "center"]),
   // Background
   bgType: z.enum(["solid", "gradient", "image"]),
-  bgImage: safeUrlSchema.nullable(),
+  bgImage: httpUrl.nullable(),
   overlayOpacity: z.number().min(0).max(1),
   blur: z.number().min(0).max(20),
 };

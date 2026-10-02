@@ -492,7 +492,7 @@
         "Direct-API abuse (Vitest): a 60-block document and a document containing a block with `type: 'script'` both fail `publishDocSchema`. RLS lets an owner write any JSON to `draft` with the publishable key, so these writes land in the draft and are stopped at Publish (see the Publish gate feature)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-02",
@@ -508,7 +508,7 @@
         "Direct-API abuse: a PostgREST update of `pages.draft` with a `javascript:` link URL succeeds (drafts are untrusted under RLS) but `publishDocSchema` rejects it, so the URL can never reach `published` or the public page (end-to-end proof lives in the Publish gate feature)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-03",
@@ -526,7 +526,7 @@
         "At 1440x900 on the same URL: breadcrumb and title sit left; status chip, Preview and Publish sit right on one row."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-04",
@@ -545,7 +545,7 @@
         "At 390x844 on http://app.localhost:3000/editor the indicator and chip wrap inside the header without horizontal scroll or overlap with the title, and every button, input and standalone link has a bounding box at least 44px tall (icon-only controls also 44px wide); at 1440x900 they sit on the right of the header row."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-05",
@@ -564,7 +564,7 @@
         "At 1440x900 on the same fixture route: column no wider than 480px and centered, background color covers the whole viewport."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-06",
@@ -581,7 +581,7 @@
         "Breakpoint per DESIGN.md: at 759x844 the tablist is shown and the bezel is not; at 760x900 the tablist is not rendered and the block list and the 310px bezel preview sit side by side; at 800x900 the layout still fits with `scrollWidth <= innerWidth`. At 1440x900 the tablist is not visible."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-07",
@@ -598,7 +598,7 @@
         "At 1440x900 on the same URL: the card fills the block column (max 720px)."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-08",
@@ -614,7 +614,7 @@
         "Replacing or removing an image in the editor changes only the draft reference: the client makes no Storage delete call, and an object the published copy still references stays readable at its public URL. Garbage collection of unreferenced objects is the Milestone 5 cleanup feature; resizing, WebP conversion and per-account quotas are Milestones 5 and 4."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-09",
@@ -631,7 +631,7 @@
         "At 1440x900 on the same URL: the avatar and buttons sit in one row."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-10",
@@ -647,7 +647,7 @@
         "At 1440x900 on the same URL: all nine chips fit in at most two rows."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-11",
@@ -663,7 +663,7 @@
         "At 1440x900 on the same URL: rows fill the block column (max 720px)."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-12",
@@ -679,7 +679,7 @@
         "At 1440x900 on the same URL: the toggle sits at the right edge of the row."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-13",
@@ -695,7 +695,7 @@
         "At 1440x900 on the same URL: the toast appears bottom-left of the main column."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-14",
@@ -712,7 +712,7 @@
         "At 1440x900 on the same URL: pointer drag works as above."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-15",
@@ -729,7 +729,7 @@
         "At 1440x900 on the same URL: the button spans the column (max 480px)."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-16",
@@ -745,7 +745,7 @@
         "At 1440x900 on the same URL: the three blocks stay within the 480px column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-17",
@@ -761,7 +761,7 @@
         "At 1440x900 on the same URL: icons are centered in the 480px column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-18",
@@ -777,7 +777,7 @@
         "At 1440x900 on the same URL: the grid fills the 480px column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-19",
@@ -794,7 +794,7 @@
         "At 1440x900 on the same URL: the embed stays within the 480px column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-20",
@@ -810,7 +810,7 @@
         "At 1440x900 on the same URL: the image fills the 480px column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-21",
@@ -826,7 +826,7 @@
         "At 1440x900 on the same URL: the card fills the 480px column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-22",
@@ -845,7 +845,7 @@
         "At 1440x900 on the same URL: the column is no wider than 480px, centered, and the page background covers the viewport."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-23",
@@ -864,7 +864,7 @@
         "At 1440x900 on the same URL: the button sits right-aligned in the header after the Preview link."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-24",
@@ -881,7 +881,7 @@
         "At 1440x900 on the same URL: the alert spans the block column (max 720px) and the preview stays visible."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-25",
@@ -897,7 +897,7 @@
         "Direct-API abuse: with mara's publishable-key JWT, PATCH `/rest/v1/pages` writing `published.tokens` directly is rejected, and applying or editing a theme never changes a live page by itself (there is no code path from a theme write to `published` or the page cache)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-26",
@@ -913,7 +913,7 @@
         "First publish: a handle that served the Milestone 1 placeholder switches to the real page on the first successful Publish. Direct-API abuse: a PostgREST write to `draft` does not change the live page, and a PostgREST write to `published` is rejected, so a client cannot alter or poison the cached page."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-27",
@@ -931,7 +931,7 @@
         "At 1440x900 on the same URL: the chip sits left of the Preview and Publish buttons."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-28",
@@ -949,7 +949,7 @@
         "At 1440x900 on the same URL: it is centered under the 480px column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-29",
@@ -965,7 +965,7 @@
         "At 1440x900 on the same URL: it is centered under the column."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-30",
@@ -981,7 +981,7 @@
         "The response carries a public `cache-control` for edge caching."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-31",
@@ -1000,7 +1000,7 @@
         "`pnpm verify` and `pnpm test:e2e` (390x844 and 1440x900 projects) pass."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M3-01",

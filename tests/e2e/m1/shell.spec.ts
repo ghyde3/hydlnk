@@ -35,6 +35,12 @@ const ROUTES = [
   },
 ] as const;
 
+/**
+ * The shell's own <main>. The editor's live preview renders a second <main> (the renderer's block
+ * list) inside it, so a bare "main" is ambiguous on /editor.
+ */
+const SHELL_MAIN = "body > div > main";
+
 const INK = "rgb(28, 27, 26)";
 const BRASS = "rgb(184, 145, 79)";
 const LINE = "rgb(226, 223, 217)";
@@ -215,7 +221,7 @@ test.describe("M1-16 app shell: desktop sidebar and screen frame", () => {
     await page.goto(url("app", "/editor"));
     await expectNoHorizontalScroll(page);
     const side = (await page.getByRole("complementary").boundingBox())!;
-    const main = (await page.locator("main").boundingBox())!;
+    const main = (await page.locator(SHELL_MAIN).boundingBox())!;
     expect(side.x).toBe(0);
     expect(main.x).toBe(240);
     expect(Math.round(main.x + main.width)).toBe(1440);
@@ -319,9 +325,9 @@ test.describe("M1-17 app shell: phone top bar and bottom tab bar", () => {
       "content",
       /viewport-fit=cover/,
     );
-    expect(parseFloat(await css(page.locator("main"), "padding-bottom"))).toBeGreaterThanOrEqual(
-      84,
-    );
+    expect(
+      parseFloat(await css(page.locator(SHELL_MAIN), "padding-bottom")),
+    ).toBeGreaterThanOrEqual(84);
 
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
@@ -478,7 +484,22 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     // Outside click closes the menu and returns focus to the button.
     await button.click();
     await expect(menu).toBeVisible();
-    await page.mouse.click(300, 600);
+    // Click somewhere inert: a fixed coordinate can land on a button or an input of the real editor
+    // (which then takes the focus), depending on the page's content and fonts. Scan below the menu
+    // and right of the sidebar for a point whose element is not interactive.
+    const inert = await page.evaluate(() => {
+      const interactive =
+        'a, button, input, textarea, select, label, summary, [tabindex], [role="menu"], [contenteditable]';
+      for (let y = 300; y < window.innerHeight - 8; y += 24) {
+        for (let x = 260; x < window.innerWidth - 8; x += 24) {
+          const el = document.elementFromPoint(x, y);
+          if (el && !el.closest(interactive)) return { x, y };
+        }
+      }
+      return null;
+    });
+    expect(inert, "an inert point to click").not.toBeNull();
+    await page.mouse.click(inert!.x, inert!.y);
     await expect(menu).toBeHidden();
     await expect(button).toBeFocused();
   });
@@ -491,7 +512,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     const secondHandle = `zq-cp2-${rand()}`;
     const secondId = await addPage(user.userId, secondHandle);
     await page.goto(url("app", "/editor"));
-    await expect(page.locator("main header p")).toHaveText(`${user.handle}.hydlnk.com / main`);
+    await expect(page.locator("main > header p")).toHaveText(`${user.handle}.hydlnk.com / main`);
 
     const button = switcher(page);
     await button.click();
@@ -500,7 +521,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
       "aria-label",
       `Switch page, current: ${secondHandle}.hydlnk.com`,
     );
-    await expect(page.locator("main header p")).toHaveText(`${secondHandle}.hydlnk.com / main`);
+    await expect(page.locator("main > header p")).toHaveText(`${secondHandle}.hydlnk.com / main`);
 
     const cookie = (await context.cookies(url("app"))).find((c) => c.name === "hl-page")!;
     expect(cookie.value).toBe(secondId);
@@ -720,14 +741,8 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
 });
 
 test.describe("M1-19 placeholder screens", () => {
+  // /editor is a real screen since Milestone 2; its own specs live in tests/e2e/m2.
   const SCREENS = [
-    {
-      path: "/editor",
-      title: "Editor — HYDLNK",
-      h1: "Main page",
-      crumb: (handle: string) => `${handle}.hydlnk.com / main`,
-      sentence: "Your profile and blocks will appear here.",
-    },
     {
       path: "/design",
       title: "Design — HYDLNK",
@@ -762,7 +777,7 @@ test.describe("M1-19 placeholder screens", () => {
       await page.goto(url("app", screen.path));
       await expect(page).toHaveTitle(screen.title);
       const crumb = page.locator("main > header p");
-      await expect(crumb).toHaveText(screen.crumb(user.handle));
+      await expect(crumb).toHaveText(screen.crumb());
       expect(await css(crumb, "font-size")).toBe("12px");
       expect(await css(crumb, "font-family")).toMatch(/Geist.?Mono/);
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
@@ -807,9 +822,9 @@ test.describe("M1-19 placeholder screens", () => {
         expect(box!.x).toBeGreaterThanOrEqual(16 - 0.5);
         expect(box!.x + box!.width).toBeLessThanOrEqual(390 - 16 + 0.5);
       }
-      expect(parseFloat(await css(page.locator("main"), "padding-bottom"))).toBeGreaterThanOrEqual(
-        84,
-      );
+      expect(
+        parseFloat(await css(page.locator(SHELL_MAIN), "padding-bottom")),
+      ).toBeGreaterThanOrEqual(84);
     }
   });
 

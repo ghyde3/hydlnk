@@ -11,7 +11,7 @@ select tests.create_supabase_user('other', 'other@example.test');      -- free, 
 
 insert into public.pages (owner_id, handle, draft) values
   (tests.get_supabase_uid('holder'), 'zq-holder-1',
-   '{"version":1,"profile":{"displayName":"H","bio":"","avatarUrl":null},"themeId":null,"tokens":{},"blocks":[]}');
+   '{"version":1,"rev":0,"profile":{"name":"H","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');
 
 -- ---------------------------------------------------------------------------
 -- A user with no page tries to claim one directly

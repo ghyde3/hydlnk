@@ -57,33 +57,51 @@ update public.accounts
   where id = '00000000-0000-4000-8000-0000000000a1';
 
 -- ---------------------------------------------------------------------------
--- Her page: handle "mara", Noir theme, every block type except image. The draft
--- and the published copy hold the same content, so the editor shows no
--- "Unpublished changes". The published copy also freezes Noir's resolved tokens.
+-- Her page: handle "mara", Noir theme, every block type. The draft is the page document
+-- (src/lib/document: version, rev, profile, theme, blocks). The published copy is its
+-- publish form: no rev, hidden blocks removed, and Noir's resolved tokens frozen in as
+-- `tokens`, so the editor shows "Published" with no unpublished changes.
+-- The image block is hidden and empty on purpose: seed.sql cannot upload a file to
+-- Storage, and Publish only needs the visible blocks to be complete.
 -- Hosts ending in .example never resolve, so the demo cannot link anywhere real.
+--
+-- Ids (blocks, social icons and grid cells share one id space):
+--   social  Sx4kT9pLq2Wa  icons Ig3xQ7mNa2Ks (instagram) Tk8vR1dLp5Wc (tiktok)
+--                               Yt6bH4zJe9Uo (youtube)   Em2cF5sYt7Dn (email)
+--   header  Hd7mN3cYb8Ue
+--   link    Bt5rJ1fGz6Os (fill override)   Qw8vC2nKd4Ly
+--   card    Lc6hP0yRe3Zi
+--   embed   Ym1gA5uVf7Tx
+--   grid    Jn9bE4sXo2Mq  cells Cp9kA3wMx1Qe (Prints) Cw5nT7hZr4Lb (Workshops)
+--   divider Vk3wD8tHa5Pr
+--   text    Ge2zU7qNc9Fl
+--   image   Im4gB6kWs8Xz  (hidden, not published)
 -- ---------------------------------------------------------------------------
 
 with doc as (
   select $json$
   {
     "version": 1,
+    "rev": 1,
     "profile": {
-      "displayName": "Mara Okafor",
+      "name": "Mara Okafor",
       "bio": "Portrait & studio photographer · Orlando, FL",
-      "avatarUrl": null
+      "photo": null
     },
-    "themeId": "00000000-0000-4000-8000-000000000001",
-    "tokens": {},
+    "theme": {
+      "ref": "00000000-0000-4000-8000-000000000001",
+      "overrides": {}
+    },
     "blocks": [
       {
         "id": "Sx4kT9pLq2Wa",
-        "type": "social_row",
+        "type": "social",
         "visible": true,
-        "links": [
-          { "platform": "instagram", "url": "https://instagram.com/maraokafor" },
-          { "platform": "tiktok", "url": "https://www.tiktok.com/@maraokafor" },
-          { "platform": "youtube", "url": "https://www.youtube.com/@maraokafor" },
-          { "platform": "email", "url": "mailto:hello@maraokafor.example" }
+        "icons": [
+          { "id": "Ig3xQ7mNa2Ks", "platform": "instagram", "url": "https://instagram.com/maraokafor" },
+          { "id": "Tk8vR1dLp5Wc", "platform": "tiktok", "url": "https://www.tiktok.com/@maraokafor" },
+          { "id": "Yt6bH4zJe9Uo", "platform": "youtube", "url": "https://www.youtube.com/@maraokafor" },
+          { "id": "Em2cF5sYt7Dn", "platform": "email", "address": "hello@maraokafor.example" }
         ]
       },
       {
@@ -94,7 +112,7 @@ with doc as (
       },
       {
         "id": "Bt5rJ1fGz6Os",
-        "type": "link_button",
+        "type": "link",
         "visible": true,
         "label": "Portrait sessions — fall dates",
         "url": "https://maraokafor.example/book/portraits",
@@ -102,33 +120,34 @@ with doc as (
       },
       {
         "id": "Qw8vC2nKd4Ly",
-        "type": "link_button",
+        "type": "link",
         "visible": true,
         "label": "Studio rental by the hour",
         "url": "https://maraokafor.example/studio"
       },
       {
         "id": "Lc6hP0yRe3Zi",
-        "type": "link_card",
+        "type": "card",
         "visible": true,
         "title": "Night Market",
-        "description": "New series — view the gallery",
-        "url": "https://maraokafor.example/series/night-market"
+        "caption": "View the gallery",
+        "url": "https://maraokafor.example/series/night-market",
+        "image": null
       },
       {
         "id": "Ym1gA5uVf7Tx",
         "type": "embed",
         "visible": true,
-        "provider": "youtube",
-        "url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+        "url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+        "caption": "Behind the lens, ep. 4"
       },
       {
         "id": "Jn9bE4sXo2Mq",
-        "type": "grid2",
+        "type": "grid",
         "visible": true,
-        "items": [
-          { "title": "Prints", "url": "https://maraokafor.example/prints" },
-          { "title": "Workshops", "url": "https://maraokafor.example/workshops" }
+        "cells": [
+          { "id": "Cp9kA3wMx1Qe", "title": "Prints", "subtitle": "Shop the archive", "url": "https://maraokafor.example/prints" },
+          { "id": "Cw5nT7hZr4Lb", "title": "Workshops", "subtitle": "Small groups", "url": "https://maraokafor.example/workshops" }
         ]
       },
       {
@@ -141,6 +160,14 @@ with doc as (
         "type": "text",
         "visible": true,
         "text": "Booking portrait sessions through November. The studio is open Tuesday to Saturday, by appointment."
+      },
+      {
+        "id": "Im4gB6kWs8Xz",
+        "type": "image",
+        "visible": false,
+        "image": null,
+        "alt": "The studio at golden hour",
+        "url": ""
       }
     ]
   }
@@ -152,9 +179,16 @@ select
   '00000000-0000-4000-8000-0000000000a1',
   'mara',
   doc.draft,
-  doc.draft || jsonb_build_object(
-    'resolvedTokens',
-    (select t.tokens from public.themes t where t.id = '00000000-0000-4000-8000-000000000001')
+  jsonb_build_object(
+    'version', doc.draft->'version',
+    'profile', doc.draft->'profile',
+    'theme', doc.draft->'theme',
+    'tokens', (select t.tokens from public.themes t where t.id = '00000000-0000-4000-8000-000000000001'),
+    'blocks', (
+      select coalesce(jsonb_agg(b.block order by b.ord), '[]'::jsonb)
+      from jsonb_array_elements(doc.draft->'blocks') with ordinality as b(block, ord)
+      where coalesce((b.block->>'visible')::boolean, true)
+    )
   ),
   now()
 from doc;

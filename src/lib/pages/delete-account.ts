@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/session";
+import { expireDeletedPages } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { CURRENT_PAGE_COOKIE, pickCurrentPage } from "./pick";
@@ -27,8 +28,11 @@ const ACCOUNT_DELETED_PATH = "/login?deleted=1";
  * deleting the pages frees their handles. auth.users deletion also drops the user's sessions and
  * refresh tokens, so every device is signed out.
  *
- * TODO(M2): invalidate the tenant page's cache tag (updateTag) here once published pages are
- * cached; today every request reads Postgres, so the page 404s immediately.
+ * Published pages are cached (M2-26), so once the user is gone each of their pages has its cache
+ * tag expired (`updateTag`, this is a Server Action) and each handle's cached 404 dropped (both in
+ * `expireDeletedPages`, the one place page tags are touched besides Publish): the deleted page stops being served at once instead of living on in the
+ * cache. This runs after the delete, not before: a request that regenerated the page between an
+ * early invalidation and the delete would put it straight back, with nothing left to expire it.
  * TODO(M4): remove Storage objects, cancel the Stripe subscription and detach custom domains
  * from Vercel before the user is deleted.
  */
@@ -60,6 +64,14 @@ export async function deleteAccount(
   if (deleteError) {
     console.error("[account] delete failed", deleteError.message);
     return { error: "We couldn’t delete your account. Try again in a moment." };
+  }
+
+  // The user is gone: expire what the cache holds for each of their pages. A failure here must not
+  // turn a completed deletion into an error message, so it is logged and the flow carries on.
+  try {
+    expireDeletedPages(pages);
+  } catch (error) {
+    console.error("[account] cache invalidation after delete failed", error);
   }
 
   // The user is gone; clear this device's session cookies (a revoke call for a deleted user may

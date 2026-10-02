@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A sign-in method was removed from your HYDLNK account</title>
+  </head>
+  <body style="margin:0;padding:0;background:#F4F3F0;">
+    <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#F4F3F0;opacity:0;">A sign-in method was removed from your HYDLNK account.</div>
+    <div style="background:#F4F3F0;padding:24px 16px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:520px;margin:0 auto;background:#FFFFFF;border:1px solid #E2DFD9;border-radius:6px;">
+        <tr>
+          <td style="padding:20px 28px;background:#1C1B1A;border-radius:6px 6px 0 0;font-family:'Public Sans',Helvetica,Arial,sans-serif;font-size:15px;line-height:20px;font-weight:700;letter-spacing:2px;color:#F4F3F0;">
+            <span aria-hidden="true" style="color:#B8914F;">&#9670;</span>&nbsp; HYDLNK
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 28px 8px 28px;font-family:'Public Sans',Helvetica,Arial,sans-serif;color:#1C1B1A;">
+            <h1 style="margin:0;font-size:24px;line-height:30px;font-weight:700;color:#1C1B1A;">A sign-in method was removed</h1>
+            <p style="margin:12px 0 0 0;font-size:16px;line-height:24px;color:#5E5A54;">
+              Your {{ .Provider }} account was removed as a sign-in method for <span style="font-family:'Geist Mono',Menlo,Consolas,monospace;font-size:14px;color:#1C1B1A;word-break:break-all;">{{ .Email }}</span>.
+            </p>
+            <p style="margin:12px 0 0 0;font-size:16px;line-height:24px;color:#5E5A54;">
+              If this wasn’t you, sign in and check your account.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 28px 8px 28px;">
+            <a href="{{ .SiteURL }}/login" style="display:inline-block;min-height:48px;padding:14px 28px;box-sizing:border-box;background:#1C1B1A;border-radius:6px;font-family:'Public Sans',Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;">Check your account</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px 32px 28px;font-family:'Public Sans',Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#5E5A54;">
+            If this was you, ignore this email.
+          </td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,5 @@
+# These are hand-authored email templates: inline styles, exact whitespace and the literal </a> are
+# load-bearing (email clients, tests/e2e/m1/auth-login.spec.ts). Prettier reflows them (lowercases the
+# colours, escapes the font quotes, splits the anchor), so only format a file that opts in with an
+# @format pragma. Move this to a `supabase/templates/` line in the root .prettierignore when convenient.
+requirePragma: true

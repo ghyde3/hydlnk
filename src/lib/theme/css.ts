@@ -12,7 +12,7 @@ export function tokenCssVarName(key: TokenKey): string {
 
 /**
  * Value for a CSS string literal, with hex escapes for the characters that could end the string
- * or the surrounding `<style>` element. Belt and braces: `safeUrlSchema` already refuses them.
+ * or the surrounding `<style>` element. Belt and braces: `httpUrl` already refuses them.
  */
 function cssString(value: string): string {
   const escaped = value.replace(

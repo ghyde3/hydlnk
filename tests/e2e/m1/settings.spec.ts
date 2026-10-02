@@ -290,7 +290,8 @@ test.describe("M1-22 delete account", () => {
     await page.goto(url("app", "/editor"));
     await expect(page).toHaveURL(url("app", "/login"));
 
-    // The published page is gone right away (nothing caches it yet), before anyone re-claims the handle.
+    // The published page is gone right away (the dev server caches nothing; the production cache is
+    // expired by the delete itself, see tests/e2e/m2/publish-cache.spec.ts), before the handle is re-claimed.
     expect((await tenant.goto(url(user.handle)))!.status()).toBe(404);
 
     // Data is gone.

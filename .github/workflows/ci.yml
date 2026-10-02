@@ -97,13 +97,17 @@ jobs:
           secret="$(sed -n 's/^SUPABASE_SECRET_KEY="\(.*\)"$/\1/p' .env.local)"
           if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
 
-      # The one Vitest file that needs the running stack (M1-05, ensureAccount against the real
-      # database) is skipped by the unit step above. REQUIRE_SUPABASE=1 makes a missing stack fail
-      # here instead of skipping.
+      # The Vitest files that need the running stack (M1-05 ensureAccount, M2-23/M2-25 the publish
+      # gate, and the seeded mara rows, all against the real database) are skipped by the unit step
+      # above. REQUIRE_SUPABASE=1 makes a missing stack fail here instead of skipping.
       - name: Integration tests (Vitest against local Supabase)
         env:
           REQUIRE_SUPABASE: "1"
-        run: pnpm exec vitest run tests/unit/auth-ensure-account.test.ts
+        run: >-
+          pnpm exec vitest run
+          tests/unit/auth-ensure-account.test.ts
+          tests/unit/publish-core.test.ts
+          tests/unit/document-seed.test.ts
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -111,6 +115,24 @@ jobs:
       # Both projects (390 and 1440). playwright.config.ts starts `pnpm dev` as the webServer.
       - name: End-to-end tests
         run: pnpm test:e2e
+
+      # M2-26 needs a production build: x-nextjs-cache only exists there. The root domain is baked
+      # into the build, so the port in it is the server's port; the dev server that Playwright starts
+      # on :3000 (no such variables) is only used to sign users in. See the header of the spec.
+      - name: Production build and cache checks (M2-26)
+        run: |
+          mkdir -p tmp
+          NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build
+          # The client bundle holds no secret key (M2-22): skipped by the unit step, which has no build.
+          pnpm exec vitest run tests/unit/publish-bundle.test.ts
+          NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm start -p 3100 > tmp/start-3100.log 2>&1 &
+          prod_pid=$!
+          trap 'kill "$prod_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 60); do
+            if curl -s -o /dev/null --max-time 5 http://localhost:3100/; then break; fi
+            sleep 1
+          done
+          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts
 
       # The screens script needs a running dev server; Playwright stopped its own after the tests.
       # Runs only when the e2e tests passed. Fills the "screens" artifact below.

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { pageDocumentSchema, type PageDocument } from "@/lib/schemas";
+import { emptyDraft } from "@/lib/document";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { normalizeHandle, validateHandle } from "./rules";
 
@@ -22,17 +22,6 @@ export type ClaimError =
 
 export type ClaimResult =
   { ok: true; handle: string; pageId: string } | { ok: false; error: ClaimError };
-
-/** The first draft of every new page: empty, no token overrides, no theme. */
-export function emptyPageDraft(handle: string): PageDocument {
-  return pageDocumentSchema.parse({
-    version: 1,
-    profile: { displayName: handle, bio: "", avatarUrl: null },
-    themeId: null,
-    tokens: {},
-    blocks: [],
-  });
-}
 
 /**
  * Inserts the account's first page. `userId` MUST come from a verified session (getClaims), never
@@ -61,7 +50,7 @@ export async function claimHandleWithClient(
 
   const { data, error } = await admin
     .from("pages")
-    .insert({ owner_id: userId, handle, draft: emptyPageDraft(handle) as unknown as Json })
+    .insert({ owner_id: userId, handle, draft: emptyDraft(handle) as unknown as Json })
     .select("id, handle")
     .single();
 
