@@ -125,9 +125,15 @@ test.describe("M2-14 drag handles", () => {
     const user = await fiveBlocks(context, "rd3");
     await openEditor(page);
     const h = handle(page, FIVE[0]!);
-    await h.focus();
-    await page.keyboard.press("Space");
-    await expect(liveRegion(page)).toContainText("Picked up One");
+    // The lift can be lost when the page has only just hydrated: press again until it is announced
+    // (never once it has been, a second Space would drop the block).
+    await expect(async () => {
+      if (!(await liveRegion(page).innerText()).includes("Picked up One")) {
+        await h.focus();
+        await page.keyboard.press("Space");
+      }
+      await expect(liveRegion(page)).toContainText("Picked up One", { timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
     // dnd-kit starts listening for the arrow keys a tick after the lift (and re-measures the list
     // after each move), so under load a key pressed at once can be lost: press again until the move
     // is announced, but never once the announcement is there.
