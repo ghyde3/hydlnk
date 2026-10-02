@@ -114,9 +114,9 @@ Each ends in something you can click. The gate to opening signup is running Gary
 
 ## Monetization
 
-Design control is free; pay starts where HYDLNK carries real cost or the user is clearly a business. No commerce fees, ever. Prices are placeholders until final.
+Design control is free; pay starts where HYDLNK carries real cost or the user is clearly a business. No commerce fees, ever. Prices are final (Gary, 2026-10-02) and live in `scripts/stripe/catalog.json`; the yearly plans are shown to customers as $5/mo and $15/mo, billed yearly.
 
-| | Free | Pro, ~$5/mo ($48/yr) | Studio, ~$15/mo |
+| | Free | Pro, $9/mo or $60/yr | Studio, $20/mo or $180/yr |
 | --- | --- | --- | --- |
 | Pages | 1 | 3 | 15 |
 | Blocks and design tokens | All | All | All |
@@ -128,7 +128,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 | Scheduled links (not in v1) | — | Later | Later |
 | Team access | — | — | Invite editors per page |
 
-- **Billing.** Stripe Checkout for upgrades, one webhook (`/api/stripe/webhook` on `app.hydlnk.com`) that writes `plan` to `accounts`, Stripe's hosted customer portal behind "Manage billing". No billing UI to build. Stripe stays in the HYDLNK sandbox while Vercel is on Hobby (no commercial use); switch to live with the move to Pro.
+- **Billing.** Stripe Checkout for upgrades, one webhook (`/api/stripe/webhook` on `app.hydlnk.com`) that writes `plan` to `accounts`, Stripe's hosted customer portal behind "Manage billing". No billing UI to build. Stripe stays in the HYDLNK sandbox while Vercel is on Hobby (no commercial use); switch to live with the move to Pro, following `docs/stripe-go-live.md`.
 - **Limits** are enforced server-side on write (page count, domain count, upload bytes), never only hidden in the UI.
 
 ## Bandwidth and cost control
@@ -150,6 +150,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Free plan is free forever, capped at 1 page; Pro 3, Studio 15.
 - Custom domains start at Pro.
 - Billing through Stripe Checkout and Stripe's hosted customer portal.
+- Prices: Pro $9/mo or $60/yr, Studio $20/mo or $180/yr (shown as $5/mo and $15/mo billed yearly).
 - Tenant pages are subdomains only (`handle.hydlnk.com`); a `hydlnk.com/handle` redirect can come later.
 - While testing: Vercel Hobby, a free Supabase project in its own "HYDLNK" org (connected to Vercel through the Supabase integration), Stripe HYDLNK sandbox. Move to Vercel Pro and Stripe live before taking real payments.
 - Sign-in lives on `app.hydlnk.com` only; the auth callback is `/auth/callback`.
@@ -160,7 +161,6 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 
 ## Open
 
-- Final prices for Pro and Studio.
 - Auth email provider. Supabase's built-in email only reaches the team's own addresses (about 2 per hour), which is fine while Gary is the only user. Custom SMTP (Resend recommended) must be in place before signup opens.
 - Rate-limit mechanism for `/api/e` and `/r` (Vercel Firewall, Redis, or Postgres); decide in Milestone 5.
 - Custom domain for Supabase Auth (a paid Supabase add-on). Until then, sign-in emails and Google's consent screen show the `supabase.co` address.
