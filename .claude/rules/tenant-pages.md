@@ -17,13 +17,13 @@ Tenant pages are a separate design system from the HYDLNK UI. Tenant content is 
 
 **Published only**
 - A public page renders `published` and nothing else, through a server-only query with the secret key (`createAdminSupabase`, `import "server-only"`). Never read `draft` on a public path. There is no public select on `pages`.
-- Render the frozen `published.resolvedTokens`. Do not re-resolve against the live theme row, so editing a theme never changes a live page until it is republished.
+- Render the frozen `published.tokens` (the fully resolved token set `toPublishForm` wrote at Publish). Do not re-resolve against the live theme row, so editing a theme never changes a live page until it is republished.
 - Pages are static and cached with a per-page cache tag. Publish invalidates it with `updateTag`.
 
 **Untrusted content**
-- URLs must pass `safeUrlSchema` (http/https only; `mailto:` only for the social_row email platform). Re-check at render time too.
+- URLs must pass `httpUrl` from `@/lib/document` (http/https only); the social email icon stores an address validated by `emailAddress` and the renderer builds `mailto:` with `mailtoHref`. Anchors get their href from `safeHref` (never a raw tenant string); parse `published` with `publishedDocSchema`.
 - Render all text as React text. Never `dangerouslySetInnerHTML`, never a tenant string in an `href` without validation.
-- Embeds only from the allowlist (YouTube, Spotify). Build the iframe `src` from the parsed id, not from the raw URL.
+- Embeds only from the allowlist (YouTube, Spotify). Build the iframe `src` from `parseEmbed(url).src` (rebuilt from the parsed id), never from the raw URL.
 - Fonts only from `FONT_ALLOWLIST`. Background and image URLs are validated and escaped before use in CSS.
 - Outbound links go through `/r/[pageId]/[blockId]` and carry `rel="noopener noreferrer"`.
 - Tenant pages never read or set cookies and never import editor code from `src/app/(editor)/**`.
