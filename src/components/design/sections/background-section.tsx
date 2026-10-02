@@ -7,10 +7,11 @@ import {
   MAX_UPLOAD_BYTES,
   NOT_AN_IMAGE_MESSAGE,
   TOO_BIG_MESSAGE,
-  quotaMessageFromText,
 } from "@/components/editor/image-upload-control";
 import { imageRefSchema, type ImageRef } from "@/lib/document";
 import { sniffImageType } from "@/lib/editor/sniff";
+import { UPLOAD_FAILED_MESSAGE, uploadErrorMessage } from "@/lib/media/messages";
+import { prepareImageForUpload } from "@/lib/media/upload-client";
 import { mediaUrl } from "@/lib/media/url";
 import { tokenSetSchema } from "@/lib/theme";
 import { OptionButton, OptionGroup } from "./shape-section";
@@ -25,19 +26,19 @@ import { OptionButton, OptionGroup } from "./shape-section";
  * page still uses stays in Storage, so the live page cannot break before the next Publish.
  */
 
-const UNUSABLE_MESSAGE = "That image can’t be used. Choose a smaller or different one.";
-const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to upload.";
-const FAILED_MESSAGE = "Couldn’t upload that image. Try again.";
+const FAILED_MESSAGE = UPLOAD_FAILED_MESSAGE;
 
 /** The widest blur the token allows (the slider follows the schema, so the two cannot disagree). */
 const BLUR_MAX = tokenSetSchema.shape.blur.maxValue ?? 20;
 
-function messageForStatus(status: number): string {
-  if (status === 413) return TOO_BIG_MESSAGE;
-  if (status === 415) return NOT_AN_IMAGE_MESSAGE;
-  if (status === 422) return UNUSABLE_MESSAGE;
-  if (status === 401) return SIGNED_OUT_MESSAGE;
-  return FAILED_MESSAGE;
+/** The route's JSON error body, or null when the text is not that JSON (a gateway page). */
+function parseBody(text: string): { message?: unknown } | null {
+  try {
+    const body: unknown = JSON.parse(text);
+    return typeof body === "object" && body !== null ? (body as { message?: unknown }) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Posts one image to the upload route, reporting how much of it has been sent (0 to 100). */
@@ -56,9 +57,9 @@ function postBackground(file: File, onProgress: (percent: number) => void): Prom
     request.onerror = () => reject(new Error(FAILED_MESSAGE));
     request.onload = () => {
       if (request.status < 200 || request.status >= 300) {
-        // Over the plan's total (M4-31): the route's own sentence says which plan and what to do.
-        const quota = request.status === 413 ? quotaMessageFromText(request.responseText) : null;
-        reject(new Error(quota ?? messageForStatus(request.status)));
+        // The route's own sentence (M5-13): what is wrong with the image, or which plan's total
+        // is full and what to do (M4-31).
+        reject(new Error(uploadErrorMessage(request.status, parseBody(request.responseText))));
         return;
       }
       let json: unknown;
@@ -108,18 +109,20 @@ export function BackgroundSection({ resolved, setToken }: DesignSectionProps) {
       ? "gradient"
       : "solid";
 
-  async function upload(file: File): Promise<void> {
+  async function upload(picked: File): Promise<void> {
     setError(null);
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(TOO_BIG_MESSAGE);
-      return;
-    }
-    if ((await sniffImageType(file)) === null) {
+    if ((await sniffImageType(picked)) === null) {
       setError(NOT_AN_IMAGE_MESSAGE);
       return;
     }
     setProgress(0);
     try {
+      // A big photo is redrawn at most 2400px on its longest edge before it is sent (M5-11/M5-12).
+      const file = await prepareImageForUpload(picked);
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError(TOO_BIG_MESSAGE);
+        return;
+      }
       const image = await postBackground(file, setProgress);
       // The URL is rebuilt from the stored path, so what the draft holds is always the bucket's.
       setTokenRef.current("bgImage", mediaUrl(image.path));

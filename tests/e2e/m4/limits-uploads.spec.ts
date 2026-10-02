@@ -12,6 +12,7 @@ import { authCookies, cookieHeader } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { openEditor } from "../m2/editor-helpers";
 import { openDesign } from "../m3/design-helpers";
+import { makePngImage } from "../m5/images-fixtures";
 import {
   SERVER_PORT,
   makePng,
@@ -107,47 +108,90 @@ const quotaRefusal = (res: RawBufferResponse, message = FREE_MESSAGE) => {
   expect(JSON.parse(res.text)).toEqual({ error: "upload_quota", message });
 };
 
+/**
+ * M5-11: the route stores the WebP it makes of an upload, and the cap counts those stored bytes. A
+ * photographic PNG (about 3 MB on the wire, a few hundred KB stored) is the upload the cap tests use;
+ * what it costs once converted is learned on a throwaway account, so the boundaries are exact.
+ */
+const noisy = (width: number, height: number) => makePngImage({ width, height, noise: true });
+
+async function storedSizeOf(
+  browser: import("@playwright/test").Browser,
+  image: Buffer,
+): Promise<number> {
+  const context = await browser.newContext();
+  const probe = await signedInUser(context, { label: "uqp" });
+  const cookie = cookieHeader(await authCookies(context));
+  accepted(await postImage(cookie, image));
+  const size = await usedBytes(probe.userId);
+  await context.close();
+  return size;
+}
+
+function postImage(
+  cookie: string | undefined,
+  data: Buffer,
+  opts: Parts & { origin?: string } = {},
+): Promise<RawBufferResponse> {
+  const { body, contentType } = multipart([
+    { name: "file", file: { filename: "p.png", contentType: "image/png", data } },
+    ...(opts.kind ? [{ name: "kind", value: opts.kind }] : []),
+    ...Object.entries(opts.extra ?? {}).map(([name, value]) => ({ name, value })),
+  ]);
+  return rawBuffer(APP_HOST, "/api/media", {
+    method: "POST",
+    cookie,
+    headers: { "content-type": contentType, ...(opts.origin ? { origin: opts.origin } : {}) },
+    body,
+  });
+}
+
 test.describe("M4-31 the upload route enforces the plan's total", () => {
-  test("M4-31 Free with 9 MiB used: 2 MiB gets 413 upload_quota and stores nothing, exactly 1 MiB fits, the next bytes do not, freed bytes lower the total", async ({
+  test("M4-31 Free near the cap: an upload that converts to more than the room left gets 413 upload_quota and stores nothing, exactly the room left fits, the next bytes do not, freed bytes lower the total", async ({
     context,
+    browser,
   }, info) => {
     test.skip(!desktopOnly(info), "not viewport dependent");
+    const photo = await noisy(1200, 800);
+    const other = await noisy(1100, 800);
+    const size = await storedSizeOf(browser, photo);
     const user = await signedInUser(context, { label: "uq" });
     const cookie = cookieHeader(await authCookies(context));
-    const seeded = await seed(user.userId, 9 * MIB);
+    const seeded = await seed(user.userId, 10 * MIB - size + 1); // one byte too little room
     const namesBefore = await objectNames(user.userId);
 
     // Over the cap: refused with the plan's sentence, nothing stored, whatever kind of image it is.
-    quotaRefusal(await post(cookie, 2 * MIB));
-    quotaRefusal(await post(cookie, 2 * MIB, { kind: "background" }));
-    quotaRefusal(await post(cookie, 2 * MIB, { kind: "avatar" }));
+    quotaRefusal(await postImage(cookie, photo));
+    quotaRefusal(await postImage(cookie, photo, { kind: "background" }));
     expect(await objectNames(user.userId)).toEqual(namesBefore);
-    expect(await usedBytes(user.userId)).toBe(9 * MIB);
+    expect(await usedBytes(user.userId)).toBe(10 * MIB - size + 1);
 
     // The plan is read from accounts.plan: a form field cannot raise it.
     quotaRefusal(
-      await post(cookie, 2 * MIB, { extra: { plan: "studio", cap: "999999999", owner: "x" } }),
+      await postImage(cookie, photo, { extra: { plan: "studio", cap: "999999999", owner: "x" } }),
     );
-    expect(await usedBytes(user.userId)).toBe(9 * MIB);
+    expect(await usedBytes(user.userId)).toBe(10 * MIB - size + 1);
 
-    // Exactly at the cap is allowed; one more byte is not.
-    const exact = accepted(await post(cookie, 1 * MIB));
+    // Exactly at the cap is allowed; anything more is not.
+    await adminClient().storage.from(BUCKET).remove(seeded);
+    const exactSeed = await seed(user.userId, 10 * MIB - size);
+    const exact = accepted(await postImage(cookie, photo));
     expect(exact).toMatch(new RegExp(`^${user.userId}/`));
     expect(await usedBytes(user.userId)).toBe(10 * MIB);
-    quotaRefusal(await post(cookie, 200));
+    quotaRefusal(await postImage(cookie, other));
     expect(await usedBytes(user.userId)).toBe(10 * MIB);
 
     // Accounting follows the bucket: deleting an object frees its bytes at once.
-    const { error } = await adminClient().storage.from(BUCKET).remove(seeded);
+    const { error } = await adminClient().storage.from(BUCKET).remove(exactSeed);
     expect(error).toBeNull();
-    expect(await usedBytes(user.userId)).toBe(1 * MIB);
-    accepted(await post(cookie, 2 * MIB));
+    expect(await usedBytes(user.userId)).toBe(size);
+    accepted(await postImage(cookie, other));
 
     // And the plan is read server-side: the same account on Pro has a 100 MiB cap.
-    await seed(user.userId, 6 * MIB);
-    quotaRefusal(await post(cookie, 3 * MIB));
+    await seed(user.userId, 9 * MIB);
+    quotaRefusal(await postImage(cookie, await noisy(1000, 800)));
     await setPlan(user.userId, "pro");
-    accepted(await post(cookie, 3 * MIB));
+    accepted(await postImage(cookie, await noisy(1000, 800)));
   });
 
   test("M4-31 a missing session is 401, a cross-origin request is 403, a suspended account is 403: nothing is stored", async ({
@@ -176,15 +220,20 @@ test.describe("M4-31 the upload route enforces the plan's total", () => {
 
   test("M4-31 two simultaneous uploads that together exceed the cap: at most one is accepted", async ({
     context,
+    browser,
   }, info) => {
     test.skip(!desktopOnly(info), "not viewport dependent");
+    const a = await noisy(1200, 800);
+    const b = await noisy(1150, 800);
+    const sizeA = await storedSizeOf(browser, a);
+    const sizeB = await storedSizeOf(browser, b);
+    const room = Math.max(sizeA, sizeB); // either alone fits, both together do not
+    expect(sizeA + sizeB).toBeGreaterThan(room);
     const user = await signedInUser(context, { label: "uc" });
     const cookie = cookieHeader(await authCookies(context));
-    await seed(user.userId, 9 * MIB);
+    await seed(user.userId, 10 * MIB - room);
 
-    // 9 MiB + 0.6 MiB + 0.6 MiB is over 10 MiB; either alone fits.
-    const size = Math.floor(0.6 * MIB);
-    const results = await Promise.all([post(cookie, size), post(cookie, size)]);
+    const results = await Promise.all([postImage(cookie, a), postImage(cookie, b)]);
     const ok = results.filter((r) => r.status === 200);
     const refused = results.filter((r) => r.status === 413);
     for (const r of ok) accepted(r);
@@ -238,7 +287,7 @@ test.describe("M4-31 the editor shows the refusal inline", () => {
     page,
   }) => {
     const user = await signedInUser(context, { label: "ue" });
-    await seed(user.userId, 9 * MIB + 512 * 1024);
+    await seed(user.userId, 10 * MIB - 10);
     await openEditor(page);
 
     const before = (
@@ -261,7 +310,7 @@ test.describe("M4-31 the editor shows the refusal inline", () => {
     await expectTapTargets(page, "main");
 
     // Nothing was stored and the draft's photo is unchanged.
-    expect(await usedBytes(user.userId)).toBe(9 * MIB + 512 * 1024);
+    expect(await usedBytes(user.userId)).toBe(10 * MIB - 10);
     const after = (await adminClient().from("pages").select("draft").eq("id", user.pageId).single())
       .data!.draft as { profile: { photo: unknown } };
     expect(after.profile.photo).toEqual(before.profile.photo);
@@ -274,7 +323,7 @@ test.describe("M4-31 the editor shows the refusal inline", () => {
     page,
   }) => {
     const user = await signedInUser(context, { label: "um" });
-    const seeded = await seed(user.userId, 9 * MIB + 512 * 1024);
+    const seeded = await seed(user.userId, 10 * MIB - 10);
     await openEditor(page);
     await page
       .locator('input[type="file"]')
@@ -305,7 +354,7 @@ test.describe("M4-31 the editor shows the refusal inline", () => {
     page,
   }) => {
     const user = await signedInUser(context, { label: "ud" });
-    await seed(user.userId, 9 * MIB + 512 * 1024);
+    await seed(user.userId, 10 * MIB - 10);
     await openDesign(page);
 
     await page.getByTestId("background-file").setInputFiles({
@@ -317,7 +366,7 @@ test.describe("M4-31 the editor shows the refusal inline", () => {
     const alert = page.getByRole("alert").filter({ hasText: FREE_MESSAGE });
     await expect(alert).toBeVisible({ timeout: 30_000 });
     await expectNoHorizontalScroll(page);
-    expect(await usedBytes(user.userId)).toBe(9 * MIB + 512 * 1024);
+    expect(await usedBytes(user.userId)).toBe(10 * MIB - 10);
     const draft = (await adminClient().from("pages").select("draft").eq("id", user.pageId).single())
       .data!.draft as { theme: { overrides: Record<string, unknown> } };
     expect(draft.theme.overrides.bgImage).toBeUndefined();

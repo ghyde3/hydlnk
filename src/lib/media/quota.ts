@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toPlanId } from "@/lib/limits";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { cleanupMediaFor } from "./cleanup-admin";
 import { MEDIA_BUCKET } from "./limits";
 import type { UploadQuota } from "./upload";
 
@@ -11,6 +12,8 @@ import type { UploadQuota } from "./upload";
  * actually in the `page-media` bucket under `{uid}/`. `userId` must be the verified session user.
  *
  * A database error throws: the route answers 500 and nothing is stored, so the cap never fails open.
+ * `reclaim` runs the M5-14 cleanup for the account, so bytes held by images that nothing uses any
+ * more are freed before an upload is refused for lack of room.
  */
 export function adminUploadQuota(
   userId: string,
@@ -34,6 +37,11 @@ export function adminUploadQuota(
     async discard(path) {
       const { error } = await admin.storage.from(MEDIA_BUCKET).remove([path]);
       if (error) throw new Error(`Removing ${path} failed: ${error.message}`);
+    },
+    // M5-14: an upload that would not fit first lets go of what the account replaced or removed
+    // (and nothing it still uses), then the total is read again.
+    async reclaim() {
+      await cleanupMediaFor(userId, admin);
     },
   };
 }

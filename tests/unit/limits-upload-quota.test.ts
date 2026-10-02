@@ -1,6 +1,7 @@
+import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PlanId } from "@/lib/limits";
-import { makePng, multipart, padTo, type Part } from "../e2e/m2/publish-helpers";
+import { makePng, multipart, type Part } from "../e2e/m2/publish-helpers";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({
@@ -75,10 +76,23 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
+/**
+ * M5-11: the route stores the pipeline's WebP, not the upload. These tests pin the cap's arithmetic,
+ * so the pipeline is replaced by one that stores exactly the bytes it is given, and every request
+ * carries random bytes so no two uploads share a content-hash name. How the real pipeline's output
+ * is counted is tests/unit/media-quota.test.ts.
+ */
+const identity = async (input: Uint8Array) => ({ bytes: input, width: 8, height: 8 });
+
 function request(size: number): Request {
+  const png = makePng(8, 8);
   const file: Part = {
     name: "file",
-    file: { filename: "p.png", contentType: "image/png", data: padTo(makePng(8, 8), size) },
+    file: {
+      filename: "p.png",
+      contentType: "image/png",
+      data: Buffer.concat([png, randomBytes(Math.max(0, Math.floor(size) - png.length))]),
+    },
   };
   const { body, contentType } = multipart([file]);
   return new Request("http://app.localhost:3000/api/media", {
@@ -89,7 +103,7 @@ function request(size: number): Request {
 }
 
 const upload = (size: number, uid = UID, b = bucket) =>
-  processUpload(request(size), uid, b.storage, b.quota);
+  processUpload(request(size), uid, b.storage, b.quota, { transform: identity });
 
 describe("M4-31 the plan's cap, exact at the limit", () => {
   it("M4-31 Free with 9 MiB used: 2 MiB gets 413 upload_quota and stores nothing", async () => {
@@ -171,7 +185,9 @@ describe("M4-31 the cap fails closed", () => {
 
   it("M4-31 without a quota nothing is enforced (the route always passes one)", async () => {
     bucket.seed(50 * MIB);
-    const result = await processUpload(request(100), UID, bucket.storage);
+    const result = await processUpload(request(100), UID, bucket.storage, undefined, {
+      transform: identity,
+    });
     expect(result.ok).toBe(true);
   });
 });

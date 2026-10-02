@@ -107,6 +107,7 @@ function CardView({ block, ctx }: { block: CardBlock; ctx: BlockContext }) {
             width={image.width}
             height={image.height}
             loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
           />
         ) : null}
@@ -164,6 +165,7 @@ function ImageView({ block, ctx }: { block: ImageBlock; ctx: BlockContext }) {
       width={image.width}
       height={image.height}
       loading="lazy"
+      decoding="async"
       referrerPolicy="no-referrer"
     />
   );

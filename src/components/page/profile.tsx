@@ -21,6 +21,7 @@ export function Profile({ profile }: { profile: PublishDoc["profile"] }) {
             alt={name}
             width={96}
             height={96}
+            decoding="async"
             referrerPolicy="no-referrer"
           />
         ) : (

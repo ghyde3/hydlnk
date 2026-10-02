@@ -13,6 +13,7 @@ import {
   tenantGet,
   type Part,
 } from "../m2/publish-helpers";
+import { makeJpeg } from "../m5/images-fixtures";
 import { setOverrides } from "./design-helpers";
 
 /**
@@ -43,13 +44,18 @@ test.afterAll(async () => {
 
 const publicUrl = (path: string) => `${supabaseUrl()}/storage/v1/object/public/${BUCKET}/${path}`;
 
-const jpegPart = (seed = 0, name = "bg.jpg"): Part => ({
+const jpegPart = async (seed = 0, name = "bg.jpg"): Promise<Part> => ({
   name: "file",
   file: {
     filename: name,
     contentType: "image/jpeg",
-    // Different bytes every call, so two uploads are never the same file.
-    data: padTo(makeJpegHeader(1600 + seed, 900), 4096 + seed),
+    // A real 1600x900 JPEG (the route decodes it, M5-12); a different colour every call, so two
+    // uploads are never the same file and never share a content-hash name.
+    data: await makeJpeg({
+      width: 1600,
+      height: 900,
+      color: [(seed * 53 + 30) % 256, (seed * 97 + 60) % 256, (seed * 29 + 120) % 256],
+    }),
   },
 });
 
@@ -93,13 +99,16 @@ test.describe("M3-15 the background upload route", () => {
 
     const other = "00000000-0000-4000-8000-0000000000a1";
     const first = await upload(user.cookie, [
-      jpegPart(1),
+      await jpegPart(1),
       { name: "kind", value: "background" },
       // An owner, folder or path in the form is ignored: the folder is always the session user.
       { name: "owner_id", value: other },
       { name: "path", value: `${other}/stolen.jpg` },
     ]);
-    const second = await upload(user.cookie, [jpegPart(2), { name: "kind", value: "background" }]);
+    const second = await upload(user.cookie, [
+      await jpegPart(2),
+      { name: "kind", value: "background" },
+    ]);
     expect(first.status, first.text).toBe(200);
     expect(second.status, second.text).toBe(200);
     const one = JSON.parse(first.text) as { path: string; url: string };
@@ -107,7 +116,8 @@ test.describe("M3-15 the background upload route", () => {
     stored.push(one.path, two.path);
 
     for (const body of [one, two]) {
-      expect(body.path).toMatch(new RegExp(`^${user.userId}/[0-9a-f-]{36}\\.jpg$`));
+      // M5-12: a background is re-encoded as WebP and named by its content hash.
+      expect(body.path).toMatch(new RegExp(`^${user.userId}/bg-[0-9a-f]{32}\\.webp$`));
       expect(body.url).toBe(publicUrl(body.path));
       expect((await fetch(body.url)).status).toBe(200);
     }
@@ -116,7 +126,10 @@ test.describe("M3-15 the background upload route", () => {
     expect(await objectNames(other)).not.toContain("stolen.jpg");
 
     // No session: refused, nothing stored.
-    const anonymous = await upload(undefined, [jpegPart(3), { name: "kind", value: "background" }]);
+    const anonymous = await upload(undefined, [
+      await jpegPart(3),
+      { name: "kind", value: "background" },
+    ]);
     expect(anonymous.status).toBe(401);
     expect(await objectNames(user.userId)).toHaveLength(before.length + 2);
     await context.close();
@@ -135,7 +148,7 @@ test.describe("M3-15 a published background cannot be swapped or removed through
     const tokenB = await accessTokenFor(b.email);
 
     // B's background, as the route stores it.
-    const res = await upload(b.cookie, [jpegPart(5), { name: "kind", value: "background" }]);
+    const res = await upload(b.cookie, [await jpegPart(5), { name: "kind", value: "background" }]);
     expect(res.status, res.text).toBe(200);
     const bPath = (JSON.parse(res.text) as { path: string }).path;
     stored.push(bPath);
@@ -251,7 +264,7 @@ test.describe("M3-15 the publish gate on the background image", () => {
     const user = await seededUser(context, "gb");
     const other = await signedIn(await browser.newContext(), "go");
     const foreign = await upload(other.cookie, [
-      jpegPart(7),
+      await jpegPart(7),
       { name: "kind", value: "background" },
     ]);
     expect(foreign.status, foreign.text).toBe(200);

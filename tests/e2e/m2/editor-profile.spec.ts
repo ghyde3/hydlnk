@@ -15,7 +15,8 @@ import {
   saveIndicator,
   seededUser,
 } from "./editor-helpers";
-import { makeJpegHeader, makePng, padTo } from "./editor-images";
+import { makeJpeg } from "../m5/images-fixtures";
+import { makePng } from "./editor-images";
 
 /** M2-07 (display name and bio) and M2-09 (profile photo upload, replace, remove). */
 
@@ -255,7 +256,7 @@ test.describe("M2-09 profile photo", () => {
     await fileInput(page).setInputFiles({
       name: "first.jpg",
       mimeType: "image/jpeg",
-      buffer: makeJpegHeader(400, 400),
+      buffer: await makeJpeg({ width: 400, height: 400 }),
     });
     const busy = card(page).getByRole("button", { name: "Uploading..." });
     await expect(busy).toBeVisible();
@@ -279,7 +280,8 @@ test.describe("M2-09 profile photo", () => {
     const first = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     expect(first.width).toBe(400);
     expect(first.height).toBe(400);
-    expect(first.path).toMatch(/^[0-9a-f-]{36}\/[a-z0-9-]{8,64}\.jpg$/);
+    // M5-11: the avatar is stored as a 400px WebP named by its content hash.
+    expect(first.path).toMatch(/^[0-9a-f-]{36}\/avatar-[0-9a-f]{32}\.webp$/);
     expect(Object.keys(first).sort()).toEqual(["height", "path", "width"]);
 
     await showPreview(page, info);
@@ -305,8 +307,8 @@ test.describe("M2-09 profile photo", () => {
         (d) => d.profile.photo !== null && d.profile.photo.path !== first.path,
       )
     ).profile.photo!;
-    expect(second.path).toMatch(/\.png$/);
-    expect([second.width, second.height]).toEqual([300, 200]);
+    expect(second.path).toMatch(/\.webp$/);
+    expect([second.width, second.height]).toEqual([200, 200]); // a square crop, never enlarged
 
     // Remove: the initials come back, the draft photo is null.
     await card(page).getByRole("button", { name: "Remove" }).click();
@@ -369,18 +371,20 @@ test.describe("M2-09 profile photo", () => {
       buffer: Buffer.from("this is only text, not an image"),
     });
     await expect(
-      card(page).getByText("That file isn’t a JPG, PNG or WebP image. Choose another."),
+      card(page).getByText("That file type isn’t supported. Use JPEG, PNG or WebP."),
     ).toBeVisible();
 
+    // M5-11: a big photo the browser can read is downsized and sent; one it cannot read (a PNG
+    // header, then 5 MB of nothing) stays 5 MB and is refused before anything is sent.
     await fileInput(page).setInputFiles({
       name: "huge.png",
       mimeType: "image/png",
-      buffer: padTo(makePng(10, 10), 5 * 1024 * 1024),
+      buffer: Buffer.concat([makePng(10, 10).subarray(0, 40), Buffer.alloc(5 * 1024 * 1024, 7)]),
     });
     await expect(
-      card(page).getByText("That image is over 4 MB. Choose a smaller one."),
+      card(page).getByText("That file is too big. Use an image under 4 MB."),
     ).toBeVisible();
-    await expect(card(page).getByText("That file isn’t a JPG")).toHaveCount(0);
+    await expect(card(page).getByText("That file type isn’t supported")).toHaveCount(0);
 
     await page.waitForTimeout(1500);
     expect(uploads).toBe(0); // refused before anything was sent
@@ -398,8 +402,9 @@ test.describe("M2-09 profile photo", () => {
     await openEditor(page);
     // A GIF passes no client sniff either, so force the server answers with a stubbed route.
     for (const [status, text] of [
-      [413, "That image is over 4 MB. Choose a smaller one."],
-      [415, "That file isn’t a JPG, PNG or WebP image. Choose another."],
+      [413, "That file is too big. Use an image under 4 MB."],
+      [415, "That file type isn’t supported. Use JPEG, PNG or WebP."],
+      [422, "We couldn’t read that image. Try a different file."],
     ] as const) {
       await page.route("**/api/media", (route) =>
         route.fulfill({

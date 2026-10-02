@@ -3,7 +3,8 @@ import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { openEditor, pageRow, seededUser, setDraft, statusChip } from "../m2/editor-helpers";
-import { makeJpegHeader, padTo } from "../m2/publish-helpers";
+import { padTo } from "../m2/publish-helpers";
+import { makeJpeg } from "../m5/images-fixtures";
 import {
   expectOverrides,
   isPhone,
@@ -257,12 +258,20 @@ test.describe("M3-14 solid and gradient", () => {
 
 type PickedFile = { name: string; mimeType: string; buffer: Buffer };
 
-/** A JPEG whose header says 1600x900 (the route reads only the header), padded to `bytes`. */
-const jpeg = (name: string, bytes = 1.2 * MIB): PickedFile => ({
-  name,
-  mimeType: "image/jpeg",
-  buffer: padTo(makeJpegHeader(1600, 900), Math.round(bytes)),
-});
+/**
+ * A real 1600x900 JPEG (the route decodes it, M5-12) whose colour comes from its name, so two names
+ * are two different images with two different content-hash URLs; padded with zeros to `bytes` when
+ * it is smaller (a JPEG ignores bytes after its end).
+ */
+const jpeg = async (name: string, bytes = 1.2 * MIB): Promise<PickedFile> => {
+  const seed = [...name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  const photo = await makeJpeg({
+    width: 1600,
+    height: 900,
+    color: [(seed * 53) % 256, (seed * 97 + 50) % 256, (seed * 29 + 100) % 256],
+  });
+  return { name, mimeType: "image/jpeg", buffer: padTo(photo, Math.round(bytes)) };
+};
 
 /** Picks a file the way the device does: the file chooser on desktop, the hidden input on a phone. */
 async function pickFile(page: Page, file: PickedFile): Promise<void> {
@@ -277,7 +286,7 @@ async function pickFile(page: Page, file: PickedFile): Promise<void> {
 
 const storageUrl = (ownerId: string) =>
   new RegExp(
-    `^${supabaseUrl()}/storage/v1/object/public/page-media/${ownerId}/[0-9a-f-]{36}\\.jpg$`,
+    `^${supabaseUrl()}/storage/v1/object/public/page-media/${ownerId}/bg-[0-9a-f]{32}\\.webp$`,
   );
 
 const isMediaPost = (r: { url(): string; request(): { method(): string } }) =>
@@ -291,7 +300,7 @@ async function uploadBackground(
   previous?: string,
 ): Promise<string> {
   const posted = page.waitForResponse(isMediaPost);
-  await pickFile(page, jpeg(name));
+  await pickFile(page, await jpeg(name));
   expect((await posted).status()).toBe(200);
   const overrides = await expectOverrides(
     user.pageId,
@@ -325,7 +334,7 @@ test.describe("M3-15 / M3-16 background image", () => {
       await route.continue();
     });
     const posted = page.waitForResponse(isMediaPost);
-    await pickFile(page, jpeg("a.jpg"));
+    await pickFile(page, await jpeg("a.jpg"));
     await expect(
       page.getByRole("progressbar", { name: "Uploading background image" }),
     ).toBeVisible();
@@ -433,14 +442,17 @@ test.describe("M3-15 / M3-16 background image", () => {
     await live.reload();
     expect(await computed(liveImage, "background-image")).toBe(`url("${imageA}")`);
 
-    // Upload again and Publish: now the live page shows the new image, and A is still served.
+    // Upload again and Publish: now the live page shows the new image.
     await openDesign(page);
     const imageC = await uploadBackground(page, user, "c.jpg", imageB);
     await publish(page);
     await live.reload();
     expect(await computed(liveImage, "background-image")).toBe(`url("${imageC}")`);
-    expect(await status(imageA)).toBe(200);
-    expect(await status(imageB)).toBe(200);
+    // M5-14: A (what the live page showed until this Publish) and B (dropped from the draft, never
+    // live) are referenced by nothing now, and the Publish action's cleanup deleted them. C is live.
+    await expect.poll(() => status(imageA), { timeout: 15_000 }).not.toBe(200);
+    await expect.poll(() => status(imageB), { timeout: 15_000 }).not.toBe(200);
+    expect(await status(imageC)).toBe(200);
     expect(new Set([imageA, imageB, imageC]).size).toBe(3);
     await live.close();
   });
@@ -455,7 +467,7 @@ test.describe("M3-15 / M3-16 background image", () => {
     page.on("request", (request) => {
       if (request.url().endsWith("/api/media")) posts.push(request.method());
     });
-    const alert = page.getByRole("alert").filter({ hasText: /image/ });
+    const alert = page.getByRole("alert").filter({ hasText: /That (file|image)/ });
     const listing = async () =>
       ((await adminClient().storage.from("page-media").list(user.userId)).data ?? []).map(
         (item) => item.name,
@@ -476,10 +488,16 @@ test.describe("M3-15 / M3-16 background image", () => {
       },
     ]) {
       await pickFile(page, file);
-      await expect(alert).toHaveText("That file isn’t a JPG, PNG or WebP image. Choose another.");
+      await expect(alert).toHaveText("That file type isn’t supported. Use JPEG, PNG or WebP.");
     }
-    await pickFile(page, jpeg("big.jpg", 5 * MIB));
-    await expect(alert).toHaveText("That image is over 4 MB. Choose a smaller one.");
+    // M5-12: a big JPEG the browser can read is downsized and sent; one it cannot read (a JPEG
+    // header, then 5 MB of nothing) stays 5 MB and is refused before anything is sent.
+    await pickFile(page, {
+      name: "big.jpg",
+      mimeType: "image/jpeg",
+      buffer: Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(5 * MIB, 7)]),
+    });
+    await expect(alert).toHaveText("That file is too big. Use an image under 4 MB.");
 
     await expectNoHorizontalScroll(page);
     expect(posts).toEqual([]);

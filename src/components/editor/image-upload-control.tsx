@@ -1,19 +1,26 @@
 "use client";
 
 import { useId, useRef, useState, type ChangeEvent } from "react";
+import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { imageRefSchema, type ImageRef } from "@/lib/document";
 import { sniffImageType } from "@/lib/editor/sniff";
+import {
+  FILE_TOO_BIG_MESSAGE,
+  UNSUPPORTED_TYPE_MESSAGE,
+  UPLOAD_FAILED_MESSAGE,
+  uploadErrorMessage,
+} from "@/lib/media/messages";
+import { prepareImageForUpload } from "@/lib/media/upload-client";
 import { mediaUrl } from "@/lib/media/url";
 import { UploadIcon } from "./icons";
 
 /** The upload route's size limit (M2-08): 4 MB. Checked here first so a big file is never sent. */
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
-export const NOT_AN_IMAGE_MESSAGE = "That file isn’t a JPG, PNG or WebP image. Choose another.";
-export const TOO_BIG_MESSAGE = "That image is over 4 MB. Choose a smaller one.";
-const UNUSABLE_MESSAGE = "That image can’t be used. Choose a smaller or different one.";
-const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to upload.";
-const FAILED_MESSAGE = "Couldn’t upload that image. Try again.";
+// The route's own sentences (M5-13): the one place the upload copy lives is src/lib/media/messages.ts.
+export const NOT_AN_IMAGE_MESSAGE = UNSUPPORTED_TYPE_MESSAGE;
+export const TOO_BIG_MESSAGE = FILE_TOO_BIG_MESSAGE;
+const FAILED_MESSAGE = UPLOAD_FAILED_MESSAGE;
 
 export interface ImageUploadControlProps {
   value: ImageRef | null;
@@ -42,6 +49,8 @@ export function ImageUploadControl({
   initials = "?",
 }: ImageUploadControlProps) {
   const noun = label ?? (kind === "avatar" ? "photo" : "image");
+  // A suspended owner cannot upload (M5-09); the route answers 403 account_suspended regardless.
+  const suspended = useAccountSuspended();
   const inputId = useId();
   const helpId = useId();
   const errorId = useId();
@@ -58,30 +67,35 @@ export function ImageUploadControl({
     setError(message);
   }
 
-  async function upload(file: File): Promise<void> {
+  async function upload(picked: File): Promise<void> {
     setError(null);
     setCanRetry(false);
     retryFile.current = null;
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(TOO_BIG_MESSAGE);
-      return;
-    }
-    if ((await sniffImageType(file)) === null) {
+    if ((await sniffImageType(picked)) === null) {
       setError(NOT_AN_IMAGE_MESSAGE);
       return;
     }
     setBusy(true);
     try {
+      // A phone photo can be 6 to 12 MB and Vercel caps a request body at 4.5 MB: a photo that is too
+      // big in bytes or pixels is redrawn at most 2400px on its longest edge first (M5-11).
+      const file = await prepareImageForUpload(picked);
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError(TOO_BIG_MESSAGE);
+        return;
+      }
       const body = new FormData();
       body.append("file", file);
       body.append("kind", kind);
       const response = await fetch("/api/media", { method: "POST", body });
       if (!response.ok) {
-        // Over the plan's total (M4-31): the route's own sentence says which plan and what to do,
-        // and sending the same file again is worth offering once the person has made room.
-        const quota = response.status === 413 ? await quotaMessage(response) : null;
-        if (quota) fail(quota, true, file);
-        else fail(messageForStatus(response.status), response.status >= 500, file);
+        // The route says what is wrong in `message` (M5-13); over the plan's total (M4-31) the same
+        // field carries the plan's sentence, and sending the same file again is worth offering once
+        // the person has made room.
+        const text = await response.text().catch(() => "");
+        const quota = response.status === 413 ? quotaMessageFromText(text) : null;
+        const message = uploadErrorMessage(response.status, parseBody(text));
+        fail(message, quota !== null || response.status >= 500, file);
         return;
       }
       const parsed = imageRefSchema.safeParse(await response.json());
@@ -92,7 +106,7 @@ export function ImageUploadControl({
       // Only the reference goes into the draft: the route's public url is derived from the path.
       onChange({ path: parsed.data.path, width: parsed.data.width, height: parsed.data.height });
     } catch {
-      fail(FAILED_MESSAGE, true, file);
+      fail(FAILED_MESSAGE, true, picked);
     } finally {
       setBusy(false);
     }
@@ -134,8 +148,9 @@ export function ImageUploadControl({
           />
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || suspended}
             aria-busy={busy}
+            title={suspended ? SUSPENDED_REASON : undefined}
             onClick={() => fileRef.current?.click()}
             className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line-3 bg-surface px-3 text-[13px] font-semibold text-ink disabled:cursor-progress disabled:opacity-60"
           >
@@ -197,16 +212,14 @@ export function quotaMessageFromText(text: string): string | null {
   return null;
 }
 
-async function quotaMessage(response: Response): Promise<string | null> {
-  return quotaMessageFromText(await response.text().catch(() => ""));
-}
-
-function messageForStatus(status: number): string {
-  if (status === 413) return TOO_BIG_MESSAGE;
-  if (status === 415) return NOT_AN_IMAGE_MESSAGE;
-  if (status === 422) return UNUSABLE_MESSAGE;
-  if (status === 401) return SIGNED_OUT_MESSAGE;
-  return FAILED_MESSAGE;
+/** The route's JSON error body, or null when the text is not that JSON (a gateway page). */
+function parseBody(text: string): { message?: unknown } | null {
+  try {
+    const body: unknown = JSON.parse(text);
+    return typeof body === "object" && body !== null ? (body as { message?: unknown }) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** 72px circle: the photo (cover) or the initials on a neutral fill. */
