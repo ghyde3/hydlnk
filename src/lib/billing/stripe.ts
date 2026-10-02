@@ -8,9 +8,11 @@ export const STRIPE_API_VERSION: Stripe.LatestApiVersion = "2026-09-30.endive";
 let cached: { key: string; host: string; client: Stripe } | null = null;
 
 /**
- * The one Stripe client: HYDLNK sandbox only. The key comes from `readStripeEnv`, whose
- * validation refuses live keys (sk_live_, rk_live_) in every environment, so there is no way to
- * build a client with one. `STRIPE_API_HOST` (test-only, refused when VERCEL_ENV=production)
+ * The one Stripe client: the HYDLNK sandbox, unless the live-mode switch is on. The key comes from
+ * `readStripeEnv`, whose validation refuses a live key (sk_live_, rk_live_) unless
+ * STRIPE_LIVE_MODE=true AND VERCEL_ENV=production, and refuses a test key when STRIPE_LIVE_MODE=true,
+ * so a client is never built with a key of the wrong mode for where it runs.
+ * `STRIPE_API_HOST` (test-only, refused when VERCEL_ENV=production)
  * points the SDK at a local stub; against a stub the SDK does not retry, so a failing call is one
  * request. Server only: `server-only` makes importing this from a Client Component a build error.
  */

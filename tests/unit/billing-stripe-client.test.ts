@@ -20,12 +20,20 @@ const BASE_ENV: Record<string, string> = {
 };
 
 const saved: Record<string, string | undefined> = {};
-const KEYS = [...Object.keys(BASE_ENV), "STRIPE_API_HOST", "VERCEL_ENV"];
+const KEYS = [
+  ...Object.keys(BASE_ENV),
+  "STRIPE_API_HOST",
+  "VERCEL_ENV",
+  "STRIPE_LIVE_MODE",
+  "PAID_PLANS_OPEN",
+];
 beforeEach(() => {
   for (const key of KEYS) saved[key] = process.env[key];
   Object.assign(process.env, BASE_ENV);
   delete process.env.STRIPE_API_HOST;
   delete process.env.VERCEL_ENV;
+  delete process.env.STRIPE_LIVE_MODE;
+  delete process.env.PAID_PLANS_OPEN;
 });
 afterEach(() => {
   for (const key of KEYS) {
@@ -102,6 +110,103 @@ describe("M4-01 the Stripe client refuses live keys", () => {
       port: 8443,
       protocol: "https",
     });
+  });
+});
+
+describe("STRIPE_LIVE_MODE decides which keys the Stripe client may be built with", () => {
+  const LIVE = "sk_live_abcdefghijklmnop";
+  const TEST = "sk_test_abcdefghijklmnop";
+  const build = async (env: Record<string, string | undefined>) => {
+    for (const [name, value] of Object.entries(env)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+    const { getStripe } = await import("@/lib/billing/stripe");
+    return getStripe();
+  };
+
+  it("a live key with STRIPE_LIVE_MODE=true on VERCEL_ENV=production builds a client against the real host", async () => {
+    const client = await build({ STRIPE_SECRET_KEY: LIVE, STRIPE_LIVE_MODE: "true", VERCEL_ENV: "production" });
+    expect(client.getApiField("host")).toBe("api.stripe.com");
+  });
+
+  it("a live key is refused in live mode off production, and without live mode anywhere", async () => {
+    for (const vercelEnv of [undefined, "development", "preview"]) {
+      await expect(
+        build({ STRIPE_SECRET_KEY: LIVE, STRIPE_LIVE_MODE: "true", VERCEL_ENV: vercelEnv }),
+        `live mode on ${vercelEnv ?? "(unset)"}`,
+      ).rejects.toThrow(/live keys are only allowed when VERCEL_ENV=production/);
+    }
+    for (const mode of [undefined, "false"]) {
+      await expect(
+        build({ STRIPE_SECRET_KEY: LIVE, STRIPE_LIVE_MODE: mode, VERCEL_ENV: "production" }),
+        `STRIPE_LIVE_MODE=${mode ?? "(unset)"} on production`,
+      ).rejects.toThrow(/live keys are not allowed until the move to Vercel Pro/);
+    }
+  });
+
+  it("a test key is refused when STRIPE_LIVE_MODE=true, in production too (no mixing)", async () => {
+    for (const vercelEnv of [undefined, "preview", "production"]) {
+      await expect(
+        build({ STRIPE_SECRET_KEY: TEST, STRIPE_LIVE_MODE: "true", VERCEL_ENV: vercelEnv }),
+        vercelEnv ?? "(unset)",
+      ).rejects.toThrow(/not allowed when STRIPE_LIVE_MODE=true/);
+    }
+  });
+
+  it("a test key still builds in test mode, on production too (everything else behaves as before)", async () => {
+    for (const vercelEnv of [undefined, "preview", "production"]) {
+      expect((await build({ STRIPE_SECRET_KEY: TEST, STRIPE_LIVE_MODE: "false", VERCEL_ENV: vercelEnv })).getApiField("host")).toBe(
+        "api.stripe.com",
+      );
+    }
+  });
+
+  it("an error never carries the key", async () => {
+    let message = "";
+    try {
+      await build({ STRIPE_SECRET_KEY: LIVE, STRIPE_LIVE_MODE: "false" });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain("STRIPE_SECRET_KEY");
+    expect(message).not.toContain(LIVE);
+  });
+
+  it("the live-mode API host override is still refused in production", async () => {
+    await expect(
+      build({
+        STRIPE_SECRET_KEY: LIVE,
+        STRIPE_LIVE_MODE: "true",
+        VERCEL_ENV: "production",
+        STRIPE_API_HOST: "127.0.0.1:12111",
+      }),
+    ).rejects.toThrow(/STRIPE_API_HOST/);
+  });
+});
+
+describe("PAID_PLANS_OPEN and the webhook's needs, read from the environment on every call", () => {
+  it("readPaidPlansOpen: open by default, closed only by exactly 'false', an invalid value is an error", async () => {
+    const { readPaidPlansOpen } = await import("@/lib/billing/env");
+    expect(readPaidPlansOpen()).toBe(true);
+    process.env.PAID_PLANS_OPEN = "true";
+    expect(readPaidPlansOpen()).toBe(true);
+    process.env.PAID_PLANS_OPEN = "false";
+    expect(readPaidPlansOpen()).toBe(false);
+    process.env.PAID_PLANS_OPEN = "";
+    expect(readPaidPlansOpen()).toBe(true);
+    process.env.PAID_PLANS_OPEN = "no";
+    expect(() => readPaidPlansOpen()).toThrow(/PAID_PLANS_OPEN/);
+  });
+
+  it("readWebhookEnv needs the Stripe key now (the webhook reads each subscription from Stripe)", async () => {
+    const { readWebhookEnv } = await import("@/lib/billing/env");
+    expect(readWebhookEnv().webhookSecret).toBe("whsec_unit");
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+    expect(() => readWebhookEnv()).toThrow(/STRIPE_WEBHOOK_SECRET/);
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_unit";
+    delete process.env.STRIPE_SECRET_KEY;
+    expect(() => readWebhookEnv()).toThrow(/STRIPE_SECRET_KEY/);
   });
 });
 

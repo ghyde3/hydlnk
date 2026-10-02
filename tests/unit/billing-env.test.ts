@@ -6,9 +6,15 @@ import {
   STRIPE_API_DEFAULT_HOST,
   VERCEL_API_DEFAULT_BASE_URL,
   parseServerEnv,
+  readServerEnvSource,
+  stripeKeyKind,
 } from "@/lib/env/server-schema";
 
-/** M4-01: the Milestone 4 variables validate at startup and Stripe stays sandbox-only. */
+/**
+ * M4-01: the Milestone 4 variables validate at startup and Stripe stays sandbox-only unless the
+ * live-mode switch is on in production. Release fixes (2026-10-02): VERCEL_API_TOKEN is optional at
+ * build and startup, PAID_PLANS_OPEN and STRIPE_LIVE_MODE are the two server switches.
+ */
 
 const FULL: Record<string, string> = {
   NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
@@ -36,6 +42,7 @@ describe("M4-01 .env.example", () => {
   const lines = readFileSync(path, "utf8").split("\n");
 
   const REQUIRED = [
+    // VERCEL_API_TOKEN is listed too, but it is optional (see "VERCEL_API_TOKEN is optional").
     "VERCEL_API_TOKEN",
     "VERCEL_PROJECT_ID",
     "VERCEL_TEAM_ID",
@@ -80,6 +87,33 @@ describe("M4-01 .env.example", () => {
       expect(valueOf(name, index)).toMatch(/replace_me/);
     });
   }
+
+  // The two switches: not secrets, listed with their defaults and a comment that says what they do.
+  for (const [name, fallback] of [
+    ["STRIPE_LIVE_MODE", "false"],
+    ["PAID_PLANS_OPEN", "true"],
+  ] as const) {
+    it(`lists the switch ${name} with its default (${fallback}) and a comment above it`, () => {
+      const index = find(name);
+      expect(index, `${name} is not listed in .env.example`).toBeGreaterThan(-1);
+      expect(valueOf(name, index)).toBe(fallback);
+      expect(lines[index]!.trim().startsWith("#"), `${name} is a default, not commented out`).toBe(false);
+      expect(lines[index - 1]?.trim().startsWith("#"), `${name} has no comment above it`).toBe(true);
+    });
+  }
+
+  it("the STRIPE_LIVE_MODE comment says live keys need production, and the VERCEL_API_TOKEN one says it is optional", () => {
+    const above = (name: string) => {
+      const index = find(name);
+      const block: string[] = [];
+      for (let i = index - 1; i >= 0 && lines[i]!.trim().startsWith("#"); i--) block.unshift(lines[i]!);
+      return block.join(" ");
+    };
+    expect(above("STRIPE_LIVE_MODE")).toMatch(/production/i);
+    expect(above("STRIPE_LIVE_MODE")).toMatch(/live/i);
+    expect(above("VERCEL_API_TOKEN")).toMatch(/optional/i);
+    expect(above("PAID_PLANS_OPEN")).toMatch(/Paid plans open soon/);
+  });
 });
 
 describe("M4-01 required variables", () => {
@@ -117,7 +151,63 @@ describe("M4-01 required variables", () => {
   });
 });
 
-describe("M4-01 Stripe stays sandbox-only", () => {
+describe("VERCEL_API_TOKEN is optional at build and startup", () => {
+  it("is not one of the required variables (eight remain)", () => {
+    expect(M4_REQUIRED_KEYS).not.toContain("VERCEL_API_TOKEN");
+    expect(M4_REQUIRED_KEYS).toHaveLength(8);
+  });
+
+  for (const vercelEnv of [undefined, "development", "preview", "production"]) {
+    for (const token of [undefined, ""]) {
+      it(`parses without it (${token === undefined ? "unset" : "empty"}) with VERCEL_ENV=${vercelEnv ?? "(unset)"}, the strict build and runtime check`, () => {
+        const env = parse({ VERCEL_API_TOKEN: token, VERCEL_ENV: vercelEnv });
+        expect(env.VERCEL_API_TOKEN).toBeUndefined();
+      });
+    }
+  }
+
+  it("still reads it when it is set", () => {
+    expect(parse().VERCEL_API_TOKEN).toBe(FULL.VERCEL_API_TOKEN);
+    expect(readServerEnvSource({ VERCEL_API_TOKEN: "abc" }).VERCEL_API_TOKEN).toBe("abc");
+  });
+
+  it("everything else stays validated: with the token missing, a missing project, team or secret still fails and names only that one", () => {
+    for (const name of M4_REQUIRED_KEYS) {
+      let message = "";
+      try {
+        parse({ VERCEL_API_TOKEN: undefined, [name]: undefined, VERCEL_ENV: "production" });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message, name).toContain(name);
+      expect(message, name).not.toContain("VERCEL_API_TOKEN");
+    }
+  });
+});
+
+describe("PAID_PLANS_OPEN", () => {
+  it("defaults to open when unset or empty", () => {
+    expect(parse().PAID_PLANS_OPEN).toBe("true");
+    expect(parse({ PAID_PLANS_OPEN: "" }).PAID_PLANS_OPEN).toBe("true");
+  });
+
+  it("accepts exactly true and false", () => {
+    expect(parse({ PAID_PLANS_OPEN: "true" }).PAID_PLANS_OPEN).toBe("true");
+    expect(parse({ PAID_PLANS_OPEN: "false" }).PAID_PLANS_OPEN).toBe("false");
+  });
+
+  for (const bad of ["no", "0", "FALSE", "False", "closed", " false", "yes"]) {
+    it(`refuses ${JSON.stringify(bad)} by name, so a typo cannot leave the plans open`, () => {
+      expect(() => parse({ PAID_PLANS_OPEN: bad })).toThrow(/PAID_PLANS_OPEN/);
+    });
+  }
+
+  it("is read from the real environment by readServerEnvSource", () => {
+    expect(readServerEnvSource({ PAID_PLANS_OPEN: "false" }).PAID_PLANS_OPEN).toBe("false");
+  });
+});
+
+describe("M4-01 Stripe stays sandbox-only unless live mode is on in production", () => {
   for (const nodeEnv of ["development", "test", "production", undefined]) {
     for (const key of ["sk_live_abcdefghijklmnop", "rk_live_abcdefghijklmnop"]) {
       it(`refuses ${key.slice(0, 8)}... in NODE_ENV=${nodeEnv ?? "(unset)"}`, () => {
@@ -134,17 +224,117 @@ describe("M4-01 Stripe stays sandbox-only", () => {
     }
   }
 
-  it("accepts sk_test_ (and a restricted test key) and refuses anything that is not a sandbox key", () => {
+  it("accepts sk_test_ (and a restricted test key) and refuses anything that is not a Stripe key", () => {
     expect(parse({ STRIPE_SECRET_KEY: "sk_test_abcdefghijklmnop" }).STRIPE_SECRET_KEY).toBe(
       "sk_test_abcdefghijklmnop",
     );
     expect(() => parse({ STRIPE_SECRET_KEY: "rk_test_abcdefghijklmnop" })).not.toThrow();
     expect(() => parse({ STRIPE_SECRET_KEY: "pk_test_abcdefghijklmnop" })).toThrow(/STRIPE_SECRET_KEY/);
     expect(() => parse({ STRIPE_SECRET_KEY: "whsec_abcdefghijklmnop" })).toThrow(/STRIPE_SECRET_KEY/);
+    // Not a key of any mode, whatever the switch says.
+    for (const liveMode of ["true", "false"]) {
+      expect(() =>
+        parse({ STRIPE_SECRET_KEY: "pk_live_abcdefghijklmnop", STRIPE_LIVE_MODE: liveMode, VERCEL_ENV: "production" }),
+      ).toThrow(/STRIPE_SECRET_KEY/);
+    }
   });
 
   it("allows the key to be unset (nothing reads it until Stripe is called)", () => {
     expect(() => parse({ STRIPE_SECRET_KEY: undefined })).not.toThrow();
+  });
+
+  it("classifies a key by its prefix alone", () => {
+    expect(stripeKeyKind("sk_live_x")).toBe("live");
+    expect(stripeKeyKind("rk_live_x")).toBe("live");
+    expect(stripeKeyKind("sk_test_x")).toBe("test");
+    expect(stripeKeyKind("rk_test_x")).toBe("test");
+    for (const other of ["", "pk_live_x", "pk_test_x", "sk_x", "whsec_x", "SK_LIVE_x", " sk_live_x"]) {
+      expect(stripeKeyKind(other), other).toBe("unknown");
+    }
+  });
+});
+
+describe("STRIPE_LIVE_MODE", () => {
+  it("defaults to false when unset or empty, and accepts exactly true and false", () => {
+    expect(parse().STRIPE_LIVE_MODE).toBe("false");
+    expect(parse({ STRIPE_LIVE_MODE: "" }).STRIPE_LIVE_MODE).toBe("false");
+    expect(parse({ STRIPE_SECRET_KEY: undefined, STRIPE_LIVE_MODE: "true" }).STRIPE_LIVE_MODE).toBe(
+      "true",
+    );
+    expect(parse({ STRIPE_LIVE_MODE: "false" }).STRIPE_LIVE_MODE).toBe("false");
+    for (const bad of ["yes", "1", "TRUE", "True", "live", " true"]) {
+      expect(() => parse({ STRIPE_SECRET_KEY: undefined, STRIPE_LIVE_MODE: bad }), bad).toThrow(
+        /STRIPE_LIVE_MODE/,
+      );
+    }
+  });
+
+  it("is read from the real environment by readServerEnvSource", () => {
+    expect(readServerEnvSource({ STRIPE_LIVE_MODE: "true" }).STRIPE_LIVE_MODE).toBe("true");
+  });
+
+  // Every combination of the switch, the deployment and the key. The rule: a live key is accepted
+  // ONLY with STRIPE_LIVE_MODE=true AND VERCEL_ENV=production; a test key is refused when
+  // STRIPE_LIVE_MODE=true (no mixing); everything else is as it was (sandbox keys, no live keys).
+  const MODES = [undefined, "false", "true"] as const;
+  const DEPLOYMENTS = [undefined, "development", "preview", "production"] as const;
+  const KEYS = [
+    ["sk_test_abcdefghijklmnop", "test"],
+    ["rk_test_abcdefghijklmnop", "test"],
+    ["sk_live_abcdefghijklmnop", "live"],
+    ["rk_live_abcdefghijklmnop", "live"],
+    [undefined, "none"],
+  ] as const;
+
+  for (const mode of MODES) {
+    for (const vercelEnv of DEPLOYMENTS) {
+      for (const [key, kind] of KEYS) {
+        const live = mode === "true";
+        const accepted =
+          kind === "none" || (live ? kind === "live" && vercelEnv === "production" : kind === "test");
+        const label = `${kind === "none" ? "no key" : `${key!.slice(0, 8)}...`} with STRIPE_LIVE_MODE=${mode ?? "(unset)"} on VERCEL_ENV=${vercelEnv ?? "(unset)"} is ${accepted ? "accepted" : "refused"}`;
+        it(label, () => {
+          const run = () =>
+            parse({ STRIPE_SECRET_KEY: key, STRIPE_LIVE_MODE: mode, VERCEL_ENV: vercelEnv });
+          if (accepted) {
+            expect(run).not.toThrow();
+            return;
+          }
+          let message = "";
+          try {
+            run();
+          } catch (error) {
+            message = (error as Error).message;
+          }
+          expect(message).toContain("STRIPE_SECRET_KEY");
+          expect(message).not.toContain(key!);
+          if (live && kind === "test") {
+            expect(message).toMatch(/test-mode key[^]*not allowed when STRIPE_LIVE_MODE=true/);
+          } else if (live) {
+            expect(message).toMatch(/live keys are only allowed when VERCEL_ENV=production/);
+          } else {
+            expect(message).toMatch(/live keys are not allowed until the move to Vercel Pro/);
+          }
+        });
+      }
+    }
+  }
+
+  it("a live key in production in live mode does not relax anything else: API redirects are still refused", () => {
+    const live = {
+      STRIPE_SECRET_KEY: "sk_live_abcdefghijklmnop",
+      STRIPE_LIVE_MODE: "true",
+      VERCEL_ENV: "production",
+    };
+    expect(() => parse(live)).not.toThrow();
+    expect(() => parse({ ...live, STRIPE_API_HOST: "127.0.0.1:12111" })).toThrow(/STRIPE_API_HOST/);
+    expect(() => parse({ ...live, VERCEL_API_BASE_URL: "http://127.0.0.1:12112" })).toThrow(
+      /VERCEL_API_BASE_URL/,
+    );
+    // And the required Milestone 4 variables are still required.
+    expect(() => parse({ ...live, STRIPE_PRICE_PRO_MONTHLY: undefined })).toThrow(
+      /STRIPE_PRICE_PRO_MONTHLY/,
+    );
   });
 });
 

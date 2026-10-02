@@ -11,8 +11,9 @@ import type { PriceIds } from "./price-map";
  * The Stripe settings, read from `process.env` on every call instead of from the module-level
  * `serverEnv` constant: a local `next dev` picks up an edited .env.local without a restart, and a
  * test can point the SDK at a stub by setting STRIPE_API_HOST. Validation is the one in
- * "@/lib/env/server-schema" (sandbox keys only, no API redirects in production), so a live key
- * fails here exactly as it fails at startup. Errors name the variable, never its value.
+ * "@/lib/env/server-schema" (sandbox keys unless STRIPE_LIVE_MODE=true on the production
+ * deployment, no API redirects in production), so a key that may not run here fails exactly as it
+ * fails at startup. Errors name the variable, never its value.
  */
 export interface BillingEnv {
   secretKey: string;
@@ -59,9 +60,14 @@ export function readBillingEnv(): BillingEnv {
   };
 }
 
-/** What the webhook needs: the signing secret and the price ids (no API key, it makes no API call). */
+/**
+ * What the webhook needs: the signing secret, the price ids and the API key. The key is for one
+ * call only: every subscription event is answered by retrieving the subscription's current state
+ * from Stripe, so a webhook without the key cannot do its job and says so up front.
+ */
 export function readWebhookEnv(): { webhookSecret: string; prices: PriceIds } {
   const env = read();
+  if (!env.STRIPE_SECRET_KEY) missing("STRIPE_SECRET_KEY");
   return {
     webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? missing("STRIPE_WEBHOOK_SECRET"),
     prices: {
@@ -71,6 +77,15 @@ export function readWebhookEnv(): { webhookSecret: string; prices: PriceIds } {
       studioYearly: env.STRIPE_PRICE_STUDIO_YEARLY ?? missing("STRIPE_PRICE_STUDIO_YEARLY"),
     },
   };
+}
+
+/**
+ * True unless PAID_PLANS_OPEN is "false". Read on every call, like the rest of this file. The env
+ * schema accepts only "true" and "false" (default "true"), so a typo is a startup error rather
+ * than a silently open switch.
+ */
+export function readPaidPlansOpen(): boolean {
+  return read().PAID_PLANS_OPEN === "true";
 }
 
 /** True when the key is unset (the account-deletion flow skips Stripe for an account with no customer). */
