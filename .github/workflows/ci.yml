@@ -127,10 +127,11 @@ jobs:
       - name: End-to-end tests
         run: pnpm test:e2e
 
-      # M2-26, M4-08 and M4-19 need a production build: x-nextjs-cache only exists there. The root domain is baked
+      # M2-26, M4-08 and M4-19 need a production build: x-nextjs-cache only exists there; the second server
+      # (PAID_PLANS_OPEN=false) is the only way to see that startup setting in a browser. The root domain is baked
       # into the build, so the port in it is the server's port; the dev server that Playwright starts
       # on :3000 (no such variables) is only used to sign users in. See the header of the spec.
-      - name: Production build and cache checks (M2-26, M4-08, M4-19)
+      - name: Production build, cache checks and the closed-plans switch (M2-26, M4-08, M4-19)
         run: |
           mkdir -p tmp
           NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build
@@ -144,6 +145,21 @@ jobs:
             sleep 1
           done
           HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts tests/e2e/m4/billing-badge.spec.ts
+          # PAID_PLANS_OPEN is read when the server starts: stop this one (and whatever `pnpm start`
+          # left listening on the port), start the same build with the plans closed and run its spec.
+          kill "$prod_pid" 2>/dev/null || true
+          kill $(lsof -ti tcp:3100) 2>/dev/null || true
+          for _ in $(seq 1 30); do
+            if ! curl -s -o /dev/null --max-time 2 http://localhost:3100/; then break; fi
+            sleep 1
+          done
+          NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 PAID_PLANS_OPEN=false pnpm start -p 3100 > tmp/start-3100-closed.log 2>&1 &
+          prod_pid=$!
+          for _ in $(seq 1 60); do
+            if curl -s -o /dev/null --max-time 5 http://localhost:3100/; then break; fi
+            sleep 1
+          done
+          HL_PROD_PORT=3100 HL_PLANS_CLOSED=1 pnpm exec playwright test tests/e2e/m4/billing-plans-closed.spec.ts
 
       # The screens script needs a running dev server; Playwright stopped its own after the tests.
       # Runs only when the e2e tests passed. Fills the "screens" artifact below.

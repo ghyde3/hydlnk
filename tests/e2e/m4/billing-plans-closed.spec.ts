@@ -90,7 +90,7 @@ test.describe("PAID_PLANS_OPEN=false: the endpoint", () => {
     expect(response.status).toBe(303);
     expect(response.headers.location).toBe(`${settings}?billing_error=plans_closed`);
     await page.goto(`${settings}?billing_error=plans_closed`);
-    await expect(page.getByRole("alert")).toContainText("Paid plans open soon.");
+    await expect(page.locator('[data-billing-notice="error"]')).toContainText("Paid plans open soon.");
   });
 
   test("the checks before it still run first: no session is a 401, a foreign origin a 403 forbidden_origin", async ({

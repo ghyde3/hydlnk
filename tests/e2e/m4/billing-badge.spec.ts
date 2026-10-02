@@ -8,6 +8,7 @@ import {
   eventId,
   postWebhook,
   priceIds,
+  seedStubFromEvent,
   signed,
   subscriptionEvent,
 } from "../fixtures/stripe-stub";
@@ -229,8 +230,12 @@ async function queryCount(handle: string): Promise<number> {
   return (JSON.parse(res.text) as { count: number }).count;
 }
 
-/** The same signed delivery, to the production build's app host. */
-function deliverProd(payload: object) {
+/**
+ * The same signed delivery, to the production build's app host. The webhook reads the
+ * subscription's current state from Stripe (the stub), so the stub is made to match the event first.
+ */
+async function deliverProd(payload: object) {
+  await seedStubFromEvent(payload);
   const { body, signature } = signed(payload);
   return rawBuffer(`app.localhost:${SERVER_PORT}`, "/api/stripe/webhook", {
     method: "POST",

@@ -546,7 +546,7 @@ test.describe("M4-06 a second upgrade is not offered while the first is being co
     await page.goto(settings());
     await page.getByRole("button", { name: "Upgrade to Pro" }).click();
     await page.waitForURL(/\/settings\?billing_error=already_subscribed/);
-    await expect(page.getByRole("alert")).toContainText(
+    await expect(page.locator('[data-billing-notice="error"]')).toContainText(
       "You already have a paid plan. Use Manage billing to change it.",
     );
     expect(await sessionCalls(user.userId)).toHaveLength(0);
