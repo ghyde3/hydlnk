@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-03 — Release: Wave E (custom domains and analytics)
+
+- PR #12 merged, merge commit ce546bb. Migrations applied through the release-migrations workflow (run 37098223967): 20261004000001_domains, 20261004000002_analytics, 20261004000003_rate_limit, 20261004000004_traffic_flags, 20261004000005_admin_audit_traffic. Deployment https://vercel.com/ghyde3s-projects/hydlnk/J3ZHGcNzZus49axTCYmsyVeS9Xkz (success).
+- Checks: CI Verify green; local `pnpm verify` PASS (3437 unit, pgTAP PASS); full browser suite deferred on Gary's instruction until Waves E–H and marketing v3 land; `pnpm test:e2e:prod` 12/12; live probes: POST /api/cron/verify-domains without a secret 401, POST /api/e 204, /r on the marketing host 404, /domains signed out redirects to /login.
+- Gary's production steps: new CRON_SECRET in Vercel (then redeploy) and the same value plus https://app.hydlnk.com in Supabase Vault (`hydlnk_cron_secret`, `hydlnk_app_base_url`); optional SMTP_* and EMAIL_FROM for the domain-live email; check Dashboard → Integrations → Cron for rollup-daily-stats, purge-old-events, flag-high-traffic, verify-pending-domains, purge-rate-limit-hits.
+- Open: M4-09 (*.vercel.app step), M4-21 (beacon on a custom host in a browser), M4-35 (real domain next day).
+
 ## 2026-10-03 — Marketing v3: hero claim panel, try-it builder, link-in-bio pages, copy sweep
 
 - **Asked by Gary (2026-10-03):** landing pages per platform and creator type, a clickable demo builder for the theme and blocks sections, a CRO pass on the hero claim, American spelling and plain benefit language everywhere.
@@ -12,6 +19,21 @@ Session log, newest first. Every session reads the top entry before starting and
 - **Visible strings in passing features that changed on Gary's direction** (features.json is not reworded; these steps now read with the American spelling / new label): M1-25 (`#design` section and "Every choice is a token." replaced by `#try`), M3-05 ("valid colour" -> "valid color"), M3-06 (tab "Tokens" -> "Style", region "Theme tokens" -> "Style settings"), M3-08 ("Enter a hex colour like #C9A86A." -> "color", aria-label "colour" -> "color").
 - **Evidence:** typecheck, lint clean; `pnpm test` 2871 passed; Playwright (HL_DEV_PORT=3200, --workers=2) marketing + m1/landing + m1/auth-signup-layout 187 passed; nine specs touched by the sweep (m2/editor-reorder, m3/design-*, m3/themes-*, m5/states-design) 113 passed; axe clean and no horizontal overflow on /, /link-in-bio, three landing pages, /design-control, /pricing, /features at 390 and 1440.
 - **Known issues:** the hero showreel video still shows "Every choice is a token." and token names (baked into `design/showreel*`; needs a re-render). Many m1/m2/m5 specs hard-code port 3000 (fine on the main checkout). Full browser suite deferred per Gary until after Waves E–H.
+
+## 2026-10-03 — Wave E: custom domains and analytics
+
+- **Built (six builders, integrated by one):** custom domains (core: M4-09, M4-11, M4-12, M4-13, M4-15 server, M4-17 server, M5-23; Domains screen: M4-10, M4-14, M4-15 UI, M4-16, M4-17 UI, M5-18), analytics (ingest: M4-20 to M4-23, M5-01, M5-02; database: M4-24, M4-25, M4-30 RLS part, M5-10; dashboard: M4-26 to M4-30, M5-17) and the downgrade and deletion lifecycle (M4-33, M4-34).
+- **Flipped to `passes: true` (26):** M4-10, M4-11, M4-12, M4-13, M4-14, M4-15, M4-16, M4-17, M4-20, M4-22, M4-23, M4-24, M4-25, M4-26, M4-27, M4-28, M4-29, M4-30, M4-33, M4-34, M5-01, M5-02, M5-10, M5-17, M5-18, M5-23.
+- **Left `false`:**
+  - **M4-09:** step 3 says a `*.vercel.app` host returns 404. It serves the marketing site instead (`src/lib/routing/host.ts` sends deployment hosts to marketing on purpose, so a deploy can be checked before DNS); no tenant data is ever served there (`domains-core-routing.spec.ts` asserts it with a hand-made verified row). Gary decides: keep marketing there (amend the step) or make every non-marketing path 404.
+  - **M4-21:** the beacon from a browser on a custom host is not proven (Chromium cannot resolve `*.example.test` locally); custom hosts are covered by raw HTTP only.
+  - **M4-35:** needs a real production domain the next day.
+- **Evidence (final tree, Node 24, local Supabase with all four Wave E migrations applied):**
+  - `pnpm typecheck` clean; `pnpm lint` 0 problems; `pnpm test` 150 files / 3372 tests; `pnpm test:db` 23 files / 994 tests, `Result: PASS` (010 and 060 updated).
+  - Playwright `--workers=2` (never the full suite): `tests/e2e/m4/domains-*`, `analytics-*`, `lifecycle-*`, `tests/e2e/m5/traffic-*`, `m1/shell`, `m2/blocks-live`, `blocks-forms`, `blocks-images`, `renderer`, `m4/billing-delete`, `limits-downgrade`: 412 passed, 136 skipped (project-specific by design), 0 failed.
+- **Integration changes:** pgTAP 010 (three new tables, grants, the old nightly job gone) and 060 (page-level clicks); "Mark reviewed" wired (`reviewTrafficFlagAction` in `ADMIN_ACTIONS`, `/api/admin/traffic/[id]/reviewed`, guard test); `isbot` 5.2.2 pinned and used by `isBot()`; Playwright projects send a real Chrome user agent (`scripts/lib/viewports.ts`); `CRON_SECRET` and `VISITOR_HASH_SECRET` local placeholders (CI uses the same script); `DomainView.createdAt` (the second RLS read is gone) and the failed-check message is M5-18's text; the Vercel stub's failure clearing can be scoped by hostname; `delete-page.ts` uses `removeProjectDomain` and `src/lib/pages/remove-domain.ts` is deleted (its unit tests now run the shared client); `database.types.ts` regenerated; the M1-19 placeholder-screens tests are removed (no placeholder screen is left); the Vercel wrappers in `src/lib/domains/vercel.ts` are `async` so a missing config rejects instead of throwing synchronously; PLAN.md rate-limit line made consistent.
+- **Deviations to know:** an unauthenticated delete-account Server Action redirects to /login (no literal 401); "Mark reviewed" is not written to `admin_audit`; the `/r` and `/api/e` tracking routes rely on `isTrackingPath` in `src/proxy.ts`.
+- **Gary's production steps:** (1) in the Supabase SQL editor create the Vault secrets `hydlnk_cron_secret` and `hydlnk_app_base_url` (the verification sweep skips quietly until both exist); (2) set `CRON_SECRET`, `VISITOR_HASH_SECRET`, `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` on Vercel (the env schema requires them); optional `SMTP_*` and `EMAIL_FROM` for the domain-live email; (3) after `/release` check Dashboard, Integrations, Cron: `rollup-daily-stats`, `purge-old-events`, `flag-high-traffic`, `purge-rate-limit-hits` and the domain verification job should exist and `hydlnk-nightly-maintenance` should be gone.
 
 ## 2026-10-02 — Wave D: hardening built
 

@@ -14,11 +14,10 @@ export type { M4RequiredKey, ServerEnv };
  * Every server and public variable, validated when this module is first imported.
  * `server-only` makes importing it from a Client Component a build error.
  *
- * The eight required Milestone 4 variables (Vercel project and team, Stripe price ids, cron and
- * visitor-hash secrets) are required whenever VERCEL_ENV is set, i.e. on every Vercel build and
- * deployment, so a missing one stops the build with a message that names it. `VERCEL_API_TOKEN` is
- * the exception: it may be unset everywhere, and what needs it fails closed where it is used. Off
- * Vercel (a local `next dev`, CI) the rest may be unset until the feature that reads them runs;
+ * The nine required Milestone 4 variables (Vercel API token, project and team, Stripe price ids,
+ * cron and visitor-hash secrets) are required whenever VERCEL_ENV is set, i.e. on every Vercel build
+ * and deployment, so a missing one stops the build with a message that names it. Off Vercel (a
+ * local `next dev`, CI) they may be unset until the feature that reads them runs;
  * read them with `requireServerEnv`, which throws the same kind of error at the point of use.
  * `STRIPE_SECRET_KEY` is sandbox-only unless STRIPE_LIVE_MODE=true on the production deployment
  * (live keys fail validation anywhere else, test keys fail validation in live mode), and

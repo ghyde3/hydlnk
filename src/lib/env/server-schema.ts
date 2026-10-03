@@ -10,12 +10,13 @@ import { parseEnv, publicEnvSchema, readPublicEnv } from "./shared";
 
 /**
  * Milestone 4 variables: required wherever the app really runs (see `requireM4` below).
- * `VERCEL_API_TOKEN` is deliberately not in this list: until the custom-domains wave it does not
- * exist in production, so a build or a start without it must succeed. Anything that has to call
- * the Vercel API (adding or removing a custom domain) fails closed at the point of use instead
- * (src/lib/pages/vercel-config.ts).
+ * `VERCEL_API_TOKEN` joined the list with the custom-domains wave (it was optional before the
+ * Domains API was in use): a Vercel build or start without it now stops, naming it. Off Vercel
+ * (local dev, CI, Vitest) it may still be unset, and whatever calls the Vercel API fails closed at
+ * the point of use (src/lib/pages/vercel-config.ts).
  */
 export const M4_REQUIRED_KEYS = [
+  "VERCEL_API_TOKEN",
   "VERCEL_PROJECT_ID",
   "VERCEL_TEAM_ID",
   "STRIPE_PRICE_PRO_MONTHLY",
@@ -69,6 +70,8 @@ const apiHostSchema = z
   });
 
 const m4Shape = {
+  /** Vercel REST API token that may manage the project's domains (Domains API). */
+  VERCEL_API_TOKEN: nonEmpty,
   VERCEL_PROJECT_ID: nonEmpty,
   VERCEL_TEAM_ID: nonEmpty,
   /** Price ids (not secret). Lookup keys pro_monthly, pro_yearly, studio_monthly, studio_yearly. */
@@ -92,9 +95,13 @@ export const SERVER_ENV_KEYS = [
   "STRIPE_WEBHOOK_SECRET",
   "STRIPE_LIVE_MODE",
   "PAID_PLANS_OPEN",
-  "VERCEL_API_TOKEN",
   "ADMIN_USER_IDS",
   "SUPPORT_EMAIL",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASS",
+  "EMAIL_FROM",
   ...M4_REQUIRED_KEYS,
   "VERCEL_API_BASE_URL",
   "STRIPE_API_HOST",
@@ -123,10 +130,19 @@ function baseShape() {
      */
     PAID_PLANS_OPEN: z.enum(["true", "false"]).default("true"),
     /**
-     * Vercel REST API token (Domains API). Optional at build and startup: adding or removing a
-     * custom domain fails closed with a clear error while it is unset (src/lib/pages/vercel-config.ts).
+     * SMTP for the "your domain is live" email (M5-23): the same provider the Supabase auth email
+     * uses. All optional: with SMTP_HOST unset in production the email is skipped and logged, and
+     * verification is never blocked. Locally, with none set, the email goes to Supabase's Mailpit.
+     * SMTP_HOST needs EMAIL_FROM (a sender address the provider accepts).
      */
-    VERCEL_API_TOKEN: nonEmpty.optional(),
+    SMTP_HOST: nonEmpty.optional(),
+    SMTP_PORT: z
+      .string()
+      .regex(/^\d{1,5}$/, { error: "expected a port number" })
+      .optional(),
+    SMTP_USER: nonEmpty.optional(),
+    SMTP_PASS: nonEmpty.optional(),
+    EMAIL_FROM: nonEmpty.optional(),
     /** `whsec_...` signing secret of the webhook endpoint. */
     STRIPE_WEBHOOK_SECRET: nonEmpty.optional(),
     /** Test-only: point the Stripe SDK at a local stub. Rejected when VERCEL_ENV=production. */
@@ -221,10 +237,35 @@ function refuseLocalRootInProduction(
   });
 }
 
-function refineEnvironment(
-  env: RedirectCheckInput & StripeModeInput & { NEXT_PUBLIC_ROOT_DOMAIN: string },
+/** SMTP_HOST without a sender address, or a user without a password, cannot send anything. */
+function requireSmtpPairs(
+  env: { SMTP_HOST?: string | undefined; EMAIL_FROM?: string | undefined; SMTP_USER?: string | undefined; SMTP_PASS?: string | undefined },
   ctx: z.RefinementCtx,
 ): void {
+  if (env.SMTP_HOST && !env.EMAIL_FROM) {
+    ctx.addIssue({ code: "custom", path: ["EMAIL_FROM"], message: "required when SMTP_HOST is set" });
+  }
+  if (Boolean(env.SMTP_USER) !== Boolean(env.SMTP_PASS)) {
+    ctx.addIssue({
+      code: "custom",
+      path: [env.SMTP_USER ? "SMTP_PASS" : "SMTP_USER"],
+      message: "SMTP_USER and SMTP_PASS are set together",
+    });
+  }
+}
+
+function refineEnvironment(
+  env: RedirectCheckInput &
+    StripeModeInput & {
+      NEXT_PUBLIC_ROOT_DOMAIN: string;
+      SMTP_HOST?: string | undefined;
+      EMAIL_FROM?: string | undefined;
+      SMTP_USER?: string | undefined;
+      SMTP_PASS?: string | undefined;
+    },
+  ctx: z.RefinementCtx,
+): void {
+  requireSmtpPairs(env, ctx);
   refuseRedirectsInProduction(env, ctx);
   refuseLocalRootInProduction(env, ctx);
   enforceStripeMode(env, ctx);
@@ -240,7 +281,7 @@ const lenientSchema = baseSchema
 export type ServerEnv = z.output<typeof lenientSchema>;
 
 export interface ParseOptions {
-  /** Default true: any of the eight required Milestone 4 variables missing is an error naming it. */
+  /** Default true: any of the nine required Milestone 4 variables missing is an error naming it. */
   requireM4?: boolean;
 }
 
@@ -249,9 +290,8 @@ export interface ParseOptions {
  * object) and throws one error that names every missing or invalid variable, never a value.
  * The Milestone 4 variables are required unless `requireM4: false`; "@/lib/env/server" passes
  * `requireM4: true` whenever VERCEL_ENV is set (Vercel builds and runtime), so production and
- * preview deployments cannot start without them, while a local `next dev`, CI or a Vitest run
- * that has not been given them still starts. (`VERCEL_API_TOKEN` is not among them: see
- * `M4_REQUIRED_KEYS`.)
+ * preview deployments cannot start without them (`VERCEL_API_TOKEN` included), while a local
+ * `next dev`, CI or a Vitest run that has not been given them still starts.
  */
 export function parseServerEnv(
   source: Record<string, string | undefined>,

@@ -49,7 +49,8 @@ test.describe("M2-15 link block panel", () => {
     await showView(page, "Preview");
     const anchor = previewScreen(page).locator(`a[data-block-id="${id}"]`);
     await expect(anchor).toHaveText("Portrait sessions - fall dates");
-    await expect(anchor).toHaveAttribute("href", "https://maraokafor.com/portraits");
+    // The link goes through the click redirect (M4-22): the destination is not in the markup.
+    await expect(anchor).toHaveAttribute("href", new RegExp(`^/r/[0-9a-f-]{36}/${id}$`));
     await expect(anchor).toHaveAttribute("rel", "nofollow noopener");
     const column = await box(previewScreen(page).locator("[data-block-id]").first());
     expect((await box(anchor)).width).toBeGreaterThan(column.width * 0.5);
@@ -538,6 +539,6 @@ test.describe("M2-20 and M2-21 image and card panels", () => {
     await expect(card).toContainText("Night Market");
     await expect(card).toContainText("View");
     await expect(card.locator("img")).toHaveCount(0);
-    await expect(card).toHaveAttribute("href", "https://maraokafor.com/night-market");
+    await expect(card).toHaveAttribute("href", new RegExp(`^/r/[0-9a-f-]{36}/${id}$`));
   });
 });

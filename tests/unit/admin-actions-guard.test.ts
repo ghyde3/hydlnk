@@ -53,9 +53,14 @@ function untouchedDeps() {
 }
 
 describe("M5-04 the registry", () => {
-  it("lists the three admin mutations, with unique names", () => {
+  it("lists the four admin mutations, with unique names", () => {
     const names = ADMIN_ACTIONS.map((action) => action.name);
-    expect(names.sort()).toEqual(["dismiss_report", "suspend_account", "unsuspend_account"]);
+    expect(names.sort()).toEqual([
+      "dismiss_report",
+      "review_traffic_flag",
+      "suspend_account",
+      "unsuspend_account",
+    ]);
     expect(new Set(names).size).toBe(names.length);
   });
 
@@ -140,7 +145,7 @@ describe("M5-04 nothing can add an unguarded admin mutation", () => {
       ([, value]) =>
         typeof value === "object" && value !== null && "run" in value && "name" in value,
     );
-    expect(exported.length).toBeGreaterThanOrEqual(3);
+    expect(exported.length).toBeGreaterThanOrEqual(4);
     for (const [exportName, value] of exported) {
       expect(ADMIN_ACTIONS, `${exportName} is exported but not in ADMIN_ACTIONS`).toContain(value);
     }

@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * VERCEL_API_TOKEN is optional at build and startup (production has none until the custom-domains
- * wave). Whatever has to call the Vercel API (adding or removing a custom domain) fails closed
- * with a clear error while it is missing and makes no request; deleting an account or a page that
- * has NO domain rows never reaches the Vercel client, so it never needs the token. The real
- * delete code runs here with the token unset and only the database, Stripe and Storage replaced.
+ * VERCEL_API_TOKEN is required on every deployment since the custom-domains wave (a Vercel build or
+ * start without it stops, naming it); off Vercel (local dev, CI, this suite) it may be unset, and
+ * whatever has to call the Vercel API (adding or removing a custom domain) fails closed with a clear
+ * error while it is missing and makes no request. Deleting an account or a page that has NO domain
+ * rows never reaches the Vercel client, so it never needs the token. The real delete code runs here
+ * with the token unset and only the database, Stripe and Storage replaced.
  */
 
 vi.mock("server-only", () => ({}));
@@ -129,19 +130,29 @@ afterEach(() => {
 });
 
 const { readVercelApiConfig, VercelNotConfiguredError } = await import("@/lib/pages/vercel-config");
-const { removeVercelDomain } = await import("@/lib/pages/remove-domain");
+const { removeProjectDomain: removeVercelDomain } = await import("@/lib/domains/vercel");
 const { removeAccountDomains } = await import("@/lib/pages/delete-domains");
 const { deleteAccount } = await import("@/lib/pages/delete-account");
 
-describe("startup and build do not need the token", () => {
-  it("the server env module imports on a production deployment without VERCEL_API_TOKEN", async () => {
+describe("startup and build need the token on a deployment (custom domains are live, Wave E)", () => {
+  it("the server env module refuses to import on a production deployment without VERCEL_API_TOKEN, naming it", async () => {
     vi.resetModules();
     Object.assign(process.env, M4_ENV, {
       VERCEL_ENV: "production",
       NEXT_PUBLIC_ROOT_DOMAIN: "hydlnk.com",
     });
+    await expect(import("@/lib/env/server")).rejects.toThrow(/VERCEL_API_TOKEN/);
+  });
+
+  it("and imports once it is set", async () => {
+    vi.resetModules();
+    Object.assign(process.env, M4_ENV, {
+      VERCEL_ENV: "production",
+      NEXT_PUBLIC_ROOT_DOMAIN: "hydlnk.com",
+      VERCEL_API_TOKEN: "tok_unit",
+    });
     const { serverEnv } = await import("@/lib/env/server");
-    expect(serverEnv.VERCEL_API_TOKEN).toBeUndefined();
+    expect(serverEnv.VERCEL_API_TOKEN).toBe("tok_unit");
     expect(serverEnv.VERCEL_PROJECT_ID).toBe("prj_unit");
   });
 

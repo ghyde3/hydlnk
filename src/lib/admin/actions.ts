@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { reviewTrafficFlagAction } from "@/lib/analytics/admin/review-flag-action";
 import type { Json } from "@/lib/supabase/database.types";
 import { fail, type ActionResult, type AdminAction, type AdminActionContext } from "./types";
 
@@ -264,9 +265,12 @@ export const dismissReportAction = defineAction("dismiss_report", async (context
   return { ok: true, status: 200, data: { changed } };
 });
 
+export { reviewTrafficFlagAction };
+
 /** Every admin mutation. Adding an action here is what makes the guard test cover it. */
 export const ADMIN_ACTIONS: readonly AdminAction[] = [
   suspendAccountAction,
   unsuspendAccountAction,
   dismissReportAction,
+  reviewTrafficFlagAction,
 ];

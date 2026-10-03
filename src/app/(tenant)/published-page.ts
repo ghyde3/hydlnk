@@ -178,3 +178,35 @@ export async function getPublishedPageByHandle(handle: string): Promise<Publishe
   const state = await getTenantPageState(handle);
   return state.kind === "published" ? state.page : null;
 }
+
+// ---------------------------------------------------------------------------------------------
+// Custom domains (M4-09): the same public read, by page id
+// ---------------------------------------------------------------------------------------------
+
+const PAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Public read of a page by id, for /sites/[pageId] (the rewrite target of a verified custom
+ * domain). It is the very read the handle host uses (`readPublicCached`: one cache entry and one
+ * tag, `pageTag`, per page), so a publish shows on `mara.hydlnk.com` and on its custom domain at
+ * the same moment. `published`, the plan and the suspension flag, never `draft`. Anything that is
+ * not a published page of an active account is `missing` or `suspended`: the route answers 404.
+ * A malformed id (`/sites/<uuid>.txt` is a path the proxy does not see) never reaches the database.
+ */
+export const getTenantPageStateById = cache(async (pageId: string): Promise<TenantPageState> => {
+  if (!PAGE_ID.test(pageId)) return { kind: "missing" };
+  const read = await readPublicCached(pageId);
+  if (read.state === "missing") return { kind: "missing" };
+  if (read.state === "suspended") return { kind: "suspended" };
+  if (read.state === "unpublished") return { kind: "unpublished", pageId };
+
+  const parsed = publishedDocSchema.safeParse(read.published);
+  if (!parsed.success) {
+    console.error(`Published document for page ${pageId} failed validation`, parsed.error.issues);
+    return { kind: "missing" };
+  }
+  return {
+    kind: "published",
+    page: { pageId, document: parsed.data, publishedAt: read.publishedAt, plan: read.plan },
+  };
+});

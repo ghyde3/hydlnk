@@ -101,7 +101,8 @@ test.describe("M2-15 link button", () => {
     await page.goto(live.url);
     const first = page.locator("a[data-block-type=link]").first();
     await expect(first).toHaveText("Portrait sessions - fall dates");
-    await expect(first).toHaveAttribute("href", "https://maraokafor.example/book");
+    // The link goes through the click redirect (M4-22): the destination is not in the markup.
+    await expect(first).toHaveAttribute("href", `/r/${live.pageId}/${doc.blocks[0]!.id}`);
     await expect(first).toHaveAttribute("rel", "nofollow noopener");
     expect(await css(first, "display")).toBe("flex");
     expect(await css(first, "justify-content")).toBe("center");
@@ -368,7 +369,7 @@ test.describe("M2-17 social icons", () => {
       await anchors.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label"))),
     ).toEqual(["Instagram", "TikTok", "YouTube", "X", "Email"]);
     expect(await anchors.last().getAttribute("href")).toBe("mailto:hello@maraokafor.example");
-    expect(await anchors.first().getAttribute("href")).toBe("https://example.com/instagram");
+    expect(await anchors.first().getAttribute("href")).toBe(`/r/${live.pageId}/ico-live-0001`);
     for (const anchor of await anchors.all()) {
       const rect = await box(anchor);
       expect(rect.width).toBe(44);
@@ -670,7 +671,10 @@ test.describe("M2-20 image block", () => {
       new RegExp(`/storage/v1/object/public/page-media/${image.path}$`),
     );
     const anchor = linked!.locator("a");
-    await expect(anchor).toHaveAttribute("href", "https://maraokafor.example/studio");
+    await expect(anchor).toHaveAttribute(
+      "href",
+      `/r/${live.pageId}/${await linked!.getAttribute("data-block-id")}`,
+    );
     await expect(anchor).toHaveAttribute("rel", "nofollow noopener");
     expect(await css(img, "border-top-left-radius")).toBe("16px");
     expect(await css(img, "max-width")).toBe("100%");
@@ -719,7 +723,10 @@ test.describe("M2-21 link card", () => {
     const live = await publishedPage("cd", doc);
     await page.goto(live.url);
     const card = page.locator("a[data-block-type=card]").first();
-    await expect(card).toHaveAttribute("href", "https://maraokafor.example/night-market");
+    await expect(card).toHaveAttribute(
+      "href",
+      `/r/${live.pageId}/${await card.getAttribute("data-block-id")}`,
+    );
     await expect(card).toHaveAttribute("rel", "nofollow noopener");
     expect(await css(card, "border-top-width")).toBe("1px");
     expect(await css(card, "border-top-color")).toBe(RGB.border);

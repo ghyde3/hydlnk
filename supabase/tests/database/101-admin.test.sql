@@ -6,7 +6,7 @@
 --   * the two admin read helpers are callable by service_role only and search as documented.
 
 begin;
-select plan(51);
+select plan(53);
 
 select tests.create_supabase_user('a', 'a-admin101@example.test');   -- stays active
 select tests.create_supabase_user('b', 'b-admin101@example.test');   -- gets suspended
@@ -202,6 +202,16 @@ select lives_ok(
   format($$ insert into public.admin_audit (admin_id, action, account_id, detail) values (%L, 'suspend', %L, '{"handle":"adm-bravo"}') $$,
     tests.get_supabase_uid('a'), tests.get_supabase_uid('b')),
   'the server appends to the audit log'
+);
+select lives_ok(
+  format($$ insert into public.admin_audit (admin_id, action, account_id, detail) values (%L, 'review_traffic_flag', %L, '{"flag_id":"00000000-0000-4000-8000-0000000101f1"}') $$,
+    tests.get_supabase_uid('a'), tests.get_supabase_uid('b')),
+  'the server appends a review_traffic_flag row (Mark reviewed on a traffic flag)'
+);
+select throws_ok(
+  $$ insert into public.admin_audit (admin_id, action) values (gen_random_uuid(), 'review_traffic_flags') $$,
+  '23514', null,
+  'only the exact action names are accepted'
 );
 select throws_ok(
   $$ insert into public.admin_audit (admin_id, action) values (gen_random_uuid(), 'delete_everything') $$,
