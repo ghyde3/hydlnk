@@ -79,7 +79,7 @@ test.describe("M6-10 the shared page, over HTTP", () => {
     const csp = String(res.headers["content-security-policy"]);
     expect(
       csp.startsWith(
-        "frame-src https://www.youtube-nocookie.com https://open.spotify.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; ",
+        "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; ",
       ),
     ).toBe(true);
     expect(csp).toMatch(/; script-src 'self' 'nonce-[A-Za-z0-9+/]{22}==' 'strict-dynamic'/);

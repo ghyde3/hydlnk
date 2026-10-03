@@ -28,7 +28,7 @@ test("M2-03 the editor loads and works with no console errors or hydration warni
   page.on("pageerror", (error) => problems.push(`pageerror: ${error.message.slice(0, 200)}`));
   await seededUser(context, "q1");
   await openEditor(page);
-  await rowOf(page, "Bt5rJ1fGz6Os").locator("button[aria-expanded]").click();
+  await rowOf(page, "Bt5rJ1fGz6Os").locator("button[aria-expanded]").first().click();
   await page.getByRole("button", { name: "Card", exact: true }).click();
   if (phoneOnly(info)) await page.getByRole("tab", { name: "Preview" }).click();
   await page.waitForTimeout(1500);
@@ -41,7 +41,7 @@ test("M2-03 axe finds no serious or critical violations in the editor (blocks an
 }, info) => {
   await seededUser(context, "q2");
   await openEditor(page);
-  await rowOf(page, "Bt5rJ1fGz6Os").locator("button[aria-expanded]").click();
+  await rowOf(page, "Bt5rJ1fGz6Os").locator("button[aria-expanded]").first().click();
   const found = await violations(page);
   if (phoneOnly(info)) {
     await page.getByRole("tab", { name: "Preview" }).click();

@@ -97,13 +97,16 @@ test.describe("M3-10 type", () => {
     await openDesign(page);
 
     // Noir's Instrument Serif ships one weight.
-    await expect(group(page, "Heading weight").getByRole("button")).toHaveCount(1);
-    await expect(option(page, "Heading weight", "Regular")).toHaveAttribute("aria-pressed", "true");
+    await expect(group(page, "Heading boldness").getByRole("button")).toHaveCount(1);
+    await expect(option(page, "Heading boldness", "Regular")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
 
     // Fraunces ships four; choose Semibold.
     await pickFont(page, "Heading font", "Fraunces");
-    await expect(group(page, "Heading weight").getByRole("button")).toHaveCount(4);
-    await choose(page, "Heading weight", "Semibold");
+    await expect(group(page, "Heading boldness").getByRole("button")).toHaveCount(4);
+    await choose(page, "Heading boldness", "Semibold");
     await showPreview(page);
     await expect.poll(() => style(page, ".pg-name", "font-weight")).toBe("600");
     await showTokens(page);
@@ -114,9 +117,9 @@ test.describe("M3-10 type", () => {
 
     // Space Mono ships 400 and 700: 600 snaps to 700 and the control follows.
     await pickFont(page, "Heading font", "Space Mono");
-    await expect(group(page, "Heading weight").getByRole("button")).toHaveCount(2);
-    await expect(option(page, "Heading weight", "Bold")).toHaveAttribute("aria-pressed", "true");
-    await expect(pressed(page, "Heading weight")).toHaveCount(1);
+    await expect(group(page, "Heading boldness").getByRole("button")).toHaveCount(2);
+    await expect(option(page, "Heading boldness", "Bold")).toHaveAttribute("aria-pressed", "true");
+    await expect(pressed(page, "Heading boldness")).toHaveCount(1);
     await expectOverrides(
       user.pageId,
       (o) => o.fontHeading === "Space Mono" && o.weightHeading === 700,
@@ -124,8 +127,11 @@ test.describe("M3-10 type", () => {
 
     // Back to a single-weight family: 700 snaps to 400.
     await pickFont(page, "Heading font", "Instrument Serif");
-    await expect(group(page, "Heading weight").getByRole("button")).toHaveCount(1);
-    await expect(option(page, "Heading weight", "Regular")).toHaveAttribute("aria-pressed", "true");
+    await expect(group(page, "Heading boldness").getByRole("button")).toHaveCount(1);
+    await expect(option(page, "Heading boldness", "Regular")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     const overrides = await expectOverrides(user.pageId, (o) => o.weightHeading === 400);
     expect(overrides.fontHeading).toBe("Instrument Serif");
   });
@@ -136,10 +142,10 @@ test.describe("M3-10 type", () => {
   }) => {
     const user = await seededUser(context, "dy3");
     await openDesign(page);
-    await expect(group(page, "Letter case").getByRole("button")).toHaveCount(3);
-    await expect(option(page, "Letter case", "Normal")).toHaveAttribute("aria-pressed", "true");
+    await expect(group(page, "Capital letters").getByRole("button")).toHaveCount(3);
+    await expect(option(page, "Capital letters", "Normal")).toHaveAttribute("aria-pressed", "true");
 
-    await choose(page, "Letter case", "Uppercase");
+    await choose(page, "Capital letters", "Uppercase");
     await showPreview(page);
     await expect.poll(() => style(page, ".pg-name", "text-transform")).toBe("uppercase");
     expect(await style(page, ".pg-header", "text-transform")).toBe("uppercase");
@@ -147,7 +153,7 @@ test.describe("M3-10 type", () => {
     expect(await style(page, ".pg-link", "text-transform")).toBe("none");
     await showTokens(page);
 
-    await choose(page, "Letter case", "Lowercase");
+    await choose(page, "Capital letters", "Lowercase");
     await showPreview(page);
     await expect.poll(() => style(page, ".pg-name", "text-transform")).toBe("lowercase");
     expect(await style(page, ".pg-header", "text-transform")).toBe("lowercase");
@@ -158,7 +164,10 @@ test.describe("M3-10 type", () => {
     await expectOverrides(user.pageId, (o) => o.letterCase === "lowercase");
     expect(await liveHtml(user.handle)).not.toContain("--t-letter-case:lowercase");
     await reloadDesign(page);
-    await expect(option(page, "Letter case", "Lowercase")).toHaveAttribute("aria-pressed", "true");
+    await expect(option(page, "Capital letters", "Lowercase")).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
 
     await publishFromEditor(page);
     await expect
@@ -194,10 +203,10 @@ test.describe("M3-10 type", () => {
     await openDesign(page);
 
     await choose(page, "Text size", "1.2×");
-    await choose(page, "Letter case", "Uppercase");
+    await choose(page, "Capital letters", "Uppercase");
     await expectNoHorizontalScroll(page);
     if (isPhone(page)) {
-      for (const name of ["Text size", "Heading weight", "Letter case"]) {
+      for (const name of ["Text size", "Heading boldness", "Capital letters"]) {
         for (const button of await group(page, name).getByRole("button").all()) {
           expect((await button.boundingBox())!.height, name).toBeGreaterThanOrEqual(44);
         }

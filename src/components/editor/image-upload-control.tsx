@@ -1,18 +1,21 @@
 "use client";
 
-import { useId, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { imageRefSchema, type ImageRef } from "@/lib/document";
 import { sniffImageType } from "@/lib/editor/sniff";
 import {
   FILE_TOO_BIG_MESSAGE,
+  UNREADABLE_IMAGE_MESSAGE,
   UNSUPPORTED_TYPE_MESSAGE,
   UPLOAD_FAILED_MESSAGE,
   uploadErrorMessage,
 } from "@/lib/media/messages";
+import { decodeForPositioning, type PositionPhoto } from "@/lib/media/position-crop";
 import { prepareImageForUpload } from "@/lib/media/upload-client";
 import { mediaUrl } from "@/lib/media/url";
 import { UploadIcon } from "./icons";
+import { PositionDialog, type PositionVariant } from "./position-dialog";
 
 /** The upload route's size limit (M2-08): 4 MB. Checked here first so a big file is never sent. */
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
@@ -31,11 +34,27 @@ export interface ImageUploadControlProps {
   label?: string;
   /** Fallback letters for the avatar when there is no photo. */
   initials?: string;
+  /** The help line under the buttons, when the default for `kind` is not the right words (M6-33). */
+  help?: string;
+  /**
+   * The words of the "Position your ..." dialog an `avatar` upload goes through (M6-24): "photo"
+   * (the profile photo: "Position your photo", "Use photo") or "image" (a link's thumbnail:
+   * "Position your image", "Use image"). Defaults to "photo" when the control's noun is "photo",
+   * else "image".
+   */
+  positioning?: PositionVariant;
 }
 
 /**
  * Upload, replace and remove one image (M2-09). Posts the file to `/api/media`, which stores it and
  * answers `{path, width, height}`; the control hands exactly that to `onChange` and nothing else.
+ *
+ * `kind="avatar"` (the profile photo, a link's thumbnail) is a square crop made in the browser
+ * (M6-24): a picked file is type-checked (the real bytes, not the name), decoded, and shown in the
+ * "Position your photo" dialog; only what "Use photo" draws is uploaded, as a JPEG or PNG of at most
+ * 800px that the route turns into the 400px WebP. Cancel, Escape and a picture the browser cannot
+ * read upload nothing. "Adjust photo" reopens the dialog on the stored picture and uploads a new
+ * object. The route and the stored reference do not change, and no crop value is stored.
  * Replacing or removing only changes the reference: no Storage call, so an object the published
  * page still uses stays readable. Errors show under the buttons and leave `value` as it was.
  *
@@ -47,6 +66,8 @@ export function ImageUploadControl({
   onChange,
   label,
   initials = "?",
+  help: helpText,
+  positioning: positioningVariant,
 }: ImageUploadControlProps) {
   const noun = label ?? (kind === "avatar" ? "photo" : "image");
   // A suspended owner cannot upload (M5-09); the route answers 403 account_suspended regardless.
@@ -60,6 +81,29 @@ export function ImageUploadControl({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canRetry, setCanRetry] = useState(false);
+  // An avatar is a square crop (M6-24): a picked file or the stored photo opens the "Position your
+  // photo" dialog first, and only its result is uploaded. `preparing` covers the decode before it opens.
+  const squareCrop = kind === "avatar";
+  const variant: PositionVariant = positioningVariant ?? (noun === "photo" ? "photo" : "image");
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const adjustButton = useRef<HTMLButtonElement>(null);
+  const [positioned, setPositioned] = useState<PositionPhoto | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  /** The button that opened the dialog: Cancel and Escape give focus back to it. */
+  const opener = useRef<HTMLButtonElement | null>(null);
+  const refocusOpener = useRef(false);
+  const refocusAfterUpload = useRef(false);
+  const heldPhoto = useRef<PositionPhoto | null>(null);
+  useEffect(() => {
+    heldPhoto.current = positioned;
+  }, [positioned]);
+  // A decoded picture is freed when the control goes away.
+  useEffect(() => () => heldPhoto.current?.close(), []);
+  useEffect(() => {
+    if (positioned !== null || !refocusOpener.current) return;
+    refocusOpener.current = false;
+    (opener.current ?? uploadButton.current)?.focus();
+  }, [positioned]);
 
   function fail(message: string, retryable = false, file?: File): void {
     retryFile.current = retryable ? (file ?? null) : null;
@@ -109,7 +153,85 @@ export function ImageUploadControl({
       fail(FAILED_MESSAGE, true, picked);
     } finally {
       setBusy(false);
+      // After the dialog, the button that showed "Uploading..." is the place to land.
+      if (refocusAfterUpload.current) {
+        refocusAfterUpload.current = false;
+        queueMicrotask(() => {
+          if (document.activeElement === document.body) uploadButton.current?.focus();
+        });
+      }
     }
+  }
+
+  /** Opens the dialog on `photo`, or says why not. */
+  function openDialog(
+    photo: PositionPhoto | null,
+    failure: string,
+    from: HTMLButtonElement | null,
+  ): void {
+    setPreparing(false);
+    if (!photo) {
+      setError(failure);
+      return;
+    }
+    opener.current = from;
+    setPositioned((previous) => {
+      previous?.close();
+      return photo;
+    });
+  }
+
+  /** A picked file for a square crop: the real type is checked, the picture is decoded, then the dialog opens. */
+  async function position(picked: File): Promise<void> {
+    setError(null);
+    setCanRetry(false);
+    retryFile.current = null;
+    const type = await sniffImageType(picked);
+    if (type === null) {
+      setError(NOT_AN_IMAGE_MESSAGE);
+      return;
+    }
+    setPreparing(true);
+    // A picture the browser cannot read opens no dialog and sends nothing. Over 4 MB and unreadable
+    // is "too big" (the sentence it always had); anything else is "couldn't read it".
+    openDialog(
+      await decodeForPositioning(picked, type !== "jpg"),
+      picked.size > MAX_UPLOAD_BYTES ? TOO_BIG_MESSAGE : UNREADABLE_IMAGE_MESSAGE,
+      uploadButton.current,
+    );
+  }
+
+  /** "Adjust": the stored picture, read back, in the same dialog. A new upload follows, with a new name. */
+  async function adjust(): Promise<void> {
+    if (!value) return;
+    setError(null);
+    setCanRetry(false);
+    retryFile.current = null;
+    setPreparing(true);
+    let photo: PositionPhoto | null = null;
+    try {
+      const response = await fetch(mediaUrl(value.path));
+      if (response.ok) {
+        const blob = await response.blob();
+        const type = await sniffImageType(blob);
+        photo = type === null ? null : await decodeForPositioning(blob, type !== "jpg");
+      }
+    } catch {
+      photo = null;
+    }
+    openDialog(
+      photo,
+      `We couldn’t open that ${noun}. Choose it again with Replace ${noun}.`,
+      adjustButton.current,
+    );
+  }
+
+  function closeDialog(giveFocusBack: boolean): void {
+    refocusOpener.current = giveFocusBack;
+    setPositioned((previous) => {
+      previous?.close();
+      return null;
+    });
   }
 
   function onRetry(): void {
@@ -120,13 +242,16 @@ export function ImageUploadControl({
   function onPick(event: ChangeEvent<HTMLInputElement>): void {
     const file = event.target.files?.[0];
     event.target.value = ""; // choosing the same file again must fire a change again
-    if (file) void upload(file);
+    if (!file) return;
+    if (squareCrop) void position(file);
+    else void upload(file);
   }
 
   const help =
-    kind === "avatar"
+    helpText ??
+    (kind === "avatar"
       ? "JPG or PNG, square works best. Without a photo, your initials show."
-      : "JPG, PNG or WebP, up to 4 MB.";
+      : "JPG, PNG or WebP, up to 4 MB.");
 
   return (
     <div className="flex flex-wrap items-center gap-3.5">
@@ -147,8 +272,9 @@ export function ImageUploadControl({
             tabIndex={-1}
           />
           <button
+            ref={uploadButton}
             type="button"
-            disabled={busy || suspended}
+            disabled={busy || preparing || suspended}
             aria-busy={busy}
             title={suspended ? SUSPENDED_REASON : undefined}
             onClick={() => fileRef.current?.click()}
@@ -157,10 +283,22 @@ export function ImageUploadControl({
             <UploadIcon />
             {busy ? "Uploading..." : value ? `Replace ${noun}` : `Upload ${noun}`}
           </button>
+          {value && squareCrop ? (
+            <button
+              ref={adjustButton}
+              type="button"
+              disabled={busy || preparing || suspended}
+              title={suspended ? SUSPENDED_REASON : undefined}
+              onClick={() => void adjust()}
+              className="inline-flex min-h-11 items-center rounded-md border border-line-3 bg-surface px-3 text-[13px] font-semibold text-ink disabled:cursor-progress disabled:opacity-60"
+            >
+              {`Adjust ${noun}`}
+            </button>
+          ) : null}
           {value ? (
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || preparing}
               onClick={() => {
                 setError(null);
                 setCanRetry(false);
@@ -191,6 +329,18 @@ export function ImageUploadControl({
           </button>
         ) : null}
       </div>
+      {positioned ? (
+        <PositionDialog
+          photo={positioned}
+          variant={variant}
+          onUse={(file) => {
+            refocusAfterUpload.current = true;
+            closeDialog(false);
+            void upload(file);
+          }}
+          onCancel={() => closeDialog(true)}
+        />
+      ) : null}
     </div>
   );
 }

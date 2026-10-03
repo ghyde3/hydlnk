@@ -162,7 +162,7 @@ export default function TermsPage() {
       <h2 id="third-parties">Other services</h2>
       <p>
         HYDLNK works with services run by others, such as Stripe for payments, Google for
-        sign-in, and YouTube and Spotify for embedded players. Their terms apply to your use of
+        sign-in, and YouTube, Spotify and the other video and music services you embed. Their terms apply to your use of
         them, and we’re not responsible for them. Links on pages lead to sites we don’t control.
       </p>
 

@@ -94,11 +94,11 @@ test.describe("M6-05 duplicate a block", () => {
     expect(ids.slice(2)).toEqual([bid(1), bid(2)]);
 
     // The copy is open with its first input focused; the original closed.
-    await expect(rowOf(page, copyId).locator("button[aria-expanded]")).toHaveAttribute(
+    await expect(rowOf(page, copyId).locator("button[aria-expanded]").first()).toHaveAttribute(
       "aria-expanded",
       "true",
     );
-    await expect(rowOf(page, LINK.id).locator("button[aria-expanded]")).toHaveAttribute(
+    await expect(rowOf(page, LINK.id).locator("button[aria-expanded]").first()).toHaveAttribute(
       "aria-expanded",
       "false",
     );

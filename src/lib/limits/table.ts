@@ -1,6 +1,6 @@
 /**
  * The plan limits, in one table (M4-02). Postgres holds the same numbers in `public.plan_limits(p_plan)`
- * (migration 20261002100003_plan_limits_v2.sql, where the three BEFORE INSERT triggers read them);
+ * (migrations 20261002100003_plan_limits_v2.sql and 20261006000002_page_versions.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
  * tests/unit/limits-parity.test.ts calls that function for every plan and column and fails when the
  * two differ. Change a number here and in the migration (a new one) together.
  *
@@ -28,6 +28,8 @@ export interface PlanLimits {
   analyticsHistoryDays: number;
   /** Referrer, device and country breakdowns. */
   analyticsBreakdowns: boolean;
+  /** Published versions kept per page, newest first (M6-48); 0 = version history is not included. */
+  versionsKept: number;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -40,6 +42,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     savedThemes: 3,
     analyticsHistoryDays: 30,
     analyticsBreakdowns: false,
+    versionsKept: 0,
   },
   pro: {
     pages: 3,
@@ -48,6 +51,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     savedThemes: null,
     analyticsHistoryDays: 365,
     analyticsBreakdowns: true,
+    versionsKept: 25,
   },
   studio: {
     pages: 15,
@@ -56,6 +60,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     savedThemes: null,
     analyticsHistoryDays: 365,
     analyticsBreakdowns: true,
+    versionsKept: 25,
   },
 };
 
@@ -67,6 +72,7 @@ export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
   savedThemes: "max_saved_themes",
   analyticsHistoryDays: "analytics_history_days",
   analyticsBreakdowns: "analytics_breakdowns",
+  versionsKept: "versions_kept",
 };
 
 export const PLAN_LABELS: Readonly<Record<PlanId, string>> = {

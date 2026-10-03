@@ -5,12 +5,14 @@ import type { DesignSectionProps } from "@/components/design/types";
 import type { TokenSet } from "@/lib/theme";
 
 /**
- * Shape on the Design screen: button style (M3-11), corner radius and border width (M3-12).
+ * The Buttons card of the Design screen: button style (M3-11), corner radius and border thickness
+ * (M3-12), named in plain words (M6-47).
  * Each group is a segmented control (Design.dc.html): a track with the options inside it, the
  * chosen one white on a 1px ring, `aria-pressed` on every option, 44px tall on a phone (40px from
  * 760px up, as in the mockup), wrapping into rows when the width runs out.
  *
- * `OptionGroup` and `OptionButton` are shared with the spacing and background sections.
+ * `OptionGroup` and `OptionButton` are shared with the type, layout and background sections. A
+ * group's title is an `h3`: it sits under its card's `h2`.
  */
 
 type ButtonStyle = TokenSet["buttonStyle"];
@@ -38,7 +40,7 @@ export function OptionGroup({
 }) {
   return (
     <div className={`flex min-w-0 flex-col gap-2 ${className}`}>
-      <h2 className="m-0 text-sm font-semibold text-ink">{label}</h2>
+      <h3 className="m-0 text-sm font-semibold text-ink">{label}</h3>
       <div
         role="group"
         aria-label={label}
@@ -80,7 +82,7 @@ export function OptionButton({
   );
 }
 
-/** Button style, corner radius and border width. */
+/** Button style, corner radius and border thickness. */
 export function ShapeSection({ resolved, setToken }: DesignSectionProps) {
   return (
     <div className="flex flex-col gap-4">
@@ -114,18 +116,23 @@ export function ShapeSection({ resolved, setToken }: DesignSectionProps) {
         ))}
       </OptionGroup>
 
-      <OptionGroup label="Border width">
-        {BORDER_WIDTHS.map((width) => (
-          <OptionButton
-            key={width}
-            mono
-            pressed={resolved.borderWidth === width}
-            onPick={() => setToken("borderWidth", width)}
-          >
-            {width}px
-          </OptionButton>
-        ))}
-      </OptionGroup>
+      <div className="flex min-w-0 flex-col gap-2">
+        <OptionGroup label="Border thickness">
+          {BORDER_WIDTHS.map((width) => (
+            <OptionButton
+              key={width}
+              mono
+              pressed={resolved.borderWidth === width}
+              onPick={() => setToken("borderWidth", width)}
+            >
+              {width}px
+            </OptionButton>
+          ))}
+        </OptionGroup>
+        <p className="m-0 text-xs text-text-2">
+          Corners and borders also apply to cards, images and embeds.
+        </p>
+      </div>
     </div>
   );
 }

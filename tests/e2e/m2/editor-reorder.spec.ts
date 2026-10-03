@@ -26,7 +26,8 @@ const WORDS = ["One", "Two", "Three", "Four", "Five"];
 
 const handle = (page: Page, id: string) =>
   rowOf(page, id).getByRole("button", { name: "Drag to reorder" });
-const rowButton = (page: Page, id: string) => rowOf(page, id).locator("button[aria-expanded]");
+const rowButton = (page: Page, id: string) =>
+  rowOf(page, id).locator("button[aria-expanded]").first();
 const order = (page: Page) =>
   rows(page).evaluateAll((els) => els.map((el) => el.getAttribute("data-block-id")));
 const previewOrder = (page: Page) =>

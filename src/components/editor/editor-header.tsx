@@ -10,7 +10,9 @@ import {
 import type { PublishStatus } from "@/lib/editor/status";
 import { PreviewLink } from "@/components/previews/preview-link";
 import { SharePreview } from "@/components/previews/share-preview";
+import { HistoryLink } from "@/components/versions/history-link";
 import { PageName } from "./page-name";
+import { QrCodeButton } from "./qr-dialog";
 import { StatusChip } from "./status-chip";
 import { UndoRedoButtons } from "./undo-redo-controls";
 import type { UndoRedo } from "./use-undo-redo";
@@ -63,6 +65,7 @@ export function EditorHeader({
   publishing,
   blocked = false,
   undoRedo,
+  qr,
   onPublish,
 }: {
   breadcrumb: string;
@@ -81,6 +84,8 @@ export function EditorHeader({
   blocked?: boolean;
   /** Undo and Redo (M6-07): two icon buttons to the left of the status chip. */
   undoRedo?: UndoRedo;
+  /** The "QR code" button (M6-31): the page's handle (the file names) and the address it encodes. */
+  qr?: { handle: string; address: string };
   onPublish: () => void;
 }) {
   // A suspended owner cannot publish (M5-09): the server refuses it too (account_suspended).
@@ -105,6 +110,10 @@ export function EditorHeader({
             View live page
           </a>
         ) : null}
+        {qr ? (
+          <QrCodeButton handle={qr.handle} address={qr.address} published={liveUrl !== null} />
+        ) : null}
+        <HistoryLink flush={flush} />
         <PreviewLink
           href={previewUrl}
           flush={flush}

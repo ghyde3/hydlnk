@@ -62,7 +62,14 @@ describe("try builder themes", () => {
       const row = stored[name];
       expect(row, `${name} is a system theme in the migrations`).toBeDefined();
       // Milestone 0 stored "none" for no text transform; the legacy-values migration made it "normal".
-      const expected = { ...row, letterCase: row!.letterCase === "none" ? "normal" : row!.letterCase };
+      // The gradient-token migration (M6-41) added the three gradient keys at their defaults.
+      const expected = {
+        ...row,
+        letterCase: row!.letterCase === "none" ? "normal" : row!.letterCase,
+        gradientAngle: 180,
+        gradientFrom: null,
+        gradientTo: null,
+      };
       expect(theme.tokens).toEqual(expected);
     },
   );
@@ -75,9 +82,17 @@ describe("try builder accent colors", () => {
       const colors = accentColors(theme);
       for (const id of ACCENT_IDS) {
         const accent = colors[id];
-        expect(contrastRatio(accent, theme.tokens.bg), `${id} on the page color`).toBeGreaterThanOrEqual(4.5);
-        expect(contrastRatio(accent, theme.tokens.surface), `${id} on the card color`).toBeGreaterThanOrEqual(3);
-        expect(contrastRatio(inkFor(accent), accent), `${id} button text`).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(accent, theme.tokens.bg),
+          `${id} on the page color`,
+        ).toBeGreaterThanOrEqual(4.5);
+        expect(
+          contrastRatio(accent, theme.tokens.surface),
+          `${id} on the card color`,
+        ).toBeGreaterThanOrEqual(3);
+        expect(contrastRatio(inkFor(accent), accent), `${id} button text`).toBeGreaterThanOrEqual(
+          4.5,
+        );
       }
     },
   );
@@ -138,7 +153,10 @@ describe("try builder sample page", () => {
       const blocks = state.blocks.filter((block) => block.type !== "image");
       const doc = buildTryDoc({ ...state, blocks }, preset);
       const parsed = publishedDocSchema.safeParse(doc);
-      expect(parsed.success, `${audience.slug}: ${parsed.success ? "" : parsed.error.message}`).toBe(true);
+      expect(
+        parsed.success,
+        `${audience.slug}: ${parsed.success ? "" : parsed.error.message}`,
+      ).toBe(true);
       expect(TRY_THEME_IDS).toContain(preset.theme);
     }
   });
@@ -154,7 +172,9 @@ describe("try builder sample page", () => {
     for (const id of ids) expect(id).toMatch(BLOCK_ID_PATTERN);
     expect(new Set(ids).size).toBe(ids.length);
     // Deterministic, so server and client render the same ids.
-    expect(presetBlocks().map((block) => block.id)).toEqual(presetBlocks().map((block) => block.id));
+    expect(presetBlocks().map((block) => block.id)).toEqual(
+      presetBlocks().map((block) => block.id),
+    );
   });
 
   it("the preset sets the theme, name, bio, social icons and link labels", () => {
@@ -172,8 +192,14 @@ describe("try builder sample page", () => {
     expect(doc.profile).toMatchObject({ name: "Hollow Pines", bio: "Indie folk." });
     const [social, first, second] = doc.blocks;
     expect(social).toMatchObject({ type: "social" });
-    expect(social!.type === "social" && social!.icons.map((icon) => icon.platform)).toEqual(["tiktok", "email"]);
-    expect([first, second].map((block) => block!.type === "link" && block!.label)).toEqual(["Buy tickets", "Merch"]);
+    expect(social!.type === "social" && social!.icons.map((icon) => icon.platform)).toEqual([
+      "tiktok",
+      "email",
+    ]);
+    expect([first, second].map((block) => block!.type === "link" && block!.label)).toEqual([
+      "Buy tickets",
+      "Merch",
+    ]);
     expect(doc.tokens.bg).toBe(TRY_THEMES.find((theme) => theme.id === "noir")!.tokens.bg);
   });
 

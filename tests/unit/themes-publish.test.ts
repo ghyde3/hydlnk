@@ -129,7 +129,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       await writeDraft(a, doc("A", { ref: null, overrides: { bg: "red;}" } as never }));
       await expectStopped(a, {
         field: "theme.overrides.bg",
-        message: "Publish stopped: bg isn’t a valid color. Reset it in Design.",
+        message: "Publish stopped: Page background isn’t a valid color. Reset it in Design.",
         blockId: null,
       });
     });
@@ -140,7 +140,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       await writeDraft(a, doc("A", { ref: null, overrides: { fontHeading: "Evil;}" } as never }));
       await expectStopped(a, {
         field: "theme.overrides.fontHeading",
-        message: "Publish stopped: fontHeading isn’t an available font. Reset it in Design.",
+        message: "Publish stopped: Heading font isn’t an available font. Reset it in Design.",
       });
     });
 
@@ -153,7 +153,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       await writeDraft(a, doc("A", { ref: null, overrides: { radius: 99 } }));
       await expectStopped(a, {
         field: "theme.overrides.radius",
-        message: "Publish stopped: radius isn’t valid. Reset it in Design.",
+        message: "Publish stopped: Corner radius isn’t valid. Reset it in Design.",
       });
     });
   });
@@ -172,7 +172,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       );
       await expectStopped(a, {
         field: "theme.overrides.bgImage",
-        message: /^Publish stopped: bgImage isn’t one of your uploaded images/,
+        message: /^Publish stopped: Background image isn’t one of your uploaded images/,
       });
     });
 

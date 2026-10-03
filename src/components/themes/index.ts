@@ -9,6 +9,13 @@ export { OverrideChip } from "./override-chip";
 export { PageTokensProvider, usePageTokens } from "./page-tokens-context";
 export { SaveAsThemeButton } from "./save-as-theme-button";
 export { SavedThemesCard } from "./saved-themes-card";
+export { ThemePreviewBar, ThemePreviewHeader } from "./theme-preview-controls";
+export {
+  useThemePreview,
+  type ThemePreview,
+  type ThemePreviewOptions,
+  type ThemePreviewView,
+} from "./use-theme-preview";
 export {
   THEME_MESSAGE_MS,
   useThemeLibrary,

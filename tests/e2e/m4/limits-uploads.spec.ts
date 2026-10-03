@@ -13,6 +13,7 @@ import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { openEditor } from "../m2/editor-helpers";
 import { openDesign } from "../m3/design-helpers";
 import { makePngImage } from "../m5/images-fixtures";
+import { confirmPhoto } from "../m6/position-dialog-helpers";
 import {
   SERVER_PORT,
   makePng,
@@ -299,6 +300,7 @@ test.describe("M4-31 the editor shows the refusal inline", () => {
       mimeType: "image/png",
       buffer: padTo(makePng(8, 8), 2 * MIB),
     });
+    await confirmPhoto(page); // M6-24: the position dialog first; the upload starts at "Use photo"
 
     const alert = page.getByRole("alert").filter({ hasText: /\S/ }).first();
     await expect(alert).toBeVisible({ timeout: 30_000 });
@@ -333,6 +335,7 @@ test.describe("M4-31 the editor shows the refusal inline", () => {
         mimeType: "image/png",
         buffer: padTo(makePng(8, 8), 2 * MIB),
       });
+    await confirmPhoto(page); // M6-24
     const alert = page.getByRole("alert").filter({ hasText: FREE_MESSAGE });
     await expect(alert).toBeVisible({ timeout: 30_000 });
     const retry = page.getByRole("button", { name: /try again|retry/i });

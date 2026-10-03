@@ -14,11 +14,13 @@ import { UPLOAD_FAILED_MESSAGE, uploadErrorMessage } from "@/lib/media/messages"
 import { prepareImageForUpload } from "@/lib/media/upload-client";
 import { mediaUrl } from "@/lib/media/url";
 import { tokenSetSchema } from "@/lib/theme";
+import { GradientPanel } from "./gradient-panel";
 import { OptionButton, OptionGroup } from "./shape-section";
 
 /**
- * Background on the Design screen: solid or gradient (M3-14), an uploaded image with replace and
- * remove (M3-15), and the overlay and blur that go with an image (M3-16).
+ * The Background card of the Design screen: solid or gradient (M3-14) with the gradient's own
+ * controls (M6-42), an uploaded image with replace and remove (M3-15), and the image overlay and
+ * image blur that go with an image (M3-16). Named in plain words (M6-47).
  *
  * The image goes through the same route as every tenant image, POST /api/media with kind
  * `background`, and the draft stores that object's public page-media URL (`mediaUrl(path)`),
@@ -87,7 +89,8 @@ const KINDS: readonly { value: BackgroundKind; label: string }[] = [
   { value: "gradient", label: "Gradient" },
 ];
 
-export function BackgroundSection({ resolved, setToken }: DesignSectionProps) {
+export function BackgroundSection(props: DesignSectionProps) {
+  const { resolved, setToken } = props;
   const fileRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -210,6 +213,8 @@ export function BackgroundSection({ resolved, setToken }: DesignSectionProps) {
         ) : null}
       </div>
 
+      {kind === "gradient" ? <GradientPanel {...props} /> : null}
+
       {imageActive && imagePath !== null ? (
         <>
           <div className="flex flex-wrap items-center gap-3.5">
@@ -239,14 +244,14 @@ export function BackgroundSection({ resolved, setToken }: DesignSectionProps) {
             </button>
           </div>
           <Slider
-            label="Overlay"
+            label="Image overlay"
             value={Math.round(resolved.overlayOpacity * 100)}
             max={100}
             unit="%"
             onChange={(value) => setToken("overlayOpacity", value / 100)}
           />
           <Slider
-            label="Blur"
+            label="Image blur"
             value={Math.round(resolved.blur)}
             max={BLUR_MAX}
             unit="px"

@@ -25,7 +25,10 @@ export function PublishAlert({
     .map((block) => ({ block, messages: errors.filter((e) => e.blockId === block.id) }))
     .filter((entry) => entry.messages.length > 0);
   const profile = errors.filter((e) => e.blockId === null && e.field.startsWith("profile"));
-  const page = errors.filter((e) => e.blockId === null && !e.field.startsWith("profile"));
+  const share = errors.filter((e) => e.blockId === null && e.field.startsWith("share"));
+  const page = errors.filter(
+    (e) => e.blockId === null && !e.field.startsWith("profile") && !e.field.startsWith("share"),
+  );
 
   const count = failing.length;
   // A Publish the link blocklist refused (M5-03): the gate's errors carry the host, and the heading
@@ -38,7 +41,9 @@ export function PublishAlert({
         ? `Fix ${count} ${count === 1 ? "block" : "blocks"} before publishing.`
         : profile.length > 0
           ? "Fix your profile before publishing."
-          : "Fix your page before publishing.";
+          : share.length > 0
+            ? "Fix your share card before publishing."
+            : "Fix your page before publishing.";
 
   return (
     <div
@@ -64,6 +69,12 @@ export function PublishAlert({
           <li>
             <span className="font-semibold">Profile:</span>{" "}
             {profile.map((e) => e.message).join(" ")}
+          </li>
+        ) : null}
+        {share.length > 0 ? (
+          <li>
+            <span className="font-semibold">Share card:</span>{" "}
+            {[...new Set(share.map((e) => e.message))].join(" ")}
           </li>
         ) : null}
         {failing.map(({ block, messages }) => {

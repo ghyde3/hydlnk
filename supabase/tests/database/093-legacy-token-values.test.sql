@@ -19,8 +19,8 @@ select is_empty(
 select is(
   (select count(*)::int from public.themes
      where owner_id is null and tokens ->> 'letterCase' in ('normal', 'uppercase', 'lowercase')),
-  7,
-  'all seven system themes carry one of the three letterCase values'
+  16,
+  'all sixteen system themes carry one of the three letterCase values'
 );
 select is(
   (select tokens ->> 'letterCase' from public.themes where name = 'Noir'),

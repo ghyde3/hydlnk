@@ -44,7 +44,17 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "Can I build my page on my phone?",
         answer:
-          "Yes. The editor works at phone size, with a Blocks and Preview switch, and the preview shows your page exactly as visitors will see it, so what you see is what you publish.",
+          "Yes. The editor works at phone size, with a Blocks and Preview switch and a small live preview docked while you edit. Tap something in the preview to edit it, add a block anywhere, and undo or redo if you change your mind. What you see is what you publish.",
+      },
+      {
+        question: "Can I start from a template?",
+        answer:
+          "Yes. Inside the editor you can start from a template for musicians, podcasters, artists, shops, coaches or streamers, then change anything you like. Templates are on every plan.",
+      },
+      {
+        question: "Can I see my page before I publish it?",
+        answer:
+          "Yes. Preview shows your draft, and you can share a private preview link that works for 7 days, so a friend or a client can look before anything goes live. You can turn the link off at any time.",
       },
     ],
   },
@@ -55,18 +65,23 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "How much of my page’s look can I change?",
         answer:
-          "Nearly everything you see. You can change 8 colors, the heading and body fonts, text size and weight, capital or lowercase headings, corner roundness, border thickness, button style, spacing, column width, alignment and the background (a solid color, a gradient or your own photo with an overlay and blur).",
+          "Nearly everything you see. Start from one of 16 themes, and preview it on your own page before you apply it. Then change 8 colors, the heading and body fonts, text size and weight, capital or lowercase headings, corner roundness, border thickness, button style, spacing, column width, alignment and the background (a solid color, a gradient with a direction and two colors, or your own photo with an overlay and blur).",
         home: 3,
       },
       {
         question: "Can I make one link stand out?",
         answer:
-          "Yes. Any link or card can override the page’s colors, button style and corner radius, so one button can be filled while the rest are outlined.",
+          "Yes. Every block has style controls, so one button can be filled while the rest are outlined. You can also mark up to 3 links as featured, with a bolder style and an optional gentle motion.",
       },
       {
         question: "What is a saved theme?",
         answer:
           "A saved copy of a page’s look that you can apply to any of your pages. Editing a saved theme updates the drafts that use it; live pages change only when you publish them again.",
+      },
+      {
+        question: "Can I choose how my link looks when someone shares it?",
+        answer:
+          "Yes. Set the title, the description and the image people see in a shared link, with a preview card that shows how it will look. Your page also has a QR code you can download as a PNG or an SVG, for flyers, menus and printed cards.",
       },
       {
         question: "Which fonts can I use?",
@@ -123,6 +138,11 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
     id: "billing",
     title: "Plans and billing",
     items: [
+      {
+        question: "Can I go back to an earlier version of my page?",
+        answer:
+          "On Pro and Studio, yes. Your recent published versions are kept, so you can preview an earlier one and restore it. Your live page doesn’t change until you publish again. Free doesn’t include version history.",
+      },
       {
         question: "Do you take a cut of sales?",
         answer: "No. We never take a cut of your sales, on any plan.",

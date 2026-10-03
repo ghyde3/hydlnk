@@ -2,7 +2,13 @@
 import { act, createElement, useState, type FunctionComponent } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { blockDefaults, type Block, type CardBlock, type ImageRef, type LinkBlock } from "@/lib/document";
+import {
+  blockDefaults,
+  type Block,
+  type CardBlock,
+  type ImageRef,
+  type LinkBlock,
+} from "@/lib/document";
 import { BLOCK_FORMS } from "@/components/blocks/forms";
 import { PageTokensProvider } from "@/components/themes/page-tokens-context";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
@@ -78,7 +84,8 @@ const field = <T extends HTMLElement>(host: HTMLElement, name: string) =>
   host.querySelector<T>(`[data-field="${name}"]`)!;
 const labels = (host: HTMLElement) =>
   Array.from(host.querySelectorAll("label")).map((label) => label.textContent?.trim());
-const optionsOf = (select: HTMLSelectElement) => Array.from(select.options).map((o) => o.textContent);
+const optionsOf = (select: HTMLSelectElement) =>
+  Array.from(select.options).map((o) => o.textContent);
 
 const link = (): LinkBlock => blockDefaults.link() as LinkBlock;
 const card = (): CardBlock => blockDefaults.card() as CardBlock;
@@ -88,13 +95,22 @@ describe("M3-17 button style override", () => {
     const { host } = mount(link());
     const select = field<HTMLSelectElement>(host, "override-button-style");
     expect(labels(host)).toContain("Button style");
-    expect(optionsOf(select)).toEqual(["Theme default (Outline)", "Fill", "Outline", "Soft", "Shadow", "Pill"]);
+    expect(optionsOf(select)).toEqual([
+      "Theme default (Outline)",
+      "Fill",
+      "Outline",
+      "Soft",
+      "Shadow",
+      "Pill",
+    ]);
     expect(select.value).toBe("");
   });
 
   it("says plain 'Theme default' when the page tokens are not provided", () => {
     const { host } = mount(link(), false);
-    expect(optionsOf(field<HTMLSelectElement>(host, "override-button-style"))[0]).toBe("Theme default");
+    expect(optionsOf(field<HTMLSelectElement>(host, "override-button-style"))[0]).toBe(
+      "Theme default",
+    );
   });
 
   it("choosing Fill sets overrides.buttonStyle; Theme default removes it, and the empty overrides with it", () => {
@@ -106,11 +122,12 @@ describe("M3-17 button style override", () => {
     expect("overrides" in latest.block).toBe(false);
   });
 
-  it("a card has no button style control, and no block type but link and card has any override control", () => {
+  it("only a link has a button style control; every block type has a style group (M6-46)", () => {
     expect(labels(mount(card()).host)).not.toContain("Button style");
     for (const type of ["header", "text", "image", "social", "embed", "grid", "divider"] as const) {
       const { host } = mount(blockDefaults[type]());
-      expect(host.querySelector('[data-testid="override-controls"]'), type).toBeNull();
+      expect(host.querySelector('[data-testid="override-controls"]'), type).not.toBeNull();
+      expect(labels(host), type).not.toContain("Button style");
     }
   });
 
@@ -128,7 +145,13 @@ describe("M3-18 color and corner radius overrides", () => {
       expect(host.querySelector('input[type="color"]')).not.toBeNull();
       const hex = field<HTMLInputElement>(host, "override-color");
       expect(hex.className).toContain("text-base"); // 16px, so iOS does not zoom
-      expect(optionsOf(field<HTMLSelectElement>(host, "override-radius"))).toEqual(["Theme default", "0", "4", "12", "20"]);
+      expect(optionsOf(field<HTMLSelectElement>(host, "override-radius"))).toEqual([
+        "Theme default",
+        "0",
+        "4",
+        "12",
+        "20",
+      ]);
     }
   });
 
@@ -163,8 +186,19 @@ describe("M3-18 color and corner radius overrides", () => {
   });
 
   it("Theme default clears only the colour keys, leaving the other overrides", () => {
-    const { host, latest } = mount({ ...link(), overrides: { buttonStyle: "pill", radius: 0, buttonBg: "#C46A4F", accent: "#C46A4F", buttonText: "#F7F3EC" } });
-    const reset = Array.from(host.querySelectorAll("button")).find((b) => b.textContent === "Theme default")!;
+    const { host, latest } = mount({
+      ...link(),
+      overrides: {
+        buttonStyle: "pill",
+        radius: 0,
+        buttonBg: "#C46A4F",
+        accent: "#C46A4F",
+        buttonText: "#F7F3EC",
+      },
+    });
+    const reset = Array.from(host.querySelectorAll("button")).find(
+      (b) => b.textContent === "Theme default",
+    )!;
     act(() => reset.click());
     expect((latest.block as LinkBlock).overrides).toEqual({ buttonStyle: "pill", radius: 0 });
   });
@@ -194,7 +228,9 @@ describe("M3-18 color and corner radius overrides", () => {
       root.render(
         createElement(Form, {
           block,
-          errors: [{ blockId: block.id, field: "overrides.radius", message: "Corner radius isn’t valid." }],
+          errors: [
+            { blockId: block.id, field: "overrides.radius", message: "Corner radius isn’t valid." },
+          ],
           onChange: () => undefined,
           onImage: () => undefined,
         }),

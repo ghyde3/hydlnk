@@ -525,7 +525,7 @@ describe("M2-19 embed block", () => {
 
   it.each([
     "https://evil.example/x",
-    "https://vimeo.com/76979871",
+    "https://vimeo.com/channels/staffpicks",
     "https://www.youtube.com/@maraokafor",
     "https://youtube.com.evil.example/watch?v=jNQXAC9IVRw",
     "javascript:alert(1)",

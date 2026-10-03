@@ -38,13 +38,15 @@ describe("M2-08 Storage stays server-only", () => {
     // upload.ts (the route), quota.ts (M4-31: bytes stored per account, an over-quota upload removed),
     // cleanup-admin.ts (M5-14: objects nothing references any more are removed),
     // delete-media.ts (M4-34: an account's objects removed with it) and publish/core.ts (the
-    // background object must exist). Each imports "server-only", checked below.
+    // background object must exist) and versions/core.ts (M6-49: a version's photo and background
+    // object are looked up before they are shown or restored). Each imports "server-only", checked below.
     expect(users).toEqual([
       "src/lib/media/cleanup-admin.ts",
       "src/lib/media/quota.ts",
       "src/lib/media/upload.ts",
       "src/lib/pages/delete-media.ts",
       "src/lib/publish/core.ts",
+      "src/lib/versions/core.ts",
     ]);
     for (const path of users) {
       expect(files.find((f) => f.path === path)!.text, path).toMatch(/import "server-only"/);

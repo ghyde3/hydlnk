@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import type { BlockType } from "@/lib/document";
 import { CardForm, EmbedForm, ImageForm } from "./media-forms";
-import { DividerForm, HeaderForm, LinkForm, TextForm } from "./simple-forms";
+import { LinkForm } from "./link-form";
+import { DividerForm, HeaderForm, TextForm } from "./simple-forms";
 import { GridForm, SocialForm } from "./list-forms";
 import type { BlockFormProps } from "./types";
 

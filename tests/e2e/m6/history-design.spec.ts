@@ -193,7 +193,7 @@ test.describe("M6-08 every Design change is a step", () => {
       [
         "a hex color field",
         async () => {
-          const field = page.getByLabel("bg hex", { exact: true });
+          const field = page.getByLabel("Page background hex", { exact: true });
           await field.fill("#102030");
           await field.blur();
         },
@@ -220,13 +220,13 @@ test.describe("M6-08 every Design change is a step", () => {
       ],
       [
         "the heading weight",
-        () => option(page, "Heading weight", "Semibold").click(),
+        () => option(page, "Heading boldness", "Semibold").click(),
         (o) => o.weightHeading === 600,
         1,
       ],
       [
         "the letter case",
-        () => option(page, "Letter case", "Uppercase").click(),
+        () => option(page, "Capital letters", "Uppercase").click(),
         (o) => o.letterCase === "uppercase",
         1,
       ],
@@ -244,13 +244,13 @@ test.describe("M6-08 every Design change is a step", () => {
       ],
       [
         "the border width",
-        () => option(page, "Border width", "2px").click(),
+        () => option(page, "Border thickness", "2px").click(),
         (o) => o.borderWidth === 2,
         1,
       ],
       [
         "the density",
-        () => option(page, "Spacing", "Airy").click(),
+        () => option(page, "Space between blocks", "Airy").click(),
         (o) => o.density === "airy",
         1,
       ],
@@ -273,7 +273,7 @@ test.describe("M6-08 every Design change is a step", () => {
             .poll(async () => typeof (await overridesOf(user.pageId)).bgImage)
             .toBe("string");
           await expect(saveStatus(page)).toHaveText("Saved", { timeout: 20_000 });
-          const overlay = page.getByLabel("Overlay", { exact: true });
+          const overlay = page.getByLabel("Image overlay", { exact: true });
           await overlay.evaluate((el: HTMLInputElement) => {
             const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
             for (const value of [10, 20, 30, 40]) {
@@ -351,7 +351,7 @@ test.describe("M6-08 every Design change is a step", () => {
     await expect(undoButton(page)).toBeDisabled();
 
     // A hex field with focus: the shortcut is the app's, not the browser's.
-    const hex = page.getByLabel("surface hex", { exact: true });
+    const hex = page.getByLabel("Cards and panels hex", { exact: true });
     await hex.click();
     await hex.selectText();
     await page.keyboard.type("#334455", { delay: 20 });
@@ -374,7 +374,7 @@ test.describe("M6-08 every Design change is a step", () => {
       bgImage: `${supabaseUrl()}/storage/v1/object/public/page-media/${user.userId}/abcdefgh12.png`,
     });
     await openDesignWithCard(page);
-    const overlay = page.getByLabel("Overlay", { exact: true });
+    const overlay = page.getByLabel("Image overlay", { exact: true });
     await expect(overlay).toBeVisible();
     const start = Number(await overlay.inputValue());
     await overlay.focus();
@@ -575,7 +575,7 @@ test.describe("M6-08 saves, tabs and leaving", () => {
       await showTokens(page);
       const patchesA = patchesOf(page);
       const storedRev = (await pageRow(user.pageId)).draft.rev;
-      await option(page, "Border width", "2px").click(); // N+2
+      await option(page, "Border thickness", "2px").click(); // N+2
       await expect(saveStatus(page)).toHaveText("Saved", { timeout: 20_000 });
       await undoButton(page).click(); // A's own Undo: N+3, one PATCH of `draft` only
       await expect(saveStatus(page)).toHaveText("Saved", { timeout: 20_000 });

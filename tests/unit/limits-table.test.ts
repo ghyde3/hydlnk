@@ -29,6 +29,7 @@ describe("M4-02 the TypeScript limits table", () => {
       savedThemes: 3,
       analyticsHistoryDays: 30,
       analyticsBreakdowns: false,
+      versionsKept: 0,
     });
     expect(PLAN_LIMITS.pro).toEqual({
       pages: 3,
@@ -37,6 +38,7 @@ describe("M4-02 the TypeScript limits table", () => {
       savedThemes: null,
       analyticsHistoryDays: 365,
       analyticsBreakdowns: true,
+      versionsKept: 25,
     });
     expect(PLAN_LIMITS.studio).toEqual({
       pages: 15,
@@ -45,6 +47,7 @@ describe("M4-02 the TypeScript limits table", () => {
       savedThemes: null,
       analyticsHistoryDays: 365,
       analyticsBreakdowns: true,
+      versionsKept: 25,
     });
     // The exact figures the acceptance names.
     expect(PLAN_IDS.map((plan) => PLAN_LIMITS[plan].uploadBytes)).toEqual([

@@ -189,9 +189,9 @@ describe("M2-15 UrlField", () => {
     expect(host.textContent).not.toContain(message);
   });
 
-  it("embed: only YouTube and Spotify are valid, with the embed message", () => {
+  it("embed: only links from the eight providers are valid, with the embed message", () => {
     const { host, field } = mountUrl({ kind: "embed" });
-    type(field, "https://vimeo.com/76979871");
+    type(field, "https://evil.example/x");
     blur(field);
     expect(field.getAttribute("aria-invalid")).toBe("true");
     expect(host.textContent).toContain(EMBED_ERROR_MESSAGE);
@@ -296,9 +296,12 @@ describe("M2-16 header, text and divider forms", () => {
     expect(host.textContent).toContain("2 / 600");
   });
 
-  it("divider: renders nothing", () => {
+  // M6-46: a divider has no content to edit, but it has its own style: the line's color.
+  it("divider: renders only its style group, with the line color", () => {
     const { host } = mountForm(blockDefaults.divider());
-    expect(host.innerHTML).toBe("");
+    expect(host.querySelectorAll("input[type=text], textarea")).toHaveLength(1);
+    expect(host.textContent).toContain("Style this block");
+    expect(host.textContent).toContain("Line color");
   });
 });
 

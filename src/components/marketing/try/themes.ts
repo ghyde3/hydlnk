@@ -31,6 +31,10 @@ const COMMON = {
   bgImage: null,
   overlayOpacity: 0,
   blur: 0,
+  // The gradient tokens (M6-41): top to bottom in the page's own colors, as every system theme has them.
+  gradientAngle: 180,
+  gradientFrom: null,
+  gradientTo: null,
 } as const;
 
 export const TRY_THEMES: readonly TryTheme[] = [
@@ -219,7 +223,12 @@ export type FontPairId = (typeof FONT_PAIR_IDS)[number];
 /** A named pairing of two allowlisted families. `theme` keeps whatever the theme itself uses. */
 export const FONT_PAIRS: Record<
   Exclude<FontPairId, "theme">,
-  { label: string; heading: TokenSet["fontHeading"]; body: TokenSet["fontBody"]; weight: TokenSet["weightHeading"] }
+  {
+    label: string;
+    heading: TokenSet["fontHeading"];
+    body: TokenSet["fontBody"];
+    weight: TokenSet["weightHeading"];
+  }
 > = {
   classic: { label: "Classic", heading: "Playfair Display", body: "Manrope", weight: 700 },
   modern: { label: "Modern", heading: "Space Grotesk", body: "Inter", weight: 600 },

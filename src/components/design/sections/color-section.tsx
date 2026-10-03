@@ -3,13 +3,14 @@
 import { useState } from "react";
 import type { DesignSectionProps } from "@/components/design/types";
 import { HEX_ERROR_MESSAGE, inkOn, isFullHex, normalizeHex, sameColor } from "@/lib/design";
-import type { TokenSet } from "@/lib/theme";
+import { TOKEN_LABELS, type TokenSet } from "@/lib/theme";
 
 /**
- * Color on the Design screen (M3-08): six accent swatches and one row for each of the eight color
- * tokens (Design.dc.html). A row has a swatch that opens the native color picker, the token name
- * and a hex field. Everything is written to the draft as uppercase #RRGGBB; a hex field that does
- * not hold a color shows its message and leaves the draft on the last valid value.
+ * The Colors card of the Design screen (M3-08, M6-47): six accent swatches and one row for each of
+ * the eight page colors (Design.dc.html), named in plain words (`TOKEN_LABELS`, the same names the
+ * Publish messages use). A row has a swatch that opens the native color picker, the name and a hex
+ * field. Everything is written to the draft as uppercase #RRGGBB; a hex field that does not hold a
+ * color shows its message and leaves the draft on the last valid value.
  */
 
 const ACCENTS = [
@@ -40,16 +41,28 @@ function pickerValue(value: string): string {
   return (hex ?? "#000000").toLowerCase();
 }
 
-function ColorRow({
+/**
+ * One color row: swatch (the native picker, `<name> color`), the name, and the hex field
+ * (`<name> hex`). `rowKey` is the token the row edits and the value of `data-color-row`; `name` is
+ * its plain label. The gradient's From and To rows use it too (M6-42), so all color fields behave
+ * alike: a complete six-digit hex applies as it is typed, shorthand waits for blur, and anything
+ * else shows the hex message and leaves the draft alone.
+ */
+export function ColorRow({
+  rowKey,
   name,
   value,
   onChange,
   last,
+  compact = false,
 }: {
-  name: ColorKey;
+  rowKey: string;
+  name: string;
   value: string;
   onChange: (hex: string) => void;
   last: boolean;
+  /** A short name ("From", "To"): the name column is narrow, so the hex field keeps its room on a phone. */
+  compact?: boolean;
 }) {
   // What the user is typing, tied to the token value it started from: once the token changes some
   // other way (the picker, a swatch, a theme) the typed text is dropped and the token shows again.
@@ -57,7 +70,7 @@ function ColorRow({
   const live = typing !== null && typing.base === value ? typing.text : null;
   const shown = live ?? value;
   const invalid = live !== null && normalizeHex(live) === null;
-  const errorId = `color-error-${name}`;
+  const errorId = `color-error-${rowKey}`;
 
   function onInput(text: string): void {
     setTyping({ text, base: value });
@@ -77,10 +90,12 @@ function ColorRow({
 
   return (
     <div
-      data-color-row={name}
-      className={`grid grid-cols-[44px_minmax(0,6.5rem)_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1 px-3 py-1 ${
-        last ? "" : "border-b border-line"
-      }`}
+      data-color-row={rowKey}
+      className={`grid items-center gap-x-2.5 gap-y-1 px-3 py-1 ${
+        compact
+          ? "grid-cols-[44px_minmax(0,2.5rem)_minmax(0,1fr)]"
+          : "grid-cols-[44px_minmax(0,7.5rem)_minmax(0,1fr)]"
+      } ${last ? "" : "border-b border-line"}`}
     >
       <input
         type="color"
@@ -92,7 +107,7 @@ function ColorRow({
         }}
         className="block size-11 cursor-pointer appearance-none rounded-md border border-line-2 bg-transparent p-1 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-0"
       />
-      <span className="font-mono text-[13px] text-ink">{name}</span>
+      <span className="text-[13px] leading-snug break-words text-ink">{name}</span>
       <input
         type="text"
         inputMode="text"
@@ -141,7 +156,7 @@ export function ColorSection({ resolved, setToken }: DesignSectionProps) {
   return (
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-col gap-2">
-        <h3 className="m-0 text-[13px] font-normal text-text-2">Accent</h3>
+        <h3 className="m-0 text-sm font-semibold text-ink">Accent</h3>
         <div role="group" aria-label="Accent" className="flex flex-wrap gap-2.5">
           {ACCENTS.map((accent) => {
             const pressed = sameColor(resolved.accent, accent.hex);
@@ -166,16 +181,20 @@ export function ColorSection({ resolved, setToken }: DesignSectionProps) {
           })}
         </div>
       </div>
-      <div className="overflow-hidden rounded-md border border-line">
-        {COLOR_KEYS.map((key, index) => (
-          <ColorRow
-            key={key}
-            name={key}
-            value={resolved[key]}
-            onChange={(hex) => set(key, hex)}
-            last={index === COLOR_KEYS.length - 1}
-          />
-        ))}
+      <div className="flex flex-col gap-2">
+        <h3 className="m-0 text-sm font-semibold text-ink">All colors</h3>
+        <div className="overflow-hidden rounded-md border border-line">
+          {COLOR_KEYS.map((key, index) => (
+            <ColorRow
+              key={key}
+              rowKey={key}
+              name={TOKEN_LABELS[key]}
+              value={resolved[key]}
+              onChange={(hex) => set(key, hex)}
+              last={index === COLOR_KEYS.length - 1}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

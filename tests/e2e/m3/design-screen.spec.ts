@@ -53,7 +53,7 @@ test.describe("M3-06 Design screen", () => {
     expect((await tokens.boundingBox())!.width).toBeLessThanOrEqual(720);
     const preview = page.getByRole("region", { name: "Live preview" });
     await expect(preview).toBeVisible();
-    await expect(preview.getByText("Block overrides still win")).toBeVisible();
+    await expect(preview.getByText("A block’s own style still wins")).toBeVisible();
     const bezel = await page.getByTestId("preview-bezel").boundingBox();
     expect(Math.round(bezel!.width)).toBe(310);
     expect(Math.round(bezel!.height)).toBe(660);

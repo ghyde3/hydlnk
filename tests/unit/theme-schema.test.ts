@@ -50,7 +50,7 @@ describe("tokenSetSchema", () => {
     expect(tokenSetSchema.safeParse({ ...noirTokens, customCss: "body{}" }).success).toBe(false);
   });
 
-  it("covers exactly the 23 contract keys", () => {
+  it("covers exactly the 26 contract keys (23 plus the three gradient tokens of M6-41)", () => {
     expect([...TOKEN_KEYS].sort()).toEqual(
       [
         "bg",
@@ -76,6 +76,9 @@ describe("tokenSetSchema", () => {
         "bgImage",
         "overlayOpacity",
         "blur",
+        "gradientAngle",
+        "gradientFrom",
+        "gradientTo",
       ].sort(),
     );
   });
@@ -161,26 +164,31 @@ describe("tokenOverridesSchema", () => {
 });
 
 describe("blockOverridesSchema", () => {
-  it("allows exactly the eight block-level keys", () => {
+  // M6-45: textMuted and borderWidth joined the original eight.
+  it("allows exactly the ten block-level keys", () => {
     expect([...BLOCK_OVERRIDE_KEYS].sort()).toEqual([
       "accent",
       "border",
+      "borderWidth",
       "buttonBg",
       "buttonStyle",
       "buttonText",
       "radius",
       "surface",
       "text",
+      "textMuted",
     ]);
     const everyKey = {
       accent: "#111111",
       buttonBg: "#222222",
       buttonText: "#333333",
       text: "#444444",
+      textMuted: "#777777",
       surface: "#555555",
       border: "#666666",
       buttonStyle: "soft",
       radius: 8,
+      borderWidth: 2,
     };
     expect(blockOverridesSchema.safeParse(everyKey).success).toBe(true);
     expect(blockOverridesSchema.safeParse({}).success).toBe(true);

@@ -183,18 +183,13 @@ describe("copy rules", () => {
     // Scheduled links are not in v1 (site.spec.ts checks the same words on the other pages), and
     // dollar amounts live in src/lib/marketing/prices.ts only.
     expect(
-      all.filter((text) =>
-        /schedul|csv|invite editors|team access|custom css|version history/i.test(text),
-      ),
+      all.filter((text) => /schedul|csv|invite editors|team access|custom css/i.test(text)),
     ).toEqual([]);
     expect(all.filter((text) => /\$\s?\d/.test(text))).toEqual([]);
-    // Embeds are YouTube and Spotify only, and there is no gallery or booking tool.
+    // Embeds are YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music and Twitch
+    // (not Bandcamp or Apple Podcasts), and there is no gallery or booking tool.
     expect(
-      all.filter((text) =>
-        /embed(s|ded)? (your |a |the )?(twitch|apple|soundcloud|bandcamp|tiktok|instagram)/i.test(
-          text,
-        ),
-      ),
+      all.filter((text) => /embed(s|ded)? (your |a |the )?(bandcamp|apple podcasts)/i.test(text)),
     ).toEqual([]);
     expect(
       all.filter(

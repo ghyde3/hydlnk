@@ -1,4 +1,4 @@
--- M4-02, M4-18, M4-31, M4-32: plan limits v2 (the six-column plan_limits), the server-only usage
+-- M4-02, M4-18, M4-31, M4-32: plan limits v2 (the seven-column plan_limits), the server-only usage
 -- functions, the page-limit backstop that binds every role, and create/delete being server-only.
 -- The TypeScript parity (tests/unit/limits-parity.test.ts) is the other half of M4-02.
 
@@ -19,23 +19,23 @@ insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000092b2', tests.get_supabase_uid('p'), 'lim-pro-two', '{"version":1}');
 
 -- ---------------------------------------------------------------------------
--- plan_limits: six columns, unlimited is null, an unknown plan fails closed (M4-02)
+-- plan_limits: seven columns, unlimited is null, an unknown plan fails closed (M4-02)
 -- ---------------------------------------------------------------------------
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false) $$,
-  'free: 1 page, 3 saved themes, 0 domains, 10 MiB, 30 days of analytics, no breakdowns'
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0) $$,
+  'free: 1 page, 3 saved themes, 0 domains, 10 MiB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true) $$,
-  'pro: 3 pages, unlimited saved themes (null), 1 domain, 100 MiB, 365 days, breakdowns'
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25) $$,
+  'pro: 3 pages, unlimited saved themes (null), 1 domain, 100 MiB, 365 days, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true) $$,
-  'studio: 15 pages, unlimited saved themes (null), 15 domains, 1 GiB, 365 days, breakdowns'
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25) $$,
+  'studio: 15 pages, unlimited saved themes (null), 15 domains, 1 GiB, 365 days, breakdowns, 25 versions'
 );
 select throws_ok(
   $$ select * from public.plan_limits('enterprise') $$,

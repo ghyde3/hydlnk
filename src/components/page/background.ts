@@ -36,3 +36,20 @@ export function backgroundImageUrl(tokens: Pick<TokenSet, "bgType" | "bgImage">)
   const path = backgroundImagePath(tokens.bgImage);
   return path === null ? null : mediaUrl(path);
 }
+
+/**
+ * True when the page's gradient has colors of its own (M6-41): either stop is set. A gradient
+ * with neither keeps the stops it has always had, the surface color at 0% and the page color at
+ * 55%, whatever the angle; one with a color of its own runs from the first stop at 0% to the last
+ * at 100%. CSS cannot compare a variable with null, so the renderer says which it is with a data
+ * attribute (`data-gradient="custom"`, only then), and the stylesheet picks the stops from it.
+ */
+export function gradientIsCustom(
+  tokens: Pick<TokenSet, "bgType" | "gradientFrom" | "gradientTo">,
+): boolean {
+  // `?? null`: a token set built by hand without the gradient keys has none, like null.
+  return (
+    tokens.bgType === "gradient" &&
+    ((tokens.gradientFrom ?? null) !== null || (tokens.gradientTo ?? null) !== null)
+  );
+}

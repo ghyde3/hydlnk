@@ -231,17 +231,19 @@ describe("M3-17 / M3-18 override controls", () => {
     ).toBeNull();
   });
 
-  it("the resolver ignores any override key other than the allowed colour, style and radius keys, even in stored JSON", () => {
+  it("the resolver ignores any override key other than the ten allowed colour, style, radius and border keys (M6-45), even in stored JSON", () => {
     expect([...BLOCK_OVERRIDE_KEYS].sort()).toEqual(
       [
         "accent",
         "border",
+        "borderWidth",
         "buttonBg",
         "buttonStyle",
         "buttonText",
         "radius",
         "surface",
         "text",
+        "textMuted",
       ].sort(),
     );
     const page = resolveTokens(NOIR);
@@ -297,14 +299,14 @@ describe("M3-05 Publish error copy", () => {
 
   it("names the field and how to fix it", () => {
     expect(themeError("bg").message).toBe(
-      "Publish stopped: bg isn’t a valid color. Reset it in Design.",
+      "Publish stopped: Page background isn’t a valid color. Reset it in Design.",
     );
     expect(themeError("fontHeading").message).toBe(
-      "Publish stopped: fontHeading isn’t an available font. Reset it in Design.",
+      "Publish stopped: Heading font isn’t an available font. Reset it in Design.",
     );
-    expect(themeError("bgImage").message).toContain("bgImage");
+    expect(themeError("bgImage").message).toContain("Background image");
     expect(themeError("scale").message).toBe(
-      "Publish stopped: scale isn’t valid. Reset it in Design.",
+      "Publish stopped: Text size isn’t valid. Reset it in Design.",
     );
   });
 

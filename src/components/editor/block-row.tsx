@@ -7,6 +7,7 @@ import { LIMITS, type Block, type PublishError } from "@/lib/document";
 import { BLOCK_FORMS, blockRowSummary } from "@/lib/editor/contracts";
 import { BLOCK_LIMIT_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
+import { FeaturedChip } from "@/components/blocks/featured-chip";
 import { OverrideChip } from "@/components/themes";
 import { GripIcon } from "./icons";
 
@@ -74,7 +75,9 @@ export const BlockRow = memo(function BlockRow({
           ? [
               panel.querySelector<HTMLElement>('[aria-invalid="true"]'),
               panel
-                .querySelector<HTMLElement>('p[data-field="image"]')
+                .querySelector<HTMLElement>(
+                  'p[data-field="image"], p[data-field="icon"], p[data-field="featured"]',
+                )
                 ?.parentElement?.parentElement?.querySelector<HTMLElement>(
                   "button:not(:disabled)",
                 ) ?? null,
@@ -194,6 +197,7 @@ export const BlockRow = memo(function BlockRow({
           </button>
         </div>
         <OverrideChip block={block} />
+        <FeaturedChip block={block} />
         {hidden ? (
           <span className="hidden shrink-0 rounded-sm bg-track px-[7px] py-[3px] font-mono text-[11px] whitespace-nowrap text-text-2 hl:inline-block">
             Hidden

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { PublishDoc } from "@/lib/document";
 import { tokensToCssVars } from "@/lib/theme";
-import { backgroundImageUrl } from "./background";
+import { backgroundImageUrl, gradientIsCustom } from "./background";
 import { BlockView, type BlockContext } from "./blocks";
 import { PageFooter, type PageChrome } from "./footer";
 import { Profile } from "./profile";
@@ -71,6 +71,9 @@ export function PageRenderer({
       data-density={tokens.density}
       data-align={tokens.align}
       data-bg-type={backgroundType}
+      data-gradient={
+        backgroundType === "gradient" && gradientIsCustom(tokens) ? "custom" : undefined
+      }
       style={vars as CSSProperties}
     >
       {image === null ? null : (

@@ -6,6 +6,12 @@ import { describe, expect, it } from "vitest";
  * M2-05 static checks over the renderer directory (src/components/page): one component renders
  * block markup, styles read only --t-* variables and size by container query, and nothing in it
  * can inject raw HTML or a raw tenant string into an href.
+ *
+ * M6-22 narrowed one assertion (accepted deviation, recorded in PROGRESS.md for Gary): the
+ * stylesheet may contain `@media` for `prefers-reduced-motion` only, and `@keyframes` blocks
+ * (named `pg-...`) are not selector rules. Viewport or width media queries and `vw` units are
+ * still banned, every selector is still scoped under [data-page-root], and there are still no
+ * color literals and no --hl- references.
  */
 
 const ROOT = resolve(process.cwd());
@@ -26,6 +32,26 @@ const rendererCss = rendererFiles.filter((f) => f.endsWith(".css"));
 const rendererCode = rendererFiles.filter((f) => /\.tsx?$/.test(f));
 const read = (file: string) => readFileSync(file, "utf8");
 const rel = (file: string) => relative(ROOT, file);
+
+/** `css` without its `@keyframes name { ... }` blocks (balanced braces). */
+function withoutKeyframes(css: string): string {
+  let out = "";
+  let from = 0;
+  for (const match of css.matchAll(/@keyframes\s+[\w-]+\s*\{/g)) {
+    const start = match.index!;
+    if (start < from) continue;
+    let depth = 1;
+    let i = start + match[0].length;
+    while (i < css.length && depth > 0) {
+      if (css[i] === "{") depth += 1;
+      else if (css[i] === "}") depth -= 1;
+      i += 1;
+    }
+    out += css.slice(from, start);
+    from = i;
+  }
+  return out + css.slice(from);
+}
 
 describe("M2-05 renderer directory: colors and token systems", () => {
   it("has a stylesheet and component files to scan", () => {
@@ -65,8 +91,16 @@ describe("M2-05 renderer styles: container queries only", () => {
     expect(css).toMatch(/\[data-page-root\]\s*\{[^}]*container-type:\s*inline-size/);
   });
 
-  it("has no @media rule and no vw unit", () => {
-    expect(css).not.toMatch(/@media/);
+  it("has no viewport or width media query and no vw unit; @media is only for prefers-reduced-motion", () => {
+    // M6-22 narrows this from "no @media at all": the featured link's motion runs only inside
+    // `@media (prefers-reduced-motion: no-preference)`. Anything that depends on the viewport's
+    // size is still banned (the editor preview is narrower than the viewport).
+    const preludes = [...css.matchAll(/@media\b([^{]*)\{/g)].map((m) => m[1]!.trim());
+    for (const prelude of preludes) {
+      expect(prelude, `@media ${prelude}`).toMatch(
+        /^\(\s*prefers-reduced-motion\s*:\s*(?:no-preference|reduce)\s*\)$/,
+      );
+    }
     expect(css).not.toMatch(/[\d.]\s*vw\b/);
   });
 
@@ -77,7 +111,13 @@ describe("M2-05 renderer styles: container queries only", () => {
   });
 
   it("scopes every rule under [data-page-root]", () => {
-    const stripped = css.replace(/\/\*[\s\S]*?\*\//g, "");
+    // A @keyframes block has no selectors of its own (its "0%", "50%" steps are not rules about
+    // elements): it is removed here, and its name must carry the pg- prefix so it cannot collide
+    // with a name on a tenant host.
+    const stripped = withoutKeyframes(css.replace(/\/\*[\s\S]*?\*\//g, ""));
+    for (const m of css.matchAll(/@keyframes\s+([\w-]+)/g)) {
+      expect(m[1], `@keyframes ${m[1]}`).toMatch(/^pg-/);
+    }
     // Selector lists: the text before each "{" that is not an at-rule prelude.
     const preludes = [...stripped.matchAll(/(?:^|[}\n])\s*([^{}@]+?)\s*\{/g)].map((m) => m[1]!);
     expect(preludes.length).toBeGreaterThan(20);
@@ -113,7 +153,10 @@ describe("M2-05 renderer code: untrusted content", () => {
     expect(blocks).toMatch(/src=\{embed\.src\}/);
     expect(blocks).toMatch(/src=\{mediaUrl\(/);
     const facade = read(join(RENDERER_DIR, "embed-facade.tsx"));
-    expect(facade).toMatch(/src=\{`\$\{src\}\?autoplay=1`\}/);
+    // M6-27: one shared facade. Its iframe src is the parsed src plus the provider's autoplay flag
+    // (embedPlayerSrc), and nothing else: no block.url, no URL taken from the document.
+    expect(facade).toMatch(/src=\{playerSrc\}/);
+    expect(facade).toMatch(/embedPlayerSrc\(\{ provider, src \}/);
     // The renderer never reads the block's own url for an iframe.
     expect(`${blocks}${facade}`).not.toMatch(/src=\{block\.url|src=\{[a-z]*\.url\}/);
   });

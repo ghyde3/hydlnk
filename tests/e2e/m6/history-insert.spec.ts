@@ -182,7 +182,10 @@ test.describe("M6-04 the + between blocks", () => {
 
     const row = rowOf(page, added);
     await expect(row).toHaveAttribute("data-block-type", "header");
-    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+    await expect(row.locator("button[aria-expanded]").first()).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     // Its first input has focus, the heading and the live preview follow, and the page says so.
     await expect.poll(async () => (await focused(page)).blockId).toBe(added);
     expect((await focused(page)).tag).toBe("INPUT");
@@ -288,7 +291,7 @@ test.describe("M6-04 layout", () => {
       (await row.getByRole("button", { name: "Drag to reorder" }).boundingBox())!.width,
     ).toBeCloseTo(44, 0);
     expect(
-      (await row.locator("button[aria-expanded]").boundingBox())!.height,
+      (await row.locator("button[aria-expanded]").first().boundingBox())!.height,
     ).toBeGreaterThanOrEqual(57.5);
     expect(
       (await row.getByRole("button", { name: "Visible on page" }).boundingBox())!.height,

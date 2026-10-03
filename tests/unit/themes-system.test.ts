@@ -38,24 +38,23 @@ describe.skipIf(!run)("M3-03 system themes (local Supabase)", () => {
     rows = data as Row[];
   };
 
-  it("ships 6 to 8, with Noir, Ivory and Smoke among them, names unique and at most 40 characters", async () => {
+  it("ships 16 (M6-43), with Noir, Ivory and Smoke among them, names unique and at most 40 characters", async () => {
     await load();
-    expect(rows.length).toBeGreaterThanOrEqual(6);
-    expect(rows.length).toBeLessThanOrEqual(8);
+    expect(rows).toHaveLength(16);
     const names = rows.map((row) => row.name);
     expect(names).toEqual(expect.arrayContaining(["Noir", "Ivory", "Smoke"]));
     expect(new Set(names).size).toBe(names.length);
     for (const name of names) expect(name.length).toBeLessThanOrEqual(40);
   });
 
-  it("every theme's tokens parse with the strict token schema (all 23 keys) and use allowlisted fonts", () => {
+  it("every theme's tokens parse with the strict token schema (all 26 keys) and use allowlisted fonts", () => {
     for (const row of rows) {
       const parsed = tokenSetSchema.safeParse(row.tokens);
       expect(parsed.success, `${row.name}: ${parsed.success ? "" : parsed.error.message}`).toBe(
         true,
       );
       const tokens = row.tokens as TokenSet;
-      expect(Object.keys(tokens)).toHaveLength(23);
+      expect(Object.keys(tokens)).toHaveLength(26);
       expect(FONT_ALLOWLIST as readonly string[]).toContain(tokens.fontHeading);
       expect(FONT_ALLOWLIST as readonly string[]).toContain(tokens.fontBody);
     }

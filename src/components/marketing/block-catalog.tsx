@@ -55,7 +55,7 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
     id: "text",
     name: "Text",
     short: "A paragraph for opening hours, a short story or anything else worth saying.",
-    detail: "Up to 600 characters, with line breaks kept.",
+    detail: "Up to 600 characters, with line breaks kept. Add bold, italics and links.",
     icon: (
       <Icon>
         <path d="M4 6.5h16M4 11h16M4 15.5h11" />
@@ -67,7 +67,7 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
     name: "Image",
     short: "A photo on its own, with a short description for screen readers. You can link it too.",
     detail:
-      "Upload a JPEG, PNG or WebP. A short description (alt text) is required, so screen readers can describe it.",
+      "Upload a JPEG, PNG or WebP. Choose the focus point so the crop keeps what matters, and pick a shape. A short description (alt text) is required, so screen readers can describe it.",
     icon: (
       <Icon>
         <rect x="3.5" y="5" width="17" height="14" rx="2" />
@@ -93,9 +93,9 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
   {
     id: "embed",
     name: "Embed",
-    short: "A YouTube video or a Spotify player, right on the page.",
+    short: "A video, a song or a stream, playing right on the page.",
     detail:
-      "YouTube videos, and Spotify tracks, albums, playlists, episodes, shows and artists. YouTube loads only when a visitor presses play.",
+      "YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music and Twitch. Everything except Spotify loads only when a visitor taps to play.",
     icon: (
       <Icon>
         <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />

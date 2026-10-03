@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { Card } from "@/components/app/screen";
-import { SaveAsThemeButton, SavedThemesCard, useThemeLibrary } from "@/components/themes";
+import {
+  SaveAsThemeButton,
+  SavedThemesCard,
+  useThemeLibrary,
+  useThemePreview,
+} from "@/components/themes";
 import { SaveBanner } from "@/components/editor/save-banner";
 import { useAutosave } from "@/components/editor/use-autosave";
 import { UndoRedoButtons, UndoRedoNotice } from "@/components/editor/undo-redo-controls";
@@ -19,6 +23,7 @@ import { resolveTokens, type TokenSet } from "@/lib/theme";
 import type { PlanId } from "@/lib/limits/table";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { fetchThemeLibrary, themeById, themeTokensFor, type ThemeRow } from "@/lib/themes";
+import { DesignCard } from "./design-card";
 import { DesignPreview } from "./design-preview";
 import { useDraftHistory } from "./use-draft-history";
 import { DesignTabs, designPanelId, designTabId, type DesignView } from "./design-tabs";
@@ -28,7 +33,7 @@ import { FontSection } from "./sections/font-section";
 import { TypeSection } from "./sections/type-section";
 import type { DesignSectionProps } from "./types";
 
-/** Tokens whose control sends many values in one gesture: the sliders and the color fields and pickers. */
+/** Tokens whose control sends many values in one gesture: the sliders and the color fields and pickers (the gradient's too). */
 const STREAMING_TOKENS: ReadonlySet<keyof TokenSet> = new Set<keyof TokenSet>([
   "overlayOpacity",
   "blur",
@@ -40,6 +45,8 @@ const STREAMING_TOKENS: ReadonlySet<keyof TokenSet> = new Set<keyof TokenSet>([
   "buttonBg",
   "buttonText",
   "border",
+  "gradientFrom",
+  "gradientTo",
 ]);
 
 export interface DesignScreenProps {
@@ -127,15 +134,31 @@ export function DesignScreen(props: DesignScreenProps) {
   );
   const form = useMemo(() => toPublishForm(draft, themeTokens), [draft, themeTokens]);
 
+  // Previewing a theme on the page without applying it (M6-44): derived, never saved or published.
+  // The preview column draws the previewed form while one is on show; every control that changes
+  // the page, Save as theme, Done and the Style tab end it first.
+  const preview = useThemePreview({
+    draft,
+    themes,
+    applyTheme: library.apply,
+    showPreview: () => {
+      if (!isDesktop) setView("preview");
+    },
+    showStyle: () => setView("tokens"),
+  });
+  const stopPreview = preview.stop;
+
   // Only the controls that stream values (a slider drag, a typed or picked color) coalesce into
   // one step, by token. A click on an option is a step of its own, however soon the next one comes.
   const setToken = useCallback(
-    <K extends keyof TokenSet>(key: K, value: TokenSet[K] | undefined) =>
+    <K extends keyof TokenSet>(key: K, value: TokenSet[K] | undefined) => {
+      stopPreview({ focus: false });
       update(
         (current) => withToken(current, key, value),
         STREAMING_TOKENS.has(key) ? `theme:${key}` : undefined,
-      ),
-    [update],
+      );
+    },
+    [update, stopPreview],
   );
 
   const sectionProps: DesignSectionProps = {
@@ -148,6 +171,7 @@ export function DesignScreen(props: DesignScreenProps) {
 
   // Done writes what is pending first, so the editor never loads a draft older than the edit.
   async function onDone(): Promise<void> {
+    stopPreview({ focus: false });
     // A link to a blocked site (M5-03) is fixed in the Editor, where the URL fields are: Done goes
     // there instead of doing nothing while the save is refused.
     if ((await flush()) || autosave.currentStatus() === "blocked") router.push("/editor");
@@ -163,7 +187,7 @@ export function DesignScreen(props: DesignScreenProps) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <UndoRedoButtons controls={undoRedo} />
           <DesignSaveStatus status={autosave.status} />
-          <SaveAsThemeButton library={library} />
+          <SaveAsThemeButton library={library} onBefore={() => stopPreview({ focus: false })} />
           <Link
             href="/editor"
             onClick={(event) => {
@@ -182,7 +206,16 @@ export function DesignScreen(props: DesignScreenProps) {
         <UndoRedoNotice controls={undoRedo} />
       </div>
 
-      {isDesktop ? null : <DesignTabs view={view} onChange={setView} />}
+      {isDesktop ? null : (
+        <DesignTabs
+          view={view}
+          onChange={(next) => {
+            // Leaving the Preview tab for Style ends a theme preview: what is on screen is the page.
+            if (next === "tokens") stopPreview({ focus: false });
+            setView(next);
+          }}
+        />
+      )}
 
       <div className="flex flex-1 flex-col gap-8 px-4 py-3 hl:flex-row hl:items-start hl:gap-8 hl:px-8 hl:py-6">
         <section
@@ -214,32 +247,35 @@ export function DesignScreen(props: DesignScreenProps) {
           <SavedThemesCard
             library={library}
             loadFailed={themesFailed ? { onRetry: () => void retryThemes(), retrying: retryingThemes } : null}
+            onPreview={(id) => preview.start(id)}
+            previewingId={preview.theme?.id ?? null}
           />
-          <div data-design-section="color">
-            <Card className="flex flex-col gap-3.5">
-              <h2 className="m-0 text-sm font-semibold">Color</h2>
-              <ColorSection {...sectionProps} />
-            </Card>
-          </div>
-          <div data-design-section="style">
-            <Card className="flex flex-col gap-4">
-              <FontSection {...sectionProps} />
-              <TypeSection {...sectionProps} />
-              <ShapeSection {...sectionProps} />
-              {/* Side by side while 220px each fit, stacked below that (Design.dc.html). */}
-              <div className="flex flex-wrap gap-4">
-                <div className="min-w-0 flex-[1_1_220px]">
-                  <SpacingSection {...sectionProps} />
-                </div>
-                <div className="min-w-0 flex-[1_1_220px]">
-                  <BackgroundSection {...sectionProps} />
-                </div>
-              </div>
-            </Card>
-          </div>
+          <DesignCard section="color" title="Colors">
+            <ColorSection {...sectionProps} />
+          </DesignCard>
+          <DesignCard section="fonts" title="Fonts">
+            <FontSection {...sectionProps} />
+            <TypeSection {...sectionProps} />
+          </DesignCard>
+          <DesignCard section="buttons" title="Buttons">
+            <ShapeSection {...sectionProps} />
+          </DesignCard>
+          <DesignCard section="layout" title="Layout">
+            <SpacingSection {...sectionProps} />
+          </DesignCard>
+          <DesignCard section="background" title="Background">
+            <BackgroundSection {...sectionProps} />
+          </DesignCard>
         </section>
 
-        <DesignPreview doc={form} pageId={pageId} chrome={chrome} view={view} isDesktop={isDesktop} />
+        <DesignPreview
+          doc={preview.form ?? form}
+          pageId={pageId}
+          chrome={chrome}
+          view={view}
+          isDesktop={isDesktop}
+          themePreview={preview.view}
+        />
       </div>
     </>
   );

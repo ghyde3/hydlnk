@@ -13,7 +13,12 @@ import {
   type ImageRef,
   type ProfileOptionChange,
   type PublishError,
+  type Focus,
+  type Share,
+  isShareEmpty,
+  roundFocus,
 } from "@/lib/document";
+import { applyTemplate, templateById } from "@/lib/templates";
 import { collectIds, duplicateBlock } from "./duplicate";
 import {
   blockEditGroup,
@@ -48,7 +53,24 @@ export type FocusRequest =
   | { kind: "row"; blockId: string; nonce: number }
   | { kind: "row-button"; blockId: string; nonce: number }
   | { kind: "invalid-input"; blockId: string; nonce: number }
-  | { kind: "profile-name"; nonce: number };
+  | { kind: "profile-name"; nonce: number }
+  /** A field of the share card (M6-33): its first control takes focus (a Publish error names it). */
+  | { kind: "share-field"; field: ShareField; nonce: number };
+
+/** The three fields of the share card, as `share.title`, `share.description` and `share.image`. */
+export type ShareField = "title" | "description" | "image";
+
+/**
+ * The "Applied the Musician template" toast (M6-40): the template's name and the draft the apply
+ * made. The toast shows while the draft on screen is still that very draft: any other edit, an undo
+ * or a redo makes a new draft object and takes it away (`editorReducer`), so its Undo can only ever
+ * undo the template. `token` changes with every apply, so a second apply restarts the toast.
+ */
+export interface TemplateToast {
+  name: string;
+  draft: DraftDoc;
+  token: number;
+}
 
 export interface EditorState {
   draft: DraftDoc;
@@ -60,6 +82,8 @@ export interface EditorState {
   /** The one open edit panel, by block id (so a reorder keeps it open). */
   expandedId: string | null;
   deleted: DeletedBlock | null;
+  /** M6-40: the toast of the last template apply, or null. */
+  templateToast: TemplateToast | null;
   /** Text for the "Moved to position N of M" live region; `announceSeq` re-announces a repeat. */
   announcement: string;
   announceSeq: number;
@@ -81,6 +105,16 @@ export type EditorAction = (
    * switch, changes nothing (the same state object comes back).
    */
   | ({ type: "profile/option" } & ProfileOptionChange)
+  /**
+   * The share card (M6-33): the title and description are clamped to 70 and 200 code points on one
+   * line; the image is a finished upload (a new image has no focus) or null; `share/focus` moves
+   * the image's focus point (null is "Center": the key is removed). When all three fields are empty
+   * the draft has no `share` key at all.
+   */
+  | { type: "share/title"; value: string }
+  | { type: "share/description"; value: string }
+  | { type: "share/image"; value: ImageRef | null }
+  | { type: "share/focus"; value: Focus | null }
   /** Adds a block with the M2-10 defaults: at `index` (clamped to the page; M6-04) or at the end. */
   | { type: "block/add"; blockType: BlockType; index?: number }
   /** Inserts a ready-made block at `index` (clamped). `block/add` is this with the defaults. */
@@ -107,6 +141,13 @@ export type EditorAction = (
   | { type: "publish/errors"; errors: PublishError[] }
   | { type: "publish/clear-errors" }
   /**
+   * M6-40: replaces the blocks, the theme reference, the page-level overrides and (when it is
+   * empty) the bio with a starter template's, in one edit and one undo step. An id that is not in
+   * the catalog changes nothing.
+   */
+  | { type: "template/apply"; templateId: string }
+  | { type: "template/dismiss"; token: number }
+  /**
    * One step back or forward in the history (M6-07). `expect` is the draft the caller decided on:
    * when the screen has moved on since (an edit landed while the images were being checked), the
    * step is dropped instead of applied to a different draft.
@@ -122,6 +163,7 @@ export function initialEditorState(draft: DraftDoc): EditorState {
     history: createHistory(draft),
     expandedId: null,
     deleted: null,
+    templateToast: null,
     announcement: "",
     announceSeq: 0,
     publishErrors: [],
@@ -190,6 +232,40 @@ function withBlocks(state: EditorState, blocks: Block[]): EditorState {
   return withDraft(state, { ...state.draft, blocks });
 }
 
+/** The draft's share card with all three keys, for an edit to build on (M6-33). */
+function shareOf(draft: DraftDoc): Required<Share> {
+  return {
+    title: draft.share?.title ?? "",
+    description: draft.share?.description ?? "",
+    image: draft.share?.image ?? null,
+  };
+}
+
+/**
+ * Writes a share card into the draft, or takes the `share` key out when all three fields are empty
+ * (clearing the card leaves the draft as if it never had one).
+ */
+function withShare(state: EditorState, share: Required<Share>): EditorState {
+  if (isShareEmpty(share)) {
+    if (state.draft.share === undefined) return state;
+    const rest: DraftDoc = { ...state.draft };
+    delete rest.share;
+    return withDraft(state, rest);
+  }
+  return withDraft(state, { ...state.draft, share });
+}
+
+/** The share field a Publish error names (`share.title`, `share.description`, `share.image...`). */
+function shareFieldOf(errors: readonly PublishError[]): ShareField | null {
+  for (const error of errors) {
+    if (error.blockId !== null) continue;
+    if (error.field === "share.title") return "title";
+    if (error.field === "share.description") return "description";
+    if (error.field === "share.image" || error.field.startsWith("share.image.")) return "image";
+  }
+  return null;
+}
+
 // Insert, duplicate, expand ---------------------------------------------------------------------
 
 /** Where focus goes in a block that was just added, duplicated or opened: its first input, or the row for a divider. */
@@ -241,6 +317,12 @@ function groupOf(state: EditorState, action: EditorAction): string | undefined {
       return "profile/name";
     case "profile/bio":
       return "profile/bio";
+    case "share/title":
+      return "share/title";
+    case "share/description":
+      return "share/description";
+    case "share/focus":
+      return "share/focus";
     case "block/update": {
       const before = state.draft.blocks.find((block) => block.id === action.block.id);
       return before ? blockEditGroup(before, action.block) : undefined;
@@ -285,6 +367,15 @@ function stepHistory(
  * dispatched; without one the clock is read here.
  */
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
+  const next = reduceWithHistory(state, action);
+  // The template toast belongs to the draft the apply made: a new draft (an edit, an undo, a redo)
+  // takes it away.
+  return next.templateToast !== null && next.templateToast.draft !== next.draft
+    ? { ...next, templateToast: null }
+    : next;
+}
+
+function reduceWithHistory(state: EditorState, action: EditorAction): EditorState {
   if (action.type === "history/undo") return stepHistory(state, "undo", action.expect);
   if (action.type === "history/redo") return stepHistory(state, "redo", action.expect);
   const next = reduceEditor(state, action);
@@ -319,6 +410,31 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
       const profile = applyProfileOption(draft.profile, action);
       if (profile === draft.profile) return state;
       return withDraft(state, { ...draft, profile });
+    }
+
+    case "share/title": {
+      const title = clampText(action.value, LIMITS.shareTitle);
+      if (title === (draft.share?.title ?? "")) return state;
+      return withShare(state, { ...shareOf(draft), title });
+    }
+    case "share/description": {
+      const description = clampText(action.value, LIMITS.shareDescription);
+      if (description === (draft.share?.description ?? "")) return state;
+      return withShare(state, { ...shareOf(draft), description });
+    }
+    case "share/image": {
+      const image = action.value;
+      if (image === (draft.share?.image ?? null) || (image === null && !draft.share)) return state;
+      return withShare(state, { ...shareOf(draft), image });
+    }
+    case "share/focus": {
+      const current = draft.share?.image ?? null;
+      if (current === null) return state;
+      const bare: ImageRef = { path: current.path, width: current.width, height: current.height };
+      const image: ImageRef =
+        action.value === null ? bare : { ...bare, focus: roundFocus(action.value) };
+      if (JSON.stringify(image) === JSON.stringify(current)) return state;
+      return withShare(state, { ...shareOf(draft), image });
     }
 
     case "block/add": {
@@ -370,6 +486,17 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
       // into the same block while the file was on its way stays.
       const index = draft.blocks.findIndex((block) => block.id === action.id);
       const block = draft.blocks[index];
+      if (block?.type === "link") {
+        // M6-21: a link's thumbnail is its `icon` as an image reference. It replaces a built-in
+        // icon (never both) and a null removes the key, so a block without an icon is unchanged.
+        const rest = { ...block };
+        delete rest.icon;
+        const blocks = draft.blocks.slice();
+        blocks[index] = action.image
+          ? { ...rest, icon: { type: "image", image: action.image } }
+          : rest;
+        return withBlocks(state, blocks);
+      }
       if (!block || (block.type !== "card" && block.type !== "image")) return state;
       const blocks = draft.blocks.slice();
       blocks[index] = { ...block, image: action.image };
@@ -457,6 +584,7 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
     case "publish/errors": {
       const first = firstFailingBlockId(draft, action.errors);
       const nameFailed = action.errors.some((error) => error.field === "profile.name");
+      const shareField = shareFieldOf(action.errors);
       const nonce = state.seq + 1;
       return {
         ...state,
@@ -466,10 +594,33 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
           ? { kind: "invalid-input", blockId: first, nonce }
           : nameFailed
             ? { kind: "profile-name", nonce }
-            : state.focus,
+            : shareField
+              ? { kind: "share-field", field: shareField, nonce }
+              : state.focus,
         seq: nonce,
       };
     }
+
+    case "template/apply": {
+      const template = templateById(action.templateId);
+      if (!template) return state;
+      const next = applyTemplate(draft, template);
+      return {
+        ...withDraft(state, next),
+        // The old rows are gone: nothing is open, and a "Block deleted." toast is for a page that
+        // no longer exists.
+        expandedId: null,
+        deleted: null,
+        focus: null,
+        templateToast: { name: template.name, draft: next, token: state.seq + 1 },
+        seq: state.seq + 1,
+      };
+    }
+
+    case "template/dismiss":
+      return state.templateToast && state.templateToast.token === action.token
+        ? { ...state, templateToast: null }
+        : state;
 
     case "focus/handled":
       return state.focus && state.focus.nonce === action.nonce ? { ...state, focus: null } : state;

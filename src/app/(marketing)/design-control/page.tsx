@@ -6,12 +6,7 @@ import { DemoPage, PhoneFrame } from "@/components/marketing/demo/demo-page";
 import { TokenPlayground } from "@/components/marketing/design/token-playground";
 import { marketingMetadata } from "@/components/marketing/metadata";
 import { PageHero } from "@/components/marketing/page-hero";
-import {
-  ArrowLink,
-  Eyebrow,
-  Section,
-  SectionIntro,
-} from "@/components/marketing/primitives";
+import { ArrowLink, Eyebrow, Section, SectionIntro } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
 import { NoirTokenCard, ResolveChain } from "@/components/marketing/theme-tokens";
@@ -29,13 +24,13 @@ const SETTING_GROUPS: { group: string; settings: [string, string][] }[] = [
     group: "Color",
     settings: [
       ["Page background", "The color behind everything"],
-      ["Cards and tiles", "The fill of cards and grid tiles"],
+      ["Cards and panels", "The fill of cards and grid tiles"],
       ["Text", "Your main text"],
       ["Secondary text", "Bio, captions and other small print"],
       ["Accent", "Avatar ring, card titles, outlines and highlights"],
       ["Button color", "The fill of buttons"],
       ["Button text", "Text on filled buttons"],
-      ["Borders", "Edges of cards, tiles and icons"],
+      ["Lines and borders", "Edges of cards, tiles and icons"],
     ],
   },
   {
@@ -44,47 +39,69 @@ const SETTING_GROUPS: { group: string; settings: [string, string][] }[] = [
       ["Heading font", "Your name, headers and card titles"],
       ["Body font", "Everything else"],
       ["Text size", "Make all text smaller or larger"],
-      ["Heading weight", "How bold your headings are"],
-      ["Letter case", "Headings as written, in capitals or in lowercase"],
+      ["Heading boldness", "How bold your headings are"],
+      ["Capital letters", "Headings as written, in capitals or in lowercase"],
     ],
   },
   {
     group: "Shape",
     settings: [
       ["Corner radius", "From square corners to fully rounded"],
-      ["Border width", "How thick the edges are, from none to 4 px"],
+      ["Border thickness", "How thick the edges are, from none to 4 px"],
       ["Button style", "Solid, outline, soft, shadow or pill"],
     ],
   },
   {
     group: "Space",
     settings: [
-      ["Spacing", "Compact, regular or airy"],
-      ["Content width", "How wide the column gets, from 360 to 720 px"],
-      ["Alignment", "Centered or left-aligned"],
+      ["Space between blocks", "Compact, regular or airy"],
+      ["Page width", "How wide the column gets, from 360 to 720 px"],
+      ["Text alignment", "Centered or left-aligned"],
     ],
   },
   {
     group: "Background",
     settings: [
-      ["Background type", "A solid color, a gradient or a photo"],
+      ["Background", "A solid color, a gradient or a photo"],
+      ["Gradient", "Pick one of eight directions and two colors, or start from a preset"],
       ["Background photo", "A photo you upload"],
-      ["Overlay", "A wash of your background color over the photo"],
-      ["Blur", "Softens the photo, up to 20 px"],
+      ["Image overlay", "A wash of your background color over the photo"],
+      ["Image blur", "Softens the photo, up to 20 px"],
     ],
   },
 ];
 
 const RESOLVE_STEPS = [
-  ["Default", "HYDLNK’s neutral starting point. Every setting has a value before you touch anything."],
+  [
+    "Default",
+    "HYDLNK’s neutral starting point. Every setting has a value before you touch anything.",
+  ],
   ["Theme", "A HYDLNK theme or one of your saved themes sets all of them at once."],
   ["Page", "Anything you change on your page itself wins over the theme."],
   ["Block", "A single link or card can change its own colors, button style and corner radius."],
 ] as const;
 
 const FONTS = {
-  Sans: ["Inter", "DM Sans", "Manrope", "Geist", "Space Grotesk", "Outfit", "Sora", "Poppins", "Plus Jakarta Sans", "Bricolage Grotesque"],
-  Serif: ["Instrument Serif", "Fraunces", "Playfair Display", "DM Serif Display", "Lora", "Cormorant Garamond"],
+  Sans: [
+    "Inter",
+    "DM Sans",
+    "Manrope",
+    "Geist",
+    "Space Grotesk",
+    "Outfit",
+    "Sora",
+    "Poppins",
+    "Plus Jakarta Sans",
+    "Bricolage Grotesque",
+  ],
+  Serif: [
+    "Instrument Serif",
+    "Fraunces",
+    "Playfair Display",
+    "DM Serif Display",
+    "Lora",
+    "Cormorant Garamond",
+  ],
   Mono: ["Space Mono", "Geist Mono"],
 } as const;
 
@@ -194,11 +211,17 @@ export default function DesignPage() {
           eyebrow="Themes"
           titleId="themes-title"
           title="Start from a theme, save your own."
-          lead="A theme is a complete look in one tap: colors, fonts, buttons and spacing. Pick one of HYDLNK’s themes, or save your own."
+          lead="A theme is a complete look in one tap: colors, fonts, buttons and spacing. Pick one of HYDLNK’s 16 themes, preview it on your own page before you apply it, or save your own."
         />
         <ul className="mt-10 grid gap-3 min-[760px]:grid-cols-3">
-          <ThemeCard theme={NOIR} note="Warm black, brass accent, Instrument Serif and outlined buttons." />
-          <ThemeCard theme={IVORY} note="Paper white, ink buttons, Fraunces and generous spacing." />
+          <ThemeCard
+            theme={NOIR}
+            note="Warm black, brass accent, Instrument Serif and outlined buttons."
+          />
+          <ThemeCard
+            theme={IVORY}
+            note="Paper white, ink buttons, Fraunces and generous spacing."
+          />
           <ThemeCard theme={SMOKE} note="Cool slate, a soft gradient and pill buttons in Geist." />
         </ul>
         <div className="mt-10 grid gap-3 min-[760px]:grid-cols-2">
@@ -206,16 +229,26 @@ export default function DesignPage() {
             <h3 className="text-base font-semibold">Saved themes</h3>
             <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-[15px] leading-[1.6] text-text-2">
               <li>“Save as theme” saves your page’s whole look as a theme of your own.</li>
-              <li>Apply it to any of your pages. Applying a theme clears the changes you made on that page, and you can undo it.</li>
+              <li>
+                Apply it to any of your pages. Applying a theme clears the changes you made on that
+                page, and you can undo it.
+              </li>
               <li>Free accounts keep up to 3 saved themes. Pro and Studio have no limit.</li>
             </ul>
           </div>
           <div className="rounded-md border border-line bg-surface p-[22px]">
             <h3 className="text-base font-semibold">Changes wait for Publish</h3>
             <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-[15px] leading-[1.6] text-text-2">
-              <li>Applying or editing a theme only changes drafts. Pages that use it show Unpublished changes.</li>
-              <li>Live pages keep the look they were published with until you publish them again.</li>
-              <li>Delete a saved theme and the drafts that used it fall back to the system default.</li>
+              <li>
+                Applying or editing a theme only changes drafts. Pages that use it show Unpublished
+                changes.
+              </li>
+              <li>
+                Live pages keep the look they were published with until you publish them again.
+              </li>
+              <li>
+                Delete a saved theme and the drafts that used it fall back to the system default.
+              </li>
             </ul>
           </div>
         </div>
@@ -251,12 +284,11 @@ export default function DesignPage() {
               eyebrow="One-off changes"
               titleId="overrides-title"
               title="Make one link stand out."
-              lead="Give a link or a card its own color, button style or corner radius. The rest of the page keeps the theme, so one highlight never turns into a mess."
+              lead="Give any block its own color, button style or corner radius, or mark up to 3 links as featured for a bolder look and an optional gentle motion. The rest of the page keeps the theme, so one highlight never turns into a mess."
             />
             <p className="mt-5 text-[15px] leading-[1.6] text-text-2">
-              On this demo page every button is outlined, the way the Noir theme draws them,
-              except “This week’s roast”, which is filled. That one change was made on a single
-              link.
+              On this demo page every button is outlined, the way the Noir theme draws them, except
+              “This week’s roast”, which is filled. That one change was made on a single link.
             </p>
             <p className="mt-3 text-[15px] leading-[1.6] text-text-2">
               A single link or card can change its colors, button style and corner radius, and

@@ -2,11 +2,14 @@ import type { Metadata } from "next";
 import { EditorScreen } from "@/components/editor/editor-screen";
 import { LoadFailure } from "@/components/editor/load-failure";
 import { clientEnv } from "@/lib/env/client";
+import { loadPrimaryDomain } from "@/lib/editor/page-address";
 import { loadEditorPageData } from "@/lib/editor/page-data";
 import { tenantOrigin } from "@/lib/editor/urls";
 import { getAppContext } from "@/lib/pages/context";
 import { handleAddress } from "@/lib/pages/plans";
 import { pageChrome } from "@/lib/publish/chrome";
+import { publicPageAddress } from "@/lib/qr/address";
+import { loadTemplateThemes } from "@/lib/templates/load";
 import { failIfInjected } from "@/lib/testing/faults";
 
 export const metadata: Metadata = { title: "Editor" };
@@ -25,9 +28,16 @@ export const metadata: Metadata = { title: "Editor" };
 export default async function EditorPage() {
   const { user, current, plan } = await getAppContext();
   let data: Awaited<ReturnType<typeof loadEditorPageData>>;
+  let primaryDomain: string | null;
+  let templateThemes: Awaited<ReturnType<typeof loadTemplateThemes>>;
   try {
     await failIfInjected("draft-load");
-    data = await loadEditorPageData(current, user.id);
+    [data, primaryDomain, templateThemes] = await Promise.all([
+      loadEditorPageData(current, user.id),
+      loadPrimaryDomain(current.id),
+      // The themes the starter templates use (M6-40): never fails the page, reads {} instead.
+      loadTemplateThemes(),
+    ]);
   } catch (error) {
     console.error("[editor] loading the draft failed", error);
     return <LoadFailure breadcrumb={handleAddress(current.handle)} title={current.name} />;
@@ -39,10 +49,21 @@ export default async function EditorPage() {
       address={handleAddress(current.handle)}
       name={current.name}
       liveUrl={tenantOrigin(current.handle, clientEnv.NEXT_PUBLIC_ROOT_DOMAIN)}
+      handle={current.handle}
+      // The QR code's address and the share card's host come from the page's own rows, here on the
+      // server (M6-31, M6-33): the primary custom domain when there is one, else the handle address.
+      publicAddress={publicPageAddress({
+        handle: current.handle,
+        primaryDomain,
+        rootDomain: clientEnv.NEXT_PUBLIC_ROOT_DOMAIN,
+      })}
+      primaryDomain={primaryDomain}
+      publishedAt={data.publishedAt}
       draft={data.draft}
       revKey={data.revKey}
       repaired={data.repaired}
       themeTokens={data.themeTokens}
+      templateThemes={templateThemes}
       hasPublished={data.hasPublished}
       published={data.published}
       chrome={pageChrome(plan, current.id)}

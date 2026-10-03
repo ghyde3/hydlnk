@@ -8,7 +8,9 @@ function PriceBlock({ price }: { price: PlanPrice }) {
   return (
     <>
       <p className="mt-2 flex flex-wrap items-baseline gap-1.5">
-        <span className="text-[40px] leading-none font-bold tracking-[-0.03em]">{price.amount}</span>
+        <span className="text-[40px] leading-none font-bold tracking-[-0.03em]">
+          {price.amount}
+        </span>
         <span className="text-sm text-text-2">{price.per}</span>
       </p>
       <p className="mt-1.5 font-mono text-xs text-text-2">{price.note}</p>
@@ -64,14 +66,14 @@ function PlanBody({ plan, signupHref }: { plan: Plan; signupHref: string }) {
             <span>{item}</span>
           </li>
         ))}
-        {plan.dash ? (
-          <li className="flex items-start gap-2.5 text-text-2">
+        {plan.dash?.map((line) => (
+          <li key={line} className="flex items-start gap-2.5 text-text-2">
             <span aria-hidden="true" className="w-4 shrink-0 text-center">
               –
             </span>
-            <span>{plan.dash}</span>
+            <span>{line}</span>
           </li>
-        ) : null}
+        ))}
       </ul>
     </div>
   );

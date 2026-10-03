@@ -1,70 +1,36 @@
 "use client";
 
 import { LIMITS } from "@/lib/document";
-import { TextAreaField, TextField } from "../text-field";
-import { UrlField } from "../url-field";
+import { TextField } from "../text-field";
 import { OverrideControls } from "./override-controls";
 import { fieldError, type BlockFormProps } from "./types";
 
-/**
- * Link button: label and address, then the block's three override controls (Button style, Color,
- * Corner radius: M3-17, M3-18). There is no schedule field: scheduled links are out of v1.
- */
-export function LinkForm({ block, onChange, errors }: BlockFormProps) {
-  if (block.type !== "link") return null;
+/** Header: the heading's text, then its own style (the heading's color: M6-46). */
+export function HeaderForm({ block, onChange, errors }: BlockFormProps) {
+  if (block.type !== "header") return null;
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-3">
-        <TextField
-          label="Label"
-          field="label"
-          max={LIMITS.linkLabel}
-          value={block.label}
-          error={fieldError(errors, block.id, "label")}
-          onChange={(label) => onChange({ ...block, label })}
-          className="flex-1 basis-[220px]"
-        />
-        <UrlField
-          value={block.url}
-          error={fieldError(errors, block.id, "url")}
-          onChange={(url) => onChange({ ...block, url })}
-          className="flex-1 basis-[220px]"
-        />
-      </div>
+      <TextField
+        label="Text"
+        field="text"
+        max={LIMITS.headerText}
+        value={block.text}
+        error={fieldError(errors, block.id, "text")}
+        onChange={(text) => onChange({ ...block, text })}
+      />
       <OverrideControls block={block} onChange={onChange} errors={errors} />
     </div>
   );
 }
 
-export function HeaderForm({ block, onChange, errors }: BlockFormProps) {
-  if (block.type !== "header") return null;
-  return (
-    <TextField
-      label="Text"
-      field="text"
-      max={LIMITS.headerText}
-      value={block.text}
-      error={fieldError(errors, block.id, "text")}
-      onChange={(text) => onChange({ ...block, text })}
-    />
-  );
-}
+/** The text block's form, with its formatting toolbar and link panel (M6-30), lives in ./text-form. */
+export { TextForm } from "./text-form";
 
-export function TextForm({ block, onChange, errors }: BlockFormProps) {
-  if (block.type !== "text") return null;
-  return (
-    <TextAreaField
-      label="Text"
-      field="text"
-      max={LIMITS.text}
-      value={block.text}
-      error={fieldError(errors, block.id, "text")}
-      onChange={(text) => onChange({ ...block, text })}
-    />
-  );
-}
-
-/** A divider has nothing to edit: the panel's Move and Delete buttons are the whole form. */
-export function DividerForm(): null {
-  return null;
+/**
+ * A divider has no content to edit (M6-46): its form is its own style, the line's color. The
+ * panel's Move and Delete buttons come after it.
+ */
+export function DividerForm({ block, onChange, errors }: BlockFormProps) {
+  if (block.type !== "divider") return null;
+  return <OverrideControls block={block} onChange={onChange} errors={errors} />;
 }

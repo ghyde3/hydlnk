@@ -55,6 +55,15 @@ function cssValue(key: TokenKey, tokens: TokenSet): string {
     case "bgImage":
       // A custom property has to carry the whole value: url(var(--x)) is not valid CSS.
       return tokens.bgImage === null ? "none" : `url(${cssString(tokens.bgImage)})`;
+    case "gradientAngle":
+      // One of the eight numbers of the schema (sanitize ran first), so `<n>deg` is all it can be.
+      return `${tokens.gradientAngle}deg`;
+    case "gradientFrom":
+      // Null follows the page: the surface color, the gradient's first stop since it was added.
+      return tokens.gradientFrom ?? tokens.surface;
+    case "gradientTo":
+      // Null follows the page: the background color, the gradient's last stop.
+      return tokens.gradientTo ?? tokens.bg;
     default:
       // Colors, enums and the unitless numbers (scale, weightHeading, overlayOpacity).
       return String(tokens[key]);
@@ -64,7 +73,10 @@ function cssValue(key: TokenKey, tokens: TokenSet): string {
 /**
  * Resolved tokens -> `--t-*` custom properties for the tenant page root.
  * `{ radius: 12 }` becomes `{ "--t-radius": "12px" }`; fonts become quoted families with a
- * generic fallback; a null `bgImage` becomes `none`. Pure, safe to run on the server or client.
+ * generic fallback; a null `bgImage` becomes `none`; the gradient angle becomes `<n>deg` and a null
+ * gradient color becomes the resolved surface (first stop) or background (last stop) color. Every
+ * value is validated first, so a hostile one is replaced by its default and never reaches a style
+ * string. Pure, safe to run on the server or client.
  */
 export function tokensToCssVars(tokens: TokenSet): Record<string, string> {
   const safe = sanitize(tokens);

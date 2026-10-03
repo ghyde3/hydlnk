@@ -16,6 +16,7 @@ import {
   statusChip,
 } from "../m2/editor-helpers";
 import { adminClient } from "../fixtures/auth";
+import { confirmPhoto } from "./position-dialog-helpers";
 import { PROFILE_OPTION_DEFAULTS } from "@/lib/document";
 
 /**
@@ -224,6 +225,7 @@ test.describe("M6-16 photo controls in the Profile card", () => {
     await card(page)
       .locator("input[type=file]")
       .setInputFiles({ name: "me.png", mimeType: "image/png", buffer: makePng(80, 80) });
+    await confirmPhoto(page); // M6-24: the position dialog first
     await expect(card(page).getByRole("button", { name: "Replace photo" })).toBeVisible();
     const withPhoto = await expectDraft(user.pageId, (d) => d.profile.photo !== null);
     const path = withPhoto.profile.photo!.path;

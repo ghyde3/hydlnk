@@ -1,3 +1,5 @@
+import { PLAN_LIMITS } from "@/lib/limits";
+import { versionHistoryCell, versionHistoryItem } from "@/lib/versions/messages";
 import {
   PRICES,
   monthlyText,
@@ -34,7 +36,8 @@ export interface Plan {
   featured?: boolean;
   lead?: string;
   items: string[];
-  dash?: string;
+  /** Lines the plan does not include, shown with a dash. */
+  dash?: readonly string[];
 }
 
 const FREE_PRICE: PlanPrice = { amount: usd(0), per: "forever", note: "No card required" };
@@ -54,7 +57,7 @@ export const PLANS: readonly Plan[] = [
       "Per-link clicks, last 30 days",
       "10 MB of uploads",
     ],
-    dash: "Small “Made with HYDLNK” badge",
+    dash: ["Version history", "Small “Made with HYDLNK” badge"],
   },
   {
     id: "pro",
@@ -78,6 +81,7 @@ export const PLANS: readonly Plan[] = [
       "Unlimited saved themes",
       "1 year of analytics with referrers, devices and countries",
       "100 MB of uploads",
+      versionHistoryItem(PLAN_LIMITS.pro.versionsKept),
     ],
   },
   {
@@ -132,6 +136,14 @@ export const COMPARISON: readonly { label: string; values: [string, string, stri
       "Per-link clicks, 30 days",
       "1 year, with referrers, countries and devices",
       "1 year, with referrers, countries and devices",
+    ],
+  },
+  {
+    label: "Version history",
+    values: [
+      versionHistoryCell(PLAN_LIMITS.free.versionsKept),
+      versionHistoryCell(PLAN_LIMITS.pro.versionsKept),
+      versionHistoryCell(PLAN_LIMITS.studio.versionsKept),
     ],
   },
   { label: "Cut of your sales", values: ["None", "None", "None"] },

@@ -6,9 +6,10 @@ import type { TokenSet } from "@/lib/theme";
 import { OptionButton, OptionGroup } from "./shape-section";
 
 /**
- * Text size, heading weight and letter case (M3-10), as segmented controls like the rest of the
- * Design screen. Text size is one of four presets of the `scale` token; heading weight offers only
- * what the chosen heading font ships; letter case applies to the profile name and header blocks.
+ * Text size, heading boldness and capital letters (M3-10, M6-47), as segmented controls like the
+ * rest of the Design screen. Text size is one of four presets of the `scale` token; heading
+ * boldness offers only what the chosen heading font ships; capital letters apply to the profile
+ * name and header blocks.
  */
 
 const SCALES = [0.9, 1, 1.1, 1.2] as const;
@@ -46,7 +47,7 @@ export function TypeSection({ resolved, setToken }: DesignSectionProps) {
         ))}
       </OptionGroup>
 
-      <OptionGroup label="Heading weight">
+      <OptionGroup label="Heading boldness">
         {weights.map((weight) => (
           <OptionButton
             key={weight}
@@ -59,7 +60,7 @@ export function TypeSection({ resolved, setToken }: DesignSectionProps) {
         ))}
       </OptionGroup>
 
-      <OptionGroup label="Letter case">
+      <OptionGroup label="Capital letters">
         {CASES.map((option) => (
           <OptionButton
             key={option.value}

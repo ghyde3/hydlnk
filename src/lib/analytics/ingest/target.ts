@@ -5,9 +5,10 @@ import { isHttpUrl, type PublishDoc } from "@/lib/document";
  * social icon or grid cell id, or null. Pure: the caller loads the document, so what is proven here
  * is that the target can only ever come from it and only if it is a plain http(s) URL.
  *
- * A link block, a card and an image link carry their own `url` under the block id; a social icon
- * and a grid cell carry theirs under their own item id. Everything else (text, header, divider,
- * embed, the social email icon, an item without a URL) has no target.
+ * A link block, a card and an image link carry their own `url` under the block id; a social icon,
+ * a grid cell and a link inside a text block carry theirs under their own item id. Everything else
+ * (the text, header, divider and embed blocks themselves, the social email icon, an item without a
+ * URL) has no target.
  */
 export function findLinkUrl(doc: PublishDoc, id: string): string | null {
   for (const block of doc.blocks) {
@@ -22,6 +23,13 @@ export function findLinkUrl(doc: PublishDoc, id: string): string | null {
     }
     if (url === undefined && block.type === "grid") {
       url = block.cells.find((candidate) => candidate.id === id)?.url;
+    }
+    // A link inside a text block (M6-28): only a link mark, by its own id. Bold and italic marks have none.
+    if (url === undefined && block.type === "text") {
+      const mark = block.marks?.find(
+        (candidate) => candidate.type === "link" && candidate.id === id,
+      );
+      if (mark?.type === "link") url = mark.url;
     }
     if (url !== undefined) return isHttpUrl(url) ? url : null;
   }

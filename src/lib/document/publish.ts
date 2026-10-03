@@ -4,12 +4,16 @@ import {
   type BlockOverrides,
   type TokenSet,
 } from "@/lib/theme";
+import { pickShape, publishFocus } from "./focus";
+import { publishTextAndMarks } from "./marks";
 import { resolveProfileOptions } from "./profile-options";
+import { publishShare } from "./share";
 import {
   publishDocSchema,
   type Block,
   type DraftDoc,
   type ImageRef,
+  type LinkBlock,
   type PublishDoc,
   type SocialIcon,
 } from "./schema";
@@ -38,8 +42,11 @@ export function toPublishForm(draft: DraftDoc, themeTokens: Partial<TokenSet> | 
     const form = publishBlock(block);
     if (form) blocks.push(form);
   }
+  // The share card (M6-32): trimmed, empty fields omitted, no `share` key at all when all are empty.
+  const share = publishShare(draft.share);
   return {
     version: 1,
+    ...(share ? { share } : {}),
     profile: {
       name: draft.profile.name.trim(),
       bio: draft.profile.bio.trim(),
@@ -58,6 +65,21 @@ function imageRef(ref: ImageRef | null): ImageRef | null {
   return ref ? { path: ref.path, width: ref.width, height: ref.height } : null;
 }
 
+/**
+ * A card's or an image block's reference (M6-23): the same, plus its focus rounded to three
+ * decimals and left out when it is the center, so two equal drafts give equal forms. The profile
+ * photo and link thumbnails use `imageRef`, which drops the focus (they are square crops already).
+ */
+function imageRefWithFocus(ref: ImageRef | null): ImageRef | null {
+  if (!ref) return null;
+  const focus = publishFocus(ref.focus);
+  return { path: ref.path, width: ref.width, height: ref.height, ...(focus ? { focus } : {}) };
+}
+
+/**
+ * A block's own style (M6-45), on every block type: the ten `BLOCK_OVERRIDE_KEYS` that have a
+ * value and nothing else, or no `overrides` key at all. Two equal drafts give equal forms.
+ */
 function cleanOverrides(overrides: BlockOverrides | undefined): { overrides?: BlockOverrides } {
   if (!overrides) return {};
   const kept: Record<string, unknown> = {};
@@ -65,6 +87,19 @@ function cleanOverrides(overrides: BlockOverrides | undefined): { overrides?: Bl
     if (overrides[key] !== undefined) kept[key] = overrides[key];
   }
   return Object.keys(kept).length > 0 ? { overrides: kept as BlockOverrides } : {};
+}
+
+/**
+ * A link's `icon` and `featured` (M6-20, M6-22), each only when set: the built-in name, or the
+ * image's path, width and height and nothing else. Two equal drafts give equal forms.
+ */
+function linkDecorations(block: LinkBlock): Pick<LinkBlock, "icon" | "featured"> {
+  const out: Pick<LinkBlock, "icon" | "featured"> = {};
+  const icon = block.icon;
+  if (icon?.type === "builtin") out.icon = { type: "builtin", name: icon.name };
+  else if (icon?.type === "image") out.icon = { type: "image", image: imageRef(icon.image)! };
+  if (block.featured !== undefined) out.featured = block.featured;
+  return out;
 }
 
 function publishIcon(icon: SocialIcon): SocialIcon {
@@ -82,6 +117,7 @@ function publishBlock(block: Block): Block | null {
         type: "link",
         label: block.label.trim(),
         url: block.url.trim(),
+        ...linkDecorations(block),
         ...cleanOverrides(block.overrides),
       };
     case "card":
@@ -91,27 +127,55 @@ function publishBlock(block: Block): Block | null {
         title: block.title.trim(),
         caption: block.caption.trim(),
         url: block.url.trim(),
-        image: imageRef(block.image),
+        image: imageRefWithFocus(block.image),
         ...cleanOverrides(block.overrides),
       };
     case "header":
-      return { ...base, type: "header", text: block.text.trim() };
-    case "text":
-      return { ...base, type: "text", text: block.text.trim() };
+      return {
+        ...base,
+        type: "header",
+        text: block.text.trim(),
+        ...cleanOverrides(block.overrides),
+      };
+    case "text": {
+      // The text trimmed and its marks shifted and clipped with it (M6-28); no `marks` key when none are left.
+      const { text, marks } = publishTextAndMarks(block.text, block.marks);
+      return {
+        ...base,
+        type: "text",
+        text,
+        ...(marks.length > 0 ? { marks } : {}),
+        ...cleanOverrides(block.overrides),
+      };
+    }
     case "image": {
       const link = block.url?.trim() ?? "";
+      const shape = pickShape(block.shape);
       return {
         ...base,
         type: "image",
-        image: imageRef(block.image),
+        image: imageRefWithFocus(block.image),
+        ...(shape ? { shape } : {}),
         alt: block.alt.trim(),
         ...(link === "" ? {} : { url: link }),
+        ...cleanOverrides(block.overrides),
       };
     }
     case "social":
-      return { ...base, type: "social", icons: block.icons.map(publishIcon) };
+      return {
+        ...base,
+        type: "social",
+        icons: block.icons.map(publishIcon),
+        ...cleanOverrides(block.overrides),
+      };
     case "embed":
-      return { ...base, type: "embed", url: block.url.trim(), caption: block.caption.trim() };
+      return {
+        ...base,
+        type: "embed",
+        url: block.url.trim(),
+        caption: block.caption.trim(),
+        ...cleanOverrides(block.overrides),
+      };
     case "grid":
       return {
         ...base,
@@ -122,9 +186,10 @@ function publishBlock(block: Block): Block | null {
           subtitle: cell.subtitle.trim(),
           url: cell.url.trim(),
         })),
+        ...cleanOverrides(block.overrides),
       };
     case "divider":
-      return { ...base, type: "divider" };
+      return { ...base, type: "divider", ...cleanOverrides(block.overrides) };
     default:
       // Not a block this version knows (only reachable with unparsed data): never published.
       return null;
@@ -156,16 +221,22 @@ export function publishFormsEqual(a: unknown, b: unknown): boolean {
   return true;
 }
 
-/** Every image reference in a document: the profile photo, card images and image blocks. */
+/**
+ * Every image reference in a document: the profile photo, card images and image blocks, and the
+ * share image (M6-32), last.
+ */
 export function collectImageRefs(doc: {
   profile: { photo: ImageRef | null };
+  share?: { image?: ImageRef | null } | undefined;
   blocks: readonly Block[];
 }): ImageRef[] {
   const refs: ImageRef[] = [];
   if (doc.profile.photo) refs.push(doc.profile.photo);
   for (const block of doc.blocks) {
     if ((block.type === "card" || block.type === "image") && block.image) refs.push(block.image);
+    if (block.type === "link" && block.icon?.type === "image") refs.push(block.icon.image);
   }
+  if (doc.share?.image) refs.push(doc.share.image);
   return refs;
 }
 
@@ -204,18 +275,26 @@ export function collectPublishErrors(draft: unknown): PublishError[] {
       const rawBlock = Array.isArray(rawBlocks) ? asRecord(rawBlocks[path[1]]) : undefined;
       const blockId = typeof rawBlock?.id === "string" ? rawBlock.id : null;
       const rest = path.slice(2);
-      const list = rest[0] === "icons" || rest[0] === "cells" ? rawBlock?.[rest[0]] : undefined;
+      const list =
+        rest[0] === "icons" || rest[0] === "cells" || rest[0] === "marks"
+          ? rawBlock?.[rest[0]]
+          : undefined;
       if (Array.isArray(list) && typeof rest[1] === "number") {
         const rawItem = asRecord(list[rest[1]]);
         const itemId = typeof rawItem?.id === "string" ? rawItem.id : undefined;
         error = {
           blockId,
           ...(itemId ? { itemId } : {}),
-          field: rest.slice(2).join(".") || String(rest[0]),
+          // A bold or italic mark has no id: its problems belong to the block's `marks`.
+          field:
+            rest[0] === "marks" && !itemId ? "marks" : rest.slice(2).join(".") || String(rest[0]),
           message: issue.message,
         };
       } else {
-        error = { blockId, field: rest.join(".") || "type", message: issue.message };
+        // A focus outside the picture (M6-23) is one error on the block's `focus`, not one per axis.
+        const field =
+          rest[0] === "image" && rest[1] === "focus" ? "focus" : rest.join(".") || "type";
+        error = { blockId, field, message: issue.message };
       }
     } else {
       error = { blockId: null, field: path.join(".") || "document", message: issue.message };

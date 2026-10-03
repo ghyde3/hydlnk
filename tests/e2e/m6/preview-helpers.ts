@@ -26,7 +26,7 @@ export const nameInput = (page: Page): Locator => page.getByLabel("Display name"
 export const rowOf = (page: Page, blockId: string): Locator =>
   page.locator(`li[data-block-id="${blockId}"]`);
 export const rowToggle = (page: Page, blockId: string): Locator =>
-  rowOf(page, blockId).locator("button[aria-expanded]");
+  rowOf(page, blockId).locator("button[aria-expanded]").first();
 export const panelOf = (page: Page, blockId: string): Locator =>
   page.locator(`#block-panel-${blockId}`);
 /** A block (or item) as the preview frame draws it. */

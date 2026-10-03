@@ -71,7 +71,7 @@ describe("Publish refuses unsafe block content and names where it is", () => {
 
   it.each([
     "https://evil.example/x",
-    "https://vimeo.com/76979871",
+    "https://vimeo.com/channels/staffpicks",
     "https://www.youtube.com/@maraokafor",
     "https://youtube.com.evil.example/watch?v=jNQXAC9IVRw",
     "javascript:alert(1)",
@@ -82,7 +82,8 @@ describe("Publish refuses unsafe block content and names where it is", () => {
       {
         blockId: blocks.embed.id,
         field: "url",
-        message: "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.",
+        message:
+          "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.",
       },
     ]);
   });

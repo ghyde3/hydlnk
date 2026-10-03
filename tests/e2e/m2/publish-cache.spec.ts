@@ -69,7 +69,15 @@ async function publishedUser(
   return { ...user, draft };
 }
 
+/**
+ * Opens the editor with the browser kept off the page's `/og` image. Since M6-33 the share preview
+ * loads the live `/og?v=<publishedAt>` on open and again the moment Publish finishes. Each of those
+ * is a second reader of the page's cache entry: it reads the database once for itself, or races the
+ * GET under test (two concurrent misses are two reads). The OG image is fetched explicitly where a
+ * test needs it, over plain HTTP, which this does not touch.
+ */
 async function openEditor(page: Page) {
+  await page.route(/\/og\?v=/, (route) => route.abort());
   await page.goto(`${APP}/editor`);
   await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
 }

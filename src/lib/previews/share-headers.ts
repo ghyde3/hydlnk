@@ -47,8 +47,8 @@ export function shareNonce(): string {
 }
 
 /**
- * The Content-Security-Policy of a shared draft: the tenant policy (embeds from YouTube and Spotify
- * only, no plugins, no <base>, no framing) plus a script policy.
+ * The Content-Security-Policy of a shared draft: the tenant policy (embeds from the eight providers
+ * of M6-26 only, no plugins, no <base>, no framing) plus a script policy.
  *
  * Why this route gets one when the tenant pages do not: a share link draws a draft that was never
  * through Publish, on the app host, whose session cookies JavaScript can read (the browser client

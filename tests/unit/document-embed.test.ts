@@ -50,7 +50,8 @@ describe("parseEmbed accepts", () => {
 
 describe("parseEmbed rejects", () => {
   it.each([
-    ["Vimeo", "https://vimeo.com/76979871"],
+    // Vimeo and SoundCloud links parse since M6-26 (tests/unit/m6-embeds-parse.test.ts); the old rows are gone.
+    ["a Vimeo channel", "https://vimeo.com/channels/staffpicks"],
     ["a YouTube channel", "https://www.youtube.com/@maraokafor"],
     ["a YouTube channel page", "https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv"],
     ["a YouTube user page", "https://www.youtube.com/user/mara"],
@@ -91,7 +92,7 @@ describe("parseEmbed rejects", () => {
     ["a Spotify subdomain", `https://evil.open.spotify.com/track/${SP}`],
     ["Spotify over a custom port", `https://open.spotify.com:444/track/${SP}`],
     ["the Spotify embed host path", `https://open.spotify.com/embed/track/${SP}`],
-    ["SoundCloud", "https://soundcloud.com/a/b"],
+    ["a SoundCloud page that is not a sound", "https://soundcloud.com/discover"],
     ["an evil iframe", "https://evil.example/x"],
     ["an empty string", ""],
     ["whitespace", "   "],
@@ -132,7 +133,7 @@ describe("the embed block", () => {
     const issue = publishDocSchema.safeParse(embed("https://evil.example/x")).error?.issues[0];
     expect(issue?.path).toEqual(["blocks", 0, "url"]);
     expect(issue?.message).toBe(
-      "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.",
+      "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.",
     );
   });
 });

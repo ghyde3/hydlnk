@@ -5,6 +5,7 @@ import { cleanupUsers, desktopOnly, phoneOnly, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { makeJpeg, makePngImage } from "../m5/images-fixtures";
 import { removeFolders, sessionCookie, uploadMedia, uploaded } from "../m5/images-helpers";
+import { confirmPhoto } from "./position-dialog-helpers";
 import {
   bid,
   expectDraft,
@@ -225,8 +226,15 @@ test.describe("M6-07 shortcuts, steps and saves", () => {
 
     // Nothing to undo yet: the shortcut changes nothing and says so.
     await page.getByRole("heading", { level: 2, name: /^Blocks/ }).click();
-    await page.keyboard.press("Control+z");
-    await expect(page.getByRole("status").filter({ hasText: "Nothing to undo." })).toHaveCount(1);
+    // Pressing it again is harmless (nothing changes, the same message): a key press that reaches
+    // the page before the click's scroll has settled on a loaded CI machine is simply tried again.
+    await expect(async () => {
+      await page.keyboard.press("Control+z");
+      await expect(page.getByRole("status").filter({ hasText: "Nothing to undo." })).toHaveCount(
+        1,
+        { timeout: 1_500 },
+      );
+    }).toPass({ timeout: 15_000 });
     await expect(BIO(page)).toHaveValue(original);
     await expect(saveIndicator(page)).toHaveText("");
 
@@ -278,7 +286,10 @@ test.describe("M6-07 shortcuts, steps and saves", () => {
     await expect(undoButton(page))
       .toBeFocused()
       .catch(() => undefined);
-    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+    await expect(row.locator("button[aria-expanded]").first()).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     await expect(rowOf(page, bid(2))).toContainText("Text 2");
 
     // Add a block (it opens), then undo the add: the row is gone and nothing is open.
@@ -477,6 +488,7 @@ test.describe("M6-07 every change is undoable", () => {
         "upload a photo",
         async () => {
           await fileInput.setInputFiles({ name: "a.jpg", mimeType: "image/jpeg", buffer: jpegA });
+          await confirmPhoto(page); // M6-24: the position dialog first
           await expect(card.getByRole("button", { name: "Replace photo" })).toBeVisible();
         },
       ],
@@ -484,6 +496,7 @@ test.describe("M6-07 every change is undoable", () => {
         "replace it",
         async () => {
           await fileInput.setInputFiles({ name: "b.jpg", mimeType: "image/jpeg", buffer: jpegB });
+          await confirmPhoto(page); // M6-24: the position dialog first
           await expect(card.getByRole("button", { name: "Replace photo" })).toBeEnabled();
         },
       ],

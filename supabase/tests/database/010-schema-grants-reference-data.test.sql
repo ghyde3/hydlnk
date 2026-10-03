@@ -47,7 +47,9 @@ select tables_are(
     -- Milestone 4: analytics rollups, high-traffic flags and the rate-limit window (111, 113, 112)
     'daily_dim_stats', 'traffic_flags', 'rate_limit_hits',
     -- Wave F: private share links of the editor (120)
-    'preview_links'
+    'preview_links',
+    -- Wave G: published versions, Pro and Studio (131)
+    'page_versions'
   ],
   'public holds exactly the contract tables'
 );
@@ -154,7 +156,11 @@ select set_eq(
       -- Wave F: preview_links is server only (the cron purge runs as the database owner)
       ('preview_links|service_role|SELECT|*'),
       ('preview_links|service_role|INSERT|*'),
-      ('preview_links|service_role|UPDATE|*')
+      ('preview_links|service_role|UPDATE|*'),
+      -- Wave G: page_versions, read only. The owner reads while the plan keeps versions (policy);
+      -- the secret key reads for the preview and restore actions; only the trigger writes.
+      ('page_versions|authenticated|SELECT|*'),
+      ('page_versions|service_role|SELECT|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );
@@ -195,18 +201,18 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false) $$,
-  'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns'
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0) $$,
+  'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true) $$,
-  'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns'
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25) $$,
+  'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true) $$,
-  'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns'
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25) $$,
+  'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns, 25 versions'
 );
 select throws_ok(
   $$ select * from public.plan_limits('platinum') $$,
@@ -220,8 +226,8 @@ select throws_ok(
 
 select set_eq(
   $$ select name from public.themes where owner_id is null $$,
-  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember') $$,
-  'the system themes are Noir, Ivory, Smoke, Paper, Sage, Midnight and Ember'
+  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember'), ('Linen'), ('Cloud'), ('Blush'), ('Citrus'), ('Graphite'), ('Ocean'), ('Plum'), ('Forest'), ('Sunset') $$,
+  'the sixteen system themes: Noir, Ivory, Smoke, Paper, Sage, Midnight and Ember, then Linen to Sunset (M6-43)'
 );
 
 select is_empty(
@@ -232,16 +238,16 @@ select is_empty(
       'bg', 'surface', 'text', 'textMuted', 'accent', 'buttonBg', 'buttonText', 'border',
       'fontHeading', 'fontBody', 'scale', 'weightHeading', 'letterCase', 'radius',
       'borderWidth', 'buttonStyle', 'density', 'maxWidth', 'align', 'bgType', 'bgImage',
-      'overlayOpacity', 'blur'
+      'overlayOpacity', 'blur', 'gradientAngle', 'gradientFrom', 'gradientTo'
     ]) as k(key)
     where t.owner_id is null and not (t.tokens ? k.key)
   $$,
-  'every system theme carries all 23 token keys'
+  'every system theme carries all 26 token keys (the 23 and the three gradient tokens of M6-41)'
 );
 
 select is(
   (select count(*)::int from public.themes t where t.owner_id is null
-     and (select count(*) from jsonb_object_keys(t.tokens)) <> 23),
+     and (select count(*) from jsonb_object_keys(t.tokens)) <> 26),
   0,
   'system themes carry no extra token keys'
 );

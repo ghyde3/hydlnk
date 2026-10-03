@@ -78,7 +78,7 @@ export const focused = (page: Page) =>
 /** Opens one row's panel (a click on its title button) unless it is open already. */
 export async function openRow(page: Page, id: string): Promise<Locator> {
   const row = page.locator(`li[data-block-id="${id}"]`);
-  const button = row.locator("button[aria-expanded]");
+  const button = row.locator("button[aria-expanded]").first();
   if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
   await expect(button).toHaveAttribute("aria-expanded", "true");
   return row;

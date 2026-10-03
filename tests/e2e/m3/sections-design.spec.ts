@@ -96,8 +96,8 @@ test.describe("M3-11 / M3-12 shape section", () => {
     await expect(pressedIn(page, "Button style")).toHaveCount(1);
     await expect(pressedIn(page, "Button style")).toHaveText("Outline");
     await expect(pressedIn(page, "Corner radius")).toHaveText("12px");
-    await expect(pressedIn(page, "Border width")).toHaveText("1px");
-    await expectPhoneFit(page, "Button style", "Corner radius", "Border width");
+    await expect(pressedIn(page, "Border thickness")).toHaveText("1px");
+    await expectPhoneFit(page, "Button style", "Corner radius", "Border thickness");
 
     // The public page, cached before any change: outline buttons, 12px.
     const live = await livePage(page, user.handle);
@@ -106,7 +106,7 @@ test.describe("M3-11 / M3-12 shape section", () => {
 
     await choose(page, "Button style", "Soft");
     await choose(page, "Corner radius", "20px");
-    await choose(page, "Border width", "2px");
+    await choose(page, "Border thickness", "2px");
     await expect(pressedIn(page, "Button style")).toHaveCount(1);
 
     // The preview follows at once.
@@ -131,7 +131,7 @@ test.describe("M3-11 / M3-12 shape section", () => {
     await reloadDesign(page);
     await expect(pressedIn(page, "Button style")).toHaveText("Soft");
     await expect(pressedIn(page, "Corner radius")).toHaveText("20px");
-    await expect(pressedIn(page, "Border width")).toHaveText("2px");
+    await expect(pressedIn(page, "Border thickness")).toHaveText("2px");
 
     // Not on the live page until Publish.
     await live.reload();
@@ -154,29 +154,25 @@ test.describe("M3-13 spacing section", () => {
     const user = await seededUser(context, "spc");
     await openDesign(page);
 
-    await expect(group(page, "Spacing").getByRole("button")).toHaveText([
+    await expect(group(page, "Space between blocks").getByRole("button")).toHaveText([
       "Compact",
       "Regular",
       "Airy",
     ]);
-    await expect(group(page, "Content width").getByRole("button")).toHaveText([
-      "480",
-      "560",
-      "640",
-    ]);
-    await expect(group(page, "Alignment").getByRole("button")).toHaveText(["Center", "Left"]);
-    await expect(pressedIn(page, "Spacing")).toHaveText("Regular");
-    await expect(pressedIn(page, "Content width")).toHaveText("480");
-    await expect(pressedIn(page, "Alignment")).toHaveText("Center");
-    await expectPhoneFit(page, "Spacing", "Content width", "Alignment");
+    await expect(group(page, "Page width").getByRole("button")).toHaveText(["480", "560", "640"]);
+    await expect(group(page, "Text alignment").getByRole("button")).toHaveText(["Center", "Left"]);
+    await expect(pressedIn(page, "Space between blocks")).toHaveText("Regular");
+    await expect(pressedIn(page, "Page width")).toHaveText("480");
+    await expect(pressedIn(page, "Text alignment")).toHaveText("Center");
+    await expectPhoneFit(page, "Space between blocks", "Page width", "Text alignment");
 
     const live = await livePage(page, user.handle);
     const gap = (target: Locator) => computed(target.locator("main"), "row-gap");
     expect(await gap(live.locator("body"))).toBe("12px");
 
-    await choose(page, "Spacing", "Airy");
-    await choose(page, "Content width", "640");
-    await choose(page, "Alignment", "Left");
+    await choose(page, "Space between blocks", "Airy");
+    await choose(page, "Page width", "640");
+    await choose(page, "Text alignment", "Left");
 
     // The preview: 18px between blocks, left-aligned headings.
     expect(await gap(previewRoot(page))).toBe("18px");
@@ -187,9 +183,9 @@ test.describe("M3-13 spacing section", () => {
       (o) => o.density === "airy" && o.maxWidth === 640 && o.align === "left",
     );
     await reloadDesign(page);
-    await expect(pressedIn(page, "Spacing")).toHaveText("Airy");
-    await expect(pressedIn(page, "Content width")).toHaveText("640");
-    await expect(pressedIn(page, "Alignment")).toHaveText("Left");
+    await expect(pressedIn(page, "Space between blocks")).toHaveText("Airy");
+    await expect(pressedIn(page, "Page width")).toHaveText("640");
+    await expect(pressedIn(page, "Text alignment")).toHaveText("Left");
 
     // Not live until Publish; then 18px, a 640px column on desktop, left alignment.
     await live.reload();
@@ -362,8 +358,8 @@ test.describe("M3-15 / M3-16 background image", () => {
     await expectPhoneFit(page, "Background");
 
     // M3-16: Overlay and Blur sliders: role slider, arrow keys, visible values, 44px touch height.
-    const overlay = page.getByRole("slider", { name: "Overlay" });
-    const blur = page.getByRole("slider", { name: "Blur" });
+    const overlay = page.getByRole("slider", { name: "Image overlay" });
+    const blur = page.getByRole("slider", { name: "Image blur" });
     await expect(overlay).toBeVisible();
     await expect(blur).toBeVisible();
     for (const slider of [overlay, blur]) {
@@ -387,8 +383,8 @@ test.describe("M3-15 / M3-16 background image", () => {
 
     // After a reload the image, sliders and values are all still there.
     await reloadDesign(page);
-    await expect(page.getByRole("slider", { name: "Overlay" })).toHaveValue("60");
-    await expect(page.getByRole("slider", { name: "Blur" })).toHaveValue("12");
+    await expect(page.getByRole("slider", { name: "Image overlay" })).toHaveValue("60");
+    await expect(page.getByRole("slider", { name: "Image blur" })).toHaveValue("12");
     await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "image");
 
     // Remove image: Solid, bgImage cleared, sliders gone. The object stays in Storage.
@@ -412,8 +408,8 @@ test.describe("M3-15 / M3-16 background image", () => {
     await openDesign(page);
 
     const imageA = await uploadBackground(page, user, "a.jpg");
-    await page.getByRole("slider", { name: "Overlay" }).fill("60");
-    await page.getByRole("slider", { name: "Blur" }).fill("12");
+    await page.getByRole("slider", { name: "Image overlay" }).fill("60");
+    await page.getByRole("slider", { name: "Image blur" }).fill("12");
     await expectOverrides(user.pageId, (o) => o.overlayOpacity === 0.6 && o.blur === 12);
     await publish(page);
 

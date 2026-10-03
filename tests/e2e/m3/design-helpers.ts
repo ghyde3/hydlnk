@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { url } from "../helpers";
-import { pageRow } from "../m2/editor-helpers";
+import { pageRow, waitForEditorHydrated } from "../m2/editor-helpers";
 
 /**
  * Shared setup for the Design screen specs (M3-01 .. M3-10). Every writing spec makes its own user
@@ -106,6 +106,8 @@ export const publishButton = (page: Page): Locator =>
 export async function publishFromEditor(page: Page): Promise<void> {
   await page.goto(url("app", "/editor"));
   await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
+  // Server-rendered markup shows before React attaches; a click before that is swallowed on a loaded machine.
+  await waitForEditorHydrated(page);
   await publishButton(page).click();
   await expect(page.locator("[data-publish-status]")).toHaveText("Published", { timeout: 20_000 });
 }

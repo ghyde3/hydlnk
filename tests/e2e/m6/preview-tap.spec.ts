@@ -70,7 +70,6 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
       { name: "text", id: byType("text").id, target: "" },
       { name: "image", id: byType("image").id, target: "" },
       { name: "social", id: byType("social").id, target: "" },
-      { name: "embed", id: byType("embed").id, target: ".pg-embed-play" },
       { name: "grid", id: byType("grid").id, target: "" },
       { name: "divider", id: byType("divider").id, target: "", divider: true },
       { name: "empty image", id: byType("image", 1).id, target: ".pg-placeholder" },
@@ -101,8 +100,15 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     }
     expect(tracked).toEqual([]);
     expect(popups).toEqual([]);
-    // Nothing mounted a player.
+    // Nothing mounted a player so far.
     await expect(previewScreen(page).locator("iframe")).toHaveCount(0);
+    // M6-27 supersedes this step of M6-03 for a facade's Play button: it plays in the preview, like
+    // on the live page, and does not open the block.
+    const embed = byType("embed").id;
+    await inPreview(page, embed).locator(".pg-embed-play").click();
+    await expect(inPreview(page, embed).locator("iframe")).toHaveCount(1);
+    await expect(rowToggle(page, embed)).toHaveAttribute("aria-expanded", "false");
+    expect(page.url()).toBe(start);
   });
 
   test("M6-03 a card, a link, an image and a grid in a row collapse the one that was open", async ({
@@ -162,7 +168,7 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     expect(await css(inPreview(page, cellB), "cursor")).toBe("pointer");
   });
 
-  test("M6-03 a Spotify player cannot swallow the tap, and a YouTube poster mounts no player", async ({
+  test("M6-03 a Spotify player cannot swallow the tap, and a YouTube poster plays in place (M6-27)", async ({
     page,
     context,
   }, info) => {
@@ -189,14 +195,16 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     await frame.click({ force: true });
     await expectOpened(page, spotify.id);
     await closeRows(page);
+    // M6-27 supersedes this step of M6-03: a facade's Play button plays in the preview, like on the
+    // live page, and does not open the block.
     await previewScreen(page).locator(`[data-block-id="${youtube.id}"] .pg-embed-play`).click();
-    await expectOpened(page, youtube.id);
     await expect(previewScreen(page).locator(`[data-block-id="${youtube.id}"] iframe`)).toHaveCount(
-      0,
+      1,
     );
     await expect(
       previewScreen(page).locator(`[data-block-id="${youtube.id}"] .pg-embed-play`),
-    ).toBeVisible();
+    ).toHaveCount(0);
+    await expect(rowToggle(page, youtube.id)).toHaveAttribute("aria-expanded", "false");
   });
 
   test("M6-03 taps that mean nothing do nothing: the background, empty space and the footer links", async ({
@@ -354,20 +362,74 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
 
   test("M6-03 a swipe that scrolls the preview opens nothing", async ({ page, context }, info) => {
     test.skip(!phoneOnly(info), "phone layout");
-    await userWithBlocks(context, "tq3", () => textBlocks(14));
+    const user = await userWithBlocks(context, "tq3", () => textBlocks(14));
     await openEditor(page);
     await dock(page).click();
     await expect(backBar(page)).toBeVisible();
+    await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");
+    // The gesture only scrolls what is there: wait until the last block is drawn and the page is
+    // clearly taller than the viewport (on a loaded CI machine the first paint can still be short).
+    await expect(
+      previewScreen(page).locator(`[data-block-id="${user.blocks.at(-1)!.id}"]`),
+    ).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), {
+        timeout: 15_000,
+      })
+      .toBeGreaterThan(300);
     const cdp = await context.newCDPSession(page);
-    await cdp.send("Input.synthesizeScrollGesture", {
-      x: 195,
-      y: 500,
-      yDistance: -400,
-      speed: 800,
-      gestureSourceType: "touch",
-    });
-    await page.waitForTimeout(500);
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    // What scrolls on the phone Preview tab is the window (the preview is `h-auto` there); read the
+    // document's scroller and, in case a container ever takes over, the preview's own scrollTop too.
+    const scrolled = () =>
+      page.evaluate(() => {
+        const screen = document.querySelector('[data-testid="preview-screen"]');
+        return Math.max(
+          window.scrollY,
+          document.scrollingElement?.scrollTop ?? 0,
+          screen?.scrollTop ?? 0,
+        );
+      });
+    // A real touch drag, sent as raw touch events (touchStart, many touchMoves, touchEnd). On CI's
+    // Linux headless Chrome `Input.synthesizeScrollGesture` alone did not scroll the page; the raw
+    // touch pipeline is what a finger does, and it needs no compositor-side gesture controller.
+    async function drag(): Promise<void> {
+      const x = 195;
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x, y: 600 }],
+      });
+      for (let i = 1; i <= 20; i += 1) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x, y: 600 - i * 20 }],
+        });
+        await page.waitForTimeout(16);
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    }
+    let attempt = 0;
+    // If the page was not yet ready to take it, swipe again (a few times at most, alternating the
+    // two ways of sending a touch scroll). What the test asserts is unchanged: the page scrolled
+    // and the swipe opened no block.
+    await expect
+      .poll(
+        async () => {
+          attempt += 1;
+          if (attempt % 2 === 1) await drag();
+          else
+            await cdp.send("Input.synthesizeScrollGesture", {
+              x: 195,
+              y: 600,
+              yDistance: -400,
+              speed: 800,
+              gestureSourceType: "touch",
+            });
+          await page.waitForTimeout(300);
+          return scrolled();
+        },
+        { timeout: 20_000, intervals: [0, 250, 250] },
+      )
+      .toBeGreaterThan(100);
     await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("li[data-block-id] button[aria-expanded=true]")).toHaveCount(0);
   });

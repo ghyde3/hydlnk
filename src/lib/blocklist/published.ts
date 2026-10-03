@@ -54,7 +54,7 @@ interface UrlField {
   url: string;
 }
 
-/** Every URL of the published form: link, card, embed and image blocks, social icons, grid cells. */
+/** Every URL of the published form: link, card, embed and image blocks, social icons, grid cells, links in text. */
 function urlFieldsOf(doc: PublishDoc): UrlField[] {
   const fields: UrlField[] = [];
   for (const block of doc.blocks) {
@@ -75,6 +75,13 @@ function urlFieldsOf(doc: PublishDoc): UrlField[] {
       case "grid":
         for (const cell of block.cells) {
           fields.push({ blockId: block.id, itemId: cell.id, url: cell.url });
+        }
+        break;
+      case "text":
+        // A link inside text (M6-29), by the mark's id.
+        for (const mark of block.marks ?? []) {
+          if (mark.type === "link")
+            fields.push({ blockId: block.id, itemId: mark.id, url: mark.url });
         }
         break;
       default:

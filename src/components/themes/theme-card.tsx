@@ -3,17 +3,24 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { resolveTokens } from "@/lib/theme";
 import type { ThemeRow } from "@/lib/themes";
+import { swatchBackground } from "@/lib/themes/swatch";
 import type { RenameResult } from "./use-theme-library";
 
 /** Buttons under a saved theme's card: 44px tall, the way every editor control is. */
 const ACTION_BUTTON =
   "inline-flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-md border border-line-3 bg-surface px-2 text-[13px] font-medium text-ink disabled:cursor-not-allowed disabled:opacity-50";
 
+/** The Preview button (M6-44): the same 44px, full-width row on every card, white with a 1px border. */
+const PREVIEW_BUTTON =
+  "inline-flex min-h-11 w-full min-w-0 cursor-pointer items-center justify-center rounded-md border border-line-3 bg-surface px-2 text-[13px] font-medium text-ink disabled:cursor-not-allowed disabled:opacity-50";
+
 /**
  * One theme in the saved-themes grid (M3-19): a button that applies it, with a 56px swatch (the
- * theme's background, a filled and an outlined accent bar), its name and, on the applied one only,
- * a tag. `aria-pressed` is the applied state. Saved themes (not system ones) also carry Rename and
- * Delete under the card, outside the apply button: a button never holds another button.
+ * theme's background, or its gradient (M6-43), with a filled and an outlined accent bar), its name
+ * and, on the applied one only, a tag. `aria-pressed` is the applied state. Every card also has a
+ * "Preview" button on its own row (M6-44, only when the screen gives it `onPreview`), and saved
+ * themes (not system ones) carry Rename and Delete under it, outside the apply button: a button
+ * never holds another button.
  *
  * Only validated colors reach the swatch's inline style: `theme.tokens` came through the token
  * schema, and `resolveTokens` fills the gaps from the system default.
@@ -22,12 +29,18 @@ export function ThemeCard({
   theme,
   tag,
   onApply,
+  onPreview,
+  previewing = false,
   onRename,
   onDelete,
 }: {
   theme: ThemeRow;
   tag: "Applied" | "Edited" | null;
   onApply: () => void;
+  /** M6-44: shows the theme on the page without applying it. The button is the focus to return to. */
+  onPreview?: ((button: HTMLElement) => void) | undefined;
+  /** This card is the one on show in the preview. */
+  previewing?: boolean;
   onRename: (input: string) => Promise<RenameResult>;
   onDelete: (trigger: HTMLElement) => void;
 }) {
@@ -52,7 +65,7 @@ export function ThemeCard({
           aria-hidden="true"
           data-swatch=""
           className="flex h-14 flex-col justify-center gap-1.5 px-3"
-          style={{ background: tokens.bg }}
+          style={{ background: swatchBackground(tokens) }}
         >
           <span
             className="block h-[7px] w-3/5"
@@ -74,6 +87,19 @@ export function ThemeCard({
           ) : null}
         </span>
       </button>
+
+      {onPreview ? (
+        <button
+          type="button"
+          aria-label={`Preview ${theme.name}`}
+          data-testid="theme-preview"
+          data-previewing={previewing ? "" : undefined}
+          onClick={(event) => onPreview(event.currentTarget)}
+          className={`${PREVIEW_BUTTON} ${previewing ? "border-ink ring-1 ring-ink" : ""}`}
+        >
+          Preview
+        </button>
+      ) : null}
 
       {theme.system ? null : renaming ? (
         <RenameForm

@@ -1,0 +1,187 @@
+{
+  "noirTheme": {
+    "bg": "#16120E",
+    "blur": 0,
+    "text": "#EFE8DC",
+    "align": "center",
+    "scale": 1,
+    "accent": "#C9A86A",
+    "bgType": "solid",
+    "border": "#3A342D",
+    "radius": 12,
+    "bgImage": null,
+    "density": "regular",
+    "surface": "#221B13",
+    "buttonBg": "#C9A86A",
+    "fontBody": "Geist",
+    "maxWidth": 480,
+    "textMuted": "#A79E90",
+    "buttonText": "#15110B",
+    "letterCase": "normal",
+    "borderWidth": 1,
+    "buttonStyle": "outline",
+    "fontHeading": "Instrument Serif",
+    "weightHeading": 400,
+    "overlayOpacity": 0
+  },
+  "published": {
+    "theme": {
+      "ref": "00000000-0000-4000-8000-000000000001",
+      "overrides": {}
+    },
+    "blocks": [
+      {
+        "id": "Sx4kT9pLq2Wa",
+        "type": "social",
+        "icons": [
+          {
+            "id": "Ig3xQ7mNa2Ks",
+            "url": "https://instagram.com/maraokafor",
+            "platform": "instagram"
+          },
+          {
+            "id": "Tk8vR1dLp5Wc",
+            "url": "https://www.tiktok.com/@maraokafor",
+            "platform": "tiktok"
+          },
+          {
+            "id": "Yt6bH4zJe9Uo",
+            "url": "https://www.youtube.com/@maraokafor",
+            "platform": "youtube"
+          },
+          {
+            "id": "Em2cF5sYt7Dn",
+            "address": "hello@maraokafor.example",
+            "platform": "email"
+          }
+        ],
+        "visible": true
+      },
+      {
+        "id": "Hd7mN3cYb8Ue",
+        "text": "Book a session",
+        "type": "header",
+        "visible": true
+      },
+      {
+        "id": "Bt5rJ1fGz6Os",
+        "url": "https://maraokafor.example/book/portraits",
+        "type": "link",
+        "label": "Portrait sessions — fall dates",
+        "visible": true,
+        "overrides": {
+          "buttonStyle": "fill"
+        }
+      },
+      {
+        "id": "Qw8vC2nKd4Ly",
+        "url": "https://maraokafor.example/studio",
+        "type": "link",
+        "label": "Studio rental by the hour",
+        "visible": true
+      },
+      {
+        "id": "Lc6hP0yRe3Zi",
+        "url": "https://maraokafor.example/series/night-market",
+        "type": "card",
+        "image": null,
+        "title": "Night Market",
+        "caption": "View the gallery",
+        "visible": true
+      },
+      {
+        "id": "Ym1gA5uVf7Tx",
+        "url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+        "type": "embed",
+        "caption": "Behind the lens, ep. 4",
+        "visible": true
+      },
+      {
+        "id": "Jn9bE4sXo2Mq",
+        "type": "grid",
+        "cells": [
+          {
+            "id": "Cp9kA3wMx1Qe",
+            "url": "https://maraokafor.example/prints",
+            "title": "Prints",
+            "subtitle": "Shop the archive"
+          },
+          {
+            "id": "Cw5nT7hZr4Lb",
+            "url": "https://maraokafor.example/workshops",
+            "title": "Workshops",
+            "subtitle": "Small groups"
+          }
+        ],
+        "visible": true
+      },
+      {
+        "id": "Vk3wD8tHa5Pr",
+        "type": "divider",
+        "visible": true
+      },
+      {
+        "id": "Ge2zU7qNc9Fl",
+        "text": "Booking portrait sessions through November. The studio is open Tuesday to Saturday, by appointment.",
+        "type": "text",
+        "visible": true
+      }
+    ],
+    "tokens": {
+      "bg": "#16120E",
+      "blur": 0,
+      "text": "#EFE8DC",
+      "align": "center",
+      "scale": 1,
+      "accent": "#C9A86A",
+      "bgType": "solid",
+      "border": "#3A342D",
+      "radius": 12,
+      "bgImage": null,
+      "density": "regular",
+      "surface": "#221B13",
+      "buttonBg": "#C9A86A",
+      "fontBody": "Geist",
+      "maxWidth": 480,
+      "textMuted": "#A79E90",
+      "buttonText": "#15110B",
+      "letterCase": "normal",
+      "borderWidth": 1,
+      "buttonStyle": "outline",
+      "fontHeading": "Instrument Serif",
+      "weightHeading": 400,
+      "overlayOpacity": 0
+    },
+    "profile": {
+      "bio": "Portrait & studio photographer · Orlando, FL",
+      "name": "Mara Okafor",
+      "photo": null
+    },
+    "version": 1
+  },
+  "smokeTheme": {
+    "bg": "#1C2023",
+    "blur": 0,
+    "text": "#E6EAEC",
+    "align": "center",
+    "scale": 1,
+    "accent": "#9DB3C4",
+    "bgType": "gradient",
+    "border": "#404447",
+    "radius": 20,
+    "bgImage": null,
+    "density": "regular",
+    "surface": "#262C30",
+    "buttonBg": "#9DB3C4",
+    "fontBody": "Geist",
+    "maxWidth": 480,
+    "textMuted": "#9AA4AA",
+    "buttonText": "#15110B",
+    "letterCase": "normal",
+    "borderWidth": 1,
+    "buttonStyle": "pill",
+    "fontHeading": "Geist",
+    "weightHeading": 600,
+    "overlayOpacity": 0
+  }
+}

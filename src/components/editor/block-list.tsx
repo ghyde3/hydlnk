@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { useMemo, useState, type Dispatch } from "react";
 import { LIMITS, type Block, type BlockType, type PublishError } from "@/lib/document";
+import { PageBlocksProvider } from "@/components/blocks/forms/featured-context";
 import { blockRowSummary } from "@/lib/editor/contracts";
 import { ALL_HIDDEN_MESSAGE, EMPTY_BLOCKS_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
@@ -175,24 +176,28 @@ export function BlockList({
               },
             }}
           >
-            <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-              <ol className="m-0 flex list-none flex-col p-0">
-                {slot(1)}
-                {blocks.flatMap((block, index) => [
-                  <BlockRow
-                    key={block.id}
-                    block={block}
-                    index={index}
-                    total={blocks.length}
-                    expanded={expandedId === block.id}
-                    errors={errorsByBlock.get(block.id) ?? NO_ERRORS}
-                    focus={focus && "blockId" in focus && focus.blockId === block.id ? focus : null}
-                    dispatch={dispatch}
-                  />,
-                  slot(index + 2),
-                ])}
-              </ol>
-            </SortableContext>
+            <PageBlocksProvider blocks={blocks}>
+              <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+                <ol className="m-0 flex list-none flex-col p-0">
+                  {slot(1)}
+                  {blocks.flatMap((block, index) => [
+                    <BlockRow
+                      key={block.id}
+                      block={block}
+                      index={index}
+                      total={blocks.length}
+                      expanded={expandedId === block.id}
+                      errors={errorsByBlock.get(block.id) ?? NO_ERRORS}
+                      focus={
+                        focus && "blockId" in focus && focus.blockId === block.id ? focus : null
+                      }
+                      dispatch={dispatch}
+                    />,
+                    slot(index + 2),
+                  ])}
+                </ol>
+              </SortableContext>
+            </PageBlocksProvider>
             <DragOverlay>
               {activeSummary ? (
                 <div
