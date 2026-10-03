@@ -54,6 +54,13 @@ export interface BlockContext {
    * iframe. Everything else is the same markup as a normal preview.
    */
   thumbnail?: boolean;
+  /**
+   * Embeds are drawn as still posters, never as a player: no Play button, no iframe, so nothing is
+   * requested from YouTube or Spotify and nothing can start (the shared preview, M6-10: a stranger
+   * who opens a draft link has not asked for a request to a third party). Links, cards and everything
+   * else stay as they are; only `EmbedView` reads this.
+   */
+  inertEmbeds?: boolean;
 }
 
 /**
@@ -264,7 +271,7 @@ function EmbedView({ block, ctx }: { block: EmbedBlock; ctx: BlockContext }) {
       data-block-type="embed"
       data-embed-provider={embed.provider}
     >
-      {ctx.thumbnail ? (
+      {ctx.thumbnail || ctx.inertEmbeds ? (
         embed.provider === "youtube" ? (
           <div className="pg-embed-play" aria-hidden="true">
             <span className="pg-embed-play-disc">

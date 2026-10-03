@@ -75,9 +75,16 @@ test.describe("M6-10 the shared page, over HTTP", () => {
     expect(res.headers["x-robots-tag"]).toBe("noindex, nofollow");
     expect(res.headers["referrer-policy"]).toBe("no-referrer");
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
-    expect(res.headers["content-security-policy"]).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
-    );
+    // The four tenant directives, then the script policy with this request's nonce.
+    const csp = String(res.headers["content-security-policy"]);
+    expect(
+      csp.startsWith(
+        "frame-src https://www.youtube-nocookie.com https://open.spotify.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; ",
+      ),
+    ).toBe(true);
+    expect(csp).toMatch(/; script-src 'self' 'nonce-[A-Za-z0-9+/]{22}==' 'strict-dynamic'/);
+    expect(csp).toContain("script-src-attr 'none'");
+    expect(csp).toContain("form-action 'none'");
     expect(res.headers["x-nextjs-cache"]).toBeUndefined();
     expect(res.setCookies).toEqual([]);
     // A robots meta tag, and no Open Graph or Twitter tags.

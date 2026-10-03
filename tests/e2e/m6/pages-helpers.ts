@@ -113,7 +113,7 @@ export function visibleText(html: string): string {
 /**
  * The markup of an HTML answer without what differs on every request. Two answers that are the same
  * page are equal after this. What is taken out: the address the visitor asked for (a token, a path),
- * Next's per-request id (`self.__next_r`), and everything from the first Flight script on. The Flight
+ * Next's per-request id (`self.__next_r`), the per-request CSP nonce on every script, and everything from the first Flight script on. The Flight
  * stream of `next dev` carries React's debug rows, whose order follows the timing of the render (a
  * lookup that takes longer streams its rows in a different order); the markup before it, which is
  * what a visitor and a crawler get, is what is compared.
@@ -125,6 +125,7 @@ export function withoutRequestSpecifics(html: string, ...requested: string[]): s
   if (flight !== -1) body = body.slice(0, flight);
   return body
     .replace(/self\.__next_r="[^"]*"/g, 'self.__next_r="ID"')
+    .replace(/\bnonce="[^"]*"/g, 'nonce="NONCE"')
     .replace(/\/share\/[^"\\\s<]*/g, "/share/REQUESTED");
 }
 

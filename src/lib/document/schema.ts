@@ -98,6 +98,19 @@ const CONTROL_EXCEPT_NEWLINE = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
 // Bidi override (U+202A-U+202E) and isolate (U+2066-U+2069) characters.
 const BIDI = /[‪-‮⁦-⁩]/;
 
+/**
+ * `value` without the characters the Publish gate refuses in text: control characters (a newline
+ * stays when `multiline`), bidi overrides and isolates. Trimmed. The same `CONTROL` and `BIDI` rules
+ * as `text()` below, for the one place that shows a draft without the gate: the share link (M6-10).
+ */
+export function stripHiddenCharacters(value: string, opts: { multiline?: boolean } = {}): string {
+  const controls = opts.multiline ? CONTROL_EXCEPT_NEWLINE : CONTROL;
+  return value
+    .replace(new RegExp(controls.source, "g"), "")
+    .replace(new RegExp(BIDI.source, "g"), "")
+    .trim();
+}
+
 export const IMAGE_PATH_PATTERN = /^[0-9a-f-]{36}\/[a-z0-9-]{8,64}[.](?:jpg|png|webp)$/;
 
 const idSchema = z.string().regex(BLOCK_ID_PATTERN, {

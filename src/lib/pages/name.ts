@@ -2,7 +2,7 @@
  * Page names (M6-13, M6-14): the private name of a page, shown in the editor header, the page
  * switcher, Settings and Domains. One helper for the editor (what the rename field keeps and sends)
  * and for the server create code (the default name of a new page), so both agree with the database
- * check `pages_name_format` (migration 20261005000001): trimmed, 1 to 60 characters, no control
+ * check `pages_name_format` (migrations 20261005000001 and 20261005000002): trimmed, 1 to 60 characters, no control
  * character, no bidi override or isolate. Pure and safe in client and server code.
  *
  * The name is plain text everywhere. Nothing here escapes or strips markup, because React escapes it

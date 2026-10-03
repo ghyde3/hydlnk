@@ -63,8 +63,12 @@ describe("M6-10 isolation: nothing public reads a draft", () => {
     // owner's preview reads through the editor's loader, with the user's own session.
     expect(readers).toEqual([]);
 
-    const importsLoader = ungated.filter((file) => read(file).includes("@/lib/previews/shared"));
-    expect(importsLoader).toEqual(["src/app/(editor)/app/share/page.tsx"]);
+    // The share route lives in its own route group, `(share)`: everything outside the signed-in
+    // screens and the admin screens counts as ungated.
+    const importsLoader = [...ungated, ...walk("src/app/(share)")].filter((file) =>
+      read(file).includes("@/lib/previews/shared"),
+    );
+    expect(importsLoader).toEqual(["src/app/(share)/app/share/page.tsx"]);
 
     const previewLibs = walk("src/lib/previews").filter((file) =>
       selectArguments(read(file)).some((argument) => /\bdraft\b/.test(argument)),
@@ -163,7 +167,7 @@ describe("M6-09 the share feature's server code", () => {
     const files = [
       ...walk("src/lib/previews"),
       ...walk("src/components/previews"),
-      ...walk("src/app/(editor)/app/share"),
+      ...walk("src/app/(share)"),
       ...walk("src/app/(editor)/app/preview"),
     ];
     for (const file of files) {
@@ -174,7 +178,7 @@ describe("M6-09 the share feature's server code", () => {
 
 describe("M6-10 the share route", () => {
   it("is dynamic, has no OG or Twitter tags and is not indexed", () => {
-    const source = read("src/app/(editor)/app/share/page.tsx");
+    const source = read("src/app/(share)/app/share/page.tsx");
     expect(source).toContain('export const dynamic = "force-dynamic"');
     expect(source).toMatch(/robots = \{ index: false, follow: false \}/);
     expect(source).not.toMatch(/openGraph|twitter/);
@@ -182,7 +186,7 @@ describe("M6-10 the share route", () => {
 
   it("renders no view beacon and no tenant page wrapper", () => {
     for (const file of [
-      "src/app/(editor)/app/share/page.tsx",
+      "src/app/(share)/app/share/page.tsx",
       "src/app/(editor)/app/preview/[pageId]/page.tsx",
     ]) {
       const source = read(file);
@@ -193,8 +197,110 @@ describe("M6-10 the share route", () => {
   });
 
   it("the 404 is one component with one sentence and reads no session", () => {
-    const source = read("src/app/(editor)/app/share/not-found.tsx");
+    const source = read("src/app/(share)/not-found.tsx");
     expect(source).toContain("INACTIVE_LINK_MESSAGE");
     expect(source).not.toMatch(/getAppContext|getSessionUser|cookies\(|headers\(/);
+  });
+});
+
+// Import graph ------------------------------------------------------------------------------------
+
+/** `@/x` and relative specifiers of a source file as repo-relative paths of files that exist (packages are skipped). */
+function importsOf(file: string): string[] {
+  const source = code(file);
+  const found: string[] = [];
+  const pattern = /(?:\bfrom\s+|\bimport\s*\(\s*|^\s*import\s+)["']([^"']+)["']/gm;
+  for (let match = pattern.exec(source); match; match = pattern.exec(source)) {
+    const specifier = match[1]!;
+    const base = specifier.startsWith("@/")
+      ? join("src", specifier.slice(2))
+      : specifier.startsWith(".")
+        ? join(file, "..", specifier)
+        : null;
+    if (!base) continue;
+    for (const candidate of [
+      base,
+      `${base}.ts`,
+      `${base}.tsx`,
+      join(base, "index.ts"),
+      join(base, "index.tsx"),
+    ]) {
+      try {
+        if (statSync(resolve(ROOT, candidate)).isFile() && /\.(ts|tsx)$/.test(candidate)) {
+          found.push(candidate);
+          break;
+        }
+      } catch {
+        // not this candidate
+      }
+    }
+  }
+  return found;
+}
+
+/** Every repo file `entries` reach through static and dynamic imports (the entries included). */
+function reachable(entries: string[]): Set<string> {
+  const seen = new Set<string>();
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const file = queue.pop()!;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    queue.push(...importsOf(file));
+  }
+  return seen;
+}
+
+describe("M6-10 the share route ships nothing of the signed-in app", () => {
+  const entries = [
+    "src/app/(share)/layout.tsx",
+    "src/app/(share)/not-found.tsx",
+    "src/app/(share)/error.tsx",
+    "src/app/(share)/app/share/page.tsx",
+  ];
+  const graph = [...reachable(entries)];
+
+  it("finds the route's modules (the crawler works)", () => {
+    expect(graph).toContain("src/components/page/page-renderer.tsx");
+    expect(graph).toContain("src/components/previews/preview-bars.tsx");
+    expect(graph).toContain("src/lib/previews/shared.ts");
+    expect(graph.length).toBeGreaterThan(20);
+  });
+
+  it("reaches no browser Supabase client, no editor module, no app shell and no preview-link action", () => {
+    const forbidden = graph.filter((file) =>
+      /^src\/(?:lib\/supabase\/browser|components\/editor\/(?!status-chip)|components\/app\/|components\/admin\/|components\/previews\/(?:share-preview|preview-link)|lib\/previews\/actions|lib\/pages\/(?:context|maybe-context))/.test(
+        file,
+      ),
+    );
+    expect(forbidden).toEqual([]);
+  });
+
+  it("the preview bars import the status chip from its own module, not from the editor header", () => {
+    const bars = code("src/components/previews/preview-bars.tsx");
+    expect(bars).toContain("@/components/editor/status-chip");
+    expect(bars).not.toContain("editor-header");
+    const chip = read("src/components/editor/status-chip.tsx");
+    expect(chip).not.toMatch(/^"use client"/);
+    expect(code("src/components/editor/status-chip.tsx")).not.toMatch(
+      /components\/editor|supabase/,
+    );
+    // The header uses the same chip.
+    expect(code("src/components/editor/editor-header.tsx")).toContain('from "./status-chip"');
+  });
+
+  it("is a route group of its own, with its own root layout, 404 and error page; none reads a session", () => {
+    for (const file of [
+      "src/app/(share)/layout.tsx",
+      "src/app/(share)/not-found.tsx",
+      "src/app/(share)/error.tsx",
+    ]) {
+      expect(code(file), file).not.toMatch(
+        /getAppContext|getSessionUser|maybe-context|cookies\(|supabase/,
+      );
+    }
+    // And the editor's own groups no longer hold it.
+    expect(() => statSync(resolve(ROOT, "src/app/(editor)/app/share"))).toThrow();
+    expect(read("src/app/(share)/layout.tsx")).toMatch(/robots: \{ index: false, follow: false \}/);
   });
 });

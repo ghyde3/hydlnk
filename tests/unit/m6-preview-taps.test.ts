@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -241,6 +243,61 @@ describe("M6-01 the thumbnail mode of the renderer", () => {
     const html = render({ ...fullPublished, blocks: [blocks.link, blocks.social] }, false);
     expect(html).toMatch(/<a class="pg-link"[^>]*href="\/r\/[^"]+" rel="nofollow noopener"/);
     expect(html).toMatch(/<a class="pg-social-link" aria-label="Instagram"/);
+  });
+});
+
+describe("M6-10 the inert-embeds mode of the renderer (the shared preview)", () => {
+  const embedDoc = (url: string, caption = "Cap"): PublishDoc => ({
+    ...fullPublished,
+    blocks: [{ ...blocks.embed, url, caption }],
+  });
+  const render = (doc: PublishDoc, inertEmbeds: boolean) =>
+    renderToStaticMarkup(
+      createElement(PageRenderer, { doc, pageId: PAGE_ID, mode: "preview", inertEmbeds }),
+    );
+
+  it("M6-10 a YouTube embed is a still poster: no Play button, no iframe, no request to YouTube", () => {
+    const html = render(embedDoc("https://www.youtube.com/watch?v=jNQXAC9IVRw"), true);
+    expect(html).not.toContain("<button");
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toMatch(/youtube(?:-nocookie)?\.com/);
+    expect(html).toContain("pg-embed-play");
+    expect(html).toContain("Cap · YouTube");
+  });
+
+  it("M6-10 a Spotify embed is an empty box of the player's height: no iframe, no request to Spotify", () => {
+    const html = render(embedDoc("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"), true);
+    expect(html).not.toContain("<iframe");
+    expect(html).not.toContain("spotify.com");
+    expect(html).toContain("height:152px");
+    expect(html).toContain("Cap · Spotify");
+    expect(
+      render(embedDoc("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"), true),
+    ).toContain("height:352px");
+  });
+
+  it("M6-10 only the embeds change: links stay anchors, and without the flag an embed is live as before", () => {
+    const youtube = embedDoc("https://www.youtube.com/watch?v=jNQXAC9IVRw");
+    expect(render(youtube, false)).toContain("<button");
+    expect(
+      render(embedDoc("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"), false),
+    ).toContain("<iframe");
+    const withLink: PublishDoc = { ...fullPublished, blocks: [blocks.link, blocks.social] };
+    const strip = (html: string) => html.replace(/\s+/g, " ");
+    expect(strip(render(withLink, true))).toBe(strip(render(withLink, false)));
+    expect(render(withLink, true)).toMatch(/<a class="pg-link"[^>]*href="\/r\/[^"]+"/);
+  });
+
+  it("M6-10 the share page draws its page this way and the owner's own preview does not", () => {
+    expect(
+      readFileSync(resolve(process.cwd(), "src/app/(share)/app/share/page.tsx"), "utf8"),
+    ).toMatch(/<PageRenderer[^>]*\binertEmbeds\b/);
+    expect(
+      readFileSync(
+        resolve(process.cwd(), "src/app/(editor)/app/preview/[pageId]/page.tsx"),
+        "utf8",
+      ),
+    ).not.toContain("inertEmbeds");
   });
 });
 

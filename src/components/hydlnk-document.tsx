@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 /**
- * <html> and <body> for the HYDLNK product UI: the marketing site and the editor app. Each of
- * those route groups has its own root layout that renders this. Tenant pages do not: they have
+ * <html> and <body> for the HYDLNK product UI: the marketing site, the editor app and the shared
+ * preview. Each of those route groups has its own root layout that renders this. Tenant pages do not: they have
  * a separate root layout, so they ship none of the HYDLNK CSS or fonts.
  */
 export function HydlnkDocument({ children }: { children: ReactNode }) {

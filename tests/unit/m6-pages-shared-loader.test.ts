@@ -155,6 +155,44 @@ describe.skipIf(!run)("M6-10 loadSharedPreview (local Supabase)", () => {
     expect(ids).not.toContain("lnk-hidden01");
   });
 
+  it("hidden control and bidi characters of a lenient draft are removed; a text block keeps its line breaks", async () => {
+    const a = await owner("sl-hidden");
+    const { token } = await linkFor(a);
+    const draft = draftOf("Ada\u202Elovelace", [
+      {
+        id: "lnk-hidden001",
+        type: "link",
+        visible: true,
+        label: "Pay\u202Epal\u0007now",
+        url: "https://example.com/pay",
+      },
+      {
+        id: "txt-hidden001",
+        type: "text",
+        visible: true,
+        text: "One\nTwo\u2067\u0001\n\nThree",
+      },
+    ]);
+    draft.profile.bio = "Bi\u0008o\u2066";
+    const saved = await admin
+      .from("pages")
+      .update({ draft: draft as never })
+      .eq("id", a.pageId);
+    expect(saved.error).toBeNull();
+
+    const result = await load(token);
+    expect(result.kind).toBe("active");
+    if (result.kind !== "active") return;
+    expect(result.doc.profile.name).toBe("Adalovelace");
+    expect(result.doc.profile.bio).toBe("Bio");
+    const [label, text] = result.doc.blocks as unknown as { label?: string; text?: string }[];
+    expect(label?.label).toBe("Paypalnow");
+    expect(text?.text).toBe("One\nTwo\n\nThree");
+    // The stored draft is not touched: only what is shown is cleaned.
+    const stored = await admin.from("pages").select("draft").eq("id", a.pageId).single();
+    expect(JSON.stringify(stored.data?.draft)).toContain("\u202E");
+  });
+
   it("every way a link can be not active answers the same `inactive`", async () => {
     const unknown = "Q".repeat(43);
     expect(await load(unknown)).toEqual({ kind: "inactive" });

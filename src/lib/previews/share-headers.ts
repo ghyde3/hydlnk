@@ -35,16 +35,59 @@ export function shareSegment(pathname: string): string {
 }
 
 /**
+ * A fresh nonce for one /share/* request: 16 random bytes, base64. Proxy-safe (Web Crypto only).
+ * It is never reused and never stored: the page's own scripts carry it, nothing else does.
+ */
+export function shareNonce(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/**
+ * The Content-Security-Policy of a shared draft: the tenant policy (embeds from YouTube and Spotify
+ * only, no plugins, no <base>, no framing) plus a script policy.
+ *
+ * Why this route gets one when the tenant pages do not: a share link draws a draft that was never
+ * through Publish, on the app host, whose session cookies JavaScript can read (the browser client
+ * keeps them readable). Today only the renderer's escaping stands between a draft's text and a
+ * script running there; this makes a second wall. With a nonce, only the scripts Next.js renders
+ * itself run (`strict-dynamic` lets those load their own chunks), no inline event handler runs
+ * (`script-src-attr 'none'`) and no form can post anywhere (`form-action 'none'`, there is none).
+ * The route is always dynamic, so a nonce per request costs nothing in caching.
+ *
+ * `nonce` null: a page with no script at all (the 429), where no script may run. `development` adds
+ * `'unsafe-eval'`, which React needs there for debugging information and nowhere else.
+ */
+export function shareContentSecurityPolicy(
+  nonce: string | null,
+  development: boolean = process.env.NODE_ENV === "development",
+): string {
+  const scripts =
+    nonce === null
+      ? "'none'"
+      : `'self' 'nonce-${nonce}' 'strict-dynamic'${development ? " 'unsafe-eval'" : ""}`;
+  return [
+    TENANT_CONTENT_SECURITY_POLICY,
+    `script-src ${scripts}`,
+    "script-src-attr 'none'",
+    "form-action 'none'",
+  ].join("; ");
+}
+
+/**
  * Headers of every /share/* response, the rewritten page and the 429 alike: never stored (a link
  * that was just turned off must answer 404 on the very next request), never indexed, no Referer
- * sent anywhere (the address is a credential), the tenant CSP (embeds from YouTube and Spotify only,
- * no plugins, no <base>, no framing) and no sniffing.
+ * sent anywhere (the address is a credential), the share CSP (see `shareContentSecurityPolicy`; pass
+ * the request's nonce, or none for a page without script) and no sniffing.
  */
-export function setShareHeaders(headers: Headers): void {
+export function setShareHeaders(headers: Headers, nonce: string | null = null): void {
   headers.set("Cache-Control", "private, no-store");
   headers.set("X-Robots-Tag", "noindex, nofollow");
   headers.set("Referrer-Policy", "no-referrer");
-  headers.set("Content-Security-Policy", TENANT_CONTENT_SECURITY_POLICY);
+  headers.set("Content-Security-Policy", shareContentSecurityPolicy(nonce));
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Frame-Options", "DENY");
 }

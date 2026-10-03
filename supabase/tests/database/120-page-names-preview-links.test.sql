@@ -8,7 +8,7 @@
 --     end by a nightly job, and removed with their page.
 
 begin;
-select plan(82);
+select plan(84);
 
 select tests.create_supabase_user('a', 'a-120@example.test');
 select tests.create_supabase_user('b', 'b-120@example.test');
@@ -87,6 +87,14 @@ select throws_ok(
 select throws_ok(
   $$ update public.pages set name = 'iso' || chr(8294) || 'late' where handle = 'zq120-alpha' $$,
   '23514', null, 'a name with U+2066 (a bidi isolate) is rejected'
+);
+select throws_ok(
+  $$ update public.pages set name = 'line' || chr(8232) || 'sep' where handle = 'zq120-alpha' $$,
+  '23514', null, 'a name with U+2028 (the line separator) is rejected, as the client turns it into a space'
+);
+select throws_ok(
+  $$ update public.pages set name = 'para' || chr(8233) || 'sep' where handle = 'zq120-alpha' $$,
+  '23514', null, 'a name with U+2029 (the paragraph separator) is rejected'
 );
 select lives_ok(
   $$ update public.pages set name = repeat('x', 60) where handle = 'zq120-alpha' $$,

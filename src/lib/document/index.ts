@@ -15,6 +15,7 @@ export {
   publishBlockSchema,
   publishDocSchema,
   publishedDocSchema,
+  stripHiddenCharacters,
   type Block,
   type BlockType,
   type CardBlock,

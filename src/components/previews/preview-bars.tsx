@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { StatusChip } from "@/components/editor/editor-header";
+import { StatusChip } from "@/components/editor/status-chip";
 import type { PublishStatus } from "@/lib/editor/status";
 
 const BAR = "flex flex-wrap items-center gap-x-4 gap-y-2 bg-ink px-4 py-2 text-on-ink hl:px-8";

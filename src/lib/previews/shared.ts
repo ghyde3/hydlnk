@@ -3,6 +3,7 @@ import { toPublishForm, type PublishDoc } from "@/lib/document";
 import { loadDraft } from "@/lib/editor/load";
 import type { Database } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
+import { sanitizeSharedDoc } from "./sanitize";
 import { hashPreviewToken, isPreviewTokenShape } from "./token";
 
 /**
@@ -14,6 +15,8 @@ import { hashPreviewToken, isPreviewTokenShape } from "./token";
  * token from an expired, turned-off, suspended or deleted one: malformed, no such hash, `revoked_at`
  * set, `expires_at` passed, the owner's account suspended. A deleted page takes its links with it
  * (cascade), so it reads as no such hash.
+ *
+ * What it shows has the hidden characters the Publish gate refuses removed (`sanitizeSharedDoc`).
  *
  * The one query selects named columns only and reads nothing of the owner's account but the plan (the
  * footer badge) and the suspension state. The token's hash is the only key: the page comes from the
@@ -77,7 +80,9 @@ export async function loadSharedPreview(
   return {
     kind: "active",
     pageId: page.id,
-    doc: toPublishForm(draft, themeTokens),
+    // A draft never met the Publish gate: what the gate refuses in text (control and bidi
+    // characters) is taken out of what is shown. The stored draft is not touched.
+    doc: sanitizeSharedDoc(toPublishForm(draft, themeTokens)),
     plan: page.accounts.plan,
     expiresAt: data.expires_at,
   };

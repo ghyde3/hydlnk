@@ -57,6 +57,7 @@ export default async function SharedPreviewPage() {
           doc={shared.doc}
           pageId={shared.pageId}
           mode="preview"
+          inertEmbeds
           chrome={{ badge: showBadge(shared.plan), reportHref: null }}
         />
       </PreviewFrame>

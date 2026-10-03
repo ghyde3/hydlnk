@@ -20,8 +20,15 @@ vi.mock("@/lib/previews/share-limit", async (importOriginal) => ({
 vi.mock("@/lib/routing/custom-domain", () => ({ resolveCustomDomain: vi.fn(async () => null) }));
 
 const { proxy } = await import("@/proxy");
-const { SHARE_TOKEN_HEADER, isSharePath, rateLimitedHtml, setShareHeaders, shareSegment } =
-  await import("@/lib/previews/share-headers");
+const {
+  SHARE_TOKEN_HEADER,
+  isSharePath,
+  rateLimitedHtml,
+  setShareHeaders,
+  shareContentSecurityPolicy,
+  shareNonce,
+  shareSegment,
+} = await import("@/lib/previews/share-headers");
 const { shareProxy } = await import("@/lib/previews/share-proxy");
 const limiter = await vi.importActual<typeof import("@/lib/previews/share-limit")>(
   "@/lib/previews/share-limit",
@@ -76,19 +83,74 @@ describe("M6-10 share paths", () => {
   });
 });
 
+/** The four directives the tenant policy has, in order: every share policy starts with them. */
+const TENANT_DIRECTIVES =
+  "frame-src https://www.youtube-nocookie.com https://open.spotify.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+const NONCE_SHAPE = /^[A-Za-z0-9+/]{22}==$/;
+/** The nonce a policy names in its script-src (null when it names none). */
+const nonceOf = (policy: string | null): string | null =>
+  /'nonce-([^']+)'/.exec(policy ?? "")?.[1] ?? null;
+
 describe("M6-10 response headers", () => {
-  it("never stored, never indexed, no Referer, the tenant CSP, no sniffing, no framing", () => {
+  it("never stored, never indexed, no Referer, the tenant CSP plus a script policy, no sniffing, no framing", () => {
     const headers = new Headers();
-    setShareHeaders(headers);
+    setShareHeaders(headers, "AAAAAAAAAAAAAAAAAAAAAA==");
     expect(headers.get("cache-control")).toBe("private, no-store");
     expect(headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(headers.get("referrer-policy")).toBe("no-referrer");
-    expect(headers.get("content-security-policy")).toBe(TENANT_CONTENT_SECURITY_POLICY);
     expect(headers.get("content-security-policy")).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      `${TENANT_CONTENT_SECURITY_POLICY}; script-src 'self' 'nonce-AAAAAAAAAAAAAAAAAAAAAA==' 'strict-dynamic'; script-src-attr 'none'; form-action 'none'`,
     );
+    expect(headers.get("content-security-policy")?.startsWith(`${TENANT_DIRECTIVES}; `)).toBe(true);
     expect(headers.get("x-content-type-options")).toBe("nosniff");
     expect(headers.get("x-frame-options")).toBe("DENY");
+  });
+});
+
+describe("M6-10 the share Content-Security-Policy: the app host's origin runs only scripts it nonced", () => {
+  it("script-src is the nonce plus strict-dynamic: no unsafe-inline, no host list, no unsafe-eval in production", () => {
+    const policy = shareContentSecurityPolicy("abc", false);
+    expect(policy).toContain("script-src 'self' 'nonce-abc' 'strict-dynamic'");
+    expect(policy).not.toContain("unsafe-inline");
+    expect(policy).not.toContain("unsafe-eval");
+    expect(policy).not.toMatch(/script-src[^;]*https?:/);
+    expect(policy).not.toContain("*");
+  });
+
+  it("inline event handlers and form posts are refused outright", () => {
+    const policy = shareContentSecurityPolicy("abc", false);
+    expect(policy).toContain("script-src-attr 'none'");
+    expect(policy).toContain("form-action 'none'");
+  });
+
+  it("keeps the four tenant directives, unchanged and first", () => {
+    expect(shareContentSecurityPolicy("abc", false).startsWith(`${TENANT_DIRECTIVES}; `)).toBe(
+      true,
+    );
+    expect(TENANT_CONTENT_SECURITY_POLICY).toBe(TENANT_DIRECTIVES);
+  });
+
+  it("only the development server gets unsafe-eval (React's debugging needs it there)", () => {
+    expect(shareContentSecurityPolicy("abc", true)).toContain(
+      "'strict-dynamic' 'unsafe-eval'; script-src-attr 'none'",
+    );
+    expect(shareContentSecurityPolicy("abc", false)).not.toContain("unsafe-eval");
+  });
+
+  it("with no nonce (a page that carries no script) no script runs at all", () => {
+    const policy = shareContentSecurityPolicy(null, false);
+    expect(policy).toContain("script-src 'none'");
+    expect(policy).not.toContain("nonce-");
+    expect(policy).not.toContain("strict-dynamic");
+    const headers = new Headers();
+    setShareHeaders(headers);
+    expect(headers.get("content-security-policy")).toBe(policy);
+  });
+
+  it("a nonce is 16 random bytes in base64, and no two are alike", () => {
+    const nonces = Array.from({ length: 50 }, () => shareNonce());
+    for (const nonce of nonces) expect(nonce).toMatch(NONCE_SHAPE);
+    expect(new Set(nonces).size).toBe(50);
   });
 });
 
@@ -105,6 +167,40 @@ describe("M6-10 the proxy branch for /share/*", () => {
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("sets the script policy with a fresh nonce on the response and on the request the page renders from", async () => {
+    const first = await proxy(request(`/share/${TOKEN}`));
+    const second = await proxy(request(`/share/${TOKEN}`));
+    const responseCsp = first.headers.get("content-security-policy");
+    const nonce = nonceOf(responseCsp);
+    expect(nonce).toMatch(NONCE_SHAPE);
+    expect(responseCsp).toContain(`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`);
+    expect(responseCsp?.startsWith(`${TENANT_DIRECTIVES}; `)).toBe(true);
+    // Next.js reads the nonce from the request's CSP header and puts it on its own scripts.
+    expect(first.headers.get("x-middleware-request-content-security-policy")).toBe(responseCsp);
+    expect(first.headers.get("x-middleware-override-headers")).toContain("content-security-policy");
+    // A new nonce for every request.
+    expect(nonceOf(second.headers.get("content-security-policy"))).not.toBe(nonce);
+  });
+
+  it("replaces a CSP a client sent: the page never renders under a nonce the visitor chose", async () => {
+    const response = await shareProxy(
+      request(`/share/${TOKEN}`, {
+        "content-security-policy": "script-src 'nonce-attacker'",
+        "content-security-policy-report-only": "script-src 'nonce-attacker'",
+      }),
+      new URL("http://app.localhost:3000/app/share"),
+      async () => ({ allowed: true, retryAfter: 0 }),
+    );
+    const forwarded = response.headers.get("x-middleware-request-content-security-policy");
+    expect(forwarded).not.toContain("attacker");
+    expect(forwarded).toBe(response.headers.get("content-security-policy"));
+    expect(
+      response.headers.get("x-middleware-request-content-security-policy-report-only"),
+    ).toBeNull();
+    const overridden = (response.headers.get("x-middleware-override-headers") ?? "").split(",");
+    expect(overridden).not.toContain("content-security-policy-report-only");
   });
 
   it("hands the segment over in a request header and drops the cookies and a forged header", async () => {
@@ -170,6 +266,9 @@ describe("M6-10 the rate limit: share:{ip}, 60 a minute, a real 429", () => {
     expect(response.headers.get("retry-after")).toBe("17");
     expect(response.headers.get("content-type")).toMatch(/text\/html/);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
+    // The plain page has no script, so no script may run on it.
+    expect(response.headers.get("content-security-policy")).toContain("script-src 'none'");
+    expect(response.headers.get("content-security-policy")).not.toContain("nonce-");
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(response.headers.get("x-middleware-rewrite")).toBeNull();
     const body = await response.text();

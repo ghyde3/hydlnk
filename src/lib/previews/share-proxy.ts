@@ -4,6 +4,8 @@ import {
   SHARE_TOKEN_HEADER,
   rateLimitedHtml,
   setShareHeaders,
+  shareContentSecurityPolicy,
+  shareNonce,
   shareSegment,
 } from "./share-headers";
 import { shareRateLimit, type ShareLimitResult } from "./share-limit";
@@ -17,7 +19,12 @@ import { shareRateLimit, type ShareLimitResult } from "./share-limit";
  *      the plain page, before anything else is looked at;
  *   2. rewrite to the internal route `destination` (`/app/share`), with the first path segment in the
  *      `x-hl-share-token` request header (a client-sent header of that name is replaced, never read);
- *   3. set the share headers on the response (never stored, noindex, no Referer, tenant CSP).
+ *   3. set the share headers on the response (never stored, noindex, no Referer, the share CSP).
+ *
+ * The CSP carries a fresh nonce (see `shareContentSecurityPolicy`). It goes on the request the page
+ * renders from as well as on the response: Next.js reads the nonce from the request's CSP header and
+ * puts it on its own scripts. Any CSP header the client sent is replaced, so a visitor can never pick
+ * the nonce a page renders under.
  *
  * Whether the token names an active link is the page's job: it answers the 404.
  */
@@ -39,10 +46,13 @@ export async function shareProxy(
     return limited;
   }
 
+  const nonce = shareNonce();
   const headers = new Headers(request.headers);
   headers.delete("cookie");
+  headers.delete("content-security-policy-report-only");
+  headers.set("content-security-policy", shareContentSecurityPolicy(nonce));
   headers.set(SHARE_TOKEN_HEADER, shareSegment(request.nextUrl.pathname));
   const response = NextResponse.rewrite(destination, { request: { headers } });
-  setShareHeaders(response.headers);
+  setShareHeaders(response.headers, nonce);
   return response;
 }
