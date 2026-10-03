@@ -23,7 +23,9 @@ export type FaultName =
   /** The saved-themes read on Design fails (the draft loads). */
   | "themes-load"
   /** A route throws while it renders: the error boundary shows. */
-  | "route-throw";
+  | "route-throw"
+  /** The version history screen's list read fails (M6-50). */
+  | "versions-load";
 
 export function faultsEnabled(): boolean {
   return process.env.NODE_ENV !== "production";

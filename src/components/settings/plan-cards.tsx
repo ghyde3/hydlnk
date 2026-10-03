@@ -8,7 +8,8 @@ import {
   type BillingInterval,
 } from "@/lib/billing/prices";
 import type { UpgradeBlock } from "@/components/billing/upgrade-button";
-import { PLAN_IDS, PLAN_LABELS, planBlurb, type PlanId } from "@/lib/limits";
+import { PLAN_IDS, PLAN_LABELS, PLAN_LIMITS, planBlurb, type PlanId } from "@/lib/limits";
+import { versionHistoryCell } from "@/lib/versions/messages";
 import { PlanCardAction } from "./plan-actions";
 
 const INTERVAL_LABEL: Record<BillingInterval, string> = { month: "Monthly", year: "Yearly" };
@@ -122,6 +123,15 @@ export function PlanCards({
                 </span>
               </div>
               <p className="text-[13px] leading-normal text-text-2">{planBlurb(plan)}</p>
+              <p
+                data-plan-feature="version-history"
+                className="flex items-baseline justify-between gap-2 text-[13px] leading-normal text-text-2"
+              >
+                <span>Version history</span>
+                <span className="font-mono text-ink">
+                  {versionHistoryCell(PLAN_LIMITS[plan].versionsKept)}
+                </span>
+              </p>
               <div className="mt-auto flex flex-col pt-1">
                 <PlanCardAction
                   card={plan}

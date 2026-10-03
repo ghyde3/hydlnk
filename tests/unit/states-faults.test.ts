@@ -77,7 +77,7 @@ describe("faults are a development and test switch only", () => {
   });
 });
 
-describe("only the three screens that own a failure state call the switch", () => {
+describe("only the screens that own a failure state call the switch", () => {
   const root = resolve(process.cwd(), "src");
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((name) => {
@@ -90,8 +90,10 @@ describe("only the three screens that own a failure state call the switch", () =
       .filter((file) => /from "@\/lib\/testing\/faults"/.test(readFileSync(file, "utf8")))
       .map((file) => relative(root, file).split("\\").join("/"))
       .sort();
+    // The version history screen (M6-50) owns a failure state too: "We couldn’t load your versions."
     expect(importers).toEqual([
       "app/(editor)/app/(screens)/design/page.tsx",
+      "app/(editor)/app/(screens)/editor/history/page.tsx",
       "app/(editor)/app/(screens)/editor/page.tsx",
       "app/(editor)/app/(screens)/settings/page.tsx",
     ]);

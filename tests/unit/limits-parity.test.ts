@@ -104,14 +104,26 @@ describe.skipIf(!run)("M4-02 plan_limits() parity (local Supabase)", () => {
     const rows = await fetchRows();
     const mutated = {
       ...PLAN_LIMITS,
-      pro: { ...PLAN_LIMITS.pro, pages: PLAN_LIMITS.pro.pages + 1 },
+      pro: {
+        ...PLAN_LIMITS.pro,
+        pages: PLAN_LIMITS.pro.pages + 1,
+        // M6-48: the number of published versions kept is part of the same table.
+        versionsKept: PLAN_LIMITS.pro.versionsKept + 1,
+      },
       studio: { ...PLAN_LIMITS.studio, savedThemes: 50 },
     };
     const found = comparePlanLimits(mutated, rows);
     expect(found.map((m) => `${m.plan}.${m.limit}`).sort()).toEqual([
       "pro.pages",
+      "pro.versionsKept",
       "studio.savedThemes",
     ]);
+    expect(found.find((m) => m.limit === "versionsKept")).toMatchObject({
+      expected: 26,
+      actual: 25,
+      column: "versions_kept",
+      kind: "value",
+    });
     expect(found.find((m) => m.limit === "pages")).toMatchObject({
       expected: 4,
       actual: 3,

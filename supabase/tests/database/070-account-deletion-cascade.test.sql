@@ -66,6 +66,8 @@ insert into public.domains (page_id, hostname) values ('00000000-0000-4000-8000-
 insert into public.events (page_id, type, visitor_hash) values ('00000000-0000-4000-8000-0000000000d1', 'view', 'zq');
 insert into public.daily_stats (page_id, block_id, day, views) values ('00000000-0000-4000-8000-0000000000d1', '', current_date, 1);
 insert into public.preview_links (page_id, token_hash) values ('00000000-0000-4000-8000-0000000000d1', repeat('7', 64));
+insert into public.page_versions (page_id, version_no, document, published_at)
+  values ('00000000-0000-4000-8000-0000000000d1', 1, '{"version":1}', now());
 
 delete from auth.users where id = (select doomed from ids);
 
@@ -92,9 +94,10 @@ select is(
   'the page''s events and daily stats are gone'
 );
 select is(
-  (select count(*)::int from public.preview_links where page_id = '00000000-0000-4000-8000-0000000000d1'),
+  (select count(*)::int from public.preview_links where page_id = '00000000-0000-4000-8000-0000000000d1')
+    + (select count(*)::int from public.page_versions where page_id = '00000000-0000-4000-8000-0000000000d1'),
   0,
-  'the page''s preview links are gone'
+  'the page''s preview links and published versions are gone'
 );
 select is(
   (select count(*)::int from auth.users where email = 'doomed@example.test'),
