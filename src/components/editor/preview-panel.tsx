@@ -4,6 +4,7 @@ import type { MouseEvent } from "react";
 import { PreviewFonts } from "@/components/design/tenant-fonts";
 import type { PublishDoc } from "@/lib/document";
 import { PageRenderer, type PageChrome } from "@/lib/editor/contracts";
+import { resolvePreviewTap, type PreviewTap } from "./preview-taps";
 import { panelId, tabId, type EditorView } from "./view-tabs";
 
 /**
@@ -14,6 +15,11 @@ import { panelId, tabId, type EditorView } from "./view-tabs";
  * Inside the frame only tenant styling applies: no HYDLNK token reaches the renderer. The frame
  * stops clicks on links so a tap on a link or social icon never leaves the editor (the renderer
  * leaves the hrefs alone so the markup stays identical everywhere).
+ *
+ * Tap to edit (M6-03): the frame is also where taps are read. A click (or Enter on a link) on a
+ * block, a social icon, a grid cell or the avatar, name or bio goes to `onTap` and nothing else
+ * sees it, so the YouTube Play button never mounts a player here; iframes get no pointer events,
+ * so a tap on a Spotify player is a tap on its block. Taps that mean nothing do nothing.
  */
 export function PreviewPanel({
   doc,
@@ -21,6 +27,7 @@ export function PreviewPanel({
   chrome,
   view,
   isDesktop,
+  onTap,
 }: {
   doc: PublishDoc;
   pageId: string;
@@ -29,9 +36,19 @@ export function PreviewPanel({
   /** Phone only: which tab is open. At 760px and up the preview is always shown. */
   view: EditorView;
   isDesktop: boolean;
+  /** What a tap on the page opens. Without it the frame only keeps links from navigating. */
+  onTap?: (tap: PreviewTap) => void;
 }) {
-  function stopNavigation(event: MouseEvent<HTMLDivElement>): void {
-    if ((event.target as Element).closest("a")) event.preventDefault();
+  function onClickCapture(event: MouseEvent<HTMLDivElement>): void {
+    const target = event.target as Element;
+    if (target.closest("a")) event.preventDefault();
+    if (!onTap) return;
+    const tap = resolvePreviewTap(target, event.currentTarget);
+    if (!tap) return;
+    // Nothing inside the page reacts to a tap that opens the editor (the YouTube Play button).
+    event.preventDefault();
+    event.stopPropagation();
+    onTap(tap);
   }
 
   return (
@@ -40,7 +57,7 @@ export function PreviewPanel({
       aria-label={isDesktop ? "Live preview" : undefined}
       aria-labelledby={isDesktop ? undefined : tabId("preview")}
       role={isDesktop ? undefined : "tabpanel"}
-      className={`min-w-0 flex-col items-center gap-2.5 hl:sticky hl:top-4 hl:flex hl:w-[330px] hl:shrink-0 hl:self-start ${
+      className={`min-w-0 flex-col items-center gap-2.5 pb-16 hl:sticky hl:top-4 hl:flex hl:w-[330px] hl:shrink-0 hl:self-start hl:pb-0 ${
         view === "preview" ? "flex" : "hidden"
       }`}
     >
@@ -57,8 +74,12 @@ export function PreviewPanel({
         <div
           data-testid="preview-screen"
           data-page-frame=""
-          onClickCapture={stopNavigation}
-          className="h-auto overflow-x-hidden rounded-md hl:h-full hl:overflow-y-auto hl:rounded-[30px]"
+          onClickCapture={onClickCapture}
+          className={`h-auto overflow-x-hidden rounded-md hl:h-full hl:overflow-y-auto hl:rounded-[30px] ${
+            onTap
+              ? "[&_[data-block-id]]:cursor-pointer [&_[data-item-id]]:cursor-pointer [&_[data-profile-part]]:cursor-pointer [&_iframe]:pointer-events-none"
+              : ""
+          }`}
         >
           <PreviewFonts tokens={doc.tokens} />
           <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} />

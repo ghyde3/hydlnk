@@ -22,6 +22,8 @@ export interface PageRendererProps {
   chrome?: PageChrome;
   /** Extra footer content for callers that need more than the two standard links. */
   footer?: ReactNode;
+  /** A small decorative copy (the editor's phone dock): nothing interactive, nothing third-party. See `BlockContext.thumbnail`. */
+  thumbnail?: boolean;
 }
 
 /**
@@ -36,9 +38,11 @@ export interface PageRendererProps {
  * Clicks are not handled here: the editor preview wraps the renderer and stops anchors from
  * navigating, so the markup (and the hrefs) stay identical everywhere.
  */
-export function PageRenderer({ doc, pageId, mode, chrome, footer }: PageRendererProps) {
+export function PageRenderer({ doc, pageId, mode, chrome, footer, thumbnail }: PageRendererProps) {
   const { tokens } = doc;
-  const ctx: BlockContext = { pageId, tokens, mode };
+  const ctx: BlockContext = thumbnail
+    ? { pageId, tokens, mode, thumbnail }
+    : { pageId, tokens, mode };
   // The background image is drawn only from the owner's page-media bucket: the URL is rebuilt from
   // a validated path, and anything else (a third-party address, a bad row) draws no image.
   const image = backgroundImageUrl(tokens);

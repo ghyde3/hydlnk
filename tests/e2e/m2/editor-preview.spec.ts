@@ -201,11 +201,15 @@ test.describe("M2-06 desktop: two columns", () => {
     const startUrl = page.url();
     const link = previewScreen(page).locator("a[href]").first();
     await link.click();
+    // M6-03: on a phone a tap in the full-size preview opens the block, which switches to the Blocks tab.
+    if (phoneOnly(info)) await page.getByRole("tab", { name: "Preview" }).click();
     const social = previewScreen(page).locator("[data-block-type='social'] a").first();
     await social.click();
     await page.waitForTimeout(500);
     expect(page.url()).toBe(startUrl);
     expect(popups).toHaveLength(0);
+    // The social tap opened its block (M6-03), which is the Blocks tab on a phone.
+    if (phoneOnly(info)) await page.getByRole("tab", { name: "Preview" }).click();
     await expect(previewScreen(page)).toBeVisible();
   });
 });

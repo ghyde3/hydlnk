@@ -22,7 +22,8 @@ export function ViewTabs({
   onChange,
 }: {
   view: EditorView;
-  onChange: (view: EditorView) => void;
+  /** `source`: a click (or a tap, Enter or Space) or an arrow, Home or End key. */
+  onChange: (view: EditorView, source: "click" | "key") => void;
 }) {
   const refs = useRef<Record<EditorView, HTMLButtonElement | null>>({
     blocks: null,
@@ -39,7 +40,7 @@ export function ViewTabs({
     else return;
     event.preventDefault();
     const target = TABS[next]!.id;
-    onChange(target);
+    onChange(target, "key");
     refs.current[target]?.focus();
   }
 
@@ -64,7 +65,7 @@ export function ViewTabs({
             aria-selected={selected}
             aria-controls={panelId(tab.id)}
             tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(tab.id)}
+            onClick={() => onChange(tab.id, "click")}
             className={`min-h-11 flex-1 rounded-sm text-sm font-semibold ${
               selected ? "bg-surface text-ink ring-1 ring-line-2" : "bg-transparent text-text-2"
             }`}
