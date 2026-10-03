@@ -54,7 +54,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     }
   });
 
-  it("no module the editor page reaches through its imports uses the secret-key client, except behind the Publish Server Action", () => {
+  it("no module the editor page reaches through its imports uses the secret-key client, except behind the Publish and preview-link Server Actions", () => {
     // Follow every static import from the editor route (the page, the screen, the gate modules it
     // calls), not just the files in the editor folders. A "use server" module is a boundary: it runs
     // on the server only and may use the secret key (that is what Publish is), so it is listed, not
@@ -114,7 +114,12 @@ describe("M2-03: the editor never uses the secret-key client", () => {
       }
     }
     expect(seen.size).toBeGreaterThan(40);
-    expect([...boundaries].sort()).toEqual([GATE_ACCOUNT_REPAIR, "src/lib/publish/actions.ts"]);
+    // The preview-link actions (M6-09) are the second Server Action module: the share dialog calls them.
+    expect([...boundaries].sort()).toEqual([
+      GATE_ACCOUNT_REPAIR,
+      "src/lib/previews/actions.ts",
+      "src/lib/publish/actions.ts",
+    ]);
   });
 
   it("loads the draft with the user's session (the server client)", () => {

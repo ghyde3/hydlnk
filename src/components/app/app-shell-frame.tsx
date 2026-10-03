@@ -33,6 +33,7 @@ export async function AppShellFrame({
   const switcherPages: SwitcherPage[] = pages.map((page) => ({
     id: page.id,
     handle: page.handle,
+    name: page.name,
     published: page.published_at !== null,
   }));
 

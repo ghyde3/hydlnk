@@ -30,6 +30,7 @@ export default async function DomainsScreen() {
   const [usage, cards] = await Promise.all([loadAccountUsage(user.id), loadDomainCards(user.id)]);
   const options: PageOption[] = pages.map((page) => ({
     id: page.id,
+    name: page.name,
     address: handleAddress(page.handle),
     published: page.published_at !== null,
   }));

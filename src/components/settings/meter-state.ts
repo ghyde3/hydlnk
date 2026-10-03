@@ -9,7 +9,7 @@ import type { Meter, PlanId } from "@/lib/limits";
  *
  * A meter with no limit or a plan that does not include it (dashed) has no level, and a meter that
  * is already past its limit keeps the over-limit note it has had since M4-33 (the sentence for that
- * is more exact), so its level is "full" for the colour but no second line is added.
+ * is more exact), so its level is "full" for the color but no second line is added.
  */
 export type MeterLevel = "ok" | "almost" | "full";
 

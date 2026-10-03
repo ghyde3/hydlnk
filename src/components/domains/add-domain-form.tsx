@@ -4,7 +4,7 @@ import { useId, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { addDomainAction } from "@/lib/domains/actions";
-import type { PageOption } from "./page-options";
+import { pageOptionLabel, type PageOption } from "./page-options";
 import { FIELD, FIELD_LABEL, PRIMARY } from "./ui";
 import { ADD_FAILED, EMPTY_HOSTNAME } from "./view-model";
 
@@ -105,7 +105,7 @@ export function AddDomainForm({
         >
           {pages.map((page) => (
             <option key={page.id} value={page.id}>
-              {page.address}
+              {pageOptionLabel(page)}
             </option>
           ))}
         </select>

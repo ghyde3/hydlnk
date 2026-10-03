@@ -16,7 +16,7 @@ Tenant pages are a separate design system from the HYDLNK UI. Tenant content is 
 - Blocks read variables only. Validate every token with the Zod schemas before it reaches CSS; never interpolate a raw tenant string into a style, a selector or a font URL.
 
 **Published only**
-- A public page renders `published` and nothing else, through a server-only query with the secret key (`createAdminSupabase`, `import "server-only"`). Never read `draft` on a public path. There is no public select on `pages`.
+- A public page renders `published` and nothing else, through a server-only query with the secret key (`createAdminSupabase`, `import "server-only"`). Never read `draft` on a public path. There is no public select on `pages`. The one exception is not a tenant path: the private share link `/share/{token}` on the app host (`src/app/(editor)/app/share`, M6-10) reads the saved draft with the secret key through `src/lib/previews/shared.ts`, by an unguessable, expiring, revocable link (docs/PLAN.md, Decided). Nothing under `(tenant)`, `(marketing)` or `src/components/tenant` ever selects `draft`; tests/unit/m6-pages-static.test.ts enforces it.
 - Render the frozen `published.tokens` (the fully resolved token set `toPublishForm` wrote at Publish). Do not re-resolve against the live theme row, so editing a theme never changes a live page until it is republished.
 - Pages are static and cached with a per-page cache tag. Publish invalidates it with `updateTag`.
 

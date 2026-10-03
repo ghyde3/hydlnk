@@ -34,7 +34,7 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     await expect(page).toHaveTitle("Editor — HYDLNK");
 
     const header = page.locator("main > header");
-    await expect(header.locator("p")).toHaveText("mara.hydlnk.com / main");
+    await expect(header.locator("p")).toHaveText("mara.hydlnk.com");
     await expect(header.getByRole("heading", { level: 1 })).toHaveText("Main page");
     await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Mara Okafor");
     await expect(page.getByLabel("Bio", { exact: true })).toHaveValue(
@@ -105,7 +105,7 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     expect(raw.body).not.toContain("Portrait sessions");
 
     await openEditor(page);
-    await expect(page.locator("main > header p")).toHaveText(`${jonas.handle}.hydlnk.com / main`);
+    await expect(page.locator("main > header p")).toHaveText(`${jonas.handle}.hydlnk.com`);
     await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Jonas Only");
     await expect(page.locator("body")).not.toContainText("Mara Okafor");
 
@@ -123,7 +123,7 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     await openEditor(page);
     const header = page.locator("main > header");
     const crumb = header.locator("p");
-    await expect(crumb).toHaveText(`${user.handle}.hydlnk.com / main`);
+    await expect(crumb).toHaveText(`${user.handle}.hydlnk.com`);
     expect(await css(crumb, "font-size")).toBe("12px");
     expect(await css(crumb, "font-family")).toMatch(/Geist.?Mono/);
     expect(await css(crumb, "color")).toBe("rgb(94, 90, 84)");
@@ -134,7 +134,8 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
 
     // By text, not role: on a phone the link is display:none, which getByRole leaves out.
     const preview = header.locator("a", { hasText: /^Preview$/ });
-    await expect(preview).toHaveAttribute("href", `http://${user.handle}.localhost:3000`);
+    // M6-11: the Preview button opens the draft preview, not the live page.
+    await expect(preview).toHaveAttribute("href", `/preview/${user.pageId}`);
     await expect(preview).toHaveAttribute("target", "_blank");
     await expect(preview).toHaveAttribute("rel", "noopener");
     if (phoneOnly(info)) await expect(preview).toBeHidden();

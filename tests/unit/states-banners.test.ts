@@ -146,7 +146,7 @@ describe("M5-15 the inline notice", () => {
 describe("M5-15 the load-failure card", () => {
   it("shows the one sentence and Retry, which asks the server to render again", () => {
     render(
-      createElement(LoadFailure, { breadcrumb: "mara.hydlnk.com / main", title: "Main page" }),
+      createElement(LoadFailure, { breadcrumb: "mara.hydlnk.com", title: "Main page" }),
     );
     expect(host.querySelector("h1")!.textContent).toBe("Main page");
     expect(host.querySelector("[data-testid=load-failure]")!.textContent).toBe(

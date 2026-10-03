@@ -30,13 +30,14 @@ export default async function EditorPage() {
     data = await loadEditorPageData(current, user.id);
   } catch (error) {
     console.error("[editor] loading the draft failed", error);
-    return <LoadFailure breadcrumb={`${handleAddress(current.handle)} / main`} title="Main page" />;
+    return <LoadFailure breadcrumb={handleAddress(current.handle)} title={current.name} />;
   }
   return (
     <EditorScreen
       key={current.id}
       pageId={current.id}
       address={handleAddress(current.handle)}
+      name={current.name}
       liveUrl={tenantOrigin(current.handle, clientEnv.NEXT_PUBLIC_ROOT_DOMAIN)}
       draft={data.draft}
       revKey={data.revKey}

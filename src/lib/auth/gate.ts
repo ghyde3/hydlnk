@@ -8,6 +8,8 @@ import { getSessionUser, requireUser, type SessionUser } from "./session";
 export interface AppPage {
   id: string;
   handle: string;
+  /** `pages.name`: the page's private name (M6-13), "Main page" until its owner renames it. */
+  name: string;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -21,7 +23,7 @@ const listOwnPages = cache(async (userId: string): Promise<AppPage[]> => {
   const supabase = await createServerSupabase();
   const { data, error } = await supabase
     .from("pages")
-    .select("id, handle, published_at, created_at, updated_at")
+    .select("id, handle, name, published_at, created_at, updated_at")
     .eq("owner_id", userId)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`Loading the signed-in user's pages failed: ${error.message}`);

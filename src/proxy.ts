@@ -11,6 +11,8 @@ import {
   siteRewritePath,
   tenantRewritePath,
 } from "@/lib/routing/paths";
+import { isSharePath } from "@/lib/previews/share-headers";
+import { shareProxy } from "@/lib/previews/share-proxy";
 import { rewriteWithSession } from "@/lib/routing/session";
 import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import { appOrigin, protocolFor } from "@/lib/routing/urls";
@@ -76,6 +78,9 @@ export async function proxy(request: NextRequest) {
       return NextResponse.next();
 
     case "app":
+      // The private share link (M6-10) is the one app-host path that never touches the session: the
+      // proxy rate limits it, sets its headers and only rewrites (see src/lib/previews/share-proxy.ts).
+      if (isSharePath(pathname)) return shareProxy(request, rewriteTo(appRewritePath("/share")));
       return rewriteWithSession(request, rewriteTo(appRewritePath(pathname)));
 
     case "tenant": {

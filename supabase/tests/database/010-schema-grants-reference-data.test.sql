@@ -2,7 +2,7 @@
 -- a loosened grant or a function that became callable through the API.
 
 begin;
-select plan(45);
+select plan(46);
 
 -- ---------------------------------------------------------------------------
 -- RLS is on for every public table
@@ -25,6 +25,7 @@ select tests.rls_enabled('public', 'image_upload_hits');
 select tests.rls_enabled('public', 'daily_dim_stats');
 select tests.rls_enabled('public', 'traffic_flags');
 select tests.rls_enabled('public', 'rate_limit_hits');
+select tests.rls_enabled('public', 'preview_links');
 
 select is_empty(
   $$
@@ -44,7 +45,9 @@ select tables_are(
     -- Milestone 5: server-only tables (RLS on, no policy, no client grant; their own pgTAP files)
     'blocked_domains', 'reports', 'report_attempts', 'admin_audit', 'image_cleanup_queue', 'image_upload_hits',
     -- Milestone 4: analytics rollups, high-traffic flags and the rate-limit window (111, 113, 112)
-    'daily_dim_stats', 'traffic_flags', 'rate_limit_hits'
+    'daily_dim_stats', 'traffic_flags', 'rate_limit_hits',
+    -- Wave F: private share links of the editor (120)
+    'preview_links'
   ],
   'public holds exactly the contract tables'
 );
@@ -95,7 +98,7 @@ select set_eq(
     values
       ('accounts|authenticated|SELECT|*'),
       ('pages|authenticated|SELECT|*'),
-      ('pages|authenticated|UPDATE|draft'),
+      ('pages|authenticated|UPDATE|draft,name'),
       ('themes|anon|SELECT|*'),
       ('themes|authenticated|SELECT|*'),
       ('themes|authenticated|INSERT|name,owner_id,tokens'),
@@ -147,7 +150,11 @@ select set_eq(
       ('admin_audit|service_role|INSERT|*'),
       ('image_cleanup_queue|service_role|SELECT|*'),
       ('image_cleanup_queue|service_role|INSERT|*'),
-      ('image_cleanup_queue|service_role|DELETE|*')
+      ('image_cleanup_queue|service_role|DELETE|*'),
+      -- Wave F: preview_links is server only (the cron purge runs as the database owner)
+      ('preview_links|service_role|SELECT|*'),
+      ('preview_links|service_role|INSERT|*'),
+      ('preview_links|service_role|UPDATE|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );

@@ -23,21 +23,24 @@ const APP_UI = [
   "src/components/blocks",
   "src/components/billing",
   "src/components/auth",
+  "src/components/settings",
+  "src/components/page",
   "src/lib/themes",
   "src/lib/design",
   "src/lib/media",
   "src/lib/publish",
+  "src/lib/settings",
   "src/lib/error-copy.ts",
 ];
 
 /** Legal text names real mechanisms (a cookie called sb-...-auth-token, a one-way hash). */
 const LEGAL = ["privacy/page.tsx", "terms/page.tsx"];
 
-function walk(path: string, out: string[]): string[] {
+function walk(path: string, out: string[], pattern = /\.tsx?$/): string[] {
   const stat = statSync(resolve(ROOT, path));
   if (stat.isDirectory()) {
-    for (const name of readdirSync(resolve(ROOT, path))) walk(join(path, name), out);
-  } else if (/\.tsx?$/.test(path)) {
+    for (const name of readdirSync(resolve(ROOT, path))) walk(join(path, name), out, pattern);
+  } else if (pattern.test(path)) {
     out.push(path);
   }
   return out;
@@ -45,6 +48,8 @@ function walk(path: string, out: string[]): string[] {
 
 const marketingFiles = MARKETING.flatMap((root) => walk(root, []));
 const appFiles = APP_UI.flatMap((root) => walk(root, []));
+/** Stylesheets in the guarded directories (the page renderer's) get the spelling rule too: comments name colors. */
+const styleFiles = [...MARKETING, ...APP_UI].flatMap((root) => walk(root, [], /\.css$/));
 
 /** Text-like strings in a source file: what a person might read, not class lists or ids. */
 const CLASS_NAME_CHARS = /^[\w\-:[\]/.()#%@!>&*+~=,|^$ '"]+$/;
@@ -130,6 +135,11 @@ describe("copy rules: what is scanned", () => {
     expect(appFiles.length).toBeGreaterThan(40);
     expect(marketingCopy.length).toBeGreaterThan(1000);
     expect(appCopy.length).toBeGreaterThan(200);
+    // The two directories the first sweep skipped are guarded now, stylesheets included.
+    expect(appFiles.some((file) => file.startsWith("src/components/settings/"))).toBe(true);
+    expect(appFiles.some((file) => file.startsWith("src/components/page/"))).toBe(true);
+    expect(appFiles.some((file) => file.startsWith("src/lib/settings/"))).toBe(true);
+    expect(styleFiles).toContain("src/components/page/page-renderer.css");
     // A string the rules below must be able to see: the headline of the home page.
     expect(allCopy.some((c) => c.text.includes("Designed like"))).toBe(true);
   });
@@ -138,7 +148,7 @@ describe("copy rules: what is scanned", () => {
 describe("copy rules: American English", () => {
   it("has no British spellings in any source file's comments or text", () => {
     const hits: string[] = [];
-    for (const file of [...marketingFiles, ...appFiles]) {
+    for (const file of [...marketingFiles, ...appFiles, ...styleFiles]) {
       readFileSync(resolve(ROOT, file), "utf8")
         .split("\n")
         // sharp's gravity name is "centre" (a library value, not copy).
