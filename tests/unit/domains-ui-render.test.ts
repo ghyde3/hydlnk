@@ -26,8 +26,18 @@ const { stepsFor } = await import("@/components/domains/view-model");
  */
 
 const pages = [
-  { id: "00000000-0000-4000-8000-0000000000a1", address: "mara.hydlnk.com", published: true },
-  { id: "00000000-0000-4000-8000-0000000000a2", address: "studio.hydlnk.com", published: false },
+  {
+    id: "00000000-0000-4000-8000-0000000000a1",
+    name: "Main page",
+    address: "mara.hydlnk.com",
+    published: true,
+  },
+  {
+    id: "00000000-0000-4000-8000-0000000000a2",
+    name: "Page 2",
+    address: "studio.hydlnk.com",
+    published: false,
+  },
 ];
 const card = (plan: "free" | "pro" | "studio", used: number) =>
   renderToStaticMarkup(

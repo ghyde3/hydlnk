@@ -419,7 +419,18 @@ describe.skipIf(!run)("M2-23 / M2-25 publish gate (local Supabase)", () => {
         "tokens",
         "version",
       ]);
-      expect(Object.keys(stored.profile as object).sort()).toEqual(["bio", "name", "photo"]);
+      // The profile's six display options (M6-15, M6-17) are always written, and nothing else is.
+      expect(Object.keys(stored.profile as object).sort()).toEqual([
+        "bio",
+        "name",
+        "photo",
+        "photoBorder",
+        "photoShape",
+        "photoSize",
+        "showBio",
+        "showName",
+        "showPhoto",
+      ]);
       expect(JSON.stringify(stored)).not.toMatch(
         /hideBadge|hideReport|badge|polluted|"rev"|Hidden/,
       );

@@ -70,6 +70,7 @@ export default async function SettingsScreen({ searchParams }: PageProps<"/app/s
           pages={pages.map((page) => ({
             id: page.id,
             handle: page.handle,
+            name: page.name,
             published: page.published_at !== null,
           }))}
         />

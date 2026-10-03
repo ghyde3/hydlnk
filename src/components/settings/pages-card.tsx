@@ -5,13 +5,15 @@ import { DeletePageDialog } from "./delete-page-dialog";
 export interface PagesCardPage {
   id: string;
   handle: string;
+  /** The page's private name (M6-13), shown above its address. */
+  name: string;
   published: boolean;
 }
 
 /**
- * The Pages card (M4-19): each of the account's pages as "{handle}.hydlnk.com" with its Live or
- * Not published chip and a danger "Delete page" button that opens the confirmation dialog. Sits
- * below the plan cards and above Account.
+ * The Pages card (M4-19): each of the account's pages with its name (M6-14) over its
+ * "{handle}.hydlnk.com" address, its Live or Not published chip and a danger "Delete page" button
+ * that opens the confirmation dialog. Sits below the plan cards and above Account.
  */
 export function PagesCard({ pages }: { pages: PagesCardPage[] }) {
   return (
@@ -25,13 +27,21 @@ export function PagesCard({ pages }: { pages: PagesCardPage[] }) {
             className="flex flex-col gap-2.5 border-t border-line py-3 first:border-t-0 first:pt-0 last:pb-0 hl:flex-row hl:items-center hl:justify-between"
           >
             <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
-              <span
-                id={`page-address-${page.id}`}
-                className="min-w-0 font-mono text-sm [overflow-wrap:anywhere]"
-              >
-                {page.handle}
-                <span className="text-text-3">.{PRODUCT_DOMAIN}</span>
-              </span>
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span
+                  data-page-name=""
+                  className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere]"
+                >
+                  {page.name}
+                </span>
+                <span
+                  id={`page-address-${page.id}`}
+                  className="min-w-0 font-mono text-[13px] [overflow-wrap:anywhere]"
+                >
+                  {page.handle}
+                  <span className="text-text-3">.{PRODUCT_DOMAIN}</span>
+                </span>
+              </div>
               <PageChip published={page.published} />
             </div>
             <div className="hl:shrink-0">

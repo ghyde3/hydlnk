@@ -49,7 +49,7 @@ Brass is never body text on white, never a large fill. Primary buttons are charc
 - Mobile first. One breakpoint at **760px** (container query on the page root in the mockups; a media query is fine in the real app).
 - **App ≥ 760px:** charcoal sidebar (240px: logo, page switcher, nav, plan meter, user) + main column (white header bar with mono breadcrumb and 22px title; content on `--hl-page`).
 - **App < 760px:** sidebar hidden → charcoal top bar (logo + page switcher chip) and a fixed white bottom tab bar (Editor, Design, Stats, Domains, Account; active = ink text + 2px brass top marker; respects safe-area inset). Main content gets bottom padding to clear it.
-- **Editor and Design < 760px:** the side-by-side preview becomes a "Blocks | Preview" (or "Tokens | Preview") segmented tab; the phone bezel is dropped and the preview renders full width.
+- **Editor and Design < 760px:** the side-by-side preview becomes a "Blocks | Preview" (or "Tokens | Preview") segmented tab; the phone bezel is dropped and the preview renders full width. On the phone the Editor also shows a fixed "Live preview" dock above the tab bar while the Blocks tab is open; tapping it opens the full-width Preview tab, and "Back to blocks" returns.
 - **Marketing < 760px:** nav shows logo + Log in only; claim-handle form button drops to its own full-width row; all grids collapse to one column; token chips around the hero phone are hidden.
 - Tables collapse on phones: DNS record → stacked definition list with its own Copy button; analytics link table drops the share-bar column.
 

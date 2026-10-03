@@ -321,6 +321,8 @@ test.describe("M2-05 the editor preview uses the same renderer", () => {
     await showView(page, "Preview");
     const before = page.url();
     await previewScreen(page).locator(`a[data-block-id="${link.id}"]`).click();
+    // M6-03: a tap in the phone's full-size preview opens the block (the Blocks tab), so reopen Preview.
+    await showView(page, "Preview");
     await previewScreen(page).locator(`[data-block-id="${social.id}"] a`).first().click();
     await page.waitForTimeout(300);
     expect(page.url()).toBe(before);

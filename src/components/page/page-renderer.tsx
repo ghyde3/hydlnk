@@ -22,6 +22,10 @@ export interface PageRendererProps {
   chrome?: PageChrome;
   /** Extra footer content for callers that need more than the two standard links. */
   footer?: ReactNode;
+  /** A small decorative copy (the editor's phone dock): nothing interactive, nothing third-party. See `BlockContext.thumbnail`. */
+  thumbnail?: boolean;
+  /** Embeds as still posters, not players: nothing is requested from YouTube or Spotify (the shared preview, M6-10). See `BlockContext.inertEmbeds`. */
+  inertEmbeds?: boolean;
 }
 
 /**
@@ -36,9 +40,23 @@ export interface PageRendererProps {
  * Clicks are not handled here: the editor preview wraps the renderer and stops anchors from
  * navigating, so the markup (and the hrefs) stay identical everywhere.
  */
-export function PageRenderer({ doc, pageId, mode, chrome, footer }: PageRendererProps) {
+export function PageRenderer({
+  doc,
+  pageId,
+  mode,
+  chrome,
+  footer,
+  thumbnail,
+  inertEmbeds,
+}: PageRendererProps) {
   const { tokens } = doc;
-  const ctx: BlockContext = { pageId, tokens, mode };
+  const ctx: BlockContext = {
+    pageId,
+    tokens,
+    mode,
+    ...(thumbnail ? { thumbnail } : {}),
+    ...(inertEmbeds ? { inertEmbeds } : {}),
+  };
   // The background image is drawn only from the owner's page-media bucket: the URL is rebuilt from
   // a validated path, and anything else (a third-party address, a bad row) draws no image.
   const image = backgroundImageUrl(tokens);

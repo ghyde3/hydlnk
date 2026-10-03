@@ -7,38 +7,13 @@ import {
   SAVE_INDICATOR,
   TOO_LARGE_MESSAGE,
 } from "@/lib/editor/messages";
-import { PUBLISH_STATUS_LABEL, type PublishStatus } from "@/lib/editor/status";
-
-const CHIP_STYLE: Record<PublishStatus, { background: string; color: string; dot?: string }> = {
-  "not-published": { background: "#EFEDE9", color: "#5E5A54" },
-  "unpublished-changes": { background: "#F6EEDF", color: "#6B5226" },
-  // The text is #2B7448, not the spec's #2F7D4F: that pair is 4.42:1, under the 4.5:1 AA floor for
-  // 12px text (axe fails it). The dot keeps #2F7D4F. Same call as the Verified chip on Domains.
-  published: { background: "#E7F3EC", color: "#2B7448", dot: "#2F7D4F" },
-};
-
-/**
- * The publish-state chip (M2-27): 4px radius, 12px/500, a 6px dot, polite live region. The state
- * comes from the data (draft publish form vs `pages.published`), never from a flag.
- */
-export function StatusChip({ status }: { status: PublishStatus }) {
-  const { background, color, dot } = CHIP_STYLE[status];
-  return (
-    <span
-      aria-live="polite"
-      data-publish-status={status}
-      className="inline-flex items-center gap-1.5 rounded-sm px-2 py-[5px] text-xs font-medium"
-      style={{ background, color }}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-block size-1.5 rounded-full"
-        style={{ background: dot ?? color }}
-      />
-      {PUBLISH_STATUS_LABEL[status]}
-    </span>
-  );
-}
+import type { PublishStatus } from "@/lib/editor/status";
+import { PreviewLink } from "@/components/previews/preview-link";
+import { SharePreview } from "@/components/previews/share-preview";
+import { PageName } from "./page-name";
+import { StatusChip } from "./status-chip";
+import { UndoRedoButtons } from "./undo-redo-controls";
+import type { UndoRedo } from "./use-undo-redo";
 
 /** What the mono save indicator reads for each queue status (empty before the first edit). */
 function indicatorText(status: SaveStatus): string {
@@ -79,16 +54,23 @@ export function SaveIndicator({ status }: { status: SaveStatus }) {
 export function EditorHeader({
   breadcrumb,
   title,
+  pageId,
+  flush,
   status,
   saveStatus,
   liveUrl,
   previewUrl,
   publishing,
   blocked = false,
+  undoRedo,
   onPublish,
 }: {
   breadcrumb: string;
+  /** The page's name (`pages.name`, M6-13): the h1, with a "Rename page" button after it. */
   title: string;
+  pageId: string;
+  /** Writes pending edits and resolves true once they are stored (the autosave queue's flush). */
+  flush: () => Promise<boolean>;
   status: PublishStatus;
   saveStatus: SaveStatus;
   /** The live page's address, shown as "View live page" once the page has been published. */
@@ -97,17 +79,20 @@ export function EditorHeader({
   publishing: boolean;
   /** A link on the page points to a blocked site (M5-03): nothing can be published until it is fixed. */
   blocked?: boolean;
+  /** Undo and Redo (M6-07): two icon buttons to the left of the status chip. */
+  undoRedo?: UndoRedo;
   onPublish: () => void;
 }) {
   // A suspended owner cannot publish (M5-09): the server refuses it too (account_suspended).
   const suspended = useAccountSuspended();
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-line bg-surface px-4 py-3.5 hl:px-8">
-      <div className="min-w-0">
+      <div className="min-w-0 hl:flex-1">
         <p className="font-mono text-xs text-text-2">{breadcrumb}</p>
-        <h1 className="mt-0.5 text-[22px] leading-[1.2] font-bold tracking-[-0.01em]">{title}</h1>
+        <PageName pageId={pageId} name={title} />
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {undoRedo ? <UndoRedoButtons controls={undoRedo} /> : null}
         <StatusChip status={status} />
         <SaveIndicator status={saveStatus} />
         {liveUrl ? (
@@ -120,14 +105,14 @@ export function EditorHeader({
             View live page
           </a>
         ) : null}
-        <a
+        <PreviewLink
           href={previewUrl}
-          target="_blank"
-          rel="noopener"
+          flush={flush}
           className="hidden min-h-11 items-center rounded-md border border-line-3 bg-surface px-3.5 text-sm font-semibold text-ink no-underline hl:inline-flex"
         >
           Preview
-        </a>
+        </PreviewLink>
+        <SharePreview pageId={pageId} flush={flush} />
         <button
           type="button"
           onClick={onPublish}

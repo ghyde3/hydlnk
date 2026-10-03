@@ -347,7 +347,17 @@ describe("emptyDraft", () => {
     expect(emptyDraft("mara")).toEqual({
       version: 1,
       rev: 0,
-      profile: { name: "mara", bio: "", photo: null },
+      profile: {
+        name: "mara",
+        bio: "",
+        photo: null,
+        photoShape: "circle",
+        photoSize: "medium",
+        photoBorder: "page",
+        showPhoto: true,
+        showName: true,
+        showBio: true,
+      },
       theme: { ref: null, overrides: {} },
       blocks: [],
     });

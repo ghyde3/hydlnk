@@ -4,6 +4,7 @@ import {
   type BlockOverrides,
   type TokenSet,
 } from "@/lib/theme";
+import { resolveProfileOptions } from "./profile-options";
 import {
   publishDocSchema,
   type Block,
@@ -22,6 +23,7 @@ import {
  *     `visible: true`;
  *   - `tokens` is every token resolved: system default, then `themeTokens` (the draft's theme row,
  *     or null for none or a deleted one), then the page's overrides;
+ *   - the six profile display options are written explicitly, with the default for a missing one;
  *   - every text and URL is trimmed, unknown keys are not copied, block `overrides` keep only the
  *     keys of `BLOCK_OVERRIDE_KEYS` that have a value (omitted when none), and an empty optional
  *     image link is omitted. The result is canonical, so two equal drafts give deep-equal forms.
@@ -42,6 +44,9 @@ export function toPublishForm(draft: DraftDoc, themeTokens: Partial<TokenSet> | 
       name: draft.profile.name.trim(),
       bio: draft.profile.bio.trim(),
       photo: imageRef(draft.profile.photo),
+      // Always written, every one filled (M6-15, M6-17), so the form deep-equals a stored
+      // document that the strict schema has parsed (which fills the same defaults).
+      ...resolveProfileOptions(draft.profile),
     },
     theme: { ref: draft.theme.ref, overrides: { ...draft.theme.overrides } },
     tokens: resolveTokens(themeTokens, draft.theme.overrides),

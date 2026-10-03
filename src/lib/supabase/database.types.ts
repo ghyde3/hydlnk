@@ -307,6 +307,7 @@ export type Database = {
           draft: Json
           handle: string
           id: string
+          name: string
           owner_id: string
           published: Json | null
           published_at: string | null
@@ -317,6 +318,7 @@ export type Database = {
           draft: Json
           handle: string
           id?: string
+          name?: string
           owner_id: string
           published?: Json | null
           published_at?: string | null
@@ -327,6 +329,7 @@ export type Database = {
           draft?: Json
           handle?: string
           id?: string
+          name?: string
           owner_id?: string
           published?: Json | null
           published_at?: string | null
@@ -338,6 +341,41 @@ export type Database = {
             columns: ["owner_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      preview_links: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          page_id: string
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          page_id: string
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          page_id?: string
+          revoked_at?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preview_links_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
             referencedColumns: ["id"]
           },
         ]

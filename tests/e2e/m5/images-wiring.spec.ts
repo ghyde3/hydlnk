@@ -702,7 +702,12 @@ test.describe("M5-14 the editor works the cleanup queue", () => {
       user.pageId,
       (d) => !d.blocks.some((x) => x.id === keep.id || x.id === gone.id),
     );
-    await page.getByRole("button", { name: "Undo" }).click(); // brings `gone` back
+    // The toast's Undo (the header has its own, M6-07) brings `gone` back.
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Block deleted." })
+      .getByRole("button", { name: "Undo" })
+      .click();
     await expectDraft(user.pageId, (d) => d.blocks.some((x) => x.id === gone.id));
 
     // Past the Undo window the editor asks the server to clean up: `keep` is deleted, `gone` stays.

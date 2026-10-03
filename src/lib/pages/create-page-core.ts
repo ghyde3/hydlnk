@@ -3,6 +3,7 @@ import { claimHandleWithClient, type ClaimError } from "@/lib/handles/claim-core
 import { normalizeHandle } from "@/lib/handles/rules";
 import { describeHandleStatus, type HandleStatus } from "@/lib/handles/status";
 import { pageLimitMessage, toPlanId } from "@/lib/limits";
+import { DEFAULT_PAGE_NAME, defaultPageName } from "@/lib/pages/name";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -47,13 +48,45 @@ async function limitMessage(admin: SupabaseClient<Database>, userId: string): Pr
   return pageLimitMessage(toPlanId(account.data?.plan), pages.count ?? 0);
 }
 
+/**
+ * Names the page just created (M6-13): the account's first page keeps the column default, "Main
+ * page"; the next ones become "Page 2" and "Page 3" (the owner's page count after the insert). A
+ * request body never names a page: this is the only place a created page gets its name. A failure
+ * here is logged and ignored, because the page exists and "Main page" is a fine name for it.
+ */
+async function nameNewPage(
+  admin: SupabaseClient<Database>,
+  userId: string,
+  pageId: string,
+): Promise<void> {
+  try {
+    const count = await admin
+      .from("pages")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", userId);
+    if (count.error) throw new Error(count.error.message);
+    const name = defaultPageName(count.count ?? 1);
+    if (name === DEFAULT_PAGE_NAME) return;
+    const update = await admin.from("pages").update({ name }).eq("id", pageId);
+    if (update.error) throw new Error(update.error.message);
+  } catch (error) {
+    console.error(
+      "[pages] naming the new page failed",
+      error instanceof Error ? error.message : "",
+    );
+  }
+}
+
 export async function createPageWithClient(
   admin: SupabaseClient<Database>,
   userId: string,
   rawHandle: string,
 ): Promise<CreatePageResult> {
   const result = await claimHandleWithClient(admin, userId, rawHandle);
-  if (result.ok) return { ok: true, pageId: result.pageId, handle: result.handle };
+  if (result.ok) {
+    await nameNewPage(admin, userId, result.pageId);
+    return { ok: true, pageId: result.pageId, handle: result.handle };
+  }
 
   const error = result.error;
   const status = CREATE_PAGE_STATUS[error];

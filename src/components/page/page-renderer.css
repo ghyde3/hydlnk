@@ -199,6 +199,95 @@
   overflow-wrap: anywhere;
 }
 
+/* Profile options (M6-15, M6-17): the avatar's shape, size and border arrive as data attributes on
+   .pg-avatar from fixed lists (profile.tsx); the defaults (circle, medium, page) are the rules
+   above, so a page that sets none looks as it always did. The name's hidden form is the clip
+   technique: a 1px absolutely positioned box, so the page keeps its one <h1> for screen readers
+   and search while nothing is drawn, and it takes no room in the column. ---------------------- */
+
+[data-page-root] .pg-avatar[data-shape="rounded"] {
+  border-radius: 24%;
+}
+
+[data-page-root] .pg-avatar[data-shape="square"] {
+  border-radius: 0;
+}
+
+[data-page-root] .pg-avatar[data-size="small"] {
+  width: 64px;
+  height: 64px;
+  font-size: calc(24px * var(--t-scale));
+}
+
+[data-page-root] .pg-avatar[data-size="large"] {
+  width: 144px;
+  height: 144px;
+  font-size: calc(54px * var(--t-scale));
+}
+
+[data-page-root] .pg-avatar[data-border="none"] {
+  border: 0;
+}
+
+[data-page-root] .pg-avatar[data-border="thin"] {
+  border: 2px solid var(--t-accent);
+}
+
+[data-page-root] .pg-avatar[data-border="thick"] {
+  border: 4px solid var(--t-accent);
+}
+
+/* Without a photo the name is the first thing in the header: no gap for an avatar that is not there. */
+[data-page-root] .pg-profile > .pg-name:first-child {
+  margin-top: 0;
+}
+
+/* With no profile header above them (the photo, the name and the bio all hidden), the blocks open
+   the page: the first one starts at the column's top padding, whatever top margin its type has
+   (header, social, divider), so there is no empty gap where the profile was. */
+[data-page-root] .pg-column > .pg-blocks:first-child > :first-child,
+[data-page-root]
+  .pg-column
+  > .pg-name[data-visually-hidden]:first-child
+  + .pg-blocks
+  > :first-child {
+  margin-top: 0;
+}
+
+[data-page-root] .pg-name[data-visually-hidden] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Narrow containers: every size steps down (48px, 64px, 96px), as the default did on its own. */
+@container (max-width: 319px) {
+  [data-page-root] .pg-avatar[data-size="small"] {
+    width: 48px;
+    height: 48px;
+    font-size: calc(18px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-avatar[data-size="medium"] {
+    width: 64px;
+    height: 64px;
+    font-size: calc(24px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-avatar[data-size="large"] {
+    width: 96px;
+    height: 96px;
+    font-size: calc(36px * var(--t-scale));
+  }
+}
+
 /* Link button -------------------------------------------------------------------------------- */
 
 [data-page-root] .pg-link {

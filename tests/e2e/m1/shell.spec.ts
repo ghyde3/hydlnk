@@ -518,7 +518,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     const secondHandle = `zq-cp2-${rand()}`;
     const secondId = await addPage(user.userId, secondHandle);
     await page.goto(url("app", "/editor"));
-    await expect(page.locator("main > header p")).toHaveText(`${user.handle}.hydlnk.com / main`);
+    await expect(page.locator("main > header p")).toHaveText(`${user.handle}.hydlnk.com`);
 
     const button = switcher(page);
     await button.click();
@@ -527,7 +527,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
       "aria-label",
       `Switch page, current: ${secondHandle}.hydlnk.com`,
     );
-    await expect(page.locator("main > header p")).toHaveText(`${secondHandle}.hydlnk.com / main`);
+    await expect(page.locator("main > header p")).toHaveText(`${secondHandle}.hydlnk.com`);
 
     const cookie = (await context.cookies(url("app"))).find((c) => c.name === "hl-page")!;
     expect(cookie.value).toBe(secondId);

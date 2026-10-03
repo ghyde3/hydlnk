@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { checkDomainAction, removeDomainAction, setDomainPageAction } from "@/lib/domains/actions";
 import type { DomainView } from "@/lib/domains/types";
-import type { PageOption } from "./page-options";
+import { pageOptionLabel, type PageOption } from "./page-options";
 import { RecordsBlock } from "./records-block";
 import { StatusChip } from "./status-chip";
 import { StepList } from "./step-list";
@@ -262,7 +262,7 @@ export function DomainCard({
               >
                 {pages.map((page) => (
                   <option key={page.id} value={page.id}>
-                    {page.address}
+                    {pageOptionLabel(page)}
                   </option>
                 ))}
               </select>

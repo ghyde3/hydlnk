@@ -141,7 +141,8 @@ async function switchPage(page: Page, handle: string): Promise<void> {
   await switcher(page).click();
   await page
     .getByRole("menu", { name: "Pages" })
-    .getByRole("menuitemradio", { name: new RegExp(`^${handle}\\.`) })
+    // M6-14: an item reads "{page name} {handle}.hydlnk.com", so the handle is not at the start.
+    .getByRole("menuitemradio", { name: new RegExp(`${handle}\\.`) })
     .click();
   await expect(switcher(page)).toHaveAttribute("aria-label", new RegExp(`current: ${handle}\\.`), {
     timeout: 20_000,

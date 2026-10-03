@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { ComponentPropsWithoutRef, CSSProperties } from "react";
 import {
   SOCIAL_PLATFORM_LABELS,
   parseEmbed,
@@ -22,7 +22,7 @@ import {
   type TokenSet,
 } from "@/lib/theme";
 import { YouTubeFacade } from "./embed-facade";
-import { mailtoLink, outboundHref } from "./outbound";
+import { mailtoLink, outboundHref, type OutboundAttrs } from "./outbound";
 import { SocialGlyph } from "./social-icons";
 
 /**
@@ -47,6 +47,38 @@ export interface BlockContext {
    * a dashed placeholder in the editor preview, nothing on the live page.
    */
   mode: "live" | "preview";
+  /**
+   * A small decorative copy of the page (the editor's phone dock, M6-01). Nothing in it is
+   * interactive and nothing in it loads from a third party: an embed is drawn as a still poster
+   * instead of a Play button (a button inside the dock's button would not be valid markup) or an
+   * iframe. Everything else is the same markup as a normal preview.
+   */
+  thumbnail?: boolean;
+  /**
+   * Embeds are drawn as still posters, never as a player: no Play button, no iframe, so nothing is
+   * requested from YouTube or Spotify and nothing can start (the shared preview, M6-10: a stranger
+   * who opens a draft link has not asked for a request to a third party). Links, cards and everything
+   * else stay as they are; only `EmbedView` reads this.
+   */
+  inertEmbeds?: boolean;
+}
+
+/**
+ * The element behind every outbound link: an anchor. In a thumbnail (the editor's dock) it is a
+ * plain box with the same classes and no href, rel or label: a small copy of the page must not
+ * hold dozens of tiny links, and nothing in it can be activated anyway.
+ */
+function LinkBox({
+  thumbnail,
+  link,
+  ...props
+}: ComponentPropsWithoutRef<"a"> & { thumbnail?: boolean; link: OutboundAttrs }) {
+  if (thumbnail) {
+    const rest: ComponentPropsWithoutRef<"a"> = { ...props };
+    delete rest["aria-label"];
+    return <div {...(rest as ComponentPropsWithoutRef<"div">)} />;
+  }
+  return <a {...props} {...link} />;
 }
 
 /** The block's resolved tokens, and inline variables for just the keys it overrides. */
@@ -70,16 +102,17 @@ function blockTokens(
 function LinkView({ block, ctx }: { block: LinkBlock; ctx: BlockContext }) {
   const { resolved, style } = blockTokens(ctx.tokens, block.overrides);
   return (
-    <a
+    <LinkBox
       className="pg-link"
       data-block-id={block.id}
       data-block-type="link"
       data-button-style={resolved.buttonStyle}
       style={style}
-      {...outboundHref(block.url, { pageId: ctx.pageId, id: block.id })}
+      thumbnail={ctx.thumbnail}
+      link={outboundHref(block.url, { pageId: ctx.pageId, id: block.id })}
     >
       {block.label}
-    </a>
+    </LinkBox>
   );
 }
 
@@ -87,12 +120,13 @@ function CardView({ block, ctx }: { block: CardBlock; ctx: BlockContext }) {
   const { style } = blockTokens(ctx.tokens, block.overrides);
   const image = block.image;
   return (
-    <a
+    <LinkBox
       className="pg-card"
       data-block-id={block.id}
       data-block-type="card"
       style={style}
-      {...outboundHref(block.url, { pageId: ctx.pageId, id: block.id })}
+      thumbnail={ctx.thumbnail}
+      link={outboundHref(block.url, { pageId: ctx.pageId, id: block.id })}
     >
       <span className="pg-card-banner" data-has-image={image ? "true" : undefined}>
         {image ? (
@@ -119,7 +153,7 @@ function CardView({ block, ctx }: { block: CardBlock; ctx: BlockContext }) {
           →
         </span>
       </span>
-    </a>
+    </LinkBox>
   );
 }
 
@@ -174,9 +208,13 @@ function ImageView({ block, ctx }: { block: ImageBlock; ctx: BlockContext }) {
       {link === "" ? (
         picture
       ) : (
-        <a className="pg-image-link" {...outboundHref(link, { pageId: ctx.pageId, id: block.id })}>
+        <LinkBox
+          className="pg-image-link"
+          thumbnail={ctx.thumbnail}
+          link={outboundHref(link, { pageId: ctx.pageId, id: block.id })}
+        >
           {picture}
-        </a>
+        </LinkBox>
       )}
     </div>
   );
@@ -191,17 +229,20 @@ function SocialView({ block, ctx }: { block: SocialBlock; ctx: BlockContext }) {
       data-block-type="social"
     >
       {block.icons.map((icon) => (
-        <a
+        <LinkBox
           key={icon.id}
           className="pg-social-link"
           aria-label={SOCIAL_PLATFORM_LABELS[icon.platform]}
           data-item-id={icon.id}
-          {...(icon.platform === "email"
-            ? mailtoLink(icon.address)
-            : outboundHref(icon.url, { pageId: ctx.pageId, id: icon.id }))}
+          thumbnail={ctx.thumbnail}
+          link={
+            icon.platform === "email"
+              ? mailtoLink(icon.address)
+              : outboundHref(icon.url, { pageId: ctx.pageId, id: icon.id })
+          }
         >
           <SocialGlyph platform={icon.platform} />
-        </a>
+        </LinkBox>
       ))}
     </nav>
   );
@@ -230,7 +271,23 @@ function EmbedView({ block, ctx }: { block: EmbedBlock; ctx: BlockContext }) {
       data-block-type="embed"
       data-embed-provider={embed.provider}
     >
-      {embed.provider === "youtube" ? (
+      {ctx.thumbnail || ctx.inertEmbeds ? (
+        embed.provider === "youtube" ? (
+          <div className="pg-embed-play" aria-hidden="true">
+            <span className="pg-embed-play-disc">
+              <svg className="pg-embed-play-glyph" viewBox="0 0 24 24" focusable="false">
+                <path d="M8 5.5v13l11-6.5z" />
+              </svg>
+            </span>
+          </div>
+        ) : (
+          <div
+            className="pg-embed-spotify"
+            aria-hidden="true"
+            style={{ height: spotifyHeight(embed.kind) }}
+          />
+        )
+      ) : embed.provider === "youtube" ? (
         <YouTubeFacade src={embed.src} caption={block.caption} />
       ) : (
         <iframe
@@ -255,15 +312,16 @@ function GridView({ block, ctx }: { block: GridBlock; ctx: BlockContext }) {
   return (
     <div className="pg-grid" data-block-id={block.id} data-block-type="grid">
       {block.cells.map((cell) => (
-        <a
+        <LinkBox
           key={cell.id}
           className="pg-cell"
           data-item-id={cell.id}
-          {...outboundHref(cell.url, { pageId: ctx.pageId, id: cell.id })}
+          thumbnail={ctx.thumbnail}
+          link={outboundHref(cell.url, { pageId: ctx.pageId, id: cell.id })}
         >
           <span className="pg-cell-title">{cell.title}</span>
           {cell.subtitle === "" ? null : <span className="pg-cell-subtitle">{cell.subtitle}</span>}
-        </a>
+        </LinkBox>
       ))}
     </div>
   );

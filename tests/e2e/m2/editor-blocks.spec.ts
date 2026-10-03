@@ -168,7 +168,12 @@ test.describe("M2-10 add a block", () => {
     await chip(page, "divider").click();
     await expect(countHeading(page, 50)).toBeVisible();
     for (const type of BLOCK_TYPES) await expect(chip(page, type)).toBeDisabled();
-    await expect(page.getByText("You’ve reached the 50-block limit.")).toBeVisible();
+    // M6-05 shows the same message beside Duplicate in an open panel: this one is the Add card's.
+    await expect(
+      page
+        .getByRole("region", { name: "Add a block" })
+        .getByText("You’ve reached the 50-block limit."),
+    ).toBeVisible();
     // A disabled chip adds nothing.
     await chip(page, "link").click({ force: true });
     await expect(rows(page)).toHaveCount(50);
@@ -383,7 +388,7 @@ test.describe("M2-11 block rows", () => {
 });
 
 async function seededPageId(page: Page): Promise<string | undefined> {
-  // The handle is in the breadcrumb: `{handle}.hydlnk.com / main`.
+  // The handle is in the breadcrumb: `{handle}.hydlnk.com`.
   const crumb = await page.locator("main > header p").innerText();
   const handle = crumb.split(".hydlnk.com")[0]!;
   const { data } = await adminClient().from("pages").select("id").eq("handle", handle).single();
@@ -605,7 +610,11 @@ test.describe("M2-13 delete with undo", () => {
     await openEditor(page);
     await rowButton(page, IDS.divider).click();
     await panel(page, IDS.divider).getByRole("button", { name: "Delete block" }).click();
-    const undo = page.getByRole("button", { name: "Undo" });
+    // The header has its own Undo button (M6-07): this one is the toast's.
+    const undo = page
+      .getByRole("status")
+      .filter({ hasText: "Block deleted." })
+      .getByRole("button", { name: "Undo" });
     await expect(undo).toBeVisible();
     await page.waitForTimeout(7000);
     await expect(undo).toBeVisible();

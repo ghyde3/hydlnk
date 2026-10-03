@@ -55,17 +55,18 @@ Each page is one JSON document (profile + blocks + theme reference + token overr
 | Table | Key columns | Access |
 | --- | --- | --- |
 | `accounts` | `id` (= `auth.uid`), `plan`, `stripe_customer_id`, `suspended_at` | Owner reads own row. Writes are server-only (signup, Stripe webhook, admin). |
-| `pages` | `id`, `owner_id`, `handle` unique, `draft` jsonb, `published` jsonb, `published_at` | Owner reads own and updates only `draft`. Create (page limit, reserved and unique handle), delete and publish are server-only. No public select. |
+| `pages` | `id`, `owner_id`, `handle` unique, `name`, `draft` jsonb, `published` jsonb, `published_at` | Owner reads own and updates only `draft` and `name` (the name is private editor metadata with a plain-text check; it is not part of the document and never published). Create (page limit, reserved and unique handle), delete and publish are server-only. No public select. |
 | `themes` | `id`, `owner_id` (null = system), `name`, `tokens` jsonb | Owner reads, updates and deletes own; insert enforces the saved-theme limit; everyone reads system themes |
 | `domains` | `id`, `page_id`, `hostname` unique, `status`, `verified_at` | Owner reads own (via page). Add and remove are server-only (domain limit, Vercel API); `status` and `verified_at` are server-only |
 | `events` | `page_id`, `block_id`, `type` (view/click), `ts`, `referrer`, `device`, `country`, `visitor_hash` | Insert from server only; no client access |
 | `daily_stats` | `page_id`, `block_id`, `day`, `views`, `clicks`, `uniques` | Owner reads own pages; written by the rollup job |
 | `reserved_handles` | `handle` | Server only |
+| `preview_links` | `id`, `page_id`, `token_hash` unique, `created_at`, `expires_at`, `revoked_at` | Server only: RLS on, no policy, no client privilege. Only the SHA-256 of the token is stored; a link lives at most 7 days, can be turned off, and a page holds at most 5 active ones (trigger). |
 
 - **Handles belong to pages.** `pages.handle` is the subdomain: unique and checked against `reserved_handles` (which includes `www`, `app`, `api` and other system names). Signup claims the handle for the user's first page. Profile content (photo, name, bio) lives in the page document.
 - **Seed vs migration.** Reserved handles and system themes ship in migrations so they reach production; `seed.sql` is local demo data only.
 - **JSON for blocks.** The editor saves the whole layout at once, ordering is array order, and Zod validates it on write. Each block carries a nanoid so analytics can key on it.
-- **Public reads** go through a server-side query that only returns `published`, never `draft`.
+- **Public reads** go through a server-side query that only returns `published`, never `draft`. The one exception is the share link below.
 - **Events** are append-only. Keep 90 days raw; `pg_cron` rolls them into `daily_stats` nightly.
 
 ## Tenant page design system
@@ -159,6 +160,8 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Theme changes wait for Publish: applying or editing a theme only changes drafts.
 - Migrations reach production through Claude's `release` step, with Gary approving each push; unattended sessions never touch production.
 - Rate limiting (2026-10-03): one `rateLimit(key, limit, windowSeconds)` function (`src/lib/rate-limit/`) backed by Postgres, a sliding window of one row per counted request behind a single `rate_limit_hit` RPC (migration `20261004000003_rate_limit.sql`), called with the secret key only. It guards the view beacon `/api/e` (120 per minute per IP) and the click redirect `/r` (60 per minute per IP); uploads and reports keep their own database limiters until they are worth porting. Why Postgres: it works unchanged in local dev, in Playwright and in production (the acceptance steps can run against it), it adds no paid service or secret (Upstash and Redis were rejected for that reason), and it counts exactly, which a fixed window or a platform rule cannot. Keys are hashed (HMAC under `VISITOR_HASH_SECRET`), so no IP address is stored; the key is the platform client IP (the IPv6 /64), with one shared `unknown` bucket when there is none; a limiter failure lets the request through (logged) and never breaks a page view or a click. A Vercel Firewall rate-limit rule may sit in front as a coarse backstop; it is not the limiter. Revisit (an edge store) if the limiter's writes ever show up in Supabase load.
+- Share link (2026-10-05): the editor's "Share preview" makes a private link, `/share/{token}` on the app host, to the page's saved draft. It is the one ungated route that reads `draft`, and it is safe by construction: the token is 32 random bytes (256 bits, base64url), only its SHA-256 is stored in the server-only `preview_links` table (a database read cannot rebuild a link), a link expires after 7 days, can be turned off at once, at most 5 are active per page, and creating one is limited to 20 an hour per account. The route is outside every signed-in screen, never reads or sets a cookie (the proxy only rewrites it), is never cached or indexed, sends no Referer, draws the draft with the same renderer in preview mode (no view beacon, no click tracking) and answers one 404 page for every link that is not active. Requests are limited to 60 a minute per IP with a real 429. Every plan can use it. The owner's own gated preview is `/preview/{pageId}`.
+- Page names (2026-10-05): `pages.name` is a private name for each page ("Main page", then "Page 2" and "Page 3"). It is editor metadata only: the owner renames it with the publishable key (column grant under the existing owner policy, so a suspended owner cannot), the database check keeps it plain text of 1 to 60 characters, and nothing public or cached ever sees it.
 
 ## Open
 

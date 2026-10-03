@@ -1,4 +1,5 @@
 import { newBlockId } from "./ids";
+import { PROFILE_OPTION_DEFAULTS } from "./profile-options";
 import type {
   Block,
   BlockType,
@@ -82,14 +83,15 @@ export const blockDefaults: Record<BlockType, () => Block> = {
 };
 
 /**
- * The first draft of every new page (M1 claim): the handle as display name, no photo, no blocks,
- * no theme, no overrides. `rev` starts at 0.
+ * The first draft of every new page (M1 claim): the handle as display name, no photo, the profile
+ * display options at their defaults (M6-15, M6-17), no blocks, no theme, no overrides. `rev` starts
+ * at 0.
  */
 export function emptyDraft(handle: string): DraftDoc {
   return {
     version: 1,
     rev: 0,
-    profile: { name: handle, bio: "", photo: null },
+    profile: { name: handle, bio: "", photo: null, ...PROFILE_OPTION_DEFAULTS },
     theme: { ref: null, overrides: {} },
     blocks: [],
   };

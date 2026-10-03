@@ -18,6 +18,8 @@ import { CheckIcon, ChevronDownIcon } from "./icons";
 export interface SwitcherPage {
   id: string;
   handle: string;
+  /** The page's private name (M6-13): the first line of its menu item, the address under it. */
+  name: string;
   published: boolean;
 }
 
@@ -225,8 +227,13 @@ export function PageSwitcherMenu({
                 className="flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left font-mono text-[13px] hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2"
               >
                 <StatusDot published={page.published} />
-                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-                  {handleAddress(page.handle)}
+                <span className="flex min-w-0 flex-1 flex-col gap-px">
+                  <span data-page-name="" className="truncate font-sans text-[13px] font-semibold">
+                    {page.name}
+                  </span>
+                  <span className="text-[11px] text-on-ink-muted [overflow-wrap:anywhere]">
+                    {handleAddress(page.handle)}
+                  </span>
                 </span>
                 {checked && (
                   <span className="text-brass">

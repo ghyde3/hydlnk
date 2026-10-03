@@ -5,7 +5,7 @@
 -- foreign keys follow the rule.
 
 begin;
-select plan(9);
+select plan(10);
 
 -- ---------------------------------------------------------------------------
 -- The rule, over the catalog
@@ -65,6 +65,7 @@ insert into public.themes (owner_id, name, tokens) values ((select doomed from i
 insert into public.domains (page_id, hostname) values ('00000000-0000-4000-8000-0000000000d1', 'zq-doomed.example.test');
 insert into public.events (page_id, type, visitor_hash) values ('00000000-0000-4000-8000-0000000000d1', 'view', 'zq');
 insert into public.daily_stats (page_id, block_id, day, views) values ('00000000-0000-4000-8000-0000000000d1', '', current_date, 1);
+insert into public.preview_links (page_id, token_hash) values ('00000000-0000-4000-8000-0000000000d1', repeat('7', 64));
 
 delete from auth.users where id = (select doomed from ids);
 
@@ -89,6 +90,11 @@ select is(
     + (select count(*)::int from public.daily_stats where page_id = '00000000-0000-4000-8000-0000000000d1'),
   0,
   'the page''s events and daily stats are gone'
+);
+select is(
+  (select count(*)::int from public.preview_links where page_id = '00000000-0000-4000-8000-0000000000d1'),
+  0,
+  'the page''s preview links are gone'
 );
 select is(
   (select count(*)::int from auth.users where email = 'doomed@example.test'),

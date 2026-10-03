@@ -228,10 +228,10 @@ test.describe("M4-16 choose which page a domain serves", () => {
     const serves = card.getByLabel("Serves");
     await expect(serves).toHaveValue(user.pageId);
     await expect(card.locator("[data-unpublished-hint]")).toHaveCount(0);
-    // Both pages are listed by their hydlnk.com address.
+    // Both pages are listed by name and hydlnk.com address (M6-14; a page added with the secret key keeps the default name).
     await expect(serves.locator("option")).toHaveText([
-      `${user.handle}.hydlnk.com`,
-      `${secondHandle}.hydlnk.com`,
+      `Main page · ${user.handle}.hydlnk.com`,
+      `Main page · ${secondHandle}.hydlnk.com`,
     ]);
 
     await serves.selectOption(secondId);

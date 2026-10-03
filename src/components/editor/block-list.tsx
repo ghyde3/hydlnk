@@ -20,10 +20,11 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useMemo, useState, type Dispatch } from "react";
-import type { Block, PublishError } from "@/lib/document";
+import { LIMITS, type Block, type BlockType, type PublishError } from "@/lib/document";
 import { blockRowSummary } from "@/lib/editor/contracts";
 import { ALL_HIDDEN_MESSAGE, EMPTY_BLOCKS_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
+import { AddSlot } from "./add-slot";
 import { BlockRow } from "./block-row";
 import { GripIcon } from "./icons";
 
@@ -67,6 +68,8 @@ export function BlockList({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  // The "+" whose type chooser is open (its position, from 1), or null. One at a time.
+  const [openSlot, setOpenSlot] = useState<number | null>(null);
   const ids = useMemo(() => blocks.map((block) => block.id), [blocks]);
   const errorsByBlock = useMemo(() => {
     const map = new Map<string, PublishError[]>();
@@ -99,6 +102,7 @@ export function BlockList({
   };
 
   function onDragStart(event: DragStartEvent): void {
+    setOpenSlot(null);
     setActiveId(event.active.id);
   }
   function onDragEnd(event: DragEndEvent): void {
@@ -108,6 +112,24 @@ export function BlockList({
       dispatch({ type: "block/reorder", activeId: String(active.id), overId: String(over.id) });
     }
   }
+
+  const full = blocks.length >= LIMITS.blocks;
+  const toggleSlot = (position: number) =>
+    setOpenSlot((current) => (current === position ? null : position));
+  const pickForSlot = (position: number, type: BlockType) => {
+    setOpenSlot(null);
+    dispatch({ type: "block/add", blockType: type, index: position - 1 });
+  };
+  const slot = (position: number) => (
+    <AddSlot
+      key={`slot-${position}`}
+      position={position}
+      open={openSlot === position && !full}
+      full={full}
+      onToggle={() => toggleSlot(position)}
+      onPick={(type) => pickForSlot(position, type)}
+    />
+  );
 
   // Every block is switched off: the page shows only the profile, and the list says so (M5-15).
   const allHidden = blocks.length > 0 && blocks.every((block) => block.visible === false);
@@ -154,8 +176,9 @@ export function BlockList({
             }}
           >
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-              <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
-                {blocks.map((block, index) => (
+              <ol className="m-0 flex list-none flex-col p-0">
+                {slot(1)}
+                {blocks.flatMap((block, index) => [
                   <BlockRow
                     key={block.id}
                     block={block}
@@ -165,8 +188,9 @@ export function BlockList({
                     errors={errorsByBlock.get(block.id) ?? NO_ERRORS}
                     focus={focus && "blockId" in focus && focus.blockId === block.id ? focus : null}
                     dispatch={dispatch}
-                  />
-                ))}
+                  />,
+                  slot(index + 2),
+                ])}
               </ol>
             </SortableContext>
             <DragOverlay>
