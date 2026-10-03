@@ -53,7 +53,7 @@ const ACTION =
 /**
  * The red banner above the editing area when a save cannot go through, shared by the Editor and
  * Design screens so both say the same thing in the same words (M5-16). `role="alert"`, the DESIGN.md
- * error colours (--hl-bad text, #E8C4BD border), at most one action:
+ * error colors (--hl-bad text, #E8C4BD border), at most one action:
  *   conflict    Reload (another tab saved first)
  *   signed-out  Sign in, to /login in a NEW tab so the unsaved text stays on screen; coming back to
  *               this tab saves it (use-autosave retries when the tab is visible again)

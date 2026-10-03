@@ -30,11 +30,11 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     await expect(page.getByText("By continuing you agree to the")).toBeVisible();
     await expect(page.getByRole("link", { name: "Terms" })).toHaveAttribute(
       "href",
-      "http://localhost:3000/terms",
+      url(null, "/terms"),
     );
     await expect(page.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
       "href",
-      "http://localhost:3000/privacy",
+      url(null, "/privacy"),
     );
     await expect(page.getByText("Already have a page?")).toBeVisible();
     await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
@@ -140,7 +140,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       for (const text of [
         "Claim your name.",
         "Free forever. No card required.",
-        "Every block and the full theme system",
+        "Every block, theme and design option",
       ]) {
         await expect(page.getByText(text)).toBeHidden();
       }
@@ -167,7 +167,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       expect(await css(page, "aside", "background-color")).toBe("rgb(28, 27, 26)");
 
       const logo = panel.getByRole("link", { name: "HYDLNK home" });
-      await expect(logo).toHaveAttribute("href", "http://localhost:3000/");
+      await expect(logo).toHaveAttribute("href", url(null, "/"));
       const wordmark = await logo.getByText("HYDLNK", { exact: true }).evaluate((el) => {
         const s = getComputedStyle(el);
         return { size: s.fontSize, weight: s.fontWeight, spacing: s.letterSpacing };
@@ -199,7 +199,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       await expect(panel.locator("svg").first()).toBeVisible(); // lock icon
 
       for (const text of [
-        "Every block and the full theme system",
+        "Every block, theme and design option",
         "Per-link analytics from day one",
         "Bring your own domain whenever you\u2019re ready",
         "Free forever. No card required.",

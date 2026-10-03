@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     template: "%s | HYDLNK",
   },
   description:
-    "Block layouts, a full theme system and your own domain — so your link page looks like your brand, not ours.",
+    "Pick a theme, add blocks and make your link page look like your brand, not ours. Free forever, with your own domain on Pro.",
   applicationName: "HYDLNK",
 };
 

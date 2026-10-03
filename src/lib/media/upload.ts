@@ -134,7 +134,7 @@ function isAlreadyStored(error: { message: string; statusCode?: string | number 
 /**
  * Reads the request body without ever holding more than `max` bytes: a declared Content-Length
  * over the cap is refused before a byte is read, and a body without one (chunked) is counted as it
- * streams and cancelled at the cap. Returns null when the body is over the cap.
+ * streams and canceled at the cap. Returns null when the body is over the cap.
  */
 async function readBodyCapped(request: Request, max: number): Promise<Uint8Array | null> {
   const declared = request.headers.get("content-length");

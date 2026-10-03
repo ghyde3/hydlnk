@@ -12,7 +12,7 @@ export const metadata: Metadata = marketingMetadata({
   path: "/faq",
   title: "FAQ",
   description:
-    "Short answers about HYDLNK: the free plan, handles, design tokens, custom domains, cookieless analytics, billing, safety and your account.",
+    "Short answers about HYDLNK: the free plan, handles, design options, custom domains, analytics without cookies, billing, safety and your account.",
   image: "faq",
 });
 

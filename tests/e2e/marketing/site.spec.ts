@@ -92,7 +92,7 @@ test("legal pages: last-updated date, a column no wider than 70 characters, link
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));
     await page.goto(url(null, path));
-    await expect(page.getByText(/^Last updated 2 October 2026$/)).toBeVisible();
+    await expect(page.getByText(/^Last updated October 2, 2026$/)).toBeVisible();
     await expect(page.locator("time[datetime='2026-10-02']")).toHaveCount(1);
     const fits = await page.locator(".prose-hl").evaluate((el) => {
       const context = document.createElement("canvas").getContext("2d")!;

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pageRow, seededUser } from "../m2/editor-helpers";
 import {
   computed,
@@ -86,7 +86,7 @@ test.describe("M3-08 colour tokens", () => {
       .poll(async () => (await liveHtml(user.handle)).includes("--t-accent:#C46A4F"))
       .toBe(true);
     const live = await context.newPage();
-    await live.goto(`http://${user.handle}.localhost:3000/`);
+    await live.goto(url(user.handle));
     expect(
       await live
         .locator(".pg-link[data-button-style='outline']")
@@ -108,7 +108,7 @@ test.describe("M3-08 colour tokens", () => {
       await expect(row(page, key)).toBeVisible();
       await expect(row(page, key)).toContainText(key);
       await expect(hexField(page, key)).toHaveValue(/^#[0-9A-F]{6}$/);
-      await expect(page.getByLabel(`${key} colour`, { exact: true })).toBeVisible();
+      await expect(page.getByLabel(`${key} color`, { exact: true })).toBeVisible();
     }
 
     // The hex field, typed lowercase without the hash: stored normalised to uppercase #RRGGBB.
@@ -118,13 +118,13 @@ test.describe("M3-08 colour tokens", () => {
     await expectOverrides(user.pageId, (o) => o.surface === "#A1B2C3");
 
     // The native colour input.
-    await page.getByLabel("text colour", { exact: true }).fill("#336699");
+    await page.getByLabel("text color", { exact: true }).fill("#336699");
     await expect.poll(() => previewVar(page, "--t-text")).toBe("#336699");
     await expectOverrides(user.pageId, (o) => o.text === "#336699");
 
     // '#12' shows the message, leaves the preview alone, and the draft keeps the last valid value.
     await hexField(page, "surface").fill("#12");
-    await expect(page.getByText("Enter a hex colour like #C9A86A.")).toBeVisible();
+    await expect(page.getByText("Enter a hex color like #C9A86A.")).toBeVisible();
     await expect(hexField(page, "surface")).toHaveAttribute("aria-invalid", "true");
     expect(await previewVar(page, "--t-surface")).toBe("#A1B2C3");
     await hexField(page, "surface").blur();
@@ -136,7 +136,7 @@ test.describe("M3-08 colour tokens", () => {
 
     // A valid value clears the message.
     await hexField(page, "surface").fill("#445566");
-    await expect(page.getByText("Enter a hex colour like #C9A86A.")).toHaveCount(0);
+    await expect(page.getByText("Enter a hex color like #C9A86A.")).toHaveCount(0);
     await expectOverrides(user.pageId, (o) => o.surface === "#445566");
   });
 

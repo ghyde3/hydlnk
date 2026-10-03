@@ -282,7 +282,7 @@ export default function PrivacyPage() {
         <strong>California residents</strong> have the right to know what personal information we
         collect and how we use it, to delete it, to correct it and not to be discriminated against
         for using these rights. We don’t sell personal information or share it for cross-context
-        behavioural advertising.
+        behavioral advertising.
       </p>
       <p>
         You can change or delete most information yourself in the editor, and delete your account

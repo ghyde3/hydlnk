@@ -129,7 +129,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       await writeDraft(a, doc("A", { ref: null, overrides: { bg: "red;}" } as never }));
       await expectStopped(a, {
         field: "theme.overrides.bg",
-        message: "Publish stopped: bg isn’t a valid colour. Reset it in Design.",
+        message: "Publish stopped: bg isn’t a valid color. Reset it in Design.",
         blockId: null,
       });
     });

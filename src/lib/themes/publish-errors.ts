@@ -6,7 +6,7 @@ import type { PublishError } from "@/lib/document";
  * expected number to be >=0"); this rewrites the ones about design values into what the person
  * can act on: which field, and how to fix it. Everything else passes through unchanged.
  *
- *   theme.overrides.bg        "Publish stopped: bg isn’t a valid colour. Reset it in Design."
+ *   theme.overrides.bg        "Publish stopped: bg isn’t a valid color. Reset it in Design."
  *   theme.overrides.fontBody  "Publish stopped: fontBody isn’t an available font. Reset it in Design."
  *   overrides.radius (block)  "Corner radius override isn’t valid. Use 0 to 32, or reset it."
  */
@@ -28,7 +28,7 @@ export const PUBLISH_STOPPED = "Publish stopped:";
 
 function themeFieldMessage(key: string): string {
   if (COLOR_TOKENS.has(key)) {
-    return `${PUBLISH_STOPPED} ${key} isn’t a valid colour. Reset it in Design.`;
+    return `${PUBLISH_STOPPED} ${key} isn’t a valid color. Reset it in Design.`;
   }
   if (FONT_TOKENS.has(key)) {
     return `${PUBLISH_STOPPED} ${key} isn’t an available font. Reset it in Design.`;
@@ -47,7 +47,7 @@ function blockFieldMessage(key: string): string {
     return "Button style isn’t valid. Pick one from the list, or reset it to the theme default.";
   }
   if (COLOR_TOKENS.has(key)) {
-    return "Color isn’t a valid colour. Use #RRGGBB, or reset it to the theme default.";
+    return "Color isn’t a valid hex color. Use #RRGGBB, or reset it to the theme default.";
   }
   return `Override ${key} isn’t valid. Reset it to the theme default.`;
 }

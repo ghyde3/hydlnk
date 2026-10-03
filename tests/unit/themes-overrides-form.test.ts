@@ -147,7 +147,7 @@ describe("M3-18 color and corner radius overrides", () => {
     const hex = field<HTMLInputElement>(host, "override-color");
     type(hex, "#C46");
     expect(latest.block).toBe(initial);
-    expect(host.textContent).toContain("Use a #RRGGBB colour");
+    expect(host.textContent).toContain("Use a #RRGGBB color");
     type(hex, "#c46a4f");
     expect((latest.block as LinkBlock).overrides).toEqual({
       buttonBg: "#C46A4F",

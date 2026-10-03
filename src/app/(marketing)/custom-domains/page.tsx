@@ -21,7 +21,7 @@ export const metadata: Metadata = marketingMetadata({
   path: "/custom-domains",
   title: "Custom domains",
   description:
-    "Serve your HYDLNK page from a domain you own, like links.yourbrand.com. Add one DNS record, we verify it and issue SSL automatically. How DNS, CNAME and A records work, step by step.",
+    "Serve your HYDLNK page from a domain you own, like links.yourbrand.com. Add one DNS record at your domain provider, and we check it and set up https for you. DNS, CNAME and A records explained step by step.",
   image: "domains",
 });
 
@@ -40,7 +40,7 @@ const STEPS = [
   },
   {
     title: "We check it for you",
-    body: "HYDLNK looks for the record and marks the domain Verified as soon as it finds it. Most changes show up within minutes; some providers take a few hours, and DNS can take up to 48 hours to reach everywhere. Check DNS now runs the check on demand.",
+    body: "HYDLNK looks for the record and marks the domain Verified as soon as it finds it. Most changes show up within minutes; some providers take a few hours, and DNS can take up to 48 hours to reach everywhere. Check DNS now runs the check right away.",
   },
   {
     title: "SSL is issued automatically",

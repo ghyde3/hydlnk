@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { FaqList } from "@/components/marketing/faq";
@@ -6,35 +7,38 @@ import { marketingMetadata } from "@/components/marketing/metadata";
 import { PageHero } from "@/components/marketing/page-hero";
 import { COMPARISON, PLANS } from "@/components/marketing/plans";
 import { PlanCards } from "@/components/marketing/pricing";
-import {
-  ArrowLink,
-  Check,
-  H2,
-  Section,
-  SectionIntro,
-} from "@/components/marketing/primitives";
+import { ArrowLink, Check, H2, Section, SectionIntro } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
-import {
-  monthlyText,
-  perMonthBilledYearlyText,
-  yearlyText,
-} from "@/lib/marketing/prices";
+import { monthlyText, perMonthBilledYearlyText, yearlyText } from "@/lib/marketing/prices";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/pricing",
   title: "Pricing",
-  description: `Free forever, with every block and the full theme system. Pro is ${monthlyText("pro")} or ${yearlyText("pro")} (${perMonthBilledYearlyText("pro")}) and connects a domain you own. Studio is ${monthlyText("studio")} or ${yearlyText("studio")}.`,
+  description: `Free forever, with every block and every design option. Pro is ${monthlyText("pro")} or ${yearlyText("pro")} (${perMonthBilledYearlyText("pro")}) and connects a domain you own. Studio is ${monthlyText("studio")} or ${yearlyText("studio")}.`,
   image: "pricing",
 });
 
+/** Lets "yourname.hydlnk.com" wrap before ".hydlnk.com" in a narrow cell instead of mid-word. */
+function breakBeforeDomain(value: string): ReactNode {
+  const at = value.indexOf(".hydlnk.com");
+  if (at <= 0) return value;
+  return (
+    <>
+      {value.slice(0, at)}
+      <wbr />
+      {value.slice(at)}
+    </>
+  );
+}
+
 const EVERY_PLAN = [
   "All nine blocks",
-  "All 23 design tokens and the system themes",
+  "Every design option and every theme",
   "Live phone preview and autosaved drafts",
   "yourname.hydlnk.com over https",
-  "Cookieless per-link analytics",
-  "No commerce fees, ever",
+  "Per-link analytics with no cookies",
+  "No cut of your sales, ever",
 ];
 
 const BILLING = [
@@ -47,7 +51,7 @@ const BILLING = [
     body: "Manage billing opens Stripe’s customer portal: change your card, download invoices, switch between monthly and yearly billing, or cancel.",
   },
   {
-    title: "Cancelling",
+    title: "Canceling",
     body: "Cancel whenever you like from the portal. Your paid plan stays active until the end of the period you’ve paid for, then the account moves to Free.",
   },
   {
@@ -63,7 +67,7 @@ export default function PricingPage() {
       <PageHero
         eyebrow="Pricing"
         title="Design is never the paywall."
-        lead="Every plan gets every block and the whole theme system. Upgrade when you want to connect a domain you own, more pages or a year of analytics. No commerce fees on any plan."
+        lead="Every plan gets every block and every design option. Upgrade when you want to connect a domain you own, more pages or a year of analytics. We never take a cut of your sales."
         secondary={{ href: "#compare", label: "Compare plans" }}
       />
 
@@ -124,7 +128,7 @@ export default function PricingPage() {
                       data-plan={PLANS[index]!.name}
                       className="px-4 py-3 text-text-2"
                     >
-                      {value}
+                      {breakBeforeDomain(value)}
                     </td>
                   ))}
                 </tr>

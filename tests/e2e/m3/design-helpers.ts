@@ -40,7 +40,7 @@ export async function showPreview(page: Page): Promise<void> {
 }
 
 export async function showTokens(page: Page): Promise<void> {
-  if (isPhone(page)) await page.getByRole("tab", { name: "Tokens" }).click();
+  if (isPhone(page)) await page.getByRole("tab", { name: "Style" }).click();
 }
 
 export const previewScreen = (page: Page): Locator => page.getByTestId("preview-screen");

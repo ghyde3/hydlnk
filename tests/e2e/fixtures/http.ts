@@ -1,5 +1,6 @@
 import http from "node:http";
 import type { BrowserContext, Cookie } from "@playwright/test";
+import { DEV_PORT } from "../helpers";
 import { publishableKey, supabaseUrl } from "./auth";
 
 /**
@@ -24,19 +25,24 @@ export interface RawResponse {
 
 /**
  * One request to the dev server on 127.0.0.1:3000 naming `host` (Node does not resolve *.localhost
- * reliably, Chromium does), redirects not followed. Pass `cookie` for a Cookie header.
+ * reliably, Chromium does), redirects not followed. Pass `cookie` for a Cookie header. With
+ * HL_DEV_PORT set (a second checkout on its own port) the request goes to that port and a host
+ * written as `name.localhost:3000` is sent as `name.localhost:<port>`, so no spec needs editing.
  */
 export function rawRequest(
   host: string,
   path: string,
   opts: { cookie?: string; method?: string; headers?: Record<string, string>; body?: string } = {},
 ): Promise<RawResponse> {
-  const headers: Record<string, string | number> = { Host: host, ...opts.headers };
+  const headers: Record<string, string | number> = {
+    Host: host.replace(/:3000$/, `:${DEV_PORT}`),
+    ...opts.headers,
+  };
   if (opts.cookie) headers.cookie = opts.cookie;
   if (opts.body !== undefined) headers["content-length"] = Buffer.byteLength(opts.body);
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { host: "127.0.0.1", port: 3000, path, method: opts.method ?? "GET", headers },
+      { host: "127.0.0.1", port: DEV_PORT, path, method: opts.method ?? "GET", headers },
       (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (chunk: Buffer) => chunks.push(chunk));

@@ -57,7 +57,7 @@ export const BlockRow = memo(function BlockRow({
   const panelDomId = `block-panel-${block.id}`;
 
   // Focus requests: a new block's first input (a divider: the row), a failed publish's first
-  // invalid input, the neighbour of a deleted row. Each also scrolls the target into view.
+  // invalid input, the neighbor of a deleted row. Each also scrolls the target into view.
   const nonce = focus?.nonce ?? null;
   useEffect(() => {
     if (!focus || nonce === null) return;

@@ -220,7 +220,7 @@ describe("M3-19 the grid and its states", () => {
     expect(cardNamed("Ivory").getAttribute("aria-pressed")).toBe("false");
     expect(tagOf("Ivory")).toBeNull();
     expect(host.querySelector("[data-status]")!.textContent).toBe("Theme · Noir");
-    expect(host.textContent).toContain("Applying one replaces page-level tokens");
+    expect(host.textContent).toContain("Applying one replaces your page’s own style changes");
   });
 
   it("an override makes the applied card Edited and the header says so", () => {

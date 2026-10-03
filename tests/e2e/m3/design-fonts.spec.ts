@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers } from "../fixtures/data";
-import { expectNoHorizontalScroll } from "../helpers";
+import { expectNoHorizontalScroll, url } from "../helpers";
 import { pageRow, seededUser } from "../m2/editor-helpers";
 import { FONT_ALLOWLIST } from "@/lib/theme";
 import {
@@ -127,7 +127,7 @@ test.describe("M3-09 font pickers", () => {
       .poll(async () => fontParams(await liveHtml(user.handle)).join("|"))
       .toBe("Fraunces|Inter");
     const live = await context.newPage();
-    await live.goto(`http://${user.handle}.localhost:3000/`);
+    await live.goto(url(user.handle));
     expect(await familyOf(live.locator(".pg-name"))).toMatch(/^"?Fraunces"?,\s*serif$/);
     expect(await familyOf(live.locator(".pg-bio"))).toMatch(/^"?Inter"?,\s*sans-serif$/);
     await live.close();

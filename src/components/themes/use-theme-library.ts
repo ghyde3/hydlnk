@@ -161,7 +161,7 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
   }, [token, sticky]);
 
   // Undo restores the theme as it was before the apply. Once the page's theme has been changed
-  // some other way (a colour edited, another theme applied) the Undo would throw that edit away,
+  // some other way (a color edited, another theme applied) the Undo would throw that edit away,
   // so it goes.
   const draftTheme = draft.theme;
   useEffect(() => {
