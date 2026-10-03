@@ -160,7 +160,7 @@ select results_eq(
   $$ select block_id, views, clicks, uniques from public.daily_stats
      where page_id = '00000000-0000-4000-8000-0000000000f1' and day = (now() at time zone 'utc')::date - 1
      order by block_id $$,
-  $$ values ('', 3, 0, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
+  $$ values ('', 3, 3, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
   'yesterday''s events are rolled up per page and block: counts and distinct visitors'
 );
 select is(
@@ -189,7 +189,7 @@ select results_eq(
   $$ select block_id, views, clicks, uniques from public.daily_stats
      where page_id = '00000000-0000-4000-8000-0000000000f1' and day = (now() at time zone 'utc')::date - 1
      order by block_id $$,
-  $$ values ('', 3, 0, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
+  $$ values ('', 3, 3, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
   'a re-run replaces the day''s rows instead of double counting'
 );
 

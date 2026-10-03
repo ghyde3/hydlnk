@@ -12,6 +12,8 @@
 #     src/lib/billing/prices.ts, never from these ids;
 #   * STRIPE_API_HOST points the Stripe SDK at the stub the billing specs start on 127.0.0.1:12111;
 #   * VERCEL_API_BASE_URL points the Vercel client at the stub Playwright starts on 127.0.0.1:12112;
+#   * CRON_SECRET / VISITOR_HASH_SECRET are fake local values: the first is the bearer token the cron
+#     routes check, the second salts the daily visitor hash. Production sets its own on Vercel;
 #   * NEXT_PUBLIC_GOOGLE_CLIENT_ID is a placeholder client id (public, not secret): it makes the Google
 #     button render so the Playwright specs, which stub Google's script, can exercise it. Google's
 #     real script answers it with an error, so use a real id only to try the real popup.
@@ -45,6 +47,8 @@ VERCEL_API_TOKEN=local_placeholder_not_a_real_token
 VERCEL_PROJECT_ID=prj_local_placeholder
 VERCEL_TEAM_ID=team_local_placeholder
 VERCEL_API_BASE_URL=http://127.0.0.1:12112
+CRON_SECRET=local-placeholder-cron-secret-not-a-real-secret
+VISITOR_HASH_SECRET=local-placeholder-visitor-hash-secret-not-real
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=local-placeholder-client-id.apps.googleusercontent.com
 EOF_PLACEHOLDERS
   chmod 600 "$file"

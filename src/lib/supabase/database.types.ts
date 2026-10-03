@@ -99,6 +99,41 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_dim_stats: {
+        Row: {
+          clicks: number
+          day: string
+          dim: string
+          page_id: string
+          value: string
+          views: number
+        }
+        Insert: {
+          clicks?: number
+          day: string
+          dim: string
+          page_id: string
+          value: string
+          views?: number
+        }
+        Update: {
+          clicks?: number
+          day?: string
+          dim?: string
+          page_id?: string
+          value?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_dim_stats_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_stats: {
         Row: {
           block_id: string
@@ -139,6 +174,8 @@ export type Database = {
           created_at: string
           hostname: string
           id: string
+          last_checked_at: string | null
+          live_email_sent_at: string | null
           page_id: string
           status: string
           updated_at: string
@@ -148,6 +185,8 @@ export type Database = {
           created_at?: string
           hostname: string
           id?: string
+          last_checked_at?: string | null
+          live_email_sent_at?: string | null
           page_id: string
           status?: string
           updated_at?: string
@@ -157,6 +196,8 @@ export type Database = {
           created_at?: string
           hostname?: string
           id?: string
+          last_checked_at?: string | null
+          live_email_sent_at?: string | null
           page_id?: string
           status?: string
           updated_at?: string
@@ -301,6 +342,24 @@ export type Database = {
           },
         ]
       }
+      rate_limit_hits: {
+        Row: {
+          bucket: string
+          hit_at: string
+          id: number
+        }
+        Insert: {
+          bucket: string
+          hit_at?: string
+          id?: never
+        }
+        Update: {
+          bucket?: string
+          hit_at?: string
+          id?: never
+        }
+        Relationships: []
+      }
       report_attempts: {
         Row: {
           bucket: string
@@ -443,6 +502,44 @@ export type Database = {
           },
         ]
       }
+      traffic_flags: {
+        Row: {
+          flagged_at: string
+          id: string
+          page_id: string
+          reviewed_at: string | null
+          views: number
+          window_end: string
+          window_start: string
+        }
+        Insert: {
+          flagged_at?: string
+          id?: string
+          page_id: string
+          reviewed_at?: string | null
+          views: number
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          flagged_at?: string
+          id?: string
+          page_id?: string
+          reviewed_at?: string | null
+          views?: number
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "traffic_flags_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -479,6 +576,23 @@ export type Database = {
           total_count: number
         }[]
       }
+      admin_traffic_flags: {
+        Args: { p_limit?: number; p_offset?: number; p_reviewed?: boolean }
+        Returns: {
+          flag_id: string
+          flagged_at: string
+          handle: string
+          owner_email: string
+          owner_id: string
+          page_id: string
+          plan: string
+          reviewed_at: string
+          total_count: number
+          views: number
+          window_end: string
+          window_start: string
+        }[]
+      }
       apply_subscription_state: {
         Args: {
           p_account_id: string
@@ -503,6 +617,13 @@ export type Database = {
       }
       blocklist_pct_decode: { Args: { p_text: string }; Returns: string }
       blocklist_url_host: { Args: { p_url: string }; Returns: string }
+      claim_domain_check: {
+        Args: { p_cooldown_seconds?: number; p_id: string }
+        Returns: boolean
+      }
+      claim_domain_live_email: { Args: { p_id: string }; Returns: boolean }
+      flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
+      mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
       media_paths_in_use: {
         Args: { p_paths: string[]; p_uid: string }
@@ -526,11 +647,21 @@ export type Database = {
           max_upload_bytes: number
         }[]
       }
+      purge_old_events: { Args: never; Returns: number }
+      rate_limit_hit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
+        Returns: {
+          allowed: boolean
+          retry_after: number
+        }[]
+      }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
         Returns: Json
       }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
+      rollup_recent_days: { Args: { n: number }; Returns: number }
+      run_domain_verification_sweep: { Args: never; Returns: undefined }
       run_nightly_maintenance: { Args: never; Returns: undefined }
       submit_report: {
         Args: {

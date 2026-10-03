@@ -135,7 +135,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 
 - **Images.** Resize and convert to WebP on upload (backgrounds 1600px max, avatars 400px), serve with long cache headers. No per-request image optimization.
 - **No video uploads.** Video is embed-only.
-- **Tracking routes.** Rate-limit `/api/e` and `/r` per IP (mechanism still open); drop bots before insert.
+- **Tracking routes.** Rate-limit `/api/e` and `/r` per IP (120 and 60 a minute, a Postgres sliding window: see the Decided entry "Rate limiting"); drop bots before insert.
 - **High-traffic flag.** Nightly job flags Free pages over ~100k views/month for review. They keep serving.
 - **Spend alerts.** Vercel Spend Management needs Pro, so set alerts up with the move to Pro. Supabase is on a free project for now; it pauses after 7 days of low activity.
 
@@ -158,11 +158,11 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Scheduled links are out of v1.
 - Theme changes wait for Publish: applying or editing a theme only changes drafts.
 - Migrations reach production through Claude's `release` step, with Gary approving each push; unattended sessions never touch production.
+- Rate limiting (2026-10-03): one `rateLimit(key, limit, windowSeconds)` function (`src/lib/rate-limit/`) backed by Postgres, a sliding window of one row per counted request behind a single `rate_limit_hit` RPC (migration `20261004000003_rate_limit.sql`), called with the secret key only. It guards the view beacon `/api/e` (120 per minute per IP) and the click redirect `/r` (60 per minute per IP); uploads and reports keep their own database limiters until they are worth porting. Why Postgres: it works unchanged in local dev, in Playwright and in production (the acceptance steps can run against it), it adds no paid service or secret (Upstash and Redis were rejected for that reason), and it counts exactly, which a fixed window or a platform rule cannot. Keys are hashed (HMAC under `VISITOR_HASH_SECRET`), so no IP address is stored; the key is the platform client IP (the IPv6 /64), with one shared `unknown` bucket when there is none; a limiter failure lets the request through (logged) and never breaks a page view or a click. A Vercel Firewall rate-limit rule may sit in front as a coarse backstop; it is not the limiter. Revisit (an edge store) if the limiter's writes ever show up in Supabase load.
 
 ## Open
 
 - Final prices for Pro and Studio.
 - Auth email provider. Supabase's built-in email only reaches the team's own addresses (about 2 per hour), which is fine while Gary is the only user. Custom SMTP (Resend recommended) must be in place before signup opens.
-- Rate-limit mechanism for `/api/e` and `/r` (Vercel Firewall, Redis, or Postgres); decide in Milestone 5.
 - Custom domain for Supabase Auth (a paid Supabase add-on). Until then, sign-in emails and Google's consent screen show the `supabase.co` address.
 - Publish the Google OAuth app before signup opens. It's in Testing, so only listed test users can sign in with Google.
