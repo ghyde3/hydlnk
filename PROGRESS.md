@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-03 — Release: marketing v3
+
+- PR #13 merged, merge commit bbe7834. No migrations. Deployment https://vercel.com/ghyde3s-projects/hydlnk/AvoA53D7CCHL8MU5sr3W31UBi56t (success).
+- Checks: `pnpm verify` PASS (3491 unit, pgTAP PASS); CI Verify green; marketing + landing browser specs 177 passed after merging Wave E in; full browser suite deferred per Gary; `pnpm test:e2e:prod` 12/12; live: /, /link-in-bio, /link-in-bio/tiktok, /link-in-bio/musicians, /design-control, /sitemap.xml all 200, home shows the claim panel and the try-it builder.
+- Also in this PR: /release can now be run by the orchestrator under Gary's standing approval (interactive sessions only), with migrations through release-migrations.yml.
+- Known issues: the hero showreel video still shows "Every choice is a token." (needs a re-render).
+
 ## 2026-10-03 — Release: Wave E (custom domains and analytics)
 
 - PR #12 merged, merge commit ce546bb. Migrations applied through the release-migrations workflow (run 37098223967): 20261004000001_domains, 20261004000002_analytics, 20261004000003_rate_limit, 20261004000004_traffic_flags, 20261004000005_admin_audit_traffic. Deployment https://vercel.com/ghyde3s-projects/hydlnk/J3ZHGcNzZus49axTCYmsyVeS9Xkz (success).
