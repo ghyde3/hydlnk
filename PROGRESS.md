@@ -2,6 +2,14 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-03 — Release: Waves G and H (links, media and design)
+
+- PR #15 merged, merge commit bd0f549. Migrations applied through release-migrations.yml (run 37131842453): 20261006000000_gradient_tokens (additive backfill of three gradient keys on complete token sets), 20261006000001_more_themes, 20261006000002_page_versions (plan_limits dropped and recreated with one more column, same grants), 20261006000040_text_link_blocklist. Deployment https://vercel.com/ghyde3s-projects/hydlnk/58DtdJ3kHeLDU9uwE1Pnw8FVrvCa (success).
+- The one full browser-suite pass Gary asked for after Wave H: run 37129892154, all four shards and Verify green (earlier runs found and fixed: M2-26 extra read from the editor's OG preview racing the query counter, M5-24 American date, M6-03 swipe on CI headless Chrome, M6-07 dropped key press, CI dev-server start timeout).
+- Checks: `pnpm verify` PASS after `pnpm db:reset` (5349 unit, 1274 pgTAP; the first run failed only on leftover local e2e rows: 060 test 20 and 135 test 1); `pnpm test:e2e:prod` 12/12; live /features lists the QR code, version history and SoundCloud.
+- The nightly full browser suite is back on (ci.yml schedule restored).
+- Known: the hero showreel video still says "Every choice is a token." (needs a re-render).
+
 ## 2026-10-03 — Waves G+H security review fixes
 
 - **Asked by Gary (2026-10-03, fast track):** fix the Waves G+H security-review findings (five, all low) on `m7-links-design`, a test first for each. No feature flag changed; nothing merged, nothing released.
