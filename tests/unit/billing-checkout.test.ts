@@ -32,10 +32,31 @@ Object.assign(process.env, ENV);
 
 let account: { id: string; plan: string; stripe_customer_id: string | null } | null;
 const accountReads = vi.fn();
+/** Customer ids the fake Stripe does not know (a sandbox id after the switch to live). */
+let missingCustomers: string[] = [];
+const dbWrites: { update: Record<string, unknown>; filters: [string, unknown][] }[] = [];
 vi.mock("@/lib/billing/account", () => ({
-  billingDb: () => {
-    throw new Error("the database must not be written here");
-  },
+  billingDb: () => ({
+    from: () => ({
+      update: (update: Record<string, unknown>) => {
+        const write = { update, filters: [] as [string, unknown][] };
+        dbWrites.push(write);
+        const chain = {
+          eq: (column: string, value: unknown) => {
+            write.filters.push([column, value]);
+            if (column === "id" && update.stripe_customer_id && account) {
+              account = { ...account, stripe_customer_id: update.stripe_customer_id as string };
+            }
+            return Object.assign(chain, { error: null });
+          },
+          is: () => chain,
+          select: async () => ({ error: null, data: [update] }),
+          error: null,
+        };
+        return chain;
+      },
+    }),
+  }),
   readBillingAccount: async (id: string) => {
     accountReads(id);
     return account;
@@ -52,6 +73,17 @@ const log: string[] = [];
 const created: Record<string, unknown>[] = [];
 
 const stripe = {
+  customers: {
+    retrieve: vi.fn(async (id: string) => {
+      if (missingCustomers.includes(id))
+        throw Object.assign(new Error(`No such customer: '${id}'`), { code: "resource_missing" });
+      return { id };
+    }),
+    create: vi.fn(async (_params: unknown, options: { idempotencyKey: string }) => {
+      log.push(`customers.create ${options.idempotencyKey}`);
+      return { id: "cus_unit_live" };
+    }),
+  },
   subscriptions: {
     list: vi.fn(async (params: { customer: string; status: string; starting_after?: string }) => {
       log.push(`subscriptions.list ${params.customer} ${params.status}`);
@@ -121,7 +153,11 @@ beforeEach(() => {
   log.length = 0;
   created.length = 0;
   accountReads.mockClear();
+  missingCustomers = [];
+  dbWrites.length = 0;
   for (const fn of [
+    stripe.customers.retrieve,
+    stripe.customers.create,
     stripe.subscriptions.list,
     stripe.checkout.sessions.list,
     stripe.checkout.sessions.retrieve,
@@ -140,6 +176,35 @@ afterEach(() => {
 
 const { startCheckout } = await import("@/lib/billing/checkout");
 const user = { id: ACCOUNT, email: "someone@example.test" };
+
+describe("a stored customer Stripe does not know is replaced", () => {
+  it("clears exactly the stale id, creates a new customer and checks out with it", async () => {
+    missingCustomers = [CUSTOMER];
+    const result = await startCheckout(user, "pro", "month");
+    expect(result).toEqual({ ok: true, url: "https://checkout.stripe.test/c/pay/cs_test_new" });
+    expect(dbWrites[0]).toEqual({
+      update: { stripe_customer_id: null },
+      filters: [
+        ["id", ACCOUNT],
+        ["stripe_customer_id", CUSTOMER],
+      ],
+    });
+    expect(log).toContain(`customers.create hydlnk-customer-${ACCOUNT}-after-${CUSTOMER}`);
+    expect(created[0]).toMatchObject({ customer: "cus_unit_live" });
+  });
+
+  it("keeps a customer Stripe knows and writes nothing", async () => {
+    await startCheckout(user, "pro", "month");
+    expect(dbWrites).toHaveLength(0);
+    expect(stripe.customers.create).not.toHaveBeenCalled();
+  });
+
+  it("any other failure looking up the customer stops the checkout", async () => {
+    stripe.customers.retrieve.mockRejectedValueOnce(new Error("stripe down"));
+    await expect(startCheckout(user, "pro", "month")).rejects.toThrow("stripe down");
+    expect(stripe.checkout.sessions.create).not.toHaveBeenCalled();
+  });
+});
 
 describe("M4-06 a second subscription cannot be started", () => {
   for (const status of ["active", "trialing", "past_due", "incomplete"]) {
