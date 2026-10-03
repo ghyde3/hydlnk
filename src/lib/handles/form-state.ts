@@ -20,6 +20,8 @@ export type HandleFormState =
 export const IDLE_FORM_STATE: HandleFormState = { kind: "idle" };
 
 export const RATE_LIMITED_MESSAGE = "You can request another link in a minute.";
+/** Supabase's hourly email limit answered (M5-20): waiting a minute will not help. */
+export { TOO_MANY_EMAILS_MESSAGE } from "@/lib/auth/otp-error";
 export const SEND_FAILED_MESSAGE = "We couldn’t send the link. Try again in a moment.";
 export const CHECK_UNAVAILABLE_MESSAGE = "Couldn’t check that handle. Try again.";
 export const CLAIM_FAILED_MESSAGE = "Couldn’t claim that handle. Try again.";

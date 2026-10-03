@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { SAVED_THEMES_HINT, THEMES_LOAD_FAILED_MESSAGE } from "@/lib/editor/messages";
+import { ownThemes } from "@/lib/themes";
 import { DeleteThemeDialog } from "./delete-theme-dialog";
 import { ThemeCard } from "./theme-card";
 import type { ThemeLibrary, ThemeMessage } from "./use-theme-library";
@@ -17,7 +19,17 @@ import type { ThemeLibrary, ThemeMessage } from "./use-theme-library";
  * tab bar, where the editor's own toasts sit; errors and the limit message stay in the card, with
  * a 44px Dismiss.
  */
-export function SavedThemesCard({ library }: { library: ThemeLibrary }) {
+export function SavedThemesCard({
+  library,
+  loadFailed,
+}: {
+  library: ThemeLibrary;
+  /**
+   * Set when the server could not read the themes (M5-16): the row says so and offers Retry instead
+   * of the grid, and nothing else on the screen changes.
+   */
+  loadFailed?: { onRetry: () => void; retrying: boolean } | null | undefined;
+}) {
   const { themes, applied, edited } = library;
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -50,7 +62,26 @@ export function SavedThemesCard({ library }: { library: ThemeLibrary }) {
         {library.message ? <Message message={library.message} library={library} /> : null}
       </div>
 
-      {applied && !applied.system && edited ? (
+      {loadFailed ? (
+        <div
+          role="alert"
+          data-testid="themes-load-error"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-bad-line bg-surface py-1 pr-1 pl-4 text-sm text-bad"
+        >
+          <span className="min-w-0 flex-1 basis-[200px] py-2">{THEMES_LOAD_FAILED_MESSAGE}</span>
+          <button
+            type="button"
+            onClick={loadFailed.onRetry}
+            disabled={loadFailed.retrying}
+            aria-busy={loadFailed.retrying || undefined}
+            className={`${DISMISS} disabled:cursor-progress disabled:opacity-70`}
+          >
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      {!loadFailed && applied && !applied.system && edited ? (
         <div>
           <button
             type="button"
@@ -65,9 +96,10 @@ export function SavedThemesCard({ library }: { library: ThemeLibrary }) {
       ) : null}
 
       <ul
-        className="m-0 grid list-none gap-2 p-0"
+        className="m-0 grid list-none gap-2 p-0 empty:hidden"
         style={{ gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))" }}
         data-testid="theme-grid"
+        hidden={loadFailed ? true : undefined}
       >
         {themes.map((theme) => (
           <ThemeCard
@@ -83,6 +115,12 @@ export function SavedThemesCard({ library }: { library: ThemeLibrary }) {
           />
         ))}
       </ul>
+
+      {!loadFailed && ownThemes(themes).length === 0 ? (
+        <p data-testid="saved-themes-hint" className="m-0 text-[13px] leading-normal text-text-2">
+          {SAVED_THEMES_HINT}
+        </p>
+      ) : null}
 
       {deleting ? (
         <DeleteThemeDialog

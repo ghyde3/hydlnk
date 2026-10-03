@@ -103,7 +103,11 @@ describe("M4-01 the Stripe client refuses live keys", () => {
   it("sdkHostOptions: default host untouched, loopback is http, any other host is https", async () => {
     const { sdkHostOptions } = await import("@/lib/billing/env");
     expect(sdkHostOptions("api.stripe.com")).toEqual({});
-    expect(sdkHostOptions("127.0.0.1:12111")).toEqual({ host: "127.0.0.1", port: 12111, protocol: "http" });
+    expect(sdkHostOptions("127.0.0.1:12111")).toEqual({
+      host: "127.0.0.1",
+      port: 12111,
+      protocol: "http",
+    });
     expect(sdkHostOptions("localhost:9")).toEqual({ host: "localhost", port: 9, protocol: "http" });
     expect(sdkHostOptions("stub.example.com:8443")).toEqual({
       host: "stub.example.com",
@@ -117,6 +121,8 @@ describe("STRIPE_LIVE_MODE decides which keys the Stripe client may be built wit
   const LIVE = "sk_live_abcdefghijklmnop";
   const TEST = "sk_test_abcdefghijklmnop";
   const build = async (env: Record<string, string | undefined>) => {
+    // The production deployment has the real root domain (a localhost one is refused there).
+    if (env.VERCEL_ENV === "production") process.env.NEXT_PUBLIC_ROOT_DOMAIN = "hydlnk.com";
     for (const [name, value] of Object.entries(env)) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
@@ -126,7 +132,11 @@ describe("STRIPE_LIVE_MODE decides which keys the Stripe client may be built wit
   };
 
   it("a live key with STRIPE_LIVE_MODE=true on VERCEL_ENV=production builds a client against the real host", async () => {
-    const client = await build({ STRIPE_SECRET_KEY: LIVE, STRIPE_LIVE_MODE: "true", VERCEL_ENV: "production" });
+    const client = await build({
+      STRIPE_SECRET_KEY: LIVE,
+      STRIPE_LIVE_MODE: "true",
+      VERCEL_ENV: "production",
+    });
     expect(client.getApiField("host")).toBe("api.stripe.com");
   });
 
@@ -156,9 +166,11 @@ describe("STRIPE_LIVE_MODE decides which keys the Stripe client may be built wit
 
   it("a test key still builds in test mode, on production too (everything else behaves as before)", async () => {
     for (const vercelEnv of [undefined, "preview", "production"]) {
-      expect((await build({ STRIPE_SECRET_KEY: TEST, STRIPE_LIVE_MODE: "false", VERCEL_ENV: vercelEnv })).getApiField("host")).toBe(
-        "api.stripe.com",
-      );
+      expect(
+        (
+          await build({ STRIPE_SECRET_KEY: TEST, STRIPE_LIVE_MODE: "false", VERCEL_ENV: vercelEnv })
+        ).getApiField("host"),
+      ).toBe("api.stripe.com");
     }
   });
 

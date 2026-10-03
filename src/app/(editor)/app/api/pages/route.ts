@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { ACCOUNT_SUSPENDED_CODE } from "@/lib/admin/suspension";
 import { clientEnv } from "@/lib/env/client";
 import { createPage } from "@/lib/pages/create-page";
 import { CREATE_FAILED_MESSAGE } from "@/lib/pages/create-page-core";
@@ -54,8 +55,13 @@ export async function POST(request: NextRequest) {
   try {
     const result = await createPage(user.id, handle);
     if (!result.ok) {
+      // A suspended owner also gets the stable `code` (M5-09); `error` keeps its older word.
       return NextResponse.json(
-        { error: result.error, message: result.message },
+        {
+          error: result.error,
+          message: result.message,
+          ...(result.error === "suspended" ? { code: ACCOUNT_SUSPENDED_CODE } : {}),
+        },
         { status: result.status, headers: NO_STORE },
       );
     }

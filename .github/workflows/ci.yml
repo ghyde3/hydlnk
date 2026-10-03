@@ -26,7 +26,7 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -103,7 +103,8 @@ jobs:
 
       # The Vitest files that need the running stack (M1-05 ensureAccount, M2-23/M2-25 the publish
       # gate, the seeded mara rows, the system themes, the token and theme publish gate, the plan
-      # limits parity, page create and delete, and the upload quota, all against the real database)
+      # limits parity, page create and delete, the upload quota, the link blocklist and its Publish
+      # gate, and the admin suspension and its audit, all against the real database)
       # are skipped by the unit step
       # above. REQUIRE_SUPABASE=1 makes a missing stack fail here instead of skipping.
       - name: Integration tests (Vitest against local Supabase)
@@ -119,6 +120,11 @@ jobs:
           tests/unit/limits-parity.test.ts
           tests/unit/limits-pages.test.ts
           tests/unit/limits-upload-stack.test.ts
+          tests/unit/blocklist-matching.test.ts
+          tests/unit/blocklist-gate.test.ts
+          tests/unit/reports-footer.test.ts
+          tests/unit/admin-actions.test.ts
+          tests/unit/admin-suspension.test.ts
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
@@ -127,11 +133,12 @@ jobs:
       - name: End-to-end tests
         run: pnpm test:e2e
 
-      # M2-26, M4-08 and M4-19 need a production build: x-nextjs-cache only exists there; the second server
+      # M2-26, M4-08, M4-19 and M5-08 need a production build: x-nextjs-cache only exists there (a suspended
+      # page must answer 404 at once and the live page again after unsuspend, with the cache in front); the second server
       # (PAID_PLANS_OPEN=false) is the only way to see that startup setting in a browser. The root domain is baked
       # into the build, so the port in it is the server's port; the dev server that Playwright starts
       # on :3000 (no such variables) is only used to sign users in. See the header of the spec.
-      - name: Production build, cache checks and the closed-plans switch (M2-26, M4-08, M4-19)
+      - name: Production build, cache checks and the closed-plans switch (M2-26, M4-08, M4-19, M5-08)
         run: |
           mkdir -p tmp
           NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build
@@ -168,7 +175,7 @@ jobs:
           }
           trap 'kill "$prod_pid" 2>/dev/null || true' EXIT
           start_prod tmp/start-3100.log
-          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts tests/e2e/m4/billing-badge.spec.ts
+          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts tests/e2e/m4/billing-badge.spec.ts tests/e2e/m5/suspend-cache.spec.ts
           # PAID_PLANS_OPEN is read when the server starts: stop this one, start the same build with the
           # plans closed and run its spec.
           stop_prod

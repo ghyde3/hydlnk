@@ -414,6 +414,81 @@ describe.skipIf(!run)(
       expect(domains.count).toBe(1);
     });
 
+    it("M5-09 a suspended owner cannot delete a page: 403 account_suspended, nothing is removed upstream or deleted, the suspension stays; unsuspended, the same call works", async () => {
+      const o = await owner("sd", "pro");
+      const extra = await secondPage(o, "sd2");
+      await addDomain(extra.pageId, `${rand(8)}.suspended.example.com`);
+      const stamp = new Date().toISOString();
+      await admin.from("accounts").update({ suspended_at: stamp }).eq("id", o.userId);
+      const removeDomain = vi.fn(async () => undefined);
+
+      const refused = await deletePageWithClient(
+        admin as never,
+        { userId: o.userId, pageId: extra.pageId, confirm: extra.handle },
+        { removeDomain },
+      );
+      expect(refused).toMatchObject({ ok: false, status: 403, error: "account_suspended" });
+      expect(removeDomain).not.toHaveBeenCalled();
+      expect(await pageExists(extra.pageId)).toBe(true);
+      expect(await pageExists(o.pageId)).toBe(true);
+      const account = await admin
+        .from("accounts")
+        .select("suspended_at")
+        .eq("id", o.userId)
+        .single();
+      expect(account.data?.suspended_at).not.toBeNull();
+
+      // Not even a malformed id or a wrong confirmation gets past the suspension check first.
+      const malformed = await deletePageWithClient(
+        admin as never,
+        { userId: o.userId, pageId: "nope", confirm: "x" },
+        { removeDomain },
+      );
+      expect(malformed).toMatchObject({ ok: false, status: 403, error: "account_suspended" });
+
+      await admin.from("accounts").update({ suspended_at: null }).eq("id", o.userId);
+      const allowed = await deletePageWithClient(
+        admin as never,
+        { userId: o.userId, pageId: extra.pageId, confirm: extra.handle },
+        { removeDomain },
+      );
+      expect(allowed).toMatchObject({ ok: true, handle: extra.handle });
+      expect(await pageExists(extra.pageId)).toBe(false);
+    });
+
+    it("M5-09 a user with no account row, and a failed account read, also cannot delete a page", async () => {
+      const o = await owner("sg", "pro");
+      const ghost = await deletePageWithClient(
+        admin as never,
+        { userId: "00000000-0000-4000-8000-00000000dead", pageId: o.pageId, confirm: o.handle },
+        NO_REMOVAL,
+      );
+      expect(ghost).toMatchObject({ ok: false, status: 403, error: "account_suspended" });
+      expect(await pageExists(o.pageId)).toBe(true);
+
+      const broken = {
+        from: (table: string) => {
+          if (table !== "accounts")
+            return (admin as never as { from: (t: string) => unknown }).from(table);
+          const chain = {
+            select: () => chain,
+            eq: () => chain,
+            maybeSingle: async () => ({ data: null, error: { message: "down" } }),
+          };
+          return chain;
+        },
+      };
+      const quiet = vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const failed = await deletePageWithClient(
+        broken as never,
+        { userId: o.userId, pageId: o.pageId, confirm: o.handle },
+        NO_REMOVAL,
+      );
+      quiet.mockRestore();
+      expect(failed).toMatchObject({ ok: false, status: 500, error: "delete_failed" });
+      expect(await pageExists(o.pageId)).toBe(true);
+    });
+
     it("M4-19 an unknown, malformed or non-string page id is a 404", async () => {
       const o = await owner("ma", "free");
       for (const pageId of [

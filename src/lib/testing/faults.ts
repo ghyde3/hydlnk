@@ -1,0 +1,42 @@
+import "server-only";
+import { cookies } from "next/headers";
+
+/**
+ * Fault injection for the end-to-end specs, and nothing else (M5-15, M5-16, M5-20).
+ *
+ * A server component's Supabase request is made by the Next.js server, so a Playwright route cannot
+ * abort it the way it aborts a browser request. To prove the failure screens (the editor that cannot
+ * load its draft, the themes row that cannot load, the route that throws) a spec sets the `hl-fault`
+ * cookie on the app host to a comma-separated list of the names below, and the server code that owns
+ * the load calls `failIfInjected(name)` right before it.
+ *
+ * It does nothing outside development and test: with NODE_ENV=production (every Vercel build,
+ * preview and production alike, and `next start`) `injectedFault` is false whatever the cookie says,
+ * and the bundler removes the cookie read. The cookie is read only on the app host, whose pages
+ * already read the session cookie, so no page becomes dynamic because of it.
+ */
+export const FAULT_COOKIE = "hl-fault";
+
+export type FaultName =
+  /** The editor's and Design's own draft read fails. */
+  | "draft-load"
+  /** The saved-themes read on Design fails (the draft loads). */
+  | "themes-load"
+  /** A route throws while it renders: the error boundary shows. */
+  | "route-throw";
+
+export function faultsEnabled(): boolean {
+  return process.env.NODE_ENV !== "production";
+}
+
+/** True when the request carries the fault cookie naming `name`, and faults are enabled. */
+export async function injectedFault(name: FaultName): Promise<boolean> {
+  if (!faultsEnabled()) return false;
+  const value = (await cookies()).get(FAULT_COOKIE)?.value ?? "";
+  return value.split(",").includes(name);
+}
+
+/** Throws the error a failed read would throw, when the fault is injected. A no-op otherwise. */
+export async function failIfInjected(name: FaultName): Promise<void> {
+  if (await injectedFault(name)) throw new Error(`Injected fault: ${name}`);
+}

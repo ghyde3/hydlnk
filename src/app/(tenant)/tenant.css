@@ -217,6 +217,7 @@ body {
  * component (see unclaimed-panel.tsx), so no HYDLNK color ever sits in this shared stylesheet.
  */
 .tenant-unclaimed {
+  box-sizing: border-box;
   min-height: 100dvh;
   display: flex;
   align-items: center;
@@ -257,6 +258,7 @@ body {
 }
 
 .tenant-unclaimed-link {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;

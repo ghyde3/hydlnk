@@ -265,7 +265,10 @@ test.describe("M4-06 the Checkout endpoint (API)", () => {
       context,
     }) => {
       // The webhook has not caught up yet: the database still says Free.
-      const user = await billingUser(context, { label: `co-live-${status.replace("_", "-")}`, customer: true });
+      const user = await billingUser(context, {
+        label: `co-live-${status.replace("_", "-")}`,
+        customer: true,
+      });
       await addStubSubscription({
         id: `sub_zq${Math.random().toString(36).slice(2, 12)}`,
         customer: user.customer!,
@@ -330,7 +333,9 @@ test.describe("M4-06 the Checkout endpoint (API)", () => {
     const user = await billingUser(context, { label: "co-expire", customer: true });
     const open = [await addStubSession(user.customer!), await addStubSession(user.customer!)];
     const complete = await addStubSession(user.customer!, "complete");
-    const elsewhere = await addStubSession(`cus_zq_other_${Math.random().toString(36).slice(2, 8)}`);
+    const elsewhere = await addStubSession(
+      `cus_zq_other_${Math.random().toString(36).slice(2, 8)}`,
+    );
 
     const response = await checkout(context, { plan: "studio", interval: "month" });
     expect(response.status).toBe(303);
@@ -420,7 +425,7 @@ test.describe("M4-06 the Checkout endpoint (API)", () => {
       { "sec-fetch-mode": "navigate" },
     );
     expect(navigation.status).toBe(303);
-    expect(navigation.location).toBe(`${APP_ORIGIN}/settings?billing_error=stripe_unavailable`);
+    expect(navigation.location).toBe(`${APP_ORIGIN}/settings?billing_error=checkout_failed`);
     // The retry works once Stripe recovers.
     expect((await checkout(context, { plan: "pro", interval: "month" })).status).toBe(303);
   });
@@ -532,7 +537,10 @@ test.describe("M4-06 a second upgrade is not offered while the first is being co
     await expectNoHorizontalScroll(page);
   });
 
-  test("M4-06 ?checkout=canceled and a plain visit still offer Upgrade", async ({ page, context }) => {
+  test("M4-06 ?checkout=canceled and a plain visit still offer Upgrade", async ({
+    page,
+    context,
+  }) => {
     await billingUser(context, { label: "ui-notpending" });
     for (const query of ["?checkout=canceled", ""]) {
       await page.goto(returnPage(query));

@@ -17,7 +17,7 @@ import {
 const BOX =
   "flex items-start gap-2.5 rounded-md border bg-surface px-3.5 py-3 text-sm leading-normal";
 
-function Notice({ plan }: { plan: string }) {
+function Notice({ plan, supportEmail }: { plan: string; supportEmail?: string | undefined }) {
   const router = useRouter();
   const params = useSearchParams();
   const checkout = parseCheckoutReturn(params.get(CHECKOUT_PARAM));
@@ -73,7 +73,22 @@ function Notice({ plan }: { plan: string }) {
         className={`${BOX} border-line text-ink`}
       >
         <span aria-hidden="true" className="mt-[7px] inline-block size-1.5 shrink-0 bg-brass" />
-        <span>{slow ? CHECKOUT_SLOW : CHECKOUT_CONFIRMING}</span>
+        <span>
+          {slow ? CHECKOUT_SLOW : CHECKOUT_CONFIRMING}
+          {slow && supportEmail ? (
+            <>
+              {" "}
+              If it persists, contact{" "}
+              <a
+                href={`mailto:${supportEmail}`}
+                className="font-semibold underline underline-offset-2"
+              >
+                {supportEmail}
+              </a>
+              .
+            </>
+          ) : null}
+        </span>
       </div>
     );
   }
@@ -84,14 +99,22 @@ function Notice({ plan }: { plan: string }) {
  * The notice at the top of Settings & billing for what a trip to Stripe left behind (M4-06):
  * "Confirming your upgrade" (aria-live polite) while the page re-reads the account every 2
  * seconds for up to 30 seconds, the "taking longer than usual" sentence after that,
+ * (followed by "If it persists, contact {SUPPORT_EMAIL}." when the page passes the address),
  * "Checkout canceled. Your plan hasn’t changed." after a canceled Checkout, and the message for a
  * billing form that failed (`?billing_error=`). `plan` is the plan the server read from the
  * database for this render; the URL never decides it.
  */
-export function CheckoutReturnNotice({ plan }: { plan: string }) {
+export function CheckoutReturnNotice({
+  plan,
+  supportEmail,
+}: {
+  plan: string;
+  /** Where "This is taking longer than usual" sends the reader (the server's SUPPORT_EMAIL). Omitted: no contact line. */
+  supportEmail?: string | undefined;
+}) {
   return (
     <Suspense fallback={null}>
-      <Notice plan={plan} />
+      <Notice plan={plan} supportEmail={supportEmail} />
     </Suspense>
   );
 }

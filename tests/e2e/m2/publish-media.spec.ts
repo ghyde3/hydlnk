@@ -3,15 +3,14 @@ import { imageRefSchema } from "@/lib/document";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, signedInUser } from "../fixtures/data";
 import { authCookies, cookieHeader } from "../fixtures/http";
+import { makeJpeg, makeWebpImage } from "../m5/images-fixtures";
 import {
   GIF,
   HTML_AS_PNG,
   SERVER_PORT,
   SVG_AS_PNG,
-  makeJpegHeader,
   makePng,
   makePngHeader,
-  makeWebpHeader,
   multipart,
   padTo,
   rawBuffer,
@@ -108,7 +107,8 @@ test.describe("M2-08 page-media bucket and upload route", () => {
 
     expect(body.width).toBe(800);
     expect(body.height).toBe(600);
-    expect(body.path).toMatch(new RegExp(`^${user.userId}/[0-9a-f-]{36}\\.png$`));
+    // M5-11: the route re-encodes every upload as WebP and names it by its content hash.
+    expect(body.path).toMatch(new RegExp(`^${user.userId}/img-[0-9a-f]{32}\\.webp$`));
     expect(
       imageRefSchema.safeParse({ path: body.path, width: body.width, height: body.height }).success,
     ).toBe(true);
@@ -117,44 +117,45 @@ test.describe("M2-08 page-media bucket and upload route", () => {
     // The public URL returns the file with its real content type and a one-year cache-control.
     const file = await fetch(body.url);
     expect(file.status).toBe(200);
-    expect(file.headers.get("content-type")).toBe("image/png");
+    expect(file.headers.get("content-type")).toBe("image/webp");
     const cache = file.headers.get("cache-control") ?? "";
     expect(cache).toMatch(/max-age=31536000/);
-    expect(Buffer.from(await file.arrayBuffer()).length).toBeGreaterThan(100);
+    expect(Buffer.from(await file.arrayBuffer()).length).toBeGreaterThan(20);
 
     expect(await objectNames(user.userId)).toHaveLength(before.length + 1);
     await context.close();
   });
 
-  test("M2-08 JPEG and WebP are stored as jpg and webp with their header size, and kind is validated", async ({
+  test("M2-08 / M5-11 JPEG and WebP are both stored as WebP named by kind and content hash, with the converted size, and kind is validated", async ({
     browser,
   }) => {
     const context = await browser.newContext();
     const user = await signedIn(context, "jw");
 
     const jpeg = await upload(user.cookie, [
-      filePart(makeJpegHeader(640, 480), "x.png", "image/png"), // declared type and name are ignored
+      // The declared type and name are ignored: the bytes decide.
+      filePart(await makeJpeg({ width: 640, height: 480 }), "x.png", "image/png"),
       { name: "kind", value: "avatar" },
     ]);
     expect(jpeg.status, jpeg.text).toBe(200);
     const jpegBody = JSON.parse(jpeg.text) as { path: string; width: number; height: number };
     createdPaths.push(jpegBody.path);
-    expect(jpegBody.path).toMatch(/\.jpg$/);
-    expect([jpegBody.width, jpegBody.height]).toEqual([640, 480]);
+    expect(jpegBody.path).toMatch(/\/avatar-[0-9a-f]{32}\.webp$/);
+    expect([jpegBody.width, jpegBody.height]).toEqual([400, 400]); // the avatar is a 400px square
     const jpegFile = await fetch(
       `${supabaseUrl()}/storage/v1/object/public/${BUCKET}/${jpegBody.path}`,
     );
-    expect(jpegFile.headers.get("content-type")).toBe("image/jpeg");
+    expect(jpegFile.headers.get("content-type")).toBe("image/webp");
 
     const webp = await upload(user.cookie, [
-      filePart(makeWebpHeader(1024, 768), "x.jpg", "image/jpeg"),
+      filePart(await makeWebpImage({ width: 1024, height: 768 }), "x.jpg", "image/jpeg"),
       { name: "kind", value: "background" },
     ]);
     expect(webp.status, webp.text).toBe(200);
     const webpBody = JSON.parse(webp.text) as { path: string; width: number; height: number };
     createdPaths.push(webpBody.path);
-    expect(webpBody.path).toMatch(/\.webp$/);
-    expect([webpBody.width, webpBody.height]).toEqual([1024, 768]);
+    expect(webpBody.path).toMatch(/\/bg-[0-9a-f]{32}\.webp$/);
+    expect([webpBody.width, webpBody.height]).toEqual([1024, 768]); // within 1600px: not resized
 
     const content = await upload(user.cookie, [
       filePart(makePng(8, 8)),
@@ -256,7 +257,7 @@ test.describe("M2-08 page-media bucket and upload route", () => {
     expect(await objectNames(user.userId)).toEqual(before);
 
     // Exactly 4 MiB is allowed (the multipart envelope is not counted against the file).
-    const exact = await upload(user.cookie, [filePart(padTo(makePngHeader(8, 8), 4 * MIB))]);
+    const exact = await upload(user.cookie, [filePart(padTo(makePng(8, 8), 4 * MIB))]);
     expect(exact.status, exact.text).toBe(200);
     createdPaths.push((JSON.parse(exact.text) as { path: string }).path);
     await context.close();

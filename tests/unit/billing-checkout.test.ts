@@ -57,7 +57,8 @@ const stripe = {
       log.push(`subscriptions.list ${params.customer} ${params.status}`);
       if (listFailure) throw listFailure;
       const index = params.starting_after
-        ? subscriptionPages.findIndex((page) => page.some((s) => s.id === params.starting_after)) + 1
+        ? subscriptionPages.findIndex((page) => page.some((s) => s.id === params.starting_after)) +
+          1
         : 0;
       const data = subscriptionPages[index] ?? [];
       return { data, has_more: index < subscriptionPages.length - 1 };
@@ -67,7 +68,19 @@ const stripe = {
     sessions: {
       list: vi.fn(async (params: { customer: string; status: string }) => {
         log.push(`sessions.list ${params.customer} ${params.status}`);
-        return { data: openSessions.map((id) => ({ id })), has_more: false };
+        return {
+          data: openSessions.map((id) => ({ id, created: 1_000, status: "open" })),
+          has_more: false,
+        };
+      }),
+      retrieve: vi.fn(async (id: string) => {
+        log.push(`sessions.retrieve ${id}`);
+        return {
+          id,
+          created: id === "cs_test_new" ? 2_000 : 1_000,
+          status: openSessions.includes(id) ? "open" : "expired",
+          url: `https://checkout.stripe.test/c/pay/${id}`,
+        };
       }),
       expire: vi.fn(async (id: string) => {
         log.push(`sessions.expire ${id}`);
@@ -78,6 +91,8 @@ const stripe = {
       create: vi.fn(async (params: Record<string, unknown>) => {
         log.push("sessions.create");
         created.push(params);
+        // The new session is open (and the newest) from here on, like Stripe's.
+        openSessions = [...openSessions, "cs_test_new"];
         return { id: "cs_test_new", url: "https://checkout.stripe.test/c/pay/cs_test_new" };
       }),
     },
@@ -93,7 +108,8 @@ vi.mock("@/lib/billing/stripe", () => ({
 
 const saved: Record<string, string | undefined> = {};
 beforeEach(() => {
-  for (const key of [...Object.keys(ENV), "PAID_PLANS_OPEN", "VERCEL_ENV"]) saved[key] = process.env[key];
+  for (const key of [...Object.keys(ENV), "PAID_PLANS_OPEN", "VERCEL_ENV"])
+    saved[key] = process.env[key];
   Object.assign(process.env, ENV);
   delete process.env.PAID_PLANS_OPEN;
   delete process.env.VERCEL_ENV;
@@ -108,6 +124,7 @@ beforeEach(() => {
   for (const fn of [
     stripe.subscriptions.list,
     stripe.checkout.sessions.list,
+    stripe.checkout.sessions.retrieve,
     stripe.checkout.sessions.expire,
     stripe.checkout.sessions.create,
   ]) {
@@ -160,7 +177,9 @@ describe("M4-06 a second subscription cannot be started", () => {
       `subscriptions.list ${CUSTOMER} all`,
       `subscriptions.list ${CUSTOMER} all`,
     ]);
-    expect(stripe.subscriptions.list.mock.calls[1]![0]).toMatchObject({ starting_after: "sub_unit_b" });
+    expect(stripe.subscriptions.list.mock.calls[1]![0]).toMatchObject({
+      starting_after: "sub_unit_b",
+    });
   });
 
   it("refuses when the subscriptions cannot be listed (fail closed): the call throws and no session is created", async () => {
@@ -202,9 +221,14 @@ describe("M4-06 the customer's other open Checkout Sessions are expired", () => 
       `sessions.list ${CUSTOMER} open`,
       `subscriptions.list ${CUSTOMER} all`,
       "sessions.create",
+      // After the create: its own session is read back and the open ones are ranked (billing-race.test.ts).
+      "sessions.retrieve cs_test_new",
+      `sessions.list ${CUSTOMER} open`,
     ]);
     // Only the new session is left to pay: nothing it created is expired.
-    expect(stripe.checkout.sessions.expire.mock.calls.map(([id]) => id)).not.toContain("cs_test_new");
+    expect(stripe.checkout.sessions.expire.mock.calls.map(([id]) => id)).not.toContain(
+      "cs_test_new",
+    );
   });
 
   it("expires the open sessions even when the answer will be 409, and creates nothing", async () => {

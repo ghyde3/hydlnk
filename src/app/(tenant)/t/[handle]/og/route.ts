@@ -37,8 +37,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ hand
     headers: {
       "Content-Type": "image/png",
       "Cache-Control": versioned
-        ? "public, max-age=86400, s-maxage=86400, immutable"
-        : "public, max-age=300, s-maxage=300, stale-while-revalidate=300",
+        ? "public, max-age=300, s-maxage=300, immutable"
+        : "public, max-age=300, s-maxage=300",
     },
   });
 }

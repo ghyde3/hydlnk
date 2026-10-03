@@ -118,6 +118,11 @@ export const BILLING_MESSAGES: Record<string, string> = {
   already_studio: "You are already on Studio.",
   not_downgradable: "There is no lower paid plan to move to.",
   stripe_unavailable: "We couldn’t reach Stripe. Try again in a moment.",
+  // What a browser form that failed is sent back with (see `answer` in ./http): one sentence per
+  // button, no Stripe error text. The JSON answer keeps `stripe_unavailable`.
+  checkout_failed: "We couldn’t start checkout. Try again.",
+  portal_failed: "We couldn’t open billing. Try again.",
+  checkout_in_progress: "Another checkout was just started. Try again in a moment.",
 };
 
 /** The message for an error code from the endpoints, or null when the code is not one of ours. */

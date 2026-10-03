@@ -6,6 +6,7 @@ import { PagesCard } from "@/components/settings/pages-card";
 import { PlanBand } from "@/components/settings/plan-band";
 import { PlanCards } from "@/components/settings/plan-cards";
 import { UsageCard } from "@/components/settings/usage-card";
+import { readSupportEmail } from "@/lib/admin/env";
 import { signOut } from "@/lib/auth/actions";
 import { readPaidPlansOpen } from "@/lib/billing/env";
 import { CHECKOUT_PARAM, parseCheckoutReturn } from "@/lib/billing/return";
@@ -16,6 +17,7 @@ import { PRODUCT_DOMAIN, handleAddress } from "@/lib/pages/plans";
 import { describeBand, wantsCardLookup } from "@/lib/settings/band";
 import { loadBillingSummary } from "@/lib/settings/billing-summary";
 import { lookupCardLast4 } from "@/lib/settings/card";
+import { failIfInjected } from "@/lib/testing/faults";
 
 export const metadata: Metadata = { title: "Settings & billing" };
 
@@ -41,6 +43,8 @@ const FIELD_VALUE =
  */
 export default async function SettingsScreen({ searchParams }: PageProps<"/app/settings">) {
   const { user, pages, current, plan } = await getAppContext();
+  // The end-to-end specs' way to make a screen throw (M5-20); does nothing in production.
+  await failIfInjected("route-throw");
   const query = await searchParams;
   const checkoutParam = query[CHECKOUT_PARAM];
   const confirming =
@@ -58,9 +62,9 @@ export default async function SettingsScreen({ searchParams }: PageProps<"/app/s
     <>
       <ScreenHeader breadcrumb="Account" title="Settings & billing" />
       <ScreenBody maxWidth="max-w-[920px]">
-        <CheckoutReturnNotice plan={plan} />
+        <CheckoutReturnNotice plan={plan} supportEmail={readSupportEmail()} />
         <PlanBand summary={account} text={describeBand(account, cardLast4)} />
-        <UsageCard meters={buildMeters(plan, usage)} />
+        <UsageCard meters={buildMeters(plan, usage)} plan={plan} />
         <PlanCards current={plan} paidPlansOpen={readPaidPlansOpen()} confirming={confirming} />
         <PagesCard
           pages={pages.map((page) => ({

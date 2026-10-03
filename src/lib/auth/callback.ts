@@ -9,7 +9,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { ensureAccount } from "./accounts";
 
 /** What /login shows for each `?error=` code. Anything else is ignored. */
-export type LoginErrorCode = "link_invalid" | "google_cancelled";
+export type LoginErrorCode = "link_invalid";
 
 /**
  * Token-hash types the emailed link may carry. The templates emit `email`; `magiclink` and `signup`
@@ -36,9 +36,9 @@ const loginError = (code: LoginErrorCode) => redirectTo(`/login?error=${code}`);
  *
  *   ?token_hash=...&type=email   emailed sign-in link: verifyOtp, no PKCE verifier cookie needed, so
  *                                it works in a different browser than the one that asked for it
- *   ?code=...                    Google OAuth (PKCE): exchange the code, the verifier cookie was set
- *                                by this browser's signInWithOAuth
- *   ?error=...                   the provider or Supabase reports a failure
+ *   ?code=...                    an OAuth (PKCE) code: exchange it for a session (the app no longer
+ *                                starts that flow itself; Google sign-in is an ID token, M1-29)
+ *   ?error=...                   Supabase reports a failure
  *   (nothing)                    back to /login
  *
  * Success always lands on "/", which the auth gate routes onward (/editor or /claim). Every failure
@@ -50,11 +50,10 @@ export async function handleAuthCallback(request: Request): Promise<NextResponse
   const code = params.get("code");
 
   if (tokenHash === null && code === null) {
-    if (params.has("error") || params.has("error_code")) {
-      return loginError(
-        params.get("error_code") === "otp_expired" ? "link_invalid" : "google_cancelled",
-      );
-    }
+    // Supabase reports a used or expired link this way (error_code=otp_expired), and any other
+    // failure ends the same: back to /login with the one notice there is. Google sign-in no longer
+    // comes through here (its button hands the page an ID token), so there is no provider notice.
+    if (params.has("error") || params.has("error_code")) return loginError("link_invalid");
     return redirectTo("/login");
   }
 

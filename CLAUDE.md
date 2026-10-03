@@ -59,7 +59,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 
 ## Unattended runs
 `claude -p "/feature-loop" --permission-mode dontAsk`
-- `dontAsk` auto-denies anything that would prompt, so the ask rules (`supabase db push`, `gh pr merge`, `vercel`, `stripe`, the Supabase, Vercel and Stripe connectors) are refused. `auto` and `bypassPermissions` cannot come from project settings; the mode comes from the command line.
+- `dontAsk` refuses every command that isn't on the project allow list, so production commands (`supabase db push`, `gh pr merge`, `vercel`, `stripe`, the Supabase, Vercel and Stripe connectors) never run unattended. There is no ask list (Gary, 2026-10-02: interactive sessions run in bypass mode and release with his standing approval). `auto` and `bypassPermissions` cannot come from project settings; the mode comes from the command line.
 - Run `claude` once interactively in this repo and accept the trust dialog first: in a never-trusted folder `claude -p` ignores the project's `permissions.allow` rules.
 - Node: `pin-node.sh` pins Node 24 for every Bash call, so no prefix is needed. If it reports it could not (Node 24 missing), `source ~/.nvm/nvm.sh >/dev/null && nvm use >/dev/null && pnpm ...` is also allowed.
 - Skills, subagents and the settings hooks work in `-p` mode. Needs Gary (secret, production, decision)? Log it in PROGRESS.md and stop.

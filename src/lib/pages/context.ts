@@ -11,6 +11,8 @@ export interface AppContext {
   current: AppPage;
   plan: Plan;
   pageLimit: number;
+  /** `accounts.suspended_at` is set (M5-09): the banner shows and writes are disabled. */
+  suspended: boolean;
 }
 
 /**
@@ -23,9 +25,16 @@ export const getAppContext = cache(async (): Promise<AppContext> => {
   const supabase = await createServerSupabase();
   const [current, account] = await Promise.all([
     getCurrentPage(user, pages),
-    supabase.from("accounts").select("plan").eq("id", user.id).maybeSingle(),
+    supabase.from("accounts").select("plan, suspended_at").eq("id", user.id).maybeSingle(),
   ]);
   if (account.error) throw new Error(`Loading the account failed: ${account.error.message}`);
   const plan = toPlan(account.data?.plan);
-  return { user, pages, current, plan, pageLimit: PLAN_INFO[plan].maxPages };
+  return {
+    user,
+    pages,
+    current,
+    plan,
+    pageLimit: PLAN_INFO[plan].maxPages,
+    suspended: account.data?.suspended_at != null,
+  };
 });

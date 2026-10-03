@@ -1,5 +1,7 @@
 "use client";
 
+import { blockedHostsOf } from "@/lib/blocklist/check";
+import { blockedPublishMessage } from "@/lib/blocklist/messages";
 import type { Block, PublishError } from "@/lib/document";
 import { blockRowSummary } from "@/lib/editor/contracts";
 
@@ -26,12 +28,17 @@ export function PublishAlert({
   const page = errors.filter((e) => e.blockId === null && !e.field.startsWith("profile"));
 
   const count = failing.length;
+  // A Publish the link blocklist refused (M5-03): the gate's errors carry the host, and the heading
+  // names them ("Can’t publish. 1 link points to a blocked site: blocked.example. Remove or change it.").
+  const blockedHosts = blockedHostsOf(errors);
   const heading =
-    count > 0
-      ? `Fix ${count} ${count === 1 ? "block" : "blocks"} before publishing.`
-      : profile.length > 0
-        ? "Fix your profile before publishing."
-        : "Fix your page before publishing.";
+    blockedHosts.length > 0 && errors.every((e) => (e as { host?: unknown }).host !== undefined)
+      ? blockedPublishMessage(blockedHosts, errors.length)
+      : count > 0
+        ? `Fix ${count} ${count === 1 ? "block" : "blocks"} before publishing.`
+        : profile.length > 0
+          ? "Fix your profile before publishing."
+          : "Fix your page before publishing.";
 
   return (
     <div
@@ -39,7 +46,9 @@ export function PublishAlert({
       className="flex flex-col gap-2 rounded-md border border-bad-line bg-surface p-4"
     >
       <div className="flex items-start justify-between gap-3">
-        <span className="py-3 text-sm font-semibold text-bad">{heading}</span>
+        <span className="min-w-0 py-3 text-sm font-semibold text-bad [overflow-wrap:anywhere]">
+          {heading}
+        </span>
         {onDismiss ? (
           <button
             type="button"

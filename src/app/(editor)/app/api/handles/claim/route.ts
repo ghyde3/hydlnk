@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { ACCOUNT_SUSPENDED_CODE } from "@/lib/admin/suspension";
 import { clientEnv } from "@/lib/env/client";
 import { appOrigin } from "@/lib/routing/urls";
 import { claimHandle, type ClaimError } from "@/lib/handles/claim";
@@ -55,7 +56,10 @@ export async function POST(request: NextRequest) {
     const result = await claimHandle(user.id, handle);
     if (!result.ok) {
       return NextResponse.json(
-        { error: result.error },
+        {
+          error: result.error,
+          ...(result.error === "suspended" ? { code: ACCOUNT_SUSPENDED_CODE } : {}),
+        },
         { status: STATUS_FOR[result.error], headers: NO_STORE },
       );
     }

@@ -1,7 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildMeters } from "@/lib/limits";
-import { makePng, multipart, padTo } from "../e2e/m2/publish-helpers";
+import { makePng, multipart } from "../e2e/m2/publish-helpers";
 import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -81,11 +82,21 @@ describe.skipIf(!run)("M4-31 / M4-32 upload quota and usage (local Supabase)", (
     return Number(data);
   };
 
+  // M5-11: the route stores the pipeline's WebP, not the upload. These tests pin the cap's
+  // arithmetic against real Storage, so the pipeline is replaced by one that stores exactly the bytes
+  // it is given, and every request carries random bytes (no two uploads share a content-hash name).
+  const identity = async (input: Uint8Array) => ({ bytes: input, width: 8, height: 8 });
+
   function request(size: number): Request {
+    const png = makePng(8, 8);
     const { body, contentType } = multipart([
       {
         name: "file",
-        file: { filename: "p.png", contentType: "image/png", data: padTo(makePng(8, 8), size) },
+        file: {
+          filename: "p.png",
+          contentType: "image/png",
+          data: Buffer.concat([png, randomBytes(Math.max(0, Math.floor(size) - png.length))]),
+        },
       },
     ]);
     return new Request("http://app.localhost:3000/api/media", {
@@ -101,6 +112,7 @@ describe.skipIf(!run)("M4-31 / M4-32 upload quota and usage (local Supabase)", (
       userId,
       undefined,
       adminUploadQuota(userId, admin),
+      { transform: identity },
     );
     if (result.ok) objects.push(result.image.path);
     return result;

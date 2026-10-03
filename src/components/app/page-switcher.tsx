@@ -1,4 +1,5 @@
 import { getAppContext } from "@/lib/pages/context";
+import { SUSPENDED_REASON } from "@/components/admin/suspension-context";
 import { PLAN_LIMITS, pageLimitMessage } from "@/lib/limits";
 import { PageSwitcherMenu, type SwitcherPage } from "./page-switcher-menu";
 
@@ -21,15 +22,21 @@ export async function PageSwitcher({
   currentId: string;
   variant: "sidebar" | "chip";
 }) {
-  const { plan, pages: owned } = await getAppContext();
-  const limitMessage =
-    owned.length >= PLAN_LIMITS[plan].pages ? pageLimitMessage(plan, owned.length) : null;
+  const { plan, pages: owned, suspended } = await getAppContext();
+  // A suspended account cannot create pages (M5-09): the item is disabled with the reason, and the
+  // "See plans" link a page limit offers is left out (a plan does not lift a suspension).
+  const limitMessage = suspended
+    ? SUSPENDED_REASON
+    : owned.length >= PLAN_LIMITS[plan].pages
+      ? pageLimitMessage(plan, owned.length)
+      : null;
   return (
     <PageSwitcherMenu
       pages={pages}
       currentId={currentId}
       variant={variant}
       limitMessage={limitMessage}
+      suspended={suspended}
     />
   );
 }

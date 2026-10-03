@@ -55,11 +55,14 @@ export function PageSwitcherMenu({
   currentId,
   variant,
   limitMessage,
+  suspended = false,
 }: {
   pages: SwitcherPage[];
   currentId: string;
   variant: "sidebar" | "chip";
   limitMessage: string | null;
+  /** The account is suspended (M5-09): `limitMessage` is the reason, and there is no plans link. */
+  suspended?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -104,7 +107,7 @@ export function PageSwitcherMenu({
   }, [open]);
 
   // Pages, then "New page", then (at the limit) "See plans".
-  const itemCount = pages.length + (limitMessage === null ? 1 : 2);
+  const itemCount = pages.length + (limitMessage === null || suspended ? 1 : 2);
 
   const moveFocus = (from: number, delta: number | "first" | "last") => {
     const count = itemCount;
@@ -272,18 +275,20 @@ export function PageSwitcherMenu({
               >
                 {limitMessage}
               </p>
-              <Link
-                ref={(node) => {
-                  itemRefs.current[pages.length + 1] = node;
-                }}
-                href="/settings#plans"
-                role="menuitem"
-                tabIndex={-1}
-                onClick={() => close(false)}
-                className="flex min-h-11 w-full items-center rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-ink-link no-underline hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2"
-              >
-                See plans
-              </Link>
+              {suspended ? null : (
+                <Link
+                  ref={(node) => {
+                    itemRefs.current[pages.length + 1] = node;
+                  }}
+                  href="/settings#plans"
+                  role="menuitem"
+                  tabIndex={-1}
+                  onClick={() => close(false)}
+                  className="flex min-h-11 w-full items-center rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-ink-link no-underline hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2"
+                >
+                  See plans
+                </Link>
+              )}
             </>
           )}
         </div>

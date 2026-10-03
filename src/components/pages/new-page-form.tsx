@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { HandleField, type ServerHandleResult } from "@/components/auth/handle-field";
 import { normalizeHandle } from "@/lib/handles/rules";
 import { isHandleStatus } from "@/lib/handles/status";
@@ -18,6 +19,8 @@ const FAILED_MESSAGE = "Couldn’t create that page. Try again.";
  * plans; success lands on /editor, which shows the new page (the route set the `hl-page` cookie).
  */
 export function NewPageForm() {
+  // A suspended owner cannot create pages (M5-09); POST /api/pages answers 403 account_suspended.
+  const suspended = useAccountSuspended();
   const [pending, setPending] = useState(false);
   const [serverResult, setServerResult] = useState<ServerHandleResult | null>(null);
   const [problem, setProblem] = useState<{ message: string; plans: boolean } | null>(null);
@@ -68,12 +71,14 @@ export function NewPageForm() {
       <HandleField id="np-handle" serverResult={serverResult} />
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || suspended}
         aria-busy={pending || undefined}
+        title={suspended ? SUSPENDED_REASON : undefined}
         className="flex min-h-12 w-full cursor-pointer items-center justify-center rounded-md bg-ink px-4 text-[15px] font-semibold text-surface disabled:cursor-default disabled:opacity-70"
       >
         {pending ? "Creating…" : "Create page"}
       </button>
+      {suspended ? <p className="-mt-2 text-[13px] text-bad">{SUSPENDED_REASON}</p> : null}
       {problem ? (
         <div role="alert" className="-mt-2 flex flex-col items-start gap-1 text-[13px] text-bad">
           <p>{problem.message}</p>

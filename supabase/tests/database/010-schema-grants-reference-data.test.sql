@@ -2,7 +2,7 @@
 -- a loosened grant or a function that became callable through the API.
 
 begin;
-select plan(37);
+select plan(43);
 
 -- ---------------------------------------------------------------------------
 -- RLS is on for every public table
@@ -16,6 +16,12 @@ select tests.rls_enabled('public', 'events');
 select tests.rls_enabled('public', 'daily_stats');
 select tests.rls_enabled('public', 'reserved_handles');
 select tests.rls_enabled('public', 'stripe_events');
+select tests.rls_enabled('public', 'blocked_domains');
+select tests.rls_enabled('public', 'reports');
+select tests.rls_enabled('public', 'report_attempts');
+select tests.rls_enabled('public', 'admin_audit');
+select tests.rls_enabled('public', 'image_cleanup_queue');
+select tests.rls_enabled('public', 'image_upload_hits');
 
 select is_empty(
   $$
@@ -30,7 +36,11 @@ select is_empty(
 -- A new table fails this test until it is added here, with its policies and test.
 select tables_are(
   'public',
-  array['accounts', 'pages', 'themes', 'domains', 'events', 'daily_stats', 'reserved_handles', 'stripe_events'],
+  array[
+    'accounts', 'pages', 'themes', 'domains', 'events', 'daily_stats', 'reserved_handles', 'stripe_events',
+    -- Milestone 5: server-only tables (RLS on, no policy, no client grant; their own pgTAP files)
+    'blocked_domains', 'reports', 'report_attempts', 'admin_audit', 'image_cleanup_queue', 'image_upload_hits'
+  ],
   'public holds exactly the contract tables'
 );
 
@@ -110,7 +120,25 @@ select set_eq(
       ('reserved_handles|service_role|SELECT|*'),
       ('stripe_events|service_role|SELECT|*'),
       ('stripe_events|service_role|INSERT|*'),
-      ('stripe_events|service_role|DELETE|*')
+      ('stripe_events|service_role|DELETE|*'),
+      -- Milestone 5. image_upload_hits is deliberately absent: only the definer function reaches it.
+      ('blocked_domains|service_role|SELECT|*'),
+      ('blocked_domains|service_role|INSERT|*'),
+      ('blocked_domains|service_role|UPDATE|*'),
+      ('blocked_domains|service_role|DELETE|*'),
+      ('reports|service_role|SELECT|*'),
+      ('reports|service_role|INSERT|*'),
+      ('reports|service_role|UPDATE|*'),
+      ('reports|service_role|DELETE|*'),
+      ('report_attempts|service_role|SELECT|*'),
+      ('report_attempts|service_role|INSERT|*'),
+      ('report_attempts|service_role|UPDATE|*'),
+      ('report_attempts|service_role|DELETE|*'),
+      ('admin_audit|service_role|SELECT|*'),
+      ('admin_audit|service_role|INSERT|*'),
+      ('image_cleanup_queue|service_role|SELECT|*'),
+      ('image_cleanup_queue|service_role|INSERT|*'),
+      ('image_cleanup_queue|service_role|DELETE|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );

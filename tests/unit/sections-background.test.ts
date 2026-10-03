@@ -243,7 +243,7 @@ describe("M3-15 image upload", () => {
     const { host, calls } = mount();
     await choose(host, file);
     expect(host.querySelector('[role="alert"]')?.textContent).toBe(
-      "That file isn’t a JPG, PNG or WebP image. Choose another.",
+      "That file type isn’t supported. Use JPEG, PNG or WebP.",
     );
     expect(FakeXhr.instances).toHaveLength(0);
     expect(calls).toEqual([]);
@@ -253,7 +253,7 @@ describe("M3-15 image upload", () => {
     const { host, calls } = mount();
     await choose(host, jpeg(5 * MIB));
     expect(host.querySelector('[role="alert"]')?.textContent).toBe(
-      "That image is over 4 MB. Choose a smaller one.",
+      "That file is too big. Use an image under 4 MB.",
     );
     expect(FakeXhr.instances).toHaveLength(0);
     expect(calls).toEqual([]);
@@ -266,9 +266,9 @@ describe("M3-15 image upload", () => {
   });
 
   it.each([
-    [413, "That image is over 4 MB. Choose a smaller one."],
-    [415, "That file isn’t a JPG, PNG or WebP image. Choose another."],
-    [422, "That image can’t be used. Choose a smaller or different one."],
+    [413, "That file is too big. Use an image under 4 MB."],
+    [415, "That file type isn’t supported. Use JPEG, PNG or WebP."],
+    [422, "We couldn’t read that image. Try a different file."],
     [401, "You’re signed out. Sign in again to upload."],
     [500, "Couldn’t upload that image. Try again."],
   ])("a %i answer shows its message and leaves the draft alone", async (status, message) => {

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/env/client";
 import { resolveCustomDomain } from "@/lib/routing/custom-domain";
-import { classifyHost } from "@/lib/routing/host";
+import { classifyHost, invalidHandleLabel } from "@/lib/routing/host";
 import {
   NOT_FOUND_PATH,
   UNKNOWN_SITE_ID,
@@ -75,6 +75,15 @@ export async function proxy(request: NextRequest) {
     }
 
     case "custom": {
+      // One label under the root that is not a handle ("ab", "-x1"): not a custom domain either.
+      // It goes to the tenant route, whose 404 says the address "isn’t valid" (M5-20); the label
+      // is a plain DNS label (see invalidHandleLabel) and no page can ever have such a handle.
+      const label = invalidHandleLabel(host, rootDomain);
+      if (label) {
+        const response = NextResponse.rewrite(rewriteTo(tenantRewritePath(label, pathname)));
+        setTenantHeaders(response.headers);
+        return response;
+      }
       // TODO(M4): resolveCustomDomain looks the host up in `domains`; unknown hosts get the plain
       // tenant 404 (the /sites/[pageId] stub always answers notFound until then).
       const pageId = await resolveCustomDomain(host);

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -36,9 +36,11 @@ describe("M2-08 Storage stays server-only", () => {
       .map((f) => f.path)
       .sort();
     // upload.ts (the route), quota.ts (M4-31: bytes stored per account, an over-quota upload removed),
+    // cleanup-admin.ts (M5-14: objects nothing references any more are removed),
     // delete-media.ts (M4-34: an account's objects removed with it) and publish/core.ts (the
     // background object must exist). Each imports "server-only", checked below.
     expect(users).toEqual([
+      "src/lib/media/cleanup-admin.ts",
       "src/lib/media/quota.ts",
       "src/lib/media/upload.ts",
       "src/lib/pages/delete-media.ts",
@@ -53,7 +55,7 @@ describe("M2-08 Storage stays server-only", () => {
     const offenders = files
       .filter((f) => isClient(f.text))
       .filter((f) =>
-        /@\/lib\/supabase\/admin|@\/lib\/env\/server|@\/lib\/media\/upload|@\/lib\/publish\/core/.test(
+        /@\/lib\/supabase\/admin|@\/lib\/env\/server|@\/lib\/media\/(?:upload|quota|cleanup|cleanup-admin|pipeline|rate-limit)["']|@\/lib\/publish\/core/.test(
           f.text,
         ),
       )
@@ -75,5 +77,37 @@ describe("M2-08 Storage stays server-only", () => {
       .map((f) => f.path)
       .sort();
     expect(users).toEqual(["src/lib/media/limits.ts"]);
+  });
+});
+
+describe("M5-12 tenant media is never routed through the image optimizer", () => {
+  it("no source file imports next/image (a lint-style check: tenant media is a plain <img>)", () => {
+    const offenders = files
+      .filter((f) =>
+        /from\s+["']next\/image["']|require\(\s*["']next\/image["']\s*\)/.test(
+          f.text.replace(COMMENTS, ""),
+        ),
+      )
+      .map((f) => f.path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("the components that draw tenant pages and previews never reach for next/image", () => {
+    const tenant = files.filter((f) =>
+      /^src\/(components\/(page|design|editor)|app\/\(tenant\))\//.test(f.path),
+    );
+    expect(tenant.length).toBeGreaterThan(10);
+    for (const f of tenant) expect(f.text.replace(COMMENTS, ""), f.path).not.toMatch(/next\/image/);
+  });
+
+  it("next.config declares no images block: no remotePatterns, no loader, no /_next/image route for Storage", () => {
+    const config = ["next.config.ts", "next.config.mjs", "next.config.js"]
+      .map((name) => join(process.cwd(), name))
+      .filter((path) => existsSync(path))
+      .map((path) => readFileSync(path, "utf8").replace(COMMENTS, ""))
+      .join("\n");
+    expect(config.length).toBeGreaterThan(0);
+    expect(config).not.toMatch(/\bimages\s*:/);
+    expect(config).not.toMatch(/remotePatterns|domains\s*:|loaderFile/);
   });
 });

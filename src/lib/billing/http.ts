@@ -67,16 +67,33 @@ export async function readFields(
   return null;
 }
 
+/** Which button a request came from: a Stripe failure reads differently for each. */
+export type BillingEndpoint = "checkout" | "portal";
+
+/**
+ * The code a browser form that failed is sent back to Settings with. A Stripe failure
+ * (`stripe_unavailable`) becomes the code of the button that was pressed, so the page can say "We
+ * couldn’t start checkout" or "We couldn’t open billing" and nothing Stripe said. Every other code
+ * is the same on both.
+ */
+export function navigationCode(error: string, endpoint?: BillingEndpoint): string {
+  return error === "stripe_unavailable" && endpoint ? `${endpoint}_failed` : error;
+}
+
 /**
  * The HTTP answer for a helper's result: 303 to the Stripe URL, or the error as JSON with its
  * status. A browser form navigation that fails is sent back to Settings instead of a JSON page,
  * with the code in `billing_error` (see `billingMessage`).
  */
-export function answer(request: NextRequest, result: BillingResult): NextResponse {
+export function answer(
+  request: NextRequest,
+  result: BillingResult,
+  endpoint?: BillingEndpoint,
+): NextResponse {
   if (result.ok) return NextResponse.redirect(result.url, { status: 303, headers: NO_STORE });
   if (isNavigation(request)) {
     const back = new URL("/settings", appOrigin(clientEnv.NEXT_PUBLIC_ROOT_DOMAIN));
-    back.searchParams.set("billing_error", result.error);
+    back.searchParams.set("billing_error", navigationCode(result.error, endpoint));
     return NextResponse.redirect(back, { status: 303, headers: NO_STORE });
   }
   return jsonError(result.status, result.error, result.message);

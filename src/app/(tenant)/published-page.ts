@@ -25,23 +25,30 @@ export interface PublishedPage {
  * What a tenant host has to show for a handle (M1-15):
  *   published    the page was published: render its frozen document
  *   unpublished  the handle is claimed but nothing is published yet: the placeholder
- *   missing      nothing to show (unclaimed, suspended, malformed, unreadable document): a 404
+ *   suspended    the owner's account is suspended (M5-08): a 404 reading "This page isn't available."
+ *                with no content of the page; the handle stays held, so it is never offered as
+ *                claimable
+ *   missing      nothing to show (unclaimed, malformed, unreadable document): a 404
  */
 export type TenantPageState =
   | { kind: "published"; page: PublishedPage }
   | { kind: "unpublished"; pageId: string }
+  | { kind: "suspended" }
   | { kind: "missing" };
 
 /** What the cached public read hands back: plain JSON, so the data cache can store it. */
 type PublicRead =
   | { state: "published"; published: unknown; publishedAt: string | null; plan: string }
   | { state: "unpublished" }
+  | { state: "suspended" }
   | { state: "missing" };
 
 /**
  * The public query (M2-22): `published`, `published_at` and the owner's `accounts` row, for one
  * page id, and nothing else. Never `draft`, never `*`. Server-only, with the secret key: RLS does
- * not apply, so this query is the access rule. A suspended owner reads as missing.
+ * not apply, so this query is the access rule. A suspended owner reads as `suspended` and the
+ * document is never returned for it, so a cached copy of this read cannot carry the page's content
+ * (and the tag `invalidateAccountPages` expires drops it at suspend and unsuspend).
  */
 async function readPublic(pageId: string): Promise<PublicRead> {
   countPublicQuery(pageId);
@@ -52,7 +59,8 @@ async function readPublic(pageId: string): Promise<PublicRead> {
     .maybeSingle();
   // A database failure is a 500, not a 404: nobody should see "not found" for a page that exists.
   if (error) throw new Error(`Loading published page ${pageId} failed: ${error.message}`);
-  if (!data || data.accounts.suspended_at !== null) return { state: "missing" };
+  if (!data) return { state: "missing" };
+  if (data.accounts.suspended_at !== null) return { state: "suspended" };
   if (data.published === null) return { state: "unpublished" };
   return {
     state: "published",
@@ -85,29 +93,54 @@ function readPublicCached(pageId: string): Promise<PublicRead> {
 /**
  * A handle with nothing to show. The page for it is generated and cached like any other, 404
  * included, so this registers a short `revalidate` (and the handle's tag) with the render: the 404
- * is served from the cache for a few seconds at most and a claim is picked up at once when the
- * claim flow calls `invalidateHandle`. Without it a 404 would be kept for a year.
+ * is served from the cache for a few seconds at most and a claim (or an unsuspend) is picked up at
+ * once when the flow calls `invalidateHandle`. Without it a 404 would be kept for a year.
  */
-async function missing(handle: string): Promise<TenantPageState> {
+async function shortLived404(handle: string): Promise<void> {
   if (process.env.NODE_ENV === "production") {
     await unstable_cache(async () => true, ["tenant-handle-missing", handle], {
       revalidate: MISSING_REVALIDATE_SECONDS,
       tags: [handleTag(handle)],
     })();
   }
+}
+
+async function missing(handle: string): Promise<TenantPageState> {
+  await shortLived404(handle);
   return { kind: "missing" };
 }
 
-/** The page id behind a handle, or null (unclaimed or suspended). Reads no document. */
-export async function lookupPageId(handle: string): Promise<string | null> {
+async function suspended(handle: string): Promise<TenantPageState> {
+  await shortLived404(handle);
+  return { kind: "suspended" };
+}
+
+interface PageLookup {
+  id: string;
+  /** The owner's account is suspended. */
+  suspended: boolean;
+}
+
+/**
+ * The page behind a handle and whether its owner is suspended, or null (unclaimed). Reads no
+ * document. A suspended page is returned, not hidden: that is what keeps its handle held, so the
+ * visitor sees "This page isn't available." and never the "Claim it" panel.
+ */
+async function lookupPage(handle: string): Promise<PageLookup | null> {
   const { data, error } = await createAdminSupabase()
     .from("pages")
     .select("id, accounts!inner(suspended_at)")
     .eq("handle", handle)
-    .is("accounts.suspended_at", null)
     .maybeSingle();
   if (error) throw new Error(`Looking up page "${handle}" failed: ${error.message}`);
-  return data?.id ?? null;
+  if (!data) return null;
+  return { id: data.id, suspended: data.accounts?.suspended_at != null };
+}
+
+/** The page id behind a handle, or null (unclaimed or suspended). Reads no document. */
+export async function lookupPageId(handle: string): Promise<string | null> {
+  const found = await lookupPage(handle);
+  return found && !found.suspended ? found.id : null;
 }
 
 /**
@@ -119,11 +152,14 @@ export const getTenantPageState = cache(async (handle: string): Promise<TenantPa
   // Cheap shape check first: garbage hosts and paths never reach the database.
   if (!handleSchema.safeParse(handle).success) return missing(handle);
 
-  const pageId = await lookupPageId(handle);
-  if (!pageId) return missing(handle);
+  const found = await lookupPage(handle);
+  if (!found) return missing(handle);
+  if (found.suspended) return suspended(handle);
+  const pageId = found.id;
 
   const read = await readPublicCached(pageId);
   if (read.state === "missing") return missing(handle);
+  if (read.state === "suspended") return suspended(handle);
   if (read.state === "unpublished") return { kind: "unpublished", pageId };
 
   const parsed = publishedDocSchema.safeParse(read.published);

@@ -12,11 +12,21 @@ import type { Database } from "@/lib/supabase/database.types";
  * removed aborts the whole delete: the page and every domain row stay, so a retry starts clean and
  * a hostname never lingers on the project without a row to find it by.
  *
+ * A suspended owner cannot delete a page (M5-09): deleting it would free the handle and erase what
+ * the admin needs to see. The account is read first, with the same secret key, before anything is
+ * looked up or removed; a failed read refuses the delete (fail closed), a missing account row reads
+ * as suspended.
+ *
  * `userId` MUST be the verified session user, never request input.
  */
 
 export type DeletePageError =
-  "not_found" | "confirmation_mismatch" | "domain_removal_failed" | "delete_failed";
+  | "not_found"
+  | "confirmation_mismatch"
+  | "domain_removal_failed"
+  | "delete_failed"
+  /** The owner's account is suspended (M5-09): deleting would erase the suspension and the evidence. */
+  | "account_suspended";
 
 export type DeletePageResult =
   | { ok: true; pageId: string; handle: string; remaining: number }
@@ -32,6 +42,7 @@ export const DELETE_PAGE_STATUS: Record<DeletePageError, number> = {
   confirmation_mismatch: 400,
   domain_removal_failed: 502,
   delete_failed: 500,
+  account_suspended: 403,
 };
 
 export const DELETE_PAGE_MESSAGES: Record<DeletePageError, string> = {
@@ -39,6 +50,8 @@ export const DELETE_PAGE_MESSAGES: Record<DeletePageError, string> = {
   confirmation_mismatch: "That doesn’t match the handle. Type it exactly to confirm.",
   domain_removal_failed: "Couldn’t remove its custom domain. Try again.",
   delete_failed: "Couldn’t delete the page. Try again.",
+  account_suspended:
+    "Your account is suspended, so its pages can’t be deleted. Contact support to appeal.",
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -56,6 +69,16 @@ export async function deletePageWithClient(
   deps: DeletePageDeps,
 ): Promise<DeletePageResult> {
   const { userId, pageId, confirm } = input;
+  const account = await admin
+    .from("accounts")
+    .select("suspended_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (account.error) {
+    console.error("[pages] reading the account before a page delete failed", account.error.message);
+    return failure("delete_failed");
+  }
+  if (!account.data || account.data.suspended_at !== null) return failure("account_suspended");
   if (typeof pageId !== "string" || !UUID.test(pageId)) return failure("not_found");
 
   const page = await admin

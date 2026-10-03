@@ -476,6 +476,40 @@
       "passes": false
     },
     {
+      "id": "M1-29",
+      "milestone": 1,
+      "area": "auth",
+      "title": "Google sign-in on the log in page through a Google ID token",
+      "acceptance": [
+        "With NEXT_PUBLIC_GOOGLE_CLIENT_ID set and Google's script stubbed (page.route on https://accounts.google.com/gsi/client; Google's real login is never driven), http://app.localhost:3000/login calls google.accounts.id.initialize once with the configured client_id, ux_mode 'popup', auto_select false and a 64-hex nonce, then renderButton with type standard, theme outline, size large, text continue_with and a width of at most 400. The nonce handed to Google equals sha256 of the value in the hl-google-nonce cookie, which is HttpOnly, SameSite=Lax, has no Domain (host app.localhost) and lives at most 900 seconds; the raw value appears nowhere in the page (document.cookie, the initialize config).",
+        "A stubbed credential with the right nonce and audience reaches the signInWithGoogle Server Action: the local Supabase refuses it, the page shows 'Google sign-in didn’t work. Try again or use an email link.', stays on /login and no sb-...-auth-token cookie is set. The attempt spent the nonce: a new hl-google-nonce is issued, initialize is called again with sha256 of it, and a second attempt reaches Supabase again (the same message, not the 'expired' one).",
+        "Abuse cases, each refused with no session cookie and the nonce spent, and with Supabase never called (Playwright for the first group, Vitest for all): a token whose nonce claim is another page's nonce or the raw cookie value, or a cleared or expired nonce cookie ('Google sign-in expired. Try again.'); a token for another Google client id; a credential that is not a JWT or is over 6000 characters; a nonce cookie that is not 43 base64url characters; and a missing or foreign Origin header, which is refused without touching the visitor's nonce.",
+        "Vitest, Supabase mocked: a valid token calls signInWithIdToken({provider:'google', token, nonce}) with the RAW nonce read from the cookie (never from the request), makes the accounts row exactly as the email path does (a failure there does not undo the sign-in), clears the nonce cookie and returns ok; the page then loads / and the auth gate routes to /claim or /editor. A Supabase error gives the friendly message (429 gives 'Too many attempts. Try again in a minute.'), only its code is logged, and nothing is set. A stale hl-pending-handle cookie is dropped when the account already has a page.",
+        "Without NEXT_PUBLIC_GOOGLE_CLIENT_ID the Google button, the 'or' rule and Google's script are absent from the server-rendered /login and /signup and email sign-in works alone. When Google's script cannot load the page says 'Google sign-in couldn’t load. Use an email link instead.' and the email form still works.",
+        "Headers: only app-host responses are affected; the app-host CSP still forbids framing and sets no script-src, frame-src, connect-src or style-src, so Google's script, iframe and requests are not blocked, and any such directive added later automatically lists Google's documented origin (https://accounts.google.com/gsi/client, /gsi/, /gsi/style); Cross-Origin-Opener-Policy: same-origin is never sent (it blanks Google's popup).",
+        "At 390x844 on http://app.localhost:3000/login: document.documentElement.scrollWidth <= 390, every other button, input and standalone link has a bounding box at least 44px tall, and Google's button spans the form column below the 'or' rule inside a row at least 48px tall. Google draws its button 40px tall inside its own iframe and does not allow resizing, so the 44px floor does not apply inside it. Narrowing the viewport draws the button again at the new width. At 1440x900 it sits below the 'or' rule inside the 400px-max form column.",
+        "Manual on production, after the Google Cloud, Supabase and Vercel steps: Gary signs in at https://app.hydlnk.com/login with a Google account, Google's popup names hydlnk.com, and he lands on /claim (new account) or /editor (existing account); a Google address that already has an email-link account lands on that same account (one auth.users row, one accounts row)."
+      ],
+      "mockup": "Signup.dc.html",
+      "passes": false
+    },
+    {
+      "id": "M1-30",
+      "milestone": 1,
+      "area": "auth",
+      "title": "Google sign-up on signup carries the chosen handle",
+      "acceptance": [
+        "On /signup?handle=zq-gg-x (available) Google's button is live; with 'mara', 'www', 'ab' or an empty field it is covered by an aria-disabled 'Continue with Google' button over an inert iframe, the same status messages as the live availability check show, pressing the cover moves focus to the Handle field and Google is never called (stub click count 0, initialize called once). A usable handle uncovers it again.",
+        "A usable handle and a stubbed credential reach the Server Action together; locally Supabase refuses the token, the page shows the friendly message and neither an hl-pending-handle cookie nor a session cookie exists.",
+        "Abuse case: with GET /api/handles/check stubbed to answer 'available' for everything, a credential sent with 'mara' or 'www' is refused by the server before sign-in with the 'taken' or 'reserved' status line, focus on the Handle field, no Google error alert, no session, no hl-pending-handle cookie and a renewed nonce.",
+        "Vitest, Supabase mocked: after a successful sign-in the handle rides to /claim in hl-pending-handle holding the normalized handle: HttpOnly, SameSite=Lax, no Domain, Max-Age at most 900, Secure on https, set only after Supabase accepted the token. It is not set (and a stale one is deleted) when the account already has a page, and not set when the page lookup fails. 'www', 'admin', 'mara', 'ab', an empty string, '-bad-', 31 characters and a non-string handle are each refused before Supabase is called, with no cookie and no account row. /claim then resumes the handle exactly as M1-13 describes.",
+        "At 390x844 on /signup?handle=zq-gg-x: no horizontal scroll, every other button, input and standalone link at least 44px tall, Google's button spans the column (a 40px button in a 48px row, see M1-29) and the cover is full width and at least 44px tall; at 1440x900 the button sits below the 'or' rule in the form column.",
+        "Manual on production: Gary signs up with Google and a fresh handle; afterwards a pages row exists and https://<handle>.hydlnk.com returns 200 showing the placeholder."
+      ],
+      "mockup": "Signup.dc.html",
+      "passes": false
+    },
+    {
       "id": "M2-01",
       "milestone": 2,
       "area": "blocks",
@@ -2024,7 +2058,7 @@
         "At 1440x900 on the same URL: the layout matches Editor.dc.html and DESIGN.md."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-04",
@@ -2041,7 +2075,7 @@
         "At 1440x900 on the same URL: the shell matches Analytics.dc.html (header bar with mono breadcrumb and 22px title)."
       ],
       "mockup": "Analytics.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-05",
@@ -2060,7 +2094,7 @@
         "At 1440x900 on the same URL: it sits inside the marketing page chrome of Main.dc.html with field and error styles matching Signup.dc.html."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-06",
@@ -2077,7 +2111,7 @@
         "At 1440x900 on the same URL: the table matches the data-table style of Analytics.dc.html (mono numbers, header row on --hl-page)."
       ],
       "mockup": "Analytics.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-07",
@@ -2093,7 +2127,7 @@
         "At 1440x900 on the same URL: the layout matches Analytics.dc.html."
       ],
       "mockup": "Analytics.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-08",
@@ -2161,7 +2195,7 @@
         "At 1440x900 on the same URL: the profile section matches Editor.dc.html, with no layout shift when the new avatar loads, and the public page markup has no /_next/image URL for the avatar (the img carries width, height and decoding=async)."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-12",
@@ -2178,7 +2212,7 @@
         "At 1440x900 on the same URL: the panel matches Design.dc.html."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-13",
@@ -2194,7 +2228,7 @@
         "At 1440x900 on the same URL: they match the error style of Signup.dc.html (--hl-bad text) inside Editor.dc.html."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-14",
@@ -2208,7 +2242,7 @@
         "Direct-API abuse: with the publishable key a direct DELETE or update of any `page-media` object is rejected (no client policy); the cleanup function is not callable by anon or authenticated; the Milestone 3 rule that replacing a background never breaks the live page still holds (object A stays 200 until the Publish that drops it)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-15",
@@ -2225,7 +2259,7 @@
         "At 1440x900 on the same URL: the layout matches Editor.dc.html."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-16",
@@ -2241,7 +2275,7 @@
         "At 1440x900 on the same URL: the layout matches Design.dc.html."
       ],
       "mockup": "Design.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-17",
@@ -2288,7 +2322,7 @@
         "At 1440x900 on the same URL: the layout matches Billing.dc.html."
       ],
       "mockup": "Billing.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-20",
@@ -2304,7 +2338,7 @@
         "At 1440x900 on the same pages: they use the Signup.dc.html and Main.dc.html chrome and DESIGN.md tokens."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-21",
@@ -2369,7 +2403,7 @@
         "At 1440x900 on the same URLs: the layout uses the Main.dc.html page chrome with a centered text column."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-25",

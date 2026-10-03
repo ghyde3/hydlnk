@@ -2,6 +2,7 @@
 
 import { updateTag } from "next/cache";
 import { getSessionUser } from "@/lib/auth/session";
+import { cleanupMediaQuietly } from "@/lib/media/cleanup-admin";
 import { publishPageCore, type PublishResult } from "./core";
 import { pageTag } from "./tags";
 
@@ -20,6 +21,10 @@ export async function publishPage(pageId: string): Promise<PublishResult> {
   const user = await getSessionUser();
   const result = await publishPageCore({ pageId, userId: user?.id ?? null });
   // Tags are case-sensitive and page ids are stored lower case; the id is a GUID by now.
-  if (result.ok) updateTag(pageTag(pageId.toLowerCase()));
+  if (result.ok) {
+    updateTag(pageTag(pageId.toLowerCase()));
+    // The Publish may have dropped the last reference to an image the live page used to show (M5-14).
+    if (user) await cleanupMediaQuietly(user.id);
+  }
   return result;
 }

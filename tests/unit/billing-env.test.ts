@@ -34,8 +34,14 @@ const FULL: Record<string, string> = {
   VISITOR_HASH_SECRET: "visitor-secret-value",
 };
 
+// The production deployment has the real root domain (a localhost one is refused there, see
+// admin-env.test.ts), so a case that sets VERCEL_ENV=production starts from hydlnk.com.
 const parse = (overrides: Record<string, string | undefined> = {}) =>
-  parseServerEnv({ ...FULL, ...overrides });
+  parseServerEnv({
+    ...FULL,
+    ...(overrides.VERCEL_ENV === "production" ? { NEXT_PUBLIC_ROOT_DOMAIN: "hydlnk.com" } : {}),
+    ...overrides,
+  });
 
 describe("M4-01 .env.example", () => {
   const path = process.env.ENV_EXAMPLE_PATH ?? resolve(process.cwd(), ".env.example");
@@ -56,7 +62,8 @@ describe("M4-01 .env.example", () => {
   // The test-only overrides: listed commented out, so an untouched copy never redirects an API.
   const OVERRIDES = ["VERCEL_API_BASE_URL", "STRIPE_API_HOST"];
 
-  const find = (name: string) => lines.findIndex((line) => new RegExp(`^#?\\s*${name}=`).test(line));
+  const find = (name: string) =>
+    lines.findIndex((line) => new RegExp(`^#?\\s*${name}=`).test(line));
   const valueOf = (name: string, index: number) =>
     lines[index]!.replace(new RegExp(`^#?\\s*${name}=`), "").trim();
 
@@ -67,7 +74,9 @@ describe("M4-01 .env.example", () => {
       const value = valueOf(name, index);
       // A placeholder, never a live-looking id or secret.
       expect(value, `${name}=${value}`).toMatch(/replace_me/);
-      expect(lines[index - 1]?.trim().startsWith("#"), `${name} has no comment above it`).toBe(true);
+      expect(lines[index - 1]?.trim().startsWith("#"), `${name} has no comment above it`).toBe(
+        true,
+      );
     });
   }
 
@@ -76,7 +85,9 @@ describe("M4-01 .env.example", () => {
       const index = find(name);
       expect(index, `${name} is not listed in .env.example`).toBeGreaterThan(-1);
       expect(lines[index]!.trim().startsWith("#"), `${name} must be commented out`).toBe(true);
-      expect(lines[index - 1]?.trim().startsWith("#"), `${name} has no comment above it`).toBe(true);
+      expect(lines[index - 1]?.trim().startsWith("#"), `${name} has no comment above it`).toBe(
+        true,
+      );
     });
   }
 
@@ -97,8 +108,12 @@ describe("M4-01 .env.example", () => {
       const index = find(name);
       expect(index, `${name} is not listed in .env.example`).toBeGreaterThan(-1);
       expect(valueOf(name, index)).toBe(fallback);
-      expect(lines[index]!.trim().startsWith("#"), `${name} is a default, not commented out`).toBe(false);
-      expect(lines[index - 1]?.trim().startsWith("#"), `${name} has no comment above it`).toBe(true);
+      expect(lines[index]!.trim().startsWith("#"), `${name} is a default, not commented out`).toBe(
+        false,
+      );
+      expect(lines[index - 1]?.trim().startsWith("#"), `${name} has no comment above it`).toBe(
+        true,
+      );
     });
   }
 
@@ -106,7 +121,8 @@ describe("M4-01 .env.example", () => {
     const above = (name: string) => {
       const index = find(name);
       const block: string[] = [];
-      for (let i = index - 1; i >= 0 && lines[i]!.trim().startsWith("#"); i--) block.unshift(lines[i]!);
+      for (let i = index - 1; i >= 0 && lines[i]!.trim().startsWith("#"); i--)
+        block.unshift(lines[i]!);
       return block.join(" ");
     };
     expect(above("STRIPE_LIVE_MODE")).toMatch(/production/i);
@@ -134,7 +150,8 @@ describe("M4-01 required variables", () => {
       expect(message).toContain(name);
       expect(message).toMatch(/Missing:/);
       // Only the missing one is named, and no value is echoed.
-      for (const other of M4_REQUIRED_KEYS) if (other !== name) expect(message).not.toContain(other);
+      for (const other of M4_REQUIRED_KEYS)
+        if (other !== name) expect(message).not.toContain(other);
       for (const value of Object.values(FULL)) expect(message).not.toContain(value);
     });
 
@@ -229,12 +246,20 @@ describe("M4-01 Stripe stays sandbox-only unless live mode is on in production",
       "sk_test_abcdefghijklmnop",
     );
     expect(() => parse({ STRIPE_SECRET_KEY: "rk_test_abcdefghijklmnop" })).not.toThrow();
-    expect(() => parse({ STRIPE_SECRET_KEY: "pk_test_abcdefghijklmnop" })).toThrow(/STRIPE_SECRET_KEY/);
-    expect(() => parse({ STRIPE_SECRET_KEY: "whsec_abcdefghijklmnop" })).toThrow(/STRIPE_SECRET_KEY/);
+    expect(() => parse({ STRIPE_SECRET_KEY: "pk_test_abcdefghijklmnop" })).toThrow(
+      /STRIPE_SECRET_KEY/,
+    );
+    expect(() => parse({ STRIPE_SECRET_KEY: "whsec_abcdefghijklmnop" })).toThrow(
+      /STRIPE_SECRET_KEY/,
+    );
     // Not a key of any mode, whatever the switch says.
     for (const liveMode of ["true", "false"]) {
       expect(() =>
-        parse({ STRIPE_SECRET_KEY: "pk_live_abcdefghijklmnop", STRIPE_LIVE_MODE: liveMode, VERCEL_ENV: "production" }),
+        parse({
+          STRIPE_SECRET_KEY: "pk_live_abcdefghijklmnop",
+          STRIPE_LIVE_MODE: liveMode,
+          VERCEL_ENV: "production",
+        }),
       ).toThrow(/STRIPE_SECRET_KEY/);
     }
   });
@@ -248,7 +273,15 @@ describe("M4-01 Stripe stays sandbox-only unless live mode is on in production",
     expect(stripeKeyKind("rk_live_x")).toBe("live");
     expect(stripeKeyKind("sk_test_x")).toBe("test");
     expect(stripeKeyKind("rk_test_x")).toBe("test");
-    for (const other of ["", "pk_live_x", "pk_test_x", "sk_x", "whsec_x", "SK_LIVE_x", " sk_live_x"]) {
+    for (const other of [
+      "",
+      "pk_live_x",
+      "pk_test_x",
+      "sk_x",
+      "whsec_x",
+      "SK_LIVE_x",
+      " sk_live_x",
+    ]) {
       expect(stripeKeyKind(other), other).toBe("unknown");
     }
   });
@@ -291,7 +324,8 @@ describe("STRIPE_LIVE_MODE", () => {
       for (const [key, kind] of KEYS) {
         const live = mode === "true";
         const accepted =
-          kind === "none" || (live ? kind === "live" && vercelEnv === "production" : kind === "test");
+          kind === "none" ||
+          (live ? kind === "live" && vercelEnv === "production" : kind === "test");
         const label = `${kind === "none" ? "no key" : `${key!.slice(0, 8)}...`} with STRIPE_LIVE_MODE=${mode ?? "(unset)"} on VERCEL_ENV=${vercelEnv ?? "(unset)"} is ${accepted ? "accepted" : "refused"}`;
         it(label, () => {
           const run = () =>

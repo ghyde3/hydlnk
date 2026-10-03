@@ -45,6 +45,10 @@ export async function generateMetadata({ params }: PageProps<"/t/[handle]">): Pr
   if (state.kind === "unpublished") {
     return { title: `${handle}.${HANDLE_DISPLAY_DOMAIN}`, robots: { index: false } };
   }
+  if (state.kind === "suspended") {
+    // Nothing of the page: no name, no bio, no OG tags (M5-08).
+    return { title: "Page not available", robots: { index: false } };
+  }
   return { title: "Page not found", robots: { index: false } };
 }
 
@@ -52,7 +56,7 @@ export default async function TenantRoute({ params }: PageProps<"/t/[handle]">) 
   const { handle } = await params;
   const state = await getTenantPageState(handle);
 
-  if (state.kind === "missing") notFound();
+  if (state.kind === "missing" || state.kind === "suspended") notFound();
   if (state.kind === "unpublished") return <UnpublishedPlaceholder handle={handle} />;
 
   const { page } = state;
