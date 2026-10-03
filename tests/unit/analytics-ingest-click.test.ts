@@ -8,6 +8,7 @@ function click(
   query = "",
 ): Request {
   const merged: Record<string, string> = {
+    host: "mara.localhost:3000",
     "user-agent": IPHONE_UA,
     "x-forwarded-for": "203.0.113.7",
   };
@@ -109,14 +110,21 @@ describe("M4-22 open redirect and unknown targets", () => {
     expect(s.resolveClickTarget).toHaveBeenCalledWith(PAGE_ID, BLOCK_ID);
   });
 
-  it("a different Host header, X-Forwarded-Host and Referer never change Location", async () => {
+  it("X-Forwarded-Host and Referer never change Location or the host that is checked", async () => {
     const s = makeDeps();
     const response = await handleClick(
-      click({ host: "evil.example", "x-forwarded-host": "evil.example", referer: "https://evil.example/" }),
+      click({ "x-forwarded-host": "evil.example", referer: "https://evil.example/" }),
       params,
       s.deps,
     );
     expect(response.headers.get("location")).toBe("https://example.com/book");
+    const forged = await handleClick(
+      click({ host: "evil.example", "x-forwarded-host": "mara.localhost:3000" }),
+      params,
+      makeDeps().deps,
+    );
+    expect(forged.status).toBe(404);
+    expect(forged.headers.get("location")).toBeNull();
   });
 
   it("an unknown or non-link id (the lookup says null) is a 404 with no Location and no insert", async () => {
@@ -175,6 +183,90 @@ describe("M4-22 open redirect and unknown targets", () => {
     const s = makeDeps();
     await handleClick(click(), { pageId: PAGE_ID, blockId: "a".repeat(64) }, s.deps);
     expect(s.resolveClickTarget).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("M4-22 the click is served only on the page's own hosts", () => {
+  async function on(host: string | null, method = "GET") {
+    const s = makeDeps();
+    const response = await handleClick(click({ host }, method), params, s.deps);
+    return { s, response };
+  }
+
+  it.each([
+    ["the page's own handle host", "mara.localhost:3000"],
+    ["the same host in upper case", "MARA.localhost:3000"],
+    ["the same host with a trailing dot", "mara.localhost.:3000"],
+    ["the same host with another port", "mara.localhost:8080"],
+    ["a verified custom host of the page", "links.example.test"],
+    ["a verified custom host with a port, a dot and capitals", "Links.Example.test.:443"],
+  ])("302s on %s", async (_name, host) => {
+    const { response } = await on(host);
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("https://example.com/book");
+  });
+
+  it.each([
+    ["another tenant's handle host", "victim.localhost:3000"],
+    ["another verified custom domain", "victim.example.test"],
+    ["the marketing host", "localhost:3000"],
+    ["the app host", "app.localhost:3000"],
+    ["www", "www.localhost:3000"],
+    ["a host that merely ends with the page's host", "evil-mara.localhost:3000"],
+    ["a host that merely starts with the custom host", "links.example.test.evil.example"],
+    ["a deployment host", "hydlnk-abc.vercel.app"],
+    ["no Host header at all", null],
+    ["an empty Host header", ""],
+  ])("404s on %s, with no Location, no insert and no scheduled task", async (_name, host) => {
+    const { s, response } = await on(host);
+    expect(response.status).toBe(404);
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(s.scheduled).toHaveLength(0);
+    expect(s.insertEvent).not.toHaveBeenCalled();
+  });
+
+  it("a HEAD on a foreign host is a 404 without a body", async () => {
+    const { response } = await on("victim.example.test", "HEAD");
+    expect(response.status).toBe(404);
+    expect(response.body).toBeNull();
+  });
+
+  it("a page with no verified custom host answers only on its handle host", async () => {
+    const s = makeDeps({
+      resolveClickTarget: vi.fn(async () => ({ url: "https://example.com/book", handle: "mara", customHosts: [] })),
+    });
+    const own = await handleClick(click(), params, s.deps);
+    const foreign = await handleClick(click({ host: "links.example.test" }), params, s.deps);
+    expect(own.status).toBe(302);
+    expect(foreign.status).toBe(404);
+  });
+});
+
+describe("M4-23 cross-site clicks", () => {
+  it.each([["document"], [null]])("a Sec-Fetch-Dest of %s is recorded", async (dest) => {
+    const s = makeDeps();
+    const response = await handleClick(click({ "sec-fetch-dest": dest }), params, s.deps);
+    expect(response.status).toBe(302);
+    expect(s.scheduled).toHaveLength(1);
+  });
+
+  it.each([["image"], ["script"], ["iframe"], ["empty"], ["style"], ["embed"], ["Image"]])(
+    "a Sec-Fetch-Dest of %s still redirects but records nothing",
+    async (dest) => {
+      const s = makeDeps();
+      const response = await handleClick(click({ "sec-fetch-dest": dest }), params, s.deps);
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("https://example.com/book");
+      expect(s.scheduled).toHaveLength(0);
+      expect(s.insertEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a Sec-Fetch-Dest of DOCUMENT in capitals is treated as document", async () => {
+    const s = makeDeps();
+    await handleClick(click({ "sec-fetch-dest": "Document" }), params, s.deps);
+    expect(s.scheduled).toHaveLength(1);
   });
 });
 

@@ -36,8 +36,15 @@ import {
 export const CHECK_COOLDOWN_SECONDS = 10;
 export const POLL_COOLDOWN_SECONDS = 9;
 
-/** Pending domains older than this are left to the owner's "Check DNS now" (the sweep skips them). */
-export const SWEEP_MAX_AGE_DAYS = 7;
+/**
+ * A domain that is still pending this many days after it was added is released: taken off the
+ * Vercel project and deleted. Without it a pending row would hold a hostname (and the project's
+ * domain slot) forever, which lets anyone squat a name they never control. The sweep and "Check DNS
+ * now" both do it; a verified domain is never expired.
+ */
+export const PENDING_EXPIRY_DAYS = 7;
+/** @deprecated the sweep verifies pending domains younger than this and releases the older ones. */
+export const SWEEP_MAX_AGE_DAYS = PENDING_EXPIRY_DAYS;
 export const SWEEP_BATCH = 50;
 
 export interface VerifyOptions {
@@ -47,6 +54,8 @@ export interface VerifyOptions {
    * The sweep skips it: it only needs the verdict.
    */
   withRecords?: boolean;
+  /** The clock for the expiry rule. Default: `deps.now`, then the real one. */
+  now?: () => Date;
 }
 
 export interface VerifyOutcome {
@@ -55,6 +64,10 @@ export interface VerifyOutcome {
   checked: boolean;
   /** This call flipped the domain from pending to verified. */
   becameVerified: boolean;
+  /** This call released (removed at Vercel and deleted) an expired pending domain. */
+  released?: boolean;
+  /** An expired pending domain that could not be released now (Vercel failed): the row is kept. */
+  releaseFailed?: boolean;
 }
 
 type OwnedRow = DomainRow & { pages: { owner_id: string } | null };
@@ -88,6 +101,41 @@ async function freshRow(deps: DomainDeps, row: OwnedRow): Promise<DomainRow> {
   return data ?? row;
 }
 
+const clockOf = (deps: DomainDeps, now?: () => Date): Date => (now ?? deps.now ?? (() => new Date()))();
+
+/** True for a pending row added more than `PENDING_EXPIRY_DAYS` ago. Verified and errored rows never expire. */
+export function isExpiredPending(row: Pick<DomainRow, "status" | "created_at">, now: Date): boolean {
+  if (row.status !== "pending") return false;
+  const created = Date.parse(row.created_at);
+  return Number.isFinite(created) && created < now.getTime() - PENDING_EXPIRY_DAYS * 86_400_000;
+}
+
+/**
+ * Releases an expired pending domain: off the Vercel project first (a 404, already gone, counts as
+ * removed), then the row, only while it is still pending (a verification that landed in between
+ * keeps its row). A Vercel failure keeps the row so the next sweep or check retries; it is logged
+ * and answered as "failed", never thrown.
+ */
+async function releaseExpired(deps: DomainDeps, row: DomainRow): Promise<"released" | "failed"> {
+  try {
+    await deps.vercel.removeProjectDomain(row.hostname);
+  } catch (error) {
+    deps.log?.(`[domains] releasing expired domain ${row.id} failed: ${errorLabel(error)}`);
+    return "failed";
+  }
+  const deleted = await deps.admin.from("domains").delete().eq("id", row.id).eq("status", "pending");
+  if (deleted.error) {
+    deps.log?.(`[domains] deleting expired domain ${row.id} failed: ${deleted.error.message}`);
+    return "failed";
+  }
+  try {
+    deps.expirePage(row.page_id);
+  } catch (error) {
+    deps.log?.(`[domains] expiring the page cache failed: ${errorLabel(error)}`);
+  }
+  return "released";
+}
+
 export async function verifyDomain(
   deps: DomainDeps,
   id: string,
@@ -100,6 +148,28 @@ export async function verifyDomain(
   if (!row) return null;
   if (row.status === "verified") {
     return { view: baseView(row), checked: false, becameVerified: false };
+  }
+
+  // Pending for more than 7 days: release it instead of asking Vercel anything.
+  if (isExpiredPending(row, clockOf(deps, options.now))) {
+    if ((await releaseExpired(deps, row)) === "released") {
+      return {
+        view: baseView(row, { message: DOMAIN_MESSAGES.expiredReleased }),
+        checked: false,
+        becameVerified: false,
+        released: true,
+      };
+    }
+    return {
+      view: pendingView(
+        row,
+        { records: [], apex: null, unavailable: true, misconfigured: false },
+        { message: DOMAIN_MESSAGES.unreachableCheck },
+      ),
+      checked: false,
+      becameVerified: false,
+      releaseFailed: true,
+    };
   }
 
   const claim = await deps.admin.rpc("claim_domain_check", {
@@ -224,12 +294,15 @@ export interface SweepResult {
   checked: number;
   /** Domains this sweep flipped to verified. */
   verified: number;
+  /** Expired pending domains this sweep released. */
+  released: number;
 }
 
 /**
  * The five-minute sweep: up to `batch` pending domains created in the last `maxAgeDays` days,
  * least recently checked first (never-checked first), each through `verifyDomain` with the same
- * cooldown, a few at a time. One failing domain never stops the rest.
+ * cooldown, a few at a time; then up to `batch` pending domains older than that, which are released
+ * (removed at Vercel, row deleted). One failing domain never stops the rest.
  */
 export async function sweepPendingDomains(
   deps: DomainDeps,
@@ -238,7 +311,8 @@ export async function sweepPendingDomains(
   const batch = options.batch ?? SWEEP_BATCH;
   const maxAgeDays = options.maxAgeDays ?? SWEEP_MAX_AGE_DAYS;
   const concurrency = options.concurrency ?? 5;
-  const since = new Date((options.now?.() ?? new Date()).getTime() - maxAgeDays * 86_400_000);
+  const now = options.now ?? (() => clockOf(deps));
+  const since = new Date(now().getTime() - maxAgeDays * 86_400_000);
 
   const { data, error } = await deps.admin
     .from("domains")
@@ -249,14 +323,24 @@ export async function sweepPendingDomains(
     .limit(batch);
   if (error) throw new Error(`Listing pending domains failed: ${error.message}`);
 
-  const ids = (data ?? []).map((row) => row.id);
+  const expired = await deps.admin
+    .from("domains")
+    .select("id")
+    .eq("status", "pending")
+    .lt("created_at", since.toISOString())
+    .order("created_at", { ascending: true })
+    .limit(batch);
+  if (expired.error) throw new Error(`Listing expired pending domains failed: ${expired.error.message}`);
+
+  const ids = [...(data ?? []), ...(expired.data ?? [])].map((row) => row.id);
   let checked = 0;
   let verified = 0;
+  let released = 0;
   for (let i = 0; i < ids.length; i += concurrency) {
     const outcomes = await Promise.all(
       ids.slice(i, i + concurrency).map(async (id) => {
         try {
-          return await verifyDomain(deps, id, { withRecords: false });
+          return await verifyDomain(deps, id, { withRecords: false, now });
         } catch (failure) {
           deps.log?.(`[domains] sweep: domain ${id} failed: ${errorLabel(failure)}`);
           return null;
@@ -266,7 +350,8 @@ export async function sweepPendingDomains(
     for (const outcome of outcomes) {
       if (outcome?.checked) checked += 1;
       if (outcome?.becameVerified) verified += 1;
+      if (outcome?.released) released += 1;
     }
   }
-  return { checked, verified };
+  return { checked, verified, released };
 }

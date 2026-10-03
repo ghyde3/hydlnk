@@ -71,6 +71,30 @@ export async function loadRecords(deps: DomainDeps, hostname: string): Promise<L
   }
 }
 
+/** How long the Domains screen's list may reuse a domain's DNS records. */
+export const RECORDS_MEMO_MS = 10_000;
+const recordsMemo = new WeakMap<object, Map<string, { at: number; loaded: LoadedRecords }>>();
+
+/**
+ * `loadRecords` with a short per-process memo, for the screen's list. It is keyed by the Vercel
+ * client (one per process in production), so two environments never share an entry, and a failed
+ * read (`unavailable`) is never remembered.
+ */
+export async function loadRecordsMemoized(deps: DomainDeps, hostname: string): Promise<LoadedRecords> {
+  let byHost = recordsMemo.get(deps.vercel);
+  if (!byHost) {
+    byHost = new Map();
+    recordsMemo.set(deps.vercel, byHost);
+  }
+  const now = Date.now();
+  const hit = byHost.get(hostname);
+  if (hit && Math.abs(now - hit.at) < RECORDS_MEMO_MS) return hit.loaded;
+  const loaded = await loadRecords(deps, hostname);
+  if (byHost.size > 500) byHost.clear();
+  if (!loaded.unavailable) byHost.set(hostname, { at: now, loaded });
+  return loaded;
+}
+
 export function pendingView(
   row: DomainRow,
   loaded: LoadedRecords,

@@ -49,7 +49,7 @@ describe("M5-01 / M5-02 a limiter outage never breaks a page view or a click", (
     const s = makeDeps({ rateLimit: (key, limit, windowSeconds) => rateLimit(key, limit, windowSeconds) });
     const response = await handleClick(
       new Request(`http://mara.localhost:3000/r/${PAGE_ID}/${BLOCK_ID}`, {
-        headers: { "user-agent": IPHONE_UA, "x-forwarded-for": "203.0.113.7" },
+        headers: { host: "mara.localhost:3000", "user-agent": IPHONE_UA, "x-forwarded-for": "203.0.113.7" },
       }),
       { pageId: PAGE_ID, blockId: BLOCK_ID },
       s.deps,

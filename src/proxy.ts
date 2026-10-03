@@ -70,6 +70,9 @@ export async function proxy(request: NextRequest) {
         );
       }
       if (isInternalPath(pathname)) return NextResponse.rewrite(rewriteTo(NOT_FOUND_PATH));
+      // The click redirect belongs to a page's own hosts: on the root host (and deployment hosts)
+      // there is no page, so /r/* is the plain 404 here (the handler checks the host as well).
+      if (pathname.startsWith("/r/")) return NextResponse.rewrite(rewriteTo(NOT_FOUND_PATH));
       return NextResponse.next();
 
     case "app":
@@ -122,13 +125,15 @@ export const config = {
   // Skip Next.js internals (including dev HMR), the framework's metadata files and static assets:
   // any path ending in a static file extension, video included (the showreel in public/marketing
   // is .mp4 and .webm). Those requests never need a host decision, and the proxy would otherwise
-  // run once per image and per video range request. tests/unit/routing-proxy-matcher.test.ts
+  // run once per image and per video range request. The extension rule does not apply under /app,
+  // /t, /sites and /r (the lookahead `(?!(?:app|t|sites|r)/)`): those are routed by host, so
+  // `/app/api/domains/<uuid>.png` still gets its host check instead of reaching the app route. tests/unit/routing-proxy-matcher.test.ts
   // checks that every file in public/ is covered. There is deliberately no /marketing/ prefix
   // rule: a path that is not a file must still get its host's routing and 404. robots.txt and
   // sitemap.xml are route handlers that read the Host header themselves
   // (src/lib/marketing/seo.ts), so they stay unmatched. The pattern has to be a literal so
   // Next.js can analyse it at build time.
   matcher: [
-    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm)$).*)",
+    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|(?!(?:app|t|sites|r)/).*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm)$).*)",
   ],
 };

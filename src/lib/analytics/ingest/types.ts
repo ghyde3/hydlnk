@@ -20,6 +20,16 @@ export interface BeaconPage {
   customHosts: string[];
 }
 
+/** What the click redirect needs to know about a link: where it goes and which hosts may serve it. */
+export interface ClickTarget {
+  /** The URL in the page's published document. */
+  url: string;
+  /** `pages.handle` of the page: `{handle}.{root}` serves it. */
+  handle: string;
+  /** Hostnames of the page's VERIFIED custom domains. */
+  customHosts: string[];
+}
+
 /**
  * Everything the two handlers touch outside the request: the limiter, the clock, the database and
  * `after()`. The routes pass the real ones (`./deps`); the unit tests pass spies, which is how the
@@ -31,8 +41,8 @@ export interface IngestDeps {
   visitorHash: (input: VisitorHashInput) => string;
   insertEvent: (row: EventRow) => Promise<void>;
   lookupBeaconPage: (pageId: string) => Promise<BeaconPage | null>;
-  /** The URL of a block, icon or cell in the page's published document, or null. */
-  resolveClickTarget: (pageId: string, id: string) => Promise<string | null>;
+  /** The link (block, icon or cell) in the page's published document with the hosts that serve it, or null. */
+  resolveClickTarget: (pageId: string, id: string) => Promise<ClickTarget | null>;
   /** Runs `task` after the response is sent (Next's `after`). */
   schedule: (task: () => Promise<void>) => void;
   /** NEXT_PUBLIC_ROOT_DOMAIN. */

@@ -21,6 +21,7 @@ import {
 } from "../fixtures/vercel-stub";
 import { addDomain, checkDomain, listDomainViews, removeDomain, setDomainPage } from "@/lib/domains/core";
 import {
+  addDomainRow,
   domainRowOf,
   domainRowsFor,
   hostnameFor,
@@ -373,6 +374,40 @@ test.describe("M4-15 Check DNS now, the cooldown and the live email", () => {
     }
     const allowed = [addPath(), domainPath(host), verifyPath(host), configPath(host)];
     for (const request of await requestsFor(host)) expect(allowed, `${request.method} ${request.path}`).toContain(request.path);
+  });
+});
+
+test.describe("pending domains expire after 7 days", () => {
+  test("M4-15 Check DNS now on an 8-day-old pending domain releases it (Vercel DELETE, row gone) and says so; a 6-day-old one is still checked", async ({}, info) => {
+    test.skip(!desktopOnly(info), "a data flow: one project is enough");
+    const site = await makeSite("ex", "studio");
+    const old = UNIQUE();
+    const recent = UNIQUE();
+    const day = 86_400_000;
+    const oldId = await addDomainRow({ pageId: site.pageId, hostname: old, status: "pending", createdAt: new Date(Date.now() - 8 * day).toISOString() });
+    const recentId = await addDomainRow({ pageId: site.pageId, hostname: recent, status: "pending", createdAt: new Date(Date.now() - 6 * day).toISOString() });
+    await markDnsReady(old);
+
+    const result = await checkDomain(realDeps(), site.user.id, oldId);
+    expect(result).toEqual({
+      ok: false,
+      error: "domain_expired",
+      message: "This domain wasn’t connected within 7 days, so we released it. Add it again to try once more.",
+      status: 410,
+    });
+    expect(await domainRowOf(oldId)).toBeNull();
+    expect((await removalCalls(old)).length).toBe(1);
+    expect(await verifyCalls(old)).toEqual([]);
+    expect((await rawRequest(old, "/")).status).toBe(404);
+
+    // Adding it again works (the slot and the hostname are free).
+    const again = await addDomain(realDeps(), site.user.id, { hostname: old, pageId: site.pageId });
+    expect(again.ok).toBe(true);
+
+    const fresh = await checkDomain(realDeps(), site.user.id, recentId);
+    expect(fresh.ok && fresh.domain!.status).toBe("pending");
+    expect((await verifyCalls(recent)).length).toBe(1);
+    expect(await removalCalls(recent)).toEqual([]);
   });
 });
 

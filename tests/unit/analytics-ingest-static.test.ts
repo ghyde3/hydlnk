@@ -159,7 +159,7 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     const selects = [...source.matchAll(/\.select\(\s*"([^"]*)"\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
       "handle, accounts!inner(suspended_at), domains(hostname, status)",
-      "published, accounts!inner(suspended_at)",
+      "published, handle, accounts!inner(suspended_at), domains(hostname, status)",
     ]);
     for (const select of selects) expect(select).not.toMatch(/\bdraft\b|\*/);
     expect(strip(source)).not.toMatch(/\bdraft\b/);
@@ -181,7 +181,9 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
   it("the click handler never reads the query string", () => {
     const source = strip(read("src/lib/analytics/ingest/click.ts"));
     expect(source).not.toMatch(/searchParams|\.search\b|new URL\(/);
-    expect(source).not.toMatch(/headers\.get\("(host|x-forwarded-host|referer)"\)/i);
+    // The only host it may read is the real Host header (the host binding); never a forwarded one.
+    expect(source).not.toMatch(/headers\.get\("(x-forwarded-host|x-original-host|referer)"\)/i);
+    expect(source).toMatch(/headers\.get\("host"\)/);
   });
 
   it("the two routes exist, each dynamic, and no copy of them hides under the tenant routes", () => {

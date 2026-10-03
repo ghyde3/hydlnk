@@ -150,10 +150,15 @@ test.describe("M4-13 DNS records shown are the ones Vercel returns", () => {
     await setDomainState(host, {
       recommendedCNAME: [{ rank: 1, value: "second.example-dns.test." }],
     });
-    await page.reload();
-    await expect(cardOf(page, host).locator("[data-dns-record]:visible")).toContainText(
-      "second.example-dns.test",
-    );
+    // The list reuses a domain's records for 10 seconds (one Vercel read per window, however often
+    // the screen is reloaded), so reload until the change shows; it must within the window.
+    await expect(async () => {
+      await page.reload();
+      await expect(cardOf(page, host).locator("[data-dns-record]:visible")).toContainText(
+        "second.example-dns.test",
+        { timeout: 2_000 },
+      );
+    }).toPass({ timeout: 20_000, intervals: [1_000] });
   });
 
   test("M4-13 Copy writes only the Value to the clipboard and says Copied for two seconds", async ({

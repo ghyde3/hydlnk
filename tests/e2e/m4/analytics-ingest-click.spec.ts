@@ -375,10 +375,83 @@ test.describe("M4-21 / M4-22 on a custom host", () => {
     expect(beacon.status).toBe(204);
     expect((await eventsOf(p.pageId)).filter((row) => row.type === "view")).toHaveLength(1);
 
-    // The same host with another page's id is still just that page's own targets: no cross-page redirect.
+    // The same host with another page's id is not served: that page's links belong to its own hosts.
     const other = await ingestPage("ry");
     const crossed = await getClick(other, IDS.link, { host });
-    expect([302, 404]).toContain(crossed.status);
-    if (crossed.status === 302) expect(crossed.location).toBe(TARGETS[IDS.link]);
+    expect(crossed.status).toBe(404);
+    expect(crossed.location).toBeNull();
+  });
+});
+
+test.describe("M4-22 the redirect is bound to the page's own hosts", () => {
+  test("M4-22 another tenant's host, another verified custom host, the marketing and app hosts get the 404; the own hosts still 302", async ({}, info) => {
+    test.skip(!desktopOnly(info), "raw HTTP, no UI");
+    const mine = await ingestPage("hb", { plan: "studio" });
+    const victim = await ingestPage("hv", { plan: "pro" });
+    const myHost = `links-${rand(6)}.example.test`;
+    const victimHost = `victim-${rand(6)}.example.test`;
+    const pendingHost = `pending-${rand(6)}.example.test`;
+    const verifiedAt = new Date().toISOString();
+    for (const [page, hostname, status] of [
+      [mine, myHost, "verified"],
+      [victim, victimHost, "verified"],
+      [mine, pendingHost, "pending"],
+    ] as const) {
+      const added = await adminClient()
+        .from("domains")
+        .insert({ page_id: page.pageId, hostname, status, verified_at: status === "verified" ? verifiedAt : null });
+      expect(added.error?.message).toBeUndefined();
+    }
+
+    // Own hosts: the handle host and the verified custom host.
+    for (const host of [mine.host, myHost + `:${DEV_PORT}`]) {
+      const res = await getClick(mine, IDS.link, { host });
+      expect(res.status, host).toBe(302);
+      expect(res.location, host).toBe(TARGETS[IDS.link]);
+    }
+
+    // Everything else: the plain 404, no Location, nothing recorded.
+    for (const host of [
+      victim.host,
+      `${victim.handle}.localhost`,
+      victimHost,
+      `${victimHost}:${DEV_PORT}`,
+      pendingHost,
+      `localhost:${DEV_PORT}`,
+      `app.localhost:${DEV_PORT}`,
+      "unknown-host.example.test",
+    ]) {
+      const res = await getClick(mine, IDS.link, { host, ua: DESKTOP_UA });
+      expect(res.status, host).toBe(404);
+      expect(res.location, host).toBeNull();
+    }
+    // The 404 is the same plain page the tenant routes use: it names no target.
+    const refused = await getClick(mine, IDS.link, { host: victimHost });
+    expect(refused.body).not.toContain(TARGETS[IDS.link]!);
+    // Forwarded-host headers do not move a request onto an allowed host.
+    const forwarded = await getClick(mine, IDS.link, {
+      host: victimHost,
+      headers: { "x-forwarded-host": mine.host, "x-original-host": mine.host },
+    });
+    expect(forwarded.status).toBe(404);
+    // Only the two own-host requests above were recorded.
+    expect(await waitForEvents(mine.pageId, 2)).toHaveLength(2);
+    expect(await settledCount(mine.pageId)).toBe(2);
+  });
+
+  test("M4-23 a click that is not a navigation (Sec-Fetch-Dest image, script, iframe) still redirects but is not recorded", async ({}, info) => {
+    test.skip(!desktopOnly(info), "raw HTTP, no UI");
+    const p = await ingestPage("sf");
+    for (const dest of ["image", "script", "iframe", "empty"]) {
+      const res = await getClick(p, IDS.link, { headers: { "sec-fetch-dest": dest } });
+      expect(res.status, dest).toBe(302);
+      expect(res.location, dest).toBe(TARGETS[IDS.link]);
+    }
+    expect(await settledCount(p.pageId)).toBe(0);
+    for (const headers of [{ "sec-fetch-dest": "document" }, {}] as Record<string, string>[]) {
+      const res = await getClick(p, IDS.link, { headers });
+      expect(res.status).toBe(302);
+    }
+    expect(await waitForClicks(p.pageId, 2)).toHaveLength(2);
   });
 });

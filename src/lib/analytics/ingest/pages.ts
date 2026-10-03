@@ -4,7 +4,7 @@ import { publishedDocSchema } from "@/lib/document";
 import { PAGE_REVALIDATE_SECONDS, PUBLIC_READ_CACHE_VERSION, pageTag } from "@/lib/publish/tags";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { findLinkUrl } from "./target";
-import type { BeaconPage } from "./types";
+import type { BeaconPage, ClickTarget } from "./types";
 
 /**
  * The two reads the tracking routes make, both with the secret key (RLS does not apply, so these
@@ -35,12 +35,14 @@ export async function lookupBeaconPage(pageId: string): Promise<BeaconPage | nul
 }
 
 /** What the cached click read hands back: plain JSON, so the data cache can store it. */
-type PublishedRead = { found: true; published: unknown } | { found: false };
+type PublishedRead =
+  | { found: true; published: unknown; handle: string; customHosts: string[] }
+  | { found: false };
 
 async function readPublished(pageId: string): Promise<PublishedRead> {
   const { data, error } = await createAdminSupabase()
     .from("pages")
-    .select("published, accounts!inner(suspended_at)")
+    .select("published, handle, accounts!inner(suspended_at), domains(hostname, status)")
     .eq("id", pageId)
     .maybeSingle();
   // A database failure is an error, not a "not found": nobody should be told a link is gone
@@ -49,7 +51,14 @@ async function readPublished(pageId: string): Promise<PublishedRead> {
   if (!data || data.published === null || data.accounts.suspended_at !== null) {
     return { found: false };
   }
-  return { found: true, published: data.published };
+  return {
+    found: true,
+    published: data.published,
+    handle: data.handle,
+    customHosts: (data.domains ?? [])
+      .filter((domain) => domain.status === "verified")
+      .map((domain) => domain.hostname.toLowerCase()),
+  };
 }
 
 /**
@@ -59,21 +68,23 @@ async function readPublished(pageId: string): Promise<PublishedRead> {
  */
 function readPublishedCached(pageId: string): Promise<PublishedRead> {
   if (process.env.NODE_ENV !== "production") return readPublished(pageId);
-  return unstable_cache(readPublished, ["click-target", PUBLIC_READ_CACHE_VERSION, pageId], {
+  return unstable_cache(readPublished, ["click-target", "host-bound", PUBLIC_READ_CACHE_VERSION, pageId], {
     tags: [pageTag(pageId)],
     revalidate: PAGE_REVALIDATE_SECONDS,
   })(pageId);
 }
 
 /**
- * The destination of the link with this id in the page's published document, or null: unknown page,
+ * The link with this id in the page's published document, with the handle and verified custom hosts
+ * of its page (the hosts the redirect may be served on), or null: unknown page,
  * nothing published, suspended owner, a document that fails the published schema, an id that is not
  * a link, or a URL that is not plain http(s).
  */
-export async function resolveClickTarget(pageId: string, id: string): Promise<string | null> {
+export async function resolveClickTarget(pageId: string, id: string): Promise<ClickTarget | null> {
   const read = await readPublishedCached(pageId);
   if (!read.found) return null;
   const parsed = publishedDocSchema.safeParse(read.published);
   if (!parsed.success) return null;
-  return findLinkUrl(parsed.data, id);
+  const url = findLinkUrl(parsed.data, id);
+  return url === null ? null : { url, handle: read.handle, customHosts: read.customHosts };
 }

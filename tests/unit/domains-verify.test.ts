@@ -241,23 +241,122 @@ describe("M4-15 the five-minute sweep", () => {
     h.vercel.state("one.example.test").verified = true;
     h.vercel.state("one.example.test").misconfigured = false;
     const result = await sweepPendingDomains(h.deps, { now: () => NOW });
-    expect(result).toEqual({ checked: 2, verified: 1 });
+    expect(result).toEqual({ checked: 2, verified: 1, released: 0 });
     expect(host(h, A).status).toBe("verified");
     expect(host(h, B).status).toBe("pending");
     expect(h.emails).toEqual([{ to: "pro@example.test", hostname: "one.example.test" }]);
   });
 
-  it("skips a pending domain created 8 days earlier (Check DNS now can still verify it)", async () => {
+  it("an 8-day-old pending domain is not verified by the sweep: it is released (Vercel DELETE, row gone)", async () => {
     const h = harness({
       domains: [pending(null, A, "old.example.test", { created_at: days(8) }), pending(null, B, "new.example.test", { created_at: days(6) })],
     });
-    const result = await sweepPendingDomains(h.deps, { now: () => NOW });
-    expect(result.checked).toBe(1);
-    expect(h.vercel.calls.some((c) => c.host === "old.example.test")).toBe(false);
-
-    // The same old domain verifies through Check DNS now.
     h.vercel.state("old.example.test").verified = true;
     h.vercel.state("old.example.test").misconfigured = false;
+    const result = await sweepPendingDomains(h.deps, { now: () => NOW });
+    expect(result).toEqual({ checked: 1, verified: 0, released: 1 });
+    expect(h.vercel.calls.filter((c) => c.host === "old.example.test")).toEqual([{ fn: "remove", host: "old.example.test" }]);
+    expect(h.admin.state.domains.map((d) => d.id)).toEqual([B]);
+    expect(h.expired).toEqual([IDS.proPage]);
+  });
+
+  it("releases the 8-day-old pending row, leaves a verified one of any age and the 6-day-old pending one", async () => {
+    const h = harness({
+      domains: [
+        pending(null, A, "stale.example.test", { created_at: days(8) }),
+        pending(null, B, "fresh.example.test", { created_at: days(6) }),
+        pending(null, "00000000-0000-4000-8000-0000000000a3", "live.example.test", {
+          status: "verified",
+          verified_at: days(29),
+          created_at: days(30),
+        }),
+      ],
+    });
+    await sweepPendingDomains(h.deps, { now: () => NOW });
+    expect(h.admin.state.domains.map((d) => d.hostname).sort()).toEqual(["fresh.example.test", "live.example.test"]);
+    expect(h.vercel.count("remove", "stale.example.test")).toBe(1);
+    expect(h.vercel.count("remove", "fresh.example.test")).toBe(0);
+    expect(h.vercel.count("remove", "live.example.test")).toBe(0);
+    expect(h.vercel.count("verify", "live.example.test")).toBe(0);
+  });
+
+  it("a Vercel 404 on the release counts as gone: the row is deleted", async () => {
+    const h = harness({ domains: [pending(null, A, "gone.example.test", { created_at: days(9) })] });
+    // The client maps a 404 to a plain resolve, which is what the fake does too.
+    const result = await sweepPendingDomains(h.deps, { now: () => NOW });
+    expect(result.released).toBe(1);
+    expect(h.admin.state.domains).toEqual([]);
+  });
+
+  it("a Vercel failure on the release keeps the row (the next sweep retries) and never stops the others", async () => {
+    const h = harness({
+      domains: [pending(null, A, "stuck.example.test", { created_at: days(9) }), pending(null, B, "stale.example.test", { created_at: days(10) })],
+    });
+    const original = h.vercel.removeProjectDomain.bind(h.vercel);
+    h.vercel.removeProjectDomain = async (name: string) => {
+      if (name === "stuck.example.test") throw new VercelApiError("unavailable", 502, "bad_gateway", "down");
+      return original(name);
+    };
+    const result = await sweepPendingDomains(h.deps, { now: () => NOW });
+    expect(result.released).toBe(1);
+    expect(h.admin.state.domains.map((d) => d.id)).toEqual([A]);
+    expect(h.logs.join("\n")).toContain("releasing");
+  });
+
+  it("the exact 7 day boundary is still pending, a second later it is expired", async () => {
+    const h = harness({
+      domains: [
+        pending(null, A, "edge.example.test", { created_at: days(7) }),
+        pending(null, B, "past.example.test", { created_at: new Date(NOW.getTime() - 7 * 86_400_000 - 1000).toISOString() }),
+      ],
+    });
+    await sweepPendingDomains(h.deps, { now: () => NOW });
+    expect(h.admin.state.domains.map((d) => d.id)).toEqual([A]);
+  });
+
+  it("Check DNS now on an expired pending row releases it and says so, without a verify request", async () => {
+    const h = harness({ domains: [pending(null, A, "old.example.test", { created_at: days(8) })] });
+    h.admin.advance(NOW.getTime() - h.admin.state.clock);
+    h.vercel.state("old.example.test").verified = true;
+    h.vercel.state("old.example.test").misconfigured = false;
+    const manual = await checkDomain(h.deps, IDS.pro, A);
+    expect(manual).toEqual({
+      ok: false,
+      error: "domain_expired",
+      message: "This domain wasn’t connected within 7 days, so we released it. Add it again to try once more.",
+      status: 410,
+    });
+    expect(h.vercel.calls).toEqual([{ fn: "remove", host: "old.example.test" }]);
+    expect(h.admin.state.domains).toEqual([]);
+    // A second click finds nothing.
+    const again = await checkDomain(h.deps, IDS.pro, A);
+    expect(again.ok === false && again.error).toBe("not_found");
+  });
+
+  it("Check DNS now on an expired row whose Vercel removal fails keeps the row and asks to try again", async () => {
+    const h = harness({ domains: [pending(null, A, "old.example.test", { created_at: days(8) })] });
+    h.admin.advance(NOW.getTime() - h.admin.state.clock);
+    h.vercel.removeError = new VercelApiError("unavailable", 502, "bad_gateway", "down");
+    const manual = await checkDomain(h.deps, IDS.pro, A);
+    expect(manual.ok).toBe(false);
+    expect(manual.ok === false && manual.error).toBe("vercel_unavailable");
+    expect(h.admin.state.domains).toHaveLength(1);
+  });
+
+  it("another account cannot trigger a release of an expired row", async () => {
+    const h = harness({ domains: [pending(null, A, "old.example.test", { created_at: days(8) })] });
+    h.admin.advance(NOW.getTime() - h.admin.state.clock);
+    const result = await checkDomain(h.deps, IDS.other, A);
+    expect(result.ok === false && result.error).toBe("not_found");
+    expect(h.vercel.calls).toEqual([]);
+    expect(h.admin.state.domains).toHaveLength(1);
+  });
+
+  it("a 6-day-old pending row is still verified by Check DNS now", async () => {
+    const h = harness({ domains: [pending(null, A, "six.example.test", { created_at: days(6) })] });
+    h.admin.advance(NOW.getTime() - h.admin.state.clock);
+    h.vercel.state("six.example.test").verified = true;
+    h.vercel.state("six.example.test").misconfigured = false;
     const manual = await checkDomain(h.deps, IDS.pro, A);
     expect(manual.ok && manual.domain!.status).toBe("verified");
   });
@@ -286,7 +385,7 @@ describe("M4-15 the five-minute sweep", () => {
     await checkDomain(h.deps, IDS.pro, A);
     h.vercel.calls.length = 0;
     const result = await sweepPendingDomains(h.deps, { now: () => NOW });
-    expect(result).toEqual({ checked: 0, verified: 0 });
+    expect(result).toEqual({ checked: 0, verified: 0, released: 0 });
     expect(h.vercel.count("verify")).toBe(0);
   });
 
@@ -308,7 +407,7 @@ describe("M4-15 the five-minute sweep", () => {
 
   it("verified and errored-out domains are not listed, and an empty table answers zero", async () => {
     const h = harness({ domains: [pending(null, A, "v.example.test", { status: "verified", verified_at: days(1), created_at: days(1) })] });
-    expect(await sweepPendingDomains(h.deps, { now: () => NOW })).toEqual({ checked: 0, verified: 0 });
+    expect(await sweepPendingDomains(h.deps, { now: () => NOW })).toEqual({ checked: 0, verified: 0, released: 0 });
     expect(h.vercel.calls).toEqual([]);
   });
 });

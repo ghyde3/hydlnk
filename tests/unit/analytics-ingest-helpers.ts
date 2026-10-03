@@ -34,7 +34,9 @@ export function makeDeps(overrides: Partial<IngestDeps> = {}): Spies {
     pageId === PAGE_ID ? { handle: "mara", customHosts: ["links.example.test"] } : null,
   );
   const resolveClickTarget = vi.fn(async (pageId: string, id: string) =>
-    pageId === PAGE_ID && id === BLOCK_ID ? "https://example.com/book" : null,
+    pageId === PAGE_ID && id === BLOCK_ID
+      ? { url: "https://example.com/book", handle: "mara", customHosts: ["links.example.test"] }
+      : null,
   );
   const visitorHash = vi.fn(() => "a".repeat(64));
   const deps: IngestDeps & { homeHref: string } = {

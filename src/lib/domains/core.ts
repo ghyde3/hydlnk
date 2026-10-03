@@ -11,6 +11,7 @@ import {
   baseView,
   errorLabel,
   loadRecords,
+  loadRecordsMemoized,
   pendingView,
   recordsFrom,
   type DomainRow,
@@ -101,6 +102,20 @@ async function readOwnedDomain(deps: DomainDeps, userId: string, id: unknown) {
   return row;
 }
 
+/** Domain actions that call Vercel: 10 per minute per account. Fail open (the limiter itself does). */
+export const DOMAIN_ACTION_LIMIT = 10;
+export const DOMAIN_ACTION_WINDOW_SECONDS = 60;
+
+async function throttled(deps: DomainDeps, action: "add" | "remove", userId: string): Promise<boolean> {
+  if (!deps.rateLimit) return false;
+  const result = await deps.rateLimit(
+    `domains:${action}:${userId}`,
+    DOMAIN_ACTION_LIMIT,
+    DOMAIN_ACTION_WINDOW_SECONDS,
+  );
+  return !result.allowed;
+}
+
 function expire(deps: DomainDeps, ...pageIds: string[]): void {
   for (const pageId of new Set(pageIds)) {
     try {
@@ -144,6 +159,7 @@ export async function addDomain(
   const pageId = input.pageId;
 
   try {
+    if (await throttled(deps, "add", userId)) return refuse("rate_limited", DOMAIN_MESSAGES.rateLimited);
     const account = await readAccount(deps, userId);
     if (!account) return refuse("forbidden", DOMAIN_MESSAGES.notYourPage);
     if (account.suspended) return refuse("account_suspended", DOMAIN_MESSAGES.suspended);
@@ -244,6 +260,10 @@ export async function checkDomain(
       cooldownSeconds: options.cooldownSeconds ?? CHECK_COOLDOWN_SECONDS,
     });
     if (!outcome) return refuse("not_found", DOMAIN_MESSAGES.noSuchDomain);
+    if (outcome.released) return refuse("domain_expired", DOMAIN_MESSAGES.expiredReleased);
+    if (outcome.releaseFailed) {
+      return refuse("vercel_unavailable", DOMAIN_MESSAGES.unreachableCheck);
+    }
     return { ok: true, domain: outcome.view };
   } catch (error) {
     return unexpected(deps, "checking a domain", error);
@@ -305,6 +325,7 @@ export async function removeDomain(
   try {
     const owned = await readOwnedDomain(deps, userId, id);
     if (!owned) return refuse("not_found", DOMAIN_MESSAGES.noSuchDomain);
+    if (await throttled(deps, "remove", userId)) return refuse("rate_limited", DOMAIN_MESSAGES.rateLimited);
     const account = await readAccount(deps, userId);
     if (!account) return refuse("forbidden", DOMAIN_MESSAGES.notYourPage);
     if (account.suspended) return refuse("account_suspended", DOMAIN_MESSAGES.suspended);
@@ -330,7 +351,11 @@ export async function removeDomain(
 // Reads for the screen and the polling route
 // -------------------------------------------------------------------------------------------
 
-/** The account's domains, newest last; a pending domain carries its DNS records from Vercel (fresh on every call). */
+/**
+ * The account's domains, newest last; a pending domain carries its DNS records from Vercel, read
+ * at most once per 10 seconds per domain (reloading the screen must not fire two Vercel GETs per
+ * pending domain every time). The polling route and "Try again" read fresh.
+ */
 export async function listDomainViews(deps: DomainDeps, accountId: string): Promise<DomainView[]> {
   if (!isUuid(accountId)) return [];
   const { data, error } = await deps.admin
@@ -342,7 +367,7 @@ export async function listDomainViews(deps: DomainDeps, accountId: string): Prom
   return Promise.all(
     (data ?? []).map(async (row) => {
       if (row.status === "verified") return baseView(row);
-      return pendingView(row, await loadRecords(deps, row.hostname));
+      return pendingView(row, await loadRecordsMemoized(deps, row.hostname));
     }),
   );
 }
@@ -372,5 +397,7 @@ export async function pollDomainView(
   const owned = await readOwnedDomain(deps, accountId, id);
   if (!owned) return null;
   const outcome = await verifyDomain(deps, owned.id, { cooldownSeconds });
+  // A domain released as expired is gone: the poll says "no such domain" (404), like any removed one.
+  if (outcome?.released) return null;
   return outcome?.view ?? null;
 }

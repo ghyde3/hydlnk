@@ -76,6 +76,10 @@ class Query {
     this.filters.push((row) => String(get(row, col) ?? "") >= String(value));
     return this;
   }
+  lt(col: string, value: unknown) {
+    this.filters.push((row) => String(get(row, col) ?? "") < String(value));
+    return this;
+  }
   order(col: string, o?: { ascending?: boolean; nullsFirst?: boolean }) {
     this.orderSpec = { col, ascending: o?.ascending ?? true, nullsFirst: o?.nullsFirst ?? false };
     return this;
@@ -390,6 +394,7 @@ export function harness(
         emails.push(input);
       }),
     rootDomain: "hydlnk.com",
+    now: () => new Date(admin.state.clock),
     log: (message) => void logs.push(message),
   };
   return { deps, admin, vercel, emails, expired, logs };

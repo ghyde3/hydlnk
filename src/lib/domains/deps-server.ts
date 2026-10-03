@@ -2,6 +2,7 @@ import "server-only";
 import { clientEnv } from "@/lib/env/client";
 import { serverEnv } from "@/lib/env/server";
 import { invalidatePage } from "@/lib/publish/invalidate";
+import { rateLimit } from "@/lib/rate-limit";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { DomainDeps } from "./deps";
 import { sendDomainLiveEmail } from "./email";
@@ -46,6 +47,7 @@ export function createDomainDeps(): DomainDeps {
       );
     },
     rootDomain: clientEnv.NEXT_PUBLIC_ROOT_DOMAIN,
+    rateLimit: (key, limit, windowSeconds) => rateLimit(key, limit, windowSeconds),
     log: (message) => console.error(message),
   };
 }

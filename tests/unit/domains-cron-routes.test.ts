@@ -49,7 +49,7 @@ describe("M4-15 POST /api/cron/verify-domains", () => {
   const OLD = "00000000-0000-4000-8000-0000000000a9";
 
   it("a missing or wrong secret is a 401 and changes nothing", async () => {
-    current = harness({ domains: [domainRow({ id: OLD, hostname: "x.example.test", page_id: IDS.proPage, created_at: new Date().toISOString() })] });
+    current = harness({ domains: [domainRow({ id: OLD, hostname: "x.example.test", page_id: IDS.proPage })] });
     const attempts: Record<string, string>[] = [
       {},
       { authorization: "Bearer wrong" },
@@ -72,7 +72,7 @@ describe("M4-15 POST /api/cron/verify-domains", () => {
   });
 
   it("the right secret runs the sweep and answers {checked, verified}", async () => {
-    current = harness({ domains: [domainRow({ id: OLD, hostname: "x.example.test", page_id: IDS.proPage, created_at: new Date().toISOString() })] });
+    current = harness({ domains: [domainRow({ id: OLD, hostname: "x.example.test", page_id: IDS.proPage })] });
     current.vercel.state("x.example.test").verified = true;
     current.vercel.state("x.example.test").misconfigured = false;
     const res = await post({ authorization: `Bearer ${SECRET}` });

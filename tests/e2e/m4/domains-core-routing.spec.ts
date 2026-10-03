@@ -213,6 +213,33 @@ test.describe("M4-09 a custom host serves the page, its OG image, /r/*, /api/e a
   });
 });
 
+test.describe("M4-09 a static-looking path cannot slip past the proxy's host checks", () => {
+  test("M4-09 /app/api/domains/<uuid>.png (and .css, .js, .svg) is a 404 on the marketing, tenant and custom hosts, and real static files are still served", async ({}, info) => {
+    test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
+    const id = "0b0e1f2a-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
+    const cookie = "sb-127-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJ4In0";
+    const hosts = ["localhost:3000", `${site.handle}.localhost:3000`, "mara.localhost:3000", live, hostnameFor("none")];
+    for (const host of hosts) {
+      for (const ext of ["png", "css", "js", "svg", "json.png"]) {
+        for (const method of ["GET", "POST", "DELETE"]) {
+          const res = await get(host, `/app/api/domains/${id}.${ext}`, { cookie, method });
+          expect(res.status, `${method} ${host} .${ext}`).toBe(404);
+          expect(res.setCookies, `${host} .${ext}`).toEqual([]);
+        }
+      }
+      for (const path of [`/app/x.png`, `/t/${site.handle}/x.webp`, `/sites/${site.pageId}/x.png`]) {
+        expect((await get(host, path, { cookie })).status, `${host} ${path}`).toBe(404);
+      }
+    }
+    // Real static files are untouched by the matcher change.
+    const asset = await get("localhost:3000", "/marketing/demo/fennmoor-image.webp");
+    expect(asset.status).toBe(200);
+    expect(String(asset.headers["content-type"])).toMatch(/image\/webp/);
+    const onTenant = await get(`${site.handle}.localhost:3000`, "/marketing/demo/fennmoor-image.webp");
+    expect(onTenant.status).toBe(200);
+  });
+});
+
 test.describe("M4-09 changes show at the next request", () => {
   test("M4-09 publishing a new display name shows on the custom host and the handle host at the same time", async ({ page, context }, info) => {
     test.skip(!desktopOnly(info), "one editor flow: one project is enough");

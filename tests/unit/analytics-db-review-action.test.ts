@@ -202,6 +202,23 @@ describe.skipIf(!run)("M5-10 mark reviewed (local Supabase)", () => {
     expect(again.data!.reviewed_at).toBe(stamp);
   });
 
+  it("audits the review: exactly one admin_audit row for the admin, the owner and the flag, none for the double click", async () => {
+    const rows = await admin
+      .from("admin_audit")
+      .select("admin_id, action, account_id, detail")
+      .eq("action", "review_traffic_flag")
+      .eq("detail->>flag_id", flagId);
+    expect(rows.error).toBeNull();
+    expect(rows.data).toEqual([
+      {
+        admin_id: ADMIN.id,
+        action: "review_traffic_flag",
+        account_id: owner.userId,
+        detail: { flag_id: flagId, page_id: owner.pageId },
+      },
+    ]);
+  });
+
   it("the reviewed flag leaves the unreviewed list and joins the reviewed one", async () => {
     const open = await admin.rpc("admin_traffic_flags", {
       p_reviewed: false,

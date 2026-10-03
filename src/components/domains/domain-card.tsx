@@ -112,6 +112,10 @@ export function DomainCard({
       } else if (result.error === "not_found") {
         // Removed somewhere else: the list is stale, not the check.
         startTransition(() => router.refresh());
+      } else if (result.error === "domain_expired") {
+        // Pending for more than 7 days: the server released it. Say so, then let the list catch up.
+        setLine(result.message);
+        window.setTimeout(() => startTransition(() => router.refresh()), 4000);
       } else {
         setLine(CHECK_FAILED);
       }
@@ -218,7 +222,7 @@ export function DomainCard({
         startTransition(() => router.refresh());
         return;
       }
-      setRemoveError(REMOVE_FAILED);
+      setRemoveError(result.error === "rate_limited" ? result.message : REMOVE_FAILED);
     } catch {
       setRemoveError(REMOVE_FAILED);
     }

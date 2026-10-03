@@ -78,6 +78,15 @@ describe("proxy matcher: everything routed by host still runs the proxy", () => 
     "/r/abc123",
     "/api/e",
     "/api/stripe/webhook",
+    // A static extension on a routed prefix never skips the host checks: /app, /t, /sites and /r
+    // always run the proxy, so `/app/api/domains/<uuid>.png` cannot reach the app route on any host.
+    "/app/api/domains/0b0e1f2a-3c4d-4e5f-8a9b-0c1d2e3f4a5b.png",
+    "/app/api/domains/0b0e1f2a-3c4d-4e5f-8a9b-0c1d2e3f4a5b.json.css",
+    "/app/x.svg",
+    "/app/x.js",
+    "/t/mara/x.png",
+    "/sites/page-1/x.webp",
+    "/r/00000000-0000-4000-8000-0000000000b1/blk.mp4",
     // Near misses: a name or extension that merely looks static. Only files are skipped, so a
     // path under /marketing/ that is not a static file still gets its host's routing and 404.
     "/marketing",

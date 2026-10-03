@@ -25,6 +25,9 @@ next-env.d.ts
 # Local scratch, screenshots
 tmp/
 
+# Vitest cache
+.vitest/
+
 # Supabase local
 supabase/.temp/
 supabase/.env

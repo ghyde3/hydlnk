@@ -7,8 +7,9 @@ import {
   TOO_MANY_CLICKS_MESSAGE,
   noticePageHtml,
 } from "./notice-page";
+import { hostServesPage } from "./host";
 import { locationFor } from "./target";
-import type { IngestDeps } from "./types";
+import type { ClickTarget, IngestDeps } from "./types";
 
 /**
  * GET and HEAD /r/[pageId]/[blockId]: the click redirect (M4-22, M4-23, M5-02).
@@ -20,6 +21,9 @@ import type { IngestDeps } from "./types";
  *   record   after the response is sent, one `events` row: type 'click', unless the user agent is a
  *            bot or the request is a HEAD
  *
+ * host     served only on `{handle}.{root}` or a verified custom host of that page (its real Host header,
+ *          never X-Forwarded-Host): any other host, the marketing and app hosts included, gets the 404
+ *   record   ... and only when Sec-Fetch-Dest is absent or "document"
  * Nothing from the request (query string, Host, X-Forwarded-Host, Referer) can change the Location.
  * A failing database insert never reaches the visitor: the redirect has already been sent.
  */
@@ -81,7 +85,7 @@ export async function handleClick(
   }
 
   const pageId = params.pageId.toLowerCase();
-  let target: string | null;
+  let target: ClickTarget | null;
   try {
     target = await deps.resolveClickTarget(pageId, params.blockId);
   } catch (error) {
@@ -90,13 +94,24 @@ export async function handleClick(
   }
   if (target === null) return notice(404, LINK_NOT_FOUND_MESSAGE, homeHref, head);
 
+  // The page's links answer on the page's own hosts only: `{handle}.{root}` and its verified custom
+  // domains. Without this, any host (a victim's custom domain, another tenant) would redirect to
+  // this page's published links, which is a phishing hop through someone else's domain.
+  if (!hostServesPage(request.headers.get("host"), target, deps.rootDomain)) {
+    return notice(404, LINK_NOT_FOUND_MESSAGE, homeHref, head);
+  }
+
   const response = new Response(null, {
     status: 302,
-    headers: { Location: locationFor(target), "Cache-Control": "no-store" },
+    headers: { Location: locationFor(target.url), "Cache-Control": "no-store" },
   });
 
   const userAgent = request.headers.get("user-agent");
-  if (!head && !isBot(userAgent)) {
+  // Only a navigation counts: an <img>, <script>, <iframe> or fetch on another site that points at
+  // /r/... carries a Sec-Fetch-Dest other than "document" (absent on old browsers and curl).
+  const dest = request.headers.get("sec-fetch-dest")?.trim().toLowerCase();
+  const navigation = dest === undefined || dest === "" || dest === "document";
+  if (!head && navigation && !isBot(userAgent)) {
     const row = {
       page_id: pageId,
       block_id: params.blockId,

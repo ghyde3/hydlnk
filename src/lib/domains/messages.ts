@@ -14,6 +14,8 @@ export const DOMAIN_MESSAGES = {
   notConfigured: "Custom domains aren’t available right now. Try again later.",
   unreachableRemove: "We couldn’t remove that domain from our host. Try again.",
   unreachableCheck: "We couldn’t check right now. Try again in a minute.",
+  expiredReleased:
+    "This domain wasn’t connected within 7 days, so we released it. Add it again to try once more.",
   checkedJustNow: "Checked just now. DNS isn’t pointing here yet. Records can take a while to spread.",
   checkedFewSecondsAgo: "Checked a few seconds ago.",
   choosePage: "Choose one of your pages for this domain.",
@@ -21,6 +23,7 @@ export const DOMAIN_MESSAGES = {
   noSuchDomain: "We couldn’t find that domain.",
   signedOut: "Sign in to manage your domains.",
   suspended: "Your account is suspended. Contact support to appeal.",
+  rateLimited: "You’ve tried that a lot in a short time. Wait a minute and try again.",
   generic: "We couldn’t finish that. Try again.",
 } as const;
 
@@ -42,11 +45,13 @@ export const DOMAIN_STATUS: Readonly<Record<DomainErrorCode, number>> = {
   unauthenticated: 401,
   invalid_request: 400,
   invalid_hostname: 400,
+  rate_limited: 429,
   plan_required: 403,
   domain_limit: 403,
   account_suspended: 403,
   forbidden: 403,
   not_found: 404,
+  domain_expired: 410,
   hostname_taken: 409,
   vercel_conflict: 409,
   vercel_capacity: 503,

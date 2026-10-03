@@ -69,11 +69,13 @@ export type DomainErrorCode =
   | "unauthenticated" // 401
   | "invalid_request" // 400: a missing or malformed id / page id
   | "invalid_hostname" // 400
+  | "rate_limited" // 429: too many adds or removes from this account in a minute
   | "plan_required" // 403: Free
   | "domain_limit" // 403: Pro or Studio at its limit
   | "account_suspended" // 403
   | "forbidden" // 403: the page is not the caller's
   | "not_found" // 404: no such domain for this account
+  | "domain_expired" // 410: a pending domain older than 7 days, released by this check
   | "hostname_taken" // 409
   | "vercel_conflict" // 409: Vercel says the name is connected elsewhere
   | "vercel_capacity" // 503: Vercel's per-project domain cap

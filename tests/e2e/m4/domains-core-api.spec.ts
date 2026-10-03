@@ -4,7 +4,7 @@ import { adminClient } from "../fixtures/auth";
 import { appRaw, authCookies, cookieHeader, rawRequest, restAs } from "../fixtures/http";
 import { getMessage, messagesTo, waitForMessages } from "../fixtures/mailpit";
 import { requireLocalEnv } from "../fixtures/stripe-stub";
-import { markDnsReady, requestsFor, setDomainState, verifyCalls } from "../fixtures/vercel-stub";
+import { markDnsReady, removalCalls, requestsFor, setDomainState, verifyCalls } from "../fixtures/vercel-stub";
 import {
   addDomainRow,
   domainRowOf,
@@ -77,7 +77,7 @@ test.describe("M4-15 POST /api/cron/verify-domains", () => {
     }
   });
 
-  test("M4-15 / M5-23 with two pending domains and the stub reporting one verified, one call flips exactly that row, skips the 8-day-old one, and emails once", async ({}, info) => {
+  test("M4-15 / M5-23 with two pending domains and the stub reporting one verified, one call flips exactly that row, releases the 8-day-old one, and emails once", async ({}, info) => {
     test.skip(!desktopOnly(info), "an HTTP data flow: one project is enough");
     const site = await makeSite("sw2");
     const ready = hostnameFor("ready");
@@ -88,7 +88,7 @@ test.describe("M4-15 POST /api/cron/verify-domains", () => {
     const oldId = await addDomainRow({ pageId: site.pageId, hostname: old, status: "pending", createdAt: days(8) });
     await markDnsReady(ready);
     await setDomainState(waiting, { verified: true, misconfigured: true });
-    await markDnsReady(old); // verified at Vercel, but too old for the sweep
+    await markDnsReady(old); // verified at Vercel, but pending for more than 7 days: released, not verified
 
     const res = await sweep({ authorization: `Bearer ${SECRET()}` });
     expect(res.status).toBe(200);
@@ -104,10 +104,10 @@ test.describe("M4-15 POST /api/cron/verify-domains", () => {
     expect(readyRow.last_checked_at).toBeTruthy();
     expect((await domainRowOf(waitingId))!.status).toBe("pending");
     expect((await domainRowOf(waitingId))!.last_checked_at).toBeTruthy();
-    const oldRow = (await domainRowOf(oldId))!;
-    expect(oldRow.status).toBe("pending");
-    expect(oldRow.last_checked_at).toBeNull();
+    // The 8-day-old pending row is released: DELETE at Vercel, row gone, never verified.
+    expect(await domainRowOf(oldId)).toBeNull();
     expect(await verifyCalls(old)).toEqual([]);
+    expect((await removalCalls(old)).length).toBe(1);
     expect((await verifyCalls(ready)).length).toBe(1);
 
     // The custom host serves at once; the email arrived once, from the sweep.
@@ -128,8 +128,27 @@ test.describe("M4-15 POST /api/cron/verify-domains", () => {
     await new Promise((r) => setTimeout(r, 600));
     expect(await messagesTo(site.user.email)).toHaveLength(1);
 
-    // The 8-day-old one can still be verified by Check DNS now (the shared routine, cooldown aside).
-    expect((await domainRowOf(oldId))!.status).toBe("pending");
+  });
+
+  test("M4-15 the sweep releases only pending rows older than 7 days: a 6-day-old pending row and an old verified row stay, with no Vercel DELETE", async ({}, info) => {
+    test.skip(!desktopOnly(info), "an HTTP data flow: one project is enough");
+    const site = await makeSite("sw4");
+    const stale = hostnameFor("stale");
+    const sixDays = hostnameFor("six");
+    const liveOld = hostnameFor("liveold");
+    const staleId = await addDomainRow({ pageId: site.pageId, hostname: stale, status: "pending", createdAt: days(8) });
+    const sixId = await addDomainRow({ pageId: site.pageId, hostname: sixDays, status: "pending", createdAt: days(6) });
+    const liveId = await addDomainRow({ pageId: site.pageId, hostname: liveOld, status: "verified", createdAt: days(40) });
+
+    const res = await sweep({ authorization: `Bearer ${SECRET()}` });
+    expect(res.status).toBe(200);
+
+    expect(await domainRowOf(staleId)).toBeNull();
+    expect((await removalCalls(stale)).length).toBe(1);
+    expect((await domainRowOf(sixId))!.status).toBe("pending");
+    expect((await domainRowOf(liveId))!.status).toBe("verified");
+    expect(await removalCalls(sixDays)).toEqual([]);
+    expect(await removalCalls(liveOld)).toEqual([]);
   });
 
   test("M4-15 the sweep honours the cooldown: a domain checked moments ago is not asked again", async ({}, info) => {
