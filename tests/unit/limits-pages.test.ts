@@ -70,7 +70,12 @@ describe.skipIf(!run)(
     let admin: SupabaseClient;
     let createPageWithClient: typeof import("@/lib/pages/create-page-core").createPageWithClient;
     let deletePageWithClient: typeof import("@/lib/pages/delete-page-core").deletePageWithClient;
-    let removeVercelDomain: typeof import("@/lib/pages/remove-domain").removeVercelDomain;
+    // The real remover: the shared Vercel client (src/lib/domains) on a config read from `source`.
+    let removeVercelDomain: (
+      hostname: string,
+      fetchImpl: typeof fetch,
+      source: Record<string, string | undefined>,
+    ) => Promise<void>;
     let stub: Awaited<ReturnType<typeof startVercelStub>>;
     const owners: TestOwner[] = [];
 
@@ -85,7 +90,10 @@ describe.skipIf(!run)(
       );
       ({ createPageWithClient } = await import("@/lib/pages/create-page-core"));
       ({ deletePageWithClient } = await import("@/lib/pages/delete-page-core"));
-      ({ removeVercelDomain } = await import("@/lib/pages/remove-domain"));
+      const { createVercelClient } = await import("@/lib/domains/vercel-client");
+      const { readVercelApiConfig } = await import("@/lib/pages/vercel-config");
+      removeVercelDomain = async (hostname, fetchImpl, source) =>
+        createVercelClient(readVercelApiConfig(source), fetchImpl).removeProjectDomain(hostname);
       stub = await startVercelStub();
     });
 

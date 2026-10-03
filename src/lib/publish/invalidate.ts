@@ -34,6 +34,15 @@ export async function invalidateAccountPages(accountId: string): Promise<number>
 }
 
 /**
+ * Expires what the cache holds for one page (its public read, its page and OG image, and the custom
+ * domain its metadata names): adding, verifying, re-pointing or removing a custom domain calls it
+ * (src/lib/domains). Immediate expiry, from Server Actions and Route Handlers alike.
+ */
+export function invalidatePage(pageId: string): void {
+  revalidateTag(pageTag(pageId), { expire: 0 });
+}
+
+/**
  * Expires the cached 404 of a handle (a handle that was just claimed, or whose page was deleted),
  * so the placeholder or the 404 shows at once instead of after `MISSING_REVALIDATE_SECONDS`.
  * Callable from Server Actions and Route Handlers.

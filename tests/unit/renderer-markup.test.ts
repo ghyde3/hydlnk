@@ -176,12 +176,17 @@ describe("M2-05 blocks", () => {
 });
 
 describe("M2-05 outbound links", () => {
-  it("outboundHref returns the validated URL and the one rel", () => {
+  it("outboundHref returns the /r redirect of a validated URL and the one rel (M4-22)", () => {
     const target = { pageId: PAGE_ID, id: "block-id-001" };
     expect(outboundHref("https://example.com/x", target)).toEqual({
-      href: "https://example.com/x",
+      href: `/r/${PAGE_ID}/block-id-001`,
       rel: "nofollow noopener",
     });
+    // The destination is never in the markup, and the ids cannot add a segment or a query.
+    expect(outboundHref("https://example.com/x", target).href).not.toContain("example.com");
+    expect(outboundHref("https://example.com/x", { pageId: PAGE_ID, id: "a/b?c=d" }).href).toBe(
+      `/r/${PAGE_ID}/a%2Fb%3Fc%3Dd`,
+    );
     for (const bad of [
       "javascript:alert(1)",
       "data:text/html,x",
@@ -220,7 +225,7 @@ describe("M2-15 link block", () => {
   it("renders one anchor with the label, the url and no target", () => {
     const parsed = dom(render(doc({}, [link()])));
     const a = parsed.querySelector("a[data-block-type=link]")!;
-    expect(a.getAttribute("href")).toBe(blocks.link.url);
+    expect(a.getAttribute("href")).toBe(`/r/${PAGE_ID}/${blocks.link.id}`);
     expect(a.getAttribute("rel")).toBe("nofollow noopener");
     expect(a.textContent).toBe(blocks.link.label);
     expect(a.hasAttribute("target")).toBe(false);
@@ -301,9 +306,10 @@ describe("M2-17 social block", () => {
       "Threads",
       "Email",
     ]);
+    // Web icons go through /r by their own icon id; the email icon stays an untracked mailto: (M4-22).
     expect(anchors.map((a) => a.getAttribute("href"))).toEqual([
-      "https://instagram.com/maraokafor",
-      "https://www.threads.net/@maraokafor",
+      `/r/${PAGE_ID}/icon-instagram`,
+      `/r/${PAGE_ID}/icon-threads-1`,
       "mailto:hello@maraokafor.com",
     ]);
     for (const a of anchors) {
@@ -361,7 +367,7 @@ describe("M2-18 grid block", () => {
     const cells = Array.from(parsed.querySelectorAll("[data-block-type=grid] a"));
     expect(cells).toHaveLength(2);
     expect(cells[0]!.getAttribute("data-item-id")).toBe("cell-prints-01");
-    expect(cells[0]!.getAttribute("href")).toBe("https://maraokafor.com/prints");
+    expect(cells[0]!.getAttribute("href")).toBe(`/r/${PAGE_ID}/cell-prints-01`);
     expect(cells[0]!.textContent).toBe("PrintsShop the archive");
   });
 
@@ -386,7 +392,7 @@ describe("M2-21 card block", () => {
     const parsed = dom(render(doc({}, [{ ...blocks.card, image: null }])));
     const card = parsed.querySelector("[data-block-type=card]")!;
     expect(card.tagName).toBe("A");
-    expect(card.getAttribute("href")).toBe(blocks.card.url);
+    expect(card.getAttribute("href")).toBe(`/r/${PAGE_ID}/${blocks.card.id}`);
     expect(card.querySelectorAll("a")).toHaveLength(0);
     expect(card.querySelector("img")).toBeNull();
     expect(card.querySelector(".pg-card-banner")?.hasAttribute("data-has-image")).toBe(false);
@@ -432,7 +438,7 @@ describe("M2-20 image block", () => {
     expect(img.getAttribute("loading")).toBe("lazy");
     expect(img.getAttribute("alt")).toBe(blocks.image.alt);
     const link = parsed.querySelector("[data-block-type=image] a")!;
-    expect(link.getAttribute("href")).toBe(blocks.image.url);
+    expect(link.getAttribute("href")).toBe(`/r/${PAGE_ID}/${blocks.image.id}`);
     expect(link.contains(img)).toBe(true);
   });
 

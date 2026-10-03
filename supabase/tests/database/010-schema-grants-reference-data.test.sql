@@ -2,7 +2,7 @@
 -- a loosened grant or a function that became callable through the API.
 
 begin;
-select plan(43);
+select plan(45);
 
 -- ---------------------------------------------------------------------------
 -- RLS is on for every public table
@@ -22,6 +22,9 @@ select tests.rls_enabled('public', 'report_attempts');
 select tests.rls_enabled('public', 'admin_audit');
 select tests.rls_enabled('public', 'image_cleanup_queue');
 select tests.rls_enabled('public', 'image_upload_hits');
+select tests.rls_enabled('public', 'daily_dim_stats');
+select tests.rls_enabled('public', 'traffic_flags');
+select tests.rls_enabled('public', 'rate_limit_hits');
 
 select is_empty(
   $$
@@ -39,7 +42,9 @@ select tables_are(
   array[
     'accounts', 'pages', 'themes', 'domains', 'events', 'daily_stats', 'reserved_handles', 'stripe_events',
     -- Milestone 5: server-only tables (RLS on, no policy, no client grant; their own pgTAP files)
-    'blocked_domains', 'reports', 'report_attempts', 'admin_audit', 'image_cleanup_queue', 'image_upload_hits'
+    'blocked_domains', 'reports', 'report_attempts', 'admin_audit', 'image_cleanup_queue', 'image_upload_hits',
+    -- Milestone 4: analytics rollups, high-traffic flags and the rate-limit window (111, 113, 112)
+    'daily_dim_stats', 'traffic_flags', 'rate_limit_hits'
   ],
   'public holds exactly the contract tables'
 );
@@ -98,6 +103,7 @@ select set_eq(
       ('themes|authenticated|DELETE|*'),
       ('domains|authenticated|SELECT|*'),
       ('daily_stats|authenticated|SELECT|*'),
+      ('daily_dim_stats|authenticated|SELECT|*'),
       ('accounts|service_role|SELECT|*'),
       ('accounts|service_role|INSERT|*'),
       ('accounts|service_role|UPDATE|*'),
@@ -117,6 +123,9 @@ select set_eq(
       ('events|service_role|SELECT|*'),
       ('events|service_role|INSERT|*'),
       ('daily_stats|service_role|SELECT|*'),
+      ('daily_dim_stats|service_role|SELECT|*'),
+      ('traffic_flags|service_role|SELECT|*'),
+      ('traffic_flags|service_role|UPDATE|reviewed_at'),
       ('reserved_handles|service_role|SELECT|*'),
       ('stripe_events|service_role|SELECT|*'),
       ('stripe_events|service_role|INSERT|*'),
@@ -274,15 +283,11 @@ select ok(
   exists (select 1 from pg_extension where extname = 'pg_cron'),
   'pg_cron is enabled'
 );
-select is(
-  (select count(*)::int from cron.job where jobname = 'hydlnk-nightly-maintenance'),
-  1,
-  'the nightly maintenance job is scheduled once'
-);
-select is(
-  (select command from cron.job where jobname = 'hydlnk-nightly-maintenance'),
-  'select public.run_nightly_maintenance()',
-  'the nightly job runs the maintenance function'
+-- The one nightly job became three (rollup-daily-stats, purge-old-events, flag-high-traffic): 111 and
+-- 113 assert them. The old combined job must be gone.
+select is_empty(
+  $$ select jobname from cron.job where jobname = 'hydlnk-nightly-maintenance' $$,
+  'the old combined nightly maintenance job is unscheduled'
 );
 
 -- ---------------------------------------------------------------------------

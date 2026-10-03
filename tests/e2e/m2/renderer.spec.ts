@@ -228,7 +228,7 @@ test.describe("M2-05 the shared page renderer", () => {
     expect(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(200);
   });
 
-  test("M2-05 outbound anchors have rel nofollow noopener and an http(s) href", async ({
+  test("M2-05 outbound anchors have rel nofollow noopener and an /r redirect href (mailto for email)", async ({
     page,
   }) => {
     const live = await publishedPage("ro", publishDocOf(ALL_BLOCKS));
@@ -240,7 +240,7 @@ test.describe("M2-05 the shared page renderer", () => {
     );
     for (const [href, rel] of attrs) {
       expect(rel).toBe("nofollow noopener");
-      expect(href).toMatch(/^(https?:\/\/|mailto:)/);
+      expect(href).toMatch(/^(\/r\/[0-9a-f-]{36}\/[A-Za-z0-9_-]+|mailto:.+)$/);
     }
   });
 
