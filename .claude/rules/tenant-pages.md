@@ -26,7 +26,7 @@ Tenant pages are a separate design system from the HYDLNK UI. Tenant content is 
 
 - URLs must pass `httpUrl` from `@/lib/document` (http/https only); the social email icon stores an address validated by `emailAddress` and the renderer builds `mailto:` with `mailtoHref`. Anchors get their href from `safeHref` (never a raw tenant string); parse `published` with `publishedDocSchema`.
 - Render all text as React text. Never `dangerouslySetInnerHTML`, never a tenant string in an `href` without validation.
-- Embeds only from the allowlist (YouTube, Spotify). Build the iframe `src` from `parseEmbed(url).src` (rebuilt from the parsed id), never from the raw URL.
+- Embeds only from the allowlist (YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music, Twitch; M6-26). Build the iframe `src` from `parseEmbed(url).src` (rebuilt from the parsed id), never from the raw URL. Twitch's `parent` comes from `location.hostname` at tap time.
 - Fonts only from `FONT_ALLOWLIST`. Background and image URLs are validated and escaped before use in CSS.
 - Outbound links go through `/r/[pageId]/[blockId]` and carry `rel="noopener noreferrer"`.
 - Tenant pages never read or set cookies and never import editor code from `src/app/(editor)/**`.

@@ -29,7 +29,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 - **Secret key stays on the server.** It never reaches client code.
 - **RLS everywhere.** Every table has RLS on. Every new table ships with policies and a policy test in the same change.
 - **Limits on write.** Plan limits (pages, saved themes, domains, upload bytes) are enforced on write, in the database or server-only code, never only in the UI.
-- **Tenant content is untrusted.** Validate URLs (http/https only), escape all text, and allow embeds only from an allowlist (YouTube, Spotify).
+- **Tenant content is untrusted.** Validate URLs (http/https only), escape all text, and allow embeds only from an allowlist (YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music, Twitch; M6-26).
 - **Two token systems.** HYDLNK UI tokens and tenant theme tokens never mix.
 - **Auth on `app.*` only.** Auth cookies live there, and tenant subdomains never see them.
 - **Production only through `release`.** Production changes go through the `release` skill, with Gary's approval. Unattended sessions never touch production, live Stripe or other projects.
