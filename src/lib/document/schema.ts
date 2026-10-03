@@ -3,6 +3,14 @@ import { blockOverridesSchema, tokenOverridesSchema, tokenSetSchema } from "@/li
 import { EMBED_ERROR_MESSAGE, parseEmbed } from "./embed";
 import { BLOCK_ID_PATTERN } from "./ids";
 import { LIMITS, codePointLength } from "./limits";
+import {
+  PHOTO_BORDERS,
+  PHOTO_SHAPES,
+  PHOTO_SIZES,
+  PROFILE_OPTION_DEFAULTS,
+  PROFILE_OPTION_MESSAGES,
+  type ProfileOptions,
+} from "./profile-options";
 import { EMAIL_ERROR_MESSAGE, URL_ERROR_MESSAGE, isEmailAddress, isHttpUrl } from "./url";
 
 /**
@@ -261,10 +269,31 @@ function buildBlocks(mode: Mode) {
     divider,
   ]);
 
+  // The display options (M6-15, M6-17) are the same in both modes: a bad value fails the draft
+  // parse itself, with the Publish gate's wording, so Publish names the field. Each has a default,
+  // so a document stored before they existed parses with them filled in.
   const profile = z.object({
     name: text(mode, { max: LIMITS.displayName, required: "Add a display name." }),
     bio: text(mode, { max: LIMITS.bio }),
     photo: imageRefSchema.nullable(),
+    photoShape: z
+      .enum(PHOTO_SHAPES, { error: PROFILE_OPTION_MESSAGES.photoShape })
+      .default(PROFILE_OPTION_DEFAULTS.photoShape),
+    photoSize: z
+      .enum(PHOTO_SIZES, { error: PROFILE_OPTION_MESSAGES.photoSize })
+      .default(PROFILE_OPTION_DEFAULTS.photoSize),
+    photoBorder: z
+      .enum(PHOTO_BORDERS, { error: PROFILE_OPTION_MESSAGES.photoBorder })
+      .default(PROFILE_OPTION_DEFAULTS.photoBorder),
+    showPhoto: z
+      .boolean({ error: PROFILE_OPTION_MESSAGES.showPhoto })
+      .default(PROFILE_OPTION_DEFAULTS.showPhoto),
+    showName: z
+      .boolean({ error: PROFILE_OPTION_MESSAGES.showName })
+      .default(PROFILE_OPTION_DEFAULTS.showName),
+    showBio: z
+      .boolean({ error: PROFILE_OPTION_MESSAGES.showBio })
+      .default(PROFILE_OPTION_DEFAULTS.showBio),
   });
 
   return { block, profile };
@@ -288,7 +317,14 @@ export type GridBlock = Extract<Block, { type: "grid" }>;
 export type DividerBlock = Extract<Block, { type: "divider" }>;
 export type SocialIcon = SocialBlock["icons"][number];
 export type GridCell = GridBlock["cells"][number];
-export type Profile = z.infer<typeof lenient.profile>;
+/**
+ * The profile. The six display options are optional in the TypeScript type, although parsing always
+ * fills them: a draft or published document built by hand (a fixture, an older code path) may leave
+ * them out, and every reader goes through `resolveProfileOptions` / `pickOption`, which apply the
+ * default. The editor state and `toPublishForm` always carry all six.
+ */
+export type Profile = Omit<z.infer<typeof lenient.profile>, keyof ProfileOptions> &
+  Partial<ProfileOptions>;
 
 // Documents -------------------------------------------------------------------------------------
 
@@ -333,7 +369,7 @@ export const draftDocSchema = z
     blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
   })
   .superRefine(requireUniqueIds);
-export type DraftDoc = z.infer<typeof draftDocSchema>;
+export type DraftDoc = Omit<z.infer<typeof draftDocSchema>, "profile"> & { profile: Profile };
 
 /**
  * The Publish gate's validator for a draft-shaped document. Everything `draftDocSchema` checks,
@@ -379,4 +415,6 @@ export const publishedDocSchema = z
     blocks: z.array(strict.block).max(LIMITS.blocks, tooManyBlocks),
   })
   .superRefine(requireUniqueIds);
-export type PublishDoc = z.infer<typeof publishedDocSchema>;
+export type PublishDoc = Omit<z.infer<typeof publishedDocSchema>, "profile"> & {
+  profile: Profile;
+};

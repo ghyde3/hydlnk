@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { draftDocSchema, emptyDraft } from "@/lib/document";
+import { PROFILE_OPTION_DEFAULTS, draftDocSchema, emptyDraft } from "@/lib/document";
 import { loadDraft, revKeyOf } from "@/lib/editor/load";
 import { blocks, fullDraft } from "./fixtures/page-document";
 
@@ -33,7 +33,12 @@ describe("loadDraft: valid drafts", () => {
   it("accepts what signup creates: the handle as name, no bio, no blocks", () => {
     const loaded = loadDraft(emptyDraft("mara"), "mara");
     expect(loaded.repaired).toBe(false);
-    expect(loaded.draft.profile).toEqual({ name: "mara", bio: "", photo: null });
+    expect(loaded.draft.profile).toEqual({
+      name: "mara",
+      bio: "",
+      photo: null,
+      ...PROFILE_OPTION_DEFAULTS,
+    });
     expect(loaded.draft.blocks).toEqual([]);
     expect(loaded.revKey).toBe("0");
   });

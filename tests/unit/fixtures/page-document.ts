@@ -1,5 +1,5 @@
 import type { Block, DraftDoc, ImageRef, PublishDoc } from "@/lib/document";
-import { toPublishForm } from "@/lib/document";
+import { PROFILE_OPTION_DEFAULTS, toPublishForm } from "@/lib/document";
 import type { TokenSet } from "@/lib/theme";
 
 /** A complete theme modelled on the Noir sample in design/mockups. */
@@ -123,6 +123,9 @@ export const fullDraft: DraftDoc = {
     name: "Mara Okafor",
     bio: "Portrait & studio photographer · Orlando, FL",
     photo: photoRef,
+    // The loader and the schemas fill the profile display options (M6-15, M6-17), so a parsed or
+    // loaded copy of this draft carries them explicitly.
+    ...PROFILE_OPTION_DEFAULTS,
   },
   theme: {
     ref: "00000000-0000-4000-8000-000000000001",

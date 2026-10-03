@@ -37,6 +37,25 @@ export {
   type TextBlock,
 } from "./schema";
 export { LIMITS, codePointLength, singleLine, truncateToCodePoints } from "./limits";
+export {
+  PHOTO_BORDERS,
+  PHOTO_SHAPES,
+  PHOTO_SIZES,
+  PHOTO_SIZE_PX,
+  PROFILE_OPTION_DEFAULTS,
+  PROFILE_OPTION_KEYS,
+  PROFILE_OPTION_MESSAGES,
+  applyProfileOption,
+  isProfileOptionValue,
+  pickOption,
+  resolveProfileOptions,
+  type PhotoBorder,
+  type PhotoShape,
+  type PhotoSize,
+  type ProfileOptionChange,
+  type ProfileOptionKey,
+  type ProfileOptions,
+} from "./profile-options";
 export { BLOCK_ID_PATTERN, newBlockId } from "./ids";
 export {
   EMAIL_ERROR_MESSAGE,

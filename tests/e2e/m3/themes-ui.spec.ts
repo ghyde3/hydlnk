@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { publishableKey } from "../fixtures/auth";
 import { cleanupUsers, makeUser } from "../fixtures/data";
 import { pageRow } from "../m2/editor-helpers";
+import { resolveProfileOptions } from "@/lib/document/profile-options";
 import { SYSTEM_DEFAULT_TOKENS, resolveTokens, tokenSetSchema } from "@/lib/theme";
 import {
   IVORY,
@@ -163,7 +164,12 @@ test.describe("M3-20 apply a theme to the draft, with Undo", () => {
     );
     const draftAfter = (await pageRow(user.pageId)).draft;
     expect(draftAfter.blocks).toEqual(draftBefore.blocks);
-    expect(draftAfter.profile).toEqual(draftBefore.profile);
+    // The profile is unchanged, but the first save of a draft stored before M6-15 and M6-17 writes the
+    // six profile display options with their defaults.
+    expect(draftAfter.profile).toEqual({
+      ...draftBefore.profile,
+      ...resolveProfileOptions(draftBefore.profile),
+    });
     const fill = draftAfter.blocks.find((block) => block.id === "Bt5rJ1fGz6Os");
     expect(fill && "overrides" in fill ? fill.overrides : null).toEqual({ buttonStyle: "fill" });
 
