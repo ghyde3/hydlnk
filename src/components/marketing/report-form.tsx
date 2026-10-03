@@ -20,7 +20,7 @@ const ERROR = "text-[13px] text-bad";
 const BUTTON =
   "flex min-h-12 w-full cursor-pointer items-center justify-center rounded-md bg-ink px-4 text-[15px] font-semibold text-surface disabled:cursor-default disabled:opacity-70";
 
-/** One labelled field with its inline error and hint, wired for assistive technology. */
+/** One labeled field with its inline error and hint, wired for assistive technology. */
 function Field({
   id,
   label,

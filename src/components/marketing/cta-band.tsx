@@ -2,7 +2,10 @@ import { clientEnv } from "@/lib/env/client";
 import { ClaimForm } from "./claim-form";
 import { Container } from "./primitives";
 
-/** Closing charcoal band with the claim form in its dark variant. One per page. */
+/**
+ * Closing charcoal band with the claim form in its dark variant (same white field and brass button
+ * as the hero). One per page. `note` is the reassurance line under the field while it is empty.
+ */
 export function CtaBand({
   title = "Claim your name before someone else does.",
   note = "Free forever. Upgrade only when you want your own domain.",
@@ -25,9 +28,13 @@ export function CtaBand({
           {title}
         </h2>
         <div className="mt-8 flex w-full justify-center">
-          <ClaimForm id={formId} rootDomain={clientEnv.NEXT_PUBLIC_ROOT_DOMAIN} variant="dark" />
+          <ClaimForm
+            id={formId}
+            rootDomain={clientEnv.NEXT_PUBLIC_ROOT_DOMAIN}
+            variant="dark"
+            idleHint={note}
+          />
         </div>
-        <p className="mt-3.5 text-[13px] text-on-ink-muted">{note}</p>
       </Container>
     </section>
   );

@@ -44,7 +44,7 @@ export function DnsExample({ name = "links", type = "CNAME" }: { name?: string; 
   );
 }
 
-/** Sample per-link analytics table (labelled as sample numbers wherever it appears). */
+/** Sample per-link analytics table (labeled as sample numbers wherever it appears). */
 export function AnalyticsSample() {
   return (
     <div className="overflow-hidden rounded-md border border-line-2 text-[13px]">

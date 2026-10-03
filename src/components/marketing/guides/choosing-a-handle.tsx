@@ -51,7 +51,7 @@ export const choosingAHandle: GuideBody = {
         </li>
         <li>
           <strong>Names of well-known services and words like</strong> <code>secure</code> or{" "}
-          <code>verify</code>, which are favourites for phishing.
+          <code>verify</code>, which are favorites for phishing.
         </li>
       </ul>
       <p>If the sign-up page says a name is reserved, it’s one of these. Try a variation.</p>

@@ -98,6 +98,9 @@ async function main(): Promise<void> {
         const response = await page.goto(target, { waitUntil: "load", timeout: 60_000 });
         // Let late network activity and web fonts settle; never block on a chatty dev server.
         await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+        // A full-page capture never scrolls, so a section marked content-visibility:auto (the home
+        // page's try-it builder) would come out blank. Draw everything for the picture.
+        await page.addStyleTag({ content: "* { content-visibility: visible !important; }" });
         await page.evaluate(() => document.fonts.ready);
         const file = path.join(OUT_DIR, `${host ?? "root"}-${slug}-${profile.viewport.width}.png`);
         await page.screenshot({ path: file, fullPage: true });

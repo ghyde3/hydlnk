@@ -191,7 +191,7 @@ export function Check({ className = "stroke-ink" }: { className?: string }) {
   );
 }
 
-/** Outline icon frame: a 24px viewBox drawn with the current colour. */
+/** Outline icon frame: a 24px viewBox drawn with the current color. */
 export function Icon({ children, className = "size-5" }: { children: ReactNode; className?: string }) {
   return (
     <svg

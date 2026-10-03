@@ -1,0 +1,531 @@
+/*
+ * The try-it builder (home page and landing pages). Two parts:
+ *   - the phone preview: a charcoal bezel around the real page renderer. The page inside it draws
+ *     itself with --t-* tenant values; everything here that is not inside [data-page-root] is HYDLNK
+ *     UI and uses --hl-* tokens only.
+ *   - the controls: tabs, choice chips, swatches and block rows, in the HYDLNK segmented/chip style.
+ * Mobile first: the preview sits on top, the controls under it; from 900px the preview moves to a
+ * sticky right-hand column.
+ */
+
+/* Layout ------------------------------------------------------------------------------------- */
+
+.try {
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .try {
+    grid-template-columns: minmax(0, 1fr) 372px;
+    align-items: start;
+    column-gap: 56px;
+  }
+
+  .try-phone-col {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 24px;
+  }
+
+  /* As tall as the phone, so the call to action sits level with its bottom edge. */
+  .try-panel {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 660px;
+  }
+}
+
+/* Phone ---------------------------------------------------------------------------------------- */
+
+.try-phone {
+  width: min(100%, 372px);
+  margin-inline: auto;
+}
+
+.try-bezel {
+  padding: 8px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: 38px;
+  background: var(--hl-ink);
+}
+
+/* The screen is the scroll box: the page inside is taller than the phone once a few blocks are in.
+   It takes focus so the keyboard can scroll it; the page itself is inert (see try-phone.tsx). */
+.try-screen {
+  height: 460px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-radius: 30px;
+  isolation: isolate;
+  scrollbar-width: none;
+  overscroll-behavior: auto;
+}
+
+@media (min-width: 900px) {
+  .try-screen {
+    height: 620px;
+  }
+}
+
+.try-screen::-webkit-scrollbar {
+  display: none;
+}
+
+.try-screen:focus-visible {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: 3px;
+}
+
+/* Fills the screen, so a short page still paints its whole background. */
+.try-page {
+  height: 100%;
+}
+
+/* The renderer asks for fonts by their Google names. These are the same families, self-hosted:
+   the wrapper carries the two stacks, and an important custom property beats the renderer's inline
+   one. */
+.try-phone [data-page-root] {
+  --t-font-heading: var(--try-heading) !important;
+  --t-font-body: var(--try-body) !important;
+}
+
+/* Panel ----------------------------------------------------------------------------------------- */
+
+.try-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.try-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 0 0 8px;
+  padding: 0;
+  color: var(--hl-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.try-value {
+  color: var(--hl-text-2);
+  font-family: var(--hl-font-mono);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.try-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: var(--hl-radius);
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+}
+
+.try-input:focus-visible {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+/* Tabs: the HYDLNK segmented control (a track with a white, ringed selected item). */
+.try-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--hl-radius);
+  background: var(--hl-track);
+}
+
+.try-tab {
+  flex: 1 1 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--hl-radius-sm);
+  background: transparent;
+  color: var(--hl-text-2);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.try-tab:hover {
+  color: var(--hl-ink);
+}
+
+.try-tab[aria-selected="true"] {
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+  box-shadow: 0 0 0 1px var(--hl-line-2);
+}
+
+.try-tab:focus-visible {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+.try-tabpanel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.try-tabpanel[hidden] {
+  display: none;
+}
+
+.try-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.try-hint {
+  margin: 0;
+  color: var(--hl-text-2);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* Choice chips: real radio buttons, so the keyboard and screen readers work as they should. */
+.try-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.try-choices[data-swatches] {
+  gap: 6px;
+}
+
+.try-choices[data-cols="3"] {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.try-choice {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: var(--hl-radius);
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+
+.try-choice:hover {
+  border-color: var(--hl-ink-2);
+}
+
+.try-choice:has(input:checked) {
+  border-color: var(--hl-ink);
+  box-shadow: 0 0 0 1px var(--hl-ink);
+  font-weight: 600;
+}
+
+.try-choice:has(input:focus-visible) {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+.try-choices[data-cols="3"] .try-choice {
+  justify-content: flex-start;
+  padding: 0 10px;
+}
+
+/* A theme's own colors, as a swatch: its page color with its accent on it. Tenant values. */
+.try-theme-swatch {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: var(--hl-radius-sm);
+}
+
+.try-theme-swatch::after {
+  content: "";
+  position: absolute;
+  inset: auto 4px 4px auto;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--try-swatch-accent);
+}
+
+/* Accent colors: a 44px target around a 24px color block. */
+.try-accent {
+  width: 44px;
+  padding: 0;
+}
+
+.try-accent-chip {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: var(--hl-radius-sm);
+}
+
+/* Blocks ---------------------------------------------------------------------------------------- */
+
+.try-add-grid > li {
+  display: flex;
+}
+
+.try-add-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 640px) {
+  .try-add-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.try-add {
+  display: flex;
+  width: 100%;
+  min-height: 56px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: var(--hl-radius);
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.try-add:hover {
+  border-color: var(--hl-ink-2);
+}
+
+.try-add:focus-visible {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+.try-add[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.try-add-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  color: var(--hl-brass-text);
+}
+
+.try-add-name {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 34px;
+}
+
+.try-add-short {
+  display: none;
+  margin-top: 2px;
+  color: var(--hl-text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.try-add-plus {
+  margin-left: auto;
+  color: var(--hl-text-3);
+  font-size: 18px;
+  line-height: 34px;
+}
+
+@media (min-width: 900px) {
+  .try-add {
+    min-height: 92px;
+  }
+
+  .try-add-short {
+    display: block;
+  }
+}
+
+.try-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.try-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--hl-line);
+  border-radius: var(--hl-radius);
+  background: var(--hl-surface);
+}
+
+.try-row-text {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding-block: 4px;
+}
+
+.try-row-name {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.try-row-sum {
+  overflow: hidden;
+  color: var(--hl-text-2);
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.try-icon-button {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--hl-radius-sm);
+  background: transparent;
+  color: var(--hl-ink);
+  cursor: pointer;
+}
+
+.try-icon-button:hover {
+  background: var(--hl-track);
+}
+
+.try-icon-button:focus-visible {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: -2px;
+}
+
+.try-icon-button[aria-disabled="true"] {
+  color: var(--hl-line-3);
+  cursor: default;
+}
+
+.try-icon-button[aria-disabled="true"]:hover {
+  background: transparent;
+}
+
+.try-empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--hl-line-3);
+  border-radius: var(--hl-radius);
+  color: var(--hl-text-2);
+  font-size: 14px;
+}
+
+/* Footer: the way out -------------------------------------------------------------------------- */
+
+.try-cta {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--hl-line-2);
+}
+
+.try-reset {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--hl-text-2);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-decoration-color: var(--hl-line-3);
+  text-underline-offset: 4px;
+  cursor: pointer;
+}
+
+.try-reset:hover {
+  color: var(--hl-ink);
+}
+
+.try-reset:focus-visible {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+/* Status line under the phone: what the last change did, for people looking at the controls. */
+.try-status {
+  min-height: 24px;
+  margin: 12px 0 0;
+  color: var(--hl-text-2);
+  font-size: 14px;
+  line-height: 24px;
+  text-align: center;
+}
+
+/* The first view, before the builder loads: the block list as plain text. */
+.try-static-list {
+  display: grid;
+  gap: 14px 24px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 640px) {
+  .try-static-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .try-static-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

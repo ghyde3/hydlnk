@@ -45,7 +45,7 @@ export const gettingStarted: GuideBody = {
       <ul>
         <li>
           <strong>Photo.</strong> Upload a JPEG, PNG or WebP image. Without one, your initials stand
-          in, drawn in your accent colour.
+          in, drawn in your accent color.
         </li>
         <li>
           <strong>Display name.</strong> Up to 60 characters. It’s set in your heading font.
@@ -77,9 +77,9 @@ export const gettingStarted: GuideBody = {
       <h2 id="look">Pick a look</h2>
       <p>
         Open Design and apply one of the system themes. Then change whatever you like: accent
-        colour, fonts, button style, corner radius, spacing or background. Each choice is a token,
-        and the whole page follows it. <Link href="/learn/designing-your-page">Designing your page</Link>{" "}
-        covers the tokens in detail.
+        color, fonts, button style, corner radius, spacing or background. Change any of them and
+        the whole page follows. <Link href="/learn/designing-your-page">Designing your page</Link>{" "}
+        covers every option.
       </p>
 
       <h2 id="publish">Publish</h2>

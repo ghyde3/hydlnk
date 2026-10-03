@@ -4,7 +4,7 @@ import { MarketingShell } from "./shell";
 import type { NavKey } from "./site-map";
 
 /** The date shown on both legal pages. */
-export const LEGAL_UPDATED = { iso: "2026-10-02", label: "2 October 2026" } as const;
+export const LEGAL_UPDATED = { iso: "2026-10-02", label: "October 2, 2026" } as const;
 
 /**
  * Privacy and Terms: the page chrome, an h1 with the last-updated date, a contents list and the

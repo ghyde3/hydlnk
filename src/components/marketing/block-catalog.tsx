@@ -65,9 +65,9 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
   {
     id: "image",
     name: "Image",
-    short: "A photo on its own, with alt text, optionally linked.",
+    short: "A photo on its own, with a short description for screen readers. You can link it too.",
     detail:
-      "Upload a JPEG, PNG or WebP. Alt text is required, so screen readers can describe it.",
+      "Upload a JPEG, PNG or WebP. A short description (alt text) is required, so screen readers can describe it.",
     icon: (
       <Icon>
         <rect x="3.5" y="5" width="17" height="14" rx="2" />
@@ -121,7 +121,7 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
     id: "divider",
     name: "Divider",
     short: "A quiet line that gives the page some rhythm.",
-    detail: "A rule in your border colour, spaced by your page’s density.",
+    detail: "A thin line in a color that matches your theme, with spacing that follows your page.",
     icon: (
       <Icon>
         <path d="M3.5 12h17" />

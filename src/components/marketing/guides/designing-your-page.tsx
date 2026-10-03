@@ -4,7 +4,7 @@ import type { GuideBody } from "./types";
 export const designingYourPage: GuideBody = {
   toc: [
     ["theme", "Start from a theme"],
-    ["colour", "Colour"],
+    ["color", "Color"],
     ["type", "Type"],
     ["shape", "Shape and buttons"],
     ["space", "Space"],
@@ -16,29 +16,34 @@ export const designingYourPage: GuideBody = {
   content: (
     <>
       <p>
-        Everything you see on a HYDLNK page is set by a token: 23 of them, in five groups. You
-        don’t need to touch all of them. Start from a theme, change three or four, and you’ll have
-        a page that looks like yours. The <Link href="/design-control">design page</Link> lets you try
-        this on a demo first.
+        Almost everything you see on a HYDLNK page can be changed: 23 settings in five groups,
+        from colors and fonts to spacing and the background. You don’t need to touch all of them.
+        Start from a theme, change three or four things, and you’ll have a page that looks like
+        yours. The <Link href="/design-control">design page</Link> lets you try this on a demo
+        first.
       </p>
 
       <h2 id="theme">Start from a theme</h2>
       <p>
-        A theme is a complete set of tokens. Apply one of the system themes in the Design tab and
-        the whole page changes at once. Applying a theme also clears any tokens you had changed on
-        the page, and you can undo it if you change your mind.
+        A theme is a complete look: colors, fonts, buttons, spacing and background together. Apply
+        one of the system themes in the Design tab and the whole page changes at once. Applying a
+        theme also clears any changes you had made to the page’s look, and you can undo it if you
+        change your mind.
       </p>
       <p>
         Like everything else, a new theme only changes your draft. Visitors see it after you press
         Publish.
       </p>
 
-      <h2 id="colour">Colour</h2>
-      <p>Eight tokens cover every colour on the page:</p>
+      <h2 id="color">Color</h2>
+      <p>
+        Eight colors cover everything on the page. The Design tab lists them under these short
+        names:
+      </p>
       <table>
         <thead>
           <tr>
-            <th>Token</th>
+            <th>Name in the editor</th>
             <th>Where it shows</th>
           </tr>
         </thead>
@@ -53,7 +58,7 @@ export const designingYourPage: GuideBody = {
       </table>
       <p>
         Keep text readable. Text against its background should have a contrast ratio of at least
-        4.5 to 1, and so should button text against its button. Light grey on white and mid-grey
+        4.5 to 1, and so should button text against its button. Light gray on white and mid-gray
         on black are the usual mistakes. When in doubt, make the text darker (or lighter) than
         feels necessary: your visitors are reading on phones, often outdoors.
       </p>
@@ -69,41 +74,42 @@ export const designingYourPage: GuideBody = {
         <li>Monospaced faces (Space Mono, Geist Mono) suit short headings, not paragraphs.</li>
       </ul>
       <p>
-        <code>scale</code> makes all text larger or smaller, <code>weightHeading</code> sets how
-        bold headings are, and <code>letterCase</code> can set headings in capitals. Capitals work
-        for short headers; avoid them for long names.
+        <strong>Text size</strong> makes all text larger or smaller, <strong>Heading weight</strong>{" "}
+        sets how bold headings are, and <strong>Letter case</strong> can set headings in capitals.
+        Capitals work for short headers; avoid them for long names.
       </p>
 
       <h2 id="shape">Shape and buttons</h2>
       <p>
-        <code>radius</code> rounds every corner, from square (0) to soft (32 px), and{" "}
-        <code>borderWidth</code> sets how heavy edges are. <code>buttonStyle</code> picks one of
-        five button styles:
+        <strong>Corner radius</strong> rounds every corner, from square (0) to soft (32 px), and{" "}
+        <strong>Border width</strong> sets how heavy edges are. <strong>Button style</strong> picks
+        one of five button styles:
       </p>
       <ul>
         <li><strong>Fill</strong>: solid buttons. The clearest call to action.</li>
-        <li><strong>Outline</strong>: an edge in your accent colour. Calm and editorial.</li>
-        <li><strong>Soft</strong>: a light tint of the button colour. Quiet, good on photos.</li>
+        <li><strong>Outline</strong>: an edge in your accent color. Calm and editorial.</li>
+        <li><strong>Soft</strong>: a light tint of the button color. Quiet, good on photos.</li>
         <li><strong>Shadow</strong>: a hard offset shadow. Playful.</li>
         <li><strong>Pill</strong>: fully rounded ends, whatever the radius.</li>
       </ul>
 
       <h2 id="space">Space</h2>
       <p>
-        <code>density</code> sets the spacing between blocks: compact, regular or airy.{" "}
-        <code>maxWidth</code> sets how wide the column gets on large screens, from 360 to 720 px,
-        and <code>align</code> centres the page or aligns it left. Airy spacing and a narrow column
-        feel calm; compact suits pages with many links.
+        <strong>Spacing</strong> sets the space between blocks: compact, regular or airy.{" "}
+        <strong>Content width</strong> sets how wide the column gets on large screens, from 360 to
+        720 px, and <strong>Alignment</strong> centers the page or aligns it left. Airy spacing and
+        a narrow column feel calm; compact suits pages with many links.
       </p>
 
       <h2 id="background">Backgrounds</h2>
       <p>
-        <code>bgType</code> is a solid colour, a gradient or an image. For an image:
+        Choose a solid color, a gradient or an image for the <strong>Background</strong>. For an
+        image:
       </p>
       <ul>
         <li>Choose a calm photo without much detail where your text will sit.</li>
-        <li>Raise <code>overlayOpacity</code> to wash the photo with your background colour until text is easy to read.</li>
-        <li>Add some <code>blur</code> (up to 20 px) to soften a busy picture.</li>
+        <li>Raise <strong>Overlay</strong> to wash the photo with your background color until text is easy to read.</li>
+        <li>Add some <strong>Blur</strong> (up to 20 px) to soften a busy picture.</li>
       </ul>
       <p>
         Images you upload count toward your plan’s storage: 10 MB on Free, 100 MB on Pro and 1 GB
@@ -112,14 +118,14 @@ export const designingYourPage: GuideBody = {
 
       <h2 id="stand-out">Make one thing stand out</h2>
       <p>
-        A link or a card can override the page’s colours, button style and corner radius. Use it
+        A link or a card can override the page’s colors, button style and corner radius. Use it
         for the one action that matters most, such as a filled “Book now” among outlined links.
         Use it sparingly: if everything stands out, nothing does.
       </p>
 
       <h2 id="save">Save it as a theme</h2>
       <p>
-        When you like the result, choose Save as theme. That copies every token into a theme of
+        When you like the result, choose Save as theme. That saves your whole look as a theme of
         your own, which you can apply to any of your pages. Free accounts keep up to 3 saved
         themes; Pro and Studio keep as many as they like.
       </p>
