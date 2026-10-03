@@ -378,22 +378,56 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
       })
       .toBeGreaterThan(300);
     const cdp = await context.newCDPSession(page);
-    // A swipe is a touch scroll; if the page was not yet ready to take it, swipe again (a few times at
-    // most). What the test asserts is unchanged: the page scrolled and the swipe opened no block.
+    // What scrolls on the phone Preview tab is the window (the preview is `h-auto` there); read the
+    // document's scroller and, in case a container ever takes over, the preview's own scrollTop too.
+    const scrolled = () =>
+      page.evaluate(() => {
+        const screen = document.querySelector('[data-testid="preview-screen"]');
+        return Math.max(
+          window.scrollY,
+          document.scrollingElement?.scrollTop ?? 0,
+          screen?.scrollTop ?? 0,
+        );
+      });
+    // A real touch drag, sent as raw touch events (touchStart, many touchMoves, touchEnd). On CI's
+    // Linux headless Chrome `Input.synthesizeScrollGesture` alone did not scroll the page; the raw
+    // touch pipeline is what a finger does, and it needs no compositor-side gesture controller.
+    async function drag(): Promise<void> {
+      const x = 195;
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x, y: 600 }],
+      });
+      for (let i = 1; i <= 20; i += 1) {
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x, y: 600 - i * 20 }],
+        });
+        await page.waitForTimeout(16);
+      }
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    }
+    let attempt = 0;
+    // If the page was not yet ready to take it, swipe again (a few times at most, alternating the
+    // two ways of sending a touch scroll). What the test asserts is unchanged: the page scrolled
+    // and the swipe opened no block.
     await expect
       .poll(
         async () => {
-          await cdp.send("Input.synthesizeScrollGesture", {
-            x: 195,
-            y: 500,
-            yDistance: -400,
-            speed: 800,
-            gestureSourceType: "touch",
-          });
-          await page.waitForTimeout(500);
-          return page.evaluate(() => window.scrollY);
+          attempt += 1;
+          if (attempt % 2 === 1) await drag();
+          else
+            await cdp.send("Input.synthesizeScrollGesture", {
+              x: 195,
+              y: 600,
+              yDistance: -400,
+              speed: 800,
+              gestureSourceType: "touch",
+            });
+          await page.waitForTimeout(300);
+          return scrolled();
         },
-        { timeout: 15_000, intervals: [0, 250, 250] },
+        { timeout: 20_000, intervals: [0, 250, 250] },
       )
       .toBeGreaterThan(100);
     await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");

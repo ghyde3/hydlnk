@@ -226,8 +226,15 @@ test.describe("M6-07 shortcuts, steps and saves", () => {
 
     // Nothing to undo yet: the shortcut changes nothing and says so.
     await page.getByRole("heading", { level: 2, name: /^Blocks/ }).click();
-    await page.keyboard.press("Control+z");
-    await expect(page.getByRole("status").filter({ hasText: "Nothing to undo." })).toHaveCount(1);
+    // Pressing it again is harmless (nothing changes, the same message): a key press that reaches
+    // the page before the click's scroll has settled on a loaded CI machine is simply tried again.
+    await expect(async () => {
+      await page.keyboard.press("Control+z");
+      await expect(page.getByRole("status").filter({ hasText: "Nothing to undo." })).toHaveCount(
+        1,
+        { timeout: 1_500 },
+      );
+    }).toPass({ timeout: 15_000 });
     await expect(BIO(page)).toHaveValue(original);
     await expect(saveIndicator(page)).toHaveText("");
 
