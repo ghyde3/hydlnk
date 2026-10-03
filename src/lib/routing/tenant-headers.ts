@@ -4,12 +4,23 @@
  * serves too.
  *
  * The CSP has no `script-src` and no nonce on purpose: a per-request nonce would make every page
- * dynamic and uncacheable. What it does pin down: embeds load only from YouTube (no-cookie) and
- * Spotify, no plugins, no <base> tag, and nobody can frame a tenant page. Tenant content is also
+ * dynamic and uncacheable. What it does pin down: embeds load only from the eight providers
+ * (YouTube no-cookie, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music, Twitch: M6-26),
+ * no plugins, no <base> tag, and nobody can frame a tenant page. Tenant content is also
  * escaped and validated before it is rendered; this is the second wall.
  */
 export const TENANT_CONTENT_SECURITY_POLICY = [
-  "frame-src https://www.youtube-nocookie.com https://open.spotify.com",
+  [
+    "frame-src https://www.youtube-nocookie.com",
+    "https://open.spotify.com",
+    "https://player.vimeo.com",
+    "https://www.tiktok.com",
+    "https://www.instagram.com",
+    "https://w.soundcloud.com",
+    "https://embed.music.apple.com",
+    "https://player.twitch.tv",
+    "https://clips.twitch.tv",
+  ].join(" "),
   "object-src 'none'",
   "base-uri 'none'",
   "frame-ancestors 'none'",

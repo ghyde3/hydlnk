@@ -3,9 +3,9 @@
 import { useState, type ReactNode } from "react";
 import { BLOCKED_FIELD_MESSAGE } from "@/lib/blocklist/messages";
 import {
-  EMBED_ERROR_MESSAGE,
   LIMITS,
   URL_ERROR_MESSAGE,
+  embedErrorMessage,
   isHttpUrl,
   normalizeUrl,
   parseEmbed,
@@ -47,7 +47,7 @@ export function UrlField({
   onChange: (next: string) => void;
   /** The Publish gate's message for this field, if it has one. */
   error?: string | null;
-  /** `embed` accepts only YouTube and Spotify links and says so in its message. */
+  /** `embed` accepts only links from the eight embed providers and says so in its message. */
   kind?: "web" | "embed";
   /** An empty value is fine (the image block's optional link). */
   optional?: boolean;
@@ -59,8 +59,9 @@ export function UrlField({
   const [touched, setTouched] = useState(false);
   const [edited, setEdited] = useState(false);
 
-  const message = kind === "embed" ? EMBED_ERROR_MESSAGE : URL_ERROR_MESSAGE;
   const trimmed = value.trim();
+  // An embed link that does not parse says which providers work, or, for a short link, to open it first.
+  const message = kind === "embed" ? embedErrorMessage(trimmed) : URL_ERROR_MESSAGE;
   const valid =
     trimmed === ""
       ? optional

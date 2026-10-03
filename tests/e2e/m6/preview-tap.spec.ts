@@ -70,7 +70,6 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
       { name: "text", id: byType("text").id, target: "" },
       { name: "image", id: byType("image").id, target: "" },
       { name: "social", id: byType("social").id, target: "" },
-      { name: "embed", id: byType("embed").id, target: ".pg-embed-play" },
       { name: "grid", id: byType("grid").id, target: "" },
       { name: "divider", id: byType("divider").id, target: "", divider: true },
       { name: "empty image", id: byType("image", 1).id, target: ".pg-placeholder" },
@@ -101,8 +100,15 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     }
     expect(tracked).toEqual([]);
     expect(popups).toEqual([]);
-    // Nothing mounted a player.
+    // Nothing mounted a player so far.
     await expect(previewScreen(page).locator("iframe")).toHaveCount(0);
+    // M6-27 supersedes this step of M6-03 for a facade's Play button: it plays in the preview, like
+    // on the live page, and does not open the block.
+    const embed = byType("embed").id;
+    await inPreview(page, embed).locator(".pg-embed-play").click();
+    await expect(inPreview(page, embed).locator("iframe")).toHaveCount(1);
+    await expect(rowToggle(page, embed)).toHaveAttribute("aria-expanded", "false");
+    expect(page.url()).toBe(start);
   });
 
   test("M6-03 a card, a link, an image and a grid in a row collapse the one that was open", async ({
@@ -162,7 +168,7 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     expect(await css(inPreview(page, cellB), "cursor")).toBe("pointer");
   });
 
-  test("M6-03 a Spotify player cannot swallow the tap, and a YouTube poster mounts no player", async ({
+  test("M6-03 a Spotify player cannot swallow the tap, and a YouTube poster plays in place (M6-27)", async ({
     page,
     context,
   }, info) => {
@@ -189,14 +195,16 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     await frame.click({ force: true });
     await expectOpened(page, spotify.id);
     await closeRows(page);
+    // M6-27 supersedes this step of M6-03: a facade's Play button plays in the preview, like on the
+    // live page, and does not open the block.
     await previewScreen(page).locator(`[data-block-id="${youtube.id}"] .pg-embed-play`).click();
-    await expectOpened(page, youtube.id);
     await expect(previewScreen(page).locator(`[data-block-id="${youtube.id}"] iframe`)).toHaveCount(
-      0,
+      1,
     );
     await expect(
       previewScreen(page).locator(`[data-block-id="${youtube.id}"] .pg-embed-play`),
-    ).toBeVisible();
+    ).toHaveCount(0);
+    await expect(rowToggle(page, youtube.id)).toHaveAttribute("aria-expanded", "false");
   });
 
   test("M6-03 taps that mean nothing do nothing: the background, empty space and the footer links", async ({

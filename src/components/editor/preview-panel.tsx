@@ -18,8 +18,9 @@ import { panelId, tabId, type EditorView } from "./view-tabs";
  *
  * Tap to edit (M6-03): the frame is also where taps are read. A click (or Enter on a link) on a
  * block, a social icon, a grid cell or the avatar, name or bio goes to `onTap` and nothing else
- * sees it, so the YouTube Play button never mounts a player here; iframes get no pointer events,
- * so a tap on a Spotify player is a tap on its block. Taps that mean nothing do nothing.
+ * sees it; iframes get no pointer events, so a tap on a Spotify player is a tap on its block. The
+ * one exception is a facade's Play button (M6-27): it mounts its player here, as it does on the
+ * live page, and does not open the block. Taps that mean nothing do nothing.
  */
 export function PreviewPanel({
   doc,
@@ -43,6 +44,8 @@ export function PreviewPanel({
     const target = event.target as Element;
     if (target.closest("a")) event.preventDefault();
     if (!onTap) return;
+    // A facade's Play button plays here, like on the live page (M6-27): it is not an edit tap.
+    if (target.closest("button.pg-embed-play")) return;
     const tap = resolvePreviewTap(target, event.currentTarget);
     if (!tap) return;
     // Nothing inside the page reacts to a tap that opens the editor (the YouTube Play button).

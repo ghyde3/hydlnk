@@ -1,14 +1,40 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  embedAllow,
+  embedAllowsFullscreen,
+  embedHeight,
+  embedPlayLabel,
+  embedPlayerSrc,
+  embedPlayerTitle,
+  type EmbedKind,
+  type EmbedProvider,
+} from "@/lib/document";
+import { PlayDisc, posterFit } from "./embed-poster";
 
 /**
- * The YouTube click-to-play facade, the renderer's one client island. Until the visitor presses
- * Play there is no iframe, no thumbnail and no request to YouTube or Google: just a dark poster
- * and a button. A click mounts the youtube-nocookie.com iframe, built from the parsed video id
- * (`src` comes from `parseEmbed`, never from the tenant's URL), and moves focus into it.
+ * The tap-to-play facade for every embed provider except Spotify, the renderer's one client island
+ * (M2-19, M6-27). Until the visitor presses Play there is no iframe, no thumbnail and no request to
+ * the provider: just a dark poster and a button. A tap mounts the provider's player, with `src`
+ * built from `parseEmbed(...).src` (the parsed parts, never the tenant's URL) plus the provider's
+ * autoplay flag, and moves focus into it.
+ *
+ * Twitch plays only inside a site it knows: the tap adds `parent={hostname}`, read from
+ * `window.location.hostname` at tap time and nowhere else (never from the document). A hostname
+ * that is not plain letters, digits, dots and dashes mounts no iframe.
  */
-export function YouTubeFacade({ src, caption }: { src: string; caption: string }) {
+export function EmbedFacade({
+  provider,
+  kind,
+  src,
+  caption,
+}: {
+  provider: EmbedProvider;
+  kind: EmbedKind;
+  src: string;
+  caption: string;
+}) {
   const [playing, setPlaying] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
 
@@ -16,32 +42,45 @@ export function YouTubeFacade({ src, caption }: { src: string; caption: string }
     if (playing) frame.current?.focus();
   }, [playing]);
 
+  const embed = { provider, kind };
+
   if (playing) {
+    // Read only after a tap, so the first render is the same on the server and in the browser.
+    const parent = provider === "twitch" ? window.location.hostname : undefined;
+    const playerSrc = embedPlayerSrc({ provider, src }, parent);
+    if (playerSrc === null) {
+      return (
+        <p className="pg-embed-unavailable" role="status">
+          This embed can’t load here.
+        </p>
+      );
+    }
+    const height = embedHeight(embed);
     return (
       <iframe
         ref={frame}
         className="pg-embed-iframe"
-        src={`${src}?autoplay=1`}
-        title={caption === "" ? "YouTube video" : `${caption} (YouTube video)`}
-        allow="autoplay; encrypted-media; picture-in-picture"
-        allowFullScreen
+        src={playerSrc}
+        title={embedPlayerTitle(provider, caption)}
+        allow={embedAllow(provider)}
+        allowFullScreen={embedAllowsFullscreen(provider)}
         referrerPolicy="strict-origin-when-cross-origin"
+        style={typeof height === "number" ? { height, aspectRatio: "auto" } : undefined}
       />
     );
   }
 
+  const { fit, style } = posterFit(embed);
   return (
     <button
       type="button"
       className="pg-embed-play"
-      aria-label={caption === "" ? "Play video" : `Play video: ${caption}`}
       onClick={() => setPlaying(true)}
+      aria-label={embedPlayLabel(embed, caption)}
+      data-embed-fit={fit}
+      style={style}
     >
-      <span className="pg-embed-play-disc" aria-hidden="true">
-        <svg className="pg-embed-play-glyph" viewBox="0 0 24 24" focusable="false">
-          <path d="M8 5.5v13l11-6.5z" />
-        </svg>
-      </span>
+      <PlayDisc />
     </button>
   );
 }
