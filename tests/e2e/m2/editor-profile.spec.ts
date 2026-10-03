@@ -15,6 +15,7 @@ import {
   saveIndicator,
   seededUser,
 } from "./editor-helpers";
+import { confirmPhoto } from "../m6/position-dialog-helpers";
 import { makeJpeg } from "../m5/images-fixtures";
 import { makePng } from "./editor-images";
 
@@ -258,6 +259,7 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/jpeg",
       buffer: await makeJpeg({ width: 400, height: 400 }),
     });
+    await confirmPhoto(page);
     const busy = card(page).getByRole("button", { name: "Uploading..." });
     await expect(busy).toBeVisible();
     await expect(busy).toBeDisabled();
@@ -301,6 +303,7 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(300, 200),
     });
+    await confirmPhoto(page);
     const second = (
       await expectDraft(
         user.pageId,
@@ -338,6 +341,7 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(400, 400),
     });
+    await confirmPhoto(page);
     const photo = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     const before = await rawRequest(`${user.handle}.localhost:3000`, "/");
     expect(before.body).not.toContain(photo.path);
@@ -418,6 +422,7 @@ test.describe("M2-09 profile photo", () => {
         mimeType: "image/png",
         buffer: makePng(8, 8),
       });
+      await confirmPhoto(page);
       await expect(card(page).getByText(text)).toBeVisible();
       await page.unroute("**/api/media");
     }
@@ -437,6 +442,7 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(64, 64),
     });
+    await confirmPhoto(page);
     await expect(card(page).getByRole("button", { name: "Replace photo" })).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page, "[aria-labelledby]");
@@ -459,6 +465,7 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(64, 64),
     });
+    await confirmPhoto(page);
     const upload = (await card(page).getByRole("button", { name: "Replace photo" }).boundingBox())!;
     const remove = (await card(page).getByRole("button", { name: "Remove" }).boundingBox())!;
     const face = (await avatar(page).boundingBox())!;

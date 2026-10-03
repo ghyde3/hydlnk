@@ -7,6 +7,7 @@ import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { expectDraft, openEditor, pageRow, seededUser, statusChip } from "../m2/editor-helpers";
 import { addBlock } from "../m2/blocks-helpers";
+import { confirmPhoto } from "../m6/position-dialog-helpers";
 import { GIF, SERVER_PORT, tenantGet } from "../m2/publish-helpers";
 import { computed, expectOverrides, isPhone, openDesign, previewRoot } from "../m3/design-helpers";
 import {
@@ -121,6 +122,7 @@ test.describe("M5-11 the avatar in the editor", () => {
       mimeType: "image/jpeg",
       buffer: phone,
     });
+    await confirmPhoto(page);
     await expect(card(page).getByRole("button", { name: "Uploading..." })).toBeDisabled();
     expect((await posted).status()).toBe(200);
     await page.unroute("**/api/media");
@@ -141,7 +143,10 @@ test.describe("M5-11 the avatar in the editor", () => {
     // The avatar shows the new image without moving anything, and the screen fits the viewport.
     await expect(avatar(page).locator("img")).toHaveAttribute("src", publicUrl(photo.path));
     const after = (await card(page).boundingBox())!;
-    expect(Math.abs(after.height - before.height)).toBeLessThanOrEqual(1);
+    // M6-24: "Adjust photo" is a third button once there is a photo. On a 390px phone it wraps to a
+    // second row (44px plus the 6px gap); nothing else moves. (Recorded as an accepted deviation.)
+    expect(after.height - before.height).toBeGreaterThanOrEqual(-1);
+    expect(after.height - before.height).toBeLessThanOrEqual(50 + 1);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page, "main");
   });
@@ -153,9 +158,10 @@ test.describe("M5-11 the avatar in the editor", () => {
     const user = await newUser(context, "w11r");
     await openEditor(page);
     const pick = (color: [number, number, number], name: string) =>
-      makePngImage({ width: 600, height: 500, color }).then((buffer) =>
-        fileInput(page).setInputFiles({ name, mimeType: "image/png", buffer }),
-      );
+      makePngImage({ width: 600, height: 500, color }).then(async (buffer) => {
+        await fileInput(page).setInputFiles({ name, mimeType: "image/png", buffer });
+        await confirmPhoto(page); // M6-24: the position dialog first, then the upload
+      });
 
     await pick([200, 40, 40], "first.png");
     const first = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
@@ -205,6 +211,7 @@ test.describe("M5-11 the avatar in the editor", () => {
       mimeType: "image/png",
       buffer: await makePngImage({ width: 500, height: 500 }),
     });
+    await confirmPhoto(page);
     const photo = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     await page
       .locator("main > header")
@@ -240,6 +247,7 @@ test.describe("M5-11 the avatar in the editor", () => {
       mimeType: "image/png",
       buffer: await makePngImage({ width: 400, height: 400 }),
     });
+    await confirmPhoto(page);
     await expectDraft(user.pageId, (d) => d.profile.photo !== null);
     const block = await addBlock(page, "image");
     await block.panel.locator('input[type="file"]').setInputFiles({
@@ -402,6 +410,7 @@ test.describe("M5-12 backgrounds and image blocks", () => {
       mimeType: "image/png",
       buffer: await makePngImage({ width: 500, height: 500 }),
     });
+    await confirmPhoto(page);
     await expectDraft(user.pageId, (d) => d.profile.photo !== null);
     const block = await addBlock(page, "image");
     await block.panel.locator('input[type="file"]').setInputFiles({
@@ -473,6 +482,7 @@ test.describe("M5-13 inline errors", () => {
       mimeType: "image/png",
       buffer: await makePngImage({ width: 400, height: 400 }),
     });
+    await confirmPhoto(page);
     const photo = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     const unchanged = async () => {
       expect((await pageRow(user.pageId)).draft.profile.photo).toEqual(photo);
@@ -514,6 +524,7 @@ test.describe("M5-13 inline errors", () => {
         mimeType: "image/png",
         buffer: await makePngImage({ width: 64, height: 64 }),
       });
+      await confirmPhoto(page);
       await expectErrorStyle(page, message, card(page));
       await unchanged();
       await page.unroute("**/api/media");
@@ -533,6 +544,7 @@ test.describe("M5-13 inline errors", () => {
       mimeType: "image/png",
       buffer: await makePngImage({ width: 400, height: 400, color: [10, 160, 40] }),
     });
+    await confirmPhoto(page);
     await expectDraft(
       user.pageId,
       (d) => d.profile.photo !== null && d.profile.photo.path !== photo.path,
@@ -612,9 +624,10 @@ test.describe("M5-14 the editor works the cleanup queue", () => {
     const user = await newUser(context, "w14");
     await openEditor(page);
     const pick = (color: [number, number, number], name: string) =>
-      makePngImage({ width: 600, height: 500, color }).then((buffer) =>
-        fileInput(page).setInputFiles({ name, mimeType: "image/png", buffer }),
-      );
+      makePngImage({ width: 600, height: 500, color }).then(async (buffer) => {
+        await fileInput(page).setInputFiles({ name, mimeType: "image/png", buffer });
+        await confirmPhoto(page); // M6-24: the position dialog first, then the upload
+      });
 
     // A is published; B replaces it in the draft: A must stay until the Publish that drops it.
     await pick([200, 40, 40], "a.png");

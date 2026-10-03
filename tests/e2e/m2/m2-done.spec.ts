@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { confirmPhoto } from "../m6/position-dialog-helpers";
 import { addBlock, expectDraft, rowOf, showView } from "./blocks-helpers";
 import { emptyUser, openEditor, pageRow, previewScreen, statusChip } from "./editor-helpers";
 
@@ -160,6 +161,8 @@ test("M2-31 a page with every block type renders identically in preview and live
     mimeType: "image/jpeg",
     buffer: await jpeg400(page),
   });
+  // M6-24: choosing a photo opens the position dialog; the upload starts at "Use photo".
+  await confirmPhoto(page);
   await expect(profile.getByRole("button", { name: "Replace photo" })).toBeVisible({
     timeout: 25_000,
   });
