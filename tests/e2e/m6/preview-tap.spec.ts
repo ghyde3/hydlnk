@@ -362,20 +362,40 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
 
   test("M6-03 a swipe that scrolls the preview opens nothing", async ({ page, context }, info) => {
     test.skip(!phoneOnly(info), "phone layout");
-    await userWithBlocks(context, "tq3", () => textBlocks(14));
+    const user = await userWithBlocks(context, "tq3", () => textBlocks(14));
     await openEditor(page);
     await dock(page).click();
     await expect(backBar(page)).toBeVisible();
+    await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");
+    // The gesture only scrolls what is there: wait until the last block is drawn and the page is
+    // clearly taller than the viewport (on a loaded CI machine the first paint can still be short).
+    await expect(
+      previewScreen(page).locator(`[data-block-id="${user.blocks.at(-1)!.id}"]`),
+    ).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), {
+        timeout: 15_000,
+      })
+      .toBeGreaterThan(300);
     const cdp = await context.newCDPSession(page);
-    await cdp.send("Input.synthesizeScrollGesture", {
-      x: 195,
-      y: 500,
-      yDistance: -400,
-      speed: 800,
-      gestureSourceType: "touch",
-    });
-    await page.waitForTimeout(500);
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
+    // A swipe is a touch scroll; if the page was not yet ready to take it, swipe again (a few times at
+    // most). What the test asserts is unchanged: the page scrolled and the swipe opened no block.
+    await expect
+      .poll(
+        async () => {
+          await cdp.send("Input.synthesizeScrollGesture", {
+            x: 195,
+            y: 500,
+            yDistance: -400,
+            speed: 800,
+            gestureSourceType: "touch",
+          });
+          await page.waitForTimeout(500);
+          return page.evaluate(() => window.scrollY);
+        },
+        { timeout: 15_000, intervals: [0, 250, 250] },
+      )
+      .toBeGreaterThan(100);
     await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("li[data-block-id] button[aria-expanded=true]")).toHaveCount(0);
   });

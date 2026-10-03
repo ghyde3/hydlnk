@@ -36,7 +36,9 @@ export default defineConfig({
       command: `pnpm dev --port ${DEV_PORT}`,
       url: `http://localhost:${DEV_PORT}`,
       reuseExistingServer: true,
-      timeout: 120_000,
+      // A cold `next dev` on a CI runner (a shard starting while the others compile) took longer than
+      // two minutes to answer the first request in the full-suite run; locally two minutes is plenty.
+      timeout: process.env.CI ? 300_000 : 120_000,
     },
     {
       // The stand-in for the Vercel domains API (VERCEL_API_BASE_URL in .env.local): deleting a page
