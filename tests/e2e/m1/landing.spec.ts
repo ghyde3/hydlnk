@@ -731,6 +731,7 @@ test.describe("M1-26 pricing", () => {
       "yourname.hydlnk.com",
       "Per-link clicks, last 30 days",
       "10 MB of uploads",
+      "–Version history",
       "–Small “Made with HYDLNK” badge",
     ]);
     expect(await lists("Pro")).toEqual([
@@ -741,6 +742,7 @@ test.describe("M1-26 pricing", () => {
       "Unlimited saved themes",
       "1 year of analytics with referrers, devices and countries",
       "100 MB of uploads",
+      "Version history, last 25 versions",
     ]);
     expect(await lists("Studio")).toEqual([
       "Everything in Pro, plus",
@@ -764,9 +766,7 @@ test.describe("M1-26 pricing", () => {
 
   test("M1-26 scope guard: nothing out of v1 anywhere on the page", async ({ page }) => {
     await open(page);
-    expect(await page.content()).not.toMatch(
-      /schedul|csv|invite editors|team access|custom css|version history/i,
-    );
+    expect(await page.content()).not.toMatch(/schedul|csv|invite editors|team access|custom css/i);
   });
 
   test("M1-26 CTA buttons go to app signup and are at least 44px tall", async ({ page }) => {

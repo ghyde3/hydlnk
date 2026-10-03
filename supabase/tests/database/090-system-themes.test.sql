@@ -23,17 +23,18 @@ insert into public.themes (id, owner_id, name, tokens) values
 -- ---------------------------------------------------------------------------
 
 select ok(
-  (select count(*) from public.themes where owner_id is null) between 6 and 8,
-  'between 6 and 8 system themes are shipped'
+  (select count(*) from public.themes where owner_id is null) = 16,
+  '16 system themes are shipped (M6-43 supersedes the 6 to 8 of M3-03)'
 );
 select is(
   (select count(*)::int from public.themes where owner_id is null),
-  7,
-  'seven: Noir, Ivory, Smoke from Milestone 0 plus Paper, Sage, Midnight and Ember'
+  16,
+  'sixteen: Noir, Ivory, Smoke from Milestone 0, Paper, Sage, Midnight and Ember, then the nine of M6-43'
 );
 select set_eq(
   $$ select name from public.themes where owner_id is null $$,
-  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember') $$,
+  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember'),
+            ('Linen'), ('Cloud'), ('Blush'), ('Citrus'), ('Graphite'), ('Ocean'), ('Plum'), ('Forest'), ('Sunset') $$,
   'the system theme names'
 );
 select is(
@@ -73,9 +74,9 @@ select is(
 select is(
   (select count(*)::int from public.themes t
     where t.owner_id is null
-      and (select count(*) from jsonb_object_keys(t.tokens)) = 23),
-  7,
-  'every system theme is a complete 23-key token set'
+      and (select count(*) from jsonb_object_keys(t.tokens)) = 26),
+  16,
+  'every system theme is a complete 26-key token set (the 23 of M3 and the three gradient keys of M6-41)'
 );
 select is(
   (select count(*)::int from public.themes
@@ -83,17 +84,21 @@ select is(
       '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000002',
       '00000000-0000-4000-8000-000000000003', '00000000-0000-4000-8000-000000000004',
       '00000000-0000-4000-8000-000000000005', '00000000-0000-4000-8000-000000000006',
-      '00000000-0000-4000-8000-000000000007')),
-  7,
-  'the system themes have the fixed ids 1 to 7'
+      '00000000-0000-4000-8000-000000000007', '00000000-0000-4000-8000-000000000008',
+      '00000000-0000-4000-8000-000000000009', '00000000-0000-4000-8000-000000000010',
+      '00000000-0000-4000-8000-000000000011', '00000000-0000-4000-8000-000000000012',
+      '00000000-0000-4000-8000-000000000013', '00000000-0000-4000-8000-000000000014',
+      '00000000-0000-4000-8000-000000000015', '00000000-0000-4000-8000-000000000016')),
+  16,
+  'the system themes have the fixed ids 1 to 16'
 );
 
 -- anon and authenticated read every system theme row
 select tests.clear_authentication();
 select is(
   (select count(*)::int from public.themes),
-  7,
-  'anon reads all seven system themes and nothing else (no saved theme)'
+  16,
+  'anon reads all sixteen system themes and nothing else (no saved theme)'
 );
 select is_empty(
   $$ select 1 from public.themes where owner_id is not null $$,
@@ -109,8 +114,8 @@ reset role;
 select tests.authenticate_as('a');
 select is(
   (select count(*)::int from public.themes where owner_id is null),
-  7,
-  'an authenticated user reads all seven system themes'
+  16,
+  'an authenticated user reads all sixteen system themes'
 );
 select set_eq(
   $$ select name from public.themes where owner_id is not null $$,
@@ -138,7 +143,7 @@ select throws_ok(
 );
 select is(
   (select count(*)::int from public.themes where owner_id is null),
-  7,
+  16,
   'and the system themes are unchanged'
 );
 select is(

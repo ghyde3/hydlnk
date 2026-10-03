@@ -88,7 +88,7 @@ test.describe("M3-05 publish validates tokens", () => {
       accent: "#C46A4F",
       radius: 20,
     });
-    expect(Object.keys(stored.tokens)).toHaveLength(23);
+    expect(Object.keys(stored.tokens)).toHaveLength(26);
     expect(stored.tokens).toEqual(expected);
   });
 
@@ -96,17 +96,17 @@ test.describe("M3-05 publish validates tokens", () => {
     {
       name: "bg 'red;}'",
       overrides: { bg: "red;}" },
-      message: /Publish stopped: bg isn’t a valid color\. Reset it in Design\./,
+      message: /Publish stopped: Page background isn’t a valid color\. Reset it in Design\./,
     },
     {
       name: "fontHeading 'Evil;}'",
       overrides: { fontHeading: "Evil;}" },
-      message: /Publish stopped: fontHeading isn’t an available font\. Reset it in Design\./,
+      message: /Publish stopped: Heading font isn’t an available font\. Reset it in Design\./,
     },
     {
       name: "bgImage on another host",
       overrides: { bgImage: "https://evil.example/x.png" },
-      message: /Publish stopped: bgImage isn’t one of your uploaded images\./,
+      message: /Publish stopped: Background image isn’t one of your uploaded images\./,
     },
   ];
 
@@ -229,7 +229,7 @@ test.describe("M3-05 the Publish message", () => {
     await clickPublish(page);
     const alert = alertOf(page);
     await expect(alert).toContainText(
-      "Publish stopped: bg isn’t a valid color. Reset it in Design.",
+      "Publish stopped: Page background isn’t a valid color. Reset it in Design.",
     );
     return alert;
   }

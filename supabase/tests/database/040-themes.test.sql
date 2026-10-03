@@ -22,7 +22,7 @@ select tests.clear_authentication();
 
 select set_eq(
   $$ select name from public.themes $$,
-  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember') $$,
+  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember'), ('Linen'), ('Cloud'), ('Blush'), ('Citrus'), ('Graphite'), ('Ocean'), ('Plum'), ('Forest'), ('Sunset') $$,
   'anon reads the system themes and nothing else'
 );
 select is(
@@ -55,7 +55,7 @@ select tests.authenticate_as('a');
 
 select set_eq(
   $$ select name from public.themes where owner_id is null $$,
-  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember') $$,
+  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember'), ('Linen'), ('Cloud'), ('Blush'), ('Citrus'), ('Graphite'), ('Ocean'), ('Plum'), ('Forest'), ('Sunset') $$,
   'an authenticated user reads the system themes'
 );
 select set_eq(
@@ -262,8 +262,8 @@ select is_empty(
 );
 select is(
   (select count(*)::int from public.themes where owner_id is null),
-  8,
-  'and the system themes stay (7 shipped + the one the server added)'
+  17,
+  'and the system themes stay (16 shipped + the one the server added)'
 );
 
 select * from finish();

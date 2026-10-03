@@ -8,13 +8,23 @@ import type { ThemeLibrary } from "./use-theme-library";
  * a second press while one save is in flight does nothing. The confirmation (or the Free limit
  * message) shows in the saved-themes card.
  */
-export function SaveAsThemeButton({ library }: { library: ThemeLibrary }) {
+export function SaveAsThemeButton({
+  library,
+  onBefore,
+}: {
+  library: ThemeLibrary;
+  /** Runs first, on every press: the Design screen ends a theme preview here (M6-44). */
+  onBefore?: (() => void) | undefined;
+}) {
   return (
     <button
       type="button"
       data-testid="save-as-theme"
       disabled={library.pending}
-      onClick={() => void library.saveAsTheme()}
+      onClick={() => {
+        onBefore?.();
+        void library.saveAsTheme();
+      }}
       className="min-h-11 cursor-pointer rounded-md border border-line-3 bg-surface px-3.5 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-60"
     >
       Save as theme

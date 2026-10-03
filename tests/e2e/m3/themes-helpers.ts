@@ -17,7 +17,7 @@ import { DESIGN_URL, openDesign } from "./design-helpers";
 
 export const NOIR = "00000000-0000-4000-8000-000000000001";
 export const IVORY = "00000000-0000-4000-8000-000000000002";
-export const SYSTEM_THEME_COUNT = 7;
+export const SYSTEM_THEME_COUNT = 16;
 
 /** mara's seeded blocks: a Fill link (with the override), a plain link and a card. */
 export const FILL_LINK = "Bt5rJ1fGz6Os";

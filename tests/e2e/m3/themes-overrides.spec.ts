@@ -133,13 +133,20 @@ test.describe("M3-17 per-block override: button style", () => {
       await expectNoHorizontalScroll(page);
     }
 
-    // A card has Color and Corner radius but no Button style; a header has no override controls.
+    // A card has Color and Corner radius but no Button style. A header used to have no override
+    // controls; since M6-46 it has its own style group with one control, Text color, and still no
+    // Button style (only a link has one).
     const card = await expand(page, C);
     await expect(styleSelect(card)).toHaveCount(0);
     await expect(radiusSelect(card)).toBeVisible();
     await expect(colorField(card)).toBeVisible();
     const header = await expand(page, H);
-    await expect(header.getByTestId("override-controls")).toHaveCount(0);
+    await expect(header.getByTestId("override-controls")).toHaveCount(1);
+    await expect(header.getByTestId("override-controls").locator("label")).toHaveText([
+      "Text color",
+    ]);
+    await expect(styleSelect(header)).toHaveCount(0);
+    await expect(radiusSelect(header)).toHaveCount(0);
   });
 
   test("M3-17 'Theme default' names the page's current theme style", async ({ page, context }) => {

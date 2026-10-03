@@ -22,8 +22,17 @@ import type { ThemeLibrary, ThemeMessage } from "./use-theme-library";
 export function SavedThemesCard({
   library,
   loadFailed,
+  onPreview,
+  previewingId = null,
 }: {
   library: ThemeLibrary;
+  /**
+   * M6-44: every card gets a Preview button that calls this with the theme's id and the button
+   * (the focus to come back to). Without it there are no Preview buttons.
+   */
+  onPreview?: ((id: string, button: HTMLElement) => void) | undefined;
+  /** The theme on show in the preview, or null. */
+  previewingId?: string | null;
   /**
    * Set when the server could not read the themes (M5-16): the row says so and offers Retry instead
    * of the grid, and nothing else on the screen changes.
@@ -109,6 +118,8 @@ export function SavedThemesCard({
             theme={theme}
             tag={library.tagFor(theme.id)}
             onApply={() => library.apply(theme.id)}
+            onPreview={onPreview ? (button) => onPreview(theme.id, button) : undefined}
+            previewing={previewingId === theme.id}
             onRename={(input) => library.rename(theme.id, input)}
             onDelete={(button) => {
               trigger.current = button;
