@@ -24,12 +24,24 @@ function nameOf(label: unknown, url: unknown): string {
   return text(label) || hostnameOf(url) || "Link";
 }
 
+/** The first 60 characters of the text a link mark covers (code points, line breaks as spaces); "" when none. */
+function linkedText(source: unknown, mark: Record<string, unknown>): string {
+  if (typeof source !== "string") return "";
+  const { start, end } = mark;
+  if (typeof start !== "number" || typeof end !== "number") return "";
+  const chars = Array.from(source).slice(
+    Math.max(0, Math.trunc(start)),
+    Math.max(0, Math.trunc(end)),
+  );
+  return chars.slice(0, 60).join("").replace(/\s+/g, " ").trim();
+}
+
 /**
  * Click ids to link names, read from the currently published document: a link by its label, a card
- * by its title, an image link by its alt text, a grid cell by its own title and a social icon by
- * its platform. Read defensively (the document is JSON from the database, not trusted to match
- * today's schema): anything unexpected is skipped, and an id that is not in the map is a link that
- * has since been removed.
+ * by its title, an image link by its alt text, a grid cell by its own title, a social icon by its
+ * platform and a link inside text by the words it covers (M6-28). Read defensively (the document is
+ * JSON from the database, not trusted to match today's schema): anything unexpected is skipped, and
+ * an id that is not in the map is a link that has since been removed.
  */
 export function linkLabelsFromPublished(published: unknown): Map<string, string> {
   const labels = new Map<string, string>();
@@ -50,6 +62,14 @@ export function linkLabelsFromPublished(published: unknown): Map<string, string>
         for (const cell of Array.isArray(block.cells) ? block.cells : []) {
           if (isRecord(cell) && typeof cell.id === "string") {
             labels.set(cell.id, nameOf(cell.title, cell.url));
+          }
+        }
+        break;
+      case "text":
+        // A link inside text (M6-28) is named by the text it is on, else by its address.
+        for (const mark of Array.isArray(block.marks) ? block.marks : []) {
+          if (isRecord(mark) && mark.type === "link" && typeof mark.id === "string") {
+            labels.set(mark.id, nameOf(linkedText(block.text, mark), mark.url));
           }
         }
         break;

@@ -16,7 +16,7 @@ interface UrlField {
   value: string;
 }
 
-/** Every URL-valued field of a block: link, card, embed and image URLs, icon and cell URLs. */
+/** Every URL-valued field of a block: link, card, embed and image URLs, icon and cell URLs, and links inside text. */
 export function urlFieldsOf(block: Block): UrlField[] {
   switch (block.type) {
     case "link":
@@ -31,6 +31,11 @@ export function urlFieldsOf(block: Block): UrlField[] {
       );
     case "grid":
       return block.cells.map((cell) => ({ blockId: block.id, itemId: cell.id, value: cell.url }));
+    case "text":
+      // A link inside text (M6-29): the mark's id is the item, like a social icon or a grid cell.
+      return (block.marks ?? []).flatMap((mark) =>
+        mark.type === "link" ? [{ blockId: block.id, itemId: mark.id, value: mark.url }] : [],
+      );
     default:
       return [];
   }
