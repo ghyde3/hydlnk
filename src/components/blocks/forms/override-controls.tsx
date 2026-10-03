@@ -1,47 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { usePageTokens } from "@/components/themes/page-tokens-context";
 import {
+  BORDER_WIDTH_OPTIONS,
   BUTTON_STYLES,
   BUTTON_STYLE_LABELS,
   COLOR_KEYS,
   RADIUS_OPTIONS,
+  hasColorOverride,
   isHexColor,
+  readBorderWidth,
   readButtonStyle,
   readColor,
   readRadius,
+  setBorderWidth,
   setButtonStyle,
   setColor,
   setRadius,
+  styleSpecOf,
   type ButtonStyle,
-  type OverridableBlock,
+  type ColorControlSpec,
+  type StyleControl,
 } from "@/lib/themes";
+import type { Block } from "@/lib/document";
 import { Field, FORM_BUTTON, controlClass } from "../field";
 import { fieldError, type BlockFormProps } from "./types";
 
 /**
- * The per-block override controls (M3-17, M3-18): exactly three, Button style (link blocks only),
- * Color and Corner radius (link and card blocks). No font, spacing or background control exists
- * here, and the document schema drops any other override key. Each control writes straight into
- * `block.overrides` through the pure setters of `@/lib/themes`; "Theme default" removes the key,
- * and an empty override set removes `overrides` from the block.
+ * The per-block style controls (M3-17, M3-18, M6-46), in a group headed "Style this block" (a
+ * labeled section) under the block's own fields. Every block type has its own short list (see `STYLE_SPECS` in
+ * `@/lib/themes`): Button style, Color (labeled for its job: "Color", "Text color", "Border color",
+ * "Icon color", "Line color"), Corner radius and Border thickness. No font, spacing or background
+ * control exists here, and the document schema drops any other override key. Each control writes
+ * straight into `block.overrides` through the pure setters of `@/lib/themes`; "Theme default"
+ * removes the key, and an empty override set removes `overrides` from the block.
+ *
+ * Plain on every plan: nothing here is gated, so there is no Pro chip.
  */
 export function OverrideControls({
   block,
   onChange,
   errors,
 }: {
-  block: OverridableBlock;
+  block: Block;
   onChange: BlockFormProps["onChange"];
   errors: BlockFormProps["errors"];
 }) {
-  const tokens = usePageTokens();
-  const style = readButtonStyle(block);
-  const radius = readRadius(block);
-  // A radius the list does not offer (set through the API) is still shown, so the select never lies.
-  const radiusChoices: number[] = [...RADIUS_OPTIONS];
-  if (radius !== null && !radiusChoices.includes(radius)) radiusChoices.push(radius);
+  const headingId = useId();
+  const spec = styleSpecOf(block);
+  if (!spec) return null;
 
   const colorError =
     COLOR_KEYS[block.type]
@@ -49,72 +57,177 @@ export function OverrideControls({
       .find((message) => message !== null) ?? null;
 
   return (
-    <div data-testid="override-controls" className="flex flex-wrap items-start gap-3">
-      {block.type === "link" ? (
-        <Field
-          label="Button style"
+    // A labeled section, not `role="group"`: the social and grid panels already hold one group per
+    // icon or cell, and the people and tests that count those must not count this one.
+    <section
+      aria-labelledby={headingId}
+      data-testid="override-controls"
+      className="flex flex-col gap-3 border-t border-line pt-3"
+    >
+      <div className="flex flex-col gap-0.5">
+        <p id={headingId} className="text-[13px] font-semibold text-ink-2">
+          Style this block
+        </p>
+        <p className="text-xs text-text-2">
+          Only this block. Leave on Theme default to follow your page style.
+        </p>
+      </div>
+      <div className="flex flex-wrap items-start gap-3">
+        {spec.controls.map((control) => (
+          <StyleControlField
+            key={control}
+            control={control}
+            colorSpec={spec.color}
+            block={block}
+            onChange={onChange}
+            colorError={colorError}
+            errors={errors}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StyleControlField({
+  control,
+  colorSpec,
+  block,
+  onChange,
+  colorError,
+  errors,
+}: {
+  control: StyleControl;
+  colorSpec: ColorControlSpec;
+  block: Block;
+  onChange: BlockFormProps["onChange"];
+  colorError: string | null;
+  errors: BlockFormProps["errors"];
+}) {
+  switch (control) {
+    case "buttonStyle":
+      return (
+        <ButtonStyleControl
+          block={block}
+          onChange={onChange}
           error={fieldError(errors, block.id, "overrides.buttonStyle")}
-          className="flex-1 basis-[220px]"
+        />
+      );
+    case "color":
+      return <ColorControl block={block} spec={colorSpec} onChange={onChange} error={colorError} />;
+    case "radius":
+      return (
+        <NumberSelect
+          label="Corner radius"
+          field="override-radius"
+          value={readRadius(block)}
+          options={RADIUS_OPTIONS}
+          error={fieldError(errors, block.id, "overrides.radius")}
+          onSelect={(value) => onChange(setRadius(block, value))}
+        />
+      );
+    case "borderWidth":
+      return (
+        <NumberSelect
+          label="Border thickness"
+          field="override-border-width"
+          value={readBorderWidth(block)}
+          options={BORDER_WIDTH_OPTIONS}
+          error={fieldError(errors, block.id, "overrides.borderWidth")}
+          onSelect={(value) => onChange(setBorderWidth(block, value))}
+        />
+      );
+  }
+}
+
+/** Button style (link blocks): "Theme default (<the page's style>)" or one of the five. */
+function ButtonStyleControl({
+  block,
+  onChange,
+  error,
+}: {
+  block: Block;
+  onChange: BlockFormProps["onChange"];
+  error: string | null;
+}) {
+  const tokens = usePageTokens();
+  const style = readButtonStyle(block);
+  return (
+    <Field label="Button style" error={error} className="flex-1 basis-[220px]">
+      {(control) => (
+        <select
+          {...control}
+          value={style ?? ""}
+          data-field="override-button-style"
+          onChange={(event) =>
+            onChange(
+              setButtonStyle(
+                block,
+                event.target.value === "" ? null : (event.target.value as ButtonStyle),
+              ),
+            )
+          }
+          className={controlClass(false, "py-0")}
         >
-          {(control) => (
-            <select
-              {...control}
-              value={style ?? ""}
-              data-field="override-button-style"
-              onChange={(event) =>
-                onChange(
-                  setButtonStyle(
-                    block,
-                    event.target.value === "" ? null : (event.target.value as ButtonStyle),
-                  ),
-                )
-              }
-              className={controlClass(false, "py-0")}
-            >
-              <option value="">
-                {tokens
-                  ? `Theme default (${BUTTON_STYLE_LABELS[tokens.buttonStyle]})`
-                  : "Theme default"}
-              </option>
-              {BUTTON_STYLES.map((value) => (
-                <option key={value} value={value}>
-                  {BUTTON_STYLE_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-      ) : null}
+          <option value="">
+            {tokens
+              ? `Theme default (${BUTTON_STYLE_LABELS[tokens.buttonStyle]})`
+              : "Theme default"}
+          </option>
+          {BUTTON_STYLES.map((value) => (
+            <option key={value} value={value}>
+              {BUTTON_STYLE_LABELS[value]}
+            </option>
+          ))}
+        </select>
+      )}
+    </Field>
+  );
+}
 
-      <ColorControl block={block} onChange={onChange} error={colorError} />
-
-      <Field
-        label="Corner radius"
-        error={fieldError(errors, block.id, "overrides.radius")}
-        className="flex-1 basis-[220px]"
-      >
-        {(control) => (
-          <select
-            {...control}
-            value={radius === null ? "" : String(radius)}
-            data-field="override-radius"
-            onChange={(event) =>
-              onChange(
-                setRadius(block, event.target.value === "" ? null : Number(event.target.value)),
-              )
-            }
-            className={controlClass(false, "py-0")}
-          >
-            <option value="">Theme default</option>
-            {radiusChoices.map((value) => (
-              <option key={value} value={String(value)}>
-                {value}
-              </option>
-            ))}
-          </select>
-        )}
-      </Field>
-    </div>
+/**
+ * Corner radius and Border thickness: "Theme default" or one of a short list of numbers. A stored
+ * value the list does not offer (set through the API) is still shown, as an extra option, so the
+ * select never shows a value that is not stored.
+ */
+function NumberSelect({
+  label,
+  field,
+  value,
+  options,
+  error,
+  onSelect,
+}: {
+  label: string;
+  field: string;
+  value: number | null;
+  options: readonly number[];
+  error: string | null;
+  onSelect: (value: number | null) => void;
+}) {
+  const choices: number[] = [...options];
+  if (value !== null && !choices.includes(value)) choices.push(value);
+  return (
+    <Field label={label} error={error} className="flex-1 basis-[220px]">
+      {(control) => (
+        <select
+          {...control}
+          value={value === null ? "" : String(value)}
+          data-field={field}
+          onChange={(event) =>
+            onSelect(event.target.value === "" ? null : Number(event.target.value))
+          }
+          className={controlClass(false, "py-0")}
+        >
+          <option value="">Theme default</option>
+          {choices.map((choice) => (
+            <option key={choice} value={String(choice)}>
+              {choice}
+            </option>
+          ))}
+        </select>
+      )}
+    </Field>
   );
 }
 
@@ -132,10 +245,12 @@ function normalizeHex(input: string): string | null {
  */
 function ColorControl({
   block,
+  spec,
   onChange,
   error,
 }: {
-  block: OverridableBlock;
+  block: Block;
+  spec: ColorControlSpec;
   onChange: BlockFormProps["onChange"];
   error: string | null;
 }) {
@@ -146,8 +261,10 @@ function ColorControl({
   const [typed, setTyped] = useState<string | null>(null);
   const text = typed ?? stored ?? "";
 
-  const themeColor = block.type === "link" ? tokens?.buttonBg : tokens?.accent;
-  const swatch = stored ?? themeColor ?? "#FFFFFF";
+  const themeValue = tokens?.[spec.source];
+  const themeColor = typeof themeValue === "string" ? themeValue : undefined;
+  // A native color input only takes #rrggbb: a theme color in another form (#RGB, #RRGGBBAA) shows white.
+  const swatch = stored ?? (isHexColor(themeColor) ? themeColor : "#FFFFFF");
   const partial = text.trim() !== "" && normalizeHex(text) === null;
   const message = error ?? (partial ? "Use a #RRGGBB color, for example #C46A4F." : null);
 
@@ -161,7 +278,7 @@ function ColorControl({
   }
 
   return (
-    <Field label="Color" error={message} className="flex-1 basis-[220px]">
+    <Field label={spec.label} error={message} className="flex-1 basis-[220px]">
       {(control) => (
         <div className="flex items-center gap-2">
           <input
@@ -193,7 +310,7 @@ function ColorControl({
             }}
             className={controlClass(partial || error !== null, "min-w-0 flex-1 font-mono")}
           />
-          {stored !== null ? (
+          {hasColorOverride(block) ? (
             <button
               type="button"
               onClick={() => {
