@@ -11,7 +11,7 @@ import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 const SIGNUP = url("app", "/signup");
 const APP = url("app");
-const OUT_OF_SCOPE = /schedul|csv|invite editors|team access|custom css|version history/i;
+const OUT_OF_SCOPE = /schedul|csv|invite editors|team access|custom css/i;
 const POSTAL = "11156 Hanlon Terrace Alley, Winter Garden, Florida 34787, United States";
 
 const PAGES: { path: string; title: RegExp; current: string | null }[] = [
@@ -21,12 +21,36 @@ const PAGES: { path: string; title: RegExp; current: string | null }[] = [
   { path: "/link-analytics", title: /^Analytics \| HYDLNK$/, current: "Analytics" },
   { path: "/pricing", title: /^Pricing \| HYDLNK$/, current: "Pricing" },
   { path: "/learn", title: /^Learn \| HYDLNK$/, current: "Learn" },
-  { path: "/learn/getting-started", title: /^Getting started · Learn \| HYDLNK$/, current: "Learn" },
-  { path: "/learn/choosing-a-handle", title: /^Choosing a handle · Learn \| HYDLNK$/, current: "Learn" },
-  { path: "/learn/designing-your-page", title: /^Designing your page · Learn \| HYDLNK$/, current: "Learn" },
-  { path: "/learn/connecting-a-domain", title: /^Connecting a domain · Learn \| HYDLNK$/, current: "Learn" },
-  { path: "/learn/understanding-analytics", title: /^Understanding analytics · Learn \| HYDLNK$/, current: "Learn" },
-  { path: "/learn/plans-and-billing", title: /^Plans and billing · Learn \| HYDLNK$/, current: "Learn" },
+  {
+    path: "/learn/getting-started",
+    title: /^Getting started · Learn \| HYDLNK$/,
+    current: "Learn",
+  },
+  {
+    path: "/learn/choosing-a-handle",
+    title: /^Choosing a handle · Learn \| HYDLNK$/,
+    current: "Learn",
+  },
+  {
+    path: "/learn/designing-your-page",
+    title: /^Designing your page · Learn \| HYDLNK$/,
+    current: "Learn",
+  },
+  {
+    path: "/learn/connecting-a-domain",
+    title: /^Connecting a domain · Learn \| HYDLNK$/,
+    current: "Learn",
+  },
+  {
+    path: "/learn/understanding-analytics",
+    title: /^Understanding analytics · Learn \| HYDLNK$/,
+    current: "Learn",
+  },
+  {
+    path: "/learn/plans-and-billing",
+    title: /^Plans and billing · Learn \| HYDLNK$/,
+    current: "Learn",
+  },
   { path: "/faq", title: /^FAQ \| HYDLNK$/, current: null },
   { path: "/privacy", title: /^Privacy policy \| HYDLNK$/, current: null },
   { path: "/terms", title: /^Terms of service \| HYDLNK$/, current: null },
@@ -56,7 +80,9 @@ for (const { path, title, current } of PAGES) {
 
     // Header: the page being viewed is marked in the navigation (desktop list).
     if (current && !isMobile) {
-      const link = page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: current, exact: true });
+      const link = page
+        .getByRole("navigation", { name: "Main" })
+        .getByRole("link", { name: current, exact: true });
       await expect(link).toHaveAttribute("aria-current", "page");
     }
 
@@ -70,7 +96,9 @@ for (const { path, title, current } of PAGES) {
     if (isMobile) await expectTapTargets(page);
 
     // Conversion: the hero's primary button (or the CTA band) reaches sign-up on the app host.
-    const heroClaim = page.locator("main").getByRole("link", { name: "Claim your handle", exact: true });
+    const heroClaim = page
+      .locator("main")
+      .getByRole("link", { name: "Claim your handle", exact: true });
     if ((await heroClaim.count()) > 0) {
       await expect(heroClaim.first()).toHaveAttribute("href", SIGNUP);
     }
@@ -102,7 +130,11 @@ test("legal pages: last-updated date, a column no wider than 70 characters, link
     });
     expect(fits).toBe(true);
     const footer = page.getByRole("navigation", { name: "Footer" });
-    expect(await footer.getByRole("link", { name: path === "/privacy" ? "Privacy" : "Terms", exact: true }).evaluate((a) => (a as HTMLAnchorElement).href)).toBe(url(null, path));
+    expect(
+      await footer
+        .getByRole("link", { name: path === "/privacy" ? "Privacy" : "Terms", exact: true })
+        .evaluate((a) => (a as HTMLAnchorElement).href),
+    ).toBe(url(null, path));
     // No request leaves the HYDLNK hosts.
     const port = new URL(APP).port;
     expect(requests.filter((u) => !new URL(u).host.endsWith(`localhost:${port}`))).toEqual([]);
@@ -115,18 +147,42 @@ test("privacy names the processors and the cookieless analytics; terms cover acc
 }) => {
   await page.goto(url(null, "/privacy"));
   const privacy = page.locator(".prose-hl");
-  for (const text of ["Vercel", "Supabase", "Stripe", "Resend", "Google", "daily", "90 days", "privacy@hydlnk.com", POSTAL]) {
+  for (const text of [
+    "Vercel",
+    "Supabase",
+    "Stripe",
+    "Resend",
+    "Google",
+    "daily",
+    "90 days",
+    "privacy@hydlnk.com",
+    POSTAL,
+  ]) {
     await expect(privacy).toContainText(text);
   }
   await page.goto(url(null, "/terms"));
   const terms = page.locator(".prose-hl");
-  for (const text of ["Phishing", "Malware", "Impersonation", "Illegal content", "report link", "suspend", "100,000 views", "support@hydlnk.com", POSTAL, "State of Florida", "Orange County, Florida"]) {
+  for (const text of [
+    "Phishing",
+    "Malware",
+    "Impersonation",
+    "Illegal content",
+    "report link",
+    "suspend",
+    "100,000 views",
+    "support@hydlnk.com",
+    POSTAL,
+    "State of Florida",
+    "Orange County, Florida",
+  ]) {
     await expect(terms).toContainText(text);
   }
   await expect(terms).not.toContainText("Delaware");
 });
 
-test("design playground: radio groups restyle the demo page without JavaScript", async ({ browser }) => {
+test("design playground: radio groups restyle the demo page without JavaScript", async ({
+  browser,
+}) => {
   const context = await browser.newContext({ javaScriptEnabled: false });
   const page = await context.newPage();
   await page.goto(url(null, "/design-control"));
@@ -145,7 +201,10 @@ test("design playground: radio groups restyle the demo page without JavaScript",
   await context.close();
 });
 
-test("home showreel: the cut for the viewport plays, and the toggle pauses it", async ({ page, isMobile }) => {
+test("home showreel: the cut for the viewport plays, and the toggle pauses it", async ({
+  page,
+  isMobile,
+}) => {
   await page.goto(url());
   const toggle = page.locator("[data-showreel] button");
   await expect(toggle).toHaveAttribute("aria-label", "Pause showreel");
@@ -159,7 +218,10 @@ test("home showreel: the cut for the viewport plays, and the toggle pauses it", 
   expect(await video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
 });
 
-test("home showreel with reduced motion: poster only, until Play is pressed", async ({ browser, isMobile }) => {
+test("home showreel with reduced motion: poster only, until Play is pressed", async ({
+  browser,
+  isMobile,
+}) => {
   const context = await browser.newContext({
     reducedMotion: "reduce",
     viewport: isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },

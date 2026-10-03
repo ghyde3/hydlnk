@@ -82,9 +82,7 @@ export function FontPicker({
 
   return (
     <div className="flex min-w-0 flex-col gap-2" data-font-picker={label}>
-      <h2 className="m-0 text-sm font-semibold text-ink">
-        {label}
-      </h2>
+      <h3 className="m-0 text-sm font-semibold text-ink">{label}</h3>
       {loaded ? <link rel="stylesheet" href={allFontsStylesheetUrl()} /> : null}
       <button
         ref={triggerRef}

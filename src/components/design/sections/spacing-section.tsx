@@ -5,9 +5,9 @@ import type { TokenSet } from "@/lib/theme";
 import { OptionButton, OptionGroup } from "./shape-section";
 
 /**
- * Spacing and layout on the Design screen (M3-13): density (the gap between blocks: 8, 12 or
- * 18px), content width (the column's width on a wide screen; a phone is never wider than itself)
- * and alignment of the profile, headings and text blocks.
+ * The Layout card of the Design screen (M3-13, M6-47): space between blocks (the gap: 8, 12 or
+ * 18px), page width (the column's width on a wide screen; a phone is never wider than itself) and
+ * text alignment of the profile, headings and text blocks.
  */
 
 const DENSITIES: readonly { value: TokenSet["density"]; label: string }[] = [
@@ -26,7 +26,7 @@ const ALIGNMENTS: readonly { value: TokenSet["align"]; label: string }[] = [
 export function SpacingSection({ resolved, setToken }: DesignSectionProps) {
   return (
     <div className="flex flex-col gap-4">
-      <OptionGroup label="Spacing">
+      <OptionGroup label="Space between blocks">
         {DENSITIES.map((option) => (
           <OptionButton
             key={option.value}
@@ -38,7 +38,7 @@ export function SpacingSection({ resolved, setToken }: DesignSectionProps) {
         ))}
       </OptionGroup>
 
-      <OptionGroup label="Content width">
+      <OptionGroup label="Page width">
         {WIDTHS.map((width) => (
           <OptionButton
             key={width}
@@ -51,7 +51,7 @@ export function SpacingSection({ resolved, setToken }: DesignSectionProps) {
         ))}
       </OptionGroup>
 
-      <OptionGroup label="Alignment">
+      <OptionGroup label="Text alignment">
         {ALIGNMENTS.map((option) => (
           <OptionButton
             key={option.value}

@@ -190,8 +190,11 @@ describe("M3-14 / M3-16 the stylesheet", () => {
   };
 
   it("gradient runs surface to bg, top to bottom, ending at 55%", () => {
+    // M6-41: the direction and the two stops are the gradient tokens' variables. With none of them
+    // set the serializer resolves them to 180deg, the surface color and the page color, so this is
+    // still the M3-14 gradient (the stops are checked in tests/unit/m6-gradient-tokens.test.ts).
     expect(rule('[data-page-root][data-bg-type="gradient"]')).toMatch(
-      /background:\s*linear-gradient\(180deg,\s*var\(--t-surface\)\s*0%,\s*var\(--t-bg\)\s*55%\)/,
+      /background:\s*linear-gradient\(\s*var\(--t-gradient-angle\),\s*var\(--t-gradient-from\)\s*0%,\s*var\(--t-gradient-to\)\s*55%\s*\)/,
     );
   });
 

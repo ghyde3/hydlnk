@@ -149,29 +149,33 @@ describe("M3-12 corner radius and border width", () => {
 
   it("offers 0px, 1px and 2px border widths and writes borderWidth", () => {
     const { host, calls } = mount(ShapeSection, { borderWidth: 1 });
-    expect(options(host, "Border width").map((b) => b.textContent)).toEqual(["0px", "1px", "2px"]);
-    expect(pressed(host, "Border width")).toEqual(["1px"]);
-    pick(host, "Border width", "2px");
-    pick(host, "Border width", "0px");
+    expect(options(host, "Border thickness").map((b) => b.textContent)).toEqual([
+      "0px",
+      "1px",
+      "2px",
+    ]);
+    expect(pressed(host, "Border thickness")).toEqual(["1px"]);
+    pick(host, "Border thickness", "2px");
+    pick(host, "Border thickness", "0px");
     expect(calls).toEqual([
       ["borderWidth", 2],
       ["borderWidth", 0],
     ]);
-    expect(pressed(host, "Border width")).toEqual(["0px"]);
+    expect(pressed(host, "Border thickness")).toEqual(["0px"]);
   });
 });
 
 describe("M3-13 spacing, content width and alignment", () => {
   it("Spacing offers Compact, Regular and Airy and writes density", () => {
     const { host, calls } = mount(SpacingSection, { density: "regular" });
-    expect(options(host, "Spacing").map((b) => b.textContent)).toEqual([
+    expect(options(host, "Space between blocks").map((b) => b.textContent)).toEqual([
       "Compact",
       "Regular",
       "Airy",
     ]);
-    expect(pressed(host, "Spacing")).toEqual(["Regular"]);
-    pick(host, "Spacing", "Compact");
-    pick(host, "Spacing", "Airy");
+    expect(pressed(host, "Space between blocks")).toEqual(["Regular"]);
+    pick(host, "Space between blocks", "Compact");
+    pick(host, "Space between blocks", "Airy");
     expect(calls).toEqual([
       ["density", "compact"],
       ["density", "airy"],
@@ -180,25 +184,25 @@ describe("M3-13 spacing, content width and alignment", () => {
 
   it("Content width offers 480, 560 and 640 and writes maxWidth", () => {
     const { host, calls } = mount(SpacingSection, { maxWidth: 480 });
-    expect(options(host, "Content width").map((b) => b.textContent)).toEqual(["480", "560", "640"]);
-    expect(pressed(host, "Content width")).toEqual(["480"]);
-    pick(host, "Content width", "640");
+    expect(options(host, "Page width").map((b) => b.textContent)).toEqual(["480", "560", "640"]);
+    expect(pressed(host, "Page width")).toEqual(["480"]);
+    pick(host, "Page width", "640");
     expect(calls).toEqual([["maxWidth", 640]]);
-    expect(pressed(host, "Content width")).toEqual(["640"]);
+    expect(pressed(host, "Page width")).toEqual(["640"]);
   });
 
   it("Alignment offers Center and Left and writes align", () => {
     const { host, calls } = mount(SpacingSection, { align: "center" });
-    expect(options(host, "Alignment").map((b) => b.textContent)).toEqual(["Center", "Left"]);
-    expect(pressed(host, "Alignment")).toEqual(["Center"]);
-    pick(host, "Alignment", "Left");
+    expect(options(host, "Text alignment").map((b) => b.textContent)).toEqual(["Center", "Left"]);
+    expect(pressed(host, "Text alignment")).toEqual(["Center"]);
+    pick(host, "Text alignment", "Left");
     expect(calls).toEqual([["align", "left"]]);
-    expect(pressed(host, "Alignment")).toEqual(["Left"]);
+    expect(pressed(host, "Text alignment")).toEqual(["Left"]);
   });
 
   it("every option is at least 44px tall on a phone and the groups wrap", () => {
     const { host } = mount(SpacingSection);
-    for (const name of ["Spacing", "Content width", "Alignment"]) {
+    for (const name of ["Space between blocks", "Page width", "Text alignment"]) {
       expect(group(host, name).className).toContain("flex-wrap");
       for (const b of options(host, name)) expect(b.className).toContain("min-h-11");
     }

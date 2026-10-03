@@ -114,8 +114,11 @@ const buttons = (host: HTMLElement) =>
   Array.from(host.querySelectorAll<HTMLButtonElement>("button"));
 const button = (host: HTMLElement, name: string) =>
   buttons(host).find((b) => b.textContent?.trim() === name);
+/** The pressed option of the Background group (the gradient panel's own buttons are not part of it). */
 const pressed = (host: HTMLElement) =>
-  buttons(host)
+  Array.from(
+    host.querySelector('[role="group"][aria-label="Background"]')!.querySelectorAll("button"),
+  )
     .filter((b) => b.getAttribute("aria-pressed") === "true")
     .map((b) => b.textContent);
 const slider = (host: HTMLElement, name: string) =>
@@ -352,15 +355,15 @@ describe("M3-16 overlay and blur", () => {
     for (const bgType of ["solid", "gradient"] as const) {
       const { host } = mount({ bgType });
       expect(host.querySelector("input[type=range]")).toBeNull();
-      expect(host.textContent).not.toContain("Overlay");
-      expect(host.textContent).not.toContain("Blur");
+      expect(host.textContent).not.toContain("Image overlay");
+      expect(host.textContent).not.toContain("Image blur");
     }
   });
 
-  it("with an image: Overlay 0-100% and Blur 0-max px sliders with visible values", () => {
+  it("with an image: Image overlay 0-100% and Image blur 0-max px sliders with visible values", () => {
     const { host } = mount({ bgType: "image", bgImage: OWN, overlayOpacity: 0.6, blur: 12 });
-    const overlay = slider(host, "Overlay")!;
-    const blur = slider(host, "Blur")!;
+    const overlay = slider(host, "Image overlay")!;
+    const blur = slider(host, "Image blur")!;
     expect([overlay.min, overlay.max, overlay.value, overlay.step]).toEqual([
       "0",
       "100",
@@ -385,13 +388,13 @@ describe("M3-16 overlay and blur", () => {
         input.dispatchEvent(new Event("input", { bubbles: true }));
       });
     };
-    set(slider(host, "Overlay")!, "60");
-    set(slider(host, "Blur")!, "12");
+    set(slider(host, "Image overlay")!, "60");
+    set(slider(host, "Image blur")!, "12");
     expect(calls).toEqual([
       ["overlayOpacity", 0.6],
       ["blur", 12],
     ]);
-    expect(slider(host, "Overlay")!.value).toBe("60");
+    expect(slider(host, "Image overlay")!.value).toBe("60");
     expect(host.textContent).toContain("60%");
     expect(host.textContent).toContain("12px");
   });

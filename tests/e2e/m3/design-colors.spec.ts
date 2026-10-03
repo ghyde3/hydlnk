@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pageRow, seededUser } from "../m2/editor-helpers";
+import { TOKEN_LABELS, type TokenKey } from "@/lib/theme";
 import {
   computed,
   expectOverrides,
@@ -36,7 +37,10 @@ const KEYS = ["bg", "surface", "text", "textMuted", "accent", "buttonBg", "butto
 
 const swatch = (page: Page, name: string) => page.getByRole("button", { name: `Accent ${name}` });
 const row = (page: Page, key: string) => page.locator(`[data-color-row="${key}"]`);
-const hexField = (page: Page, key: string) => page.getByLabel(`${key} hex`, { exact: true });
+/** The plain name a color row carries (M6-47): the picker is "<name> color", the field "<name> hex". */
+const nameOf = (key: string): string => TOKEN_LABELS[key as TokenKey];
+const hexField = (page: Page, key: string) =>
+  page.getByLabel(`${nameOf(key)} hex`, { exact: true });
 const outlineButton = (page: Page) =>
   previewRoot(page).locator(".pg-link[data-button-style='outline']").first();
 
@@ -106,9 +110,9 @@ test.describe("M3-08 colour tokens", () => {
     // One row per token: swatch input, name and hex.
     for (const key of KEYS) {
       await expect(row(page, key)).toBeVisible();
-      await expect(row(page, key)).toContainText(key);
+      await expect(row(page, key)).toContainText(nameOf(key));
       await expect(hexField(page, key)).toHaveValue(/^#[0-9A-F]{6}$/);
-      await expect(page.getByLabel(`${key} color`, { exact: true })).toBeVisible();
+      await expect(page.getByLabel(`${nameOf(key)} color`, { exact: true })).toBeVisible();
     }
 
     // The hex field, typed lowercase without the hash: stored normalised to uppercase #RRGGBB.
@@ -118,7 +122,7 @@ test.describe("M3-08 colour tokens", () => {
     await expectOverrides(user.pageId, (o) => o.surface === "#A1B2C3");
 
     // The native colour input.
-    await page.getByLabel("text color", { exact: true }).fill("#336699");
+    await page.getByLabel("Text color", { exact: true }).fill("#336699");
     await expect.poll(() => previewVar(page, "--t-text")).toBe("#336699");
     await expectOverrides(user.pageId, (o) => o.text === "#336699");
 

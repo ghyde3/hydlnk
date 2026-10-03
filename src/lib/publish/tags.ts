@@ -37,5 +37,8 @@ export const PAGE_REVALIDATE_SECONDS = 86_400;
  *
  * "2": `letterCase` lost its legacy `none` (M3-02; migration 20261002100004 rewrote the stored
  * documents to `normal`).
+ *
+ * "3": the three gradient tokens joined the token set (M6-41; migration 20261006000000 added them
+ * to every stored complete token set).
  */
-export const PUBLIC_READ_CACHE_VERSION = "2";
+export const PUBLIC_READ_CACHE_VERSION = "3";
