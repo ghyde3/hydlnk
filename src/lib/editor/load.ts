@@ -11,6 +11,7 @@ import {
   type DraftDoc,
   type ImageRef,
 } from "@/lib/document";
+import { resolveProfileOptions } from "@/lib/document/profile-options";
 import { tokenOverridesSchema } from "@/lib/theme";
 
 /**
@@ -64,6 +65,23 @@ function idsOf(block: Block): string[] {
   return [block.id];
 }
 
+/** A social block's icons and a grid block's cells that repeat an id: the first of each stays. */
+function withoutRepeatedItemIds(item: unknown): unknown {
+  if (!isRecord(item)) return item;
+  const key = item.type === "social" ? "icons" : item.type === "grid" ? "cells" : null;
+  const list = key === null ? undefined : item[key];
+  if (key === null || !Array.isArray(list)) return item;
+  const seenIds = new Set<string>();
+  const kept = list.filter((entry) => {
+    const id = isRecord(entry) ? entry.id : undefined;
+    if (typeof id !== "string") return true;
+    if (seenIds.has(id)) return false;
+    seenIds.add(id);
+    return true;
+  });
+  return kept.length === list.length ? item : { ...item, [key]: kept };
+}
+
 export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   const revKey = revKeyOf(raw);
 
@@ -77,6 +95,8 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
           name: stored.profile.name,
           bio: stored.profile.bio,
           photo: stored.profile.photo,
+          // Stored objects are returned as they are, so the options are filled here (M6-15, M6-17).
+          ...resolveProfileOptions(stored.profile),
         },
         theme: { ref: stored.theme.ref, overrides: stored.theme.overrides },
         blocks: stored.blocks.map(withVisible),
@@ -112,20 +132,23 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   if (Array.isArray(source.blocks)) {
     for (const item of source.blocks) {
       if (blocks.length >= LIMITS.blocks) break;
-      const parsed = blockSchema.safeParse(item);
+      // Icons or cells that repeat an id inside one block: the first of each stays (M6-05).
+      const candidateItem = withoutRepeatedItemIds(item);
+      const parsed = blockSchema.safeParse(candidateItem);
       if (!parsed.success) continue;
       const ids = idsOf(parsed.data);
       if (ids.some((id) => seen.has(id)) || new Set(ids).size !== ids.length) continue;
       ids.forEach((id) => seen.add(id));
       // The raw object, not the parsed one: the editor keeps what was typed, whitespace included.
-      blocks.push(withVisible(item as Block));
+      blocks.push(withVisible(candidateItem as Block));
     }
   }
 
   const candidate: DraftDoc = {
     version: 1,
     rev: revNumber(raw),
-    profile: { name, bio, photo },
+    // Each option keeps its stored value when that is valid and takes its default when it is not.
+    profile: { name, bio, photo, ...resolveProfileOptions(rawProfile) },
     theme: { ref, overrides },
     blocks,
   };

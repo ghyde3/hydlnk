@@ -2471,7 +2471,7 @@
         "At 1440x900 on the same URL: there is no dock; the layout still matches M2-06 (block list at most 720px beside the 330px 'Live preview' column)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-02",
@@ -2489,7 +2489,7 @@
         "At 1440x900 on the same URL: no dock and no bar exist, the preview stays beside the list and there is no 'Back to blocks' control."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-03",
@@ -2509,7 +2509,7 @@
         "At 1440x900 on the same URL: the list scrolls to the opened row while the preview stays sticky in view, and the Design screen’s preview is unchanged (tapping a block there still opens nothing)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-04",
@@ -2526,7 +2526,7 @@
         "At 1440x900 on the same URL: a slot is a 20px hairline whose 24px circle shows on hover and on keyboard focus (a faint 6px dot otherwise), and it keeps the 44px layout where `(hover: none)` applies; the slots sit inside the 720px block column and the chooser fits in at most two rows of chips."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-05",
@@ -2544,7 +2544,7 @@
         "At 1440x900 on the same URL: the four buttons sit in one row of the expanded panel."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-06",
@@ -2564,7 +2564,7 @@
         "At 1440x900 on the same URL: the same sequence leaves the list and the preview identical to the loaded draft."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-07",
@@ -2583,7 +2583,7 @@
         "At 1440x900 on the same URL: Undo and Redo sit left of the chip on the right-hand cluster of the header, in one row with Preview and Publish."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-08",
@@ -2601,7 +2601,7 @@
         "At 1440x900 on the same URL: the buttons sit in the header row left of the save status, 'Save as theme' and 'Done'."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-09",
@@ -2621,7 +2621,7 @@
         "At 1440x900 on the same URL: the same messages sit under the 'Create link' button inside the 480px dialog."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-10",
@@ -2640,7 +2640,7 @@
         "At 1440x900 on the same URL: the bar spans the top of the viewport, the page column is no wider than 480px and centered, and the background covers the viewport."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-11",
@@ -2658,7 +2658,7 @@
         "At 1440x900 on the same URL: the bar spans the viewport top, the page column is no wider than 480px and centered, and the background covers the viewport."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-12",
@@ -2676,7 +2676,7 @@
         "At 1440x900 on the same URL: the dialog is centered at a maximum width of 480px over a dimmed backdrop and the button sits in the header’s right cluster after 'Preview'."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-13",
@@ -2693,7 +2693,7 @@
         "At 1440x900 on the same URL: the long name wraps inside the title block and the right-hand cluster stays on its row."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-14",
@@ -2711,7 +2711,7 @@
         "At 1440x900 on the same URL: the input replaces the title in the header’s left block without moving the right-hand cluster, and the switcher menu opens under the sidebar button listing name and address."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-15",
@@ -2730,7 +2730,7 @@
         "At 1440x900 on the same URL: the 144px avatar is centered in the column of at most 480px (left-aligned when the `align` token is 'left') and the page background covers the viewport."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-16",
@@ -2748,7 +2748,7 @@
         "At 1440x900 on the same URL: the three groups and the toggle sit inside the Profile card within the 720px column, each group’s options on one row."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-17",
@@ -2766,7 +2766,7 @@
         "At 1440x900 on the same URL: the column is at most 480px wide and centered with the same blocks, and the page background covers the viewport."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-18",
@@ -2785,7 +2785,7 @@
         "At 1440x900 on the same URL: the toggles sit in the Profile card inside the 720px column without shifting the inputs."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-19",
@@ -2802,7 +2802,7 @@
         "At 1440x900 on the same URLs: both screens render as before the sweep."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-20",

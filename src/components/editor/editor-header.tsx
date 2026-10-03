@@ -8,6 +8,11 @@ import {
   TOO_LARGE_MESSAGE,
 } from "@/lib/editor/messages";
 import { PUBLISH_STATUS_LABEL, type PublishStatus } from "@/lib/editor/status";
+import { PreviewLink } from "@/components/previews/preview-link";
+import { SharePreview } from "@/components/previews/share-preview";
+import { PageName } from "./page-name";
+import { UndoRedoButtons } from "./undo-redo-controls";
+import type { UndoRedo } from "./use-undo-redo";
 
 const CHIP_STYLE: Record<PublishStatus, { background: string; color: string; dot?: string }> = {
   "not-published": { background: "#EFEDE9", color: "#5E5A54" },
@@ -79,16 +84,23 @@ export function SaveIndicator({ status }: { status: SaveStatus }) {
 export function EditorHeader({
   breadcrumb,
   title,
+  pageId,
+  flush,
   status,
   saveStatus,
   liveUrl,
   previewUrl,
   publishing,
   blocked = false,
+  undoRedo,
   onPublish,
 }: {
   breadcrumb: string;
+  /** The page's name (`pages.name`, M6-13): the h1, with a "Rename page" button after it. */
   title: string;
+  pageId: string;
+  /** Writes pending edits and resolves true once they are stored (the autosave queue's flush). */
+  flush: () => Promise<boolean>;
   status: PublishStatus;
   saveStatus: SaveStatus;
   /** The live page's address, shown as "View live page" once the page has been published. */
@@ -97,17 +109,20 @@ export function EditorHeader({
   publishing: boolean;
   /** A link on the page points to a blocked site (M5-03): nothing can be published until it is fixed. */
   blocked?: boolean;
+  /** Undo and Redo (M6-07): two icon buttons to the left of the status chip. */
+  undoRedo?: UndoRedo;
   onPublish: () => void;
 }) {
   // A suspended owner cannot publish (M5-09): the server refuses it too (account_suspended).
   const suspended = useAccountSuspended();
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-line bg-surface px-4 py-3.5 hl:px-8">
-      <div className="min-w-0">
+      <div className="min-w-0 hl:flex-1">
         <p className="font-mono text-xs text-text-2">{breadcrumb}</p>
-        <h1 className="mt-0.5 text-[22px] leading-[1.2] font-bold tracking-[-0.01em]">{title}</h1>
+        <PageName pageId={pageId} name={title} />
       </div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {undoRedo ? <UndoRedoButtons controls={undoRedo} /> : null}
         <StatusChip status={status} />
         <SaveIndicator status={saveStatus} />
         {liveUrl ? (
@@ -120,14 +135,14 @@ export function EditorHeader({
             View live page
           </a>
         ) : null}
-        <a
+        <PreviewLink
           href={previewUrl}
-          target="_blank"
-          rel="noopener"
+          flush={flush}
           className="hidden min-h-11 items-center rounded-md border border-line-3 bg-surface px-3.5 text-sm font-semibold text-ink no-underline hl:inline-flex"
         >
           Preview
-        </a>
+        </PreviewLink>
+        <SharePreview pageId={pageId} flush={flush} />
         <button
           type="button"
           onClick={onPublish}

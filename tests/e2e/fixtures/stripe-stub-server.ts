@@ -272,6 +272,21 @@ async function api(req: http.IncomingMessage, res: http.ServerResponse, url: URL
     return send(res, 200, { object: "customer", ...customer });
   }
 
+  // The app asks Stripe whether a stored customer id still exists before it uses it (a sandbox id
+  // can be gone after the switch to live). The specs write ids like `cus_zq...` straight into
+  // accounts.stripe_customer_id, so an id the stub never created is a customer that exists; only an
+  // id that starts with `cus_gone` stands for one Stripe no longer knows.
+  if (method === "GET" && (match = path.match(/^\/v1\/customers\/([^/]+)$/))) {
+    const id = decodeURIComponent(match[1]!);
+    if (id.startsWith("cus_gone")) {
+      const missing = notFound("customer");
+      return send(res, missing.status, missing.body);
+    }
+    const known = customers.get(id) ?? { id, email: null, metadata: {} };
+    customers.set(id, known);
+    return send(res, 200, { object: "customer", ...known });
+  }
+
   if (method === "POST" && path === "/v1/checkout/sessions") {
     const key = (req.headers["idempotency-key"] as string | undefined) ?? null;
     const fingerprint = JSON.stringify(Object.entries(form).sort());

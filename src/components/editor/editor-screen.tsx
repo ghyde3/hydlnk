@@ -1,6 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { flushSync } from "react-dom";
 import { blockedFieldErrors } from "@/lib/blocklist/fields";
 import { toPublishForm, type DraftDoc, type PublishDoc } from "@/lib/document";
 import { publishPage, type PageChrome } from "@/lib/editor/contracts";
@@ -10,6 +19,7 @@ import {
   PUBLISH_FAILED_MESSAGE,
 } from "@/lib/editor/messages";
 import { editorReducer, initialEditorState } from "@/lib/editor/state";
+import { DEFAULT_PAGE_NAME } from "@/lib/pages/name";
 import { computePublishStatus } from "@/lib/editor/status";
 import type { TokenSet } from "@/lib/theme";
 import { PageTokensProvider } from "@/components/themes";
@@ -17,20 +27,33 @@ import { AddBlockCard } from "./add-block-card";
 import { BlockList } from "./block-list";
 import { EditorHeader } from "./editor-header";
 import { InlineNotice } from "./inline-notice";
+import {
+  BackToBlocksBar,
+  PreviewDock,
+  isTextField,
+  stackHeight,
+  toastLift,
+} from "./mini-preview-dock";
 import { PreviewPanel } from "./preview-panel";
+import { checkTap, focusProfilePart, type PreviewTap } from "./preview-taps";
 import { ProfileCard } from "./profile-card";
 import { PublishAlert } from "./publish-alert";
 import { PublishedToast } from "./published-toast";
 import { SaveBanner } from "./save-banner";
 import { UndoToast } from "./undo-toast";
+import { UndoRedoNotice } from "./undo-redo-controls";
 import { useAutosave } from "./use-autosave";
 import { useIsDesktop } from "./use-is-desktop";
-import { ViewTabs, panelId, tabId, type EditorView } from "./view-tabs";
+import { usePreviewView } from "./use-preview-view";
+import { useUndoRedo } from "./use-undo-redo";
+import { ViewTabs, panelId, tabId } from "./view-tabs";
 
 export interface EditorScreenProps {
   pageId: string;
   /** The address shown in the breadcrumb, `{handle}.hydlnk.com`. */
   address: string;
+  /** `pages.name` (M6-13): the title in the header, "Main page" until renamed. */
+  name?: string;
   /** The public page, "http://mara.localhost:3000" in development. */
   liveUrl: string;
   draft: DraftDoc;
@@ -57,7 +80,6 @@ export interface EditorScreenProps {
 export function EditorScreen(props: EditorScreenProps) {
   const { pageId, address, liveUrl, themeTokens, chrome } = props;
   const [state, dispatch] = useReducer(editorReducer, props.draft, initialEditorState);
-  const [view, setView] = useState<EditorView>("blocks");
   const [published, setPublished] = useState({ has: props.hasPublished, doc: props.published });
   const [publishing, setPublishing] = useState(false);
   // What went wrong with the last Publish when there is no field to point at (M5-15). `retry` is
@@ -65,8 +87,21 @@ export function EditorScreen(props: EditorScreenProps) {
   const [publishNote, setPublishNote] = useState<{ message: string; retry: boolean } | null>(null);
   const [publishedToken, setPublishedToken] = useState<number | null>(null);
   const isDesktop = useIsDesktop();
+  // Which half of the phone editor shows, the dock and the full-size preview (M6-01, M6-02).
+  const nav = usePreviewView(isDesktop);
+  const { view, setView, showBlocks } = nav;
+  // A text field of the page has focus: the dock shrinks to a strip so the keyboard leaves room.
+  const [fieldFocused, setFieldFocused] = useState(false);
   const autosave = useAutosave({ pageId, draft: state.draft, initialRevKey: props.revKey });
   const { flush, savedDraft, currentStatus: autosaveStatus, blocked } = autosave;
+  // Undo and redo (M6-07): the history is in the reducer state; each step is a normal draft change
+  // and goes through the autosave above like any edit.
+  const undoRedo = useUndoRedo({
+    history: state.history,
+    step: (direction, expect) =>
+      dispatch({ type: direction === "undo" ? "history/undo" : "history/redo", expect }),
+    scope: `#${panelId("blocks")}`,
+  });
 
   // The URL fields the database refused as links to blocked sites (M5-03), shown under those fields
   // beside the Publish errors. They are derived from the draft as it is now, so changing the URL
@@ -140,7 +175,7 @@ export function EditorScreen(props: EditorScreenProps) {
     } finally {
       setPublishing(false);
     }
-  }, [publishing, flush, savedDraft, autosaveStatus, pageId, themeTokens]);
+  }, [publishing, flush, savedDraft, autosaveStatus, pageId, themeTokens, setView]);
 
   // A "Couldn’t publish. A link points to a blocked site" note belongs to the refusal it was shown
   // for: once a save has gone through (the refusal is gone) it is stale and is not shown.
@@ -151,22 +186,45 @@ export function EditorScreen(props: EditorScreenProps) {
 
   const nameError =
     state.publishErrors.find((error) => error.field === "profile.name")?.message ?? null;
+
+  // Tap to edit (M6-03): what a tap on the preview opens. From the phone's full-size preview the
+  // Blocks tab comes first, committed (flushSync) before the row is asked to scroll and take focus,
+  // and without restoring the old scroll position: the row scrolls itself into view.
+  const draftBlocks = state.draft.blocks;
+  const onPreviewTap = useCallback(
+    (raw: PreviewTap) => {
+      const tap = checkTap(raw, draftBlocks);
+      if (!tap) return;
+      flushSync(() => showBlocks({ restoreScroll: false }));
+      if (tap.kind === "profile") focusProfilePart(tap.part);
+      else dispatch({ type: "expand", id: tap.blockId, itemId: tap.itemId });
+    },
+    [draftBlocks, showBlocks],
+  );
+
+  // The toasts sit on top of whatever is docked above the tab bar (the dock, or the Back to blocks bar).
+  const docked = isDesktop ? "none" : view === "blocks" ? "dock" : "bar";
+  const lift = toastLift(stackHeight(docked, fieldFocused));
   return (
     <>
       <EditorHeader
-        breadcrumb={`${address} / main`}
-        title="Main page"
+        breadcrumb={address}
+        title={props.name ?? DEFAULT_PAGE_NAME}
+        pageId={pageId}
+        flush={flush}
+        previewUrl={`/preview/${pageId}`}
         status={status}
         saveStatus={autosave.status}
         liveUrl={published.has ? liveUrl : null}
-        previewUrl={liveUrl}
         publishing={publishing}
         blocked={blocked !== null}
+        undoRedo={undoRedo}
         onPublish={() => void onPublish()}
       />
 
       <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden hl:px-8">
         <SaveBanner status={autosave.status} blockedHosts={blocked?.hosts} />
+        <UndoRedoNotice controls={undoRedo} />
         {shownNote ? (
           <InlineNotice
             kind="publish"
@@ -181,7 +239,7 @@ export function EditorScreen(props: EditorScreenProps) {
         ) : null}
       </div>
 
-      {isDesktop ? null : <ViewTabs view={view} onChange={setView} />}
+      {isDesktop ? null : <ViewTabs view={view} onChange={nav.selectTab} />}
 
       <div className="flex flex-1 flex-col gap-8 px-4 py-3 hl:flex-row hl:items-start hl:gap-8 hl:px-8 hl:py-6">
         <section
@@ -189,7 +247,11 @@ export function EditorScreen(props: EditorScreenProps) {
           aria-label={isDesktop ? "Blocks" : undefined}
           aria-labelledby={isDesktop ? undefined : tabId("blocks")}
           role={isDesktop ? undefined : "tabpanel"}
-          className={`min-w-0 max-w-[720px] flex-col gap-3 hl:flex hl:flex-1 ${
+          onFocus={(event) => setFieldFocused(isTextField(event.target))}
+          onBlur={(event) => {
+            if (!isTextField(event.relatedTarget)) setFieldFocused(false);
+          }}
+          className={`min-w-0 max-w-[720px] flex-col gap-3 pb-28 hl:flex hl:flex-1 hl:pb-0 ${
             view === "blocks" ? "flex" : "hidden"
           }`}
         >
@@ -210,6 +272,7 @@ export function EditorScreen(props: EditorScreenProps) {
             name={state.draft.profile.name}
             bio={state.draft.profile.bio}
             photo={state.draft.profile.photo}
+            options={state.draft.profile}
             nameError={nameError}
             focus={state.focus}
             dispatch={dispatch}
@@ -234,11 +297,35 @@ export function EditorScreen(props: EditorScreenProps) {
           chrome={chrome}
           view={view}
           isDesktop={isDesktop}
+          onTap={onPreviewTap}
         />
       </div>
 
-      <UndoToast deleted={state.deleted} dispatch={dispatch} />
-      <PublishedToast token={publishedToken} liveUrl={liveUrl} lifted={state.deleted !== null} />
+      {docked === "dock" ? (
+        <PreviewDock
+          doc={form}
+          pageId={pageId}
+          collapsed={fieldFocused}
+          buttonRef={nav.dockRef}
+          onOpen={nav.openPreview}
+        />
+      ) : null}
+      {docked === "bar" ? (
+        <BackToBlocksBar buttonRef={nav.backRef} onBack={nav.closePreview} />
+      ) : null}
+      {/*
+        The toasts are fixed 68px above the bottom edge, over the tab bar. A transformed ancestor is
+        the containing block of its fixed children, so lifting this box (its bottom edge moves up by
+        --toast-lift, 0 on desktop) lifts both toasts clear of the dock or the bar without a change
+        to either toast.
+      */}
+      <div
+        style={{ "--toast-lift": `${lift}px` } as CSSProperties}
+        className="pointer-events-none fixed inset-x-0 top-0 bottom-[var(--toast-lift)] z-30 [transform:translateZ(0)] hl:bottom-0"
+      >
+        <UndoToast deleted={state.deleted} dispatch={dispatch} />
+        <PublishedToast token={publishedToken} liveUrl={liveUrl} lifted={state.deleted !== null} />
+      </div>
     </>
   );
 }
