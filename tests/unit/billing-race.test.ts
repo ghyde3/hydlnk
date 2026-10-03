@@ -88,6 +88,10 @@ class FakeStripe {
     return session;
   }
 
+  customers = {
+    retrieve: async (id: string) => ({ id }),
+  };
+
   subscriptions = {
     list: async () => {
       await this.step();

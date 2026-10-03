@@ -19,10 +19,21 @@ export async function ensureStripeCustomer(
   account: BillingAccount,
   email: string,
 ): Promise<string> {
-  if (account.stripe_customer_id) return account.stripe_customer_id;
+  const stale = account.stripe_customer_id;
+  if (stale) {
+    // A stored id Stripe no longer knows (a sandbox customer after the switch to live, or one
+    // deleted in the dashboard) is cleared and replaced; only that exact id is cleared.
+    if (await customerExists(stale)) return stale;
+    const cleared = await billingDb()
+      .from("accounts")
+      .update({ stripe_customer_id: null })
+      .eq("id", account.id)
+      .eq("stripe_customer_id", stale);
+    if (cleared.error) throw new Error(`Clearing the Stripe customer failed: ${cleared.error.message}`);
+  }
   const customer = await getStripe().customers.create(
     { email: email || undefined, metadata: { account_id: account.id } },
-    { idempotencyKey: `hydlnk-customer-${account.id}` },
+    { idempotencyKey: `hydlnk-customer-${account.id}${stale ? `-after-${stale}` : ""}` },
   );
   const saved = await billingDb()
     .from("accounts")
@@ -36,6 +47,17 @@ export async function ensureStripeCustomer(
   const current = await readBillingAccount(account.id);
   if (!current?.stripe_customer_id) throw new Error("The Stripe customer could not be saved");
   return current.stripe_customer_id;
+}
+
+/** False when Stripe answers "no such customer" or the customer was deleted. */
+async function customerExists(id: string): Promise<boolean> {
+  try {
+    const customer = await getStripe().customers.retrieve(id);
+    return !("deleted" in customer && customer.deleted);
+  } catch (error) {
+    if (isMissingResource(error)) return false;
+    throw error;
+  }
 }
 
 /**
