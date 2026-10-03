@@ -4,6 +4,8 @@
  * from another. Paths are root-relative; the root host is the only host that serves them.
  */
 
+import { AUDIENCES, PLATFORM_AUDIENCES, audienceHref } from "./audiences/data";
+
 export type NavKey =
   | "home"
   | "features"
@@ -59,7 +61,7 @@ export const GUIDES: readonly Guide[] = [
     slug: "designing-your-page",
     title: "Designing your page",
     summary:
-      "Themes, tokens, fonts, backgrounds and per-block overrides, with the choices that keep a page readable.",
+      "Themes, colors, fonts, backgrounds and how to make one link stand out, with the choices that keep a page easy to read.",
     minutes: 7,
   },
   {
@@ -105,6 +107,17 @@ export const FOOTER_COLUMNS: readonly {
     ],
   },
   {
+    // The platform pages, then the hub that lists them all with the creator-type pages.
+    title: "Link in bio for",
+    links: [
+      ...PLATFORM_AUDIENCES.map((audience) => ({
+        href: audienceHref(audience.slug),
+        label: audience.name,
+      })),
+      { href: audienceHref(), label: "All link in bio pages" },
+    ],
+  },
+  {
     title: "Learn",
     links: [
       { href: "/learn", label: "All guides" },
@@ -128,6 +141,8 @@ export const FOOTER_COLUMNS: readonly {
 export const SITEMAP_PATHS: readonly string[] = [
   "/",
   ...MAIN_NAV.map((item) => item.href),
+  audienceHref(),
+  ...AUDIENCES.map((audience) => audienceHref(audience.slug)),
   ...GUIDES.map((guide) => guideHref(guide.slug)),
   "/faq",
   "/privacy",
