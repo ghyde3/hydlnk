@@ -5,6 +5,7 @@ import { TenantPage } from "@/components/tenant/tenant-page";
 import { getPrimaryDomain } from "@/lib/domains/primary";
 import { customOgImageUrl } from "@/lib/domains/urls";
 import { clientEnv } from "@/lib/env/client";
+import { pageMetadata } from "@/lib/publish/share-meta";
 import { customOrigin } from "@/lib/routing/urls";
 import { getTenantPageStateById } from "../../published-page";
 
@@ -23,7 +24,9 @@ export function generateStaticParams() {
   return [];
 }
 
-export async function generateMetadata({ params }: PageProps<"/sites/[pageId]">): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: PageProps<"/sites/[pageId]">): Promise<Metadata> {
   const { pageId } = await params;
   const state = await getTenantPageStateById(pageId);
   if (state.kind !== "published") return { title: "Page not found", robots: { index: false } };
@@ -35,18 +38,11 @@ export async function generateMetadata({ params }: PageProps<"/sites/[pageId]">)
   const hostname = await getPrimaryDomain(pageId);
   if (!hostname) return base;
   const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
-  const image = customOgImageUrl(hostname, state.page.publishedAt, rootDomain);
-  return {
-    ...base,
-    openGraph: {
-      type: "website",
-      title: profile.name,
-      description,
-      url: `${customOrigin(hostname, rootDomain)}/`,
-      images: [{ url: image, width: 1200, height: 630, alt: profile.name }],
-    },
-    twitter: { card: "summary_large_image", title: profile.name, description, images: [image] },
-  };
+  // The share card (M6-32) changes og:title and og:description only; og:url and og:image name this host.
+  return pageMetadata(state.page.document, {
+    page: `${customOrigin(hostname, rootDomain)}/`,
+    image: customOgImageUrl(hostname, state.page.publishedAt, rootDomain),
+  });
 }
 
 export default async function SitePage({ params }: PageProps<"/sites/[pageId]">) {

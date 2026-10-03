@@ -4,6 +4,7 @@ import { TenantFonts } from "@/components/design/tenant-fonts";
 import { TenantPage } from "@/components/tenant/tenant-page";
 import { UnpublishedPlaceholder } from "@/components/tenant/unpublished-placeholder";
 import { HANDLE_DISPLAY_DOMAIN } from "@/lib/handles/rules";
+import { pageMetadata } from "@/lib/publish/share-meta";
 import { ogImageUrl, tenantOrigin } from "@/lib/publish/urls";
 import { getTenantPageState } from "../../../published-page";
 
@@ -26,21 +27,11 @@ export async function generateMetadata({ params }: PageProps<"/t/[handle]">): Pr
   const state = await getTenantPageState(handle);
 
   if (state.kind === "published") {
-    const { profile } = state.page.document;
-    const description = profile.bio || undefined;
-    const image = ogImageUrl(handle, state.page.publishedAt);
-    return {
-      title: `${profile.name} - links`,
-      description,
-      openGraph: {
-        type: "website",
-        title: profile.name,
-        description,
-        url: `${tenantOrigin(handle)}/`,
-        images: [{ url: image, width: 1200, height: 630, alt: profile.name }],
-      },
-      twitter: { card: "summary_large_image", title: profile.name, description, images: [image] },
-    };
+    // The share card (M6-32) changes og:title and og:description only; the image stays the page's own /og.
+    return pageMetadata(state.page.document, {
+      page: `${tenantOrigin(handle)}/`,
+      image: ogImageUrl(handle, state.page.publishedAt),
+    });
   }
   if (state.kind === "unpublished") {
     return { title: `${handle}.${HANDLE_DISPLAY_DOMAIN}`, robots: { index: false } };

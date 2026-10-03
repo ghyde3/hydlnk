@@ -13,10 +13,14 @@ import type { ImageRef, PublishDoc } from "@/lib/document";
 import { mediaOrigin, mediaUrl } from "@/lib/media/url";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
 import { loadOgFont, type OgFont } from "./og-font";
+import { shareImagePng } from "./share-og";
 import { pageTag } from "./tags";
 
-/** Bump when the layout changes: it is part of the cache key, so a deploy never serves the old one. */
-const OG_TEMPLATE_VERSION = "1";
+/**
+ * Bump when the layout changes: it is part of the cache key, so a deploy never serves the old one.
+ * "2": a page's share image (M6-32) can replace the generated card.
+ */
+export const OG_TEMPLATE_VERSION = "2";
 
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
@@ -217,10 +221,32 @@ export async function renderOgPng(input: OgInput): Promise<Buffer> {
 }
 
 /**
+ * The key of the cached image: the template version, the page, its publish time and the share card
+ * (M6-32), so a new publish or a changed share card is never answered with an old image. The
+ * share fields are empty for a page without a share card.
+ */
+export function ogCacheKey(page: {
+  pageId: string;
+  publishedAt: string | null;
+  share?: unknown;
+}): string[] {
+  return [
+    "og-image",
+    OG_TEMPLATE_VERSION,
+    page.pageId,
+    page.publishedAt ?? "",
+    page.share === undefined ? "" : JSON.stringify(page.share),
+  ];
+}
+
+/**
  * The page's OG image through the page's cache tag (same tag as the page and the public query),
  * so Publish refreshes it together with the page and a draft edit never changes it. The publish
  * time is part of the key as well: a new publish can never be answered with the old image.
  * `next dev` renders every time (see published-page.ts).
+ *
+ * A page whose share card has a picture serves that picture (M6-32); when it cannot be loaded the
+ * generated card below is drawn instead, so this never fails because of it.
  */
 export async function getOgPng(page: {
   pageId: string;
@@ -230,8 +256,12 @@ export async function getOgPng(page: {
   host: string;
 }): Promise<Buffer> {
   const { document } = page;
-  const build = async () =>
-    (
+  const build = async () => {
+    if (document.share?.image) {
+      const picture = await shareImagePng(document.share.image);
+      if (picture) return picture.toString("base64");
+    }
+    return (
       await renderOgPng({
         name: document.profile.name,
         bio: document.profile.bio,
@@ -241,13 +271,18 @@ export async function getOgPng(page: {
         tokens: document.tokens,
       })
     ).toString("base64");
+  };
 
   const base64 =
     process.env.NODE_ENV !== "production"
       ? await build()
       : await unstable_cache(
           build,
-          ["og-image", OG_TEMPLATE_VERSION, page.pageId, page.publishedAt ?? ""],
+          ogCacheKey({
+            pageId: page.pageId,
+            publishedAt: page.publishedAt,
+            share: document.share,
+          }),
           {
             tags: [pageTag(page.pageId)],
           },
