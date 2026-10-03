@@ -829,12 +829,12 @@ body {
       <div id="stage" class="clip" data-start="0" data-duration="24" data-track-index="0" data-layout-allow-overflow="true">
         <div id="bg"><div id="grid"></div><div id="glow"></div><div id="vignette"></div></div>
 
-        <div class="hl" id="hA" data-layout-ignore="true"><div class="hl-line"><span>Every choice</span></div><div class="hl-line"><span>is <em>a token.</em></span></div></div>
+        <div class="hl" id="hA" data-layout-ignore="true"><div class="hl-line"><span>Make it look</span></div><div class="hl-line"><span>like <em>you.</em></span></div></div>
         <div class="hl" id="hB" data-layout-ignore="true"><div class="hl-line"><span>Your page.</span></div><div class="hl-line"><span><em>Your domain.</em></span></div></div>
         <div class="hl hl-center" id="hD" data-layout-ignore="true"><div class="hl-line"><span>Claim your <em>name.</em></span></div></div>
         <div class="hl" id="hE" data-layout-ignore="true"><div class="hl-line"><span>Build it</span></div><div class="hl-line"><span><em>with blocks.</em></span></div></div>
 
-<div class="ticker" id="ticker"><span class="dot"></span><span class="tk-k" id="tk-k">accent</span><span class="tk-v" id="tk-v">#1B1814</span></div>
+<div class="ticker" id="ticker"><span class="dot"></span><span class="tk-k" id="tk-k">Color</span><span class="tk-v" id="tk-v">Ink</span></div>
 
         <div class="device" id="device">
           <div class="speaker" id="speaker"></div>
@@ -1023,10 +1023,10 @@ body {
   // Themes (HYDLNK system themes Ivory, Noir, Smoke, and a saved photo theme, "Kiln")
   // ---------------------------------------------------------------------------------------
   const THEMES = {
-    ivory: { name: "Ivory", bg: "#F3EEE4", surface: "#E6DDCD", text: "#1B1814", muted: "#5E564B", accent: "#1B1814", btnBg: "#1B1814", btnText: "#F7F3EC", border: "#CCC7BF", font: "Fraunces", weight: 600, radius: 4, style: "fill", bgType: "solid", gap: 16 },
-    noir: { name: "Noir", bg: "#16120E", surface: "#221B13", text: "#EFE8DC", muted: "#A79E90", accent: "#C9A86A", btnBg: "#C9A86A", btnText: "#15110B", border: "#3A342D", font: "Instrument Serif", weight: 400, radius: 12, style: "outline", bgType: "solid", gap: 12 },
-    smoke: { name: "Smoke", bg: "#1C2023", surface: "#262C30", text: "#E6EAEC", muted: "#9AA4AA", accent: "#9DB3C4", btnBg: "#9DB3C4", btnText: "#15110B", border: "#404447", font: "Geist", weight: 600, radius: 20, style: "pill", bgType: "gradient", gap: 12 },
-    kiln: { name: "Kiln", bg: "#17120D", surface: "#2A221A", text: "#F7F1E6", muted: "#DDD2C1", accent: "#E8D3B0", btnBg: "#E8D3B0", btnText: "#1A140E", border: "#5C4E40", font: "Fraunces", weight: 600, radius: 16, style: "soft", bgType: "image", gap: 12 },
+    ivory: { name: "Ivory", color: "Ink", bg: "#F3EEE4", surface: "#E6DDCD", text: "#1B1814", muted: "#5E564B", accent: "#1B1814", btnBg: "#1B1814", btnText: "#F7F3EC", border: "#CCC7BF", font: "Fraunces", weight: 600, radius: 4, style: "fill", bgType: "solid", gap: 16 },
+    noir: { name: "Noir", color: "Brass", bg: "#16120E", surface: "#221B13", text: "#EFE8DC", muted: "#A79E90", accent: "#C9A86A", btnBg: "#C9A86A", btnText: "#15110B", border: "#3A342D", font: "Instrument Serif", weight: 400, radius: 12, style: "outline", bgType: "solid", gap: 12 },
+    smoke: { name: "Smoke", color: "Steel", bg: "#1C2023", surface: "#262C30", text: "#E6EAEC", muted: "#9AA4AA", accent: "#9DB3C4", btnBg: "#9DB3C4", btnText: "#15110B", border: "#404447", font: "Geist", weight: 600, radius: 20, style: "pill", bgType: "gradient", gap: 12 },
+    kiln: { name: "Kiln", color: "Sand", bg: "#17120D", surface: "#2A221A", text: "#F7F1E6", muted: "#DDD2C1", accent: "#E8D3B0", btnBg: "#E8D3B0", btnText: "#1A140E", border: "#5C4E40", font: "Fraunces", weight: 600, radius: 16, style: "soft", bgType: "image", gap: 12 },
   };
   const FONT_STACK = {
     Fraunces: '"Fraunces", serif',
@@ -1080,12 +1080,16 @@ body {
 
   // Panel values per row and the theme title, as step lists.
   const ROWS = ["accent", "fontHeading", "radius", "buttonStyle", "background"];
+  // What the viewer reads: plain words, never token names or hex codes.
+  const STYLE_WORD = { fill: "Filled", outline: "Outline", pill: "Pill", soft: "Soft" };
+  const BG_WORD = { solid: "Solid", gradient: "Gradient", image: "Photo" };
+  const LABEL = { accent: "Color", fontHeading: "Font", radius: "Corners", buttonStyle: "Buttons", background: "Background", blocks: "Blocks", publish: "Publish" };
   const rowValue = (th, row) =>
-    ({ accent: th.accent, fontHeading: th.font, radius: String(th.radius), buttonStyle: th.style, background: th.bgType })[row];
+    ({ accent: th.color, fontHeading: th.font, radius: `${th.radius} px`, buttonStyle: STYLE_WORD[th.style] || th.style, background: BG_WORD[th.bgType] || th.bgType })[row];
   const ROW_STEPS = Object.fromEntries(ROWS.map((row) => [row, [[0, rowValue(IV, row)]]]));
   const TITLE_STEPS = [[0, `Theme · ${IV.name}`]];
   const MARKER_STEPS = [[0, 0]]; // active row index
-  const TICKER_STEPS = [[0, ["accent", IV.accent]]];
+  const TICKER_STEPS = [[0, ["accent", IV.color]]];
 
   // Selection boxes: the page element a token beat changes is outlined while it changes.
   const SEL = { name: track(0), card: track(0), links: track(0), bg: track(0) };
@@ -1102,9 +1106,9 @@ body {
     P.btnBorder.to(T, C, keepStyle.border, "power2.inOut");
     P.btnText.to(T, C, keepStyle.text, "power2.inOut");
     TITLE_STEPS.push([T, `Theme · ${to.name}`]);
-    ROW_STEPS.accent.push([T, to.accent]);
+    ROW_STEPS.accent.push([T, rowValue(to, "accent")]);
     MARKER_STEPS.push([T, 0]);
-    TICKER_STEPS.push([T, ["accent", `${from.accent} → ${to.accent}`]]);
+    TICKER_STEPS.push([T, ["accent", `${from.color} → ${to.color}`]]);
 
     // 2. Heading font (fontHeading row)
     const F = T + 0.45;
@@ -1122,10 +1126,10 @@ body {
     P.radius.to(R, 0.5, to.radius, "expo.inOut");
     P.gap.to(R, 0.5, to.gap, "expo.inOut");
     P.btnRadius.to(R, 0.5, from.style === "pill" ? BTN_H / 2 : to.radius, "expo.inOut");
-    ROW_STEPS.radius.push([R, String(to.radius)]);
+    ROW_STEPS.radius.push([R, rowValue(to, "radius")]);
     flashSel("card", R, 0.42);
     MARKER_STEPS.push([R, 2]);
-    TICKER_STEPS.push([R, ["radius", `${from.radius} → ${to.radius}`]]);
+    TICKER_STEPS.push([R, ["radius", `${from.radius} → ${to.radius} px`]]);
 
     // 4. Button style (buttonStyle row)
     const B = T + 1.25;
@@ -1135,10 +1139,10 @@ body {
     P.btnText.to(B, 0.45, next.text, "power2.inOut");
     P.btnRadius.to(R + 0.5, 0.45, next.radius, "expo.inOut");
     P.btnWeight.to(B, 0.45, next.weight, "power2.inOut");
-    ROW_STEPS.buttonStyle.push([B, to.style]);
+    ROW_STEPS.buttonStyle.push([B, rowValue(to, "buttonStyle")]);
     flashSel("links", B, 0.45);
     MARKER_STEPS.push([B, 3]);
-    TICKER_STEPS.push([B, ["buttonStyle", `${from.style} → ${to.style}`]]);
+    TICKER_STEPS.push([B, ["buttonStyle", `${STYLE_WORD[from.style] || from.style} → ${STYLE_WORD[to.style] || to.style}`]]);
 
     // 5. Background (background row), when it changes
     if (to.bgType !== from.bgType) {
@@ -1148,10 +1152,10 @@ body {
       P.photo.to(G, 0.7, to.bgType === "image" ? 1 : 0, "power2.inOut");
       P.overlay.to(G, 0.7, to.bgType === "image" ? 0.56 : 0, "power2.inOut");
       P.blur.to(G, 0.9, to.bgType === "image" ? 5 : 14, "expo.out");
-      ROW_STEPS.background.push([G, to.bgType]);
+      ROW_STEPS.background.push([G, rowValue(to, "background")]);
       flashSel("bg", G, 0.7);
       MARKER_STEPS.push([G, 4]);
-      TICKER_STEPS.push([G, ["background", `${from.bgType} → ${to.bgType}`]]);
+      TICKER_STEPS.push([G, ["background", `${BG_WORD[from.bgType] || from.bgType} → ${BG_WORD[to.bgType] || to.bgType}`]]);
     }
   }
 
@@ -1227,7 +1231,7 @@ body {
   TICKER_STEPS.push([RESET, ["blocks", "Add a block"]]);
   for (const [at, , , label] of BUILD) if (label) TICKER_STEPS.push([at - 0.15, ["blocks", label]]);
   TICKER_STEPS.push([21.05, ["publish", "fennmoor.hydlnk.com ✓"]]);
-  TICKER_STEPS.push([22.8, ["accent", IV.accent]]);
+  TICKER_STEPS.push([22.8, ["accent", IV.color]]);
 
   const blockTracks = BUILD.map(([at, id]) => ({
     el: $(id),
@@ -1546,7 +1550,7 @@ body {
       el.ticker.style.opacity = String(tickerO.at(t));
       const info = stepInfo(TICKER_STEPS, t);
       const [k, v] = info.value;
-      el.tickerK.textContent = k;
+      el.tickerK.textContent = LABEL[k] || k;
       el.tickerV.textContent = v;
       const u = clamp01(info.since / 0.3);
       const changed = info.since < 0.3 && info.value !== info.prev;

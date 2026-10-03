@@ -56,15 +56,15 @@ const page = `
 
 const panel = `
 <div class="panel" id="panel">
-  <div class="panel-head"><span class="panel-title" id="panel-title">Theme · Ivory</span><span class="panel-count">23 tokens</span></div>
+  <div class="panel-head"><span class="panel-title" id="panel-title">Theme · Ivory</span><span class="panel-count">Style</span></div>
   <div style="position:relative">
     <div class="row-hi" id="row-hi"></div>
     <div class="row-bar" id="row-bar"></div>
-    <div class="row"><span class="row-k">accent</span><span class="row-v" id="v-accent"><span class="swatch" id="sw-accent"></span><span class="val">#1B1814</span></span></div>
-    <div class="row"><span class="row-k">fontHeading</span><span class="row-v" id="v-fontHeading"><span class="val">Fraunces</span></span></div>
-    <div class="row"><span class="row-k">radius</span><span class="row-v" id="v-radius"><span class="val">4</span></span></div>
-    <div class="row"><span class="row-k">buttonStyle</span><span class="row-v" id="v-buttonStyle"><span class="val">fill</span></span></div>
-    <div class="row"><span class="row-k">background</span><span class="row-v" id="v-background"><span class="val">solid</span></span></div>
+    <div class="row"><span class="row-k">Color</span><span class="row-v" id="v-accent"><span class="swatch" id="sw-accent"></span><span class="val">Ink</span></span></div>
+    <div class="row"><span class="row-k">Font</span><span class="row-v" id="v-fontHeading"><span class="val">Fraunces</span></span></div>
+    <div class="row"><span class="row-k">Corners</span><span class="row-v" id="v-radius"><span class="val">4 px</span></span></div>
+    <div class="row"><span class="row-k">Buttons</span><span class="row-v" id="v-buttonStyle"><span class="val">Filled</span></span></div>
+    <div class="row"><span class="row-k">Background</span><span class="row-v" id="v-background"><span class="val">Solid</span></span></div>
   </div>
 </div>`;
 
@@ -77,7 +77,7 @@ const palette = `
 <div class="publish" id="publish">Publish</div>`;
 
 const ticker = `
-<div class="ticker" id="ticker"><span class="dot"></span><span class="tk-k" id="tk-k">accent</span><span class="tk-v" id="tk-v">#1B1814</span></div>`;
+<div class="ticker" id="ticker"><span class="dot"></span><span class="tk-k" id="tk-k">Color</span><span class="tk-v" id="tk-v">Ink</span></div>`;
 
 function html({ format, width, height }) {
   const wide = format === "wide";
@@ -99,7 +99,7 @@ ${css}
       <div id="stage" class="clip" data-start="0" data-duration="24" data-track-index="0" data-layout-allow-overflow="true">
         <div id="bg"><div id="grid"></div><div id="glow"></div><div id="vignette"></div></div>
 
-        <div class="hl" id="hA" data-layout-ignore="true"><div class="hl-line"><span>Every choice</span></div><div class="hl-line"><span>is <em>a token.</em></span></div></div>
+        <div class="hl" id="hA" data-layout-ignore="true"><div class="hl-line"><span>Make it look</span></div><div class="hl-line"><span>like <em>you.</em></span></div></div>
         <div class="hl" id="hB" data-layout-ignore="true"><div class="hl-line"><span>Your page.</span></div><div class="hl-line"><span><em>Your domain.</em></span></div></div>
         <div class="hl hl-center" id="hD" data-layout-ignore="true"><div class="hl-line"><span>Claim your <em>name.</em></span></div></div>
         <div class="hl" id="hE" data-layout-ignore="true"><div class="hl-line"><span>Build it</span></div><div class="hl-line"><span><em>with blocks.</em></span></div></div>
