@@ -2,6 +2,12 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-03 — Release: Wave F (editing comfort)
+
+- PR #14 merged, merge commit 021310a. Migrations applied through release-migrations.yml (run 37111162127): 20261005000001_page_names_and_previews, 20261005000002_page_name_separators. Deployment https://vercel.com/ghyde3s-projects/hydlnk/AztdB9LrMBLAagHxxEn8KfHpNfCg (success).
+- Checks: `pnpm verify` PASS (3821 unit, pgTAP PASS); CI Verify green; Wave F e2e (346: 253 passed, 93 project-skipped, 0 failed) and the regression sets in the Wave F entry; full browser suite deferred per Gary until after Wave H; `pnpm test:e2e:prod` 12/12; live: /share/<unknown token> answers 404.
+- Open for Gary (logged in the Wave F entries): share links live on app.* with a strict nonce CSP; moving them to a cookie-less host and adding a report path for shared drafts are optional follow-ups. M6-05 puts Duplicate in every block panel, which supersedes M2-16 step 1 (divider panel buttons).
+
 ## 2026-10-03 — Wave F security review fixes
 
 - **Feature ids touched:** M6-09, M6-10, M6-13 (all stay `passes: true`; nothing in `docs/features.json` changed). Fixes for the eight findings of the Wave F security review, one commit `fix(security): Wave F review fixes [M6-09 M6-10 M6-13]`.
