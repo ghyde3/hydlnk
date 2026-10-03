@@ -1,12 +1,11 @@
 ---
 name: release
-description: "The only path to production. Confirms verify and CI are green, shows the production migration plan, pushes migrations, merges the PR to main (Vercel deploys), waits for the deployment, runs the production smoke test and logs the release. Manual only; needs Gary in the session."
-disable-model-invocation: true
+description: "The only path to production. Confirms verify and CI are green, shows the production migration plan, pushes migrations, merges the PR to main (Vercel deploys), waits for the deployment, runs the production smoke test and logs the release. Runs in interactive sessions under Gary's standing release approval (2026-10-03); never in unattended runs."
 ---
 
 # Release to production
 
-Merging to `main` deploys production. Gary approves the two production steps (`supabase db push` and `gh pr merge` both prompt). If this is not an interactive session with Gary, stop now: unattended sessions never touch production.
+Merging to `main` deploys production. Gary gave standing approval (2026-10-03) for the orchestrator to run this skill for each green wave in an interactive session: tell him before starting and report after. Anything destructive in a migration, or anything touching live Stripe, still needs his explicit yes first. If this is not an interactive session with Gary, stop now: unattended sessions never touch production. The full browser suite (`pnpm test:e2e`) is deferred until Waves E–H and marketing v3 have landed (Gary, 2026-10-03); until then step 2 is `pnpm verify` + CI. Migrations go through the `release-migrations.yml` workflow (`gh workflow run release-migrations.yml -f ref=<branch> -f apply=false`, then `apply=true`) instead of a local `supabase db push`, which hangs on the Mac keychain.
 
 Production is Supabase project ref `pzcinnkzrlyrqkgyetqx`, Vercel project `hydlnk`, Stripe HYDLNK sandbox only. Never print or handle secret keys. Never run `vercel deploy --prod`; deployment happens only by merging to `main`.
 
