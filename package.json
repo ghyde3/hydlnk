@@ -27,6 +27,7 @@
     "@dnd-kit/utilities": "3.2.2",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.2",
+    "isbot": "5.2.2",
     "next": "16.3.8",
     "nodemailer": "10.0.13",
     "react": "19.3.0",
