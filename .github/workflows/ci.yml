@@ -12,10 +12,8 @@ on:
     types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
-  # Nightly run paused (Gary, 2026-10-03): the full suite runs once, by hand or with the full-ci
-  # label, after Waves E-H and marketing v3 land. Restore after that run:
-  # schedule:
-  #   - cron: "0 7 * * *"
+  schedule:
+    - cron: "0 7 * * *"
   workflow_dispatch:
 
 concurrency:
