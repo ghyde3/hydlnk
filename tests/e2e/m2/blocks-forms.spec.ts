@@ -172,14 +172,20 @@ test.describe("M2-16 header, text and divider panels", () => {
     await expect(divider.row).toContainText("Divider");
   });
 
-  test("M2-16 the divider panel has only Move up, Move down and Delete block", async ({
+  test("M2-16 the divider panel has no field, only the four panel buttons (Duplicate block since M6-05)", async ({
     page,
     context,
   }) => {
     await userWithDraft(context, "dv");
     await openEditor(page);
     const { panel } = await addBlock(page, "divider");
-    await expect(panel.getByRole("button")).toHaveText(["Move up", "Move down", "Delete block"]);
+    // M6-05 puts 'Duplicate block' in every panel, the divider's included (it was three buttons before).
+    await expect(panel.getByRole("button")).toHaveText([
+      "Move up",
+      "Move down",
+      "Duplicate block",
+      "Delete block",
+    ]);
     await expect(panel.locator("input, textarea, select")).toHaveCount(0);
   });
 

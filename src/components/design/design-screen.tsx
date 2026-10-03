@@ -7,6 +7,8 @@ import { Card } from "@/components/app/screen";
 import { SaveAsThemeButton, SavedThemesCard, useThemeLibrary } from "@/components/themes";
 import { SaveBanner } from "@/components/editor/save-banner";
 import { useAutosave } from "@/components/editor/use-autosave";
+import { UndoRedoButtons, UndoRedoNotice } from "@/components/editor/undo-redo-controls";
+import { useUndoRedo } from "@/components/editor/use-undo-redo";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { toPublishForm, type DraftDoc } from "@/lib/document";
 import { withToken } from "@/lib/design";
@@ -18,12 +20,27 @@ import type { PlanId } from "@/lib/limits/table";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { fetchThemeLibrary, themeById, themeTokensFor, type ThemeRow } from "@/lib/themes";
 import { DesignPreview } from "./design-preview";
+import { useDraftHistory } from "./use-draft-history";
 import { DesignTabs, designPanelId, designTabId, type DesignView } from "./design-tabs";
 import { BackgroundSection, ShapeSection, SpacingSection } from "./external-sections";
 import { ColorSection } from "./sections/color-section";
 import { FontSection } from "./sections/font-section";
 import { TypeSection } from "./sections/type-section";
 import type { DesignSectionProps } from "./types";
+
+/** Tokens whose control sends many values in one gesture: the sliders and the color fields and pickers. */
+const STREAMING_TOKENS: ReadonlySet<keyof TokenSet> = new Set<keyof TokenSet>([
+  "overlayOpacity",
+  "blur",
+  "bg",
+  "surface",
+  "text",
+  "textMuted",
+  "accent",
+  "buttonBg",
+  "buttonText",
+  "border",
+]);
 
 export interface DesignScreenProps {
   pageId: string;
@@ -53,11 +70,18 @@ export interface DesignScreenProps {
 export function DesignScreen(props: DesignScreenProps) {
   const { pageId, ownerId, plan, chrome } = props;
   const router = useRouter();
-  const [draft, setDraft] = useState<DraftDoc>(props.draft);
+  // The draft with its undo history (M6-08): in memory only, this screen's own, gone with it.
+  const { draft, history, setDraft, update, step } = useDraftHistory(props.draft);
   const [view, setView] = useState<DesignView>("tokens");
   const isDesktop = useIsDesktop();
   const autosave = useAutosave({ pageId, draft, initialRevKey: props.revKey });
   const { flush } = autosave;
+  const undoRedo = useUndoRedo({
+    history,
+    step,
+    scope: `#${designPanelId("tokens")}`,
+    nativeWithin: '[data-testid="saved-themes-card"]',
+  });
 
   // The saved-themes logic (apply, save, update, rename, delete) is the themes area's hook; the
   // draft and its autosave stay this screen's, and a theme action only writes `draft.theme`.
@@ -103,10 +127,15 @@ export function DesignScreen(props: DesignScreenProps) {
   );
   const form = useMemo(() => toPublishForm(draft, themeTokens), [draft, themeTokens]);
 
+  // Only the controls that stream values (a slider drag, a typed or picked color) coalesce into
+  // one step, by token. A click on an option is a step of its own, however soon the next one comes.
   const setToken = useCallback(
     <K extends keyof TokenSet>(key: K, value: TokenSet[K] | undefined) =>
-      setDraft((current) => withToken(current, key, value)),
-    [],
+      update(
+        (current) => withToken(current, key, value),
+        STREAMING_TOKENS.has(key) ? `theme:${key}` : undefined,
+      ),
+    [update],
   );
 
   const sectionProps: DesignSectionProps = {
@@ -132,6 +161,7 @@ export function DesignScreen(props: DesignScreenProps) {
           <h1 className="mt-0.5 text-[22px] leading-[1.2] font-bold tracking-[-0.01em]">Design</h1>
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <UndoRedoButtons controls={undoRedo} />
           <DesignSaveStatus status={autosave.status} />
           <SaveAsThemeButton library={library} />
           <Link
@@ -149,6 +179,7 @@ export function DesignScreen(props: DesignScreenProps) {
 
       <div className="flex flex-col gap-2 px-4 pt-3 empty:hidden hl:px-8">
         <SaveBanner status={autosave.status} blockedHosts={autosave.blocked?.hosts} editorLink />
+        <UndoRedoNotice controls={undoRedo} />
       </div>
 
       {isDesktop ? null : <DesignTabs view={view} onChange={setView} />}
