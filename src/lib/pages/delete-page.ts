@@ -1,8 +1,8 @@
 import "server-only";
+import { removeProjectDomain } from "@/lib/domains/vercel";
 import { expireDeletedPage } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { deletePageWithClient, type DeletePageResult } from "./delete-page-core";
-import { removeVercelDomain } from "./remove-domain";
 
 export type { DeletePageResult } from "./delete-page-core";
 
@@ -25,7 +25,7 @@ export async function deletePage(
   const result = await deletePageWithClient(
     createAdminSupabase(),
     { userId, pageId, confirm },
-    { removeDomain: (hostname) => removeVercelDomain(hostname) },
+    { removeDomain: (hostname) => removeProjectDomain(hostname) },
   );
   if (result.ok) {
     try {

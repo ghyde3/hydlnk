@@ -7,6 +7,7 @@ import {
   UNKNOWN_SITE_ID,
   appRewritePath,
   isInternalPath,
+  isTrackingPath,
   siteRewritePath,
   tenantRewritePath,
 } from "@/lib/routing/paths";
@@ -22,14 +23,20 @@ import { appOrigin, protocolFor } from "@/lib/routing/urls";
  *   www.hydlnk.com            308 to the root host
  *   app.hydlnk.com            rewrite to /app/..., refreshing the Supabase session (only here)
  *   <handle>.hydlnk.com       rewrite to /t/<handle>/...
- *   anything else             custom-domain lookup (stub), rewrite to /sites/<pageId>
+ *   anything else             custom-domain lookup: a verified domain with a published page is rewritten
+ *                             to /sites/<pageId>; everything else is the plain 404 (M4-09)
  *
  * The internal prefixes (/app, /t, /sites) exist only as rewrite targets: a visitor asking for one
  * directly on the root host gets a 404. Consequences for later milestones:
  *   - everything on the app host lives under src/app/(editor)/app/, so the auth callback is
  *     .../app/auth/callback/route.ts and the Stripe webhook .../app/api/stripe/webhook/route.ts;
- *   - the tracking routes (/r/..., /api/e) are served from every host, so M4 has to exempt them from
- *     the tenant and custom-domain rewrites.
+ *   - the tracking routes (/r/..., /api/e) are served from every host: tenant hosts and resolved
+ *     custom hosts leave them unrewritten (`isTrackingPath`), so the handlers at the root of the app
+ *     answer them.
+ *
+ * A custom host is attacker-controlled input: only the request's real Host header is read (never
+ * X-Forwarded-Host or X-Original-Host), the request's cookies are dropped before the page renders
+ * (no custom host ever sees an auth cookie) and no response sets one.
  */
 export async function proxy(request: NextRequest) {
   const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
@@ -69,6 +76,7 @@ export async function proxy(request: NextRequest) {
       return rewriteWithSession(request, rewriteTo(appRewritePath(pathname)));
 
     case "tenant": {
+      if (isTrackingPath(pathname)) return NextResponse.next();
       const response = NextResponse.rewrite(rewriteTo(tenantRewritePath(handle ?? "", pathname)));
       setTenantHeaders(response.headers);
       return response;
@@ -84,13 +92,27 @@ export async function proxy(request: NextRequest) {
         setTenantHeaders(response.headers);
         return response;
       }
-      // TODO(M4): resolveCustomDomain looks the host up in `domains`; unknown hosts get the plain
-      // tenant 404 (the /sites/[pageId] stub always answers notFound until then).
-      const pageId = await resolveCustomDomain(host);
+      // The real Host header only. A verified domain whose page is published rewrites to its page;
+      // an unknown host, a pending or draft-only domain and a lookup error all rewrite to the
+      // plain tenant 404 (/sites/unknown), with no tenant data in it.
+      // The lookup answers null on every failure; the catch is the second wall: never a 500 here.
+      let pageId: string | null = null;
+      try {
+        pageId = await resolveCustomDomain(host);
+      } catch {
+        pageId = null;
+      }
+      const headers = new Headers(request.headers);
+      headers.delete("cookie");
+      if (pageId && isTrackingPath(pathname)) {
+        return NextResponse.next({ request: { headers } });
+      }
       const response = NextResponse.rewrite(
         rewriteTo(siteRewritePath(pageId ?? UNKNOWN_SITE_ID, pathname)),
+        { request: { headers } },
       );
       setTenantHeaders(response.headers);
+      response.headers.delete("set-cookie");
       return response;
     }
   }

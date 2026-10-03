@@ -12,8 +12,9 @@ import {
 
 /**
  * M4-01: the Milestone 4 variables validate at startup and Stripe stays sandbox-only unless the
- * live-mode switch is on in production. Release fixes (2026-10-02): VERCEL_API_TOKEN is optional at
- * build and startup, PAID_PLANS_OPEN and STRIPE_LIVE_MODE are the two server switches.
+ * live-mode switch is on in production. Release fixes (2026-10-02): PAID_PLANS_OPEN and
+ * STRIPE_LIVE_MODE are the two server switches. Wave E (2026-10-04): VERCEL_API_TOKEN, optional
+ * until then, joined the required variables.
  */
 
 const FULL: Record<string, string> = {
@@ -48,7 +49,7 @@ describe("M4-01 .env.example", () => {
   const lines = readFileSync(path, "utf8").split("\n");
 
   const REQUIRED = [
-    // VERCEL_API_TOKEN is listed too, but it is optional (see "VERCEL_API_TOKEN is optional").
+    // VERCEL_API_TOKEN is required since the custom-domains wave (see "VERCEL_API_TOKEN is required").
     "VERCEL_API_TOKEN",
     "VERCEL_PROJECT_ID",
     "VERCEL_TEAM_ID",
@@ -117,7 +118,7 @@ describe("M4-01 .env.example", () => {
     });
   }
 
-  it("the STRIPE_LIVE_MODE comment says live keys need production, and the VERCEL_API_TOKEN one says it is optional", () => {
+  it("the STRIPE_LIVE_MODE comment says live keys need production, and the VERCEL_API_TOKEN one says it is required", () => {
     const above = (name: string) => {
       const index = find(name);
       const block: string[] = [];
@@ -127,7 +128,7 @@ describe("M4-01 .env.example", () => {
     };
     expect(above("STRIPE_LIVE_MODE")).toMatch(/production/i);
     expect(above("STRIPE_LIVE_MODE")).toMatch(/live/i);
-    expect(above("VERCEL_API_TOKEN")).toMatch(/optional/i);
+    expect(above("VERCEL_API_TOKEN")).toMatch(/required/i);
     expect(above("PAID_PLANS_OPEN")).toMatch(/Paid plans open soon/);
   });
 });
@@ -168,31 +169,45 @@ describe("M4-01 required variables", () => {
   });
 });
 
-describe("VERCEL_API_TOKEN is optional at build and startup", () => {
-  it("is not one of the required variables (eight remain)", () => {
-    expect(M4_REQUIRED_KEYS).not.toContain("VERCEL_API_TOKEN");
-    expect(M4_REQUIRED_KEYS).toHaveLength(8);
+describe("VERCEL_API_TOKEN is required wherever the app really runs (custom domains, Wave E)", () => {
+  it("is one of the required variables (nine in all)", () => {
+    expect(M4_REQUIRED_KEYS).toContain("VERCEL_API_TOKEN");
+    expect(M4_REQUIRED_KEYS).toHaveLength(9);
   });
 
   for (const vercelEnv of [undefined, "development", "preview", "production"]) {
     for (const token of [undefined, ""]) {
-      it(`parses without it (${token === undefined ? "unset" : "empty"}) with VERCEL_ENV=${vercelEnv ?? "(unset)"}, the strict build and runtime check`, () => {
-        const env = parse({ VERCEL_API_TOKEN: token, VERCEL_ENV: vercelEnv });
-        expect(env.VERCEL_API_TOKEN).toBeUndefined();
+      it(`refuses to start without it (${token === undefined ? "unset" : "empty"}) with VERCEL_ENV=${vercelEnv ?? "(unset)"}, the strict build and runtime check, naming only it`, () => {
+        let message = "";
+        try {
+          parse({ VERCEL_API_TOKEN: token, VERCEL_ENV: vercelEnv });
+        } catch (error) {
+          message = (error as Error).message;
+        }
+        expect(message).toContain("VERCEL_API_TOKEN");
+        for (const other of M4_REQUIRED_KEYS)
+          if (other !== "VERCEL_API_TOKEN") expect(message).not.toContain(other);
       });
     }
   }
+
+  it("may be unset only when asked (local dev, CI, Vitest): the point of use fails closed instead", () => {
+    const { VERCEL_API_TOKEN: _token, ...rest } = FULL;
+    void _token;
+    expect(parseServerEnv(rest, { requireM4: false }).VERCEL_API_TOKEN).toBeUndefined();
+  });
 
   it("still reads it when it is set", () => {
     expect(parse().VERCEL_API_TOKEN).toBe(FULL.VERCEL_API_TOKEN);
     expect(readServerEnvSource({ VERCEL_API_TOKEN: "abc" }).VERCEL_API_TOKEN).toBe("abc");
   });
 
-  it("everything else stays validated: with the token missing, a missing project, team or secret still fails and names only that one", () => {
+  it("everything else stays validated: with the token present, a missing project, team or secret still fails and names only that one", () => {
     for (const name of M4_REQUIRED_KEYS) {
+      if (name === "VERCEL_API_TOKEN") continue;
       let message = "";
       try {
-        parse({ VERCEL_API_TOKEN: undefined, [name]: undefined, VERCEL_ENV: "production" });
+        parse({ [name]: undefined, VERCEL_ENV: "production" });
       } catch (error) {
         message = (error as Error).message;
       }
