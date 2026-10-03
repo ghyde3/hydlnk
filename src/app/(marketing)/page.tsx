@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BLOCK_CATALOG } from "@/components/marketing/block-catalog";
+import { AudienceStrip } from "@/components/marketing/audiences/audience-strip";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { DemoGallery } from "@/components/marketing/demo/demo-gallery";
 import { DomainAnalytics } from "@/components/marketing/domain-analytics";
@@ -11,20 +11,19 @@ import {
   ArrowLink,
   ButtonLink,
   H2,
-  IconTile,
   Section,
   SectionIntro,
 } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
-import { ThemeTokens } from "@/components/marketing/theme-tokens";
 import { marketingMetadata } from "@/components/marketing/metadata";
+import { TryBuilder } from "@/components/marketing/try";
 import { monthlyText, perMonthBilledYearlyText } from "@/lib/marketing/prices";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/",
   title: { absolute: "HYDLNK — Link in bio, with real design control" },
-  description: `Block layouts, a full theme system and your own domain — so your link page looks like your brand, not ours. Free forever; connect a domain you own on Pro, ${monthlyText("pro")} or ${perMonthBilledYearlyText("pro")}.`,
+  description: `Pick a theme, add blocks and make your link page look like your brand, not ours. Free forever, and you can use your own domain on Pro, ${monthlyText("pro")} or ${perMonthBilledYearlyText("pro")}.`,
   image: "home",
 });
 
@@ -46,7 +45,7 @@ const STEPS = [
   {
     number: "03",
     title: "Style it, then publish",
-    body: "Start from a theme or set every token yourself. Nothing reaches your live page until you press Publish, and on Pro you can connect a domain you already own.",
+    body: "Start from a theme, then change any color, font or shape. Nothing goes live until you press Publish, and on Pro you can use a domain you already own.",
     href: guideHref("designing-your-page"),
     link: "Designing your page",
   },
@@ -62,7 +61,7 @@ export default function HomePage() {
           eyebrow="How it works"
           titleId="how-title"
           title="From a name to a published page in three steps."
-          lead="No templates to fight and no code. You choose the blocks, the tokens decide the look, and you publish when it’s right."
+          lead="No code and no templates to fight. Pick your blocks, pick a look, and publish when you like it."
         />
         <ol className="mt-10 grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-3">
           {STEPS.map((step) => (
@@ -86,10 +85,10 @@ export default function HomePage() {
       <Section id="demos" labelledBy="demos-title">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <SectionIntro
-            eyebrow="Same blocks, three brands"
+            eyebrow="Same blocks, three looks"
             titleId="demos-title"
             title="Your page should look like your brand."
-            lead="A pottery studio, a coffee roaster and a photographer, built from the same nine blocks. Only the tokens change."
+            lead="A pottery studio, a coffee roaster and a photographer, all built from the same nine blocks. Only the colors, fonts and photos are different."
           />
           <ButtonLink href="/design-control" variant="secondary">
             See how themes work
@@ -100,35 +99,29 @@ export default function HomePage() {
         </div>
       </Section>
 
-      <Section id="design" tone="page" labelledBy="design-title">
-        <ThemeTokens />
-      </Section>
-
-      <Section id="blocks" labelledBy="blocks-title">
+      {/* content-visibility: the browser skips drawing this section, and fetching the fonts its
+          sample page uses, until it is near the screen. */}
+      <Section
+        id="try"
+        tone="page"
+        labelledBy="try-title"
+        className="[contain-intrinsic-size:auto_1100px] [content-visibility:auto] min-[900px]:[contain-intrinsic-size:auto_1200px]"
+      >
         <SectionIntro
-          eyebrow="Free on every plan"
-          titleId="blocks-title"
-          title="Nine blocks. Any order. Every plan."
-          lead="Every plan gets every block and the whole theme system. You pay to connect your own domain or for more pages — never to make your page look good."
+          eyebrow="Try it now"
+          titleId="try-title"
+          title="Make this page yours. No sign-up."
+          lead="Tap a theme, change a color, add a few blocks. Nothing is saved, and every theme and block is free on every plan."
         />
-        <ul className="mt-10 grid gap-3 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3">
-          {BLOCK_CATALOG.map((block) => (
-            <li
-              key={block.id}
-              className="flex gap-4 rounded-md border border-line bg-surface p-[18px]"
-            >
-              <IconTile>{block.icon}</IconTile>
-              <div className="min-w-0">
-                <h3 className="text-base font-semibold">{block.name}</h3>
-                <p className="mt-1 text-sm leading-[1.55] text-text-2">{block.short}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
-        <ArrowLink href="/features" className="mt-6">
+        <div className="mt-10">
+          <TryBuilder />
+        </div>
+        <ArrowLink href="/features" className="mt-8">
           Every feature, in detail
         </ArrowLink>
       </Section>
+
+      <AudienceStrip tone="white" />
 
       <Section id="domains-analytics" tone="page" labelledBy="da-title">
         <h2 id="da-title" className="sr-only">
@@ -143,7 +136,7 @@ export default function HomePage() {
             eyebrow="Pricing"
             titleId="pricing-title"
             title="Design is never the paywall."
-            lead="No commerce fees on any plan. Cancel anytime from your billing portal."
+            lead="We never take a cut of your sales, on any plan. Cancel anytime from your billing portal."
           />
           <ButtonLink href="/pricing" variant="secondary">
             Compare plans

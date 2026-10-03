@@ -13,7 +13,7 @@ import { openDesign, publishButton } from "./design-helpers";
 
 test.afterAll(cleanupUsers);
 
-const MARA = "http://mara.localhost:3000/";
+const MARA = url("mara");
 const NOIR_FONTS = ["Instrument Serif", "Geist"];
 
 const familyOf = (page: Page, selector: string): Promise<string> =>

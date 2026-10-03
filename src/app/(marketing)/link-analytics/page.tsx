@@ -22,20 +22,20 @@ export const metadata: Metadata = marketingMetadata({
 });
 
 const METRICS = [
-  ["Views", "How many times your page was opened. Counted by a small beacon your page sends as it loads."],
-  ["Clicks", "How many times each link, card or tile was tapped. Counted on our side as the visitor is sent on, so it works even with JavaScript off."],
+  ["Views", "How many times your page was opened. Counted by a small signal your page sends as it loads."],
+  ["Clicks", "How many times each link, card or tile was tapped. Counted on our side as the visitor is sent on, so it works even when scripts are turned off."],
   ["Click-through rate", "Clicks on a link divided by views of the page: the share of visitors who tapped it."],
   ["Unique visitors", "An estimate of how many different people visited each day, made without cookies (see below)."],
   ["Referrers", "The site a visitor came from, such as instagram.com, or Direct when the browser doesn’t say."],
-  ["Devices", "Mobile, desktop or tablet, read from the browser’s user agent."],
+  ["Devices", "Mobile, desktop or tablet, based on the visitor’s browser."],
   ["Countries", "The visitor’s country, from the network they connect through. We never store their IP address."],
 ] as const;
 
 const PRIVACY = [
-  "No cookies, no local storage and no tracking scripts on your page.",
-  "IP addresses are never stored. Unique visitors come from a one-way hash of the IP address and browser, mixed with a value that changes every day, so a visitor can’t be followed from one day to the next.",
+  "No cookies, no saved data in the browser and no tracking scripts on your page.",
+  "IP addresses are never stored. Unique visitors come from a scrambled, one-way code made from the IP address and browser, mixed with a value that changes every day, so a visitor can’t be followed from one day to the next.",
   "Known bots and crawlers are filtered out before anything is counted.",
-  "Individual events are kept for 90 days, then rolled up into daily totals.",
+  "Individual views and clicks are kept for 90 days, then combined into daily totals.",
   "Your visitors’ data is used for your analytics only. HYDLNK doesn’t sell it or use it for advertising.",
 ] as const;
 
@@ -46,7 +46,7 @@ const LIMITS = [
   },
   {
     title: "Some views can go uncounted",
-    body: "Views rely on a beacon that some blockers stop. Clicks are counted on our side, so they’re the more complete number.",
+    body: "Views rely on a small signal that some ad blockers stop. Clicks are counted on our side, so they’re the more complete number.",
   },
   {
     title: "Uniques are estimates",

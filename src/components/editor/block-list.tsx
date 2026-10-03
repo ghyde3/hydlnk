@@ -95,7 +95,7 @@ export function BlockList({
         ? `${nameOf(blockById(active.id))} dropped at position ${position(over.id)} of ${ids.length}.`
         : `${nameOf(blockById(active.id))} dropped.`,
     onDragCancel: ({ active }) =>
-      `Reordering cancelled. ${nameOf(blockById(active.id))} is back at position ${position(active.id)} of ${ids.length}.`,
+      `Reordering canceled. ${nameOf(blockById(active.id))} is back at position ${position(active.id)} of ${ids.length}.`,
   };
 
   function onDragStart(event: DragStartEvent): void {

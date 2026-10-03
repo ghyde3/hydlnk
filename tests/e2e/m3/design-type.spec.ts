@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers } from "../fixtures/data";
-import { expectNoHorizontalScroll } from "../helpers";
+import { expectNoHorizontalScroll, url } from "../helpers";
 import { pageRow, seededUser, setDraft } from "../m2/editor-helpers";
 import {
   computed,
@@ -165,7 +165,7 @@ test.describe("M3-10 type", () => {
       .poll(async () => (await liveHtml(user.handle)).includes("--t-letter-case:lowercase"))
       .toBe(true);
     const live = await context.newPage();
-    await live.goto(`http://${user.handle}.localhost:3000/`);
+    await live.goto(url(user.handle));
     expect(
       await live.locator(".pg-name").evaluate((el) => getComputedStyle(el).textTransform),
     ).toBe("lowercase");

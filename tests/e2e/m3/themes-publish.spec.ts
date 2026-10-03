@@ -96,7 +96,7 @@ test.describe("M3-05 publish validates tokens", () => {
     {
       name: "bg 'red;}'",
       overrides: { bg: "red;}" },
-      message: /Publish stopped: bg isn’t a valid colour\. Reset it in Design\./,
+      message: /Publish stopped: bg isn’t a valid color\. Reset it in Design\./,
     },
     {
       name: "fontHeading 'Evil;}'",
@@ -229,7 +229,7 @@ test.describe("M3-05 the Publish message", () => {
     await clickPublish(page);
     const alert = alertOf(page);
     await expect(alert).toContainText(
-      "Publish stopped: bg isn’t a valid colour. Reset it in Design.",
+      "Publish stopped: bg isn’t a valid color. Reset it in Design.",
     );
     return alert;
   }

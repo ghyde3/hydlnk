@@ -73,7 +73,9 @@ test.describe("M3-19 saved themes grid", () => {
     await expect(
       savedThemesCard(page).getByRole("heading", { name: "Saved themes" }),
     ).toBeVisible();
-    await expect(savedThemesCard(page)).toContainText("Applying one replaces page-level tokens");
+    await expect(savedThemesCard(page)).toContainText(
+      "Applying one replaces your page’s own style changes",
+    );
 
     const cards = themeCards(page);
     await expect(cards).toHaveCount(SYSTEM_THEME_COUNT + 2);

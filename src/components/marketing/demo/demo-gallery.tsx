@@ -1,8 +1,23 @@
 import { DEMO_BRANDS, type DemoTheme } from "./brands";
 import { DemoPage, PhoneFrame } from "./demo-page";
 
-function tokenLine(theme: DemoTheme): string {
-  return `${theme.fontHeading} · radius ${theme.radius} · ${theme.buttonStyle} · ${theme.bgType}`;
+const BUTTONS: Record<DemoTheme["buttonStyle"], string> = {
+  fill: "solid buttons",
+  outline: "outlined buttons",
+  soft: "soft buttons",
+  shadow: "shadow buttons",
+  pill: "pill buttons",
+};
+
+const BACKGROUNDS: Record<DemoTheme["bgType"], string> = {
+  solid: "flat background",
+  gradient: "gradient background",
+  image: "photo background",
+};
+
+/** What a visitor can see about the look, in plain words: "Fraunces headings · solid buttons". */
+export function lookLine(theme: DemoTheme): string {
+  return `${theme.fontHeading} headings · ${BUTTONS[theme.buttonStyle]} · ${BACKGROUNDS[theme.bgType]}`;
 }
 
 /**
@@ -20,7 +35,10 @@ export function DemoGallery() {
         className="-mx-6 flex snap-x snap-mandatory gap-6 overflow-x-auto px-6 pb-4 min-[1024px]:justify-center"
       >
         {DEMO_BRANDS.map((brand) => (
-          <figure key={brand.id} className="flex shrink-0 snap-center flex-col items-center gap-4">
+          <figure
+            key={brand.id}
+            className="flex w-[290px] shrink-0 snap-center flex-col items-center gap-4"
+          >
             <PhoneFrame>
               <DemoPage brand={brand} badge={brand.id === "fennmoor"} />
             </PhoneFrame>
@@ -28,7 +46,9 @@ export function DemoGallery() {
               <span className="text-sm font-semibold">
                 {brand.name} <span className="font-normal text-text-2">· {brand.theme.name}</span>
               </span>
-              <span className="font-mono text-xs text-text-2">{tokenLine(brand.theme)}</span>
+              <span className="text-balance font-mono text-xs leading-[1.6] text-text-2">
+                {lookLine(brand.theme)}
+              </span>
             </figcaption>
           </figure>
         ))}

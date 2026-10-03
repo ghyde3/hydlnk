@@ -162,7 +162,7 @@ test.describe("M2-14 drag handles", () => {
     await page.keyboard.press("ArrowDown");
     await page.waitForTimeout(150);
     await page.keyboard.press("Escape");
-    await expect(liveRegion(page)).toContainText("cancelled");
+    await expect(liveRegion(page)).toContainText("canceled");
     expect(await order(page)).toEqual(expected);
     await page.waitForTimeout(1200);
     const stored = await expectDraft(user.pageId, () => true);

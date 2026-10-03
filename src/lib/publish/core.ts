@@ -68,7 +68,7 @@ const refuse = (
  *   2b. `publishDocSchema` on the stored draft (required fields, http(s) URLs, embed allowlist,
  *      no control or bidi characters, block limit, page and block token overrides): any issue
  *      returns `{ok:false, errors}` naming the block or the design field and how to fix it
- *      ("Publish stopped: bg isn’t a valid colour. Reset it in Design."), and writes nothing;
+ *      ("Publish stopped: bg isn’t a valid color. Reset it in Design."), and writes nothing;
  *   3. every image path of a visible block starts with the owner's uid and exists in `page-media`,
  *      and so does the resolved background image (M3-05): a `bgImage` is only ever one of the
  *      owner's own uploads, whether it came from the page overrides or from a saved theme;

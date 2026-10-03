@@ -44,11 +44,11 @@ export const PLANS: readonly Plan[] = [
     id: "free",
     name: "Free",
     price: { monthly: FREE_PRICE, yearly: FREE_PRICE },
-    blurb: "One page that looks properly designed.",
+    blurb: "One page that looks the way you want.",
     cta: "Start free",
     items: [
       "1 page",
-      "Every block and the full theme system",
+      "Every block, theme and design option",
       "3 saved themes",
       "yourname.hydlnk.com",
       "Per-link clicks, last 30 days",
@@ -117,7 +117,7 @@ export const COMPARISON: readonly { label: string; values: [string, string, stri
     ],
   },
   { label: "Pages", values: ["1", "3", "15"] },
-  { label: "Blocks and design tokens", values: ["All", "All", "All"] },
+  { label: "Blocks, themes and design options", values: ["All", "All", "All"] },
   { label: "Saved themes", values: ["3", "Unlimited", "Unlimited, shared across pages"] },
   {
     label: "Address",
@@ -134,5 +134,5 @@ export const COMPARISON: readonly { label: string; values: [string, string, stri
       "1 year, with referrers, countries and devices",
     ],
   },
-  { label: "Commerce fees", values: ["None", "None", "None"] },
+  { label: "Cut of your sales", values: ["None", "None", "None"] },
 ];

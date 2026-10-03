@@ -25,7 +25,7 @@ import {
  *
  * `limitInputPixels` is the decompression-bomb guard (M5-13): libvips refuses to decode a file whose
  * header claims more than 40 megapixels. The upload route reads the size from the header first
- * (no decoder) and refuses with 422 before this runs; this is the second line of defence for any
+ * (no decoder) and refuses with 422 before this runs; this is the second line of defense for any
  * header the route's own reader and libvips read differently.
  */
 

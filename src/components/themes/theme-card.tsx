@@ -15,7 +15,7 @@ const ACTION_BUTTON =
  * a tag. `aria-pressed` is the applied state. Saved themes (not system ones) also carry Rename and
  * Delete under the card, outside the apply button: a button never holds another button.
  *
- * Only validated colours reach the swatch's inline style: `theme.tokens` came through the token
+ * Only validated colors reach the swatch's inline style: `theme.tokens` came through the token
  * schema, and `resolveTokens` fills the gaps from the system default.
  */
 export function ThemeCard({

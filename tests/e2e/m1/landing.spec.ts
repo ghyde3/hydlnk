@@ -1,5 +1,4 @@
 import { expect, test, type Page } from "@playwright/test";
-import { perMonthBilledYearlyText } from "@/lib/marketing/prices";
 import { axeViolations } from "../fixtures/a11y";
 import { SHOWN_PRICES } from "../fixtures/prices";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
@@ -73,7 +72,9 @@ test.describe("M1-23 header and hero", () => {
     expect(requests.filter((u) => /supabase|:54321/i.test(u))).toEqual([]);
     // Nothing on the page comes from another host.
     const origins = new Set(requests.map((u) => new URL(u).host));
-    expect([...origins].filter((host) => !host.endsWith(`localhost:${new URL(APP).port}`))).toEqual([]);
+    expect([...origins].filter((host) => !host.endsWith(`localhost:${new URL(APP).port}`))).toEqual(
+      [],
+    );
   });
 
   test("M1-23 header: charcoal bar, logo, page links, Log in and Claim your link", async ({
@@ -116,7 +117,7 @@ test.describe("M1-23 header and hero", () => {
     await expect(claim).toHaveAttribute("href", SIGNUP);
     await expect(claim).toHaveCSS("background-color", BRASS);
     await expect(claim).toHaveCSS("color", INK);
-    for (const id of ["how-it-works", "demos", "design", "blocks", "pricing", "faq"]) {
+    for (const id of ["how-it-works", "demos", "try", "link-in-bio-for", "pricing", "faq"]) {
       await expect(page.locator(`#${id}`)).toHaveCount(1);
     }
   });
@@ -140,15 +141,16 @@ test.describe("M1-23 header and hero", () => {
 
     await expect(
       page.getByText(
-        "Block layouts, a full theme system and your own domain — so your link page looks like your brand, not ours.",
+        "A link-in-bio page that looks like your brand, not ours. Pick your layout, colors and fonts, and connect your own domain on Pro.",
         { exact: true },
       ),
     ).toBeVisible();
+    // The reassurance sits under the claim field while it is empty.
     await expect(
-      page.getByText(
-        `Free forever · No card required · Bring your own domain from ${perMonthBilledYearlyText("pro")}`,
-        { exact: true },
-      ),
+      page
+        .locator("form")
+        .filter({ has: page.locator("#hero-handle") })
+        .getByText("Free forever. No card required.", { exact: true }),
     ).toBeVisible();
 
     // The HYDLNK UI is Public Sans; tenant fonts appear only inside the demo pages.
@@ -182,7 +184,10 @@ test.describe("M1-23 header and hero", () => {
       await expect(video).toHaveAttribute(attribute, "");
     }
     await expect(video).toHaveAttribute("preload", "metadata");
-    await expect(video).toHaveAttribute("poster", /\/marketing\/showreel\/showreel-4x5-poster\.webp$/);
+    await expect(video).toHaveAttribute(
+      "poster",
+      /\/marketing\/showreel\/showreel-4x5-poster\.webp$/,
+    );
     // After the page has loaded, the cut for the viewport is attached and plays.
     await expect(video).toHaveAttribute("data-cut", isMobile ? "tall" : "wide");
     await expect(video).toHaveAttribute("data-shown", "true");
@@ -195,13 +200,18 @@ test.describe("M1-23 header and hero", () => {
     test.skip(!isMobile, "phone project only");
     await open(page);
     await expectNoHorizontalScroll(page);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      390,
+    );
     await expectTapTargets(page);
 
     const nav = page.getByRole("navigation", { name: "Main" });
     await expect(nav.getByRole("link", { name: "Log in" })).toBeVisible();
     await expect(nav.locator(":scope > ul")).toHaveCSS("display", "none");
-    await expect(nav.locator(":scope > a", { hasText: "Claim your link" })).toHaveCSS("display", "none");
+    await expect(nav.locator(":scope > a", { hasText: "Claim your link" })).toHaveCSS(
+      "display",
+      "none",
+    );
 
     const menu = nav.locator("summary[aria-label='Menu']");
     await expect(menu).toBeVisible();
@@ -213,13 +223,18 @@ test.describe("M1-23 header and hero", () => {
       await expect(link).toBeVisible();
       await expect(link).toHaveAttribute("href", href);
     }
-    await expect(nav.locator("details a", { hasText: "Claim your link" })).toHaveAttribute("href", SIGNUP);
+    await expect(nav.locator("details a", { hasText: "Claim your link" })).toHaveAttribute(
+      "href",
+      SIGNUP,
+    );
     await page.keyboard.press("Escape");
     await expect(nav.locator("details")).toHaveJSProperty("open", false);
     await expect(menu).toBeFocused();
 
     const h1 = page.getByRole("heading", { level: 1 });
-    expect(await h1.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(38);
+    expect(
+      await h1.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+    ).toBeGreaterThanOrEqual(38);
     const form = await box(page.locator("form").filter({ has: page.locator("#hero-handle") }));
     const reel = await box(page.locator("[data-showreel]"));
     expect((await box(h1)).y).toBeLessThan(form.y);
@@ -233,8 +248,10 @@ test.describe("M1-23 header and hero", () => {
     test.skip(isMobile, "desktop project only");
     await open(page);
     const nav = page.getByRole("navigation", { name: "Main" });
-    for (const [name] of PAGE_LINKS) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
-    for (const name of ["Log in", "Claim your link"]) await expect(nav.getByRole("link", { name })).toBeVisible();
+    for (const [name] of PAGE_LINKS)
+      await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
+    for (const name of ["Log in", "Claim your link"])
+      await expect(nav.getByRole("link", { name })).toBeVisible();
     await expect(nav.locator("summary[aria-label='Menu']")).toBeHidden();
     const h1 = await box(page.getByRole("heading", { level: 1 }));
     const form = await box(page.locator("form").filter({ has: page.locator("#hero-handle") }));
@@ -250,26 +267,95 @@ test.describe("M1-24 claim form hands off to app signup", () => {
     await open(page);
     const input = page.locator("#hero-handle");
     const form = page.locator("form").filter({ has: input });
-    await expect(page.locator("label[for='hero-handle']")).toHaveText("Choose your handle");
-    expect((await box(page.locator("label[for='hero-handle']"))).width).toBeLessThanOrEqual(1);
+    // The label is visible: it is the first thing the claim panel says.
+    const label = page.locator("label[for='hero-handle']");
+    await expect(label).toHaveText("Choose your handle");
+    await expect(label).toBeVisible();
+    expect((await box(label)).width).toBeGreaterThan(100);
     await expect(input).toHaveAttribute("placeholder", "yourname");
     await expect(input).toHaveAttribute("autocomplete", "off");
     await expect(input).toHaveAttribute("spellcheck", "false");
-    await expect(input).toHaveCSS("font-size", "16px");
+    await expect(input).toHaveCSS("font-size", "18px");
     expect(await input.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/Geist.?Mono/);
     await expect(form.getByText(".hydlnk.com", { exact: true })).toBeVisible();
 
+    // The field is white and the button is brass, both on a charcoal panel: the loudest thing on
+    // the first screen. (DESIGN.md: a brass primary is for charcoal backgrounds.)
+    const field = input.locator("..");
+    await expect(field).toHaveCSS("background-color", WHITE);
+    expect(Math.round((await box(field)).height)).toBe(56);
     const button = form.getByRole("button", { name: "Claim it" });
-    await expect(button).toHaveCSS("background-color", INK);
-    await expect(button).toHaveCSS("color", WHITE);
+    await expect(button).toHaveCSS("background-color", BRASS);
+    await expect(button).toHaveCSS("color", INK);
     await expect(button).toHaveCSS("border-top-left-radius", "4px");
-    expect(Math.round((await box(button)).height)).toBe(44);
+    expect(Math.round((await box(button)).height)).toBe(56);
 
-    await expect(form).toHaveCSS("border-top-color", "rgb(201, 197, 190)");
-    await expect(form).toHaveCSS("border-top-width", "1px");
+    await expect(form).toHaveCSS("background-color", INK);
     await expect(form).toHaveCSS("border-top-left-radius", "6px");
-    await expect(form).toHaveCSS("max-width", "500px");
-    expect((await box(form)).width).toBeLessThanOrEqual(500.5);
+    await expect(form).toHaveCSS("max-width", "520px");
+    expect((await box(form)).width).toBeLessThanOrEqual(520.5);
+  });
+
+  test("M1-24 the line under the field says what the name becomes, and never claims it is free", async ({
+    page,
+  }) => {
+    await open(page);
+    await ready(page);
+    const input = page.locator("#hero-handle");
+    const hint = page.locator(`[id='${(await input.getAttribute("aria-describedby"))!}']`);
+    await expect(hint).toHaveText("Free forever. No card required.");
+    for (const [typed, message, invalid] of [
+      ["wr", "Use at least 3 letters, numbers or dashes.", false],
+      ["wren", "Next, we check that it’s available.", false],
+      ["Wren_Haven", "We’ll use wrenhaven.hydlnk.com.", false],
+      ["-wren", "Handles can’t start or end with a dash.", true],
+      ["a".repeat(31), "Handles can be up to 30 characters.", true],
+    ] as const) {
+      await input.fill(typed);
+      await expect(hint).toHaveText(message);
+      if (invalid) await expect(input).toHaveAttribute("aria-invalid", "true");
+      else await expect(input).not.toHaveAttribute("aria-invalid", "true");
+      await expect(hint).not.toHaveText(/is available|is free|taken/);
+    }
+    await input.fill("");
+    await expect(hint).toHaveText("Free forever. No card required.");
+  });
+
+  test("M1-24 the claim form keeps its charcoal panel colors inside a long-form guide", async ({
+    page,
+  }) => {
+    await page.goto(url(null, "/learn/choosing-a-handle"));
+    const input = page.locator("#guide-handle");
+    const form = page.locator("form").filter({ has: input });
+    await expect(form).toHaveCSS("background-color", INK);
+    const hint = page.locator(`[id='${(await input.getAttribute("aria-describedby"))!}']`);
+    // The guide's prose styles color every paragraph grey; the hint must stay readable on charcoal.
+    await expect(hint).toHaveCSS("color", "rgb(185, 180, 171)");
+    await expect(form.getByRole("button", { name: "Claim it" })).toHaveCSS(
+      "background-color",
+      BRASS,
+    );
+  });
+
+  test("M1-24 the claim field is on the first screen, and submitting it carries the handle to sign-up", async ({
+    page,
+  }) => {
+    await open(page);
+    await ready(page);
+    await stubAppHost(page);
+    const viewport = page.viewportSize()!;
+    const input = page.locator("#hero-handle");
+    const form = page.locator("form").filter({ has: input });
+    // No scrolling: the whole claim panel, button included, is inside the first screen.
+    const panel = await box(form);
+    expect(panel.y).toBeGreaterThanOrEqual(0);
+    expect(panel.y + panel.height).toBeLessThanOrEqual(viewport.height);
+    await expect(input).toBeInViewport({ ratio: 1 });
+    await expect(form.getByRole("button", { name: "Claim it" })).toBeInViewport({ ratio: 1 });
+
+    await input.fill("Wren_Haven");
+    await form.getByRole("button", { name: "Claim it" }).click();
+    await page.waitForURL(`${SIGNUP}?handle=wrenhaven`, { waitUntil: "commit" });
   });
 
   test("M1-24 typing Wren_Haven and clicking Claim it lands on a normalized signup URL", async ({
@@ -372,7 +458,10 @@ test.describe("M1-24 claim form hands off to app signup", () => {
     await open(page);
     await ready(page);
     await page.locator("#hero-handle").fill("Wren_Haven");
-    await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Claim your link" }).click();
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Claim your link" })
+      .click();
     await page.waitForURL(`${SIGNUP}?handle=wrenhaven`, { waitUntil: "commit" });
   });
 
@@ -391,8 +480,12 @@ test.describe("M1-24 claim form hands off to app signup", () => {
       const buttonBox = await box(form.getByRole("button", { name: "Claim it" }));
       const formBox = await box(form);
       expect(buttonBox.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height - 1);
-      expect(buttonBox.width).toBeGreaterThan(formBox.width - 24);
-      expect(await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+      // The hero's panel pads the button by 16px a side; the band's form has no panel.
+      expect(buttonBox.width).toBeGreaterThan(formBox.width - 36);
+      expect(buttonBox.height).toBeGreaterThanOrEqual(44);
+      expect(
+        await input.evaluate((el) => parseFloat(getComputedStyle(el).fontSize)),
+      ).toBeGreaterThanOrEqual(16);
     }
   });
 
@@ -410,7 +503,7 @@ test.describe("M1-24 claim form hands off to app signup", () => {
       const buttonBox = await box(form.getByRole("button", { name: "Claim it" }));
       const centers = [inputBox, suffixBox, buttonBox].map((b) => b.y + b.height / 2);
       expect(Math.max(...centers) - Math.min(...centers)).toBeLessThan(4);
-      expect((await box(form)).width).toBeLessThanOrEqual(500.5);
+      expect((await box(form)).width).toBeLessThanOrEqual(520.5);
     }
   });
 });
@@ -448,44 +541,53 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
     expect(await page.content()).not.toMatch(/Mara Okafor/);
   });
 
-  test("M1-25 #design: resolve chain in order and the Noir token card", async ({ page }) => {
+  test("M1-25 #try: heading, the phone, six themes and the way to sign up", async ({ page }) => {
     await open(page);
-    const design = page.locator("#design");
-    await expect(design).toHaveCSS("background-color", PAGE);
-    await expect(design.getByRole("heading", { level: 2, name: "Every choice is a token." })).toBeVisible();
-    const order = await Promise.all(
-      ["system", "theme", "page", "block"].map(async (chip) => {
-        const b = await design.getByText(chip, { exact: true }).boundingBox();
-        return b!.y * 10_000 + b!.x;
-      }),
+    const section = page.locator("#try");
+    await expect(section).toHaveCSS("background-color", PAGE);
+    await expect(
+      section.getByRole("heading", { level: 2, name: "Make this page yours. No sign-up." }),
+    ).toBeVisible();
+    // The first view is the server-drawn phone; the controls load as the section nears the screen.
+    await expect(section.getByTestId("try-phone")).toBeVisible();
+    await section.scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("try-builder")).toHaveAttribute("data-try-ready", "true", {
+      timeout: 45_000,
+    });
+    await expect(section.locator("input[name$='-theme']")).toHaveCount(6);
+    await expect(
+      section.locator(".try-choice").filter({ has: page.locator("input[name$='-theme']") }),
+    ).toHaveText(["Sage", "Paper", "Ivory", "Noir", "Midnight", "Ember"]);
+    await expect(
+      section.getByRole("link", { name: "Claim your name to keep building" }),
+    ).toHaveAttribute("href", SIGNUP);
+    await expect(section.getByRole("link", { name: "Every feature, in detail" })).toHaveAttribute(
+      "href",
+      "/features",
     );
-    expect(order).toEqual([...order].sort((a, b) => a - b));
-    await expect(design.getByText("Theme · Noir", { exact: true })).toBeVisible();
-    await expect(design.getByText("23 tokens", { exact: true })).toBeVisible();
-    for (const row of ["Color", "Type", "Shape", "Buttons", "Spacing", "Background"]) {
-      await expect(design.getByText(row, { exact: true })).toBeVisible();
-    }
-    await expect(design.getByRole("link", { name: "Explore the design system" })).toHaveAttribute("href", "/design-control");
+    // Plain words: nothing technical on the surface.
+    expect(await section.innerText()).not.toMatch(/token|schema|render|\bCSS\b/i);
   });
 
-  test("M1-25 #blocks: the nine v1 block types", async ({ page }) => {
+  test("M1-25 #try: the nine v1 block types, as plain text first and as buttons once it loads", async ({
+    page,
+  }) => {
+    const NINE = ["Link", "Card", "Header", "Text", "Image", "Social", "Embed", "Grid", "Divider"];
     await open(page);
-    await expect(page.locator("#blocks").getByRole("heading", { level: 3 })).toHaveText([
-      "Link",
-      "Card",
-      "Header",
-      "Text",
-      "Image",
-      "Social",
-      "Embed",
-      "Grid",
-      "Divider",
-    ]);
+    await expect(page.locator("#try .try-static-list li p:first-child")).toHaveText(NINE);
+    await page.locator("#try").scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("try-builder")).toHaveAttribute("data-try-ready", "true", {
+      timeout: 45_000,
+    });
+    await page.getByRole("tab", { name: "Blocks", exact: true }).click();
+    await expect(page.locator("#try .try-add-name")).toHaveText(NINE.map((name) => `Add ${name}`));
   });
 
   test("M1-25 domain and analytics cards: example record and sample numbers", async ({ page }) => {
     await open(page);
-    const domain = page.getByRole("heading", { level: 3, name: "Your domain, not ours." }).locator("xpath=..");
+    const domain = page
+      .getByRole("heading", { level: 3, name: "Your domain, not ours." })
+      .locator("xpath=..");
     await expect(domain.getByText("Pro", { exact: true })).toBeVisible();
     await expect(domain.getByText("CNAME", { exact: true })).toBeVisible();
     // The real CNAME target comes from the editor (per project), never from marketing copy.
@@ -494,7 +596,10 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
     const status = domain.getByText("Verified · SSL issued", { exact: true });
     await expect(status.locator("xpath=..")).toHaveCSS("background-color", "rgb(231, 243, 236)");
     await expect(status).toHaveCSS("color", "rgb(43, 116, 72)");
-    await expect(domain.getByRole("link", { name: "How custom domains work" })).toHaveAttribute("href", "/custom-domains");
+    await expect(domain.getByRole("link", { name: "How custom domains work" })).toHaveAttribute(
+      "href",
+      "/custom-domains",
+    );
 
     const analytics = page
       .getByRole("heading", { level: 3, name: "Analytics that answer something." })
@@ -507,13 +612,18 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
   test("M1-25 sections alternate white and #F4F3F0 with 1px dividers", async ({ page }) => {
     await open(page);
     const sections = page.locator("main > section");
-    const backgrounds = await sections.evaluateAll((els) => els.map((el) => getComputedStyle(el).backgroundColor));
+    const backgrounds = await sections.evaluateAll((els) =>
+      els.map((el) => getComputedStyle(el).backgroundColor),
+    );
     expect(backgrounds).toEqual([WHITE, PAGE, WHITE, PAGE, WHITE, PAGE, WHITE, PAGE, INK]);
     const borders = await sections.evaluateAll((els) =>
-      els.map((el) => `${getComputedStyle(el).borderBottomWidth} ${getComputedStyle(el).borderBottomColor}`),
+      els.map(
+        (el) =>
+          `${getComputedStyle(el).borderBottomWidth} ${getComputedStyle(el).borderBottomColor}`,
+      ),
     );
     for (const index of [0, 1, 2, 3, 4, 5, 6, 7]) expect(borders[index]).toBe(`1px ${LINE}`);
-    for (const id of ["how-it-works", "demos", "design", "blocks", "pricing", "faq"]) {
+    for (const id of ["how-it-works", "demos", "try", "link-in-bio-for", "pricing", "faq"]) {
       await expect(page.locator(`#${id} > div`).first()).toHaveCSS("max-width", "1200px");
     }
   });
@@ -527,10 +637,11 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
     const columns = await page.evaluate(() => {
-      const count = (el: Element | null) => (el ? getComputedStyle(el).gridTemplateColumns.split(" ").length : 0);
+      const count = (el: Element | null) =>
+        el ? getComputedStyle(el).gridTemplateColumns.split(" ").length : 0;
       return {
         steps: count(document.querySelector("#how-it-works ol")),
-        blocks: count(document.querySelector("#blocks ul")),
+        blocks: count(document.querySelector("#try .try-static-list")),
         plans: count(document.querySelector("[data-plan-cards]")),
       };
     });
@@ -546,13 +657,28 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
     test.skip(isMobile, "desktop project only");
     await open(page);
     const ys = new Set<number>();
-    for (const phone of await page.locator("#demos .hl-phone").all()) ys.add(Math.round((await box(phone)).y));
+    for (const phone of await page.locator("#demos .hl-phone").all())
+      ys.add(Math.round((await box(phone)).y));
     expect(ys.size).toBe(1);
+    // The captions wrap under their phones, so the row fits and nothing is clipped at its edges.
+    const row = page.getByRole("region", { name: "Demo pages" });
+    expect(await row.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    for (const figure of await page.locator("#demos figure").all()) {
+      const phone = await box(figure.locator(".hl-phone"));
+      const caption = await box(figure.locator("figcaption"));
+      expect(caption.x).toBeGreaterThanOrEqual(phone.x - 1);
+      expect(caption.x + caption.width).toBeLessThanOrEqual(phone.x + phone.width + 1);
+    }
     const xs = new Set<number>();
-    for (const item of await page.locator("#blocks li").all()) xs.add(Math.round((await box(item)).x));
+    for (const item of await page.locator("#try .try-static-list li").all())
+      xs.add(Math.round((await box(item)).x));
     expect(xs.size).toBe(3);
-    const domain = await box(page.getByRole("heading", { level: 3, name: "Your domain, not ours." }));
-    const analytics = await box(page.getByRole("heading", { level: 3, name: "Analytics that answer something." }));
+    const domain = await box(
+      page.getByRole("heading", { level: 3, name: "Your domain, not ours." }),
+    );
+    const analytics = await box(
+      page.getByRole("heading", { level: 3, name: "Analytics that answer something." }),
+    );
     expect(analytics.x).toBeGreaterThan(domain.x + 200);
     expect(Math.abs(analytics.y - domain.y)).toBeLessThan(4);
   });
@@ -560,18 +686,27 @@ test.describe("M1-25 how it works, demos, tokens, blocks, domain and analytics",
 
 test.describe("M1-26 pricing", () => {
   const card = (page: Page, name: string) =>
-    page.locator("#pricing").getByRole("heading", { level: 3, name, exact: true }).locator("xpath=../../..");
+    page
+      .locator("#pricing")
+      .getByRole("heading", { level: 3, name, exact: true })
+      .locator("xpath=../../..");
 
   test("M1-26 heading and three cards in order with the PLAN v1 lists", async ({ page }) => {
     await open(page);
     const pricing = page.locator("#pricing");
     await expect(pricing.getByText("Pricing", { exact: true })).toBeVisible();
-    await expect(pricing.getByRole("heading", { level: 2, name: "Design is never the paywall." })).toBeVisible();
     await expect(
-      pricing.getByText("No commerce fees on any plan. Cancel anytime from your billing portal.", { exact: true }),
+      pricing.getByRole("heading", { level: 2, name: "Design is never the paywall." }),
+    ).toBeVisible();
+    await expect(
+      pricing.getByText(
+        "We never take a cut of your sales, on any plan. Cancel anytime from your billing portal.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await expect(pricing.getByRole("heading", { level: 3 })).toHaveText(["Free", "Pro", "Studio"]);
-    const lists = async (name: string) => (await card(page, name).locator("li").allTextContents()).map((t) => t.trim());
+    const lists = async (name: string) =>
+      (await card(page, name).locator("li").allTextContents()).map((t) => t.trim());
 
     // Yearly is the default view. innerText is what is on screen: the monthly price sits in the
     // DOM too, hidden by CSS, and textContent would see it.
@@ -584,11 +719,14 @@ test.describe("M1-26 pricing", () => {
     await expect(card(page, "Pro")).not.toContainText(SHOWN_PRICES.monthlyAmount("pro"), shown);
     await expect(card(page, "Studio")).toContainText(SHOWN_PRICES.yearlyHeadline("studio"), shown);
     await expect(card(page, "Studio")).toContainText(SHOWN_PRICES.yearlyNote("studio"), shown);
-    await expect(card(page, "Studio")).not.toContainText(SHOWN_PRICES.monthlyAmount("studio"), shown);
+    await expect(card(page, "Studio")).not.toContainText(
+      SHOWN_PRICES.monthlyAmount("studio"),
+      shown,
+    );
 
     expect(await lists("Free")).toEqual([
       "1 page",
-      "Every block and the full theme system",
+      "Every block, theme and design option",
       "3 saved themes",
       "yourname.hydlnk.com",
       "Per-link clicks, last 30 days",
@@ -612,15 +750,23 @@ test.describe("M1-26 pricing", () => {
     ]);
 
     await expect(card(page, "Pro")).toHaveCSS("border-top-color", INK);
-    await expect(card(page, "Pro").getByText("Recommended", { exact: true })).toHaveCSS("background-color", INK);
+    await expect(card(page, "Pro").getByText("Recommended", { exact: true })).toHaveCSS(
+      "background-color",
+      INK,
+    );
     await expect(card(page, "Free")).toHaveCSS("border-top-color", "rgb(217, 214, 208)");
     await expect(card(page, "Studio")).toHaveCSS("border-top-color", "rgb(217, 214, 208)");
-    await expect(pricing.getByRole("link", { name: "Compare plans" })).toHaveAttribute("href", "/pricing");
+    await expect(pricing.getByRole("link", { name: "Compare plans" })).toHaveAttribute(
+      "href",
+      "/pricing",
+    );
   });
 
   test("M1-26 scope guard: nothing out of v1 anywhere on the page", async ({ page }) => {
     await open(page);
-    expect(await page.content()).not.toMatch(/schedul|csv|invite editors|team access|custom css|version history/i);
+    expect(await page.content()).not.toMatch(
+      /schedul|csv|invite editors|team access|custom css|version history/i,
+    );
   });
 
   test("M1-26 CTA buttons go to app signup and are at least 44px tall", async ({ page }) => {
@@ -632,14 +778,19 @@ test.describe("M1-26 pricing", () => {
     }
   });
 
-  test("M1-26 phone layout: one column in order, full-width buttons", async ({ page, isMobile }) => {
+  test("M1-26 phone layout: one column in order, full-width buttons", async ({
+    page,
+    isMobile,
+  }) => {
     test.skip(!isMobile, "phone project only");
     await open(page, "#pricing");
     await expectNoHorizontalScroll(page);
     const ys: number[] = [];
     const xs = new Set<number>();
     for (const name of ["Free", "Pro", "Studio"]) {
-      const b = await box(page.locator("#pricing").getByRole("heading", { level: 3, name, exact: true }));
+      const b = await box(
+        page.locator("#pricing").getByRole("heading", { level: 3, name, exact: true }),
+      );
       ys.push(b.y);
       xs.add(Math.round(b.x));
     }
@@ -648,7 +799,9 @@ test.describe("M1-26 pricing", () => {
     expect(xs.size).toBe(1);
     for (const name of ["Start free", "Go Pro", "Start Studio"]) {
       const link = page.locator("#pricing").getByRole("link", { name, exact: true });
-      expect((await box(link)).width).toBeGreaterThan((await box(link.locator("xpath=../.."))).width - 60);
+      expect((await box(link)).width).toBeGreaterThan(
+        (await box(link.locator("xpath=../.."))).width - 60,
+      );
     }
   });
 
@@ -658,7 +811,9 @@ test.describe("M1-26 pricing", () => {
   }) => {
     test.skip(isMobile, "desktop project only");
     await open(page, "#pricing");
-    const [free, pro, studio] = await Promise.all(["Free", "Pro", "Studio"].map((name) => box(card(page, name))));
+    const [free, pro, studio] = await Promise.all(
+      ["Free", "Pro", "Studio"].map((name) => box(card(page, name))),
+    );
     expect(free!.x).toBeLessThan(pro!.x);
     expect(pro!.x).toBeLessThan(studio!.x);
     expect(Math.abs(free!.height - pro!.height)).toBeLessThan(1);
@@ -709,24 +864,36 @@ test.describe("M1-27 questions, CTA band and footer", () => {
     await open(page);
     const band = page.locator("main > section").last();
     await expect(band).toHaveCSS("background-color", INK);
-    const h2 = band.getByRole("heading", { level: 2, name: "Claim your name before someone else does." });
+    const h2 = band.getByRole("heading", {
+      level: 2,
+      name: "Claim your name before someone else does.",
+    });
     await expect(h2).toBeVisible();
     const size = await h2.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     if (isMobile) expect(size).toBeGreaterThanOrEqual(30);
     else expect(size).toBe(48);
     await expect(h2).toHaveCSS("text-align", "center");
     const form = page.locator("form").filter({ has: page.locator("#cta-handle") });
-    await expect(form).toHaveCSS("background-color", "rgb(42, 40, 37)");
-    await expect(form).toHaveCSS("border-top-color", "rgb(69, 65, 59)");
-    await expect(page.locator("#cta-handle")).toHaveCSS("color", "rgb(244, 243, 240)");
-    await expect(form.getByText(".hydlnk.com", { exact: true })).toHaveCSS("color", "rgb(169, 164, 155)");
+    // Same white field and brass button as the hero; the band itself is the charcoal panel.
+    await expect(form).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(page.locator("#cta-handle").locator("..")).toHaveCSS("background-color", WHITE);
+    await expect(page.locator("#cta-handle")).toHaveCSS("color", INK);
+    await expect(form.getByText(".hydlnk.com", { exact: true })).toHaveCSS(
+      "color",
+      "rgb(94, 90, 84)",
+    );
     const button = form.getByRole("button", { name: "Claim it" });
     await expect(button).toHaveCSS("background-color", BRASS);
     await expect(button).toHaveCSS("color", INK);
-    await expect(band.getByText("Free forever. Upgrade only when you want your own domain.", { exact: true })).toBeVisible();
+    await expect(
+      band.getByText("Free forever. Upgrade only when you want your own domain.", { exact: true }),
+    ).toBeVisible();
   });
 
-  test("M1-27 footer: brand, copyright, page links, Privacy and Terms", async ({ page, isMobile }) => {
+  test("M1-27 footer: brand, copyright, page links, Privacy and Terms", async ({
+    page,
+    isMobile,
+  }) => {
     await open(page);
     const footer = page.locator("footer");
     await expect(footer).toHaveCSS("background-color", WHITE);
@@ -736,10 +903,17 @@ test.describe("M1-27 questions, CTA band and footer", () => {
     await expect(diamond).toHaveCSS("width", "8px");
     await expect(diamond).toHaveCSS("background-color", BRASS);
     await expect(footer.getByText("HYDLNK", { exact: true })).toBeVisible();
-    await expect(footer.getByText(`© ${new Date().getFullYear()} HYDLNK`, { exact: true })).toBeVisible();
+    await expect(
+      footer.getByText(`© ${new Date().getFullYear()} HYDLNK`, { exact: true }),
+    ).toBeVisible();
 
     const nav = page.getByRole("navigation", { name: "Footer" });
-    for (const [name, path] of [["Privacy", "/privacy"], ["Terms", "/terms"], ["Pricing", "/pricing"], ["FAQ", "/faq"]] as const) {
+    for (const [name, path] of [
+      ["Privacy", "/privacy"],
+      ["Terms", "/terms"],
+      ["Pricing", "/pricing"],
+      ["FAQ", "/faq"],
+    ] as const) {
       const link = nav.getByRole("link", { name, exact: true });
       expect(await link.evaluate((a) => (a as HTMLAnchorElement).href)).toBe(url(null, path));
       const b = await box(link);
@@ -754,13 +928,21 @@ test.describe("M1-27 questions, CTA band and footer", () => {
 
   test("M1-27 heading outline has no skipped levels", async ({ page }) => {
     await open(page);
+    // The try-it phone shows a real page, which has its own name (h1) and headings; it is a picture
+    // of a page (inert, hidden from assistive technology), not part of this page's outline.
     const levels = await page
       .locator("h1, h2, h3, h4, h5, h6")
-      .evaluateAll((els) => els.map((el) => Number(el.tagName.slice(1))));
+      .evaluateAll((els) =>
+        els
+          .filter((el) => !el.closest("[data-page-root]"))
+          .map((el) => Number(el.tagName.slice(1))),
+      );
     expect(levels[0]).toBe(1);
     expect(levels.filter((level) => level === 1)).toHaveLength(1);
     for (let i = 1; i < levels.length; i += 1) {
-      expect(levels[i]!, `heading ${i} follows level ${levels[i - 1]}`).toBeLessThanOrEqual(levels[i - 1]! + 1);
+      expect(levels[i]!, `heading ${i} follows level ${levels[i - 1]}`).toBeLessThanOrEqual(
+        levels[i - 1]! + 1,
+      );
     }
     expect(Math.max(...levels)).toBe(3);
   });
@@ -786,7 +968,10 @@ test.describe("M1-27 questions, CTA band and footer", () => {
     const inputBox = await box(input);
     expect(button.y).toBeGreaterThanOrEqual(inputBox.y + inputBox.height - 1);
     expect(button.width).toBeGreaterThan((await box(form)).width - 24);
-    for (const link of await page.getByRole("navigation", { name: "Footer" }).getByRole("link").all()) {
+    for (const link of await page
+      .getByRole("navigation", { name: "Footer" })
+      .getByRole("link")
+      .all()) {
       const b = await box(link);
       expect(b.x + b.width).toBeLessThanOrEqual(390);
     }
@@ -806,6 +991,6 @@ test.describe("M1-27 questions, CTA band and footer", () => {
     expect(widths.size).toBe(1);
     expect([...widths][0]!).toBeLessThanOrEqual(900);
     const form = page.locator("form").filter({ has: page.locator("#cta-handle") });
-    expect((await box(form)).width).toBeLessThanOrEqual(500.5);
+    expect((await box(form)).width).toBeLessThanOrEqual(520.5);
   });
 });

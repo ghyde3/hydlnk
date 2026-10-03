@@ -5,7 +5,7 @@ import { useRef, type KeyboardEvent } from "react";
 export type DesignView = "tokens" | "preview";
 
 const TABS: readonly { id: DesignView; label: string }[] = [
-  { id: "tokens", label: "Tokens" },
+  { id: "tokens", label: "Style" },
   { id: "preview", label: "Preview" },
 ];
 
@@ -13,7 +13,7 @@ export const designTabId = (view: DesignView) => `design-tab-${view}`;
 export const designPanelId = (view: DesignView) => `design-panel-${view}`;
 
 /**
- * The phone's "Tokens | Preview" segmented control (M3-06), a WAI-ARIA tabs widget: one tab in the
+ * The phone's "Style | Preview" segmented control (M3-06), a WAI-ARIA tabs widget: one tab in the
  * tab order, ArrowLeft/ArrowRight (wrapping), Home and End move and select. Same look as the
  * editor's "Blocks | Preview": 6px track on --hl-track, white selected item on a 1px ring, 44px
  * tall, hidden from 760px up.

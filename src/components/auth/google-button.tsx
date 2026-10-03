@@ -93,9 +93,9 @@ interface GoogleButtonProps {
  * Hidden entirely when NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set; email sign-in works alone then.
  *
  * Sequence: the page loads Google's script, asks the server for a nonce (`prepareGoogleSignIn`:
- * the browser only ever gets sha256 of it), initialises Google with that and draws the button.
+ * the browser only ever gets sha256 of it), initializes Google with that and draws the button.
  * A credential from Google goes to `signInWithGoogle`. Every attempt spends the nonce, so after a
- * failure the page asks for a new one and initialises Google again; until that is done the button
+ * failure the page asks for a new one and initializes Google again; until that is done the button
  * is inert. Two tabs on /login share one nonce cookie, so the older tab's first press can fail with
  * "expired"; it recovers by itself.
  *
@@ -134,8 +134,8 @@ function GoogleSignIn({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Google keeps the callback it was initialised with; an Effect Event always reads the current
-  // handle and handlers instead of the ones from the render that initialised it.
+  // Google keeps the callback it was initialized with; an Effect Event always reads the current
+  // handle and handlers instead of the ones from the render that initialized it.
   const onCredential = useEffectEvent(async (credential: string) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -159,16 +159,16 @@ function GoogleSignIn({
     setBusy(false);
     if (result.kind === "handle") onHandleRefused?.(result);
     else setError(result.message);
-    // The attempt spent the nonce: get a new one and initialise Google again.
+    // The attempt spent the nonce: get a new one and initialize Google again.
     setPhase("refreshing");
     setEpoch((n) => n + 1);
   });
 
-  // Get a nonce, initialise Google with its hash and draw the button. Runs when the script is
+  // Get a nonce, initialize Google with its hash and draw the button. Runs when the script is
   // there, and again after every attempt (epoch).
   useEffect(() => {
     if (!scriptReady) return;
-    let cancelled = false;
+    let canceled = false;
     void (async () => {
       let nonce: string | null = null;
       try {
@@ -177,7 +177,7 @@ function GoogleSignIn({
       } catch {
         // Offline or the server failed: the unavailable note below says so.
       }
-      if (cancelled) return;
+      if (canceled) return;
       const gsi = window.google?.accounts?.id;
       const box = boxRef.current;
       if (!nonce || !gsi || !box) {
@@ -197,7 +197,7 @@ function GoogleSignIn({
       setPhase("ready");
     })();
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, [scriptReady, epoch, clientId]);
 

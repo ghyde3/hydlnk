@@ -6,10 +6,10 @@ import { HEX_ERROR_MESSAGE, inkOn, isFullHex, normalizeHex, sameColor } from "@/
 import type { TokenSet } from "@/lib/theme";
 
 /**
- * Colour on the Design screen (M3-08): six accent swatches and one row for each of the eight colour
- * tokens (Design.dc.html). A row has a swatch that opens the native colour picker, the token name
+ * Color on the Design screen (M3-08): six accent swatches and one row for each of the eight color
+ * tokens (Design.dc.html). A row has a swatch that opens the native color picker, the token name
  * and a hex field. Everything is written to the draft as uppercase #RRGGBB; a hex field that does
- * not hold a colour shows its message and leaves the draft on the last valid value.
+ * not hold a color shows its message and leaves the draft on the last valid value.
  */
 
 const ACCENTS = [
@@ -62,7 +62,7 @@ function ColorRow({
   function onInput(text: string): void {
     setTyping({ text, base: value });
     // A complete six-digit hex applies as it is typed; shorthand waits for blur so typing
-    // "#C9A86A" never passes through the colour "#C9A".
+    // "#C9A86A" never passes through the color "#C9A".
     const hex = normalizeHex(text);
     if (hex !== null && isFullHex(text)) onChange(hex);
   }
@@ -84,7 +84,7 @@ function ColorRow({
     >
       <input
         type="color"
-        aria-label={`${name} colour`}
+        aria-label={`${name} color`}
         value={pickerValue(value)}
         onChange={(event) => {
           setTyping(null);
@@ -122,7 +122,7 @@ function ColorRow({
 export function ColorSection({ resolved, setToken }: DesignSectionProps) {
   /**
    * A new accent. Buttons that follow the accent (their fill is the accent today) keep following
-   * it, with ink that reads on the new colour; a theme with its own button colour is left alone.
+   * it, with ink that reads on the new color; a theme with its own button color is left alone.
    */
   function setAccent(hex: string): void {
     const followed = sameColor(resolved.buttonBg, resolved.accent);

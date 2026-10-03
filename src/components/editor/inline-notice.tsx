@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 
 /**
  * An inline error with at most one action: "Couldn’t publish. Your draft is safe. Try again." and
- * its Retry button (M5-15). `role="alert"`, DESIGN.md error colours, a 44px action. The copy comes
+ * its Retry button (M5-15). `role="alert"`, DESIGN.md error colors, a 44px action. The copy comes
  * from the caller; nothing from a server error ever reaches it.
  */
 export function InlineNotice({

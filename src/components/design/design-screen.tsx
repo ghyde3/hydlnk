@@ -45,7 +45,7 @@ export interface DesignScreenProps {
 }
 
 /**
- * The Design screen (M3-06): the page's theme tokens beside a live preview (Tokens | Preview tabs
+ * The Design screen (M3-06): the page's theme tokens beside a live preview (Style | Preview tabs
  * on a phone). It edits the same draft the editor does, through the editor's own autosave
  * (`useAutosave`, a PATCH of `{draft}` with rev + 1 under the user's session), so a token change
  * lands in `draft.theme.overrides` and nothing is published until Publish.
@@ -156,7 +156,7 @@ export function DesignScreen(props: DesignScreenProps) {
       <div className="flex flex-1 flex-col gap-8 px-4 py-3 hl:flex-row hl:items-start hl:gap-8 hl:px-8 hl:py-6">
         <section
           id={designPanelId("tokens")}
-          aria-label={isDesktop ? "Theme tokens" : undefined}
+          aria-label={isDesktop ? "Style settings" : undefined}
           aria-labelledby={isDesktop ? undefined : designTabId("tokens")}
           role={isDesktop ? undefined : "tabpanel"}
           className={`min-w-0 max-w-[720px] flex-col gap-3 hl:flex hl:flex-1 ${

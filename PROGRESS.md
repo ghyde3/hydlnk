@@ -2,6 +2,24 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-03 — Release: Wave E (custom domains and analytics)
+
+- PR #12 merged, merge commit ce546bb. Migrations applied through the release-migrations workflow (run 37098223967): 20261004000001_domains, 20261004000002_analytics, 20261004000003_rate_limit, 20261004000004_traffic_flags, 20261004000005_admin_audit_traffic. Deployment https://vercel.com/ghyde3s-projects/hydlnk/J3ZHGcNzZus49axTCYmsyVeS9Xkz (success).
+- Checks: CI Verify green; local `pnpm verify` PASS (3437 unit, pgTAP PASS); full browser suite deferred on Gary's instruction until Waves E–H and marketing v3 land; `pnpm test:e2e:prod` 12/12; live probes: POST /api/cron/verify-domains without a secret 401, POST /api/e 204, /r on the marketing host 404, /domains signed out redirects to /login.
+- Gary's production steps: new CRON_SECRET in Vercel (then redeploy) and the same value plus https://app.hydlnk.com in Supabase Vault (`hydlnk_cron_secret`, `hydlnk_app_base_url`); optional SMTP_* and EMAIL_FROM for the domain-live email; check Dashboard → Integrations → Cron for rollup-daily-stats, purge-old-events, flag-high-traffic, verify-pending-domains, purge-rate-limit-hits.
+- Open: M4-09 (*.vercel.app step), M4-21 (beacon on a custom host in a browser), M4-35 (real domain next day).
+
+## 2026-10-03 — Marketing v3: hero claim panel, try-it builder, link-in-bio pages, copy sweep
+
+- **Asked by Gary (2026-10-03):** landing pages per platform and creator type, a clickable demo builder for the theme and blocks sections, a CRO pass on the hero claim, American spelling and plain benefit language everywhere.
+- **Hero:** the claim is a charcoal panel with a 56px white field showing `yourname.hydlnk.com` as you type and a brass "Claim it" button (brass primary only on charcoal, per DESIGN.md); the CTA band and guide forms match. Line under the field: "Free forever. No card required." No fake availability check (the real one lives on the app host).
+- **Try-it builder** (`src/components/marketing/try/`): replaces the home `#design` and `#blocks` sections with one `#try` section. Six real system themes, simple style controls, tap-to-add blocks, live phone preview drawn by the real page renderer; server-rendered until scrolled near, then a 51 KB chunk hydrates. Reused on every landing page with a preset.
+- **Landing pages:** `/link-in-bio` hub plus tiktok, instagram, youtube, twitch, x, musicians, podcasters, artists, small-business, coaches; FAQPage + BreadcrumbList JSON-LD; sitemap and a footer column; `AudienceStrip` on the home page.
+- **Copy sweep:** American spelling in marketing and app UI (editor, design, themes, blocks, billing, auth, media, publish errors); jargon removed from marketing ("Every choice is a token." is gone; `/design-control` rewritten); Design tab "Tokens" is now "Style". `tests/unit/marketing-copy.test.ts` guards spelling, jargon, exclamation marks and em dashes. Not swept yet (Wave E owned them): `src/components/settings/`, `src/components/page/`.
+- **Visible strings in passing features that changed on Gary's direction** (features.json is not reworded; these steps now read with the American spelling / new label): M1-25 (`#design` section and "Every choice is a token." replaced by `#try`), M3-05 ("valid colour" -> "valid color"), M3-06 (tab "Tokens" -> "Style", region "Theme tokens" -> "Style settings"), M3-08 ("Enter a hex colour like #C9A86A." -> "color", aria-label "colour" -> "color").
+- **Evidence:** typecheck, lint clean; `pnpm test` 2871 passed; Playwright (HL_DEV_PORT=3200, --workers=2) marketing + m1/landing + m1/auth-signup-layout 187 passed; nine specs touched by the sweep (m2/editor-reorder, m3/design-*, m3/themes-*, m5/states-design) 113 passed; axe clean and no horizontal overflow on /, /link-in-bio, three landing pages, /design-control, /pricing, /features at 390 and 1440.
+- **Known issues:** the hero showreel video still shows "Every choice is a token." and token names (baked into `design/showreel*`; needs a re-render). Many m1/m2/m5 specs hard-code port 3000 (fine on the main checkout). Full browser suite deferred per Gary until after Waves E–H.
+
 ## 2026-10-03 — Wave E: custom domains and analytics
 
 - **Built (six builders, integrated by one):** custom domains (core: M4-09, M4-11, M4-12, M4-13, M4-15 server, M4-17 server, M5-23; Domains screen: M4-10, M4-14, M4-15 UI, M4-16, M4-17 UI, M5-18), analytics (ingest: M4-20 to M4-23, M5-01, M5-02; database: M4-24, M4-25, M4-30 RLS part, M5-10; dashboard: M4-26 to M4-30, M5-17) and the downgrade and deletion lifecycle (M4-33, M4-34).

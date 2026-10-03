@@ -4,7 +4,7 @@
  */
 
 /* Plan comparison: a normal table from 760px; below it, each row is the feature name over three
-   labelled cells. Roles on the elements keep the table semantics when display changes. */
+   labeled cells. Roles on the elements keep the table semantics when display changes. */
 @media (max-width: 759px) {
   .compare thead {
     position: absolute;
@@ -115,7 +115,7 @@
   display: none;
 }
 
-/* Forced colours drop backgrounds and shadows: underline the selected period instead. */
+/* Forced colors drop backgrounds and shadows: underline the selected period instead. */
 @media (forced-colors: active) {
   .bt-option:has(input:checked) {
     text-decoration: underline 2px;

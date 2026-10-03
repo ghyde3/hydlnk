@@ -24,7 +24,7 @@ const SPLITS = [
 ] as const;
 
 /**
- * A still of the analytics dashboard with sample numbers (labelled as such): KPI strip, daily
+ * A still of the analytics dashboard with sample numbers (labeled as such): KPI strip, daily
  * views and clicks, clicks per link and the referrer, device and country splits. Decorative.
  */
 export function AnalyticsMock({ compact = false }: { compact?: boolean }) {

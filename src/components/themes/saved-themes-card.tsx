@@ -55,7 +55,9 @@ export function SavedThemesCard({
         >
           Saved themes
         </h2>
-        <span className="text-xs text-text-2">Applying one replaces page-level tokens</span>
+        <span className="text-xs text-text-2">
+          Applying one replaces your page’s own style changes
+        </span>
       </div>
 
       <div role="status" aria-live="polite" data-testid="theme-message-region">

@@ -179,12 +179,12 @@ export const NORTHFOLD: DemoBrand = {
   name: "Northfold Studio",
   handle: "northfold",
   kind: "a photography studio",
-  bio: "Landscape and still-life photography. Prints, licensing and studio hire.",
+  bio: "Landscape and still-life photography. Prints, licensing and studio rental.",
   avatar: { image: "northfold-avatar", alt: "A pine forest in morning fog" },
   social: ["instagram", "website", "email"],
   blocks: [
     { type: "link", label: "Print shop" },
-    { type: "link", label: "Hire the studio" },
+    { type: "link", label: "Rent the studio" },
     { type: "image", image: "northfold-image", alt: "A misty headland above a calm sea at blue hour" },
     {
       type: "grid",
@@ -198,7 +198,7 @@ export const NORTHFOLD: DemoBrand = {
       title: "The studio",
       caption: "Daylight room, paper sweeps, by the hour",
       image: "northfold-card",
-      alt: "An empty photo studio with a grey paper backdrop and a softbox",
+      alt: "An empty photo studio with a gray paper backdrop and a softbox",
     },
   ],
   theme: SMOKE,

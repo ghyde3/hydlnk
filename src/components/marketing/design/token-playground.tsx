@@ -13,7 +13,7 @@ const GROUPS: Group[] = [
   {
     name: "tp-theme",
     legend: "Theme",
-    hint: "A complete set of 23 tokens.",
+    hint: "A complete look: colors, fonts, shapes and spacing.",
     options: [
       { value: "smoke", label: "Smoke" },
       { value: "noir", label: "Noir" },
@@ -22,11 +22,11 @@ const GROUPS: Group[] = [
   },
   {
     name: "tp-button",
-    legend: "buttonStyle",
-    hint: "Overrides the theme’s button style.",
+    legend: "Button style",
+    hint: "Change just the buttons.",
     options: [
-      { value: "theme", label: "Theme" },
-      { value: "fill", label: "Fill" },
+      { value: "theme", label: "Theme default" },
+      { value: "fill", label: "Solid" },
       { value: "outline", label: "Outline" },
       { value: "soft", label: "Soft" },
       { value: "shadow", label: "Shadow" },
@@ -35,22 +35,22 @@ const GROUPS: Group[] = [
   },
   {
     name: "tp-radius",
-    legend: "radius",
-    hint: "Corners on buttons, cards and tiles.",
+    legend: "Corners",
+    hint: "Buttons, cards and tiles.",
     options: [
-      { value: "theme", label: "Theme" },
-      { value: "0", label: "0" },
-      { value: "8", label: "8" },
-      { value: "16", label: "16" },
-      { value: "28", label: "28" },
+      { value: "theme", label: "Theme default" },
+      { value: "0", label: "Square" },
+      { value: "8", label: "Soft" },
+      { value: "16", label: "Round" },
+      { value: "28", label: "Rounder" },
     ],
   },
   {
     name: "tp-font",
-    legend: "fontHeading",
+    legend: "Heading font",
     hint: "The name, headers and card titles.",
     options: [
-      { value: "theme", label: "Theme" },
+      { value: "theme", label: "Theme default" },
       { value: "fraunces", label: "Fraunces" },
       { value: "instrument", label: "Instrument Serif" },
       { value: "geist", label: "Geist" },
@@ -58,13 +58,13 @@ const GROUPS: Group[] = [
   },
   {
     name: "tp-bg",
-    legend: "bgType",
-    hint: "Solid colour, gradient or a photo.",
+    legend: "Background",
+    hint: "A flat color, a gradient or a photo.",
     options: [
-      { value: "theme", label: "Theme" },
-      { value: "solid", label: "Solid" },
+      { value: "theme", label: "Theme default" },
+      { value: "solid", label: "Flat" },
       { value: "gradient", label: "Gradient" },
-      { value: "image", label: "Image" },
+      { value: "image", label: "Photo" },
     ],
   },
 ];
@@ -83,7 +83,7 @@ export function TokenPlayground() {
         {GROUPS.map((group) => (
           <fieldset key={group.name} className="min-w-0">
             <legend className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="font-mono text-[13px] font-medium text-ink">{group.legend}</span>
+              <span className="text-sm font-semibold text-ink">{group.legend}</span>
               <span className="text-[13px] text-text-2">{group.hint}</span>
             </legend>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -103,9 +103,8 @@ export function TokenPlayground() {
           </fieldset>
         ))}
         <p className="text-sm leading-[1.6] text-text-2">
-          This is how resolution works in the editor too: a theme sets every token, and anything
-          you set on the page wins over it. Choose <span className="font-mono">Theme</span> to
-          take an override off again.
+          The editor works the same way. A theme sets the whole look, and anything you change on
+          your page wins over it. Choose Theme default to undo a change.
         </p>
       </div>
       <figure className="flex flex-col items-center gap-3 justify-self-center">

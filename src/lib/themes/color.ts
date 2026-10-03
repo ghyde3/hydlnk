@@ -1,5 +1,5 @@
 /**
- * Colour maths for themes and per-block colour overrides. Pure, no dependencies.
+ * Color math for themes and per-block color overrides. Pure, no dependencies.
  *
  * Two different measures, on purpose:
  *   - `perceivedBrightness` is the formula the Design mockup uses to decide dark ink or light ink
@@ -8,11 +8,11 @@
  *   - `relativeLuminance` and `contrastRatio` are WCAG 2.x: the 4.5:1 checks of M3-03 use them.
  */
 
-/** Ink used on a light colour, and on a dark one (Design.dc.html: #15110B and #F7F3EC). */
+/** Ink used on a light color, and on a dark one (Design.dc.html: #15110B and #F7F3EC). */
 export const INK_ON_LIGHT = "#15110B";
 export const INK_ON_DARK = "#F7F3EC";
 
-/** A colour is "light" above this perceived brightness. */
+/** A color is "light" above this perceived brightness. */
 export const LIGHT_THRESHOLD = 0.55;
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -21,9 +21,9 @@ export function isHexColor(value: unknown): value is string {
   return typeof value === "string" && HEX.test(value);
 }
 
-/** `#RRGGBB` -> [r, g, b] (0..255). Throws on anything else, so a bad value never becomes NaN maths. */
+/** `#RRGGBB` -> [r, g, b] (0..255). Throws on anything else, so a bad value never becomes NaN math. */
 export function hexToRgb(hex: string): [number, number, number] {
-  if (!isHexColor(hex)) throw new Error(`Not a #RRGGBB colour: ${String(hex)}`);
+  if (!isHexColor(hex)) throw new Error(`Not a #RRGGBB color: ${String(hex)}`);
   return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
 }
 
@@ -37,7 +37,7 @@ export function isLightColor(hex: string): boolean {
   return perceivedBrightness(hex) > LIGHT_THRESHOLD;
 }
 
-/** Dark ink on a light colour, light ink on a dark one. */
+/** Dark ink on a light color, light ink on a dark one. */
 export function inkFor(hex: string): string {
   return isLightColor(hex) ? INK_ON_LIGHT : INK_ON_DARK;
 }
@@ -53,7 +53,7 @@ export function relativeLuminance(hex: string): number {
   return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 }
 
-/** WCAG contrast ratio between two colours, 1..21. */
+/** WCAG contrast ratio between two colors, 1..21. */
 export function contrastRatio(a: string, b: string): number {
   const x = relativeLuminance(a);
   const y = relativeLuminance(b);

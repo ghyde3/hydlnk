@@ -48,7 +48,7 @@ test.describe("M3-06 Design screen", () => {
     await expect(page.getByRole("link", { name: "Done" })).toBeVisible();
 
     // Two columns: token sections (max 720px) and the live preview with a 310x660 bezel.
-    const tokens = page.getByRole("region", { name: "Theme tokens" });
+    const tokens = page.getByRole("region", { name: "Style settings" });
     await expect(tokens).toBeVisible();
     expect((await tokens.boundingBox())!.width).toBeLessThanOrEqual(720);
     const preview = page.getByRole("region", { name: "Live preview" });
@@ -62,7 +62,7 @@ test.describe("M3-06 Design screen", () => {
     // The preview renders the page's real blocks through PageRenderer: same --t-* values as live.
     await expect(previewRoot(page).locator("[data-block-type='link']").first()).toBeVisible();
     const live = await page.context().newPage();
-    await live.goto(`http://${user.handle}.localhost:3000/`);
+    await live.goto(url(user.handle));
     const publicVars = await tokenVars(live.locator("[data-page-root]"));
     const previewVars = await tokenVars(previewRoot(page));
     expect(Object.keys(previewVars).length).toBeGreaterThanOrEqual(23);
@@ -95,7 +95,7 @@ test.describe("M3-06 Design screen", () => {
     // Tokens is selected by default; the preview pane is hidden.
     const tablist = page.getByRole("tablist", { name: "Design view" });
     await expect(tablist).toBeVisible();
-    const tokensTab = tablist.getByRole("tab", { name: "Tokens" });
+    const tokensTab = tablist.getByRole("tab", { name: "Style" });
     const previewTab = tablist.getByRole("tab", { name: "Preview" });
     await expect(tokensTab).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("button", { name: "Accent Brass" })).toBeVisible();

@@ -5,7 +5,7 @@ import { rootOrigin } from "@/lib/routing/urls";
 import { BrandHandlePill, BrandHandleProvider } from "./brand-handle";
 
 const BULLETS = [
-  "Every block and the full theme system",
+  "Every block, theme and design option",
   "Per-link analytics from day one",
   "Bring your own domain whenever you’re ready",
 ];

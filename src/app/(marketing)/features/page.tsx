@@ -21,7 +21,7 @@ export const metadata: Metadata = marketingMetadata({
   path: "/features",
   title: "Features",
   description:
-    "Nine block types, a profile, an editor with a live phone preview, autosaved drafts and an explicit Publish. Every feature is on every plan, free included.",
+    "Nine kinds of blocks, a profile, an editor with a live phone preview, drafts that save themselves and a Publish button you control. Every feature is on every plan, free included.",
   image: "features",
 });
 
@@ -44,7 +44,7 @@ function FeatureList({ items }: { items: { title: string; body: string; icon: Re
 const EDITOR = [
   {
     title: "A preview you can trust",
-    body: "The phone preview beside the editor is drawn by the same code as your public page, so what you see is what visitors get.",
+    body: "The phone preview beside the editor shows your page exactly as visitors will see it, so what you see is what they get.",
     icon: (
       <Icon>
         <rect x="7" y="3" width="10" height="18" rx="2" />
@@ -96,7 +96,7 @@ const PUBLISHING = [
   },
   {
     title: "Checked before it goes live",
-    body: "Publish checks that every link is a complete http or https address and that every visible block is filled in, and tells you what to fix.",
+    body: "Publish checks that every link is a complete web address and every visible block is filled in, and tells you what to fix.",
     icon: (
       <Icon>
         <path d="M5 12.5l4.5 4.5L19 7.5" />
@@ -115,7 +115,7 @@ const PUBLISHING = [
   },
   {
     title: "Fast under load",
-    body: "Published pages are cached at the edge, so they load quickly and keep serving through traffic spikes, on every plan.",
+    body: "Published pages are stored close to your visitors, so they open fast and keep working through traffic spikes, on every plan.",
     icon: (
       <Icon>
         <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
@@ -127,7 +127,7 @@ const PUBLISHING = [
 const SAFETY = [
   {
     title: "Only real web links",
-    body: "Links have to be http or https addresses. Anything else is refused when you save.",
+    body: "Links have to be real web addresses, starting with http:// or https://. Anything else is refused when you save.",
     icon: (
       <Icon>
         <path d="M10 14l4-4" />
@@ -147,7 +147,7 @@ const SAFETY = [
   },
   {
     title: "Reserved names",
-    body: "Handles that could pass for HYDLNK itself or for well-known services are reserved, so nobody can claim them to impersonate.",
+    body: "Handles that could pass for HYDLNK itself or for well-known services are reserved, so nobody can claim them to pose as someone else.",
     icon: (
       <Icon>
         <rect x="5" y="11" width="14" height="9" rx="2" />
@@ -221,7 +221,7 @@ export default function FeaturesPage() {
             <ul className="mt-6 flex flex-col gap-3 text-[15px] leading-[1.6] text-text-2">
               <li>
                 <strong className="font-semibold text-ink">Photo.</strong> Upload, replace or
-                remove it. Without one, your initials stand in, drawn in your accent colour.
+                remove it. Without one, your initials stand in, drawn in your accent color.
               </li>
               <li>
                 <strong className="font-semibold text-ink">Display name.</strong> Up to 60
@@ -298,7 +298,7 @@ export default function FeaturesPage() {
           eyebrow="Safe by default"
           titleId="safety-title"
           title="A link people can trust tapping."
-          lead="Open sign-up attracts scammers, so the guard rails are part of the product, not an add-on."
+          lead="Anyone can sign up, so the safety checks are built in, not bolted on."
         />
         <div className="mt-10">
           <FeatureList items={SAFETY} />

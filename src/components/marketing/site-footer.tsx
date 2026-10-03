@@ -5,13 +5,14 @@ const FOOTER_LINK =
   "inline-flex min-h-11 min-w-11 items-center text-sm text-text-2 hover:text-ink hover:underline underline-offset-4";
 
 /**
- * White footer with a 1px top divider: the brand, three link columns (Product, Learn, Legal) and
- * a bottom row with the copyright and the support address. Links are 44px tall on every width.
+ * White footer with a 1px top divider: the brand, four link columns (Product, Link in bio for,
+ * Learn, Legal) and a bottom row with the copyright and the support address. Links are 44px tall
+ * on every width.
  */
 export function SiteFooter() {
   return (
     <footer className="border-t border-line bg-surface">
-      <div className="mx-auto grid w-full max-w-[1200px] gap-x-6 gap-y-8 px-6 pt-12 pb-6 hl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+      <div className="mx-auto grid w-full max-w-[1200px] gap-x-6 gap-y-8 px-6 pt-12 pb-6 hl:grid-cols-[minmax(0,1.2fr)_repeat(4,minmax(0,1fr))]">
         <div className="flex flex-col gap-3">
           <div className="flex min-h-11 items-center gap-2.5">
             <span aria-hidden="true" className="inline-block size-2 rotate-45 bg-brass" />
@@ -23,7 +24,7 @@ export function SiteFooter() {
         </div>
         <nav
           aria-label="Footer"
-          className="grid grid-cols-2 gap-x-6 gap-y-8 hl:col-span-3 hl:grid-cols-3"
+          className="grid grid-cols-2 gap-x-6 gap-y-8 hl:col-span-4 hl:grid-cols-4"
         >
           {FOOTER_COLUMNS.map((column) => (
             <div key={column.title}>

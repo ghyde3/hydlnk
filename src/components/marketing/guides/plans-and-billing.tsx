@@ -8,14 +8,14 @@ export const plansAndBilling: GuideBody = {
     ["plans", "The three plans"],
     ["upgrade", "Upgrading"],
     ["manage", "Managing billing"],
-    ["cancel", "Cancelling"],
+    ["cancel", "Canceling"],
     ["limits", "How limits work"],
     ["delete", "Deleting your account"],
   ],
   content: (
     <>
       <p>
-        HYDLNK is free for one page with every block and the full theme system. You pay when you
+        HYDLNK is free for one page with every block, theme and design option. You pay when you
         want your own domain, more pages or more history, never to make your page look good.
       </p>
 
@@ -49,8 +49,8 @@ export const plansAndBilling: GuideBody = {
       <p>
         Prices are in US dollars. Paying yearly costs less than twelve monthly payments, and the
         monthly figure for a yearly plan is always shown with “billed yearly”: you pay the whole
-        year at once. See <Link href="/pricing#compare">the full comparison</Link>. There are no
-        commerce fees on any plan.
+        year at once. See <Link href="/pricing#compare">the full comparison</Link>. We never take a
+        cut of your sales, on any plan.
       </p>
       <p>
         HYDLNK doesn’t sell or register domains. Pro includes 1 custom domain and Studio 15; you
@@ -73,7 +73,7 @@ export const plansAndBilling: GuideBody = {
         <li>cancel your plan.</li>
       </ul>
 
-      <h2 id="cancel">Cancelling</h2>
+      <h2 id="cancel">Canceling</h2>
       <p>
         Cancel at any time in the portal. Your paid plan stays active until the end of the period
         you’ve already paid for; after that, your account moves to Free. The{" "}

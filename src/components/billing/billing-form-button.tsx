@@ -30,7 +30,7 @@ export function BillingFormButton({
   fields: Record<string, string>;
   children: ReactNode;
   variant?: BillingButtonVariant;
-  /** Extra classes (width, for instance); the 44px height and the colours come from `variant`. */
+  /** Extra classes (width, for instance); the 44px height and the colors come from `variant`. */
   className?: string;
   /** Shown while the request is in flight; the label stays when omitted. */
   pendingLabel?: string;

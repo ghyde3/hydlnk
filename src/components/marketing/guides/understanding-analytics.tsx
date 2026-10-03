@@ -87,8 +87,8 @@ export const understandingAnalytics: GuideBody = {
           Someone who taps and closes the page before it loads counts in one and not the other.
         </li>
         <li>
-          Views are counted by a small beacon, which some browser blockers stop. Clicks are counted
-          on our side, so clicks are the more complete number.
+          Views are counted by a small signal your page sends, which some ad blockers stop. Clicks
+          are counted on our side, so clicks are the more complete number.
         </li>
         <li>
           Known bots and crawlers are filtered out, so link previews and search engines don’t
@@ -102,9 +102,9 @@ export const understandingAnalytics: GuideBody = {
       <h2 id="privacy">How your visitors stay private</h2>
       <p>
         HYDLNK sets no cookies on your page and loads no tracking scripts. Visitor IP addresses
-        are never stored: unique visitors come from a one-way hash of the IP address and browser,
-        mixed with a value that changes every day. Individual events are kept for 90 days and then
-        rolled up into daily totals. The details are in the{" "}
+        are never stored: unique visitors come from a scrambled, one-way code made from the IP
+        address and browser, mixed with a value that changes every day. Individual views and
+        clicks are kept for 90 days and then combined into daily totals. The details are in the{" "}
         <Link href="/privacy">privacy policy</Link>.
       </p>
     </>

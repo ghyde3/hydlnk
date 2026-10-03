@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { IVORY, NOIR, SMOKE, WRENHAVEN, type DemoTheme } from "@/components/marketing/demo/brands";
+import { lookLine } from "@/components/marketing/demo/demo-gallery";
 import { DemoPage, PhoneFrame } from "@/components/marketing/demo/demo-page";
 import { TokenPlayground } from "@/components/marketing/design/token-playground";
 import { marketingMetadata } from "@/components/marketing/metadata";
@@ -19,66 +20,66 @@ export const metadata: Metadata = marketingMetadata({
   path: "/design-control",
   title: "Design",
   description:
-    "Every visual choice on a HYDLNK page is one of 23 tokens: colour, type, shape, space and background. Start from a theme, override what you like, save it and reuse it.",
+    "Start from a theme, then change any color, font, button or background until your page looks like your brand. Save your look and use it on every page.",
   image: "design",
 });
 
-const TOKEN_GROUPS: { group: string; tokens: [string, string][] }[] = [
+const SETTING_GROUPS: { group: string; settings: [string, string][] }[] = [
   {
-    group: "Colour",
-    tokens: [
-      ["bg", "Page background"],
-      ["surface", "Cards and grid tiles"],
-      ["text", "Main text"],
-      ["textMuted", "Bio, captions and other secondary text"],
-      ["accent", "Avatar ring, card titles, outlines and highlights"],
-      ["buttonBg", "Button fill"],
-      ["buttonText", "Text on filled buttons"],
-      ["border", "Edges of cards, tiles and icons"],
+    group: "Color",
+    settings: [
+      ["Page background", "The color behind everything"],
+      ["Cards and tiles", "The fill of cards and grid tiles"],
+      ["Text", "Your main text"],
+      ["Secondary text", "Bio, captions and other small print"],
+      ["Accent", "Avatar ring, card titles, outlines and highlights"],
+      ["Button color", "The fill of buttons"],
+      ["Button text", "Text on filled buttons"],
+      ["Borders", "Edges of cards, tiles and icons"],
     ],
   },
   {
     group: "Type",
-    tokens: [
-      ["fontHeading", "Your name, headers and card titles"],
-      ["fontBody", "Everything else"],
-      ["scale", "Overall text size, from 0.875× to 1.25×"],
-      ["weightHeading", "Heading weight, 400 to 800"],
-      ["letterCase", "Headings as written, or in capitals"],
+    settings: [
+      ["Heading font", "Your name, headers and card titles"],
+      ["Body font", "Everything else"],
+      ["Text size", "Make all text smaller or larger"],
+      ["Heading weight", "How bold your headings are"],
+      ["Letter case", "Headings as written, in capitals or in lowercase"],
     ],
   },
   {
     group: "Shape",
-    tokens: [
-      ["radius", "Corners, from 0 to 32 px"],
-      ["borderWidth", "Edge thickness, from 0 to 4 px"],
-      ["buttonStyle", "Fill, outline, soft, shadow or pill"],
+    settings: [
+      ["Corner radius", "From square corners to fully rounded"],
+      ["Border width", "How thick the edges are, from none to 4 px"],
+      ["Button style", "Solid, outline, soft, shadow or pill"],
     ],
   },
   {
     group: "Space",
-    tokens: [
-      ["density", "Compact, regular or airy spacing"],
-      ["maxWidth", "Column width, from 360 to 720 px"],
-      ["align", "Centred or left-aligned"],
+    settings: [
+      ["Spacing", "Compact, regular or airy"],
+      ["Content width", "How wide the column gets, from 360 to 720 px"],
+      ["Alignment", "Centered or left-aligned"],
     ],
   },
   {
     group: "Background",
-    tokens: [
-      ["bgType", "Solid colour, gradient or image"],
-      ["bgImage", "A photo you upload"],
-      ["overlayOpacity", "A wash of your background colour over the photo"],
-      ["blur", "Softens the photo, up to 20 px"],
+    settings: [
+      ["Background type", "A solid color, a gradient or a photo"],
+      ["Background photo", "A photo you upload"],
+      ["Overlay", "A wash of your background color over the photo"],
+      ["Blur", "Softens the photo, up to 20 px"],
     ],
   },
 ];
 
 const RESOLVE_STEPS = [
-  ["system", "HYDLNK’s neutral defaults: every token has a value before you touch anything."],
-  ["theme", "A system theme or one of your saved themes replaces all of them at once."],
-  ["page", "Anything you change on the page itself wins over the theme."],
-  ["block", "A single link or card can change its colours, button style and corner radius."],
+  ["Default", "HYDLNK’s neutral starting point. Every setting has a value before you touch anything."],
+  ["Theme", "A HYDLNK theme or one of your saved themes sets all of them at once."],
+  ["Page", "Anything you change on your page itself wins over the theme."],
+  ["Block", "A single link or card can change its own colors, button style and corner radius."],
 ] as const;
 
 const FONTS = {
@@ -104,9 +105,7 @@ function ThemeCard({ theme, note }: { theme: DemoTheme; note: string }) {
           />
         ))}
       </div>
-      <p className="font-mono text-xs leading-[1.7] text-text-2">
-        {theme.fontHeading} · radius {theme.radius} · {theme.buttonStyle} · {theme.bgType}
-      </p>
+      <p className="font-mono text-xs leading-[1.7] text-text-2">{lookLine(theme)}</p>
       <p className="text-sm leading-[1.6] text-text-2">{note}</p>
     </li>
   );
@@ -117,8 +116,8 @@ export default function DesignPage() {
     <MarketingShell current="design">
       <PageHero
         eyebrow="Design"
-        title="Design control is the product."
-        lead="Every visual choice on your page is one of 23 tokens. Start from a theme, change any token, and the whole page follows. Save the result as a theme and use it again on any page."
+        title="Make your page look like your brand."
+        lead="Start from a theme, then change any color, font, button or background. The whole page follows, and you can save your look and use it again on any page."
         secondary={{ href: guideHref("designing-your-page"), label: "Read the design guide" }}
       />
 
@@ -126,8 +125,8 @@ export default function DesignPage() {
         <SectionIntro
           eyebrow="Try it"
           titleId="playground-title"
-          title="Change a token. Watch the page follow."
-          lead="A demo page in the Smoke theme. Switch the theme, then override single tokens on top of it."
+          title="Change one thing. Watch the page follow."
+          lead="A demo page you can restyle. Pick a theme, then change just the buttons, the corners, the font or the background on top of it."
         />
         <div className="mt-10">
           <TokenPlayground />
@@ -136,24 +135,24 @@ export default function DesignPage() {
 
       <Section id="tokens" labelledBy="tokens-title">
         <SectionIntro
-          eyebrow="The token system"
+          eyebrow="What you can change"
           titleId="tokens-title"
-          title="23 tokens in five groups."
-          lead="Blocks never carry their own colours or fonts: they read these tokens. That’s why a theme can change everything at once without breaking anything."
+          title="23 settings in five groups."
+          lead="Every block follows these settings. That’s why changing one changes the whole page, and nothing ever looks out of place."
         />
         <div className="mt-10 grid gap-3 min-[760px]:grid-cols-2 min-[1080px]:grid-cols-3">
-          {TOKEN_GROUPS.map(({ group, tokens }) => (
+          {SETTING_GROUPS.map(({ group, settings }) => (
             <div key={group} className="overflow-hidden rounded-md border border-line bg-surface">
               <div className="flex items-center justify-between border-b border-line bg-page px-4 py-3">
                 <h3 className="text-[15px] font-semibold">{group}</h3>
                 <span className="font-mono text-xs text-text-2">
-                  {tokens.length} {tokens.length === 1 ? "token" : "tokens"}
+                  {settings.length} {settings.length === 1 ? "setting" : "settings"}
                 </span>
               </div>
               <dl>
-                {tokens.map(([name, description]) => (
+                {settings.map(([name, description]) => (
                   <div key={name} className="border-b border-line px-4 py-2.5 last:border-b-0">
-                    <dt className="font-mono text-[13px] text-ink">{name}</dt>
+                    <dt className="text-[15px] font-semibold text-ink">{name}</dt>
                     <dd className="mt-0.5 text-sm leading-[1.5] text-text-2">{description}</dd>
                   </div>
                 ))}
@@ -167,10 +166,10 @@ export default function DesignPage() {
         <div className="grid items-center gap-12 min-[1024px]:grid-cols-2">
           <div>
             <SectionIntro
-              eyebrow="How a style resolves"
+              eyebrow="How your choices stack"
               titleId="resolve-title"
-              title="Later wins."
-              lead="Four layers decide each token’s final value, and each one only changes what it sets."
+              title="The most specific choice wins."
+              lead="Four layers decide how each part of your page looks. Each layer only changes what it sets."
             />
             <div className="mt-6">
               <ResolveChain />
@@ -178,7 +177,7 @@ export default function DesignPage() {
             <ol className="mt-6 flex flex-col gap-3">
               {RESOLVE_STEPS.map(([name, body]) => (
                 <li key={name} className="flex gap-3 text-[15px] leading-[1.6]">
-                  <span className="w-14 shrink-0 font-mono text-[13px] leading-[1.9] text-brass-text">
+                  <span className="w-16 shrink-0 font-mono text-[13px] leading-[1.9] text-brass-text">
                     {name}
                   </span>
                   <span className="text-text-2">{body}</span>
@@ -195,7 +194,7 @@ export default function DesignPage() {
           eyebrow="Themes"
           titleId="themes-title"
           title="Start from a theme, save your own."
-          lead="A theme is a complete set of tokens. HYDLNK ships with system themes; your saved themes sit next to them."
+          lead="A theme is a complete look in one tap: colors, fonts, buttons and spacing. Pick one of HYDLNK’s themes, or save your own."
         />
         <ul className="mt-10 grid gap-3 min-[760px]:grid-cols-3">
           <ThemeCard theme={NOIR} note="Warm black, brass accent, Instrument Serif and outlined buttons." />
@@ -206,8 +205,8 @@ export default function DesignPage() {
           <div className="rounded-md border border-line bg-surface p-[22px]">
             <h3 className="text-base font-semibold">Saved themes</h3>
             <ul className="mt-3 flex list-disc flex-col gap-2 pl-5 text-[15px] leading-[1.6] text-text-2">
-              <li>“Save as theme” copies every resolved token on the page into a theme of your own.</li>
-              <li>Apply it to any of your pages. Applying a theme clears that page’s own overrides, and you can undo it.</li>
+              <li>“Save as theme” saves your page’s whole look as a theme of your own.</li>
+              <li>Apply it to any of your pages. Applying a theme clears the changes you made on that page, and you can undo it.</li>
               <li>Free accounts keep up to 3 saved themes. Pro and Studio have no limit.</li>
             </ul>
           </div>
@@ -228,7 +227,7 @@ export default function DesignPage() {
             eyebrow="Type"
             titleId="fonts-title"
             title="Eighteen fonts, picked for link pages."
-            lead="Choose one Google Font for headings and one for body text. The list is short on purpose: every face on it holds up at link-page sizes, so any pairing stays readable."
+            lead="Pick one font for headings and one for body text. The list is short on purpose: every font on it reads well on a phone, so any pairing looks good."
           />
           <div className="grid gap-3 min-[640px]:grid-cols-3">
             {Object.entries(FONTS).map(([kind, names]) => (
@@ -249,18 +248,19 @@ export default function DesignPage() {
         <div className="grid items-center gap-12 min-[1024px]:grid-cols-[minmax(0,1fr)_auto]">
           <div>
             <SectionIntro
-              eyebrow="Per-block overrides"
+              eyebrow="One-off changes"
               titleId="overrides-title"
               title="Make one link stand out."
-              lead="A link or a card can override the page’s colours, button style and corner radius. The rest of the page keeps the theme, so a highlight never turns into a mess."
+              lead="Give a link or a card its own color, button style or corner radius. The rest of the page keeps the theme, so one highlight never turns into a mess."
             />
             <p className="mt-5 text-[15px] leading-[1.6] text-text-2">
-              On this demo page every button is outlined, as the Noir theme says, except “This
-              week’s roast”, which is filled. That’s one block override: buttonStyle set to fill.
+              On this demo page every button is outlined, the way the Noir theme draws them,
+              except “This week’s roast”, which is filled. That one change was made on a single
+              link.
             </p>
             <p className="mt-3 text-[15px] leading-[1.6] text-text-2">
-              Block overrides cover accent, button colours, text, surface, border, button style
-              and radius, and nothing else, so fonts and spacing stay consistent down the page.
+              A single link or card can change its colors, button style and corner radius, and
+              nothing else, so fonts and spacing stay consistent down the page.
             </p>
             <ArrowLink href={guideHref("designing-your-page")} className="mt-5">
               Designing your page
@@ -279,7 +279,7 @@ export default function DesignPage() {
 
       <CtaBand
         title="Design is free on every plan."
-        note="Every token, every block and the system themes are yours on Free."
+        note="Every block, theme and design option is yours on Free."
       />
     </MarketingShell>
   );

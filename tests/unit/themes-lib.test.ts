@@ -297,7 +297,7 @@ describe("M3-05 Publish error copy", () => {
 
   it("names the field and how to fix it", () => {
     expect(themeError("bg").message).toBe(
-      "Publish stopped: bg isn’t a valid colour. Reset it in Design.",
+      "Publish stopped: bg isn’t a valid color. Reset it in Design.",
     );
     expect(themeError("fontHeading").message).toBe(
       "Publish stopped: fontHeading isn’t an available font. Reset it in Design.",

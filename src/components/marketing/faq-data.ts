@@ -27,7 +27,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "Is the free plan actually free?",
         answer:
-          "Yes. One page, every block, the full theme system and per-link analytics, with no time limit and no card on file.",
+          "Yes. One page, every block, every theme and design option and per-link analytics, with no time limit and no card on file.",
         home: 1,
       },
       {
@@ -44,7 +44,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "Can I build my page on my phone?",
         answer:
-          "Yes. The editor works at phone size, with a Blocks and Preview switch, and the preview uses the same renderer as your live page, so what you see is what you publish.",
+          "Yes. The editor works at phone size, with a Blocks and Preview switch, and the preview shows your page exactly as visitors will see it, so what you see is what you publish.",
       },
     ],
   },
@@ -55,18 +55,18 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "How much of my page’s look can I change?",
         answer:
-          "Everything on the page is a token: 8 colours, heading and body fonts, type scale and weight, letter case, corner radius, border width, button style, spacing, column width, alignment and the background (a solid colour, a gradient or your own image with an overlay and blur).",
+          "Nearly everything you see. You can change 8 colors, the heading and body fonts, text size and weight, capital or lowercase headings, corner roundness, border thickness, button style, spacing, column width, alignment and the background (a solid color, a gradient or your own photo with an overlay and blur).",
         home: 3,
       },
       {
         question: "Can I make one link stand out?",
         answer:
-          "Yes. Any link or card can override the page’s colours, button style and corner radius, so one button can be filled while the rest are outlined.",
+          "Yes. Any link or card can override the page’s colors, button style and corner radius, so one button can be filled while the rest are outlined.",
       },
       {
         question: "What is a saved theme?",
         answer:
-          "A snapshot of a page’s tokens that you can apply to any of your pages. Editing a saved theme updates the drafts that use it; live pages change only when you publish them again.",
+          "A saved copy of a page’s look that you can apply to any of your pages. Editing a saved theme updates the drafts that use it; live pages change only when you publish them again.",
       },
       {
         question: "Which fonts can I use?",
@@ -88,7 +88,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "Can I use my root domain, like yourbrand.com?",
         answer:
-          "Yes. A root domain uses an A record instead of a CNAME, and the editor shows you the exact value. If your main website already lives on that domain, use a subdomain such as links.yourbrand.com instead.",
+          "Yes. A root domain uses an A record instead of a CNAME, and the editor shows you exactly what to enter. If your main website already lives on that domain, use a subdomain such as links.yourbrand.com instead.",
       },
       {
         question: "Does HYDLNK sell domains?",
@@ -115,7 +115,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "How are unique visitors counted without cookies?",
         answer:
-          "With a one-way hash of the visitor’s IP address and browser, mixed with a value that changes every day. The hash can’t be turned back into an IP address and can’t follow a visitor from one day to the next.",
+          "We turn the visitor’s IP address and browser into a scrambled code that can’t be reversed, mixed with a value that changes every day. The code can’t be turned back into an IP address and can’t follow a visitor from one day to the next.",
       },
     ],
   },
@@ -125,7 +125,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
     items: [
       {
         question: "Do you take a cut of sales?",
-        answer: "No. There are no commerce fees on any plan.",
+        answer: "No. We never take a cut of your sales, on any plan.",
         home: 6,
       },
       {
@@ -146,7 +146,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "What if my page gets a lot of traffic?",
         answer:
-          "It keeps serving. Published pages are cached at the edge and built for traffic spikes, on every plan.",
+          "It keeps working. Published pages are stored close to your visitors and built for traffic spikes, on every plan.",
       },
       {
         question: "How do you handle scams and phishing pages?",

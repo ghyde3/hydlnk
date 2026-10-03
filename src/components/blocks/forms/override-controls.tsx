@@ -118,7 +118,7 @@ export function OverrideControls({
   );
 }
 
-/** Accepts `#RRGGBB` and `RRGGBB`, any case; anything else is not a colour yet. */
+/** Accepts `#RRGGBB` and `RRGGBB`, any case; anything else is not a color yet. */
 function normalizeHex(input: string): string | null {
   const text = input.trim();
   const hex = text.startsWith("#") ? text : `#${text}`;
@@ -126,7 +126,7 @@ function normalizeHex(input: string): string | null {
 }
 
 /**
- * Color: a swatch (the native colour picker) and a 16px hex field. The field keeps what is being
+ * Color: a swatch (the native color picker) and a 16px hex field. The field keeps what is being
  * typed; only a complete #RRGGBB reaches the block, so a half-typed value never makes the draft
  * invalid. Clearing the field, or "Theme default", removes the override.
  */
@@ -142,14 +142,14 @@ function ColorControl({
   const tokens = usePageTokens();
   const stored = readColor(block);
   // What is being typed, while the hex field has focus; null otherwise, and then the field shows
-  // the block's colour (so a change from elsewhere, the picker, a reset or undo, shows at once).
+  // the block's color (so a change from elsewhere, the picker, a reset or undo, shows at once).
   const [typed, setTyped] = useState<string | null>(null);
   const text = typed ?? stored ?? "";
 
   const themeColor = block.type === "link" ? tokens?.buttonBg : tokens?.accent;
   const swatch = stored ?? themeColor ?? "#FFFFFF";
   const partial = text.trim() !== "" && normalizeHex(text) === null;
-  const message = error ?? (partial ? "Use a #RRGGBB colour, for example #C46A4F." : null);
+  const message = error ?? (partial ? "Use a #RRGGBB color, for example #C46A4F." : null);
 
   function commit(value: string) {
     if (value.trim() === "") {

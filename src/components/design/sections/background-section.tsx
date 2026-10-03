@@ -259,7 +259,7 @@ export function BackgroundSection({ resolved, setToken }: DesignSectionProps) {
 }
 
 /**
- * A labelled range input with its value beside the label. The input is the whole 44px touch
+ * A labeled range input with its value beside the label. The input is the whole 44px touch
  * target; arrow keys, Home, End and Page keys come with the native control.
  */
 function Slider({

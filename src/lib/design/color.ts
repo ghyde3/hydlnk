@@ -1,10 +1,10 @@
 /**
- * Colour helpers of the Design screen (M3-08). Pure, no dependencies.
+ * Color helpers of the Design screen (M3-08). Pure, no dependencies.
  * The token schema accepts #RGB, #RRGGBB and #RRGGBBAA; the screen only ever writes the
- * normalised uppercase #RRGGBB form.
+ * normalized uppercase #RRGGBB form.
  */
 
-export const HEX_ERROR_MESSAGE = "Enter a hex colour like #C9A86A.";
+export const HEX_ERROR_MESSAGE = "Enter a hex color like #C9A86A.";
 
 /**
  * What a hex field may hold, as the uppercase #RRGGBB it stands for, or null: `c9a86a`,
@@ -32,12 +32,12 @@ function brightness(hex: string): number {
   return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
 }
 
-/** Ink for text on `hex`: dark on a light colour, light on a dark one (Design.dc.html `btn()`). */
+/** Ink for text on `hex`: dark on a light color, light on a dark one (Design.dc.html `btn()`). */
 export function inkOn(hex: string): string {
   return brightness(hex) > 0.55 ? "#15110B" : "#F7F3EC";
 }
 
-/** Same colour, whatever the case or the shorthand. */
+/** Same color, whatever the case or the shorthand. */
 export function sameColor(a: string, b: string): boolean {
   const left = normalizeHex(a);
   const right = normalizeHex(b);

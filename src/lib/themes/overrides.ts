@@ -7,13 +7,13 @@ import { inkFor, isHexColor } from "./color";
  * style (link blocks), Color and Corner radius (link and card blocks). Nothing else: no font,
  * spacing or background control exists, and the resolver ignores any other key in stored JSON.
  *
- * "Color" is one control over the colour tokens a block reads, so it writes a small group of the
+ * "Color" is one control over the color tokens a block reads, so it writes a small group of the
  * block-level keys `BLOCK_OVERRIDE_KEYS` already allows (and the renderer already follows):
  *
- *   link  buttonBg and accent = the colour (the Fill background and border, the Outline border),
- *         buttonText = dark or light ink for that colour (perceived brightness above 0.55 is
+ *   link  buttonBg and accent = the color (the Fill background and border, the Outline border),
+ *         buttonText = dark or light ink for that color (perceived brightness above 0.55 is
  *         light, so it gets the dark ink)
- *   card  accent (title and arrow) and border = the colour
+ *   card  accent (title and arrow) and border = the color
  *
  * Every function is pure and returns the same block object when nothing changes.
  */
@@ -86,19 +86,19 @@ export function setButtonStyle(block: OverridableBlock, style: ButtonStyle | nul
 
 // Color -----------------------------------------------------------------------------------------
 
-/** The colour the block overrides, or null (not overridden, or a stored value that is not #RRGGBB). */
+/** The color the block overrides, or null (not overridden, or a stored value that is not #RRGGBB). */
 export function readColor(block: OverridableBlock): string | null {
   const value = overridesOf(block)[COLOR_SOURCE[block.type]];
   return isHexColor(value) ? value : null;
 }
 
-/** Whether any of the block's colour keys is set (even to a value the control cannot show). */
+/** Whether any of the block's color keys is set (even to a value the control cannot show). */
 export function hasColorOverride(block: OverridableBlock): boolean {
   const overrides = overridesOf(block);
   return COLOR_KEYS[block.type].some((key) => overrides[key] !== undefined);
 }
 
-/** `null` is "Theme default": every colour key the control owns is removed. */
+/** `null` is "Theme default": every color key the control owns is removed. */
 export function setColor(block: OverridableBlock, hex: string | null) {
   const next: Record<string, unknown> = { ...overridesOf(block) };
   for (const key of COLOR_KEYS[block.type]) delete next[key];

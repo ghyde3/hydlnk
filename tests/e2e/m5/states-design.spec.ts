@@ -186,7 +186,7 @@ test.describe("M5-16 the themes cannot be loaded", () => {
     if (phoneOnly(test.info())) {
       await page.getByRole("tab", { name: "Preview" }).click();
       await expect(previewScreen(page)).toBeVisible();
-      await page.getByRole("tab", { name: "Tokens" }).click();
+      await page.getByRole("tab", { name: "Style" }).click();
       await expect(error).toBeVisible();
     }
     if (desktopOnly(test.info())) {
