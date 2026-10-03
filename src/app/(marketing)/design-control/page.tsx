@@ -211,7 +211,7 @@ export default function DesignPage() {
           eyebrow="Themes"
           titleId="themes-title"
           title="Start from a theme, save your own."
-          lead="A theme is a complete look in one tap: colors, fonts, buttons and spacing. Pick one of HYDLNK’s themes, or save your own."
+          lead="A theme is a complete look in one tap: colors, fonts, buttons and spacing. Pick one of HYDLNK’s 16 themes, preview it on your own page before you apply it, or save your own."
         />
         <ul className="mt-10 grid gap-3 min-[760px]:grid-cols-3">
           <ThemeCard
@@ -284,7 +284,7 @@ export default function DesignPage() {
               eyebrow="One-off changes"
               titleId="overrides-title"
               title="Make one link stand out."
-              lead="Give a link or a card its own color, button style or corner radius. The rest of the page keeps the theme, so one highlight never turns into a mess."
+              lead="Give any block its own color, button style or corner radius, or mark up to 3 links as featured for a bolder look and an optional gentle motion. The rest of the page keeps the theme, so one highlight never turns into a mess."
             />
             <p className="mt-5 text-[15px] leading-[1.6] text-text-2">
               On this demo page every button is outlined, the way the Noir theme draws them, except

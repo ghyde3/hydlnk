@@ -7,8 +7,9 @@ import type { TryPreset } from "../try/try-builder";
  * a page cannot be linked in one place and missing from another.
  *
  * Every claim here has to be true of the product today (see plans.ts, block-catalog.tsx and
- * faq-data.ts): embeds are YouTube and Spotify only, the social icon row has no Twitch, Spotify or
- * Discord icon, the Grid block holds linked tiles without pictures, HYDLNK takes no payments and
+ * faq-data.ts): embeds are YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music and
+ * Twitch (not Bandcamp or Apple Podcasts), the social icon row has no Twitch, Spotify or Discord
+ * icon, the Grid block holds linked tiles without pictures, HYDLNK takes no payments and
  * has no booking tool, and referrers, devices and countries are Pro and Studio. The platform steps
  * were checked against each platform's own help text where it could be read; where a platform
  * decides who gets a feature, the copy says so and sends people to the platform's help center.
@@ -125,6 +126,11 @@ export const AUDIENCES: readonly Audience[] = [
         icon: "card",
         title: "The thing people asked about goes first",
         body: "A Card block gives a product, a recipe or your newest video a picture, a title and a caption, and the whole card is the link. Drag it to the top whenever a video makes it the question in your comments.",
+      },
+      {
+        icon: "embed",
+        title: "Show a TikTok right on the page",
+        body: "An Embed block takes a TikTok video address and plays it on your page when a visitor taps it. Nothing from TikTok loads until then.",
       },
       {
         icon: "chart",
@@ -413,7 +419,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         question: "Can I show my videos on my HYDLNK page?",
         answer:
-          "Yes, with the Embed block. YouTube videos load only when a visitor presses play. The Embed block plays YouTube videos and Spotify; other video sites go in as link buttons.",
+          "Yes, with the Embed block. YouTube videos load only when a visitor presses play. Vimeo, TikTok, Instagram and Twitch can play on the page too.",
       },
       {
         question: "Is the free plan enough for a channel?",
@@ -474,7 +480,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         icon: "embed",
         title: "Show your best moment",
-        body: "Embed a YouTube highlight so a new visitor can watch it without leaving the page. The Embed block plays YouTube videos and Spotify.",
+        body: "Embed a YouTube highlight or a Twitch clip so a new visitor can watch it without leaving the page. It plays when they tap it.",
       },
       {
         icon: "design",
@@ -501,8 +507,8 @@ export const AUDIENCES: readonly Audience[] = [
       },
       {
         block: "embed",
-        title: "A YouTube highlight",
-        body: "Your best clip or stream recap, playing right on the page.",
+        title: "A highlight or your stream",
+        body: "A YouTube video or a Twitch channel, video or clip, playing right on the page when someone taps it.",
       },
       {
         block: "text",
@@ -525,7 +531,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         question: "Can I embed my live stream on the page?",
         answer:
-          "Not today. The Embed block plays YouTube videos and Spotify. Add a Card or a Link that goes to your Twitch channel, with a picture from your stream.",
+          "Yes. Paste your Twitch channel address into an Embed block and visitors can tap to watch. Videos and clips work the same way. Nothing from Twitch loads until someone taps.",
       },
       {
         question: "Where do I put the link on Twitch?",
@@ -694,7 +700,7 @@ export const AUDIENCES: readonly Audience[] = [
       },
       {
         title: "Add buttons for everywhere else",
-        body: "Apple Music, Bandcamp, SoundCloud and your ticket page go in as Link blocks. They’re links, not players: embeds are Spotify and YouTube.",
+        body: "SoundCloud and Apple Music have their own players, so add them the same way. Bandcamp and your ticket page go in as Link blocks.",
       },
       {
         title: "List your shows and merch",
@@ -711,7 +717,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         icon: "embed",
         title: "Listeners can play it on the page",
-        body: "Spotify tracks, albums, playlists and artist pages play in an Embed block. Someone who finds you on a short video can hear the record before they decide anything.",
+        body: "Spotify, SoundCloud and Apple Music play in an Embed block. Someone who finds you on a short video can hear the record before they decide anything.",
       },
       {
         icon: "grid",
@@ -762,7 +768,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         question: "Can I put my music on the page?",
         answer:
-          "Yes. Spotify tracks, albums, playlists and artist pages play in an Embed block, and YouTube videos do too. Apple Music, SoundCloud and Bandcamp go in as link buttons.",
+          "Yes. Spotify, SoundCloud and Apple Music play in an Embed block, and so do YouTube and Vimeo videos. Bandcamp goes in as a link button.",
       },
       {
         question: "Can I use a pre-save link?",
@@ -815,7 +821,7 @@ export const AUDIENCES: readonly Audience[] = [
       },
       {
         title: "Add a button for each other app",
-        body: "Apple Podcasts, Overcast, Pocket Casts and your RSS feed each get a Link block. These are links, not players, since embeds are Spotify and YouTube.",
+        body: "Apple Podcasts, Overcast, Pocket Casts and your RSS feed each get a Link block. These are links, not players.",
       },
       {
         title: "Embed your video episodes",

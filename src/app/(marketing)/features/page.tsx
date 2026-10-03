@@ -21,7 +21,7 @@ export const metadata: Metadata = marketingMetadata({
   path: "/features",
   title: "Features",
   description:
-    "Nine kinds of blocks, a profile, an editor with a live phone preview, drafts that save themselves and a Publish button you control. Every feature is on every plan, free included.",
+    "Nine kinds of blocks, a profile, an editor with a live phone preview, drafts that save themselves and a Publish button you control. Every feature is on every plan, free included, except version history on Pro and Studio.",
   image: "features",
 });
 
@@ -53,6 +53,15 @@ const EDITOR = [
     ),
   },
   {
+    title: "Edit from the preview",
+    body: "On a phone, a small live preview stays docked while you work, and you can open it full size. Tap anything in it to edit that part, and add a block anywhere with the plus between blocks.",
+    icon: (
+      <Icon>
+        <path d="M12 5v14M5 12h14" />
+      </Icon>
+    ),
+  },
+  {
     title: "Drag to reorder",
     body: "Move blocks with a mouse, a finger or the keyboard. Order on the page is order in the list.",
     icon: (
@@ -68,6 +77,25 @@ const EDITOR = [
       <Icon>
         <path d="M5 4h11l3 3v13H5z" />
         <path d="M8 4v5h7V4M8 20v-6h8v6" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Undo, redo and duplicate",
+    body: "Change your mind as often as you like. Undo and redo work on every change, and one tap duplicates a block.",
+    icon: (
+      <Icon>
+        <path d="M9 7H5v4M5 7l4-3M15 17h4v-4M19 17l-4 3" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Start from a template",
+    body: "Pick a starting point for musicians, podcasters, artists, shops, coaches or streamers, then change anything you like.",
+    icon: (
+      <Icon>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M4 10h16M10 10v10" />
       </Icon>
     ),
   },
@@ -95,6 +123,16 @@ const PUBLISHING = [
     ),
   },
   {
+    title: "Preview your draft, privately",
+    body: "See your unpublished draft any time. Share a private preview link, good for 7 days, so a friend or a client can look first. You can turn it off whenever you like.",
+    icon: (
+      <Icon>
+        <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" />
+        <circle cx="12" cy="12" r="2.5" />
+      </Icon>
+    ),
+  },
+  {
     title: "Checked before it goes live",
     body: "Publish checks that every link is a complete web address and every visible block is filled in, and tells you what to fix.",
     icon: (
@@ -104,12 +142,34 @@ const PUBLISHING = [
     ),
   },
   {
-    title: "A preview image for every page",
-    body: "Each published page gets its own social preview image, so your link looks like you when it’s shared.",
+    title: "Your share card, your way",
+    body: "Choose the title, description and image people see when your link is shared, with a preview card as you type. Without one, your page gets its own preview image.",
     icon: (
       <Icon>
         <rect x="3" y="5" width="18" height="14" rx="2" />
         <path d="M7 15l3-3 2 2 3-4 3 5" />
+      </Icon>
+    ),
+  },
+  {
+    title: "A QR code for your page",
+    body: "Download a QR code that opens your page, as a PNG or an SVG, for flyers, menus and printed cards.",
+    icon: (
+      <Icon>
+        <rect x="4" y="4" width="6" height="6" />
+        <rect x="14" y="4" width="6" height="6" />
+        <rect x="4" y="14" width="6" height="6" />
+        <path d="M14 14h2v2h-2zM18 18h2M14 19h2" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Version history on Pro and Studio",
+    body: "Your recent published versions are kept. Preview an earlier one and restore it, and your live page stays as it is until you publish again.",
+    icon: (
+      <Icon>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 8v4l3 2" />
       </Icon>
     ),
   },
@@ -157,7 +217,7 @@ const SAFETY = [
   },
   {
     title: "Nothing tracks your visitors",
-    body: "No cookies and no ad scripts on your page. YouTube videos load only when someone presses play.",
+    body: "No cookies and no ad scripts on your page. Embedded videos, except Spotify players, load only when someone taps to play.",
     icon: (
       <Icon>
         <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" />
@@ -172,7 +232,7 @@ export default function FeaturesPage() {
       <PageHero
         eyebrow="Features"
         title="Everything a link page needs. Nothing it doesn’t."
-        lead="Nine kinds of block, a profile, an editor with a live phone preview, drafts that save themselves and a page that goes live only when you press Publish. All of it is on every plan, free included."
+        lead="Nine kinds of block, a profile, an editor with a live phone preview, drafts that save themselves and a page that goes live only when you press Publish. All of it is on every plan, free included, apart from version history on Pro and Studio."
         aside={
           <figure className="flex flex-col items-center gap-3">
             <PhoneFrame>
@@ -190,7 +250,7 @@ export default function FeaturesPage() {
           eyebrow="Blocks"
           titleId="blocks-title"
           title="Nine blocks, in any order."
-          lead="A page is a column of blocks under your profile. Add up to 50, drag them into order and switch any of them off without deleting it."
+          lead="A page is a column of blocks under your profile. Add up to 50, drag them into order, style each one and switch any of them off without deleting it. Links take an icon or a small thumbnail, and up to 3 can be featured with a bolder look."
         />
         <ul className="mt-10 grid gap-3 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3">
           {BLOCK_CATALOG.map((block) => (
@@ -221,11 +281,13 @@ export default function FeaturesPage() {
             <ul className="mt-6 flex flex-col gap-3 text-[15px] leading-[1.6] text-text-2">
               <li>
                 <strong className="font-semibold text-ink">Photo.</strong> Upload, replace or
-                remove it. Without one, your initials stand in, drawn in your accent color.
+                remove it, and choose its position, shape, size and border, or hide it. Without
+                one, your initials stand in, drawn in your accent color.
               </li>
               <li>
                 <strong className="font-semibold text-ink">Display name.</strong> Up to 60
-                characters, in your heading font.
+                characters, in your heading font. Hide the name and bio if you would rather build
+                the top of your page from blocks.
               </li>
               <li>
                 <strong className="font-semibold text-ink">Bio.</strong> Up to 160 characters: say
@@ -306,8 +368,8 @@ export default function FeaturesPage() {
       </Section>
 
       <CtaBand
-        title="Every feature here is on the free plan."
-        note="Upgrade only when you want your own domain, more pages or a year of analytics."
+        title="Nearly every feature here is on the free plan."
+        note="Upgrade only when you want your own domain, more pages, a year of analytics or version history."
       />
     </MarketingShell>
   );

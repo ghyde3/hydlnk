@@ -24,8 +24,9 @@ export const designingYourPage: GuideBody = {
 
       <h2 id="theme">Start from a theme</h2>
       <p>
-        A theme is a complete look: colors, fonts, buttons, spacing and background together. Apply
-        one of the system themes in the Design tab and the whole page changes at once. Applying a
+        A theme is a complete look: colors, fonts, buttons, spacing and background together. There
+        are 16 system themes. Preview one on your own page, then apply it in the Design tab and
+        the whole page changes at once. Applying a
         theme also clears any changes you had made to the page’s look, and you can undo it if you
         change your mind.
       </p>
@@ -168,9 +169,11 @@ export const designingYourPage: GuideBody = {
 
       <h2 id="stand-out">Make one thing stand out</h2>
       <p>
-        A link or a card can override the page’s colors, button style and corner radius. Use it for
-        the one action that matters most, such as a filled “Book now” among outlined links. Use it
-        sparingly: if everything stands out, nothing does.
+        Every block has its own style controls, so a link or a card can override the page’s colors,
+        button style and corner radius. Use it for the one action that matters most, such as a
+        filled “Book now” among outlined links. You can also mark up to 3 links as featured, which
+        gives them a bolder style and, if you like, a gentle motion. Use it sparingly: if
+        everything stands out, nothing does.
       </p>
 
       <h2 id="save">Save it as a theme</h2>

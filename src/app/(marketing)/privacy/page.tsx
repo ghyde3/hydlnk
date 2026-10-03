@@ -160,8 +160,9 @@ export default function PrivacyPage() {
       </p>
       <p>
         Pages can include content from other services. A YouTube video loads from
-        youtube-nocookie.com only after a visitor presses play. A Spotify player loads from Spotify
-        when it comes into view. Those services handle what they receive under their own privacy
+        youtube-nocookie.com only after a visitor presses play. Vimeo, TikTok, Instagram,
+        SoundCloud, Apple Music and Twitch embeds also load only after a visitor taps to play. A
+        Spotify player loads from Spotify when it comes into view. Those services handle what they receive under their own privacy
         policies. Where a page’s fonts are served by Google Fonts, the visitor’s browser fetches
         them from Google.
       </p>

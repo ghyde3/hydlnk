@@ -186,13 +186,10 @@ describe("copy rules", () => {
       all.filter((text) => /schedul|csv|invite editors|team access|custom css/i.test(text)),
     ).toEqual([]);
     expect(all.filter((text) => /\$\s?\d/.test(text))).toEqual([]);
-    // Embeds are YouTube and Spotify only, and there is no gallery or booking tool.
+    // Embeds are YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music and Twitch
+    // (not Bandcamp or Apple Podcasts), and there is no gallery or booking tool.
     expect(
-      all.filter((text) =>
-        /embed(s|ded)? (your |a |the )?(twitch|apple|soundcloud|bandcamp|tiktok|instagram)/i.test(
-          text,
-        ),
-      ),
+      all.filter((text) => /embed(s|ded)? (your |a |the )?(bandcamp|apple podcasts)/i.test(text)),
     ).toEqual([]);
     expect(
       all.filter(

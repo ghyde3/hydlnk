@@ -44,8 +44,8 @@ export const gettingStarted: GuideBody = {
       <p>The profile sits at the top of the page and is the first thing visitors see.</p>
       <ul>
         <li>
-          <strong>Photo.</strong> Upload a JPEG, PNG or WebP image. Without one, your initials stand
-          in, drawn in your accent color.
+          <strong>Photo.</strong> Upload a JPEG, PNG or WebP image, then choose its position, shape,
+          size and border. Without one, your initials stand in, drawn in your accent color.
         </li>
         <li>
           <strong>Display name.</strong> Up to 60 characters. It’s set in your heading font.
@@ -55,6 +55,10 @@ export const gettingStarted: GuideBody = {
           tap: “Small-batch stoneware. Spring kiln opening on Saturday.”
         </li>
       </ul>
+      <p>
+        If you would rather build the top of your page from blocks, you can hide the name and the
+        bio.
+      </p>
 
       <h2 id="blocks">Add your blocks</h2>
       <p>
@@ -67,16 +71,19 @@ export const gettingStarted: GuideBody = {
         <li>Use a header to group related links, such as “Shop” and “Classes”.</li>
         <li>Drag blocks to reorder them, with a mouse, a finger or the keyboard.</li>
         <li>Switch a block off to hide it without deleting it, for things that come and go.</li>
+        <li>Add a block anywhere with the plus between blocks, duplicate one with a tap, and use undo and redo if you change your mind.</li>
+        <li>Not sure where to begin? Start from a template for musicians, podcasters, artists, shops, coaches or streamers, then change anything you like.</li>
       </ul>
       <p>
         Every change is saved to your draft as you work, and the preview shows exactly what the
-        page will look like. On a phone, switch between Blocks and Preview at the top of the
-        editor.
+        page will look like. On a phone, a small live preview stays docked while you edit, and
+        tapping something in it opens that part for editing. You can also open the preview full
+        size, and share a private preview link that works for 7 days.
       </p>
 
       <h2 id="look">Pick a look</h2>
       <p>
-        Open Design and apply one of the system themes. Then change whatever you like: accent
+        Open Design and pick one of the 16 system themes. You can preview it on your own page before you apply it. Then change whatever you like: accent
         color, fonts, button style, corner radius, spacing or background. Change any of them and
         the whole page follows. <Link href="/learn/designing-your-page">Designing your page</Link>{" "}
         covers every option.
@@ -99,7 +106,8 @@ export const gettingStarted: GuideBody = {
       <ul>
         <li>Put it in the bio of your social profiles: that’s what a link in bio is for.</li>
         <li>Add it to your email signature, your newsletter footer and your printed cards.</li>
-        <li>When someone shares it, the link shows your page’s own preview image.</li>
+        <li>When someone shares it, the link shows the title, description and image you chose, or your page’s own preview image.</li>
+        <li>Download a QR code for your page, as a PNG or an SVG, for flyers and printed cards.</li>
       </ul>
 
       <h2 id="next">What to do next</h2>
@@ -110,6 +118,10 @@ export const gettingStarted: GuideBody = {
         </li>
         <li>
           Save your design as a theme, so you can reuse it on another page.
+        </li>
+        <li>
+          On Pro and Studio, version history keeps your recent published versions, so you can restore
+          an earlier one.
         </li>
         <li>
           On Pro, <Link href="/learn/connecting-a-domain">connect your own domain</Link>.
