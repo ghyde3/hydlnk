@@ -72,7 +72,7 @@ Without `-level 4.1`, x264 uses 16 reference frames and writes level 5.1, which 
 
 **WebM** (VP9, 8-bit 4:2:0, no audio): two-pass constant-quality libvpx-vp9. The committed files
 were encoded with the first-pass stats of the original run (not kept), so the exact settings are
-inferred: a CRF of about 27 for 16:9 and about 31 for 4:5 with `-cpu-used 1 -row-mt 1` lands within
+inferred: a CRF of about 27 for 16:9 and about 31 for 4:5 (the 2026-10-03 re-render, with plain-language copy, used 30 for 16:9 to stay near the old size) with `-cpu-used 1 -row-mt 1` lands within
 1% of their sizes (1,541 KB against 1,532 KB, and 1,328 KB against 1,341 KB), but not byte for byte.
 
 ```sh
