@@ -15,7 +15,9 @@ export type ImagePlace = "photo" | "block" | "background";
 /**
  * The page-media paths a version names inside `ownerId`'s own folder, once each: the ones whose
  * object has to be looked up in Storage. A reference outside the folder is never looked up (it is
- * dropped without asking Storage), and neither is anything that is not an image path.
+ * dropped without asking Storage), and neither is anything that is not an image path. The places are
+ * the ones `collectImageRefs` and Publish's `placedImages` walk: the profile photo, card and image
+ * blocks, a link's thumbnail (M6-20), the share image (M6-32) and the background image.
  */
 export function ownedImagePaths(doc: PublishDoc, ownerId: string, mediaOrigin: string): string[] {
   const paths = new Set<string>();
@@ -25,14 +27,19 @@ export function ownedImagePaths(doc: PublishDoc, ownerId: string, mediaOrigin: s
   own(doc.profile.photo?.path ?? null);
   for (const block of doc.blocks) {
     if ((block.type === "card" || block.type === "image") && block.image) own(block.image.path);
+    if (block.type === "link" && block.icon?.type === "image") own(block.icon.image.path);
   }
+  own(doc.share?.image?.path ?? null);
   own(mediaPathOf(doc.tokens.bgImage, mediaOrigin));
   return [...paths];
 }
 
 export interface CheckedImages {
   doc: PublishDoc;
-  /** References replaced by null: one for each photo, card image or image-block image, and one for the background. */
+  /**
+   * References removed: one for each photo, card image, image-block image, link thumbnail and share
+   * image, and one for the background.
+   */
   missingImages: number;
   /** The resolved background image was replaced (the draft's page-level overrides then say so). */
   backgroundMissing: boolean;
@@ -41,7 +48,9 @@ export interface CheckedImages {
 /**
  * A copy of `doc` with every image that cannot be shown replaced by null, and the count. An image
  * reference is kept only when its path is inside the owner's folder and `isPresent` says the object
- * is still in `page-media`. The version's frozen background image goes the same way: when
+ * is still in `page-media`. A link's thumbnail (the draft schema has no null for `icon`) is removed
+ * from the link instead, so the link stays and shows no icon; the share image becomes null and the
+ * share title and description stay. The version's frozen background image goes the same way: when
  * `tokens.bgImage` is not one of this project's media URLs, is in another user's folder, or names
  * an object that is gone, it becomes null (and a background type of `image` becomes `solid`), so
  * the page is drawn, and later published, without it.
@@ -68,8 +77,20 @@ export function nullMissingImages(
       const image = keep(block.image);
       return image === block.image ? block : ({ ...block, image } as Block);
     }
+    if (block.type === "link" && block.icon?.type === "image") {
+      if (keep(block.icon.image) !== null) return block;
+      const rest = { ...block };
+      delete rest.icon;
+      return rest;
+    }
     return block;
   });
+
+  let share = doc.share;
+  if (share?.image) {
+    const image = keep(share.image);
+    if (image === null) share = { ...share, image: null };
+  }
 
   let tokens: TokenSet = doc.tokens;
   let backgroundMissing = false;
@@ -87,7 +108,13 @@ export function nullMissingImages(
   }
 
   return {
-    doc: { ...doc, profile: { ...doc.profile, photo }, blocks, tokens },
+    doc: {
+      ...doc,
+      profile: { ...doc.profile, photo },
+      blocks,
+      ...(share === undefined ? {} : { share }),
+      tokens,
+    },
     missingImages: missing,
     backgroundMissing,
   };
@@ -139,15 +166,17 @@ export function nextRev(storedDraft: unknown): number {
 }
 
 /**
- * The draft a version restores to: its profile, its blocks (ids kept, all visible, in order), the
- * theme from `restoredTheme` and `rev` set by the caller. `doc` is the version after
- * `nullMissingImages`. Not validated here: the caller parses the result with `draftDocSchema`.
+ * The draft a version restores to: its profile, its share card (M6-32, when the version has one),
+ * its blocks (ids kept, all visible, in order), the theme from `restoredTheme` and `rev` set by the
+ * caller. `doc` is the version after `nullMissingImages`. Not validated here: the caller parses the
+ * result with `draftDocSchema`.
  */
 export function versionToDraft(doc: PublishDoc, theme: DocTheme, rev: number): DraftDoc {
   return {
     version: 1,
     rev,
     profile: { ...doc.profile },
+    ...(doc.share === undefined ? {} : { share: { ...doc.share } }),
     theme,
     blocks: doc.blocks.map((block) => ({ ...block, visible: true }) as Block),
   };

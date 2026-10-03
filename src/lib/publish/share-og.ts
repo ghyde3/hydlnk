@@ -1,6 +1,6 @@
 import "server-only";
 import sharp from "sharp";
-import { IMAGE_PATH_PATTERN, focusOf, imageRefSchema } from "@/lib/document";
+import { IMAGE_PATH_PATTERN, SHARE_IMAGE_MIN_WIDTH, focusOf, imageRefSchema } from "@/lib/document";
 import { mediaOrigin, mediaUrl } from "@/lib/media/url";
 
 /**
@@ -13,7 +13,10 @@ import { mediaOrigin, mediaUrl } from "@/lib/media/url";
  *     to the configured Supabase Storage origin (an SSRF guard: a stored path is tenant data);
  *   - `redirect: "error"`, a 4 second timeout, at most 4 MB of body (checked on the header and
  *     again while reading) and a PNG, JPEG or WebP content type;
- *   - at most 16 megapixels (sharp's `limitInputPixels`, and the header size is checked first).
+ *   - at most 16 megapixels (sharp's `limitInputPixels`, and the header size is checked first);
+ *   - at least 600 pixels wide, measured on the decoded file (upright, after any EXIF turn), not on
+ *     the width the reference declares: Publish only sees the declared width, so a direct draft write
+ *     could declare 600 for a smaller upload. A narrower file gets the generated card.
  *
  * Anything else, or any failure, answers null and the caller draws today's generated card instead:
  * the route never answers a 500 because of this picture. No font and no other host is touched.
@@ -101,6 +104,7 @@ export async function shareImagePng(image: unknown): Promise<Buffer | null> {
     const width = turned ? meta.height : meta.width;
     const height = turned ? meta.width : meta.height;
     if (width * height > SHARE_IMAGE_MAX_PIXELS) return null;
+    if (width < SHARE_IMAGE_MIN_WIDTH) return null;
 
     const crop = coverCrop(width, height, focusOf(ref.data.focus) ?? { x: 0.5, y: 0.5 });
     return await sharp(bytes, { limitInputPixels: SHARE_IMAGE_MAX_PIXELS })

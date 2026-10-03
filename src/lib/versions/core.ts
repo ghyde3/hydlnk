@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { checkBlocklist, readBlockedLinkError } from "@/lib/blocklist";
-import { draftDocSchema, publishedDocSchema, type PublishDoc } from "@/lib/document";
+import { LIMITS, draftDocSchema, publishedDocSchema, type PublishDoc } from "@/lib/document";
 import { jsonbTextBytes } from "@/lib/editor/size";
 import { PLAN_LIMITS, toPlanId } from "@/lib/limits";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
@@ -58,8 +58,6 @@ export interface VersionInput {
 
 const guid = z.guid();
 const UID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-/** The `pages.draft` size cap (`pages_draft_size`), the same line the database holds. */
-const DRAFT_BYTE_CAP = 524_288;
 
 type Op = "preview" | "restore";
 
@@ -269,10 +267,13 @@ export async function loadVersionPreviewCore(
  *     `rev` one past the stored one, so an editor tab open on the old draft meets the stale-tab
  *     guard on its next save instead of overwriting the restore;
  *   - the theme resolves to the version's frozen tokens exactly (see `restoredTheme`);
- *   - an image that is gone becomes null and is counted; a background image that is gone becomes
- *     `bgImage` null in the page-level overrides, so Publish does not stop on it;
- *   - the draft is parsed with `draftDocSchema` and checked against the draft size cap, and the
- *     link blocklist is asked about it (`blocked_link` with the hosts) before anything is written;
+ *   - the draft also carries the version's share card (M6-32) when it has one;
+ *   - an image that is gone becomes null and is counted (a link thumbnail is removed from its link,
+ *     the share image becomes null); a background image that is gone becomes `bgImage` null in the
+ *     page-level overrides, so Publish does not stop on it;
+ *   - the draft is parsed with `draftDocSchema` and checked against the draft size cap
+ *     (`LIMITS.draftBytes`, the database's own line), and the link blocklist is asked about it
+ *     (`blocked_link` with the hosts) before anything is written;
  *   - the write is filtered on the page id, the owner id and the draft rev read at the start, and
  *     goes through the same `pages` triggers as any draft save: a draft that changed in between
  *     (another tab saved, or a second restore ran first) matches no row and is `conflict`.
@@ -306,7 +307,9 @@ export async function restorePageVersionCore(
   const theme = restoredTheme(parsed, parsed.tokens, themeTokens, checked.backgroundMissing);
   const draft = draftDocSchema.safeParse(versionToDraft(checked.doc, theme, nextRev(open.draft)));
   if (!draft.success) return failed("error");
-  if (jsonbTextBytes(draft.data) > DRAFT_BYTE_CAP) return failed("error");
+  // The line the database holds (`pages_draft_integrity`, 20261002000001) and the editor's autosave
+  // keeps: refused here, before any write, instead of failing there with 23514.
+  if (jsonbTextBytes(draft.data) > LIMITS.draftBytes) return failed("error");
 
   // The same function the `pages` trigger runs on every draft write: a site listed since this
   // version was published is caught here, with the hosts, before anything is written.

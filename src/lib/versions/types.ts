@@ -24,7 +24,7 @@ export type PreviewResult =
       ok: true;
       /** The stored publish form, parsed, with every image that is no longer stored replaced by null. */
       doc: PublishDoc;
-      /** How many images (photo, card and image blocks, the background) were replaced. */
+      /** How many images (photo, card and image blocks, link thumbnails, the share image, the background) were removed. */
       missingImages: number;
     }
   | { ok: false; reason: VersionFailureReason };

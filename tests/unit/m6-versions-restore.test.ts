@@ -249,6 +249,175 @@ describe("M6-49 images: nothing outside the owner's folder, nothing that is gone
   });
 });
 
+describe("M6-49 images: link thumbnails (M6-20) and the share image (M6-32) follow the same rules", () => {
+  const thumb = { path: `${OWNER_UID}/thumb-aaaaaaaa.webp`, width: 96, height: 96 };
+  const sharePic = { path: `${OWNER_UID}/share-bbbbbbbb.webp`, width: 1200, height: 630 };
+  const linkBlock = (icon: unknown, id = "link-thumb-1") =>
+    ({
+      id,
+      type: "link",
+      visible: true,
+      label: "Portrait sessions",
+      url: "https://maraokafor.com/book/portraits",
+      icon,
+    }) as PublishDoc["blocks"][number];
+  const docWith = (over: Partial<PublishDoc>): PublishDoc => ({ ...fullPublished, ...over });
+  const withThumb = (icon: unknown = { type: "image", image: thumb }) =>
+    docWith({ blocks: [...fullPublished.blocks, linkBlock(icon)] });
+  const withShare = (image: unknown = sharePic) =>
+    docWith({ share: { title: "Mara", image } as PublishDoc["share"] });
+  const linkOf = (doc: PublishDoc, id = "link-thumb-1") =>
+    doc.blocks.find((b) => b.id === id) as Extract<PublishDoc["blocks"][number], { type: "link" }>;
+
+  it("M6-49 ownedImagePaths names a link thumbnail and the share image, once each, in the owner's folder only", () => {
+    const doc = docWith({
+      blocks: [
+        ...fullPublished.blocks,
+        linkBlock({ type: "image", image: thumb }),
+        linkBlock({ type: "image", image: thumb }, "link-thumb-2"),
+        linkBlock(
+          {
+            type: "image",
+            image: { path: `${OTHER_UID}/thumb-cccccccc.webp`, width: 96, height: 96 },
+          },
+          "link-thumb-3",
+        ),
+        linkBlock({ type: "builtin", name: "star" }, "link-builtin-1"),
+      ],
+      share: { image: sharePic },
+    });
+    const paths = ownedImagePaths(doc, OWNER_UID, ORIGIN);
+    expect(paths.filter((p) => p === thumb.path)).toHaveLength(1);
+    expect(paths).toContain(sharePic.path);
+    expect(paths.some((p) => p.startsWith(OTHER_UID))).toBe(false);
+  });
+
+  it("M6-49 a link thumbnail that is stored is kept; a built-in icon is never looked up or touched", () => {
+    const doc = docWith({
+      blocks: [
+        ...fullPublished.blocks,
+        linkBlock({ type: "image", image: thumb }),
+        linkBlock({ type: "builtin", name: "star" }, "link-builtin-1"),
+      ],
+    });
+    const asked: string[] = [];
+    const result = nullMissingImages(doc, OWNER_UID, ORIGIN, (path) => {
+      asked.push(path);
+      return true;
+    });
+    expect(result.missingImages).toBe(0);
+    expect(result.doc).toEqual(doc);
+    expect(linkOf(result.doc).icon).toEqual({ type: "image", image: thumb });
+    expect(linkOf(result.doc, "link-builtin-1").icon).toEqual({ type: "builtin", name: "star" });
+    expect(asked).not.toContain("star");
+  });
+
+  it("M6-49 a link thumbnail whose object is gone is removed from the link (the key goes, the link stays) and counted", () => {
+    const result = nullMissingImages(withThumb(), OWNER_UID, ORIGIN, (p) => p !== thumb.path);
+    const link = linkOf(result.doc);
+    expect("icon" in link).toBe(false);
+    expect(link.label).toBe("Portrait sessions");
+    expect(link.url).toBe("https://maraokafor.com/book/portraits");
+    expect(result.missingImages).toBe(1);
+    // the draft schema accepts the link without its icon
+    const theme = restoredTheme(fullPublished, fullPublished.tokens, noirTokens, false);
+    expect(draftDocSchema.safeParse(versionToDraft(result.doc, theme, 2)).success).toBe(true);
+  });
+
+  it("M6-49 a link thumbnail in another user's folder is dropped without asking Storage", () => {
+    const doc = withThumb({
+      type: "image",
+      image: { path: `${OTHER_UID}/thumb-cccccccc.webp`, width: 96, height: 96 },
+    });
+    const asked: string[] = [];
+    const result = nullMissingImages(doc, OWNER_UID, ORIGIN, (path) => {
+      asked.push(path);
+      return true;
+    });
+    expect("icon" in linkOf(result.doc)).toBe(false);
+    expect(result.missingImages).toBe(1);
+    expect(asked.some((p) => p.startsWith(OTHER_UID))).toBe(false);
+  });
+
+  it("M6-49 a share image that is stored is kept; one that is gone becomes null, keeps the share text, and is counted", () => {
+    const kept = nullMissingImages(withShare(), OWNER_UID, ORIGIN, everythingStored);
+    expect(kept.doc.share).toEqual({ title: "Mara", image: sharePic });
+    expect(kept.missingImages).toBe(0);
+
+    const gone = nullMissingImages(withShare(), OWNER_UID, ORIGIN, (p) => p !== sharePic.path);
+    expect(gone.doc.share).toEqual({ title: "Mara", image: null });
+    expect(gone.missingImages).toBe(1);
+  });
+
+  it("M6-49 a share image in another user's folder is dropped without asking Storage", () => {
+    const other = { path: `${OTHER_UID}/share-bbbbbbbb.webp`, width: 1200, height: 630 };
+    const asked: string[] = [];
+    const result = nullMissingImages(withShare(other), OWNER_UID, ORIGIN, (path) => {
+      asked.push(path);
+      return true;
+    });
+    expect(result.doc.share?.image).toBeNull();
+    expect(result.missingImages).toBe(1);
+    expect(asked.some((p) => p.startsWith(OTHER_UID))).toBe(false);
+  });
+
+  it("M6-49 one count per place: photo, card, image block, thumbnail, share image and background all gone", () => {
+    const doc: PublishDoc = {
+      ...withThumb(),
+      share: { image: sharePic },
+      tokens: { ...fullPublished.tokens, bgImage: bgUrl(OWNER_UID), bgType: "image" },
+    };
+    const result = nullMissingImages(doc, OWNER_UID, ORIGIN, () => false);
+    expect(result.missingImages).toBe(3 + 1 + 1 + 1);
+    expect(result.backgroundMissing).toBe(true);
+  });
+
+  it("M6-49 a document with neither a thumbnail nor a share card comes back as before (no stray keys)", () => {
+    const result = nullMissingImages(fullPublished, OWNER_UID, ORIGIN, () => false);
+    expect("share" in result.doc).toBe(false);
+    expect(result.doc.blocks.every((b) => !("icon" in b))).toBe(true);
+  });
+
+  it("M6-49 does not mutate the document it was given (thumbnail and share image)", () => {
+    const doc: PublishDoc = { ...withThumb(), share: { title: "T", image: sharePic } };
+    const before = JSON.stringify(doc);
+    nullMissingImages(doc, OWNER_UID, ORIGIN, () => false);
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+
+  it("M6-49 the restored draft carries the version's share card, and publishing it gives the share card back", () => {
+    const doc: PublishDoc = {
+      ...withThumb(),
+      share: { title: "Mara Okafor", description: "Book a shoot", image: sharePic },
+    };
+    const theme = restoredTheme(doc, doc.tokens, noirTokens, false);
+    const draft = versionToDraft(doc, theme, 3);
+    expect(draft.share).toEqual(doc.share);
+    const parsed = draftDocSchema.parse(draft);
+    expect(parsed.share).toEqual(doc.share);
+    expect(toPublishForm(parsed, noirTokens).share).toEqual(doc.share);
+  });
+
+  it("M6-49 a version with no share card restores to a draft with no share key at all", () => {
+    const theme = restoredTheme(fullPublished, fullPublished.tokens, noirTokens, false);
+    expect("share" in versionToDraft(fullPublished, theme, 3)).toBe(false);
+  });
+
+  it("M6-49 a restored draft whose thumbnail and share image are gone still validates and publishes without them", () => {
+    const doc: PublishDoc = {
+      ...withThumb(),
+      share: { title: "Mara", image: sharePic },
+    };
+    const checked = nullMissingImages(doc, OWNER_UID, ORIGIN, () => false);
+    const theme = restoredTheme(doc, doc.tokens, noirTokens, false);
+    const parsed = draftDocSchema.parse(versionToDraft(checked.doc, theme, 4));
+    expect(parsed.share).toEqual({ title: "Mara", image: null });
+    const again = toPublishForm(parsed, noirTokens);
+    expect(again.share).toEqual({ title: "Mara" });
+    expect("icon" in linkOf(again)).toBe(false);
+  });
+});
+
 describe("M6-49 the restored draft", () => {
   it("M6-49 keeps the profile, the blocks in order with their ids, all visible, and sets rev", () => {
     const theme = restoredTheme(fullPublished, fullPublished.tokens, noirTokens, false);

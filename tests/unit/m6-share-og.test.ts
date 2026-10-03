@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { publishedDocSchema, toPublishForm, emptyDraft, type DraftDoc } from "@/lib/document";
+import {
+  SHARE_IMAGE_MIN_WIDTH,
+  publishedDocSchema,
+  toPublishForm,
+  emptyDraft,
+  type DraftDoc,
+} from "@/lib/document";
 import { pngSizeOf } from "../e2e/m2/publish-helpers";
 import { blocks } from "./fixtures/page-document";
 
@@ -188,9 +194,9 @@ describe("M6-32 shareImagePng draws the picture", () => {
   });
 
   it("turns a picture that says it lies on its side upright before it crops", async () => {
-    // 1600x400 pixels with orientation 6: shown as 400x1600, cropped to the frame, still 1200x630.
+    // 2400x600 pixels with orientation 6: shown as 600x2400, cropped to the frame, still 1200x630.
     const turned = await sharp({
-      create: { width: 1600, height: 400, channels: 3, background: BLUE },
+      create: { width: 2400, height: 600, channels: 3, background: BLUE },
     })
       .jpeg()
       .withMetadata({ orientation: 6 })
@@ -198,6 +204,50 @@ describe("M6-32 shareImagePng draws the picture", () => {
     mockFetch(async () => bytesResponse(turned, "image/jpeg"));
     const png = await shareOg.shareImagePng(ref({ path: `${UID}/img-0123456789ab.jpg` }));
     expect(pngSizeOf(png!)).toEqual({ width: 1200, height: 630 });
+  });
+});
+
+describe("M6-32 shareImagePng measures the picture itself, not the width its reference declares", () => {
+  const solid = (width: number, height: number) =>
+    sharp({ create: { width, height, channels: 3, background: BLUE } })
+      .png()
+      .toBuffer();
+  const pngRef = (over: Record<string, unknown> = {}) =>
+    ref({ path: `${UID}/img-0123456789ab.png`, ...over });
+
+  it("a stored file under 600 pixels wide gets the generated card (null) even when the reference says 600 or more", async () => {
+    for (const [width, height] of [
+      [500, 300],
+      [599, 400],
+      [100, 100],
+    ] as const) {
+      mockFetch(async () => bytesResponse(await solid(width, height), "image/png"));
+      for (const declared of [600, 1200, 1600]) {
+        expect(
+          await shareOg.shareImagePng(pngRef({ width: declared, height })),
+          `${width}x${height} declared ${declared}`,
+        ).toBeNull();
+      }
+    }
+  });
+
+  it("a stored file of exactly 600 pixels wide is drawn", async () => {
+    expect(SHARE_IMAGE_MIN_WIDTH).toBe(600);
+    mockFetch(async () => bytesResponse(await solid(600, 315), "image/png"));
+    const png = await shareOg.shareImagePng(pngRef({ width: 600, height: 315 }));
+    expect(pngSizeOf(png!)).toEqual({ width: 1200, height: 630 });
+  });
+
+  it("the width that counts is the upright one: a picture that lies on its side and is 400 wide upright is refused", async () => {
+    // 1600x400 pixels with orientation 6 is shown as 400x1600.
+    const turned = await sharp({
+      create: { width: 1600, height: 400, channels: 3, background: BLUE },
+    })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    mockFetch(async () => bytesResponse(turned, "image/jpeg"));
+    expect(await shareOg.shareImagePng(ref({ path: `${UID}/img-0123456789ab.jpg` }))).toBeNull();
   });
 });
 
@@ -389,6 +439,23 @@ describe("M6-32 the cache key and getOgPng", () => {
       // Only the picture was asked for: no font, no emoji CDN, no other host.
       expect(calls.map((call) => call.url)).toEqual([URL_OF(PATH)]);
     }
+  });
+
+  it("a stored file under 600 pixels wide that its reference declares as 600 wide gets the generated card", async () => {
+    const plain = await og.getOgPng(page(doc()));
+    mockFetch(async () =>
+      bytesResponse(
+        await sharp({ create: { width: 500, height: 300, channels: 3, background: BLUE } })
+          .png()
+          .toBuffer(),
+        "image/png",
+      ),
+    );
+    const png = await og.getOgPng(
+      page(doc({ title: "T", image: ref({ width: 600, height: 360 }) })),
+    );
+    expect(pngSizeOf(png)).toEqual({ width: 1200, height: 630 });
+    expect(png.equals(plain)).toBe(true);
   });
 
   it("a page without share fields gets the same bytes as the generated card, with no request", async () => {

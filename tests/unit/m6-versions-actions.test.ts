@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { LIMITS } from "@/lib/document";
 import { fullPublished } from "./fixtures/page-document";
 
 vi.mock("server-only", () => ({}));
@@ -19,13 +20,13 @@ vi.mock("@/lib/supabase/admin", () => ({
 const getSessionUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({ getSessionUser }));
 // The size guard cannot be reached with a document that passes the schema (its limits are far
-// below the cap), so one test makes the measure report a draft over the cap.
-const size = { forceOver: false };
+// below the cap), so a test makes the measure report the size it wants.
+const size = { forceBytes: null as number | null };
 vi.mock("@/lib/editor/size", async (original) => {
   const real = await original<typeof import("@/lib/editor/size")>();
   return {
     ...real,
-    jsonbTextBytes: (value: unknown) => (size.forceOver ? 524_289 : real.jsonbTextBytes(value)),
+    jsonbTextBytes: (value: unknown) => size.forceBytes ?? real.jsonbTextBytes(value),
   };
 });
 
@@ -505,6 +506,92 @@ describe("M6-49 the work", () => {
     expect(draft.theme.overrides.bgType).toBe("solid");
   });
 
+  const THUMB = `${OWNER}/thumb-aaaaaaaa.webp`;
+  const SHARE_PIC = `${OWNER}/share-bbbbbbbb.webp`;
+  const docWithThumbAndShare = {
+    ...fullPublished,
+    blocks: [
+      ...fullPublished.blocks,
+      {
+        id: "link-thumb-1",
+        type: "link" as const,
+        visible: true,
+        label: "Portrait sessions",
+        url: "https://maraokafor.com/book/portraits",
+        icon: { type: "image" as const, image: { path: THUMB, width: 96, height: 96 } },
+      },
+    ],
+    share: {
+      title: "Mara",
+      image: { path: SHARE_PIC, width: 1200, height: 630 },
+    },
+  };
+  type WrittenDraft = {
+    share?: { title?: string; image?: unknown };
+    blocks: { id: string; icon?: unknown }[];
+  };
+
+  it("M6-49 restore with a missing link thumbnail and share image drops the thumbnail, nulls the share image and counts both", async () => {
+    const world = makeWorld({
+      versions: [{ id: VERSION, page_id: PAGE, version_no: 8, document: docWithThumbAndShare }],
+    });
+    const { client, calls } = fakeAdmin(world);
+    const asked: string[] = [];
+    const result = await restorePageVersionCore(
+      { pageId: PAGE, versionId: VERSION, userId: OWNER },
+      {
+        admin: client,
+        // the photo, the card and the image block are stored; the thumbnail and the share image are not
+        mediaExists: async (path) => {
+          asked.push(path);
+          return path !== THUMB && path !== SHARE_PIC;
+        },
+      },
+    );
+    expect(result).toEqual({ ok: true, restored: 8, missingImages: 2 });
+    expect(asked).toEqual(expect.arrayContaining([THUMB, SHARE_PIC]));
+    const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
+    const link = draft.blocks.find((b) => b.id === "link-thumb-1")!;
+    expect("icon" in link).toBe(false);
+    expect(draft.share).toEqual({ title: "Mara", image: null });
+  });
+
+  it("M6-49 restore with the thumbnail and share image stored keeps both in the draft", async () => {
+    const world = makeWorld({
+      versions: [{ id: VERSION, page_id: PAGE, version_no: 8, document: docWithThumbAndShare }],
+    });
+    const { client, calls } = fakeAdmin(world);
+    const result = await restorePageVersionCore(
+      { pageId: PAGE, versionId: VERSION, userId: OWNER },
+      { admin: client, mediaExists: async () => true },
+    );
+    expect(result).toEqual({ ok: true, restored: 8, missingImages: 0 });
+    const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
+    expect(draft.blocks.find((b) => b.id === "link-thumb-1")?.icon).toEqual({
+      type: "image",
+      image: { path: THUMB, width: 96, height: 96 },
+    });
+    expect(draft.share).toEqual(docWithThumbAndShare.share);
+  });
+
+  it("M6-49 preview with a missing link thumbnail and share image shows neither and counts both, and writes nothing", async () => {
+    const world = makeWorld({
+      versions: [{ id: VERSION, page_id: PAGE, version_no: 8, document: docWithThumbAndShare }],
+    });
+    const { client, calls } = fakeAdmin(world);
+    const result = await loadVersionPreviewCore(
+      { pageId: PAGE, versionId: VERSION, userId: OWNER },
+      { admin: client, mediaExists: async (path) => path !== THUMB && path !== SHARE_PIC },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.missingImages).toBe(2);
+    const link = result.doc.blocks.find((b) => b.id === "link-thumb-1")!;
+    expect("icon" in link).toBe(false);
+    expect(result.doc.share?.image).toBeNull();
+    expect(writes(calls)).toEqual([]);
+  });
+
   it("M6-49 a link to a site on the blocklist now is blocked_link with the hosts, and nothing is written", async () => {
     const { client, calls } = fakeAdmin(
       makeWorld({ blockedHosts: ["example.test", "bad.example"] }),
@@ -571,19 +658,39 @@ describe("M6-49 the work", () => {
     expect(logged).not.toContain("SECRET-ROW");
   });
 
-  it("M6-49 a restored draft over the 524288-byte cap is an error and nothing is written", async () => {
+  it("M6-49 a restored draft over the database cap (LIMITS.draftBytes, 262144 bytes) is an error and nothing is written", async () => {
+    // Between the database's cap and the old 524288 line: before the fix this went on to the
+    // database and failed there with 23514; it must be refused before any write.
+    for (const bytes of [LIMITS.draftBytes + 1, 300_000, 524_289]) {
+      const { client, calls } = fakeAdmin(makeWorld());
+      size.forceBytes = bytes;
+      try {
+        const result = await restorePageVersionCore(
+          { pageId: PAGE, versionId: VERSION, userId: OWNER },
+          { admin: client, mediaExists: async () => true },
+        );
+        expect(result, String(bytes)).toMatchObject({ ok: false, reason: "error" });
+      } finally {
+        size.forceBytes = null;
+      }
+      expect(writes(calls), String(bytes)).toEqual([]);
+    }
+  });
+
+  it("M6-49 a restored draft of exactly LIMITS.draftBytes is written", async () => {
+    expect(LIMITS.draftBytes).toBe(262_144);
     const { client, calls } = fakeAdmin(makeWorld());
-    size.forceOver = true;
+    size.forceBytes = LIMITS.draftBytes;
     try {
       const result = await restorePageVersionCore(
         { pageId: PAGE, versionId: VERSION, userId: OWNER },
         { admin: client, mediaExists: async () => true },
       );
-      expect(result).toMatchObject({ ok: false, reason: "error" });
+      expect(result).toMatchObject({ ok: true });
     } finally {
-      size.forceOver = false;
+      size.forceBytes = null;
     }
-    expect(writes(calls)).toEqual([]);
+    expect(writes(calls)).toHaveLength(1);
   });
 
   it("M6-49 a theme that is another user's is not used: the lookup is scoped to the owner and system themes", async () => {
