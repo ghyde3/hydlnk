@@ -17,9 +17,9 @@ A multi-tenant link-in-bio platform that wins on design control: block layouts, 
 | --- | --- | --- |
 | Accounts | Email magic link + Google OAuth, handle claim, reserved handles | Team members, roles |
 | Profile | Photo (upload/replace/remove, initials fallback), display name, bio (160 chars) | Verified badge |
-| Blocks | Link button, link card, header, text, image, social icon row, embed (YouTube, Spotify), divider, 2-column grid | Forms, email capture, product/checkout blocks, scheduled links |
+| Blocks | Link button (optional icon or thumbnail, featured style), link card, header, text (bold, italic, links), image (focus point and shape), social icon row, embed (YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music, Twitch; tap to play), divider, 2-column grid | Forms, email capture, product/checkout blocks, scheduled links |
 | Design | Theme tokens editor, per-block overrides, Google Fonts allowlist, backgrounds (solid, gradient, image), saved themes | Custom CSS/HTML, public theme gallery |
-| Publishing | Draft vs published, live phone preview, OG image per page | Version history |
+| Publishing | Draft vs published, live phone preview, OG image per page, share title, description and image, QR code, version history (Pro and Studio) | — |
 | Domains | `handle.hydlnk.com`, custom domains with auto SSL | Multiple pages per domain, `hydlnk.com/handle` paths |
 | Analytics | Views, clicks, CTR per link, referrers, device, country | Exports (Studio), UTM builder |
 | Billing | Stripe Checkout, webhook → plan, Stripe hosted customer portal | In-app billing UI |
@@ -79,10 +79,11 @@ Every visual choice on a tenant page is a token; tokens become CSS variables on 
 | Type | `fontHeading`, `fontBody` (Google Fonts allowlist), `scale`, `weightHeading`, `letterCase` |
 | Shape | `radius`, `borderWidth`, `buttonStyle` (fill, outline, soft, shadow, pill) |
 | Space | `density` (compact, regular, airy), `maxWidth`, `align` |
-| Background | `bgType` (solid, gradient, image), `bgImage`, `overlayOpacity`, `blur` |
+| Background | `bgType` (solid, gradient, image), `bgImage`, `overlayOpacity`, `blur`, and the gradient: `gradientAngle` (0, 45, 90, 135, 180, 225, 270 or 315 degrees; 180 is top to bottom), `gradientFrom`, `gradientTo` (a hex color, or null to follow the page's surface and background colors) |
 
-- **Resolution order** (later wins): system default → applied theme → page overrides → block overrides. Block overrides are limited to color, button style and radius.
-- **Saved themes.** "Save as theme" copies the page's resolved tokens into `themes`. Applying a theme replaces the draft's theme reference and clears its page-level overrides (with undo). Ship 6–8 system themes (mockups show Noir, Ivory, Smoke).
+- **Resolution order** (later wins): system default → applied theme → page overrides → block overrides. Block overrides are limited to color, button style, corner radius and border thickness: ten token keys (accent, buttonBg, buttonText, text, textMuted, surface, border, buttonStyle, radius, borderWidth), on every block type (M6-45). No font, spacing or background override exists.
+- **Saved themes.** "Save as theme" copies the page's resolved tokens into `themes`. Applying a theme replaces the draft's theme reference and clears its page-level overrides (with undo). Ship 16 system themes (Noir, Ivory, Smoke, Paper, Sage, Midnight, Ember, Linen, Cloud, Blush, Citrus, Graphite, Ocean, Plum, Forest, Sunset). A theme can be previewed on the page before it is applied: the preview is derived on screen and is never saved, published or sent anywhere (M6-44).
+- **Starter templates.** "Start from a template" in the editor's Add a block card replaces the page's blocks, theme and page-level overrides with one of six creator-type starters (a static catalog; addresses and images stay empty, so Publish refuses a template until they are filled in). It is one edit and one undo step, the same on every plan, and never part of signup (M6-40).
 - **Theme changes wait for Publish.** Applying a theme only changes the draft. Editing a saved theme changes the drafts that use it, which then show "Unpublished changes"; live pages keep their frozen tokens until each is republished. If a saved theme is deleted, drafts that used it fall back to the system default.
 - **Editor.** Profile section, then block list with drag reorder (dnd-kit), live preview rendering the same component tree as the public page. Autosave the draft; Publish is explicit.
 
@@ -126,6 +127,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 | Footer badge | "Made with HYDLNK" | Removable | Removable |
 | Uploads | 10 MB | 100 MB | 1 GB |
 | Analytics | Per-link clicks, 30 days | 1 year, referrers, country, device | + CSV export |
+| Version history | — | Last 25 published versions: preview and restore | Last 25 published versions: preview and restore |
 | Scheduled links (not in v1) | — | Later | Later |
 | Team access | — | — | Invite editors per page |
 

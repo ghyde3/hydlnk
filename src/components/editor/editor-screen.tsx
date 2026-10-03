@@ -23,6 +23,7 @@ import { DEFAULT_PAGE_NAME } from "@/lib/pages/name";
 import { computePublishStatus } from "@/lib/editor/status";
 import type { TokenSet } from "@/lib/theme";
 import { PageTokensProvider } from "@/components/themes";
+import { StartFromTemplate, TemplateToast } from "@/components/templates";
 import { AddBlockCard } from "./add-block-card";
 import { BlockList } from "./block-list";
 import { EditorHeader } from "./editor-header";
@@ -37,6 +38,7 @@ import {
 import { PreviewPanel } from "./preview-panel";
 import { checkTap, focusProfilePart, type PreviewTap } from "./preview-taps";
 import { ProfileCard } from "./profile-card";
+import { ShareCard } from "./share-card";
 import { PublishAlert } from "./publish-alert";
 import { PublishedToast } from "./published-toast";
 import { SaveBanner } from "./save-banner";
@@ -56,6 +58,17 @@ export interface EditorScreenProps {
   name?: string;
   /** The public page, "http://mara.localhost:3000" in development. */
   liveUrl: string;
+  /** The page's handle: the QR code's file names are `{handle}-qr.png` and `{handle}-qr.svg` (M6-31). */
+  handle: string;
+  /**
+   * The address the QR code encodes (M6-31), decided on the server: `https://{hostname}/` of the
+   * primary custom domain, else the handle's origin with a slash.
+   */
+  publicAddress: string;
+  /** The page's primary custom domain (the oldest verified one), or null: the share preview shows it. */
+  primaryDomain: string | null;
+  /** `pages.published_at` (ISO), or null: it versions the live `/og` image the share preview shows. */
+  publishedAt: string | null;
   draft: DraftDoc;
   /** The stored `draft->>rev` (null when the stored draft has none): the stale-tab guard's filter. */
   revKey: string | null;
@@ -63,6 +76,11 @@ export interface EditorScreenProps {
   repaired: boolean;
   /** The draft's theme row, or null (none, or a deleted one): the system default applies. */
   themeTokens: Partial<TokenSet> | null;
+  /**
+   * The token sets of the six themes the starter templates use, by theme id (M6-40): the preview
+   * shows a template's theme the moment it is applied, and the template cards draw its colors.
+   */
+  templateThemes?: Record<string, Partial<TokenSet>>;
   /** `pages.published_at` is set. */
   hasPublished: boolean;
   /** `pages.published` as the stored publish form; null when none or unreadable. */
@@ -78,9 +96,25 @@ export interface EditorScreenProps {
  * autosave queue (src/lib/editor/autosave.ts).
  */
 export function EditorScreen(props: EditorScreenProps) {
-  const { pageId, address, liveUrl, themeTokens, chrome } = props;
+  const { pageId, address, liveUrl, chrome } = props;
   const [state, dispatch] = useReducer(editorReducer, props.draft, initialEditorState);
+  // The tokens of the theme a draft points at (M6-40): the one the page loaded with, or one of the
+  // template themes. A starter template changes the theme, so the preview, the status chip and
+  // Publish's comparison follow the draft's current reference instead of the loaded one.
+  const { themeTokens: loadedThemeTokens, templateThemes } = props;
+  const loadedRef = props.draft.theme.ref;
+  const themeTokensOf = useCallback(
+    (ref: string | null): Partial<TokenSet> | null => {
+      if (ref === null) return null;
+      if (ref === loadedRef && loadedThemeTokens !== null) return loadedThemeTokens;
+      return templateThemes?.[ref] ?? null;
+    },
+    [loadedRef, loadedThemeTokens, templateThemes],
+  );
+  const themeTokens = themeTokensOf(state.draft.theme.ref);
   const [published, setPublished] = useState({ has: props.hasPublished, doc: props.published });
+  // When the page was last published: the share preview's `/og?v=` follows it (M6-33).
+  const [publishedAt, setPublishedAt] = useState(props.publishedAt);
   const [publishing, setPublishing] = useState(false);
   // What went wrong with the last Publish when there is no field to point at (M5-15). `retry` is
   // whether pressing Publish again can help (a failure on the way) or not (signed out, suspended).
@@ -152,7 +186,11 @@ export function EditorScreen(props: EditorScreenProps) {
       const snapshot = savedDraft() ?? draftRef.current;
       const result = await publishPage(pageId);
       if (result.ok) {
-        setPublished({ has: true, doc: toPublishForm(snapshot, themeTokens) });
+        setPublished({
+          has: true,
+          doc: toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)),
+        });
+        setPublishedAt(result.publishedAt);
         dispatch({ type: "publish/clear-errors" });
         setPublishedToken((token) => (token ?? 0) + 1);
         return;
@@ -175,7 +213,7 @@ export function EditorScreen(props: EditorScreenProps) {
     } finally {
       setPublishing(false);
     }
-  }, [publishing, flush, savedDraft, autosaveStatus, pageId, themeTokens, setView]);
+  }, [publishing, flush, savedDraft, autosaveStatus, pageId, themeTokensOf, setView]);
 
   // A "Couldn’t publish. A link points to a blocked site" note belongs to the refusal it was shown
   // for: once a save has gone through (the refusal is gone) it is stale and is not shown.
@@ -183,6 +221,13 @@ export function EditorScreen(props: EditorScreenProps) {
     publishNote && publishNote.message === BLOCKED_PUBLISH_NOTE && blocked === null
       ? null
       : publishNote;
+
+  // The page's current social image, as the live page's metadata names it (M2-30): the share
+  // preview shows it when the draft has no share image of its own.
+  const publishedMs = publishedAt ? Date.parse(publishedAt) : Number.NaN;
+  const liveOgUrl = published.has
+    ? `${liveUrl}/og${Number.isFinite(publishedMs) ? `?v=${publishedMs}` : ""}`
+    : null;
 
   const nameError =
     state.publishErrors.find((error) => error.field === "profile.name")?.message ?? null;
@@ -216,6 +261,7 @@ export function EditorScreen(props: EditorScreenProps) {
         status={status}
         saveStatus={autosave.status}
         liveUrl={published.has ? liveUrl : null}
+        qr={{ handle: props.handle, address: props.publicAddress }}
         publishing={publishing}
         blocked={blocked !== null}
         undoRedo={undoRedo}
@@ -277,7 +323,27 @@ export function EditorScreen(props: EditorScreenProps) {
             focus={state.focus}
             dispatch={dispatch}
           />
-          <AddBlockCard blockCount={state.draft.blocks.length} dispatch={dispatch} />
+          <ShareCard
+            share={state.draft.share}
+            name={state.draft.profile.name}
+            bio={state.draft.profile.bio}
+            host={props.primaryDomain ?? address}
+            liveOgUrl={liveOgUrl}
+            errors={state.publishErrors}
+            focus={state.focus}
+            dispatch={dispatch}
+          />
+          <AddBlockCard
+            blockCount={state.draft.blocks.length}
+            dispatch={dispatch}
+            footer={
+              <StartFromTemplate
+                draft={state.draft}
+                themes={templateThemes ?? {}}
+                dispatch={dispatch}
+              />
+            }
+          />
           <PageTokensProvider tokens={form.tokens}>
             <BlockList
               blocks={state.draft.blocks}
@@ -324,7 +390,12 @@ export function EditorScreen(props: EditorScreenProps) {
         className="pointer-events-none fixed inset-x-0 top-0 bottom-[var(--toast-lift)] z-30 [transform:translateZ(0)] hl:bottom-0"
       >
         <UndoToast deleted={state.deleted} dispatch={dispatch} />
-        <PublishedToast token={publishedToken} liveUrl={liveUrl} lifted={state.deleted !== null} />
+        <TemplateToast toast={state.templateToast} dispatch={dispatch} onUndo={undoRedo.undo} />
+        <PublishedToast
+          token={publishedToken}
+          liveUrl={liveUrl}
+          lifted={state.deleted !== null || state.templateToast !== null}
+        />
       </div>
     </>
   );

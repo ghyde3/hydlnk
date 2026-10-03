@@ -29,7 +29,8 @@ const publishButton = (page: Page) =>
   page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
 const alertFor = (page: Page, text: string | RegExp) =>
   page.getByRole("alert").filter({ hasText: text });
-const rowButton = (page: Page, id: string) => rowOf(page, id).locator("button[aria-expanded]");
+const rowButton = (page: Page, id: string) =>
+  rowOf(page, id).locator("button[aria-expanded]").first();
 
 const BAD = { link: "lnkBad001", embed: "embBad001", image: "imgBad001", header: "hdrGood01" };
 
@@ -96,7 +97,7 @@ test.describe("M2-24 publish errors", () => {
     await rowButton(page, BAD.embed).click();
     await expect(
       rowOf(page, BAD.embed).getByText(
-        "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.",
+        "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.",
       ),
     ).toBeVisible();
     await rowButton(page, BAD.image).click();

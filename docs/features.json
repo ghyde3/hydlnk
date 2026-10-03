@@ -2821,7 +2821,7 @@
         "At 1440x900 on the same URL: the buttons stay within the 480px column, the icon or thumbnail sits at the start edge and the label is centered in the remaining space."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-21",
@@ -2839,7 +2839,7 @@
         "At 1440x900 on the same URL: the panel sits inside the expanded block (max 720px column) with the icons in at most four rows and no horizontal scroll."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-22",
@@ -2858,7 +2858,7 @@
         "At 1440x900 on the same URL: the featured buttons stay within the 480px column and the animation does not shift neighboring blocks (the page height is the same at the start and halfway through a cycle)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-23",
@@ -2875,7 +2875,7 @@
         "At 1440x900 on the same URL: frames stay within the 480px column and keep their ratios."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-24",
@@ -2893,7 +2893,7 @@
         "At 1440x900 on the same URL: the dialog is centered, about 440px wide, over a dimmed page that does not scroll; the viewfinder is 280px square."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-25",
@@ -2910,7 +2910,7 @@
         "At 1440x900 on the same URL: the picker and the 'How it will look' strip sit side by side inside the expanded block (max 720px column)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-26",
@@ -2929,7 +2929,7 @@
         "At 1440x900 on the same URL: the message sits under the field inside the expanded block (max 720px column) without shifting the Caption field."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-27",
@@ -2947,7 +2947,7 @@
         "At 1440x900 on the same URL: the facades and players stay within the 480px column."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-28",
@@ -2965,7 +2965,7 @@
         "At 1440x900 on the same URL: the text stays within the 480px column, centered or left-aligned by the `align` token, with links underlined in the accent color."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-29",
@@ -2983,7 +2983,7 @@
         "At 1440x900 on the same URL: the error sits under the link’s row inside the expanded block and the layout matches Editor.dc.html."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-30",
@@ -3001,7 +3001,7 @@
         "At 1440x900 on the same URL: the toolbar sits on one row above the textarea and the link panel opens below it inside the expanded block (max 720px column)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-31",
@@ -3019,7 +3019,7 @@
         "At 1440x900 on the same URL: the dialog is centered, about 420px wide, the code is 280px square and the two download buttons sit side by side."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-32",
@@ -3037,7 +3037,7 @@
         "At 1440x900 on the same URL: the page is unchanged, within the 480px column, and the response HTML contains the share title in `og:title` exactly once."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-33",
@@ -3054,7 +3054,7 @@
         "At 1440x900 on the same URL: the card sits in the block column (max 720px) with the preview card under the fields and no horizontal scroll."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-34",
@@ -3072,7 +3072,7 @@
         "At 1440x900 on the same URL: the column is no wider than 480px and centered, the page background covers the viewport, and the same page opened in the editor preview matches it."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-40",
@@ -3092,7 +3092,7 @@
         "At 1440x900 on the same URL: the dialog is centered, at most 720px wide, with the cards in two columns; focus starts on the first card's 'Use this template' button, Tab stays inside the dialog, and Escape closes it and returns focus to 'Start from a template'."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-41",
@@ -3110,7 +3110,7 @@
         "At 1440x900 on the same URL: the gradient spans the full viewport width and height behind the 480px column with no unfilled strip below the content."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-42",
@@ -3128,7 +3128,7 @@
         "At 1440x900 on the same URL: the gradient panel sits inside the Background group in the 720px column with no horizontal scroll and the phone bezel updates as each control changes."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-43",
@@ -3145,7 +3145,7 @@
         "At 1440x900 on the same URL: the cards fill the 720px column in auto-fill columns of at least 130px, the grid grows taller without moving the preview column, and the layout matches M3-19."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-44",
@@ -3162,7 +3162,7 @@
         "At 1440x900 on the same URL: the two buttons sit under the 'Previewing Paper' header inside the 330px preview column, the bezel stays 310x660 and sticky, and the grid is otherwise unchanged."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-45",
@@ -3180,7 +3180,7 @@
         "At 1440x900 on the same URL: every block stays inside the 480px column and the editor preview shows the same computed styles as the live page."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-46",
@@ -3196,7 +3196,7 @@
         "At 1440x900 on the same URL: the controls sit in the expanded panel (the 720px block column) with no horizontal scroll and the phone bezel preview updates as each control changes."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-47",
@@ -3214,7 +3214,7 @@
         "At 1440x900 on the same URL: the five cards sit in the 720px column beside the 330px preview, with the same order and labels as on the phone and no horizontal scroll."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-48",
@@ -3231,7 +3231,7 @@
         "Versions are never public: the public page, its OG image and the click and view routes never query page_versions (the public query counter in tests/unit shows reads of pages and accounts only), and no version content appears in a response on a tenant host. Deleting a page (M4-19) or the account (M1-22, M4-34) removes its versions (pgTAP, and the existing deletion specs count zero rows left). Versions do not keep uploaded files alive: media_paths_in_use and the M5-14 cleanup are unchanged, so replacing a photo and publishing still deletes the old file even when a stored version names it."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-49",
@@ -3249,7 +3249,7 @@
         "Logging: failures log a short code and the ids only, never the document, a URL or a token; responses never include the secret key or another page's ids."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M6-50",
@@ -3269,7 +3269,7 @@
         "At 1440x900 on the same URL: the list sits in the 720px column and the preview in the sticky 330px column, the confirmation appears inline in its row without moving the preview, and Escape closes it."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     }
   ]
 }

@@ -41,7 +41,8 @@ const IDS = {
 
 const toggle = (page: Page, id: string) =>
   rowOf(page, id).getByRole("button", { name: "Visible on page" });
-const rowButton = (page: Page, id: string) => rowOf(page, id).locator("button[aria-expanded]");
+const rowButton = (page: Page, id: string) =>
+  rowOf(page, id).locator("button[aria-expanded]").first();
 const panel = (page: Page, id: string) => page.locator(`#block-panel-${id}`);
 const countHeading = (page: Page, n: number) =>
   page.getByRole("heading", { level: 2, name: `Blocks · ${n}` });
@@ -82,7 +83,8 @@ test.describe("M2-10 add a block", () => {
     await openEditor(page);
     const card = page.getByRole("region", { name: "Add a block" });
     await expect(card.getByText("Goes to the end of the page")).toBeVisible();
-    const chips = card.getByRole("button");
+    // The nine chips; the card's secondary "Start from a template" button (M6-40) is not one.
+    const chips = card.locator("button:not([data-testid='start-from-template'])");
     await expect(chips).toHaveText(
       BLOCK_TYPES.map((t) => `+${BLOCK_TYPE_LABELS[t]}`).map((t) => t),
     );
@@ -116,7 +118,10 @@ test.describe("M2-10 add a block", () => {
       const row = rows(page).nth(i);
       expect(await row.getAttribute("data-block-type")).toBe(type);
       // Expanded, in view, with focus on the first input (a divider focuses the row).
-      await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+      await expect(row.locator("button[aria-expanded]").first()).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
       await expect(row).toBeInViewport();
       if (type === "divider") {
         await expect(row).toBeFocused();
@@ -201,12 +206,15 @@ test.describe("M2-10 add a block", () => {
     await emptyUser(context, "ad5");
     await openEditor(page);
     const card = page.getByRole("region", { name: "Add a block" });
-    const boxes = await card.getByRole("button").evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return { y: Math.round(r.y), height: r.height, right: r.right };
-      }),
-    );
+    // The nine chips (the secondary "Start from a template" button, M6-40, is on a row of its own).
+    const boxes = await card
+      .locator("button:not([data-testid='start-from-template'])")
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { y: Math.round(r.y), height: r.height, right: r.right };
+        }),
+      );
     for (const box of boxes) expect(box.height).toBeGreaterThanOrEqual(44);
     const rowCount = new Set(boxes.map((b) => b.y)).size;
     if (phoneOnly(info)) {

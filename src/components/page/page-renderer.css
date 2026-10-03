@@ -50,7 +50,22 @@
    sits on its own layer (.pg-bg) with the bg token as the color behind it. --------------------- */
 
 [data-page-root][data-bg-type="gradient"] {
-  background: linear-gradient(180deg, var(--t-surface) 0%, var(--t-bg) 55%);
+  background: linear-gradient(
+    var(--t-gradient-angle),
+    var(--t-gradient-from) 0%,
+    var(--t-gradient-to) 55%
+  );
+}
+
+/* A gradient with colors of its own (data-gradient, set by the renderer when either stop is set)
+   runs the whole length of the page. Without them, the stops above are the gradient the page has
+   always had: the surface color at 0% and the page color at 55%. */
+[data-page-root][data-bg-type="gradient"][data-gradient="custom"] {
+  background: linear-gradient(
+    var(--t-gradient-angle),
+    var(--t-gradient-from) 0%,
+    var(--t-gradient-to) 100%
+  );
 }
 
 /* The layer fills the whole page and clips the picture, which is drawn larger than the layer by
@@ -344,6 +359,160 @@
   border-radius: 999px;
 }
 
+/* Link icon and thumbnail (M6-20): one decorative first child at the start edge of the button. The
+   label is its own box that takes the space left, centered, and wraps inside it, so it never goes
+   under the icon. The glyph is stroked with currentcolor (set on the <svg>), so it follows the
+   button style and any color override. A thumbnail is a 40px square, its corners from the radius
+   token capped at 12px; 9px around it keeps a thumbnail button as tall as a plain one (58px). ---- */
+
+[data-page-root] .pg-link[data-icon] {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+[data-page-root] .pg-link[data-icon="image"] {
+  padding-block: 9px;
+  padding-inline-start: 9px;
+}
+
+[data-page-root][data-density="compact"] .pg-link[data-icon="image"] {
+  padding-block: 6px;
+}
+
+[data-page-root] .pg-link-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+[data-page-root] .pg-link-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: min(var(--t-radius), 12px);
+  object-fit: cover;
+}
+
+[data-page-root] .pg-link-label {
+  flex: 1 1 0%;
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Featured link (M6-22): the bold style. Weight 700, 8px more minimum height than a plain link at
+   the same density, and a 2px ring in the accent drawn outside the border (the block's own accent
+   override reaches it, because that override is set on the anchor). The shadow style keeps its
+   offset shadow next to the ring. A ring is a box-shadow, so nothing around it moves. ----------- */
+
+[data-page-root] .pg-link[data-featured] {
+  min-height: 66px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--t-accent);
+}
+
+[data-page-root][data-density="compact"] .pg-link[data-featured] {
+  min-height: 56px;
+}
+
+[data-page-root][data-density="airy"] .pg-link[data-featured] {
+  min-height: 72px;
+}
+
+[data-page-root] .pg-link[data-featured][data-button-style="shadow"] {
+  box-shadow:
+    0 0 0 2px var(--t-accent),
+    4px 4px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+}
+
+/* The motion of `pulse` and `shine` is CSS only and runs only when the device has not asked for
+   less motion; otherwise the link is just bold. Pulse breathes a soft halo around the ring (on the
+   anchor); shine sweeps a highlight across the button (on ::after, clipped by the button's own
+   corners), about every 4 seconds. Both are drawn from the accent and the button text color. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-page-root] .pg-link[data-featured="pulse"] {
+    animation: pg-featured-pulse 2.4s ease-in-out infinite;
+  }
+
+  [data-page-root] .pg-link[data-featured="pulse"][data-button-style="shadow"] {
+    animation-name: pg-featured-pulse-offset;
+  }
+
+  [data-page-root] .pg-link[data-featured="shine"] {
+    position: relative;
+  }
+
+  [data-page-root] .pg-link[data-featured="shine"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        105deg,
+        transparent 38%,
+        color-mix(in srgb, var(--t-button-text) 32%, transparent) 50%,
+        transparent 62%
+      )
+      0 0 / 300% 100% no-repeat;
+    background-position: 100% 0;
+    pointer-events: none;
+    animation: pg-featured-shine 4s ease-in-out infinite;
+  }
+
+  [data-page-root] .pg-link[data-featured="shine"][data-button-style="outline"]::after,
+  [data-page-root] .pg-link[data-featured="shine"][data-button-style="soft"]::after {
+    background-image: linear-gradient(
+      105deg,
+      transparent 38%,
+      color-mix(in srgb, var(--t-accent) 26%, transparent) 50%,
+      transparent 62%
+    );
+  }
+
+  @keyframes pg-featured-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 4px color-mix(in srgb, var(--t-accent) 0%, transparent);
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 8px color-mix(in srgb, var(--t-accent) 30%, transparent);
+    }
+  }
+
+  @keyframes pg-featured-pulse-offset {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 4px color-mix(in srgb, var(--t-accent) 0%, transparent),
+        4px 4px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 8px color-mix(in srgb, var(--t-accent) 30%, transparent),
+        4px 4px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+    }
+  }
+
+  @keyframes pg-featured-shine {
+    0%,
+    55% {
+      background-position: 100% 0;
+    }
+
+    100% {
+      background-position: 0 0;
+    }
+  }
+}
+
 /* Link card ---------------------------------------------------------------------------------- */
 
 [data-page-root] .pg-card {
@@ -422,8 +591,13 @@
 
 /* Header, text and divider ------------------------------------------------------------------- */
 
+/* The heading's color is its own, explicit, from the text token (M6-45): it used to be inherited
+   from the page root, and an inline variable on the heading would not have changed that. Still a
+   variable, so a theme change reaches it and a block's own text color override (set inline on the
+   heading) wins. */
 [data-page-root] .pg-header {
   margin: 12px 0 0;
+  color: var(--t-text);
   font-family: var(--t-font-heading);
   font-size: calc(26px * var(--t-scale));
   font-weight: var(--t-weight-heading);
@@ -441,6 +615,24 @@
   text-align: center;
   white-space: pre-line;
   overflow-wrap: anywhere;
+}
+
+/* Links inside text (M6-28): the accent color, always underlined (color is not the only cue), and
+   vertical padding so the box is at least 44px tall. Padding on an inline box does not change the
+   line spacing. Bold and italic need no rule of their own: they inherit the block's variables. */
+[data-page-root] .pg-text-link {
+  padding-block: 16px;
+  color: var(--t-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-text-link:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 [data-page-root][data-align="left"] .pg-header,
@@ -472,6 +664,54 @@
 [data-page-root] .pg-image-img {
   width: 100%;
   height: auto;
+  border-radius: var(--t-radius);
+}
+
+/* A shaped image (M6-23): the picture sits in a frame whose aspect-ratio is set here, so its height
+   is the same before and after the file loads. The image fills it (cover) and `object-position`
+   comes from the block's focus, written inline from two numbers (image-frame.tsx); without a focus
+   the default 50% 50% applies. Without a shape none of this applies and the image is drawn as before. */
+[data-page-root] .pg-image-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--t-radius);
+}
+
+[data-page-root] .pg-image-frame[data-shape="square"] {
+  aspect-ratio: 1 / 1;
+}
+
+[data-page-root] .pg-image-frame[data-shape="landscape"] {
+  aspect-ratio: 4 / 3;
+}
+
+[data-page-root] .pg-image-frame[data-shape="wide"] {
+  aspect-ratio: 16 / 9;
+}
+
+[data-page-root] .pg-image-frame > .pg-image-img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
+}
+
+/* An image's own border (M6-45). An image has no border: this draws one only for a block that sets
+   its own border thickness (`data-bordered`, emitted by the renderer from that block's overrides),
+   in the border token, which the block may override as well. The border is on the picture, inside
+   the shaped frame when there is one, and the picture takes the radius so the corners match. A
+   border thickness of 0 draws none. No existing image has the attribute, so none gains a border. */
+[data-page-root] .pg-image[data-bordered] .pg-image-img {
+  border: var(--t-border-width) solid var(--t-border);
+}
+
+[data-page-root] .pg-image[data-bordered] .pg-image-frame > .pg-image-img {
   border-radius: var(--t-radius);
 }
 
@@ -581,6 +821,28 @@
   max-width: 100%;
   border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
+}
+
+/* The tall and fixed-height players (M6-27): a facade of the player's own height or a short bar
+   (inline height), and an iframe that never outgrows the column. */
+[data-page-root] .pg-embed-play[data-embed-fit="player"],
+[data-page-root] .pg-embed-play[data-embed-fit="bar"] {
+  aspect-ratio: auto;
+}
+
+[data-page-root] .pg-embed-iframe {
+  max-width: 100%;
+}
+
+[data-page-root] .pg-embed-unavailable {
+  margin: 0;
+  padding: 16px 12px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 [data-page-root] .pg-embed-caption {

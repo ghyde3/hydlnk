@@ -27,6 +27,9 @@ export const noirTokens: TokenSet = {
   bgImage: null,
   overlayOpacity: 0,
   blur: 0,
+  gradientAngle: 180,
+  gradientFrom: null,
+  gradientTo: null,
 };
 
 export const OWNER_UID = "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01";

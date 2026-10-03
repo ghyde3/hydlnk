@@ -77,3 +77,9 @@ export function SocialGlyph({ platform }: { platform: SocialPlatform }) {
     </svg>
   );
 }
+
+/**
+ * The glyph shapes, for the link block's built-in icons (M6-20): the eight brand glyphs, Email (as
+ * `mail`) and Website (as `globe`) are reused as they are, so the two rows never drift apart.
+ */
+export { GLYPHS as SOCIAL_GLYPHS };

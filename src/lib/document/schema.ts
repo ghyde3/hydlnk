@@ -1,8 +1,19 @@
 import { z } from "zod";
-import { blockOverridesSchema, tokenOverridesSchema, tokenSetSchema } from "@/lib/theme";
-import { EMBED_ERROR_MESSAGE, parseEmbed } from "./embed";
+import { blockOverridesSchema, storedTokenSetSchema, tokenOverridesSchema } from "@/lib/theme";
+import { embedErrorMessage, parseEmbed } from "./embed";
+import { IMAGE_SHAPES, IMAGE_SHAPE_MESSAGE, focusSchema, type Focus } from "./focus";
 import { BLOCK_ID_PATTERN } from "./ids";
 import { LIMITS, codePointLength } from "./limits";
+import { MARK_MESSAGES, checkMarks, requireMarkRanges } from "./marks";
+import {
+  FEATURED_LIMIT_MESSAGE,
+  LINK_FEATURED,
+  LINK_FEATURED_VALUE_MESSAGE,
+  LINK_ICONS,
+  LINK_ICON_ERROR_MESSAGE,
+  featuredOverLimit,
+} from "./link-icons";
+import { SHARE_IMAGE_MIN_WIDTH, SHARE_IMAGE_WIDTH_MESSAGE } from "./share";
 import {
   PHOTO_BORDERS,
   PHOTO_SHAPES,
@@ -159,7 +170,7 @@ function url(mode: Mode, opts: { optional?: boolean; embed?: boolean } = {}): z.
     if (value === "" && opts.optional) return;
     if (opts.embed) {
       if (parseEmbed(value) === null)
-        ctx.addIssue({ code: "custom", message: EMBED_ERROR_MESSAGE });
+        ctx.addIssue({ code: "custom", message: embedErrorMessage(value) });
     } else if (!isHttpUrl(value)) {
       ctx.addIssue({ code: "custom", message: URL_ERROR_MESSAGE });
     }
@@ -170,6 +181,36 @@ function email(mode: Mode): z.ZodString {
   const base = z.string().trim().max(LIMITS.email, { error: EMAIL_ERROR_MESSAGE });
   if (mode === "draft") return base;
   return base.refine(isEmailAddress, { error: EMAIL_ERROR_MESSAGE });
+}
+
+// Text marks ------------------------------------------------------------------------------------
+
+/**
+ * One mark of a text block (M6-28). Unknown keys (`href`, `style`, `class`...) are stripped and
+ * another `type` fails. The offsets are plain finite numbers in both forms here: `toPublishForm`
+ * clips them to the text, so an offset past the end is never an error, and the stored published form
+ * is held to whole numbers inside the text by `requireMarkRanges`. A link's address follows the
+ * URL rule (a draft keeps any string, Publish wants http(s)).
+ */
+function markSchema(mode: Mode) {
+  const range = { start: z.number(), end: z.number() };
+  return z.discriminatedUnion(
+    "type",
+    [
+      z.object({ type: z.literal("bold"), ...range }),
+      z.object({ type: z.literal("italic"), ...range }),
+      z.object({ type: z.literal("link"), ...range, id: idSchema, url: url(mode) }),
+    ],
+    { error: MARK_MESSAGES.unsupported },
+  );
+}
+
+/** The `marks` field: at most 30 entries; at Publish also at most 10 links and none overlapping. */
+function marksField(mode: Mode) {
+  const base = z.array(markSchema(mode)).max(LIMITS.textMarks, { error: MARK_MESSAGES.tooMany });
+  return (
+    mode === "publish" ? base.superRefine((marks, ctx) => checkMarks(marks, ctx)) : base
+  ).optional();
 }
 
 // Image references ------------------------------------------------------------------------------
@@ -183,12 +224,32 @@ export const imageRefSchema = z.object({
   path: z.string().regex(IMAGE_PATH_PATTERN, { error: "Not a valid image reference." }),
   width: z.number().int().min(1).max(20000),
   height: z.number().int().min(1).max(20000),
+  /**
+   * Where the picture stays in view when a frame crops it (M6-23): `{x, y}`, two numbers from 0 to 1
+   * (see ./focus). Optional, so every older reference is still valid. Published only for card
+   * images, image blocks and the share image; `toPublishForm` drops it everywhere else.
+   */
+  focus: focusSchema.optional(),
 });
 export type ImageRef = z.infer<typeof imageRefSchema>;
 
+/**
+ * The reference of a card or an image block in a DRAFT: the same, but its focus is kept as it
+ * came. A draft written straight to the database can hold any value there, and a bad one in a
+ * hidden block must not stop Publish (hidden blocks are dropped); Publish checks the focus of every
+ * visible block with the strict `imageRefSchema`. Typed as a `Focus` because every reader goes
+ * through `focusOf` / `objectPositionOf`, which accept nothing else.
+ */
+const draftBlockImageRef = imageRefSchema.extend({ focus: z.custom<Focus>().optional() });
+
 // Blocks ----------------------------------------------------------------------------------------
 
-/** Only the keys the resolver allows; others are stripped. Invalid values for them fail. */
+/**
+ * A block's own style (M3-18, M6-45), on every block type: only the ten keys of
+ * `BLOCK_OVERRIDE_KEYS`; others are stripped. Invalid values for them fail, in the draft as well as
+ * at Publish, so a hostile value never reaches `pages.published`. Social icons and grid cells carry
+ * none of their own: styling is per block.
+ */
 const blockOverrides = z.object(blockOverridesSchema.shape);
 
 function buildBlocks(mode: Mode) {
@@ -200,6 +261,36 @@ function buildBlocks(mode: Mode) {
     type: z.literal("link"),
     label: text(mode, { max: LIMITS.linkLabel, required: "Add a link label." }),
     url: url(mode),
+    /**
+     * An icon or a small image next to the label (M6-20): one of the 24 built-in names, or an
+     * uploaded image reference. There is no URL form. A draft keeps any short name (the editor
+     * shows no icon for it and Publish names the field); Publish wants one of the 24. The image
+     * reference is strict in both forms, like a card's.
+     */
+    icon: z
+      .discriminatedUnion(
+        "type",
+        [
+          z.object({
+            type: z.literal("builtin"),
+            name: publish
+              ? z.enum(LINK_ICONS, { error: LINK_ICON_ERROR_MESSAGE })
+              : z.string().max(64),
+          }),
+          z.object({ type: z.literal("image"), image: imageRefSchema }),
+        ],
+        { error: LINK_ICON_ERROR_MESSAGE },
+      )
+      .optional(),
+    /**
+     * A featured link (M6-22): the bold style, plus a gentle motion for `pulse` and `shine`. Absent
+     * means not featured. A block field, never a token override. A draft keeps any short string;
+     * Publish wants one of the three words and at most `LIMITS.featuredLinks` visible links.
+     */
+    featured: (publish
+      ? z.enum(LINK_FEATURED, { error: LINK_FEATURED_VALUE_MESSAGE })
+      : z.string().max(32)
+    ).optional(),
     overrides: blockOverrides.optional(),
   });
 
@@ -209,7 +300,7 @@ function buildBlocks(mode: Mode) {
     title: text(mode, { max: LIMITS.cardTitle, required: "Add a card title." }),
     caption: text(mode, { max: LIMITS.cardCaption }),
     url: url(mode),
-    image: imageRefSchema.nullable(),
+    image: (publish ? imageRefSchema : draftBlockImageRef).nullable(),
     overrides: blockOverrides.optional(),
   });
 
@@ -217,12 +308,19 @@ function buildBlocks(mode: Mode) {
     ...common,
     type: z.literal("header"),
     text: text(mode, { max: LIMITS.headerText, required: "Add a heading." }),
+    overrides: blockOverrides.optional(),
   });
 
   const textBlock = z.object({
     ...common,
     type: z.literal("text"),
     text: text(mode, { max: LIMITS.text, required: "Add some text.", multiline: true }),
+    /**
+     * Bold, italic and links as structured ranges (M6-28), never syntax inside the text. Optional,
+     * so a text block without it renders and publishes as it always did. See ./marks.
+     */
+    marks: marksField(mode),
+    overrides: blockOverrides.optional(),
   });
 
   const image = z.object({
@@ -230,9 +328,20 @@ function buildBlocks(mode: Mode) {
     type: z.literal("image"),
     image: publish
       ? imageRefSchema.nullable().refine((value) => value !== null, { error: "Upload an image." })
-      : imageRefSchema.nullable(),
+      : draftBlockImageRef.nullable(),
+    /**
+     * The frame the picture is cropped to (M6-23): `square`, `landscape` or `wide`. Absent means
+     * the original shape. A draft keeps whatever it holds (a hidden block with a bad value must not
+     * stop Publish, and the editor shows the original shape for one it does not know); Publish
+     * wants one of the three, and every reader goes through `pickShape`.
+     */
+    shape: (publish
+      ? z.enum(IMAGE_SHAPES, { error: IMAGE_SHAPE_MESSAGE })
+      : z.custom<string>()
+    ).optional(),
     alt: text(mode, { max: LIMITS.imageAlt, required: "Add a short description of this image." }),
     url: url(mode, { optional: true }).optional(),
+    overrides: blockOverrides.optional(),
   });
 
   const socialIcon = z.discriminatedUnion("platform", [
@@ -247,6 +356,7 @@ function buildBlocks(mode: Mode) {
     ...common,
     type: z.literal("social"),
     icons: z.array(socialIcon).min(LIMITS.socialIconsMin).max(LIMITS.socialIconsMax),
+    overrides: blockOverrides.optional(),
   });
 
   const embed = z.object({
@@ -254,6 +364,7 @@ function buildBlocks(mode: Mode) {
     type: z.literal("embed"),
     url: url(mode, { embed: true }),
     caption: text(mode, { max: LIMITS.embedCaption }),
+    overrides: blockOverrides.optional(),
   });
 
   const gridCell = z.object({
@@ -266,9 +377,14 @@ function buildBlocks(mode: Mode) {
     ...common,
     type: z.literal("grid"),
     cells: z.array(gridCell).min(LIMITS.gridCellsMin).max(LIMITS.gridCellsMax),
+    overrides: blockOverrides.optional(),
   });
 
-  const divider = z.object({ ...common, type: z.literal("divider") });
+  const divider = z.object({
+    ...common,
+    type: z.literal("divider"),
+    overrides: blockOverrides.optional(),
+  });
 
   const block = z.discriminatedUnion("type", [
     link,
@@ -309,7 +425,23 @@ function buildBlocks(mode: Mode) {
       .default(PROFILE_OPTION_DEFAULTS.showBio),
   });
 
-  return { block, profile };
+  // The share card (M6-32): the title, description and image of the page's link preview. Page-level,
+  // not a block. Every key is optional in both forms (an older document has none); the Publish form
+  // drops the empty ones (`publishShare` in ./share). One line each: `text()` gives the wording.
+  const share = z.object({
+    title: text(mode, { max: LIMITS.shareTitle }).optional(),
+    description: text(mode, { max: LIMITS.shareDescription }).optional(),
+    image: (publish
+      ? imageRefSchema
+          .nullable()
+          .refine((value) => value === null || value.width >= SHARE_IMAGE_MIN_WIDTH, {
+            error: SHARE_IMAGE_WIDTH_MESSAGE,
+          })
+      : imageRefSchema.nullable()
+    ).optional(),
+  });
+
+  return { block, profile, share };
 }
 
 const lenient = buildBlocks("draft");
@@ -338,6 +470,8 @@ export type GridCell = GridBlock["cells"][number];
  */
 export type Profile = Omit<z.infer<typeof lenient.profile>, keyof ProfileOptions> &
   Partial<ProfileOptions>;
+/** The share card (M6-32): every key optional; `image` is an uploaded image reference or null. */
+export type Share = z.infer<typeof lenient.share>;
 
 // Documents -------------------------------------------------------------------------------------
 
@@ -365,6 +499,11 @@ function requireUniqueIds(doc: { blocks: readonly Block[] }, ctx: z.core.$Refine
     check(block.id, ["blocks", index, "id"]);
     if (block.type === "social") {
       block.icons.forEach((icon, i) => check(icon.id, ["blocks", index, "icons", i, "id"]));
+    } else if (block.type === "text") {
+      // A link inside a text block is clicked and counted by its own id (M6-28).
+      (block.marks ?? []).forEach((mark, i) => {
+        if (mark.type === "link") check(mark.id, ["blocks", index, "marks", i, "id"]);
+      });
     } else if (block.type === "grid") {
       block.cells.forEach((cell, i) => check(cell.id, ["blocks", index, "cells", i, "id"]));
     }
@@ -378,6 +517,8 @@ export const draftDocSchema = z
     /** Bumped by one on every save; the stale-tab guard filters the update on the stored value. */
     rev: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
     profile: lenient.profile,
+    /** The share card (M6-32). Absent until one of its three fields is filled in. */
+    share: lenient.share.optional(),
     theme: themeSchema,
     blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
   })
@@ -399,6 +540,14 @@ export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
       ctx.addIssue({ code: "custom", message: issue.message, path: ["profile", ...issue.path] });
     }
   }
+  if (doc.share !== undefined) {
+    const share = strict.share.safeParse(doc.share);
+    if (!share.success) {
+      for (const issue of share.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message, path: ["share", ...issue.path] });
+      }
+    }
+  }
   doc.blocks.forEach((block, index) => {
     if (block.visible === false) return;
     const result = strict.block.safeParse(block);
@@ -411,6 +560,14 @@ export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
       });
     }
   });
+  // M6-22: at most LIMITS.featuredLinks visible featured links; the 4th (in page order) is named.
+  for (const index of featuredOverLimit(doc.blocks)) {
+    ctx.addIssue({
+      code: "custom",
+      message: FEATURED_LIMIT_MESSAGE,
+      path: ["blocks", index, "featured"],
+    });
+  }
 });
 
 /**
@@ -422,12 +579,27 @@ export const publishedDocSchema = z
   .object({
     version: z.literal(1),
     profile: strict.profile,
+    /** The share card, with its empty fields left out (M6-32); absent when all three are empty. */
+    share: strict.share.optional(),
     theme: themeSchema,
-    /** Every token, resolved: system default, then theme, then page overrides. */
-    tokens: tokenSetSchema,
+    /**
+     * Every token, resolved: system default, then theme, then page overrides. A document stored
+     * before the gradient tokens (M6-41) has 23 keys; the three missing ones take their defaults.
+     */
+    tokens: storedTokenSetSchema,
     blocks: z.array(strict.block).max(LIMITS.blocks, tooManyBlocks),
   })
-  .superRefine(requireUniqueIds);
+  .superRefine(requireUniqueIds)
+  .superRefine(requireMarkRanges)
+  .superRefine((doc, ctx) => {
+    for (const index of featuredOverLimit(doc.blocks)) {
+      ctx.addIssue({
+        code: "custom",
+        message: FEATURED_LIMIT_MESSAGE,
+        path: ["blocks", index, "featured"],
+      });
+    }
+  });
 export type PublishDoc = Omit<z.infer<typeof publishedDocSchema>, "profile"> & {
   profile: Profile;
 };

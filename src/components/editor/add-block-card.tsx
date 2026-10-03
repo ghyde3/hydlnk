@@ -1,6 +1,6 @@
 "use client";
 
-import type { Dispatch } from "react";
+import type { Dispatch, ReactNode } from "react";
 import { LIMITS } from "@/lib/document";
 import { BLOCK_LIMIT_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction } from "@/lib/editor/state";
@@ -14,9 +14,12 @@ import { BlockTypeChips } from "./block-type-chips";
 export function AddBlockCard({
   blockCount,
   dispatch,
+  footer,
 }: {
   blockCount: number;
   dispatch: Dispatch<EditorAction>;
+  /** Under the chips and the limit note: the "Start from a template" button (M6-40). */
+  footer?: ReactNode;
 }) {
   const full = blockCount >= LIMITS.blocks;
   return (
@@ -39,6 +42,7 @@ export function AddBlockCard({
           {BLOCK_LIMIT_MESSAGE}
         </span>
       ) : null}
+      {footer}
     </section>
   );
 }

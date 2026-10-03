@@ -10,9 +10,11 @@ import {
   type Block,
   type DraftDoc,
   type ImageRef,
+  type Share,
+  isShareEmpty,
 } from "@/lib/document";
 import { resolveProfileOptions } from "@/lib/document/profile-options";
-import { tokenOverridesSchema } from "@/lib/theme";
+import { tokenOverridesSchema, validBlockOverrides } from "@/lib/theme";
 
 /**
  * Turns whatever `pages.draft` holds into a draft the editor can work on (M2-03).
@@ -58,10 +60,17 @@ function withVisible(block: Block): Block {
   return typeof block.visible === "boolean" ? block : ({ ...block, visible: true } as Block);
 }
 
-/** Every id a block holds (its own, its icons', its cells'): ids are unique across the page. */
+/** Every id a block holds (its own, its icons', its cells', its text links'): ids are unique across the page. */
 function idsOf(block: Block): string[] {
   if (block.type === "social") return [block.id, ...block.icons.map((icon) => icon.id)];
   if (block.type === "grid") return [block.id, ...block.cells.map((cell) => cell.id)];
+  // A link inside text is clicked and counted by its own id (M6-28).
+  if (block.type === "text") {
+    return [
+      block.id,
+      ...(block.marks ?? []).flatMap((mark) => (mark.type === "link" ? [mark.id] : [])),
+    ];
+  }
   return [block.id];
 }
 
@@ -82,6 +91,20 @@ function withoutRepeatedItemIds(item: unknown): unknown {
   return kept.length === list.length ? item : { ...item, [key]: kept };
 }
 
+/**
+ * A block with a style that does not validate (M6-45: a radius of -5, a color that is not a hex
+ * literal, written straight to the draft) keeps its content and loses only the bad style, so the
+ * editor and its preview show the block with the theme default for that setting. Without this the
+ * whole block would be dropped by the repair below for the sake of one optional setting. Only the
+ * ten allowed override keys with valid values survive; nothing is written until the user edits.
+ */
+function withoutBadOverrides(item: unknown): unknown {
+  if (!isRecord(item) || !("overrides" in item)) return item;
+  const { overrides, ...rest } = item;
+  const kept = validBlockOverrides(overrides);
+  return kept ? { ...rest, overrides: kept } : rest;
+}
+
 export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   const revKey = revKeyOf(raw);
 
@@ -98,6 +121,8 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
           // Stored objects are returned as they are, so the options are filled here (M6-15, M6-17).
           ...resolveProfileOptions(stored.profile),
         },
+        // The share card (M6-32) is kept as stored, raw strings and all.
+        ...(stored.share ? { share: stored.share } : {}),
         theme: { ref: stored.theme.ref, overrides: stored.theme.overrides },
         blocks: stored.blocks.map(withVisible),
       },
@@ -118,6 +143,20 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   const parsedPhoto = imageRefSchema.safeParse(rawProfile?.photo);
   if (parsedPhoto.success) photo = parsedPhoto.data;
 
+  // The share card (M6-32): each field keeps what reads (text cut to its limit, on one line, an
+  // image reference that validates) and the card is dropped when nothing is left.
+  const rawShare = isRecord(source.share) ? source.share : undefined;
+  let share: Share | undefined;
+  if (rawShare) {
+    const parsedImage = imageRefSchema.safeParse(rawShare.image);
+    const repaired: Share = {
+      title: text(rawShare.title, "", LIMITS.shareTitle),
+      description: text(rawShare.description, "", LIMITS.shareDescription),
+      image: parsedImage.success ? parsedImage.data : null,
+    };
+    if (!isShareEmpty(repaired)) share = repaired;
+  }
+
   const rawTheme = isRecord(source.theme) ? source.theme : undefined;
   let ref: string | null = null;
   if (typeof rawTheme?.ref === "string" && z.guid().safeParse(rawTheme.ref).success) {
@@ -133,7 +172,7 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
     for (const item of source.blocks) {
       if (blocks.length >= LIMITS.blocks) break;
       // Icons or cells that repeat an id inside one block: the first of each stays (M6-05).
-      const candidateItem = withoutRepeatedItemIds(item);
+      const candidateItem = withoutBadOverrides(withoutRepeatedItemIds(item));
       const parsed = blockSchema.safeParse(candidateItem);
       if (!parsed.success) continue;
       const ids = idsOf(parsed.data);
@@ -149,6 +188,7 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
     rev: revNumber(raw),
     // Each option keeps its stored value when that is valid and takes its default when it is not.
     profile: { name, bio, photo, ...resolveProfileOptions(rawProfile) },
+    ...(share ? { share } : {}),
     theme: { ref, overrides },
     blocks,
   };

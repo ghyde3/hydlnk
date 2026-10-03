@@ -215,7 +215,17 @@ function innerPath(a: unknown, b: unknown): string | null {
  */
 export function blockEditGroup(previous: Block, next: Block): string | undefined {
   if (previous.id !== next.id || previous.type !== next.type) return undefined;
-  const keys = changedKeys(previous as Rec, next as Rec);
+  let keys = changedKeys(previous as Rec, next as Rec);
+  // The marks of a text block follow its text (M6-28): typing that moves a bold or link range is
+  // still typing, so `text` and `marks` changing together group as `text`.
+  if (
+    previous.type === "text" &&
+    keys.length === 2 &&
+    keys.includes("text") &&
+    keys.includes("marks")
+  ) {
+    keys = ["text"];
+  }
   if (keys.length !== 1) return undefined;
   const key = keys[0]!;
   const inner = innerPath((previous as Rec)[key], (next as Rec)[key]);

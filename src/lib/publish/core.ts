@@ -243,6 +243,14 @@ function placedImages(form: PublishDoc): Placed[] {
     if ((block.type === "card" || block.type === "image") && block.image) {
       placed.push({ ref: block.image, blockId: block.id, field: "image" });
     }
+    // A link's thumbnail (M6-20): the same rules, reported under the field `icon`.
+    if (block.type === "link" && block.icon?.type === "image") {
+      placed.push({ ref: block.icon.image, blockId: block.id, field: "icon" });
+    }
+  }
+  // The share image (M6-32): the same ownership and existence rules, under its own field.
+  if (form.share?.image) {
+    placed.push({ ref: form.share.image, blockId: null, field: "share.image" });
   }
   return placed;
 }

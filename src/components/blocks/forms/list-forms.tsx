@@ -18,6 +18,7 @@ import {
 import { FORM_BUTTON, FORM_BUTTON_DANGER, Field, controlClass } from "../field";
 import { TextField } from "../text-field";
 import { UrlField } from "../url-field";
+import { OverrideControls } from "./override-controls";
 import { fieldError, itemHasError, type BlockFormProps } from "./types";
 
 /** `list` with the item at `from` moved to `to`; the same list when either index is out of range. */
@@ -270,6 +271,7 @@ export function SocialForm({ block, onChange, errors }: BlockFormProps) {
       >
         Add icon
       </AddButton>
+      <OverrideControls block={social} onChange={onChange} errors={errors} />
     </div>
   );
 }
@@ -338,6 +340,7 @@ export function GridForm({ block, onChange, errors }: BlockFormProps) {
       >
         Add cell
       </AddButton>
+      <OverrideControls block={grid} onChange={onChange} errors={errors} />
     </div>
   );
 }

@@ -632,9 +632,14 @@ describe("block overrides", () => {
     }
   });
 
-  it("only link and card blocks carry overrides", () => {
-    const parsed = draftDocSchema.parse(draftWith({ ...blocks.header, overrides: { radius: 4 } }));
-    expect(parsed.blocks[0]).not.toHaveProperty("overrides");
+  // M6-45: every block type carries overrides now (it was link and card until then); the keys
+  // outside the ten are still stripped, wherever they sit. The full matrix is in
+  // tests/unit/m6-block-style-schema.test.ts.
+  it("every block type carries overrides, and only the ten allowed keys", () => {
+    const parsed = draftDocSchema.parse(
+      draftWith({ ...blocks.header, overrides: { radius: 4, fontHeading: "Geist" } }),
+    );
+    expect(parsed.blocks[0]).toHaveProperty("overrides", { radius: 4 });
     expect(publishOk(draftWith({ ...blocks.card, overrides: { buttonStyle: "pill" } }))).toBe(true);
   });
 });
@@ -778,7 +783,7 @@ describe("collectPublishErrors", () => {
           blockId: "embed-yt-ep04",
           field: "url",
           message:
-            "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.",
+            "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.",
         },
         { blockId: "image-studio-1", field: "image", message: "Upload an image." },
         {

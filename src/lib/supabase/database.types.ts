@@ -301,6 +301,41 @@ export type Database = {
           },
         ]
       }
+      page_versions: {
+        Row: {
+          created_at: string
+          document: Json
+          id: string
+          page_id: string
+          published_at: string
+          version_no: number
+        }
+        Insert: {
+          created_at?: string
+          document: Json
+          id?: string
+          page_id: string
+          published_at: string
+          version_no: number
+        }
+        Update: {
+          created_at?: string
+          document?: Json
+          id?: string
+          page_id?: string
+          published_at?: string
+          version_no?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_versions_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pages: {
         Row: {
           created_at: string
@@ -683,6 +718,7 @@ export type Database = {
           max_pages: number
           max_saved_themes: number
           max_upload_bytes: number
+          versions_kept: number
         }[]
       }
       purge_old_events: { Args: never; Returns: number }

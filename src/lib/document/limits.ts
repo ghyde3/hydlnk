@@ -11,6 +11,9 @@ export const LIMITS = {
   cardCaption: 100,
   headerText: 80,
   text: 600,
+  /** Bold, italic and link marks in one text block, and the links among them (M6-28). */
+  textMarks: 30,
+  textLinks: 10,
   imageAlt: 140,
   embedCaption: 80,
   socialIconsMin: 1,
@@ -19,6 +22,11 @@ export const LIMITS = {
   gridCellsMax: 6,
   cellTitle: 40,
   cellSubtitle: 60,
+  /** Most visible featured links (`featured` on a link block, M6-22) one page may publish. */
+  featuredLinks: 3,
+  /** The share card's title and description (M6-32): one line each, in code points. */
+  shareTitle: 70,
+  shareDescription: 200,
   /** Longest URL Publish accepts. */
   url: 2048,
   /** Longest URL string a draft may hold, so an over-long paste still autosaves and shows its error. */

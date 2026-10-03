@@ -5,6 +5,7 @@ import { cleanupUsers, desktopOnly, phoneOnly, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { makeJpeg, makePngImage } from "../m5/images-fixtures";
 import { removeFolders, sessionCookie, uploadMedia, uploaded } from "../m5/images-helpers";
+import { confirmPhoto } from "./position-dialog-helpers";
 import {
   bid,
   expectDraft,
@@ -278,7 +279,10 @@ test.describe("M6-07 shortcuts, steps and saves", () => {
     await expect(undoButton(page))
       .toBeFocused()
       .catch(() => undefined);
-    await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+    await expect(row.locator("button[aria-expanded]").first()).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     await expect(rowOf(page, bid(2))).toContainText("Text 2");
 
     // Add a block (it opens), then undo the add: the row is gone and nothing is open.
@@ -477,6 +481,7 @@ test.describe("M6-07 every change is undoable", () => {
         "upload a photo",
         async () => {
           await fileInput.setInputFiles({ name: "a.jpg", mimeType: "image/jpeg", buffer: jpegA });
+          await confirmPhoto(page); // M6-24: the position dialog first
           await expect(card.getByRole("button", { name: "Replace photo" })).toBeVisible();
         },
       ],
@@ -484,6 +489,7 @@ test.describe("M6-07 every change is undoable", () => {
         "replace it",
         async () => {
           await fileInput.setInputFiles({ name: "b.jpg", mimeType: "image/jpeg", buffer: jpegB });
+          await confirmPhoto(page); // M6-24: the position dialog first
           await expect(card.getByRole("button", { name: "Replace photo" })).toBeEnabled();
         },
       ],

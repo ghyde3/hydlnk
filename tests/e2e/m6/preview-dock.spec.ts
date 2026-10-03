@@ -423,10 +423,12 @@ test.describe("M6-01 the dock on a phone", () => {
     expect((await box(dock(page))).height).toBeGreaterThanOrEqual(44);
     expect((await box(dock(page))).width).toBe(390 - 32);
 
-    // Tab until the dock has focus, then Enter opens the preview.
+    // Tab until the dock has focus, then Enter opens the preview. The dock comes after the header,
+    // the profile, the Add card and every block row, so the bound grows with the page (82 stops
+    // for the seeded page once the QR code, History and template buttons exist).
     await page.locator("body").click({ position: { x: 5, y: 5 } });
     let focused = false;
-    for (let i = 0; i < 80 && !focused; i += 1) {
+    for (let i = 0; i < 150 && !focused; i += 1) {
       await page.keyboard.press("Tab");
       focused = await dock(page).evaluate((el) => el === document.activeElement);
     }

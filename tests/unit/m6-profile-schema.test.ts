@@ -92,7 +92,7 @@ describe("M6-15 / M6-17 schemas fill the defaults of an older document", () => {
     expect(collectPublishErrors(legacyDraft())).toEqual([]);
   });
 
-  it("parses a stored legacy published document with publishedDocSchema (cache version stays 2)", () => {
+  it("parses a stored legacy published document with publishedDocSchema (the profile options need no cache bump)", () => {
     const form = toPublishForm(draftDocSchema.parse(legacyDraft()), noirTokens);
     const { profile, ...rest } = form;
     const stored = {
@@ -101,7 +101,8 @@ describe("M6-15 / M6-17 schemas fill the defaults of an older document", () => {
     };
     const parsed = publishedDocSchema.parse(stored);
     expect(parsed.profile).toMatchObject(PROFILE_OPTION_DEFAULTS);
-    expect(PUBLIC_READ_CACHE_VERSION).toBe("2");
+    // "3" since the gradient tokens (M6-41); the profile options alone did not need a bump.
+    expect(PUBLIC_READ_CACHE_VERSION).toBe("3");
   });
 
   it("keeps the seeded mara draft valid: no fields stored, all defaulted on parse", () => {
