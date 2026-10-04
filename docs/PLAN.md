@@ -132,7 +132,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 | URL | `you.hydlnk.com` | + 1 custom domain | 15 custom domains |
 | Footer badge | "Made with HYDLNK" | Removable | Removable |
 | Uploads | 10 MB | 100 MB | 1 GB |
-| Analytics | Per-link clicks, 30 days | 1 year, referrers, country, device | + CSV export |
+| Analytics | Per-link clicks, 30 days; CSV export of that range | 1 year, referrers, country, device; CSV export | Same as Pro (CSV export is on every plan since Wave K, M9-26) |
 | Version history | — | Last 25 published versions: preview and restore | Last 25 published versions: preview and restore |
 | Scheduled links (not in v1) | — | Later | Later |
 | Team access | — | — | Invite editors per page |
