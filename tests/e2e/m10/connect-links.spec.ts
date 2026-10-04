@@ -139,7 +139,15 @@ test.describe("M10-35 the Features section", () => {
     const ids = await page
       .locator("main > section[id]")
       .evaluateAll((els) => els.map((el) => el.id));
-    expect(ids).toEqual(["blocks", "profile", "editor", "publishing", "ai-apps", "safety"]);
+    expect(ids).toEqual([
+      "blocks",
+      "profile",
+      "editor",
+      "publishing",
+      "ai-apps",
+      "safety",
+      "links",
+    ]);
     const heading = page.locator("section#ai-apps h2");
     await expect(heading).toHaveAttribute("id", "ai-apps-title");
     await expect(heading).toHaveText("Use it from Claude or ChatGPT");

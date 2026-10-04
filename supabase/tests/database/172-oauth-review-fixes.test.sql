@@ -107,15 +107,16 @@ select is(
   'ok',
   'the second install''s code is redeemed while the first install''s refresh token was live'
 );
+-- M10-39 supersedes the one-live-refresh-token-per-grant rule of this test: one per install (family).
 select is(
   (select count(*)::int from public.oauth_tokens where grant_id = '00000000-0000-4000-8000-000000172001' and kind = 'refresh' and rotated_at is null and revoked_at is null),
-  1,
-  'one live refresh token remains for the grant'
+  2,
+  'one live refresh token remains for each install'
 );
-select isnt(
+select is(
   (select revoked_at from public.oauth_tokens where id = '00000000-0000-4000-8000-000000172012'),
   null,
-  'the first install''s refresh token is the one that gave way'
+  'the first install''s refresh token does not give way (M10-39)'
 );
 select is(
   (select revoked_at from public.oauth_tokens where id = '00000000-0000-4000-8000-000000172011'),

@@ -57,7 +57,7 @@ export interface TokenDeps {
     | "redeemCode"
     | "getTokenByHash"
     | "rotateRefresh"
-    | "endGrant"
+    | "endFamily"
     | "getActiveGrant"
   >;
   limit: LimitFn;
@@ -218,15 +218,19 @@ function tokenResponse(
   };
 }
 
-/** A copied code or refresh token: the whole connection ends, and the log names the event and the app. */
+/**
+ * A copied code or refresh token: the family it belongs to (one install: the tokens of one code
+ * exchange and its rotations) ends, and the log names the event and the app. Other installs of the
+ * same app keep working (RFC 9700); the grant ends only when no live family is left.
+ */
 async function endFamily(
   deps: TokenDeps,
   event: string,
   clientId: string,
-  grantId: string | null,
+  familyId: string | null,
 ): Promise<void> {
   logOauthEvent(event, { client: clientId });
-  if (grantId) await deps.store.endGrant(grantId);
+  if (familyId) await deps.store.endFamily(familyId);
 }
 
 async function exchangeCode(
@@ -251,8 +255,7 @@ async function exchangeCode(
   // code) is refused and ends nothing.
   if (row.status === "used") {
     if (row.client_id !== clientId) return invalidGrant();
-    const grant = await deps.store.getActiveGrant(row.user_id, row.client_id);
-    await endFamily(deps, "code_reuse", row.client_id, grant?.id ?? null);
+    await endFamily(deps, "code_reuse", row.client_id, await codeFamily(deps, row));
     return invalidGrant();
   }
   if (row.status !== "issued" || !row.code_expires_at) return invalidGrant();
@@ -276,11 +279,21 @@ async function exchangeCode(
     // Used between the read and the write (two exchanges at once) is a copy; expired is just late.
     const again = await deps.store.getRequestByCodeHash(sha256Hex(code));
     if (again?.status === "used" && again.user_id && again.client_id === clientId) {
-      const grant = await deps.store.getActiveGrant(again.user_id, again.client_id);
-      await endFamily(deps, "code_reuse", again.client_id, grant?.id ?? null);
+      await endFamily(deps, "code_reuse", again.client_id, await codeFamily(deps, again));
     }
   }
   return invalidGrant();
+}
+
+/**
+ * The family a used code started. A code redeemed before families existed has none recorded: its
+ * tokens were given the grant's id as their family, so that is its family.
+ */
+async function codeFamily(deps: TokenDeps, row: RequestRow): Promise<string | null> {
+  if (row.family_id) return row.family_id;
+  if (!row.user_id) return null;
+  const grant = await deps.store.getActiveGrant(row.user_id, row.client_id);
+  return grant?.id ?? null;
 }
 
 function withinGrace(rotatedAt: string, nowMs: number): boolean {
@@ -312,7 +325,7 @@ async function refreshTokens(
     found.clientId !== clientId ||
     (found.rotatedAt !== null && !withinGrace(found.rotatedAt, now()))
   ) {
-    await endFamily(deps, "refresh_reuse", found.clientId, found.grantId);
+    await endFamily(deps, "refresh_reuse", found.clientId, found.familyId);
     return invalidGrant();
   }
   if (found.revokedAt !== null || found.grantRevokedAt !== null) return invalidGrant();
@@ -344,7 +357,7 @@ async function refreshTokens(
       // the meantime is just late.
       const again = await deps.store.getTokenByHash(sha256Hex(presented));
       if (again?.rotatedAt && !withinGrace(again.rotatedAt, now())) {
-        await endFamily(deps, "refresh_reuse", found.clientId, found.grantId);
+        await endFamily(deps, "refresh_reuse", found.clientId, found.familyId);
       }
       return invalidGrant();
     }

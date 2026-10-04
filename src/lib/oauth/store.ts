@@ -84,6 +84,8 @@ export interface TokenLookup {
   id: string;
   kind: "access" | "refresh";
   grantId: string;
+  /** The install this token belongs to: a code exchange starts a family, a rotation keeps it. */
+  familyId: string;
   userId: string;
   clientId: string;
   scopes: string[];
@@ -162,9 +164,11 @@ export interface OauthStore {
     refreshHash: string;
     scopes: string[] | null;
   }): Promise<RotateResult>;
-  /** Ends a grant and every token of it. */
+  /** Ends a grant and every token of every family of it. */
   endGrant(grantId: string): Promise<void>;
-  /** RFC 7009: true when a live token of that client ended its grant. */
+  /** Ends one family (one install) and the grant too when no live family is left. */
+  endFamily(familyId: string): Promise<void>;
+  /** RFC 7009: true when a live token of that client ended its family (and its grant, if it was the last). */
   revokeByToken(tokenHash: string, clientId: string): Promise<boolean>;
   verifyAccessToken(tokenHash: string, resource: string): Promise<VerifiedTokenRow | null>;
   touchToken(tokenId: string): Promise<boolean>;

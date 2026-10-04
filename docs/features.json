@@ -5066,6 +5066,24 @@
       ],
       "mockup": "",
       "passes": false
+    },
+    {
+      "id": "M10-39",
+      "milestone": 10,
+      "area": "security",
+      "title": "One refresh token per install: token families",
+      "acceptance": [
+        "Supersedes, in this respect only, the one-live-refresh-token-per-grant rule of M10-16, M10-36 and M10-38 (the known limit written in M10-38 is closed); every other step of those rows stands.",
+        "Every code exchange starts a token family (`oauth_tokens.family_id`, set on the access and refresh token it issues and remembered on the code); a rotation keeps the family; the unique index `oauth_tokens_one_live_refresh` is on the family, so a second live refresh token in one family is a 23505 and two installs of one app each hold a live one. The code exchange no longer retires the grant's other refresh token. Tokens that exist before the change become one family per grant (`supabase/migrations/20261010000032_oauth_token_families.sql`; pgTAP `173-oauth-token-families.test.sql`).",
+        "Two installs of one app (two code exchanges for one grant) refresh independently: the first install's refresh, long after the second connected, is an ordinary rotation and neither is disconnected (pgTAP 173, `m10-oauth-token.test.ts`).",
+        "Reuse detection ends that family only: a refresh token rotated more than 60 seconds ago (or presented by another client), and a used code presented again by the same client, end the family of that token or code (`oauth_end_family`, RFC 9700); the other install keeps working and the grant stays; when no live family is left the grant ends with it, so a lone install behaves as before and leaves Connected apps. The 60 second same-client grace window is unchanged and its cleanup stays inside the family (`m10-oauth-token.test.ts`, pgTAP 173, `oauth-dance.spec.ts`, `flow.spec.ts`).",
+        "RFC 7009 revocation of one token ends the family of that token, and the grant if it was the last live family; revoking the grant (the Connected apps Revoke button, `oauth_end_grant`) and account deletion (`oauth_revoke_all_user_grants`) end every family (pgTAP 173, `m10-oauth-token.test.ts`).",
+        "A second consent keeps the M10-38 rule: only tokens whose scopes exceed the newly allowed set end, in every family (pgTAP 172).",
+        "`oauth_end_family` is security definer with an empty search_path and `service_role` only; RLS stays on for the OAuth tables and `anon` and `authenticated` hold nothing on them (pgTAP 173).",
+        "`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm db:reset` and `pnpm test:db` pass, and `tests/e2e/m10/` passes at 390 and 1440 with `--workers=2`."
+      ],
+      "mockup": "",
+      "passes": false
     }
   ]
 }

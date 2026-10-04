@@ -208,7 +208,7 @@ export function createSupabaseOauthStore(admin: Admin = createAdminSupabase()): 
       const { data, error } = await admin
         .from("oauth_tokens")
         .select(
-          "id, kind, grant_id, user_id, scopes, resource, expires_at, rotated_at, revoked_at, oauth_grants!inner(client_id, revoked_at, scopes)",
+          "id, kind, grant_id, family_id, user_id, scopes, resource, expires_at, rotated_at, revoked_at, oauth_grants!inner(client_id, revoked_at, scopes)",
         )
         .eq("token_hash", tokenHash)
         .maybeSingle();
@@ -223,6 +223,7 @@ export function createSupabaseOauthStore(admin: Admin = createAdminSupabase()): 
         id: data.id,
         kind: data.kind as "access" | "refresh",
         grantId: data.grant_id,
+        familyId: data.family_id,
         userId: data.user_id,
         clientId: grant.client_id,
         scopes: data.scopes,
@@ -260,6 +261,11 @@ export function createSupabaseOauthStore(admin: Admin = createAdminSupabase()): 
     async endGrant(grantId) {
       const { error } = await admin.rpc("oauth_end_grant", { p_grant: grantId });
       if (error) fail("endGrant", error);
+    },
+
+    async endFamily(familyId) {
+      const { error } = await admin.rpc("oauth_end_family", { p_family: familyId });
+      if (error) fail("endFamily", error);
     },
 
     async revokeByToken(tokenHash, clientId) {

@@ -370,6 +370,7 @@ export type Database = {
           code_hash: string | null
           created_at: string
           csrf_hash: string | null
+          family_id: string | null
           id: string
           redirect_uri: string
           request_expires_at: string
@@ -388,6 +389,7 @@ export type Database = {
           code_hash?: string | null
           created_at?: string
           csrf_hash?: string | null
+          family_id?: string | null
           id?: string
           redirect_uri: string
           request_expires_at?: string
@@ -406,6 +408,7 @@ export type Database = {
           code_hash?: string | null
           created_at?: string
           csrf_hash?: string | null
+          family_id?: string | null
           id?: string
           redirect_uri?: string
           request_expires_at?: string
@@ -525,6 +528,7 @@ export type Database = {
         Row: {
           created_at: string
           expires_at: string
+          family_id: string
           grant_id: string
           id: string
           kind: string
@@ -539,6 +543,7 @@ export type Database = {
         Insert: {
           created_at?: string
           expires_at: string
+          family_id?: string
           grant_id: string
           id?: string
           kind: string
@@ -553,6 +558,7 @@ export type Database = {
         Update: {
           created_at?: string
           expires_at?: string
+          family_id?: string
           grant_id?: string
           id?: string
           kind?: string
@@ -1013,6 +1019,7 @@ export type Database = {
           code_hash: string | null
           created_at: string
           csrf_hash: string | null
+          family_id: string | null
           id: string
           redirect_uri: string
           request_expires_at: string
@@ -1047,6 +1054,7 @@ export type Database = {
           code_hash: string | null
           created_at: string
           csrf_hash: string | null
+          family_id: string | null
           id: string
           redirect_uri: string
           request_expires_at: string
@@ -1065,6 +1073,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      oauth_end_family: { Args: { p_family: string }; Returns: undefined }
       oauth_end_grant: { Args: { p_grant: string }; Returns: undefined }
       oauth_redeem_code: {
         Args: {

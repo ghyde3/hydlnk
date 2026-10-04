@@ -443,21 +443,25 @@ select lives_ok(
   'an access token can be moved into the past (the specs do it with the secret key)'
 );
 
--- one live refresh token per grant
+-- one live refresh token per family (a token family is one install: M10-39)
 select lives_ok(
   $$ insert into public.oauth_tokens (id, grant_id, user_id, kind, token_hash, scopes, expires_at)
      select '00000000-0000-4000-8000-0000000170c2', '00000000-0000-4000-8000-0000000170b1', a, 'refresh', repeat('1', 64), array['hydlnk.read'], now() + interval '60 days' from ids $$,
   'a first live refresh token is accepted'
 );
 select throws_ok(
-  $$ insert into public.oauth_tokens (grant_id, user_id, kind, token_hash, scopes, expires_at)
-     select '00000000-0000-4000-8000-0000000170b1', a, 'refresh', repeat('2', 64), array['hydlnk.read'], now() + interval '60 days' from ids $$,
-  '23505', null, 'a second live refresh token for one grant raises 23505'
+  $$ insert into public.oauth_tokens (grant_id, user_id, kind, token_hash, scopes, expires_at, family_id)
+     select '00000000-0000-4000-8000-0000000170b1', a, 'refresh', repeat('2', 64), array['hydlnk.read'], now() + interval '60 days',
+            (select family_id from public.oauth_tokens where id = '00000000-0000-4000-8000-0000000170c2')
+     from ids $$,
+  '23505', null, 'a second live refresh token in one family raises 23505'
 );
 update public.oauth_tokens set rotated_at = now() where id = '00000000-0000-4000-8000-0000000170c2';
 select lives_ok(
-  $$ insert into public.oauth_tokens (id, grant_id, user_id, kind, token_hash, scopes, expires_at)
-     select '00000000-0000-4000-8000-0000000170c3', '00000000-0000-4000-8000-0000000170b1', a, 'refresh', repeat('2', 64), array['hydlnk.read'], now() + interval '60 days' from ids $$,
+  $$ insert into public.oauth_tokens (id, grant_id, user_id, kind, token_hash, scopes, expires_at, family_id)
+     select '00000000-0000-4000-8000-0000000170c3', '00000000-0000-4000-8000-0000000170b1', a, 'refresh', repeat('2', 64), array['hydlnk.read'], now() + interval '60 days',
+            (select family_id from public.oauth_tokens where id = '00000000-0000-4000-8000-0000000170c2')
+     from ids $$,
   'a new live refresh token is accepted once the first one is rotated'
 );
 select throws_ok(

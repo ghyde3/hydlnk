@@ -27,6 +27,8 @@ const inOrder = (scopes: string[]) => ALL.filter((scope) => scopes.includes(scop
 export interface FakeToken {
   id: string;
   grantId: string;
+  /** The install: a code exchange starts a family, a rotation keeps it (M10-39). */
+  familyId: string;
   userId: string;
   kind: "access" | "refresh";
   hash: string;
@@ -168,6 +170,7 @@ export class FakeOauthStore implements OauthStore {
       resource: request.resource,
       csrf_hash: null,
       code_hash: null,
+      family_id: null,
       request_expires_at: this.iso(this.clock + 600_000),
       code_expires_at: null,
       used_at: null,
@@ -299,19 +302,11 @@ export class FakeOauthStore implements OauthStore {
     const scopes = inOrder(grant.scopes.filter((s) => (row.scopes_granted ?? []).includes(s)));
     const accessExp = this.clock + 3600_000;
     const refreshExp = Math.min(this.clock + 60 * 86400_000, grant.authorizedAt + 365 * 86400_000);
-    // One live refresh token per grant: a refresh token that survived a re-consent gives way.
-    for (const token of this.tokens) {
-      if (
-        token.grantId === grant.id &&
-        token.kind === "refresh" &&
-        token.rotatedAt === null &&
-        token.revokedAt === null
-      ) {
-        token.revokedAt = this.clock;
-      }
-    }
-    this.addToken(grant, "access", args.accessHash, scopes, row.resource, accessExp);
-    this.addToken(grant, "refresh", args.refreshHash, scopes, row.resource, refreshExp);
+    // A new family per code exchange: another install of the app keeps its own live refresh token.
+    const familyId = randomUUID();
+    row.family_id = familyId;
+    this.addToken(grant, familyId, "access", args.accessHash, scopes, row.resource, accessExp);
+    this.addToken(grant, familyId, "refresh", args.refreshHash, scopes, row.resource, refreshExp);
     return {
       outcome: "ok",
       grantId: grant.id,
@@ -325,6 +320,7 @@ export class FakeOauthStore implements OauthStore {
   }
   private addToken(
     grant: FakeGrant,
+    familyId: string,
     kind: "access" | "refresh",
     hash: string,
     scopes: string[],
@@ -334,7 +330,7 @@ export class FakeOauthStore implements OauthStore {
     if (
       kind === "refresh" &&
       this.tokens.some(
-        (t) => t.grantId === grant.id && t.kind === "refresh" && !t.rotatedAt && !t.revokedAt,
+        (t) => t.familyId === familyId && t.kind === "refresh" && !t.rotatedAt && !t.revokedAt,
       )
     ) {
       throw Object.assign(new Error("duplicate key"), { code: "23505" });
@@ -342,6 +338,7 @@ export class FakeOauthStore implements OauthStore {
     this.tokens.push({
       id: randomUUID(),
       grantId: grant.id,
+      familyId,
       userId: grant.userId,
       kind,
       hash,
@@ -363,6 +360,7 @@ export class FakeOauthStore implements OauthStore {
       id: token.id,
       kind: token.kind,
       grantId: token.grantId,
+      familyId: token.familyId,
       userId: token.userId,
       clientId: grant.clientId,
       scopes: token.scopes,
@@ -401,7 +399,8 @@ export class FakeOauthStore implements OauthStore {
     if (args.scopes !== null && !args.scopes.every((scope) => grant.scopes.includes(scope))) {
       return { outcome: "invalid_scope" };
     }
-    const wanted = args.scopes === null ? base : base.filter((scope) => args.scopes!.includes(scope));
+    const wanted =
+      args.scopes === null ? base : base.filter((scope) => args.scopes!.includes(scope));
     if (wanted.length === 0) return { outcome: "invalid_scope" };
     const scopes = inOrder(wanted);
     if (old.rotatedAt === null) {
@@ -412,7 +411,7 @@ export class FakeOauthStore implements OauthStore {
       for (const token of this.tokens) {
         if (
           token.id !== old.id &&
-          token.grantId === grant.id &&
+          token.familyId === old.familyId &&
           token.revokedAt === null &&
           ((token.kind === "refresh" && token.rotatedAt === null) ||
             (token.kind === "access" && token.createdAt >= old.rotatedAt))
@@ -423,8 +422,16 @@ export class FakeOauthStore implements OauthStore {
     }
     const accessExp = this.clock + 3600_000;
     const refreshExp = Math.min(this.clock + 60 * 86400_000, grant.authorizedAt + 365 * 86400_000);
-    this.addToken(grant, "access", args.accessHash, scopes, old.resource, accessExp);
-    this.addToken(grant, "refresh", args.refreshHash, scopes, old.resource, refreshExp);
+    this.addToken(grant, old.familyId, "access", args.accessHash, scopes, old.resource, accessExp);
+    this.addToken(
+      grant,
+      old.familyId,
+      "refresh",
+      args.refreshHash,
+      scopes,
+      old.resource,
+      refreshExp,
+    );
     return {
       outcome: "ok",
       grantId: grant.id,
@@ -443,6 +450,24 @@ export class FakeOauthStore implements OauthStore {
     const grant = this.grants.find((g) => g.id === grantId);
     if (grant && grant.revokedAt === null) grant.revokedAt = this.clock;
   }
+  async endFamily(familyId: string) {
+    this.count("endFamily");
+    const members = this.tokens.filter((t) => t.familyId === familyId);
+    if (members.length === 0) return;
+    for (const token of members) {
+      if (token.revokedAt === null) token.revokedAt = this.clock;
+    }
+    const grantId = members[0]!.grantId;
+    const live = this.tokens.some(
+      (t) =>
+        t.grantId === grantId &&
+        t.kind === "refresh" &&
+        t.rotatedAt === null &&
+        t.revokedAt === null &&
+        t.expiresAt > this.clock,
+    );
+    if (!live) await this.endGrant(grantId);
+  }
   async revokeByToken(tokenHash: string, clientId: string) {
     this.count("revokeByToken");
     const token = this.tokens.find((t) => t.hash === tokenHash);
@@ -458,7 +483,7 @@ export class FakeOauthStore implements OauthStore {
     ) {
       return false;
     }
-    await this.endGrant(grant.id);
+    await this.endFamily(token.familyId);
     return true;
   }
   async verifyAccessToken(tokenHash: string, resource: string): Promise<VerifiedTokenRow | null> {

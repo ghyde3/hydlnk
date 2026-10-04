@@ -385,7 +385,9 @@ describe("M10-15 grants", () => {
     expect(second.scope).toBe("hydlnk.read hydlnk.write hydlnk.publish");
     // The first install's access token holds read and write: inside the new set, so it still works.
     expect(await h.store.verifyAccessToken(sha256Hex(first.access_token), RESOURCE)).not.toBeNull();
-    expect(await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE)).not.toBeNull();
+    expect(
+      await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE),
+    ).not.toBeNull();
     // A narrower second consent ends what exceeds it.
     const third = await connect(h, { scopes: [] });
     expect(third.scope).toBe("hydlnk.read");
@@ -519,7 +521,11 @@ describe("M10-15 the request itself", () => {
     const connected = await connect(h);
     for (let i = 0; i < 400; i += 1) {
       const bad = await h.token(
-        { grant_type: "refresh_token", refresh_token: `hl_rt_${"x".repeat(43)}`, client_id: DCR_ID },
+        {
+          grant_type: "refresh_token",
+          refresh_token: `hl_rt_${"x".repeat(43)}`,
+          client_id: DCR_ID,
+        },
         { clientKey: `bad-caller-${i}` },
       );
       expect(bad.status).toBe(400);
@@ -692,7 +698,9 @@ describe("M10-16 refresh tokens", () => {
     // Narrowing is sticky (Wave L second review): the next pair is never wider than this one.
     const back = await refresh(h, String(body(narrowed).refresh_token));
     expect(body(back).scope).toBe("hydlnk.read");
-    expect((await refresh(h, String(body(back).refresh_token), { scope: "hydlnk.write" })).status).toBe(400);
+    expect(
+      (await refresh(h, String(body(back).refresh_token), { scope: "hydlnk.write" })).status,
+    ).toBe(400);
     expect(h.store.grants[0]!.scopes).toEqual(["hydlnk.read", "hydlnk.write"]);
     const unknown = await refresh(h, String(body(back).refresh_token), { scope: "hydlnk.nope" });
     expect(body(unknown).error).toBe("invalid_scope");
@@ -766,8 +774,12 @@ describe("M10-16 refresh tokens", () => {
       const second = body(retry);
       expect(second.refresh_token).not.toBe(first.refresh_token);
       // What the first answer carried is dead, the retry's pair lives.
-      expect(await h.store.verifyAccessToken(sha256Hex(String(first.access_token)), RESOURCE)).toBeNull();
-      expect(await h.store.verifyAccessToken(sha256Hex(String(second.access_token)), RESOURCE)).not.toBeNull();
+      expect(
+        await h.store.verifyAccessToken(sha256Hex(String(first.access_token)), RESOURCE),
+      ).toBeNull();
+      expect(
+        await h.store.verifyAccessToken(sha256Hex(String(second.access_token)), RESOURCE),
+      ).not.toBeNull();
       expect(body(await refresh(h, String(first.refresh_token))).error).toBe("invalid_grant");
       expect(h.store.grants[0]!.revokedAt).toBeNull();
       // One live refresh token, and the new one works.
@@ -832,5 +844,138 @@ describe("M10-16 refresh tokens", () => {
     expect(result.status).toBe(200);
     expect(result.headers["Cache-Control"]).toBe("no-store");
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("M10-39 one refresh token per install (token family)", () => {
+  const refresh = (h: Harness, token: string, over: Record<string, string | undefined> = {}) =>
+    h.token({ grant_type: "refresh_token", refresh_token: token, client_id: DCR_ID, ...over });
+  const live = (h: Harness) =>
+    h.store.tokens.filter((t) => t.kind === "refresh" && !t.rotatedAt && !t.revokedAt);
+
+  it("a second install of the same app does not retire the first one's refresh token", async () => {
+    const h = harness();
+    const first = await connect(h);
+    const second = await connect(h);
+    expect(live(h)).toHaveLength(2);
+    expect(new Set(live(h).map((t) => t.familyId)).size).toBe(2);
+    // The first install's next refresh is an ordinary rotation, long after the second one connected.
+    h.store.advance(3600);
+    const rotated = await refresh(h, first.refresh_token);
+    expect(rotated.status).toBe(200);
+    expect((await refresh(h, second.refresh_token)).status).toBe(200);
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
+    expect(live(h)).toHaveLength(2);
+  });
+
+  it("a rotation stays in its family, and a refresh token is still single use inside it", async () => {
+    const h = harness();
+    const first = await connect(h);
+    const family = h.store.tokens.find((t) => t.hash === sha256Hex(first.refresh_token))!.familyId;
+    const next = body(await refresh(h, first.refresh_token));
+    const tokens = h.store.tokens.filter((t) => t.familyId === family);
+    expect(tokens.map((t) => t.hash)).toContain(sha256Hex(String(next.refresh_token)));
+    expect(tokens.map((t) => t.hash)).toContain(sha256Hex(String(next.access_token)));
+    expect(live(h)).toHaveLength(1);
+  });
+
+  it("a copied refresh token ends only its own family: the other install keeps working and the grant stays", async () => {
+    const h = harness();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const first = await connect(h);
+    const second = await connect(h);
+    const rotatedFirst = body(await refresh(h, first.refresh_token));
+    h.store.advance(61);
+    const reuse = await refresh(h, first.refresh_token);
+    expect(reuse.status).toBe(400);
+    expect(body(reuse).error).toBe("invalid_grant");
+    // The first install's newest pair is dead, the second install's pair is not.
+    expect(
+      await h.store.verifyAccessToken(sha256Hex(String(rotatedFirst.access_token)), RESOURCE),
+    ).toBeNull();
+    expect(body(await refresh(h, String(rotatedFirst.refresh_token))).error).toBe("invalid_grant");
+    expect(
+      await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE),
+    ).not.toBeNull();
+    expect((await refresh(h, second.refresh_token)).status).toBe(200);
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
+    expect(warn.mock.calls.map((call) => String(call[0])).join("\n")).toContain("refresh_reuse");
+  });
+
+  it("a copied refresh token of the only install ends the connection, as before", async () => {
+    const h = harness();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const only = await connect(h);
+    await refresh(h, only.refresh_token);
+    h.store.advance(61);
+    expect((await refresh(h, only.refresh_token)).status).toBe(400);
+    expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
+    expect(h.store.grants[0]!.revokedAt).not.toBeNull();
+  });
+
+  it("a code used twice ends the family that code started and no other", async () => {
+    const h = harness();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const keeper = await connect(h);
+    const { code, verifier } = await issueCode(h);
+    expect((await exchange(h, code, verifier)).status).toBe(200);
+    const second = await exchange(h, code, verifier);
+    expect(body(second).error).toBe("invalid_grant");
+    expect(live(h).map((t) => t.hash)).toEqual([sha256Hex(keeper.refresh_token)]);
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
+    expect(
+      await h.store.verifyAccessToken(sha256Hex(keeper.access_token), RESOURCE),
+    ).not.toBeNull();
+  });
+
+  it("another app presenting a refresh token ends that token's family only", async () => {
+    const h = harness();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    h.store.addClient(`hlc_${"e".repeat(32)}`, [REDIRECT]);
+    const first = await connect(h);
+    const second = await connect(h);
+    const result = await refresh(h, first.refresh_token, { client_id: `hlc_${"e".repeat(32)}` });
+    expect(body(result).error).toBe("invalid_grant");
+    expect(await h.store.verifyAccessToken(sha256Hex(first.access_token), RESOURCE)).toBeNull();
+    expect(
+      await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE),
+    ).not.toBeNull();
+  });
+
+  it("the grace window re-rotates inside the family and revokes only what that install was issued", async () => {
+    const h = harness();
+    const first = await connect(h);
+    const second = await connect(h);
+    const a = body(await refresh(h, first.refresh_token));
+    const b = await refresh(h, first.refresh_token);
+    expect(b.status).toBe(200);
+    expect(await h.store.verifyAccessToken(sha256Hex(String(a.access_token)), RESOURCE)).toBeNull();
+    expect(
+      await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE),
+    ).not.toBeNull();
+    expect(live(h)).toHaveLength(2);
+  });
+
+  it("revoking one install's token (RFC 7009) ends its family; the grant ends with the last one", async () => {
+    const h = harness();
+    const first = await connect(h);
+    const second = await connect(h);
+    expect(await h.store.revokeByToken(sha256Hex(first.refresh_token), DCR_ID)).toBe(true);
+    expect(await h.store.verifyAccessToken(sha256Hex(first.access_token), RESOURCE)).toBeNull();
+    expect(
+      await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE),
+    ).not.toBeNull();
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
+    expect(await h.store.revokeByToken(sha256Hex(second.refresh_token), DCR_ID)).toBe(true);
+    expect(h.store.grants[0]!.revokedAt).not.toBeNull();
+  });
+
+  it("ending the grant ends every family", async () => {
+    const h = harness();
+    await connect(h);
+    await connect(h);
+    await h.store.endGrant(h.store.grants[0]!.id);
+    expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
+    expect(h.store.grants[0]!.revokedAt).not.toBeNull();
   });
 });

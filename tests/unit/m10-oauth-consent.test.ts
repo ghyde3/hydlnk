@@ -488,6 +488,7 @@ describe("M10-12 / M10-13 suspended accounts, the 20-app limit, the rate limit",
     h.store.tokens.push({
       id: "t1",
       grantId: grant.id,
+      familyId: "f1",
       userId: USER.id,
       kind: "access",
       hash: "h".repeat(64),
