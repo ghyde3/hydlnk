@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Wave L ready to release: held features flipped
+
+- Flipped to `passes: true`: M10-33 (its step 6, a `security-reviewer` run, is done three times over: the wave review, the review of 55dd199, and the focused review of b72c9b4, ab1095a and cb0f5de), M10-36, M10-37, M10-38, M10-39, M10-40. Features: 263 of 294 pass.
+- Evidence: full browser suite green on the production build, 8 shards (run 37232867890, head b9a23e5), which includes `tests/e2e/m10/` (the scripted official-MCP-client flow through every tool, publish live on the very next request, Publish unticked by default, token families, strict reuse). Locally after `pnpm db:reset`: typecheck and lint clean; `pnpm test` 9,561 of 9,562 (the one failure, `m7-media-publish.test.ts`, was "Database error creating new user" from local auth and passes alone, 2 of 2); `pnpm test:db` 42 files, 1,863 tests, PASS.
+- Decided by the orchestrator: no refresh grace window (a false-positive reuse now ends one install only), batches stay accepted with a 30 s answer timeout, CSV export on every plan written back to PLAN.md.
+- Gary's decisions this wave: Publish your pages starts unticked; open registration for unknown apps stays on; Privacy "Last updated" October 4 with no email; `@modelcontextprotocol/client` 2.3.0 approved as a dev dependency.
+
 ## 2026-10-04 — Wave L third security review fixes
 
 On `m11-mcp`, feature row M10-40 appended (`passes: false`). Migration `20261010000033_oauth_strict_reuse.sql`.
