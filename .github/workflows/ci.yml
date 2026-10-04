@@ -116,8 +116,11 @@ jobs:
       - name: Integration tests (Vitest against local Supabase)
         env:
           REQUIRE_SUPABASE: "1"
+        # --retry 2: the local Supabase gateway (Kong) sometimes answers one request with "An invalid
+        # response was received from the upstream server" right after start-up; a retried test still has
+        # to pass every assertion. Root cause tracked separately.
         run: >-
-          pnpm exec vitest run
+          pnpm exec vitest run --retry 2
           tests/unit/auth-ensure-account.test.ts
           tests/unit/publish-core.test.ts
           tests/unit/document-seed.test.ts
