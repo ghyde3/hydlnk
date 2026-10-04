@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/env/client";
+import { SHARE_TOKEN_HEADER } from "@/lib/previews/share-headers";
 import { setAppHeaders } from "./app-headers";
 import { hostOnlyCookie } from "./cookies";
 
@@ -12,13 +13,22 @@ import { hostOnlyCookie } from "./cookies";
  * refreshed token is copied onto the request (so Server Components in this same request see it)
  * and onto the response (so the browser stores it), and the library's no-store cache headers ride
  * along so a CDN never caches a Set-Cookie response.
+ *
+ * The page never sees a client-chosen `x-hl-share-token`: that header is how `shareProxy` hands a
+ * private link's token to its one internal route, after the rate limit, and nowhere else may carry
+ * it (a second wall behind the proxy's refusal of the internal path itself). The headers are copied
+ * on every `rewrite()` call, not once, because a refresh mutates `request.cookies` and rebuilds the
+ * response from the request as it is by then.
  */
 export async function rewriteWithSession(
   request: NextRequest,
   destination: URL,
 ): Promise<NextResponse> {
-  const rewrite = () =>
-    NextResponse.rewrite(destination, { request: { headers: request.headers } });
+  const rewrite = () => {
+    const headers = new Headers(request.headers);
+    headers.delete(SHARE_TOKEN_HEADER);
+    return NextResponse.rewrite(destination, { request: { headers } });
+  };
   let response = rewrite();
 
   const supabase = createServerClient(

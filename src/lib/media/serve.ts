@@ -1,4 +1,5 @@
 import { IMAGE_PATH_PATTERN } from "@/lib/document/schema";
+import { mediaHostAllowed } from "./host";
 import { storageUrl } from "./url";
 
 /**
@@ -38,6 +39,17 @@ export const MEDIA_CDN_MAX_AGE = 604_800;
  * and does not pass it on, so the browser keeps its year (above) while the CDN keeps `MEDIA_CDN_MAX_AGE`.
  */
 export const MEDIA_CDN_CACHE_CONTROL = `public, max-age=${MEDIA_CDN_MAX_AGE}`;
+
+/**
+ * `Vercel-Cache-Tag` of an image: `media-{uid}` (everything one account stored) and
+ * `media-{uid}-{file}` (one image), so a takedown or an account's removal can purge the CDN's copies
+ * by tag instead of waiting out `MEDIA_CDN_MAX_AGE` (`vercel cache dangerously-delete --tag ...`,
+ * or the purge API). Tags hold only the characters of a valid path, and `path` has been validated.
+ */
+export function mediaCacheTags(path: string): string {
+  const [uid = "", file = ""] = path.split("/");
+  return `media-${uid},media-${uid}-${file}`;
+}
 
 /**
  * Both cache headers of every 404 this route makes: a missing or deleted image costs one Storage
@@ -104,8 +116,13 @@ export function methodNotAllowed(): Response {
  * `{uid}/{file}.{jpg|png|webp}` when the request is exactly that and nothing else, otherwise null.
  * Read from the URL's path as written (percent-encoding is not decoded, so `%2e`, `%2f` and `%61`
  * never match: the pattern has no `%`, and one image has one address, which keeps the CDN's cache
- * key from being multiplied). Any `?` at all is refused, even an empty one: the query is part of
- * the cache key, so it would let anyone make endless misses.
+ * key from being multiplied). A query string is refused: it is part of the cache key, so it would
+ * let anyone make endless misses. What the framework has already done by the time `request.url`
+ * exists is not seen here: a bare `?` is dropped (so `/media/{p}?` is served as `/media/{p}`), and
+ * dot segments are resolved (`/media/x/../{p}` is `/media/{p}`). Each reaches the same object
+ * inside `/media`, so there is no traversal, and each adds at most one more cache key per image
+ * if the CDN does not normalize the same way. (The `?` test below is for a caller that hands over
+ * a URL as it was written, as the unit tests do.)
  */
 function validPath(rawUrl: string, segments: readonly string[] | undefined): string | null {
   if (rawUrl.includes("?")) return null;
@@ -155,6 +172,11 @@ export async function serveMedia(
   const path = validPath(request.url, options.segments);
   if (path === null) return missing();
 
+  // The real Host header only (as the proxy reads it), or the URL's own host when a caller sent none.
+  // An address nobody owns gets the same short 404, and Storage is not asked (see ./host).
+  const host = request.headers.get("host") || new URL(request.url).host;
+  if (!mediaHostAllowed(host)) return missing();
+
   let upstream: Response;
   try {
     upstream = await (options.fetch ?? fetch)(storageUrl(path), {
@@ -194,8 +216,13 @@ export async function serveMedia(
     "Content-Type": type,
     "Cache-Control": MEDIA_BROWSER_CACHE_CONTROL,
     "Vercel-CDN-Cache-Control": MEDIA_CDN_CACHE_CONTROL,
+    "Vercel-Cache-Tag": mediaCacheTags(path),
     "X-Content-Type-Options": "nosniff",
   });
+  // A HEAD answer is never stored by the CDN: if it were keyed like a GET, one HEAD would leave every
+  // GET for the image with an empty body for a week. The CDN reads this header and never passes it
+  // on, so a client sees the same headers for both methods.
+  if (method === "HEAD") headers.set("Vercel-CDN-Cache-Control", "no-store");
   // An encoded upstream body is decoded by fetch, so its length would no longer be the body's.
   if (length !== null && !upstream.headers.get("content-encoding")) {
     headers.set("Content-Length", String(length));

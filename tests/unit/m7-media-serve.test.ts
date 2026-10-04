@@ -139,6 +139,7 @@ describe("M7-14 an image is served with exactly the headers it needs", () => {
       "cache-control",
       "content-length",
       "content-type",
+      "vercel-cache-tag",
       "vercel-cdn-cache-control",
       "x-content-type-options",
     ]);
@@ -154,9 +155,33 @@ describe("M7-14 an image is served with exactly the headers it needs", () => {
     expect(headSpy.mock.calls[0]![1]!.method).toBe("HEAD");
     expect(getSpy.mock.calls[0]![1]!.method).toBe("GET");
     expect(head.status).toBe(200);
-    expect([...head.headers.entries()].sort()).toEqual([...get.headers.entries()].sort());
+    // The headers a client sees are the same. The one the CDN reads and never passes on differs:
+    // a HEAD answer is never stored by the CDN (Wave I review: if the CDN keyed it like a GET, one
+    // HEAD would leave every GET for the image with an empty body for a week).
+    const clientSees = (res: Response) =>
+      [...res.headers.entries()].filter(([name]) => name !== "vercel-cdn-cache-control").sort();
+    expect(clientSees(head)).toEqual(clientSees(get));
+    expect(get.headers.get("vercel-cdn-cache-control")).toBe("public, max-age=604800");
+    expect(head.headers.get("vercel-cdn-cache-control")).toBe("no-store");
+    expect(head.headers.get("cache-control")).toBe(MEDIA_BROWSER_CACHE_CONTROL);
     expect(await head.text()).toBe("");
     expect(head.body).toBeNull();
+  });
+
+  it("tags every image for the CDN, so one account's or one image's copies can be purged by tag", async () => {
+    // Wave I review: removed media would otherwise stay in the CDN until MEDIA_CDN_MAX_AGE ends.
+    const res = await serve(makeFetch());
+    expect(res.headers.get("vercel-cache-tag")).toBe(`media-${UID},media-${UID}-${FILE}`);
+    // Only the characters a tag may hold (no comma inside a tag, no space, no slash).
+    for (const tag of String(res.headers.get("vercel-cache-tag")).split(",")) {
+      expect(tag).toMatch(/^[a-z0-9.-]{1,256}$/);
+    }
+    // Not on a refusal or a failure: nothing is stored under a tag for those.
+    expect(
+      (await serve(makeFetch(), `/media/${UID}/x.svg`)).headers.get("vercel-cache-tag"),
+    ).toBeNull();
+    const gone = await serve(makeFetch(() => new Response(null, { status: 404 })));
+    expect(gone.headers.get("vercel-cache-tag")).toBeNull();
   });
 
   it("HEAD of a missing image is the same short 404 as GET", async () => {
@@ -314,6 +339,83 @@ describe("M7-14 never an open proxy: every refusal makes no upstream request", (
     expect(url.origin).toBe(ORIGIN);
     expect(String(spy.mock.calls[0]![0])).toBe(storageUrl(A));
     expect(spy.mock.calls[0]![1]!.headers).toBeUndefined();
+  });
+});
+
+describe("M7-14 only a real address gets an image (Wave I review)", () => {
+  // The CDN keeps a copy per host, so an address nobody owns would be one more cache miss, one more
+  // Storage fetch and one more byte of transfer for every label an attacker invents. The gate is
+  // syntactic (the route may not hold a database key), so it narrows the host space and does not
+  // bound it: the per-IP rate rule and the spend limit at Vercel are the ceiling (PROGRESS.md).
+  const served = [
+    ["the root host", "localhost:3000"],
+    ["the app host", "app.localhost:3000"],
+    ["a handle's host", "mara.localhost:3000"],
+    ["a handle with digits and hyphens", "a-1-b.localhost:3000"],
+    ["the loopback address in development", "127.0.0.1:3000"],
+    ["a deployment host", "hydlnk-git-m8-ghyde3.vercel.app"],
+    ["a custom domain", "links.example.com"],
+    ["a custom domain with a port and a trailing dot", "links.example.com.:8443"],
+    ["a custom domain that is not ours at all", "evil.example"],
+    ["a host in upper case", "MARA.LOCALHOST:3000"],
+  ] as const;
+  const refused = [
+    ["www, which only redirects", "www.localhost:3000"],
+    ["two labels under the root", "a.b.localhost:3000"],
+    ["a label that is not a handle (too short)", "ab.localhost:3000"],
+    ["a label that is not a handle (leading hyphen)", "-x1.localhost:3000"],
+    ["a label that is not a handle (31 characters)", `${"a".repeat(31)}.localhost:3000`],
+    ["a label with an underscore", "a_b_c.localhost:3000"],
+    ["the root on the wrong port", "localhost:4000"],
+    ["a handle on the wrong port", "mara.localhost:4000"],
+    ["a handle with no port", "mara.localhost"],
+    ["an IP address that is not the loopback", "203.0.113.7"],
+    ["a single-label name", "intranet"],
+    ["garbage", "not a host!"],
+    ["a name with a path in it", "evil.example/x"],
+    [
+      "a name over 253 characters",
+      `${"a".repeat(60)}.${"b".repeat(60)}.${"c".repeat(60)}.${"d".repeat(60)}.${"e".repeat(20)}.example`,
+    ],
+  ] as const;
+
+  it.each(served)("%s is served", async (_label, host) => {
+    const spy = makeFetch();
+    const res = await serve(spy, `/media/${PATH}`, { headers: { host } });
+    expect(res.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(refused)("%s gets the short 404 and no Storage request", async (_label, host) => {
+    for (const method of ["GET", "HEAD"]) {
+      const spy = makeFetch();
+      const res = await serve(spy, `/media/${PATH}`, { method, headers: { host } });
+      expectMiss(res);
+      expect(res.headers.get("vercel-cache-tag")).toBeNull();
+      expect(spy).not.toHaveBeenCalled();
+    }
+  });
+
+  it("only the real Host header decides, never a forwarded one", async () => {
+    const spy = makeFetch();
+    const hostile = await serve(spy, `/media/${PATH}`, {
+      headers: { host: "a.b.localhost:3000", "x-forwarded-host": "mara.localhost:3000" },
+    });
+    expectMiss(hostile);
+    const friendly = await serve(spy, `/media/${PATH}`, {
+      headers: { host: "mara.localhost:3000", "x-forwarded-host": "a.b.localhost:3000" },
+    });
+    expect(friendly.status).toBe(200);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("a request with no Host header is judged by its URL's host", async () => {
+    const spy = makeFetch();
+    const bare = await serveMedia(new Request(`http://a.b.localhost:3000/media/${PATH}`), {
+      fetch: spy as unknown as typeof fetch,
+    });
+    expectMiss(bare);
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 
@@ -549,7 +651,7 @@ describe("M7-14 the route's own code", () => {
       const imports = [...text.matchAll(/from\s+["']([^"']+)["']/g)].map((match) => match[1]);
       for (const path of imports) {
         expect(path, `${name} imports ${path}`).toMatch(
-          /^(@\/lib\/media\/(serve|url)|@\/lib\/document\/schema|\.\/url)$/,
+          /^(@\/lib\/media\/(serve|url|host)|@\/lib\/document\/schema|\.\/(url|host))$/,
         );
       }
       expect(text, name).not.toMatch(

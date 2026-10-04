@@ -130,6 +130,9 @@ export const blockDomainAction: AdminAction = {
         live_pages: impact.pages,
         draft_pages: impact.drafts,
         retried: true,
+        // `admin_id` stays the admin who listed the domain; this is the admin whose request wrote
+        // the missing row.
+        retried_by: context.actor.id,
       });
       return {
         ok: true,

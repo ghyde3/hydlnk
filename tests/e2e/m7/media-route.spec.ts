@@ -163,11 +163,18 @@ test.describe("M7-14 the /media route", () => {
       "content-type",
       "content-length",
       "cache-control",
-      "vercel-cdn-cache-control",
+      "vercel-cache-tag",
       "x-content-type-options",
     ]) {
       expect(head.headers[name], name).toBe(got.headers[name]);
     }
+    // The one header the CDN reads and never passes on differs: a HEAD answer is not stored by the
+    // CDN (Wave I review), so it can never stand in for the GET of the same image.
+    expect(got.headers["vercel-cdn-cache-control"]).toBe(CDN);
+    expect(head.headers["vercel-cdn-cache-control"]).toBe("no-store");
+    // Every image is tagged by account and by file, so a takedown can purge its copies by tag.
+    const [uid, file] = image.path.split("/") as [string, string];
+    expect(got.headers["vercel-cache-tag"]).toBe(`media-${uid},media-${uid}-${file}`);
     // HEAD of a missing image is the same short 404.
     const missing = await get(HOSTS.app, `/media/${me.userId}/img-${"0".repeat(32)}.webp`, {
       method: "HEAD",
@@ -186,6 +193,52 @@ test.describe("M7-14 the /media route", () => {
     const options = await get(HOSTS.tenant, path, { method: "OPTIONS" });
     expect(options.status).toBe(204);
     expect(options.headers.allow).toBe("GET, HEAD");
+  });
+
+  test("M7-14 an address nobody owns gets the short 404 and never an image (Wave I review)", async ({
+    browser,
+  }, info) => {
+    test.skip(!desktopOnly(info), "not viewport dependent");
+    const context = await browser.newContext();
+    const me = await signedInUser(context, { label: "mdg" });
+    owners.push(me.userId);
+    const image = uploaded(
+      await uploadMedia(await png(), {
+        kind: "content",
+        filename: "a.png",
+        contentType: "image/png",
+        cookie: await sessionCookie(context),
+      }),
+    );
+    const path = `/media/${image.path}`;
+    const bytes = Buffer.from(await (await fetch(storageUrl(image.path))).arrayBuffer());
+    // The CDN keeps a copy per host: a label that cannot be a page's address is not worth a copy.
+    const hosts = [
+      `a.b.localhost:${PORT}`,
+      `ab.localhost:${PORT}`,
+      `-x1.localhost:${PORT}`,
+      `${"a".repeat(31)}.localhost:${PORT}`,
+      `mara.localhost:${PORT + 1}`,
+      `localhost:${PORT + 1}`,
+      "203.0.113.7",
+      "intranet",
+    ];
+    for (const host of hosts) {
+      for (const method of ["GET", "HEAD"]) {
+        const res = await get(host, path, { method });
+        expectMiss(res, `${host} ${method}`);
+        expect(res.headers["vercel-cache-tag"], `${host} ${method}`).toBeUndefined();
+        if (method === "GET") expect(res.text, host).toBe("Not found");
+      }
+    }
+    // www is redirected to the root by next.config.ts before the route is reached (the route's own
+    // refusal of it, in the unit twin, is the second wall): never an image from that address.
+    const www = await get(`www.localhost:${PORT}`, path);
+    expect(www.status).toBe(308);
+    expect(String(www.headers.location)).toBe(`http://localhost:${PORT}${path}`);
+    // The real hosts are untouched.
+    for (const host of Object.values(HOSTS))
+      expectImage(await get(host, path), "image/webp", bytes);
   });
 
   test("M7-14 a missing or deleted image is a short-cached 404, never a 200 or a 5xx", async ({

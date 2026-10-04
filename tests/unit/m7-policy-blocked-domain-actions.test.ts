@@ -353,6 +353,7 @@ describe("M7-12 block_domain", () => {
         live_pages: 3,
         draft_pages: 2,
         retried: true,
+        retried_by: ADMIN.id,
       },
     });
 
@@ -382,7 +383,12 @@ describe("M7-12 block_domain", () => {
     f.failAudit = false;
     const retry = await block(f, { domain: "example.test", reason: "spam" }, OTHER_ADMIN);
     expect(retry).toMatchObject({ ok: true, data: { changed: false } });
-    expect(f.audit[0]).toMatchObject({ admin_id: ADMIN.id, detail: { retried: true } });
+    // The row is the original adder's, and the admin whose request wrote it is in the detail
+    // (Wave I review: the trail says who did what, as the unblock retry's does).
+    expect(f.audit[0]).toMatchObject({
+      admin_id: ADMIN.id,
+      detail: { retried: true, retried_by: OTHER_ADMIN.id },
+    });
   });
 
   it("refuses bad input with a 400 and its sentence before the database is asked anything", async () => {
