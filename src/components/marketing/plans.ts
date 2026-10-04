@@ -13,7 +13,7 @@ import {
 
 /**
  * Plans as PLAN.md's monetization table describes them, limited to what ships in v1: scheduled
- * links, team access and CSV export are later, so they are not listed. Every dollar amount comes
+ * links and team access are later, so they are not listed. Every dollar amount comes
  * from src/lib/marketing/prices.ts.
  */
 
@@ -57,7 +57,7 @@ export const PLANS: readonly Plan[] = [
       "Per-link clicks, last 30 days",
       "10 MB of uploads",
     ],
-    dash: ["Version history", "Small “Made with HYDLNK” badge"],
+    dash: ["Version history", "Redirect mode", "Small “Made with HYDLNK” badge"],
   },
   {
     id: "pro",
@@ -80,6 +80,7 @@ export const PLANS: readonly Plan[] = [
       "No badge",
       "Unlimited saved themes",
       "1 year of analytics with referrers, devices and countries",
+      "Redirect mode: send visitors straight to one link",
       "100 MB of uploads",
       versionHistoryItem(PLAN_LIMITS.pro.versionsKept),
     ],
@@ -146,5 +147,6 @@ export const COMPARISON: readonly { label: string; values: [string, string, stri
       versionHistoryCell(PLAN_LIMITS.studio.versionsKept),
     ],
   },
+  { label: "Redirect mode", values: ["—", "Included", "Included"] },
   { label: "Cut of your sales", values: ["None", "None", "None"] },
 ];

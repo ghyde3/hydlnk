@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { ShareCard } from "@/components/editor/share-card";
 import { useWorkspace } from "../workspace-context";
 import { AddressCard } from "./address-card";
+import { ConnectCard } from "./connect-card";
 import { HistoryCard } from "./history-card";
 import { LinkTrackingCard } from "./link-tracking-card";
 import { PreviewLinksCard } from "./preview-links-card";
@@ -62,7 +63,8 @@ const SECTIONS = ["preview-links", "qr"] as const;
 /**
  * The Share tab (M7-04): everything about how the page reaches other people, in one column beside
  * the shared preview: its address, the share card (title, description and image of the link
- * preview), redirect mode (M9-32), link tracking (M9-28), the QR code, private preview links and, on a phone, version history. All of it reads
+ * preview), redirect mode (M9-32), link tracking (M9-28), the QR code, private preview links and, on a phone, version history, then a pointer to the Claude and
+ * ChatGPT connector's setup page (M10-34). All of it reads
  * and writes through the workspace (`useWorkspace`): the share card edits `draft.share` with the
  * one autosave and the one history, and this tab calls no endpoint but the draft save, the shared
  * upload route and the three preview-link actions.
@@ -105,6 +107,7 @@ export function ShareTab() {
       <QrCard />
       <PreviewLinksCard />
       <HistoryCard />
+      <ConnectCard />
     </>
   );
 }

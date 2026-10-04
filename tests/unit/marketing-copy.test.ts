@@ -31,6 +31,10 @@ const APP_UI = [
   "src/lib/publish",
   "src/lib/settings",
   "src/lib/error-copy.ts",
+  // Wave L: the consent screen and its messages (M10-13), and every tool description and result an AI reads (M10-21).
+  "src/lib/mcp",
+  "src/lib/oauth/messages.ts",
+  "src/components/oauth",
 ];
 
 /** Legal text names real mechanisms (a cookie called sb-...-auth-token, a one-way hash). */

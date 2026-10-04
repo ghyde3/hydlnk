@@ -253,3 +253,24 @@
   background: var(--hl-page);
   color: var(--hl-ink);
 }
+
+/* A command to copy (the /connect page's Claude Code step): wraps inside itself, never widens the page. */
+.prose-hl pre {
+  padding: 12px 14px;
+  border: 1px solid var(--hl-line);
+  border-radius: var(--hl-radius);
+  background: var(--hl-track);
+  color: var(--hl-ink);
+  font-family: var(--hl-font-mono);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.prose-hl pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}

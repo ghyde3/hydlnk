@@ -81,12 +81,33 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "Can I choose how my link looks when someone shares it?",
         answer:
-          "Yes. Set the title, the description and the image people see in a shared link, with a preview card that shows how it will look. Your page also has a QR code you can download as a PNG or an SVG, for flyers, menus and printed cards.",
+          "Yes. Set the title, the description and the image people see in a shared link, with a preview card that shows how it will look. Your page also has a QR code you can download as a PNG or an SVG. Choose its colors, add your logo in the center and put a Scan me frame around it, for flyers, menus and printed cards.",
       },
       {
         question: "Which fonts can I use?",
         answer:
           "Eighteen Google Fonts picked to work on link pages: ten sans serifs, six serifs and two monospaced faces. You set one for headings and one for body text.",
+      },
+    ],
+  },
+  {
+    id: "links",
+    title: "Links and blocks",
+    items: [
+      {
+        question: "Can I lock a link?",
+        answer:
+          "Yes, on every plan. Add a lock to a link and visitors must pass an age check or enter a code you choose before it opens. The link’s address isn’t in your page until they do.",
+      },
+      {
+        question: "How do I share a discount code?",
+        answer:
+          "Add a Discount code block. Visitors tap the code to copy it, and you can add a link to your shop. The code is just text on your page, so set it up in your own store.",
+      },
+      {
+        question: "Can my page send visitors straight to one link?",
+        answer:
+          "On Pro and Studio, yes. Turn on redirect mode in the Share tab and pick a link. Visitors skip your page and go to that link, and each visit counts as a click on it. The link can’t be a locked one.",
       },
     ],
   },
@@ -126,6 +147,11 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
         question: "What do the analytics show?",
         answer:
           "Views, clicks and click-through rate for every link. Pro and Studio add a year of history with referrers, devices and countries.",
+      },
+      {
+        question: "Can I export my analytics?",
+        answer:
+          "Yes, on every plan. On the Analytics screen, download your daily totals or your clicks per link as a CSV file for a spreadsheet. Free covers the last 7 and 30 days. Pro and Studio also cover 90 days and a year.",
       },
       {
         question: "How are unique visitors counted without cookies?",
@@ -177,6 +203,37 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
         question: "Can I delete my account?",
         answer:
           "Yes, from your account settings. Deleting your account deletes your pages, themes and analytics, frees your handles and signs you out everywhere.",
+      },
+    ],
+  },
+  {
+    id: "ai-apps",
+    title: "Claude and ChatGPT",
+    items: [
+      {
+        question: "Can I use HYDLNK from Claude or ChatGPT?",
+        answer:
+          "Yes. Connect HYDLNK to Claude or ChatGPT, then ask the AI to add a link, reword your bio, switch your theme or check your numbers. It works on your draft, and the connect page has the steps for each app.",
+      },
+      {
+        question: "Is it on every plan?",
+        answer:
+          "Yes. Connecting an AI app works on Free, Pro and Studio. What it can read of your analytics follows your plan, the same as in the editor.",
+      },
+      {
+        question: "Can the AI publish my page without asking?",
+        answer:
+          "Only if you allow it. When you connect an app you choose what it may do, and publishing is a separate choice you can leave off. Even when it is on, the AI app may ask you first. Without it, the AI can still edit your draft, and you publish yourself.",
+      },
+      {
+        question: "What can the AI see?",
+        answer:
+          "What you allow and ask for: your page drafts, your numbers and your list of custom domains. It can’t see other people’s pages, and HYDLNK never sees your chats with the AI.",
+      },
+      {
+        question: "How do I turn it off?",
+        answer:
+          "Open Settings & billing, find Connected apps and choose Revoke next to the app. It stops working at once. You can also remove HYDLNK inside Claude or ChatGPT.",
       },
     ],
   },

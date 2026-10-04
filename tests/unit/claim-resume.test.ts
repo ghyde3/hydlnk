@@ -27,6 +27,10 @@ vi.mock("@/lib/handles/pending-server", () => ({
   clearPendingMetadata: (id: string) => clearPendingMetadata(id),
 }));
 
+// Wave L (M10-12): after a claim the route asks whether an app's connection is waiting; its own test
+// is m10-oauth-resume-claim.test.ts. Here nothing is waiting.
+vi.mock("@/lib/oauth/resume", () => ({ oauthResumeAvailable: async () => false }));
+
 const { GET } = await import("@/app/(editor)/app/claim/resume/route");
 
 const APP = "http://app.localhost:3000";

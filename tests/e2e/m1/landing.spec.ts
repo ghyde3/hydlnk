@@ -732,6 +732,7 @@ test.describe("M1-26 pricing", () => {
       "Per-link clicks, last 30 days",
       "10 MB of uploads",
       "–Version history",
+      "–Redirect mode",
       "–Small “Made with HYDLNK” badge",
     ]);
     expect(await lists("Pro")).toEqual([
@@ -741,6 +742,7 @@ test.describe("M1-26 pricing", () => {
       "No badge",
       "Unlimited saved themes",
       "1 year of analytics with referrers, devices and countries",
+      "Redirect mode: send visitors straight to one link",
       "100 MB of uploads",
       "Version history, last 25 versions",
     ]);

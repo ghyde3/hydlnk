@@ -155,7 +155,10 @@ export function ButtonLink({
   );
 }
 
-/** "Read the guide →" style text link with a 44px tap area. */
+/**
+ * "Read the guide →" style text link with a 44px tap area. Internal paths use next/link; absolute
+ * URLs (the app host) are plain anchors, like ButtonLink.
+ */
 export function ArrowLink({
   href,
   children,
@@ -165,14 +168,24 @@ export function ArrowLink({
   children: ReactNode;
   className?: string;
 }) {
-  return (
-    <Link
-      href={href}
-      className={`inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink underline decoration-line-3 underline-offset-4 hover:decoration-ink ${className}`}
-    >
+  const classes = `inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink underline decoration-line-3 underline-offset-4 hover:decoration-ink ${className}`;
+  const content = (
+    <>
       {children}
       <span aria-hidden="true">→</span>
-    </Link>
+    </>
+  );
+  if (href.startsWith("/")) {
+    return (
+      <Link href={href} className={classes}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <a href={href} className={classes}>
+      {content}
+    </a>
   );
 }
 

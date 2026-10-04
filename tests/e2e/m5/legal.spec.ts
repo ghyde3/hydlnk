@@ -186,7 +186,13 @@ test.describe("M5-24 what each page covers", () => {
       expect(text, String(phrase)).toMatch(phrase);
     }
     // A reader can get to each of them from the contents list.
-    for (const label of ["What we collect", "Cookies", "Service providers", "Your rights"]) {
+    for (const label of [
+      "What we collect",
+      "Connected AI apps",
+      "Cookies",
+      "Service providers",
+      "Your rights",
+    ]) {
       await expect(
         page.getByRole("navigation", { name: "Contents" }).getByRole("link", { name: label }),
       ).toBeVisible();

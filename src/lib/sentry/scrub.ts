@@ -13,6 +13,8 @@
  *   /t/{handle}  /sites/{id}  /share/{token}      /t/[handle]  /sites/[id]  /share/[token]
  *   token= code= access_token= refresh_token= key= (and their JSON and header forms), sb- cookies,
  *   a JWT-shaped string (three base64url parts)   [Filtered]
+ *   code_verifier= client_secret= client_assertion= csrf= hl_oauth_resume= and the three OAuth token
+ *   shapes (hl_at_, hl_rt_, hl_ac_ plus 43 characters)   [Filtered]   (Wave L, M10-17)
  *
  * It is idempotent: scrubbing a scrubbed event changes nothing.
  */
@@ -38,6 +40,13 @@ const SECRET_NAMES = [
   "key",
   "password",
   "secret",
+  // Wave L (M10-17): the OAuth authorization server's secrets.
+  "code_verifier",
+  "client_secret",
+  "client_assertion",
+  "csrf",
+  // The cookie that carries a pending authorization request across a sign-in (M10-12).
+  "hl_oauth_resume",
 ] as const;
 
 /** Object keys whose value is dropped to [Filtered] whatever it is. */
@@ -52,6 +61,8 @@ const SECRET_KEYS = new Set<string>([
 const NAMES = [...SECRET_NAMES].sort((a, b) => b.length - a.length).join("|");
 
 const JWT = /\beyJ[\w-]{4,}\.[\w-]{4,}\.[\w-]*/g;
+/** The three secret shapes of the authorization server (M10-15): access, refresh and authorization code. */
+const OAUTH_TOKEN = /hl_(?:at|rt|ac)_[A-Za-z0-9_-]{43}/g;
 const BASE64_COOKIE_VALUE = /\bbase64-[A-Za-z0-9_-]{16,}/g;
 // A value that is already [Filtered] is left alone, so scrubbing twice changes nothing.
 const SB_PAIR = /\b(sb-[\w.-]+)=(?!\[Filtered\])([^;\s"'&,)}]+)/g;
@@ -83,6 +94,7 @@ const MAX_STRING = 8_000;
 export function scrubString(value: string, options: ScrubOptions = {}): string {
   let out = value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}[Truncated]` : value;
   out = out.replace(JWT, FILTERED);
+  out = out.replace(OAUTH_TOKEN, FILTERED);
   out = out.replace(BASE64_COOKIE_VALUE, FILTERED);
   out = out.replace(SB_PAIR, (_match, name: string) => `${name}=${FILTERED}`);
   out = out.replace(SECRET_PARAM, (_match, name: string) => `${name}=${FILTERED}`);

@@ -47,6 +47,8 @@ Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds thes
 - `@dnd-kit/core` 6.3.1: drag and drop in the block builder
 - `@dnd-kit/sortable` 10.0.0: sortable lists for the block builder
 - `@dnd-kit/utilities` 3.2.2: helpers for dnd-kit
+- `@modelcontextprotocol/core` 2.3.0: the MCP and OAuth protocol schemas shared with the server package, server only (Approved by Gary 2026-10-04 (Wave L))
+- `@modelcontextprotocol/server` 2.3.0: the MCP server, tool registration and bearer-token helpers, server only (Approved by Gary 2026-10-04 (Wave L))
 - `@radix-ui/react-dialog` 1.1.23: one existing dialog (only this Radix component and the next one)
 - `@radix-ui/react-dropdown-menu` 2.1.24: the workspace toolbar menus and the account menu
 - `@sentry/nextjs` 11.4.0: error monitoring on the app host only, off unless NEXT_PUBLIC_SENTRY_DSN is set
@@ -61,6 +63,7 @@ Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds thes
 - `clsx` 2.1.1: class name joining (with tailwind-merge, in `cn`)
 - `isbot` 5.2.2: bot detection in the view and click tracking
 - `lucide-react` 1.51.0: UI icons on the app side
+- `mcp-handler` 2.2.0: mounts the MCP server as a Next.js route handler on the app host, server only (Approved by Gary 2026-10-04 (Wave L))
 - `next` 16.3.8: the framework
 - `nodemailer` 10.0.13: SMTP for the domain-live email
 - `qrcode-generator` 2.0.4: QR codes for the Share tab
@@ -75,7 +78,7 @@ Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds thes
 - `stripe` 23.0.0: billing (sandbox only)
 - `tailwind-merge` 3.7.0: class name merging (with clsx, in `cn`)
 - `zod` 4.6.5: schemas for documents, env and inputs
-Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@playwright/test` 1.63.0, `@tailwindcss/postcss` 4.3.3, `@types/node` 24.19.0, `@types/nodemailer` 8.0.2, `@types/react` 19.3.0, `@types/react-dom` 19.3.0, `eslint` 9.39.5, `eslint-config-next` 16.3.8, `eslint-config-prettier` 10.1.8, `jsdom` 30.1.1, `jsqr` 1.4.0, `prettier` 3.9.9, `tailwindcss` 4.3.3, `tsx` 4.23.15, `typescript` 6.0.3, `vitest` 5.0.3
+Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@modelcontextprotocol/client` 2.3.0, `@playwright/test` 1.63.0, `@tailwindcss/postcss` 4.3.3, `@types/node` 24.19.0, `@types/nodemailer` 8.0.2, `@types/react` 19.3.0, `@types/react-dom` 19.3.0, `eslint` 9.39.5, `eslint-config-next` 16.3.8, `eslint-config-prettier` 10.1.8, `jsdom` 30.1.1, `jsqr` 1.4.0, `prettier` 3.9.9, `tailwindcss` 4.3.3, `tsx` 4.23.15, `typescript` 6.0.3, `vitest` 5.0.3
 
 ## Definition of done (every feature)
 - Acceptance steps pass in Playwright at 390 and 1440.
@@ -108,7 +111,7 @@ Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@playwright/test` 1.
 - Skills, subagents and the settings hooks work in `-p` mode. Needs Gary (secret, production, decision)? Log it in PROGRESS.md and stop.
 
 ## Area rules, agents, skills
-- `.claude/rules/` load by path: `supabase-migrations.md` (`supabase/**`), `tenant-pages.md` (`src/app/(tenant)/**`, `src/lib/theme/**`), `editor-app.md` (`src/app/(editor)/**`), `routing.md` (`src/proxy.ts`, `src/lib/routing/**`).
+- `.claude/rules/` load by path: `supabase-migrations.md` (`supabase/**`), `tenant-pages.md` (`src/app/(tenant)/**`, `src/lib/theme/**`), `editor-app.md` (`src/app/(editor)/**`), `routing.md` (`src/proxy.ts`, `src/lib/routing/**`), `mcp-oauth.md` (`src/lib/mcp/**`, `src/lib/oauth/**` and their routes under `src/app/(editor)/app/`).
 - Agents: `reviewer` (correctness against acceptance), `security-reviewer` (auth, data, routing, payments), `design-verifier` (screens vs mockups).
 - Skills: `/feature-loop`, `/release`, `/add-block-type`, `/db-change`.
 - Stripe: HYDLNK sandbox only; the Stripe CLI always takes `--project-name hydlnk`. Never read or print `.env*` or secret keys. If a bare `supabase` command stalls on a docker image, run `source scripts/lib/docker-env.sh` first (it works around Docker Desktop's hanging credential helper; init.sh and `pnpm db:types` already do).

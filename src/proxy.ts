@@ -19,6 +19,8 @@ import {
   isSharePath,
 } from "@/lib/previews/share-headers";
 import { shareProxy } from "@/lib/previews/share-proxy";
+import { classifyAppPath } from "@/lib/routing/app-paths";
+import { bearerPathProxy } from "@/lib/routing/bearer-proxy";
 import { rewriteWithSession } from "@/lib/routing/session";
 import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import { appOrigin, protocolFor } from "@/lib/routing/urls";
@@ -120,8 +122,14 @@ export async function proxy(request: NextRequest) {
       }
       return NextResponse.next();
 
-    case "app":
-      // The private share link (M6-10) is the one app-host path that never touches the session: the
+    case "app": {
+      // Wave L (M10-02): the connector's bearer and discovery paths are the second set of app-host paths
+      // that never touch a session cookie (src/lib/routing/app-paths.ts): the proxy only rewrites them.
+      const bearerPath = classifyAppPath(pathname);
+      if (bearerPath) {
+        return bearerPathProxy(request, rewriteTo(appRewritePath(pathname)), bearerPath);
+      }
+      // The private share link (M6-10) is the other app-host path that never touches the session: the
       // proxy rate limits it, sets its headers and only rewrites (see src/lib/previews/share-proxy.ts).
       if (isSharePath(pathname)) {
         return shareProxy(request, rewriteTo(appRewritePath(SHARE_INTERNAL_PATH)));
@@ -133,6 +141,7 @@ export async function proxy(request: NextRequest) {
         return rewriteWithSession(request, rewriteTo(appRewritePath(NOT_FOUND_PATH)));
       }
       return rewriteWithSession(request, rewriteTo(appRewritePath(pathname)));
+    }
 
     case "tenant": {
       if (isTrackingPath(pathname)) return NextResponse.next();

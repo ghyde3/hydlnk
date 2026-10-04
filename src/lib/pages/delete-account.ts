@@ -6,9 +6,12 @@ import { isAccountSuspended } from "@/lib/admin/suspension";
 import { getSessionUser } from "@/lib/auth/session";
 import { cancelAccountBilling } from "@/lib/billing/cancel";
 import { expireDomainHost } from "@/lib/domains/expire-host";
+import { revokeAllGrants } from "@/lib/oauth/grants";
+import { DISCONNECT_FAILED } from "@/lib/oauth/messages";
 import { expireDeletedPages } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { failIfInjected } from "@/lib/testing/faults";
 import { removeAccountDomains } from "./delete-domains";
 import { removeAccountMedia } from "./delete-media";
 import { CURRENT_PAGE_COOKIE, pickCurrentPage } from "./pick";
@@ -51,7 +54,8 @@ const ACCOUNT_DELETED_PATH = "/login?deleted=1";
  * early invalidation and the delete would put it straight back, with nothing left to expire it.
  *
  * M4-34: before the user is deleted, in this order, each step stopping the deletion when it
- * fails (nothing is deleted, the dialog says what to retry):
+ * fails (nothing is deleted, the dialog says what to retry). M10-19 adds a step 0, after the
+ * suspension check and the handle confirmation: every connected app is disconnected (`revokeAllGrants`).
  *   1. every live Stripe subscription of the account's customer is canceled (the customer id is
  *      the session user's own account row, never request input), so a failed deletion can never
  *      leave a paying account behind;
@@ -97,7 +101,18 @@ export async function deleteAccount(
     return { error: "That doesn’t match your handle. Type it exactly to confirm." };
   }
 
-  // Billing first: a subscription that cannot be canceled stops the whole deletion.
+  // M10-19 (Wave L): every connected app is disconnected first, so a half-failed deletion can never
+  // leave an AI app able to publish while the account is being taken apart. Nothing else runs if it fails.
+  try {
+    // The end-to-end specs' way to make this step fail; does nothing in production.
+    await failIfInjected("grants-revoke");
+    await revokeAllGrants(user.id);
+  } catch (error) {
+    console.error("[account] disconnecting connected apps failed", errorText(error));
+    return { error: DISCONNECT_FAILED };
+  }
+
+  // Billing next: a subscription that cannot be canceled stops the whole deletion.
   try {
     await cancelAccountBilling(user.id);
   } catch (error) {

@@ -33,11 +33,11 @@ function breakBeforeDomain(value: string): ReactNode {
 }
 
 const EVERY_PLAN = [
-  "All nine blocks",
+  "All fifteen blocks",
   "Every design option and every theme",
   "Live phone preview and autosaved drafts",
   "yourname.hydlnk.com over https",
-  "Per-link analytics with no cookies",
+  "Per-link analytics with no cookies, and a CSV export",
   "No cut of your sales, ever",
 ];
 

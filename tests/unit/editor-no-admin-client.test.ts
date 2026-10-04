@@ -32,6 +32,13 @@ function sourceFiles(dir: string): string[] {
 const files = EDITOR_DIRS.flatMap((dir) => sourceFiles(resolve(ROOT, dir)));
 
 const GATE_ACCOUNT_REPAIR = "src/lib/auth/accounts.ts";
+/**
+ * Wave L (M10-12): the gate asks `resumeOauthRequest` whether the person came here to sign in for an
+ * app's connection. It reads one pending request by the id in an HttpOnly cookie, with the secret
+ * key (the OAuth tables have no client access), and only decides where to send the verified session
+ * user. Not editor code; named here so a second path to the admin client cannot appear unnoticed.
+ */
+const GATE_OAUTH_RESUME = "src/lib/oauth/resume.ts";
 
 const FORBIDDEN: [RegExp, string][] = [
   [/@\/lib\/supabase\/admin/, "the secret-key Supabase client"],
@@ -110,6 +117,10 @@ describe("M2-03: the editor never uses the secret-key client", () => {
         boundaries.add(GATE_ACCOUNT_REPAIR);
         continue;
       }
+      if (relative(ROOT, file) === GATE_OAUTH_RESUME) {
+        boundaries.add(GATE_OAUTH_RESUME);
+        continue;
+      }
       // Comments may mention the server env ("for the secret key use ..."): only code counts.
       const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
       for (const [pattern, what] of FORBIDDEN) {
@@ -130,6 +141,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     expect([...boundaries].sort()).toEqual([
       GATE_ACCOUNT_REPAIR,
       "src/lib/links/actions.ts",
+      GATE_OAUTH_RESUME,
       "src/lib/previews/actions.ts",
       "src/lib/publish/actions.ts",
     ]);

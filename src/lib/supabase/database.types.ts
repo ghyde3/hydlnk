@@ -304,6 +304,289 @@ export type Database = {
           },
         ]
       }
+      mcp_activity: {
+        Row: {
+          at: string
+          client_id: string
+          error_code: string | null
+          grant_id: string | null
+          id: number
+          ok: boolean
+          page_id: string | null
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          at?: string
+          client_id: string
+          error_code?: string | null
+          grant_id?: string | null
+          id?: never
+          ok: boolean
+          page_id?: string | null
+          tool: string
+          user_id: string
+        }
+        Update: {
+          at?: string
+          client_id?: string
+          error_code?: string | null
+          grant_id?: string | null
+          id?: never
+          ok?: boolean
+          page_id?: string | null
+          tool?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mcp_activity_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "oauth_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mcp_activity_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mcp_activity_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      oauth_authorization_codes: {
+        Row: {
+          client_id: string
+          code_challenge: string
+          code_expires_at: string | null
+          code_hash: string | null
+          created_at: string
+          csrf_hash: string | null
+          family_id: string | null
+          id: string
+          redirect_uri: string
+          request_expires_at: string
+          resource: string
+          scopes_granted: string[] | null
+          scopes_requested: string[]
+          state: string | null
+          status: string
+          used_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          client_id: string
+          code_challenge: string
+          code_expires_at?: string | null
+          code_hash?: string | null
+          created_at?: string
+          csrf_hash?: string | null
+          family_id?: string | null
+          id?: string
+          redirect_uri: string
+          request_expires_at?: string
+          resource: string
+          scopes_granted?: string[] | null
+          scopes_requested: string[]
+          state?: string | null
+          status?: string
+          used_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          client_id?: string
+          code_challenge?: string
+          code_expires_at?: string | null
+          code_hash?: string | null
+          created_at?: string
+          csrf_hash?: string | null
+          family_id?: string | null
+          id?: string
+          redirect_uri?: string
+          request_expires_at?: string
+          resource?: string
+          scopes_granted?: string[] | null
+          scopes_requested?: string[]
+          state?: string | null
+          status?: string
+          used_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oauth_authorization_codes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "oauth_clients"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "oauth_authorization_codes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      oauth_clients: {
+        Row: {
+          client_id: string
+          client_name: string
+          created_at: string
+          expires_at: string | null
+          fetched_at: string | null
+          kind: string
+          last_seen_at: string
+          logo_png: string | null
+          redirect_uris: string[]
+        }
+        Insert: {
+          client_id: string
+          client_name: string
+          created_at?: string
+          expires_at?: string | null
+          fetched_at?: string | null
+          kind: string
+          last_seen_at?: string
+          logo_png?: string | null
+          redirect_uris: string[]
+        }
+        Update: {
+          client_id?: string
+          client_name?: string
+          created_at?: string
+          expires_at?: string | null
+          fetched_at?: string | null
+          kind?: string
+          last_seen_at?: string
+          logo_png?: string | null
+          redirect_uris?: string[]
+        }
+        Relationships: []
+      }
+      oauth_grants: {
+        Row: {
+          authorized_at: string
+          client_id: string
+          created_at: string
+          id: string
+          last_used_at: string | null
+          revoked_at: string | null
+          scopes: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          authorized_at?: string
+          client_id: string
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          scopes: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          authorized_at?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          last_used_at?: string | null
+          revoked_at?: string | null
+          scopes?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oauth_grants_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "oauth_clients"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "oauth_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      oauth_tokens: {
+        Row: {
+          created_at: string
+          expires_at: string
+          family_id: string
+          grant_id: string
+          id: string
+          kind: string
+          last_used_at: string | null
+          resource: string | null
+          revoked_at: string | null
+          rotated_at: string | null
+          scopes: string[]
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          family_id?: string
+          grant_id: string
+          id?: string
+          kind: string
+          last_used_at?: string | null
+          resource?: string | null
+          revoked_at?: string | null
+          rotated_at?: string | null
+          scopes: string[]
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          family_id?: string
+          grant_id?: string
+          id?: string
+          kind?: string
+          last_used_at?: string | null
+          resource?: string | null
+          revoked_at?: string | null
+          rotated_at?: string | null
+          scopes?: string[]
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oauth_tokens_grant_id_fkey"
+            columns: ["grant_id"]
+            isOneToOne: false
+            referencedRelation: "oauth_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oauth_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       page_versions: {
         Row: {
           created_at: string
@@ -725,6 +1008,136 @@ export type Database = {
         Returns: {
           allowed: boolean
           retry_after: number
+        }[]
+      }
+      oauth_bind_request: {
+        Args: { p_csrf_hash: string; p_id: string; p_user: string }
+        Returns: {
+          client_id: string
+          code_challenge: string
+          code_expires_at: string | null
+          code_hash: string | null
+          created_at: string
+          csrf_hash: string | null
+          family_id: string | null
+          id: string
+          redirect_uri: string
+          request_expires_at: string
+          resource: string
+          scopes_granted: string[] | null
+          scopes_requested: string[]
+          state: string | null
+          status: string
+          used_at: string | null
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "oauth_authorization_codes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      oauth_decide_request: {
+        Args: {
+          p_code_hash: string
+          p_csrf_hash: string
+          p_decision: string
+          p_id: string
+          p_scopes: string[]
+          p_user: string
+        }
+        Returns: {
+          client_id: string
+          code_challenge: string
+          code_expires_at: string | null
+          code_hash: string | null
+          created_at: string
+          csrf_hash: string | null
+          family_id: string | null
+          id: string
+          redirect_uri: string
+          request_expires_at: string
+          resource: string
+          scopes_granted: string[] | null
+          scopes_requested: string[]
+          state: string | null
+          status: string
+          used_at: string | null
+          user_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "oauth_authorization_codes"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      oauth_end_family: { Args: { p_family: string }; Returns: undefined }
+      oauth_end_grant: { Args: { p_grant: string }; Returns: undefined }
+      oauth_redeem_code: {
+        Args: {
+          p_access_hash: string
+          p_code_hash: string
+          p_refresh_hash: string
+        }
+        Returns: {
+          access_expires_at: string
+          client_id: string
+          grant_id: string
+          outcome: string
+          refresh_expires_at: string
+          resource: string
+          scopes: string[]
+          user_id: string
+        }[]
+      }
+      oauth_revoke_all_user_grants: {
+        Args: { p_user: string }
+        Returns: number
+      }
+      oauth_revoke_by_token: {
+        Args: { p_client_id: string; p_token_hash: string }
+        Returns: boolean
+      }
+      oauth_revoke_user_grant: {
+        Args: { p_grant: string; p_user: string }
+        Returns: string
+      }
+      oauth_rotate_refresh: {
+        Args: {
+          p_access_hash: string
+          p_old_id: string
+          p_refresh_hash: string
+          p_scopes: string[]
+        }
+        Returns: {
+          access_expires_at: string
+          grant_id: string
+          outcome: string
+          refresh_expires_at: string
+          resource: string
+          scopes: string[]
+          user_id: string
+        }[]
+      }
+      oauth_touch_token: { Args: { p_token: string }; Returns: boolean }
+      oauth_trim_unused_cimd: {
+        Args: { p_cap: number; p_keep: string[] }
+        Returns: number
+      }
+      oauth_trim_unused_dcr: { Args: { p_cap: number }; Returns: number }
+      oauth_uris_ok: { Args: { p_uris: string[] }; Returns: boolean }
+      oauth_verify_access_token: {
+        Args: { p_resource: string; p_token_hash: string }
+        Returns: {
+          client_id: string
+          expires_at: string
+          grant_id: string
+          last_used_at: string
+          scopes: string[]
+          token_id: string
+          user_id: string
         }[]
       }
       plan_limits: {

@@ -48,6 +48,10 @@ select tables_are(
     'daily_dim_stats', 'traffic_flags', 'rate_limit_hits',
     -- Wave F: private share links of the editor (120)
     'preview_links',
+    -- Wave L: the OAuth authorization server, server only (170)
+    'oauth_clients', 'oauth_authorization_codes', 'oauth_grants', 'oauth_tokens',
+    -- Wave L: the log of MCP tool calls, server only (171)
+    'mcp_activity',
     -- Wave G: published versions, Pro and Studio (131)
     'page_versions'
   ],
@@ -157,6 +161,25 @@ select set_eq(
       ('preview_links|service_role|SELECT|*'),
       ('preview_links|service_role|INSERT|*'),
       ('preview_links|service_role|UPDATE|*'),
+      -- Wave L: the OAuth tables are server only. Clients can be removed with the secret key (M10-08,
+      -- the register route's trim); codes, grants and tokens end through the security definer functions
+      -- and the nightly jobs, so the secret key itself never deletes them.
+      ('oauth_clients|service_role|SELECT|*'),
+      ('oauth_clients|service_role|INSERT|*'),
+      ('oauth_clients|service_role|UPDATE|*'),
+      ('oauth_clients|service_role|DELETE|*'),
+      ('oauth_authorization_codes|service_role|SELECT|*'),
+      ('oauth_authorization_codes|service_role|INSERT|*'),
+      ('oauth_authorization_codes|service_role|UPDATE|*'),
+      ('oauth_grants|service_role|SELECT|*'),
+      ('oauth_grants|service_role|INSERT|*'),
+      ('oauth_grants|service_role|UPDATE|*'),
+      ('oauth_tokens|service_role|SELECT|*'),
+      ('oauth_tokens|service_role|INSERT|*'),
+      ('oauth_tokens|service_role|UPDATE|*'),
+      -- Wave L: the MCP activity log is server only: written once per tool call, read for the log.
+      ('mcp_activity|service_role|SELECT|*'),
+      ('mcp_activity|service_role|INSERT|*'),
       -- Wave G: page_versions, read only. The owner reads while the plan keeps versions (policy);
       -- the secret key reads for the preview and restore actions; only the trigger writes.
       ('page_versions|authenticated|SELECT|*'),

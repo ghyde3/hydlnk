@@ -109,7 +109,16 @@ describe("M8-12 the copy renders the constant", () => {
       /These individual events are kept for 60 days, then combined into daily totals/,
     );
     expect(text).toMatch(/Individual visitor events\s*:\s*60 days, then only daily totals remain/);
-    expect(text).not.toMatch(/\b90 days\b/);
+    // No raw event is kept 90 days. The one 90 on the page is the activity record of connected AI
+    // apps (M10-35), said twice: in its own section and in the retention list.
+    const ninety = [...text.matchAll(/\b90 days\b/g)];
+    expect(ninety).toHaveLength(2);
+    for (const match of ninety) {
+      expect(
+        text.slice(Math.max(0, match.index - 40), match.index),
+        "a 90 on the privacy page must be the connected-app activity record",
+      ).toMatch(/(We keep it for|Connected app activity\s*:)\s*$/);
+    }
   });
 
   it("the Link analytics page FAQ and the guide say 60 days", async () => {

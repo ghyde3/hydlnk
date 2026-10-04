@@ -29,7 +29,11 @@ export type FaultName =
   /** A route throws while it renders: the error boundary shows. */
   | "route-throw"
   /** The version history screen's list read fails (M6-50). */
-  | "versions-load";
+  | "versions-load"
+  /** The Connected apps card's read fails (M10-18): the card says so and the rest of Settings renders. */
+  | "connected-apps-load"
+  /** Disconnecting the connected apps, the first step of an account deletion, fails (M10-19). */
+  | "grants-revoke";
 
 export function faultsEnabled(): boolean {
   return process.env.NODE_ENV !== "production" || testHooksEnabled();

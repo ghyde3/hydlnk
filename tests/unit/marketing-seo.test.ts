@@ -51,16 +51,22 @@ describe.each([
 });
 
 describe("marketing site map", () => {
-  it("puts every header page, every guide and both legal pages in the sitemap", () => {
+  it("puts every header page, every guide, the connect page and both legal pages in the sitemap", () => {
     for (const item of MAIN_NAV) expect(SITEMAP_PATHS).toContain(item.href);
     for (const guide of GUIDES) expect(SITEMAP_PATHS).toContain(guideHref(guide.slug));
-    for (const path of ["/", "/faq", "/privacy", "/terms"]) expect(SITEMAP_PATHS).toContain(path);
+    for (const path of ["/", "/faq", "/connect", "/privacy", "/terms"]) expect(SITEMAP_PATHS).toContain(path);
   });
 
   it("links Privacy and Terms from the footer", () => {
     const hrefs = FOOTER_COLUMNS.flatMap((column) => column.links.map((link) => link.href));
     expect(hrefs).toContain("/privacy");
     expect(hrefs).toContain("/terms");
+  });
+
+  it("links the AI connector's page from the footer's Product column (M10-35)", () => {
+    const product = FOOTER_COLUMNS.find((column) => column.title === "Product");
+    expect(product?.links).toContainEqual({ href: "/connect", label: "Use with Claude or ChatGPT" });
+    expect(SITEMAP_PATHS.filter((path) => path === "/connect")).toHaveLength(1);
   });
 
   it("never takes a path the app host owns (M1-06: those 404 on the root host)", () => {
