@@ -8,6 +8,12 @@ import qrcode from "qrcode-generator";
  */
 
 export const QR_ERROR_LEVEL = "M";
+/**
+ * The level a code with a logo in its center is made at (M9-25): H restores up to 30% of the code, and
+ * the logo's plate covers at most 4% of it. Everything without a logo stays at `QR_ERROR_LEVEL`.
+ */
+export const QR_LOGO_ERROR_LEVEL = "H";
+export type QrErrorLevel = typeof QR_ERROR_LEVEL | typeof QR_LOGO_ERROR_LEVEL;
 /** White modules around the code, in modules (the QR standard asks for four). */
 export const QR_QUIET_ZONE = 4;
 /** The PNG is this many pixels on a side. */
@@ -24,10 +30,13 @@ export interface QrCode {
 // encodes one byte per character, so anything else would be mangled: refuse it instead.
 const PRINTABLE_ASCII = /^[\x20-\x7e]+$/;
 
-/** The QR code of `text`. Throws for an empty or non-ASCII string, or one too long for a code. */
-export function makeQr(text: string): QrCode {
+/**
+ * The QR code of `text`, at error correction level M unless `level` says H (a code with a logo).
+ * Throws for an empty or non-ASCII string, or one too long for a code.
+ */
+export function makeQr(text: string, level: QrErrorLevel = QR_ERROR_LEVEL): QrCode {
   if (!PRINTABLE_ASCII.test(text)) throw new Error("A QR code needs printable ASCII text.");
-  const code = qrcode(0, QR_ERROR_LEVEL);
+  const code = qrcode(0, level);
   code.addData(text);
   code.make();
   const size = code.getModuleCount();

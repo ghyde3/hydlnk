@@ -47,11 +47,13 @@ test.describe("M6-33 the card and its fields", () => {
 
     const card = shareCard(page);
     await expect(card).toBeVisible();
-    // M7-04: the card moved from the Edit tab to the Share tab, right under "Your page address".
+    // M7-04: the card moved from the Edit tab to the Share tab, under "Your page address". Since M9-32
+    // the Redirect mode card sits between the two.
     const order = await page.evaluate(() => {
       const address = document.querySelector('[data-testid="address-card"]');
+      const redirect = document.querySelector('[data-testid="redirect-card"]');
       const share = document.querySelector('[data-testid="share-card"]');
-      return address?.nextElementSibling === share;
+      return address?.nextElementSibling === redirect && redirect?.nextElementSibling === share;
     });
     expect(order).toBe(true);
     await expect(page.getByTestId("profile-card")).toHaveCount(0);
