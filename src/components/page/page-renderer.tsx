@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { PublishDoc } from "@/lib/document";
 import { tokensToCssVars } from "@/lib/theme";
 import { backgroundImageUrl, gradientIsCustom } from "./background";
+import { Banner, bannerOf } from "./banner";
 import { BlockView, type BlockContext } from "./blocks";
 import { PageFooter, type PageChrome } from "./footer";
 import { Profile } from "./profile";
@@ -64,10 +65,14 @@ export function PageRenderer({
   vars["--t-bg-image"] = image === null ? "none" : `url("${image}")`;
   const backgroundType =
     image !== null ? "image" : tokens.bgType === "gradient" ? "gradient" : "solid";
+  // The support banner (M9-23): above the column, across the page's width. `data-banner` on the root
+  // only when there is one, so a page without it has the markup it always had.
+  const banner = bannerOf(doc);
   return (
     <div
       className="pg-root"
       data-page-root=""
+      {...(banner ? { "data-banner": "" } : {})}
       data-density={tokens.density}
       data-align={tokens.align}
       data-bg-type={backgroundType}
@@ -85,6 +90,7 @@ export function PageRenderer({
           <div className="pg-bg-overlay" data-bg-layer="overlay" />
         </div>
       )}
+      {banner ? <Banner banner={banner} pageId={pageId} thumbnail={thumbnail === true} /> : null}
       <div className="pg-column">
         <Profile profile={doc.profile} />
         <main className="pg-blocks">

@@ -1,4 +1,4 @@
-import type { Block, DraftDoc, PublishError } from "@/lib/document";
+import { mapTargets, type Block, type DraftDoc, type PublishError } from "@/lib/document";
 import { urlPointsAtHost, type BlockedLinkError } from "./error";
 import { BLOCKED_FIELD_MESSAGE } from "./messages";
 
@@ -24,6 +24,7 @@ export function urlFieldsOf(block: Block): UrlField[] {
     case "embed":
       return [{ blockId: block.id, value: block.url }];
     case "image":
+    case "discount":
       return block.url ? [{ blockId: block.id, value: block.url }] : [];
     case "social":
       return block.icons.flatMap((icon) =>
@@ -36,9 +37,36 @@ export function urlFieldsOf(block: Block): UrlField[] {
       return (block.marks ?? []).flatMap((mark) =>
         mark.type === "link" ? [{ blockId: block.id, itemId: mark.id, value: mark.url }] : [],
       );
+    case "book":
+    case "apps":
+      // The store buttons (M9-20, M9-21): each entry's id is the item, like a social icon.
+      return block.links.map((link) => ({ blockId: block.id, itemId: link.id, value: link.url }));
+    case "map": {
+      // A map stores no address; its two buttons go to the targets `/r/` builds (M9-22). They are
+      // fixed hosts, so this is a defense: it keeps the check whole if the targets ever change.
+      const targets = mapTargets(block.name, block.address);
+      return [
+        { blockId: block.id, itemId: block.googleId, value: targets.google },
+        { blockId: block.id, itemId: block.appleId, value: targets.apple },
+      ];
+    }
     default:
       return [];
   }
+}
+
+/**
+ * What the database and the Publish gate call the support banner when its link is refused (M9-23):
+ * the banner is no block, so its `block_id` is this word and its `item_id` is the banner's own id.
+ */
+export const BANNER_BLOCK_ID = "banner";
+
+/** The banner's address as a URL field (M9-23), or nothing when the draft has none. */
+function bannerFieldsOf(draft: Pick<DraftDoc, "banner">): UrlField[] {
+  // Hidden or not: the database judges a hidden banner's address too (like a hidden block's).
+  const banner = draft.banner;
+  if (!banner) return [];
+  return [{ blockId: BANNER_BLOCK_ID, itemId: banner.id, value: banner.url }];
 }
 
 const toError = (field: UrlField): PublishError => ({
@@ -59,16 +87,23 @@ export function blockedFieldErrors(
   blocked: (BlockedLinkError & { draft?: DraftDoc }) | null,
 ): PublishError[] {
   if (!blocked) return [];
-  const errors = draft.blocks.flatMap((block) =>
-    urlFieldsOf(block)
+  const errors = [
+    ...draft.blocks.flatMap((block) =>
+      urlFieldsOf(block)
+        .filter((field) => urlPointsAtHost(field.value, blocked.hosts))
+        .map(toError),
+    ),
+    ...bannerFieldsOf(draft)
       .filter((field) => urlPointsAtHost(field.value, blocked.hosts))
       .map(toError),
-  );
+  ];
   if (errors.length > 0 || blocked.draft !== draft) return errors;
-  return draft.blocks
-    .filter((block) => blocked.blockIds.includes(block.id))
-    .flatMap((block) => urlFieldsOf(block).slice(0, 1))
-    .map(toError);
+  return [
+    ...draft.blocks
+      .filter((block) => blocked.blockIds.includes(block.id))
+      .flatMap((block) => urlFieldsOf(block).slice(0, 1)),
+    ...(blocked.blockIds.includes(BANNER_BLOCK_ID) ? bannerFieldsOf(draft) : []),
+  ].map(toError);
 }
 
 /**
@@ -81,6 +116,9 @@ export function blockedPublishErrorHolds(
 ): boolean {
   if (typeof error.host !== "string") return false;
   const host = error.host;
+  if (error.blockId === BANNER_BLOCK_ID) {
+    return bannerFieldsOf(draft).some((field) => urlPointsAtHost(field.value, [host]));
+  }
   const block = draft.blocks.find((candidate) => candidate.id === error.blockId);
   if (!block) return false;
   return urlFieldsOf(block).some(

@@ -2,6 +2,7 @@ import { domainToASCII } from "node:url";
 import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, rand } from "../fixtures/data";
+import { untilHostLookupExpires } from "../fixtures/expire";
 import { rawRequest } from "../fixtures/http";
 import { requireLocalEnv } from "../fixtures/stripe-stub";
 import { messagesTo, waitForMessages } from "../fixtures/mailpit";
@@ -289,7 +290,9 @@ test.describe("M4-15 Check DNS now, the cooldown and the live email", () => {
     expect(row.status).toBe("verified");
     expect(row.verified_at).toBeTruthy();
     expect(row.live_email_sent_at).toBeTruthy();
-    expect((await rawRequest(host, "/")).status).toBe(200);
+    // The checks above ran in this process: a production build still holds the host's 10 s "none".
+    const live = await untilHostLookupExpires(() => rawRequest(host, "/"), (r) => r.status === 200, "none");
+    expect(live.status).toBe(200);
 
     const mail = await waitForMessages(site.user.email, 1);
     expect(mail).toHaveLength(1);
@@ -429,7 +432,8 @@ test.describe("M4-17 remove a custom domain", () => {
     expect(removals[0]).toMatchObject({ hasBearer: true });
     expect(await domainRowOf(id)).toBeNull();
     expect(deps.expired).toEqual([site.pageId]);
-    const gone = await rawRequest(host, "/");
+    // Removed from this process: a production build holds the found host for up to 60 s.
+    const gone = await untilHostLookupExpires(() => rawRequest(host, "/"), (r) => r.status === 404, "found");
     expect(gone.status).toBe(404);
     expect(gone.body).not.toContain(site.name);
     // The slot is free again.
@@ -473,7 +477,10 @@ test.describe("M4-17 remove a custom domain", () => {
     const deps = realDeps();
     expect((await setDomainPage(deps, site.user.id, id, other)).ok).toBe(true);
     expect([...deps.expired].sort()).toEqual([site.pageId, other].sort());
-    const body = (await rawRequest(host, "/")).body;
+    // Re-pointed from this process: a production build holds the found host for up to 60 s.
+    const body = (
+      await untilHostLookupExpires(() => rawRequest(host, "/"), (r) => /Second /.test(r.body), "found")
+    ).body;
     expect(body).not.toContain(site.name);
     expect(body).toMatch(/Second /);
   });

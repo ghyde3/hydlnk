@@ -32,6 +32,12 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   embed: "Embed",
   grid: "Grid",
   divider: "Divider",
+  faq: "FAQ",
+  contact: "Contact",
+  discount: "Discount code",
+  book: "Book",
+  apps: "App store",
+  map: "Map",
 };
 
 export interface TestPage {

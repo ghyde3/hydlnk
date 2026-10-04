@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { ColorPanel, ColorSwatchButton, pickerValue, useColorPanel } from "@/components/design/color-picker";
 import type { DesignSectionProps } from "@/components/design/types";
 import { HEX_ERROR_MESSAGE, inkOn, isFullHex, normalizeHex, sameColor } from "@/lib/design";
 import { TOKEN_LABELS, type TokenSet } from "@/lib/theme";
@@ -8,8 +9,8 @@ import { TOKEN_LABELS, type TokenSet } from "@/lib/theme";
 /**
  * The Colors card of the Design screen (M3-08, M6-47): six accent swatches and one row for each of
  * the eight page colors (Design.dc.html), named in plain words (`TOKEN_LABELS`, the same names the
- * Publish messages use). A row has a swatch that opens the native color picker, the name and a hex
- * field. Everything is written to the draft as uppercase #RRGGBB; a hex field that does not hold a
+ * Publish messages use). A row has a swatch that opens the color picker (M9-07: an inline panel
+ * under the row), the name and a hex field. Everything is written to the draft as uppercase #RRGGBB; a hex field that does not hold a
  * color shows its message and leaves the draft on the last valid value.
  */
 
@@ -35,14 +36,8 @@ const COLOR_KEYS: readonly ColorKey[] = [
   "border",
 ];
 
-/** What the native picker needs: `#rrggbb`, lowercase, whatever the token holds. */
-function pickerValue(value: string): string {
-  const hex = normalizeHex(value) ?? (/^#[0-9a-fA-F]{8}$/.test(value) ? value.slice(0, 7) : null);
-  return (hex ?? "#000000").toLowerCase();
-}
-
 /**
- * One color row: swatch (the native picker, `<name> color`), the name, and the hex field
+ * One color row: swatch (opens the picker, `<name> color`), the name, and the hex field
  * (`<name> hex`). `rowKey` is the token the row edits and the value of `data-color-row`; `name` is
  * its plain label. The gradient's From and To rows use it too (M6-42), so all color fields behave
  * alike: a complete six-digit hex applies as it is typed, shorthand waits for blur, and anything
@@ -71,13 +66,26 @@ export function ColorRow({
   const shown = live ?? value;
   const invalid = live !== null && normalizeHex(live) === null;
   const errorId = `color-error-${rowKey}`;
+  const panel = useColorPanel();
+  const swatch = useRef<HTMLButtonElement>(null);
 
   function onInput(text: string): void {
     setTyping({ text, base: value });
     // A complete six-digit hex applies as it is typed; shorthand waits for blur so typing
     // "#C9A86A" never passes through the color "#C9A".
     const hex = normalizeHex(text);
-    if (hex !== null && isFullHex(text)) onChange(hex);
+    if (hex !== null && isFullHex(text)) {
+      onChange(hex);
+      // Applied: the field shows the token again, so a later reset to the value this typing began
+      // from (Swap colors, Use theme colors, Undo) is not drawn over by the old text.
+      setTyping(null);
+    }
+  }
+
+  /** Done and Escape: the panel closes and focus goes back to the swatch. */
+  function closePanel(): void {
+    panel.close();
+    swatch.current?.focus();
   }
 
   function onBlur(): void {
@@ -97,15 +105,14 @@ export function ColorRow({
           : "grid-cols-[44px_minmax(0,7.5rem)_minmax(0,1fr)]"
       } ${last ? "" : "border-b border-line"}`}
     >
-      <input
-        type="color"
-        aria-label={`${name} color`}
-        value={pickerValue(value)}
-        onChange={(event) => {
-          setTyping(null);
-          onChange(event.target.value.toUpperCase());
-        }}
-        className="block size-11 cursor-pointer appearance-none rounded-md border border-line-2 bg-transparent p-1 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-moz-color-swatch]:rounded-sm [&::-moz-color-swatch]:border-0"
+      <ColorSwatchButton
+        name={name}
+        color={pickerValue(value)}
+        open={panel.open}
+        panelId={panel.panelId}
+        onToggle={panel.toggle}
+        onEscape={closePanel}
+        buttonRef={swatch}
       />
       <span className="text-[13px] leading-snug break-words text-ink">{name}</span>
       <input
@@ -130,6 +137,20 @@ export function ColorRow({
           {HEX_ERROR_MESSAGE}
         </p>
       ) : null}
+      {panel.open ? (
+        <div className="col-span-3 col-start-1 pb-3">
+          <ColorPanel
+            id={panel.panelId}
+            name={name}
+            value={value}
+            onPick={(hex) => {
+              setTyping(null);
+              onChange(hex);
+            }}
+            onDone={closePanel}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -143,8 +164,9 @@ export function ColorSection({ resolved, setToken }: DesignSectionProps) {
     const followed = sameColor(resolved.buttonBg, resolved.accent);
     setToken("accent", hex);
     if (followed) {
-      setToken("buttonBg", hex);
-      setToken("buttonText", inkOn(hex));
+      // Under the accent's own group, so a drag of the picker is one undo step, not three per move.
+      setToken("buttonBg", hex, "accent");
+      setToken("buttonText", inkOn(hex), "accent");
     }
   }
 

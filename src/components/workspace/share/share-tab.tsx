@@ -5,16 +5,20 @@ import { ShareCard } from "@/components/editor/share-card";
 import { useWorkspace } from "../workspace-context";
 import { AddressCard } from "./address-card";
 import { HistoryCard } from "./history-card";
+import { LinkTrackingCard } from "./link-tracking-card";
 import { PreviewLinksCard } from "./preview-links-card";
 import { QrCard } from "./qr-card";
+import { RedirectCard } from "./redirect-card";
 
 /** The first control of a Share card the toolbar's menus ask to focus: 'Create link' or 'Download PNG'. */
 function focusSection(id: string): boolean {
   const card = document.getElementById(id);
   if (!card) return false;
-  const first = card.querySelector<HTMLElement>(
-    "button:not([disabled]):not([aria-disabled='true'])",
-  );
+  // A card may name its first control (the QR card's Style group comes before its downloads).
+  const first =
+    card.querySelector<HTMLElement>(
+      "[data-share-first]:not([disabled]):not([aria-disabled='true'])",
+    ) ?? card.querySelector<HTMLElement>("button:not([disabled]):not([aria-disabled='true'])");
   if (first) {
     first.scrollIntoView({ block: "center" });
     first.focus({ preventScroll: true });
@@ -58,7 +62,7 @@ const SECTIONS = ["preview-links", "qr"] as const;
 /**
  * The Share tab (M7-04): everything about how the page reaches other people, in one column beside
  * the shared preview: its address, the share card (title, description and image of the link
- * preview), the QR code, private preview links and, on a phone, version history. All of it reads
+ * preview), redirect mode (M9-32), link tracking (M9-28), the QR code, private preview links and, on a phone, version history. All of it reads
  * and writes through the workspace (`useWorkspace`): the share card edits `draft.share` with the
  * one autosave and the one history, and this tab calls no endpoint but the draft save, the shared
  * upload route and the three preview-link actions.
@@ -86,6 +90,7 @@ export function ShareTab() {
   return (
     <>
       <AddressCard />
+      <RedirectCard />
       <ShareCard
         share={draft.share}
         name={draft.profile.name}
@@ -96,6 +101,7 @@ export function ShareTab() {
         focus={state.focus}
         dispatch={dispatch}
       />
+      <LinkTrackingCard />
       <QrCard />
       <PreviewLinksCard />
       <HistoryCard />

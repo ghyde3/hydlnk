@@ -1,7 +1,9 @@
 "use client";
 
+import { X } from "lucide-react";
 import { useEffect, useRef, type MouseEvent } from "react";
 import { flushSync } from "react-dom";
+import { Icon } from "@/components/app/icon";
 import { PreviewFonts } from "@/components/design/tenant-fonts";
 import { resolvePreviewTap, type PreviewTap } from "@/components/editor/preview-taps";
 import type { PublishDoc } from "@/lib/document";
@@ -151,19 +153,7 @@ export function FullPreviewSheet({
               data-testid="preview-sheet-close"
               className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-line-3 bg-surface px-3.5 text-sm font-semibold text-ink"
             >
-              <svg
-                viewBox="0 0 24 24"
-                width={16}
-                height={16}
-                aria-hidden="true"
-                focusable="false"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-              >
-                <path d="M6 6l12 12M18 6 6 18" />
-              </svg>
+              <Icon icon={X} size={16} />
               Close preview
             </button>
           </div>
@@ -177,7 +167,7 @@ export function FullPreviewSheet({
                 : "[&_iframe]:pointer-events-none"
             }`}
           >
-            <PreviewFonts tokens={doc.tokens} />
+            <PreviewFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
             <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} />
           </div>
           {themePreview ? (

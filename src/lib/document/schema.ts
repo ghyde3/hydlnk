@@ -1,10 +1,23 @@
 import { z } from "zod";
-import { blockOverridesSchema, storedTokenSetSchema, tokenOverridesSchema } from "@/lib/theme";
+import {
+  FONT_ALLOWLIST,
+  blockOverridesSchema,
+  storedTokenSetSchema,
+  tokenOverridesSchema,
+} from "@/lib/theme";
 import { embedErrorMessage, parseEmbed } from "./embed";
 import { IMAGE_SHAPES, IMAGE_SHAPE_MESSAGE, focusSchema, type Focus } from "./focus";
 import { BLOCK_ID_PATTERN } from "./ids";
 import { LIMITS, codePointLength } from "./limits";
-import { MARK_MESSAGES, checkMarks, requireMarkRanges } from "./marks";
+import { linkUtmSchema, lockSchema, pageUtmSchema, redirectSchema } from "./link-fields";
+import {
+  ALIGN_VALUES,
+  MARK_MESSAGES,
+  type AlignValue,
+  checkMarkCounts,
+  checkMarks,
+  requireMarkRanges,
+} from "./marks";
 import {
   FEATURED_LIMIT_MESSAGE,
   LINK_FEATURED,
@@ -13,7 +26,18 @@ import {
   LINK_ICON_ERROR_MESSAGE,
   featuredOverLimit,
 } from "./link-icons";
+import { LOGO_PLACEMENTS, NAME_SIZES, PROFILE_STYLE_MESSAGES, bannerIssues } from "./page-extras";
 import { SHARE_IMAGE_MIN_WIDTH, SHARE_IMAGE_WIDTH_MESSAGE } from "./share";
+import {
+  APP_STORES,
+  APP_STORE_MESSAGE,
+  BOOK_STORES,
+  BOOK_STORE_MESSAGE,
+  STORE_DUPLICATE_MESSAGE,
+  STORE_MISSING_MESSAGE,
+  appStoresLimitMessage,
+  bookStoresLimitMessage,
+} from "./stores";
 import {
   PHOTO_BORDERS,
   PHOTO_SHAPES,
@@ -22,7 +46,14 @@ import {
   PROFILE_OPTION_MESSAGES,
   type ProfileOptions,
 } from "./profile-options";
-import { EMAIL_ERROR_MESSAGE, URL_ERROR_MESSAGE, isEmailAddress, isHttpUrl } from "./url";
+import {
+  EMAIL_ERROR_MESSAGE,
+  PHONE_ERROR_MESSAGE,
+  URL_ERROR_MESSAGE,
+  isEmailAddress,
+  isHttpUrl,
+  isPhoneNumber,
+} from "./url";
 
 /**
  * The page document (`pages.draft`) and the published document (`pages.published`).
@@ -50,6 +81,12 @@ export const BLOCK_TYPES = [
   "embed",
   "grid",
   "divider",
+  "faq",
+  "contact",
+  "discount",
+  "book",
+  "apps",
+  "map",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -63,6 +100,12 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   embed: "Embed",
   grid: "Grid",
   divider: "Divider",
+  faq: "FAQ",
+  contact: "Contact",
+  discount: "Discount code",
+  book: "Book",
+  apps: "App store",
+  map: "Map",
 };
 
 /** Social platforms, in the order of the platform select. `email` stores an address, not a URL. */
@@ -75,6 +118,12 @@ export const SOCIAL_PLATFORMS = [
   "linkedin",
   "github",
   "threads",
+  "reddit",
+  "snapchat",
+  "pinterest",
+  "discord",
+  "twitch",
+  "spotify",
   "email",
   "website",
 ] as const;
@@ -95,6 +144,12 @@ export const SOCIAL_PLATFORM_LABELS: Record<SocialPlatform, string> = {
   linkedin: "LinkedIn",
   github: "GitHub",
   threads: "Threads",
+  reddit: "Reddit",
+  snapchat: "Snapchat",
+  pinterest: "Pinterest",
+  discord: "Discord",
+  twitch: "Twitch",
+  spotify: "Spotify",
   email: "Email",
   website: "Website",
 };
@@ -183,14 +238,65 @@ function email(mode: Mode): z.ZodString {
   return base.refine(isEmailAddress, { error: EMAIL_ERROR_MESSAGE });
 }
 
+/** An email address that may be left empty (the contact block, M9-17): a draft keeps any string. */
+function optionalEmail(mode: Mode): z.ZodString {
+  const base = z.string().trim().max(LIMITS.email, { error: EMAIL_ERROR_MESSAGE });
+  if (mode === "draft") return base;
+  return base.refine((value) => value === "" || isEmailAddress(value), {
+    error: EMAIL_ERROR_MESSAGE,
+  });
+}
+
+/** A phone number that may be left empty (M9-17): a draft keeps what was typed, Publish wants a number. */
+function phoneNumber(mode: Mode): z.ZodString {
+  return z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (codePointLength(value) > LIMITS.contactPhone) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Use ${LIMITS.contactPhone} characters or fewer.`,
+        });
+      } else if (mode === "publish" && value !== "" && !isPhoneNumber(value)) {
+        ctx.addIssue({ code: "custom", message: PHONE_ERROR_MESSAGE });
+      }
+    });
+}
+
+/**
+ * A discount code (M9-19): 1 to 32 code points with no whitespace, control or bidi characters. A
+ * draft keeps what was typed (only the length is held, so it still autosaves); Publish names the
+ * field. The code is shown as text and written into a `data-copy` attribute, never into an address.
+ */
+function discountCode(mode: Mode): z.ZodString {
+  return z
+    .string()
+    .trim()
+    .superRefine((value, ctx) => {
+      if (codePointLength(value) > LIMITS.discountCode) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Use ${LIMITS.discountCode} characters or fewer.`,
+        });
+      }
+      if (mode !== "publish") return;
+      if (value === "") ctx.addIssue({ code: "custom", message: "Add a code." });
+      else if (/[\s\u0000-\u001f\u007f-\u009f]/.test(value) || BIDI.test(value)) {
+        ctx.addIssue({ code: "custom", message: "Enter a code with no spaces." });
+      }
+    });
+}
+
 // Text marks ------------------------------------------------------------------------------------
 
 /**
- * One mark of a text block (M6-28). Unknown keys (`href`, `style`, `class`...) are stripped and
- * another `type` fails. The offsets are plain finite numbers in both forms here: `toPublishForm`
- * clips them to the text, so an offset past the end is never an error, and the stored published form
- * is held to whole numbers inside the text by `requireMarkRanges`. A link's address follows the
- * URL rule (a draft keeps any string, Publish wants http(s)).
+ * One mark of a text block (M6-28, M9-11). Unknown keys (`href`, `style`, `class`...) are stripped
+ * and another `type` fails; an `align` is one of the three words. The offsets are plain finite
+ * numbers in both forms here: `toPublishForm` clips them to the text (and snaps an `align` to its
+ * line), so an offset past the end is never an error, and the stored published form is held to
+ * whole numbers inside the text by `requireMarkRanges`. A link's address follows the URL rule (a
+ * draft keeps any string, Publish wants http(s)).
  */
 function markSchema(mode: Mode) {
   const range = { start: z.number(), end: z.number() };
@@ -199,15 +305,34 @@ function markSchema(mode: Mode) {
     [
       z.object({ type: z.literal("bold"), ...range }),
       z.object({ type: z.literal("italic"), ...range }),
+      z.object({ type: z.literal("strike"), ...range }),
+      z.object({ type: z.literal("underline"), ...range }),
       z.object({ type: z.literal("link"), ...range, id: idSchema, url: url(mode) }),
+      z.object({
+        type: z.literal("align"),
+        ...range,
+        // A draft keeps any string (a hidden block must not stop Publish); Publish wants one of the three words.
+        align:
+          mode === "publish"
+            ? z.enum(ALIGN_VALUES, { error: MARK_MESSAGES.unsupported })
+            : z.custom<AlignValue>((value) => typeof value === "string", {
+                error: MARK_MESSAGES.unsupported,
+              }),
+      }),
     ],
     { error: MARK_MESSAGES.unsupported },
   );
 }
 
-/** The `marks` field: at most 30 entries; at Publish also at most 10 links and none overlapping. */
+/**
+ * The `marks` field: at most 30 inline marks and 20 alignments in both forms; at Publish also at
+ * most 10 links and none overlapping.
+ */
 function marksField(mode: Mode) {
-  const base = z.array(markSchema(mode)).max(LIMITS.textMarks, { error: MARK_MESSAGES.tooMany });
+  const base = z
+    .array(markSchema(mode))
+    .max(LIMITS.textMarks + LIMITS.textAligns, { error: MARK_MESSAGES.tooMany })
+    .superRefine((marks, ctx) => checkMarkCounts(marks, ctx));
   return (
     mode === "publish" ? base.superRefine((marks, ctx) => checkMarks(marks, ctx)) : base
   ).optional();
@@ -291,6 +416,10 @@ function buildBlocks(mode: Mode) {
       ? z.enum(LINK_FEATURED, { error: LINK_FEATURED_VALUE_MESSAGE })
       : z.string().max(32)
     ).optional(),
+    /** This link's own UTM tags (M9-27): `{source, medium, campaign, off}`, added at redirect time. */
+    utm: linkUtmSchema(mode).optional(),
+    /** An age check or a code, asked at `/r/...` before the redirect (M9-29). Links only. */
+    lock: lockSchema(mode).optional(),
     overrides: blockOverrides.optional(),
   });
 
@@ -386,6 +515,140 @@ function buildBlocks(mode: Mode) {
     overrides: blockOverrides.optional(),
   });
 
+  // FAQ (M9-16): 1 to 10 questions with plain-text answers. The draft keeps any number of them
+  // (the editor never writes none or more than ten, but a hidden block must not stop Publish, and
+  // an eleventh question typed into raw JSON is named at Publish, on the block, instead of failing
+  // the whole draft); Publish wants one to ten.
+  const faqItem = z.object({
+    id: idSchema,
+    question: text(mode, { max: LIMITS.faqQuestion, required: "Add a question." }),
+    answer: text(mode, { max: LIMITS.faqAnswer, required: "Add an answer.", multiline: true }),
+  });
+  const faq = z.object({
+    ...common,
+    type: z.literal("faq"),
+    items: publish
+      ? z
+          .array(faqItem)
+          .min(LIMITS.faqItemsMin, { error: "Add at least one question." })
+          .max(LIMITS.faqItemsMax, { error: `Use up to ${LIMITS.faqItemsMax} questions.` })
+      : z.array(faqItem),
+    overrides: blockOverrides.optional(),
+  });
+
+  // Contact details (M9-17): a name and at least one of a phone number and an email address. There
+  // is no http(s) URL in it, so the blocklist and the click redirect have nothing to read.
+  const contact = z
+    .object({
+      ...common,
+      type: z.literal("contact"),
+      name: text(mode, { max: LIMITS.contactName, required: "Add a name." }),
+      phone: phoneNumber(mode).default(""),
+      email: optionalEmail(mode).default(""),
+      hours: text(mode, { max: LIMITS.contactHours, multiline: true }).default(""),
+      overrides: blockOverrides.optional(),
+    })
+    .superRefine((value, ctx) => {
+      if (publish && value.phone === "" && value.email === "") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["phone"],
+          message: "Add a phone number or an email address.",
+        });
+      }
+    });
+
+  // Discount code (M9-19): the code, a one-line description and an optional shop link. The link's
+  // click target is the block's own id (`/r/{pageId}/{blockId}`).
+  const discount = z.object({
+    ...common,
+    type: z.literal("discount"),
+    code: discountCode(mode),
+    description: text(mode, { max: LIMITS.discountDescription }).default(""),
+    url: url(mode, { optional: true }).optional(),
+    overrides: blockOverrides.optional(),
+  });
+
+  // Store buttons (M9-20, M9-21): a list of `{id, store, url}`. A store is a label, not a host rule.
+  // A draft keeps any short store name (the editor shows the row and Publish names the field);
+  // Publish wants one of the known stores, each once, and at least one link. The ids are analytics
+  // keys: each button is counted by its own, so they join the page's id namespace.
+  function storeLinks<const Stores extends readonly [string, ...string[]]>(
+    stores: Stores,
+    storeMessage: string,
+    max: number,
+    maxMessage: string,
+  ) {
+    const item = z.object({
+      id: idSchema,
+      store: publish ? z.enum(stores, { error: storeMessage }) : z.string().max(32),
+      url: url(mode),
+    });
+    const list = z.array(item).max(max, { error: maxMessage });
+    if (!publish) return list;
+    return list.superRefine((links, ctx) => {
+      if (links.length === 0) ctx.addIssue({ code: "custom", message: STORE_MISSING_MESSAGE });
+      const seen = new Set<string>();
+      links.forEach((link, index) => {
+        if (seen.has(link.store)) {
+          ctx.addIssue({
+            code: "custom",
+            path: [index, "store"],
+            message: STORE_DUPLICATE_MESSAGE,
+          });
+        }
+        seen.add(link.store);
+      });
+    });
+  }
+
+  // Book links (M9-20): a cover, a title, an author and one button per store.
+  const book = z.object({
+    ...common,
+    type: z.literal("book"),
+    title: text(mode, { max: LIMITS.bookTitle, required: "Add a book title." }),
+    author: text(mode, { max: LIMITS.bookAuthor }),
+    /**
+     * An uploaded image reference or null (a missing key is null), never a URL. Its focus is not
+     * kept (a cover is always cropped to the same 2:3 frame from its middle, like the profile
+     * photo): the key is stripped on parse in both forms, so a stored focus never reaches the
+     * published page.
+     */
+    cover: imageRefSchema.omit({ focus: true }).nullable().default(null),
+    links: storeLinks(
+      BOOK_STORES,
+      BOOK_STORE_MESSAGE,
+      LIMITS.bookLinks,
+      bookStoresLimitMessage(LIMITS.bookLinks),
+    ),
+    overrides: blockOverrides.optional(),
+  });
+
+  // App store buttons (M9-21): one or two badges, the App Store and Google Play.
+  const apps = z.object({
+    ...common,
+    type: z.literal("apps"),
+    links: storeLinks(
+      APP_STORES,
+      APP_STORE_MESSAGE,
+      LIMITS.appLinks,
+      appStoresLimitMessage(LIMITS.appLinks),
+    ),
+    overrides: blockOverrides.optional(),
+  });
+
+  // A map card (M9-22): the place and the two ids its buttons are counted by. The destinations are
+  // not stored: `/r/` builds them from the name and address (`mapTargets`, ./map).
+  const map = z.object({
+    ...common,
+    type: z.literal("map"),
+    name: text(mode, { max: LIMITS.mapName, required: "Add a place name." }),
+    address: text(mode, { max: LIMITS.mapAddress, required: "Add an address." }),
+    googleId: idSchema,
+    appleId: idSchema,
+    overrides: blockOverrides.optional(),
+  });
+
   const block = z.discriminatedUnion("type", [
     link,
     card,
@@ -396,6 +659,12 @@ function buildBlocks(mode: Mode) {
     embed,
     grid,
     divider,
+    faq,
+    contact,
+    discount,
+    book,
+    apps,
+    map,
   ]);
 
   // The display options (M6-15, M6-17) are the same in both modes: a bad value fails the draft
@@ -423,7 +692,36 @@ function buildBlocks(mode: Mode) {
     showBio: z
       .boolean({ error: PROFILE_OPTION_MESSAGES.showBio })
       .default(PROFILE_OPTION_DEFAULTS.showBio),
+    // M9-24: the logo, where it goes, and the name's own font and size. Optional with NO default
+    // (unlike the six options above): a page that uses none of them parses, publishes and renders
+    // byte-identically to before. Readers go through `resolveNameStyle`. A bad value fails the parse
+    // with the Publish gate's wording, so Publish names the field.
+    logo: imageRefSchema.nullable().optional(),
+    logoPlacement: z
+      .enum(LOGO_PLACEMENTS, { error: PROFILE_STYLE_MESSAGES.logoPlacement })
+      .optional(),
+    nameFont: z.enum(FONT_ALLOWLIST, { error: PROFILE_STYLE_MESSAGES.nameFont }).optional(),
+    nameSize: z.enum(NAME_SIZES, { error: PROFILE_STYLE_MESSAGES.nameSize }).optional(),
   });
+
+  // The support banner (M9-23): a short message and an optional link at the top of the page.
+  // Page-level, not a block; absent on a page that never set one. The draft is lenient (half-typed
+  // text autosaves); Publish wants the message once anything is filled in, and the link's label and
+  // address both set or both empty (`bannerIssues`). `visible: false` drops it at Publish.
+  const bannerShape = z.object({
+    id: idSchema,
+    visible: z.boolean().default(true),
+    text: text(mode, { max: LIMITS.bannerText }),
+    label: text(mode, { max: LIMITS.bannerLabel }),
+    url: url(mode, { optional: true }),
+  });
+  const banner = publish
+    ? bannerShape.superRefine((value, ctx) => {
+        for (const issue of bannerIssues(value)) {
+          ctx.addIssue({ code: "custom", path: [issue.field], message: issue.message });
+        }
+      })
+    : bannerShape;
 
   // The share card (M6-32): the title, description and image of the page's link preview. Page-level,
   // not a block. Every key is optional in both forms (an older document has none); the Publish form
@@ -441,7 +739,11 @@ function buildBlocks(mode: Mode) {
     ).optional(),
   });
 
-  return { block, profile, share };
+  // The page's default UTM tags (M9-27) and redirect mode (M9-31): page-level, optional in both forms.
+  const utm = pageUtmSchema(mode);
+  const redirect = redirectSchema(mode);
+
+  return { block, profile, share, banner, utm, redirect };
 }
 
 const lenient = buildBlocks("draft");
@@ -460,6 +762,15 @@ export type SocialBlock = Extract<Block, { type: "social" }>;
 export type EmbedBlock = Extract<Block, { type: "embed" }>;
 export type GridBlock = Extract<Block, { type: "grid" }>;
 export type DividerBlock = Extract<Block, { type: "divider" }>;
+export type FaqBlock = Extract<Block, { type: "faq" }>;
+export type FaqItem = FaqBlock["items"][number];
+export type ContactBlock = Extract<Block, { type: "contact" }>;
+export type DiscountBlock = Extract<Block, { type: "discount" }>;
+export type BookBlock = Extract<Block, { type: "book" }>;
+export type AppsBlock = Extract<Block, { type: "apps" }>;
+export type MapBlock = Extract<Block, { type: "map" }>;
+export type BookLink = BookBlock["links"][number];
+export type AppLink = AppsBlock["links"][number];
 export type SocialIcon = SocialBlock["icons"][number];
 export type GridCell = GridBlock["cells"][number];
 /**
@@ -472,6 +783,8 @@ export type Profile = Omit<z.infer<typeof lenient.profile>, keyof ProfileOptions
   Partial<ProfileOptions>;
 /** The share card (M6-32): every key optional; `image` is an uploaded image reference or null. */
 export type Share = z.infer<typeof lenient.share>;
+/** The support banner (M9-23): `{id, visible, text, label, url}`. */
+export type Banner = z.infer<typeof lenient.banner>;
 
 // Documents -------------------------------------------------------------------------------------
 
@@ -486,7 +799,10 @@ export type DocTheme = z.infer<typeof themeSchema>;
 const tooManyBlocks = { error: `Use ${LIMITS.blocks} blocks or fewer.` };
 
 /** Ids are analytics keys: no two blocks, icons or cells in a document may share one. */
-function requireUniqueIds(doc: { blocks: readonly Block[] }, ctx: z.core.$RefinementCtx): void {
+function requireUniqueIds(
+  doc: { blocks: readonly Block[]; banner?: { id: string } | undefined },
+  ctx: z.core.$RefinementCtx,
+): void {
   const seen = new Set<string>();
   const check = (id: unknown, path: (string | number)[]) => {
     if (typeof id !== "string") return;
@@ -495,6 +811,8 @@ function requireUniqueIds(doc: { blocks: readonly Block[] }, ctx: z.core.$Refine
     }
     seen.add(id);
   };
+  // The banner's link is clicked and counted by its own id (M9-23), so it shares the namespace.
+  if (doc.banner) check(doc.banner.id, ["banner", "id"]);
   doc.blocks.forEach((block, index) => {
     check(block.id, ["blocks", index, "id"]);
     if (block.type === "social") {
@@ -506,6 +824,16 @@ function requireUniqueIds(doc: { blocks: readonly Block[] }, ctx: z.core.$Refine
       });
     } else if (block.type === "grid") {
       block.cells.forEach((cell, i) => check(cell.id, ["blocks", index, "cells", i, "id"]));
+    } else if (block.type === "faq") {
+      // A question has no click of its own, but its id is a key the editor and the page share (M9-16).
+      block.items.forEach((item, i) => check(item.id, ["blocks", index, "items", i, "id"]));
+    } else if (block.type === "book" || block.type === "apps") {
+      // Each store button is clicked and counted by its own id (M9-20, M9-21).
+      block.links.forEach((link, i) => check(link.id, ["blocks", index, "links", i, "id"]));
+    } else if (block.type === "map") {
+      // The map's two buttons, Google Maps and Apple Maps, each have an id (M9-22).
+      check(block.googleId, ["blocks", index, "googleId"]);
+      check(block.appleId, ["blocks", index, "appleId"]);
     }
   });
 }
@@ -519,6 +847,12 @@ export const draftDocSchema = z
     profile: lenient.profile,
     /** The share card (M6-32). Absent until one of its three fields is filled in. */
     share: lenient.share.optional(),
+    /** The support banner (M9-23). Absent until one is set up. */
+    banner: lenient.banner.optional(),
+    /** The page's default UTM tags (M9-27). Absent until one value is set. */
+    utm: lenient.utm.optional(),
+    /** Redirect mode (M9-31): the live page answers with a redirect to this link. Absent means off. */
+    redirect: lenient.redirect.optional(),
     theme: themeSchema,
     blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
   })
@@ -545,6 +879,32 @@ export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
     if (!share.success) {
       for (const issue of share.error.issues) {
         ctx.addIssue({ code: "custom", message: issue.message, path: ["share", ...issue.path] });
+      }
+    }
+  }
+  // The page's UTM defaults (M9-27) and redirect mode (M9-31): each field named in its own path.
+  if (doc.utm !== undefined) {
+    const utm = strict.utm.safeParse(doc.utm);
+    if (!utm.success) {
+      for (const issue of utm.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message, path: ["utm", ...issue.path] });
+      }
+    }
+  }
+  if (doc.redirect !== undefined) {
+    const redirect = strict.redirect.safeParse(doc.redirect);
+    if (!redirect.success) {
+      for (const issue of redirect.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message, path: ["redirect", ...issue.path] });
+      }
+    }
+  }
+  // The banner (M9-23): checked like a visible block; a hidden one is dropped at Publish.
+  if (doc.banner !== undefined && doc.banner.visible !== false) {
+    const banner = strict.banner.safeParse(doc.banner);
+    if (!banner.success) {
+      for (const issue of banner.error.issues) {
+        ctx.addIssue({ code: "custom", message: issue.message, path: ["banner", ...issue.path] });
       }
     }
   }
@@ -581,6 +941,12 @@ export const publishedDocSchema = z
     profile: strict.profile,
     /** The share card, with its empty fields left out (M6-32); absent when all three are empty. */
     share: strict.share.optional(),
+    /** The support banner (M9-23), written only when it is visible and has a message. */
+    banner: strict.banner.optional(),
+    /** The page's default UTM tags (M9-27), written only when at least one value is set. */
+    utm: strict.utm.optional(),
+    /** Redirect mode (M9-31), written only when it is on: the live page redirects to this link. */
+    redirect: strict.redirect.optional(),
     theme: themeSchema,
     /**
      * Every token, resolved: system default, then theme, then page overrides. A document stored

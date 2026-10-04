@@ -15,6 +15,7 @@ import {
   type SocialIcon,
   type SocialPlatform,
 } from "@/lib/document";
+import { SocialGlyph } from "@/components/page/social-icons";
 import { FORM_BUTTON, FORM_BUTTON_DANGER, Field, controlClass } from "../field";
 import { TextField } from "../text-field";
 import { UrlField } from "../url-field";
@@ -22,7 +23,7 @@ import { OverrideControls } from "./override-controls";
 import { fieldError, itemHasError, type BlockFormProps } from "./types";
 
 /** `list` with the item at `from` moved to `to`; the same list when either index is out of range. */
-function moved<T>(list: readonly T[], from: number, to: number): T[] {
+export function moved<T>(list: readonly T[], from: number, to: number): T[] {
   const next = [...list];
   if (from < 0 || from >= next.length || to < 0 || to >= next.length) return next;
   const [item] = next.splice(from, 1);
@@ -31,7 +32,7 @@ function moved<T>(list: readonly T[], from: number, to: number): T[] {
 }
 
 /** Move up, Move down and Remove for one item of an icon or cell list. */
-function ItemControls({
+export function ItemControls({
   index,
   count,
   minCount,
@@ -74,7 +75,7 @@ function ItemControls({
   );
 }
 
-function ItemCard({
+export function ItemCard({
   label,
   itemId,
   invalid,
@@ -100,7 +101,7 @@ function ItemCard({
   );
 }
 
-function AddButton({
+export function AddButton({
   children,
   disabled,
   onClick,
@@ -191,25 +192,35 @@ function SocialIconRow({
   return (
     <ItemCard label={label} itemId={icon.id} invalid={itemHasError(errors, blockId, icon.id)}>
       <div className="flex flex-wrap gap-3">
-        <div className="flex w-40 min-w-0 flex-none flex-col gap-1.5">
+        <div className="flex w-48 min-w-0 flex-none flex-col gap-1.5">
           <label htmlFor={selectId} className="text-[13px] font-semibold text-ink-2">
             Platform
           </label>
-          <select
-            id={selectId}
-            value={icon.platform}
-            data-field="platform"
-            onChange={(event) =>
-              onChange(changeSocialPlatform(icon, event.target.value as SocialPlatform))
-            }
-            className={controlClass(false, "pr-8")}
-          >
-            {SOCIAL_PLATFORMS.map((platform) => (
-              <option key={platform} value={platform}>
-                {SOCIAL_PLATFORM_LABELS[platform]}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            {/* The mark visitors will see (M9-04): the page's own glyph component, so the two cannot drift. */}
+            <span
+              aria-hidden="true"
+              data-testid="social-tile"
+              className="flex size-6 shrink-0 items-center justify-center text-ink"
+            >
+              <SocialGlyph platform={icon.platform} size={18} />
+            </span>
+            <select
+              id={selectId}
+              value={icon.platform}
+              data-field="platform"
+              onChange={(event) =>
+                onChange(changeSocialPlatform(icon, event.target.value as SocialPlatform))
+              }
+              className={controlClass(false, "min-w-0 flex-1 pr-8")}
+            >
+              {SOCIAL_PLATFORMS.map((platform) => (
+                <option key={platform} value={platform}>
+                  {SOCIAL_PLATFORM_LABELS[platform]}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {icon.platform === "email" ? (
           <EmailInput

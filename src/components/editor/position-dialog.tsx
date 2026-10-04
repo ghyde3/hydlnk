@@ -1,12 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import {
   useEffect,
   useId,
   useRef,
   useState,
+  type HTMLAttributes,
+  type ImgHTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   MAX_ZOOM,
@@ -14,16 +16,23 @@ import {
   NUDGE_FINE_PX,
   NUDGE_PX,
   ZOOM_STEP,
-  clampCrop,
   cropToFile,
-  initialCrop,
-  movePicture,
-  pictureLayout,
+  nudgePan,
+  panToCrop,
+  restrictPan,
+  scalePan,
   zoomAnnouncement,
-  zoomCrop,
-  type Crop,
+  type Pan,
   type PositionPhoto,
 } from "@/lib/media/position-crop";
+
+/**
+ * react-easy-crop is loaded when this dialog opens (a file was picked), not with the editor: the
+ * editor's first load carries none of it in a production build. `ssr: false`: the dialog is only ever
+ * drawn in the browser. (`next dev` lists every chunk of a client module in the page; the
+ * production build fetches this one only when the dialog is drawn.)
+ */
+const Cropper = dynamic(() => import("react-easy-crop"), { ssr: false });
 
 /**
  * What the dialog is called and what its primary button says. The profile photo is "photo"; a link's
@@ -65,13 +74,31 @@ const ARROWS: Record<string, readonly [number, number]> = {
   ArrowDown: [0, 1],
 };
 
+const CENTERED: Pan = { x: 0, y: 0 };
+
+/** The viewfinder's outline and the dimmed area outside it, in HYDLNK UI tokens (the library's defaults are fixed white and black). */
+const OUTLINE_STYLE = {
+  border: "2px solid var(--hl-surface)",
+  color: "color-mix(in srgb, var(--hl-ink) 55%, transparent)",
+} as const;
+const SQUARE_OUTLINE_STYLE = { ...OUTLINE_STYLE, borderRadius: "var(--hl-radius)" } as const;
+
+const clampZoom = (zoom: number): number =>
+  Number.isFinite(zoom) ? Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom)) : MIN_ZOOM;
+
 /**
- * "Position your photo" (M6-24): the picture under a square viewfinder with a circular outline.
- * Drag it (pointer events, `touch-action: none` on the viewfinder), zoom it with the slider (1x to
- * 4x), or use the keyboard: the arrow keys move it by 10px (Shift: 1px), plus and minus zoom, and
- * a polite live region says "Zoom 200 percent". The picture always covers the viewfinder, so there
- * are never empty edges. "Use photo" draws the chosen square at the picture's real resolution (at
- * most 800px) and hands the file to `onUse`; Reset, Cancel and Escape change nothing.
+ * "Position your photo" (M6-24, M9-08): the picture under a square viewfinder with a circular
+ * outline, drawn by react-easy-crop. Drag it, pinch it on a phone, zoom it with the slider (1x to
+ * 4x), or use the keyboard: the arrow keys move it by 10px (Shift: 1px), plus and minus zoom, and a
+ * polite live region says "Zoom 200 percent". The picture always covers the viewfinder
+ * (`restrictPosition`), so there are never empty edges. "Use photo" draws the chosen square at the
+ * picture's real resolution (at most 800px) and hands the file to `onUse`; Reset, Cancel and Escape
+ * change nothing.
+ *
+ * The dialog owns the library's `crop` (a pan in screen pixels) and `zoom`, so the keys, the slider
+ * and Reset drive the same state a drag does, and the file it draws comes from that state
+ * (`panToCrop`), not from what the library last reported. No crop, focus or zoom value is stored or
+ * sent: only the picture that "Use photo" draws.
  *
  * A native modal `<dialog>`: the page behind is inert and does not scroll, Escape asks to cancel,
  * and Tab stays inside. On a phone it is a full-height sheet (`100dvh`) with the two buttons pinned
@@ -85,9 +112,9 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
   const zoomId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const finderRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: number; x: number; y: number; crop: Crop; size: number } | null>(null);
   const { width, height } = photo;
-  const [crop, setCrop] = useState<Crop>(() => initialCrop(width, height));
+  const [view, setView] = useState<{ pan: Pan; zoom: number }>({ pan: CENTERED, zoom: MIN_ZOOM });
+  const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -109,36 +136,16 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
 
   const finderSize = (): number => finderRef.current?.getBoundingClientRect().width ?? 0;
 
-  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      crop,
-      size: finderSize(),
-    };
-    finderRef.current?.focus({ preventScroll: true });
-  }
-
-  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>): void {
-    const start = drag.current;
-    if (!start || start.id !== event.pointerId) return;
-    setCrop(
-      movePicture(
-        start.crop,
-        event.clientX - start.x,
-        event.clientY - start.y,
-        width,
-        height,
-        start.size,
-      ),
-    );
-  }
-
-  function endDrag(event: ReactPointerEvent<HTMLDivElement>): void {
-    if (drag.current?.id === event.pointerId) drag.current = null;
+  /** A new zoom around the same center: the pan scales with it, and stays inside the picture. */
+  function zoomTo(next: number): void {
+    const size = finderSize();
+    setView((current) => {
+      const zoom = clampZoom(next);
+      return {
+        zoom,
+        pan: restrictPan(scalePan(current.pan, current.zoom, zoom), width, height, size, zoom),
+      };
+    });
   }
 
   function onFinderKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
@@ -148,14 +155,17 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
       event.preventDefault();
       const px = event.shiftKey ? NUDGE_FINE_PX : NUDGE_PX;
       const size = finderSize();
-      setCrop((current) => movePicture(current, arrow[0] * px, arrow[1] * px, width, height, size));
+      setView((current) => ({
+        ...current,
+        pan: nudgePan(current.pan, arrow[0] * px, arrow[1] * px, width, height, size, current.zoom),
+      }));
       return;
     }
     const direction =
       event.key === "+" || event.key === "=" ? 1 : event.key === "-" || event.key === "_" ? -1 : 0;
     if (direction !== 0) {
       event.preventDefault();
-      setCrop((current) => zoomCrop(current, current.zoom + direction * ZOOM_STEP, width, height));
+      zoomTo(view.zoom + direction * ZOOM_STEP);
     }
   }
 
@@ -186,7 +196,8 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
     setError(null);
     let file: File | null = null;
     try {
-      file = await cropToFile(photo, clampCrop(crop, width, height), copy.file);
+      const crop = panToCrop(view.pan, view.zoom, width, height, finderSize());
+      file = await cropToFile(photo, crop, copy.file);
     } catch {
       file = null;
     }
@@ -198,8 +209,7 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
     onUse(file);
   }
 
-  const layout = pictureLayout(crop, width, height);
-  const zoomText = `${Number(crop.zoom.toFixed(2))}x`;
+  const zoomText = `${Number(view.zoom.toFixed(2))}x`;
   return (
     <dialog
       ref={dialogRef}
@@ -227,42 +237,58 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
         <div
           ref={finderRef}
           role="group"
-
           tabIndex={0}
           aria-label="Picture position"
           aria-describedby={hintId}
           data-testid="position-viewfinder"
           data-variant={variant}
+          data-shape={variant === "photo" ? "round" : "square"}
+          data-ready={ready ? "true" : undefined}
           onKeyDown={onFinderKeyDown}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          // The library keeps the focus where it was (it cancels the mouse-down), so a drag leaves the
+          // arrow keys working on the viewfinder.
+          onPointerDown={() => finderRef.current?.focus({ preventScroll: true })}
           style={{ touchAction: "none" }}
           className="relative mx-auto aspect-square w-full max-w-[320px] cursor-grab touch-none overflow-hidden rounded-md bg-track select-none hl:max-w-[280px]"
         >
-          {/* A plain <img> of the file's own object URL: nothing is requested from anywhere. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photo.url}
-            alt=""
-            draggable={false}
-            data-testid="position-picture"
-            data-zoom={crop.zoom}
+          <Cropper
+            image={photo.url}
+            crop={view.pan}
+            zoom={view.zoom}
+            rotation={0}
+            aspect={1}
+            minZoom={MIN_ZOOM}
+            maxZoom={MAX_ZOOM}
+            cropShape={variant === "photo" ? "round" : "rect"}
+            objectFit="cover"
+            showGrid={false}
+            zoomWithScroll={false}
+            zoomSpeed={1}
+            restrictPosition
+            keyboardStep={NUDGE_PX}
+            onCropChange={(pan) => setView((current) => ({ ...current, pan }))}
+            onZoomChange={(zoom) => setView((current) => ({ ...current, zoom: clampZoom(zoom) }))}
+            onMediaLoaded={() => setReady(true)}
             style={{
-              left: `${layout.left}%`,
-              top: `${layout.top}%`,
-              width: `${layout.width}%`,
-              height: `${layout.height}%`,
+              cropAreaStyle: variant === "photo" ? OUTLINE_STYLE : SQUARE_OUTLINE_STYLE,
             }}
-            className="pointer-events-none absolute max-w-none"
-          />
-          <span
-            aria-hidden="true"
-            data-testid="position-outline"
-            className={`pointer-events-none absolute inset-0 border-2 border-surface shadow-[0_0_0_999px_rgb(28_27_26/0.55)] ${
-              variant === "photo" ? "rounded-full" : "rounded-md"
-            }`}
+            classes={{}}
+            // Nothing is requested: the picture is the file's own object URL, drawn as a plain <img>.
+            mediaProps={
+              {
+                "data-testid": "position-picture",
+                "data-zoom": view.zoom,
+                draggable: false,
+              } as ImgHTMLAttributes<HTMLElement>
+            }
+            // The outline is a picture, not a control: the dialog's viewfinder takes the focus and the keys.
+            cropperProps={
+              {
+                "data-testid": "position-outline",
+                "aria-hidden": true,
+                tabIndex: undefined,
+              } as HTMLAttributes<HTMLDivElement>
+            }
           />
         </div>
 
@@ -281,11 +307,9 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
             min={MIN_ZOOM}
             max={MAX_ZOOM}
             step={0.01}
-            value={crop.zoom}
-            aria-valuetext={`${Math.round(crop.zoom * 100)} percent`}
-            onChange={(event) =>
-              setCrop((current) => zoomCrop(current, Number(event.target.value), width, height))
-            }
+            value={view.zoom}
+            aria-valuetext={`${Math.round(view.zoom * 100)} percent`}
+            onChange={(event) => zoomTo(Number(event.target.value))}
             className="h-11 w-full accent-ink"
           />
         </div>
@@ -293,7 +317,7 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
         <div>
           <button
             type="button"
-            onClick={() => setCrop(initialCrop(width, height))}
+            onClick={() => setView({ pan: CENTERED, zoom: MIN_ZOOM })}
             className={`${SECONDARY} w-full hl:w-auto`}
           >
             Reset
@@ -301,7 +325,7 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
         </div>
 
         <div aria-live="polite" data-testid="position-live" className="sr-only">
-          {zoomAnnouncement(crop.zoom)}
+          {zoomAnnouncement(view.zoom)}
         </div>
         {error ? (
           <p role="alert" className="text-[13px] text-bad">

@@ -62,7 +62,8 @@ test.describe("M3-08 colour tokens", () => {
 
     // Six swatches with their labels; the current accent (Brass in Noir) is pressed.
     for (const name of Object.keys(ACCENTS)) await expect(swatch(page, name)).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Accent / })).toHaveCount(6);
+    // M9-07: the Accent row's own swatch is named "Accent color"; the six accent swatches are "Accent <name>".
+    await expect(page.getByRole("button", { name: /^Accent (?!color$)/ })).toHaveCount(6);
     await expect(swatch(page, "Brass")).toHaveAttribute("aria-pressed", "true");
     await expect(swatch(page, "Terracotta")).toHaveAttribute("aria-pressed", "false");
 
@@ -121,8 +122,9 @@ test.describe("M3-08 colour tokens", () => {
     await expect.poll(() => previewVar(page, "--t-surface")).toBe("#A1B2C3");
     await expectOverrides(user.pageId, (o) => o.surface === "#A1B2C3");
 
-    // The native colour input.
-    await page.getByLabel("Text color", { exact: true }).fill("#336699");
+    // M9-07: the swatch opens the color picker; the hex field is how a color is typed.
+    await page.getByLabel("Text color", { exact: true }).click();
+    await hexField(page, "text").fill("#336699");
     await expect.poll(() => previewVar(page, "--t-text")).toBe("#336699");
     await expectOverrides(user.pageId, (o) => o.text === "#336699");
 

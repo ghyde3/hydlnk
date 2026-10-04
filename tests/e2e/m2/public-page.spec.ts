@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { emptyDraft, toPublishForm, type Block, type PublishDoc } from "@/lib/document";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
+import { expireOwnerPages } from "../fixtures/expire";
 import {
   accessTokenFor,
   cleanupUsers,
@@ -384,6 +385,7 @@ test.describe("M2-28 Made with HYDLNK", () => {
 
   test("M2-28 the badge follows the account's plan at render time, with no republish", async ({
     page,
+    browser,
   }) => {
     const fx = await publishedPage("bplan", { plan: "free" });
     await page.goto(url(fx.handle));
@@ -396,12 +398,16 @@ test.describe("M2-28 Made with HYDLNK", () => {
         .single()
     ).data;
 
+    // A production build serves the cached page until its tag expires; the Stripe webhook expires it
+    // (M4-08), and here the plan is set straight in the database, so expire it the way the webhook does.
     const up = await adminClient().from("accounts").update({ plan: "pro" }).eq("id", fx.userId);
     expect(up.error).toBeNull();
+    await expireOwnerPages(browser, fx.userId);
     await page.goto(url(fx.handle));
     await expect(badge(page)).toHaveCount(0);
 
     await adminClient().from("accounts").update({ plan: "free" }).eq("id", fx.userId);
+    await expireOwnerPages(browser, fx.userId);
     await page.goto(url(fx.handle));
     await expect(badge(page)).toHaveCount(1);
     const after = (
@@ -705,7 +711,9 @@ test.describe("M2-30 OG image and social metadata", () => {
     expect((await tenantGet(`nobody-${rand(6)}`, "/og")).status).toBe(404);
   });
 
-  test("M2-30 editing the draft does not change the image; changing the published name does", async () => {
+  test("M2-30 editing the draft does not change the image; changing the published name does", async ({
+    browser,
+  }) => {
     const fx = await publishedPage("ogedit", { name: "Zq Original" });
     const before = (await tenantGet(fx.handle, "/og")).body;
 
@@ -723,6 +731,9 @@ test.describe("M2-30 OG image and social metadata", () => {
       .from("pages")
       .update({ published: next, published_at: new Date().toISOString() })
       .eq("id", fx.pageId);
+    // Publish expires the page's tag (a production build caches the image under it); this write
+    // went straight to the database, so expire it the way an admin action does.
+    await expireOwnerPages(browser, fx.userId);
     const after = (await tenantGet(fx.handle, "/og")).body;
     expect(after.equals(before)).toBe(false);
     expect(pngSizeOf(after)).toEqual({ width: 1200, height: 630 });

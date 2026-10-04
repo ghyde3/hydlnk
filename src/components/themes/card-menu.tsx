@@ -1,5 +1,6 @@
 "use client";
 
+import { Ellipsis } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -10,6 +11,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "@/components/app/icon";
 
 export interface CardMenuItem {
   /** Stable key, and the `data-testid` of the item: `theme-preview`, `theme-rename`, `theme-delete`. */
@@ -214,16 +216,7 @@ export function CardMenu({
         }}
         className={className}
       >
-        <svg
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-          className="size-[18px] fill-current"
-          focusable="false"
-        >
-          <circle cx="5" cy="12" r="1.8" />
-          <circle cx="12" cy="12" r="1.8" />
-          <circle cx="19" cy="12" r="1.8" />
-        </svg>
+        <Icon icon={Ellipsis} size={18} />
       </button>
 
       {open && typeof document !== "undefined"

@@ -212,7 +212,7 @@ describe("M6-47 the five groups", () => {
   it("the Colors group has six accent swatches and eight rows in the old order, named in plain words", () => {
     const host = mount(props());
     expect(
-      Array.from(host.querySelectorAll('button[aria-label^="Accent "]')).map((b) =>
+      Array.from(host.querySelectorAll('button[aria-pressed][aria-label^="Accent "]')).map((b) =>
         b.getAttribute("aria-label"),
       ),
     ).toEqual([
@@ -241,7 +241,7 @@ describe("M6-47 the five groups", () => {
     for (const key of keys) {
       const name = TOKEN_LABELS[key as keyof typeof TOKEN_LABELS];
       expect(
-        host.querySelector(`input[type="color"][aria-label="${name} color"]`),
+        host.querySelector(`button[type="button"][aria-label="${name} color"]`),
         name,
       ).not.toBeNull();
       expect(

@@ -12,7 +12,20 @@ import {
   type ImageRef,
   type Share,
   isShareEmpty,
+  salvageMarks,
 } from "@/lib/document";
+import {
+  LOGO_PLACEMENTS,
+  NAME_SIZES,
+  pickNameFont,
+  pickProfileStyle,
+} from "@/lib/document/page-extras";
+import {
+  linkUtmSchema,
+  lockSchema,
+  pageUtmSchema,
+  redirectSchema,
+} from "@/lib/document/link-fields";
 import { resolveProfileOptions } from "@/lib/document/profile-options";
 import { tokenOverridesSchema, validBlockOverrides } from "@/lib/theme";
 
@@ -64,6 +77,11 @@ function withVisible(block: Block): Block {
 function idsOf(block: Block): string[] {
   if (block.type === "social") return [block.id, ...block.icons.map((icon) => icon.id)];
   if (block.type === "grid") return [block.id, ...block.cells.map((cell) => cell.id)];
+  // Each store button and each map button is clicked and counted by its own id (M9-20, M9-21, M9-22).
+  if (block.type === "book" || block.type === "apps") {
+    return [block.id, ...block.links.map((link) => link.id)];
+  }
+  if (block.type === "map") return [block.id, block.googleId, block.appleId];
   // A link inside text is clicked and counted by its own id (M6-28).
   if (block.type === "text") {
     return [
@@ -74,10 +92,17 @@ function idsOf(block: Block): string[] {
   return [block.id];
 }
 
-/** A social block's icons and a grid block's cells that repeat an id: the first of each stays. */
+/** A social block's icons, a grid block's cells and a book's or app block's store links that repeat an id: the first of each stays. */
 function withoutRepeatedItemIds(item: unknown): unknown {
   if (!isRecord(item)) return item;
-  const key = item.type === "social" ? "icons" : item.type === "grid" ? "cells" : null;
+  const key =
+    item.type === "social"
+      ? "icons"
+      : item.type === "grid"
+        ? "cells"
+        : item.type === "book" || item.type === "apps"
+          ? "links"
+          : null;
   const list = key === null ? undefined : item[key];
   if (key === null || !Array.isArray(list)) return item;
   const seenIds = new Set<string>();
@@ -105,6 +130,40 @@ function withoutBadOverrides(item: unknown): unknown {
   return kept ? { ...rest, overrides: kept } : rest;
 }
 
+/**
+ * A text block whose marks the draft schema cannot read as they are (400 marks, a mark of another
+ * type, an `align` that is not a string: something wrote them straight to the draft, M9-12) keeps its
+ * text and the marks that read, the first 30 inline and the first 20 alignments, and loses the rest.
+ * Nothing is written until the user edits.
+ */
+function withSaneMarks(item: unknown): unknown {
+  if (!isRecord(item) || item.type !== "text" || !("marks" in item)) return item;
+  const { marks, ...rest } = item;
+  const kept = salvageMarks(marks);
+  return kept.length > 0 ? { ...rest, marks: kept } : rest;
+}
+
+/**
+ * A link block whose own tags or lock the draft schema cannot read (M9-27, M9-29: something wrote
+ * them straight to the draft) keeps its content and loses only that key. Nothing is written until
+ * the user edits.
+ */
+function withSaneLinkFields(item: unknown): unknown {
+  if (!isRecord(item) || item.type !== "link") return item;
+  let out = item;
+  if ("utm" in out && !linkUtmSchema("draft").safeParse(out.utm).success) {
+    const { utm, ...rest } = out;
+    void utm;
+    out = rest;
+  }
+  if ("lock" in out && !lockSchema("draft").safeParse(out.lock).success) {
+    const { lock, ...rest } = out;
+    void lock;
+    out = rest;
+  }
+  return out;
+}
+
 export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   const revKey = revKeyOf(raw);
 
@@ -120,9 +179,17 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
           photo: stored.profile.photo,
           // Stored objects are returned as they are, so the options are filled here (M6-15, M6-17).
           ...resolveProfileOptions(stored.profile),
+          // The logo, its placement and the name's font and size (M9-24): kept as stored, and only
+          // when the document has them (no key is invented).
+          ...pickProfileStyle(stored.profile),
         },
         // The share card (M6-32) is kept as stored, raw strings and all.
         ...(stored.share ? { share: stored.share } : {}),
+        // The support banner (M9-23), raw strings and all.
+        ...(stored.banner ? { banner: stored.banner } : {}),
+        // The page's UTM defaults (M9-27) and redirect mode (M9-31), as stored.
+        ...(stored.utm ? { utm: stored.utm } : {}),
+        ...(stored.redirect ? { redirect: stored.redirect } : {}),
         theme: { ref: stored.theme.ref, overrides: stored.theme.overrides },
         blocks: stored.blocks.map(withVisible),
       },
@@ -157,6 +224,40 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
     if (!isShareEmpty(repaired)) share = repaired;
   }
 
+  // The logo and the name's own style (M9-24): each keeps its value when it reads, else it is left out.
+  const style: Record<string, unknown> = {};
+  const parsedLogo = imageRefSchema.safeParse(rawProfile?.logo);
+  if (parsedLogo.success) style.logo = parsedLogo.data;
+  if ((LOGO_PLACEMENTS as readonly unknown[]).includes(rawProfile?.logoPlacement)) {
+    style.logoPlacement = rawProfile?.logoPlacement;
+  }
+  if ((NAME_SIZES as readonly unknown[]).includes(rawProfile?.nameSize)) {
+    style.nameSize = rawProfile?.nameSize;
+  }
+  const nameFont = pickNameFont(rawProfile?.nameFont);
+  if (nameFont !== null) style.nameFont = nameFont;
+
+  // The support banner (M9-23): kept when its parts read (text cut to its limit, on one line), else dropped.
+  const rawBanner = isRecord(source.banner) ? source.banner : undefined;
+  let banner: DraftDoc["banner"];
+  if (rawBanner && typeof rawBanner.id === "string") {
+    const candidate = {
+      id: rawBanner.id,
+      visible: rawBanner.visible !== false,
+      text: text(rawBanner.text, "", LIMITS.bannerText),
+      label: text(rawBanner.label, "", LIMITS.bannerLabel),
+      url: typeof rawBanner.url === "string" ? rawBanner.url.slice(0, LIMITS.draftUrl) : "",
+    };
+    if (draftDocSchema.shape.banner.safeParse(candidate).success) banner = candidate;
+  }
+
+  // The page's UTM defaults and redirect mode (M9-27, M9-31): each is kept when it reads, else dropped.
+  const parsedUtm = pageUtmSchema("draft").safeParse(source.utm);
+  const utm = source.utm !== undefined && parsedUtm.success ? parsedUtm.data : undefined;
+  const parsedRedirect = redirectSchema("draft").safeParse(source.redirect);
+  const redirect =
+    source.redirect !== undefined && parsedRedirect.success ? parsedRedirect.data : undefined;
+
   const rawTheme = isRecord(source.theme) ? source.theme : undefined;
   let ref: string | null = null;
   if (typeof rawTheme?.ref === "string" && z.guid().safeParse(rawTheme.ref).success) {
@@ -167,12 +268,15 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   if (parsedOverrides.success) overrides = parsedOverrides.data;
 
   const blocks: Block[] = [];
-  const seen = new Set<string>();
+  // The banner's id is part of the page's id space (M9-23): a block that repeats it is dropped.
+  const seen = new Set<string>(banner ? [banner.id] : []);
   if (Array.isArray(source.blocks)) {
     for (const item of source.blocks) {
       if (blocks.length >= LIMITS.blocks) break;
       // Icons or cells that repeat an id inside one block: the first of each stays (M6-05).
-      const candidateItem = withoutBadOverrides(withoutRepeatedItemIds(item));
+      const candidateItem = withSaneLinkFields(
+        withSaneMarks(withoutBadOverrides(withoutRepeatedItemIds(item))),
+      );
       const parsed = blockSchema.safeParse(candidateItem);
       if (!parsed.success) continue;
       const ids = idsOf(parsed.data);
@@ -187,8 +291,11 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
     version: 1,
     rev: revNumber(raw),
     // Each option keeps its stored value when that is valid and takes its default when it is not.
-    profile: { name, bio, photo, ...resolveProfileOptions(rawProfile) },
+    profile: { name, bio, photo, ...resolveProfileOptions(rawProfile), ...style },
     ...(share ? { share } : {}),
+    ...(banner ? { banner } : {}),
+    ...(utm ? { utm } : {}),
+    ...(redirect ? { redirect } : {}),
     theme: { ref, overrides },
     blocks,
   };

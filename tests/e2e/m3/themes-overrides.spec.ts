@@ -296,7 +296,8 @@ test.describe("M3-18 per-block overrides: color and corner radius", () => {
     await expect(linkControls.locator("label")).toHaveCount(3);
     await expect(linkControls.getByText(/font|spacing|background|gap/i)).toHaveCount(0);
 
-    const swatch = link.locator('input[data-field="override-color-swatch"]');
+    // The swatch is a button since M9-07 (it opens the color picker); the hex field is the input.
+    const swatch = link.locator('button[data-field="override-color-swatch"]');
     await expect(swatch).toBeVisible();
     const hex = colorField(link);
     expect(await css(hex, "font-size")).toBe("16px");
@@ -520,13 +521,10 @@ test.describe("M3-18 direct-API abuse: block overrides", () => {
     await openEditorPage(page);
     const panel = await expand(page, A);
     await expectDraft(user.pageId, (draft) => draft.blocks.length === 4);
-    const names = await panel.locator("label").allTextContents();
-    expect(names.map((text) => text.trim())).toEqual([
-      "Label",
-      "Link",
-      "Button style",
-      "Color",
-      "Corner radius",
-    ]);
+    // M9-30 adds "Lock this link" under the link's own fields; the override section is unchanged.
+    const names = await panel.getByTestId("override-controls").locator("label").allTextContents();
+    expect(names.map((text) => text.trim())).toEqual(["Button style", "Color", "Corner radius"]);
+    const all = await panel.locator("label").allTextContents();
+    expect(all.map((text) => text.trim()).slice(0, 2)).toEqual(["Label", "Link"]);
   });
 });

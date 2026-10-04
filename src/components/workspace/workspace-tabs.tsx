@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, type KeyboardEvent } from "react";
+import { cn } from "@/lib/cn";
 import {
   WORKSPACE_PANEL_ID,
   WORKSPACE_TABS,
@@ -54,7 +55,7 @@ export function WorkspaceTabs({
       aria-label="Workspace"
       data-testid="workspace-tabs"
       onKeyDown={onKeyDown}
-      className={`flex gap-0.5 rounded-md border border-line bg-track p-[3px] ${className}`}
+      className={cn("flex gap-0.5 rounded-md border border-line bg-track p-[3px]", className)}
     >
       {WORKSPACE_TABS.map((tab) => {
         const selected = tab.id === active;
@@ -71,9 +72,10 @@ export function WorkspaceTabs({
             aria-controls={WORKSPACE_PANEL_ID}
             tabIndex={selected ? 0 : -1}
             data-workspace-tab={tab.id}
-            className={`inline-flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-sm px-3.5 text-sm font-semibold no-underline ${
-              selected ? "bg-surface text-ink ring-1 ring-line-2" : "bg-transparent text-text-2"
-            }`}
+            className={cn(
+              "inline-flex min-h-11 min-w-0 flex-1 items-center justify-center rounded-sm px-3.5 text-sm font-semibold no-underline",
+              selected ? "bg-surface text-ink ring-1 ring-line-2" : "bg-transparent text-text-2",
+            )}
           >
             {tab.label}
           </Link>

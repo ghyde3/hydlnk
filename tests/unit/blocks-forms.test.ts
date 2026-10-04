@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EMBED_ERROR_MESSAGE,
+  SOCIAL_PLATFORMS,
   URL_ERROR_MESSAGE,
   blockDefaults,
   newGridCell,
@@ -26,6 +27,14 @@ vi.mock("@/lib/env/client", () => ({
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// jsdom has no matchMedia; the text editor asks it whether the screen is a desktop (M9-12).
+window.matchMedia ??= ((query: string) => ({
+  matches: false,
+  media: query,
+  addEventListener: () => undefined,
+  removeEventListener: () => undefined,
+})) as unknown as typeof window.matchMedia;
 
 const cleanups: (() => void)[] = [];
 afterEach(() => {
@@ -273,27 +282,48 @@ describe("M2-16 header, text and divider forms", () => {
     expect((latest.block as { text: string }).text).toHaveLength(80);
   });
 
-  it("text: a textarea with a '{n} / 600' counter that keeps line breaks and stops at 600", () => {
-    const { host, latest } = mountForm({ ...blocks.text, text: "Hello" });
+  /** The text editor is loaded on demand (M9-12): wait for it to replace its placeholder. */
+  async function editorLoaded(host: HTMLElement) {
+    expect(host.textContent).toContain("Loading the text editor");
+    // The form's own import() settles on the same module; the update it makes is flushed when act ends.
+    await act(async () => {
+      await import("@/components/blocks/forms/text-editor/text-editor");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(host.querySelector('[data-field="text"][contenteditable="true"]')).not.toBeNull();
+    return host.querySelector<HTMLElement>('[data-field="text"][contenteditable="true"]')!;
+  }
+
+  it("text: a rich text editor (a textbox labelled Text) with a '{n} / 600' counter, loaded on demand", async () => {
+    const { host } = mountForm({ ...blocks.text, text: "Hello" });
+    const editor = await editorLoaded(host);
+    expect(editor.getAttribute("role")).toBe("textbox");
+    expect(editor.getAttribute("aria-multiline")).toBe("true");
     expect(host.textContent).toContain("5 / 600");
-    const area = host.querySelector("textarea")!;
-    type(area, "line one\nline two");
-    expect((latest.block as { text: string }).text).toBe("line one\nline two");
-    expect(host.textContent).toContain("17 / 600");
-    type(area, "a".repeat(700));
-    expect((latest.block as { text: string }).text).toHaveLength(600);
-    expect(host.textContent).toContain("600 / 600");
+    expect(host.querySelector("textarea")).toBeNull();
+    expect(editor.textContent).toBe("Hello");
   });
 
-  it("text: normalizes \\r\\n and drops other control characters", () => {
-    const { host, latest } = mountForm(blockDefaults.text());
-    type(host.querySelector("textarea")!, "a\r\nb\u0007c");
-    expect((latest.block as { text: string }).text).toBe("a\nbc");
+  it("text: line breaks are paragraphs, and CRLF reads as LF", async () => {
+    const { host } = mountForm({ ...blocks.text, text: "a\r\nb" });
+    const editor = await editorLoaded(host);
+    expect(Array.from(editor.querySelectorAll("p")).map((p) => p.textContent)).toEqual(["a", "b"]);
+    expect(host.textContent).toContain("3 / 600");
   });
 
-  it("text: counts code points, not UTF-16 units", () => {
+  it("text: counts code points, not UTF-16 units", async () => {
     const { host } = mountForm({ ...blocks.text, text: "👍👍" });
+    await editorLoaded(host);
     expect(host.textContent).toContain("2 / 600");
+  });
+
+  it("text: opening the editor writes nothing to the draft", async () => {
+    const { host, changes } = mountForm({ ...blocks.text, text: "Hello" });
+    await editorLoaded(host);
+    expect(changes).toEqual([]);
   });
 
   // M6-46: a divider has no content to edit, but it has its own style: the line's color.
@@ -319,7 +349,7 @@ describe("M2-17 social form", () => {
     const rows = host.querySelectorAll<HTMLElement>("[data-item-id]");
     expect(rows).toHaveLength(3);
     for (const row of Array.from(rows)) {
-      expect(row.querySelector("select")?.options).toHaveLength(10);
+      expect(row.querySelector("select")?.options).toHaveLength(SOCIAL_PLATFORMS.length);
       expect(row.querySelector('input[type="url"]')).not.toBeNull();
       expect(["Move up", "Move down", "Remove"].every((name) => button(row, name))).toBe(true);
       for (const b of Array.from(row.querySelectorAll("button"))) {

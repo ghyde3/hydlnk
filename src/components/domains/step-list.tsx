@@ -1,4 +1,6 @@
+import { Check } from "lucide-react";
 import type { ReactNode } from "react";
+import { CHECK_ON_FILL_STROKE, Icon } from "@/components/app/icon";
 import type { StepState, StepView } from "./view-model";
 
 const CIRCLE: Record<StepState, string> = {
@@ -21,20 +23,7 @@ function StepCircle({ step }: { step: StepView }) {
       className={`flex size-[26px] shrink-0 items-center justify-center rounded-full border font-mono text-xs font-medium ${CIRCLE[step.state]}`}
     >
       {step.state === "done" ? (
-        <svg
-          viewBox="0 0 24 24"
-          width={13}
-          height={13}
-          aria-hidden="true"
-          focusable="false"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.6}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M5 12.5l4.5 4.5L19 7.5" />
-        </svg>
+        <Icon icon={Check} size={13} strokeWidth={CHECK_ON_FILL_STROKE} />
       ) : (
         <span aria-hidden="true">{step.n}</span>
       )}

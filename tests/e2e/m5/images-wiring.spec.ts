@@ -60,7 +60,9 @@ test.afterAll(async () => {
 
 const card = (page: Page) => page.getByRole("region", { name: "Profile", exact: true });
 const avatar = (page: Page) => card(page).getByRole("img", { name: /^Profile photo/ });
-const fileInput = (page: Page) => card(page).locator("input[type=file]");
+// The Profile card holds two uploads since M9-24 (the photo and the logo): the photo's is in its own row.
+const fileInput = (page: Page) =>
+  card(page).getByTestId("profile-photo-row").locator("input[type=file]");
 const uploadButton = (page: Page) =>
   card(page).getByRole("button", { name: /^(Upload|Replace) photo|^Uploading/ });
 

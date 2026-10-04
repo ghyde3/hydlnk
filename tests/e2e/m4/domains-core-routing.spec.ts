@@ -1,7 +1,8 @@
 import { chromium, expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, makeUser, rand, signedInUser } from "../fixtures/data";
-import { rawRequest } from "../fixtures/http";
+import { setOwnerSuspended, untilHostLookupExpires } from "../fixtures/expire";
+import { PRODUCTION_BUILD, rawRequest } from "../fixtures/http";
 import { url } from "../helpers";
 import {
   addDomainRow,
@@ -337,6 +338,9 @@ test.describe("M4-09 changes show at the next request", () => {
 
   test("M4-09 a pending domain going live, a re-point and a removal take effect at the very next request", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
+    // The dev server shows each change at once. A production build remembers a host for 10 s (none) or
+    // 60 s (found) and these changes are written from this process, so each step may wait that long.
+    if (PRODUCTION_BUILD) test.setTimeout(300_000);
     const other = await publishedPage(site.user.id, `zq-rt2-${rand(5)}`, `Other ${rand(4)}`);
     const host = hostnameFor("flip");
     const id = await addDomainRow({ pageId: site.pageId, hostname: host, status: "pending" });
@@ -347,7 +351,7 @@ test.describe("M4-09 changes show at the next request", () => {
       .from("domains")
       .update({ status: "verified", verified_at: new Date().toISOString() })
       .eq("id", id);
-    const live1 = await get(host);
+    const live1 = await untilHostLookupExpires(() => get(host), (r) => r.status === 200, "none");
     expect(live1.status).toBe(200);
     expect(live1.body).toContain(site.name);
 
@@ -355,34 +359,38 @@ test.describe("M4-09 changes show at the next request", () => {
     await admin.from("domains").update({ page_id: other }).eq("id", id);
     const otherName = (await admin.from("pages").select("published").eq("id", other).single()).data!
       .published as { profile: { name: string } };
-    const live2 = await get(host);
+    const live2 = await untilHostLookupExpires(
+      () => get(host),
+      (r) => r.body.includes(otherName.profile.name),
+      "found",
+    );
     expect(live2.body).toContain(otherName.profile.name);
     expect(live2.body).not.toContain(site.name);
 
     // Removed: 404 immediately, no stale copy.
     await admin.from("domains").delete().eq("id", id);
-    const gone = await get(host);
+    const gone = await untilHostLookupExpires(() => get(host), (r) => r.status === 404, "found");
     expect(gone.status).toBe(404);
     expect(gone.body).not.toContain(site.name);
     expect(gone.body).not.toContain(otherName.profile.name);
   });
 
-  test("M4-09 a page that is unpublished, or whose owner is suspended, stops serving at the next request", async ({}, info) => {
+  test("M4-09 a page that is unpublished, or whose owner is suspended, stops serving at the next request", async ({
+    browser,
+  }, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const s = await makeSite("rts");
     const host = hostnameFor("susp");
     await addDomainRow({ pageId: s.pageId, hostname: host, status: "verified" });
     expect((await get(host)).status).toBe(200);
 
-    const admin = adminClient();
-    await admin
-      .from("accounts")
-      .update({ suspended_at: new Date().toISOString() })
-      .eq("id", s.user.id);
+    // A production build caches the page until its tag expires, which the admin action does (the
+    // dev server needs only the database write).
+    await setOwnerSuspended(browser, s.user.id, true);
     const suspended = await get(host);
     expect(suspended.status).toBe(404);
     expect(suspended.body).not.toContain(s.name);
-    await admin.from("accounts").update({ suspended_at: null }).eq("id", s.user.id);
+    await setOwnerSuspended(browser, s.user.id, false);
     expect((await get(host)).status).toBe(200);
   });
 });

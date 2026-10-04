@@ -38,8 +38,9 @@ const panelOf = (page: Page, id: string): Locator =>
   rowOf(page, id).locator('[id^="block-panel-"]');
 const groupOf = (panel: Locator): Locator => panel.getByRole("region", { name: GROUP });
 const colorField = (panel: Locator): Locator => panel.locator('input[data-field="override-color"]');
+// M9-07: the swatch is a button that opens the color picker (it was a native color input).
 const swatch = (panel: Locator): Locator =>
-  panel.locator('input[data-field="override-color-swatch"]');
+  panel.locator('button[data-field="override-color-swatch"]');
 const radiusSelect = (panel: Locator): Locator =>
   panel.locator('select[data-field="override-radius"]');
 const thicknessSelect = (panel: Locator): Locator =>
@@ -107,14 +108,19 @@ test.describe("M6-46 the controls in every block's panel", () => {
       const names = (await group.locator("label").allTextContents()).map((t) => t.trim());
       expect(names, pair).toEqual(labels);
 
-      // Under the block's own fields: no field of the block sits below the group's top.
+      // Under the block's own fields: no field of the block sits below the group's top. A link's
+      // own tags and its lock (M9-28, M9-30) are groups of their own that follow it.
       const groupTop = (await group.boundingBox())!.y;
       const fieldBottoms = await panel
         .locator("input, select, textarea")
         .evaluateAll(
           (els, groupEl) =>
             els
-              .filter((el) => !(groupEl as Element).contains(el))
+              .filter(
+                (el) =>
+                  !(groupEl as Element).contains(el) &&
+                  !el.closest('[data-testid="link-tags-field"], [data-testid="link-lock-field"]'),
+              )
               .map((el) => el.getBoundingClientRect().bottom),
           await group.elementHandle(),
         );
@@ -374,11 +380,15 @@ test.describe("M6-46 setting a style changes only that block, in the preview", (
     await expect
       .poll(() => computed(img, "border-top-color"), { timeout: 3000 })
       .toBe("rgb(0, 170, 0)");
-    // The swatch (the native picker) writes too.
-    await swatch(panel).fill("#aa0000");
+    // M9-07: the swatch opens the color picker; the hex field is how a color is typed.
+    await swatch(panel).click();
+    await expect(swatch(panel)).toHaveAttribute("aria-expanded", "true");
+    await colorField(panel).fill("#aa0000");
     await expect
       .poll(() => computed(img, "border-top-color"), { timeout: 3000 })
       .toBe("rgb(170, 0, 0)");
+    // The field shows what is typed while it has the focus, and the stored #RRGGBB once it has not.
+    await colorField(panel).blur();
     await expect(colorField(panel)).toHaveValue("#AA0000");
   });
 

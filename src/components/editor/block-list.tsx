@@ -19,15 +19,16 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { GripVertical } from "lucide-react";
 import { useMemo, useState, type Dispatch } from "react";
 import { LIMITS, type Block, type BlockType, type PublishError } from "@/lib/document";
+import { Icon } from "@/components/app/icon";
 import { PageBlocksProvider } from "@/components/blocks/forms/featured-context";
 import { blockRowSummary } from "@/lib/editor/contracts";
 import { ALL_HIDDEN_MESSAGE, EMPTY_BLOCKS_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
 import { AddSlot } from "./add-slot";
 import { BlockRow } from "./block-row";
-import { GripIcon } from "./icons";
 
 const NO_ERRORS: PublishError[] = [];
 
@@ -205,7 +206,7 @@ export function BlockList({
                   className="flex min-h-[58px] items-center gap-0.5 rounded-md border border-ink bg-surface pr-4 ring-1 ring-ink"
                 >
                   <span className="flex size-11 shrink-0 items-center justify-center text-[#9a958d]">
-                    <GripIcon />
+                    <Icon icon={GripVertical} size={15} />
                   </span>
                   <span className="flex min-w-0 flex-col gap-0.5 px-1">
                     <span className="font-mono text-[11px] tracking-[0.06em] text-text-3 uppercase">

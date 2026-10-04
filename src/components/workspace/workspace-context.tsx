@@ -75,6 +75,8 @@ export interface WorkspaceValue {
 
   // What is published, and Publish.
   status: PublishStatus;
+  /** The published document as it was last published or loaded, or null (M9-32: the Share tab says what the live page does). */
+  publishedForm: PublishDoc | null;
   hasPublished: boolean;
   publishedAt: string | null;
   /** `{liveUrl}/og?v=...` once the page is published, else null: the share preview shows it. */
@@ -133,4 +135,12 @@ export function useWorkspace(): WorkspaceValue {
   const value = useContext(WorkspaceContext);
   if (value === null) throw new Error("useWorkspace must be used inside the workspace layout.");
   return value;
+}
+
+/**
+ * Like `useWorkspace`, but null outside the workspace layout: for editor pieces that also render
+ * alone (a block form in a unit test) and only add detail when the workspace is there (M9-28).
+ */
+export function useOptionalWorkspace(): WorkspaceValue | null {
+  return useContext(WorkspaceContext);
 }

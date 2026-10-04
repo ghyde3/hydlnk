@@ -8,6 +8,7 @@ import {
   type BillingInterval,
 } from "@/lib/billing/prices";
 import type { UpgradeBlock } from "@/components/billing/upgrade-button";
+import { cn } from "@/lib/cn";
 import { PLAN_IDS, PLAN_LABELS, PLAN_LIMITS, planBlurb, type PlanId } from "@/lib/limits";
 import { versionHistoryCell } from "@/lib/versions/messages";
 import { PlanCardAction } from "./plan-actions";
@@ -84,11 +85,12 @@ export function PlanCards({
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setInterval(value)}
-                  className={`min-h-11 flex-1 rounded-sm px-4 text-[13px] font-semibold hl:flex-none ${
+                  className={cn(
+                    "min-h-11 flex-1 rounded-sm px-4 text-[13px] font-semibold hl:flex-none",
                     selected
                       ? "bg-surface text-ink shadow-[0_0_0_1px_var(--hl-line-2)]"
-                      : "text-text-2"
-                  }`}
+                      : "text-text-2",
+                  )}
                 >
                   {INTERVAL_LABEL[value]}
                 </button>
@@ -106,9 +108,10 @@ export function PlanCards({
               key={plan}
               data-plan-card={plan}
               data-current={isCurrent ? "true" : undefined}
-              className={`flex flex-col gap-2 rounded-md border p-3.5 ${
-                isCurrent ? "border-ink shadow-[0_0_0_1px_var(--hl-ink)]" : "border-line-2"
-              }`}
+              className={cn(
+                "flex flex-col gap-2 rounded-md border p-3.5",
+                isCurrent ? "border-ink shadow-[0_0_0_1px_var(--hl-ink)]" : "border-line-2",
+              )}
             >
               <div className="flex items-baseline justify-between gap-2">
                 <h3

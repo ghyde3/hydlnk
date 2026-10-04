@@ -44,6 +44,10 @@ Brass is never body text on white, never a large fill. Primary buttons are charc
 - Touch targets ≥ 44px on anything tappable on phones.
 - Focus: 2px brass outline, 2px offset (`:focus-visible`).
 
+### Icons
+
+Icons in the HYDLNK UI are Lucide (`lucide-react`), drawn through the one `Icon` wrapper (`src/components/app/icon.tsx`): the 24 grid, stroke 1.8 (1.9 for the editor's own upload, rename, undo and redo, 2.4 for a check mark on a fill), round caps and joins, `currentColor`, so an icon follows its control's text color in every state. Sizes are the ones the app already used: 14px (a menu chevron), 15px (editor chips, upload, the drag grip), 16px (sidebar, rename, close), 18px (the toolbar's Undo, Redo and ⋯), 20px (the phone tab bar, carousel arrows, the mini phone). Icons are decorative by default: `aria-hidden="true"`, `focusable="false"`, no `<title>`; the control that holds one keeps its own `aria-label` or visible text. Import each glyph by name (`import { Pencil } from "lucide-react"`), never `import *` or the dynamic icon. The app and the editor only: the public page, the marketing site and the logo never import Lucide, and a public page's brand marks are Simple Icons paths written into the static HTML.
+
 ## Layout and responsive rules
 
 - Mobile first. One breakpoint at **760px** (container query on the page root in the mockups; a media query is fine in the real app).

@@ -7,7 +7,8 @@ import {
   type LinkIconName,
 } from "@/lib/document";
 import { mediaUrl } from "@/lib/media/url";
-import { SOCIAL_GLYPHS } from "./social-icons";
+import { brandMarkPath } from "./brand-marks";
+import { OUTLINE_GLYPHS } from "./social-icons";
 
 /**
  * The link block's icon (M6-20): a bundled inline SVG glyph or a small square thumbnail, drawn as
@@ -15,11 +16,13 @@ import { SOCIAL_GLYPHS } from "./social-icons";
  * looked up by name in the table below (a name that is not in it draws nothing) and a thumbnail is
  * an uploaded image reference turned into a `/media/...` address by `mediaUrl`.
  *
- * The glyphs are 24x24 line drawings, stroke `currentColor`, so an icon takes the button's text
- * color and follows the button style and any color override. The eight brand glyphs, Email (`mail`)
- * and Website (`globe`) are the social row's shapes; the other fourteen use the same stroke weight
- * and corner style. The stroke is set with attributes, not CSS, so the editor's icon picker draws
- * the same glyph outside the page's stylesheet.
+ * The sixteen generic glyphs are 24x24 line drawings, stroke `currentColor`, so an icon takes the
+ * button's text color and follows the button style and any color override. The eight brand icons
+ * (instagram, tiktok, youtube, x, facebook, linkedin, github, threads) are the social row's real
+ * brand marks (M9-04, ./brand-marks.ts): one filled path in `currentColor`, no stroke. Email
+ * (`mail`) and Website (`globe`) are the social row's outline shapes; the other fourteen use the
+ * same stroke weight and corner style. The paint is set with attributes, not CSS, so the editor's
+ * icon picker draws the same glyph outside the page's stylesheet.
  */
 const LINE_GLYPHS: Record<
   | "link"
@@ -121,23 +124,50 @@ const LINE_GLYPHS: Record<
   ),
 };
 
-/** The shapes of all 24 names: the social row's for the first eight, `mail` and `globe`. */
-const GLYPHS: Record<LinkIconName, ReactNode> = {
-  instagram: SOCIAL_GLYPHS.instagram,
-  tiktok: SOCIAL_GLYPHS.tiktok,
-  youtube: SOCIAL_GLYPHS.youtube,
-  x: SOCIAL_GLYPHS.x,
-  facebook: SOCIAL_GLYPHS.facebook,
-  linkedin: SOCIAL_GLYPHS.linkedin,
-  github: SOCIAL_GLYPHS.github,
-  threads: SOCIAL_GLYPHS.threads,
-  mail: SOCIAL_GLYPHS.email,
-  globe: SOCIAL_GLYPHS.website,
-  ...LINE_GLYPHS,
-};
+/** The brand icons of the list: drawn as filled marks, from the one shared table. */
+const BRAND_ICONS: ReadonlySet<string> = new Set([
+  "instagram",
+  "tiktok",
+  "youtube",
+  "x",
+  "facebook",
+  "linkedin",
+  "github",
+  "threads",
+]);
 
-/** A built-in icon: decorative (the anchor's text is its name), 20px, `currentColor`. */
+/** The line shapes of the sixteen generic names: the social row's Email and Website as `mail` and `globe`, then the rest. */
+const OUTLINE: ReadonlyMap<string, ReactNode> = new Map<string, ReactNode>([
+  ["mail", OUTLINE_GLYPHS.get("email")],
+  ["globe", OUTLINE_GLYPHS.get("website")],
+  ...Object.entries(LINE_GLYPHS),
+]);
+
+/**
+ * A built-in icon: decorative (the anchor's text is its name), 20px, `currentColor`. A brand icon is
+ * filled (`fill` currentColor, `stroke` none); the other sixteen keep their line style. A name that
+ * is not in a table draws nothing.
+ */
 export function LinkGlyph({ name }: { name: LinkIconName }) {
+  const mark = BRAND_ICONS.has(name) ? brandMarkPath(name) : null;
+  if (mark !== null) {
+    return (
+      <svg
+        className="pg-link-icon"
+        viewBox="0 0 24 24"
+        width={20}
+        height={20}
+        fill="currentColor"
+        stroke="none"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d={mark} />
+      </svg>
+    );
+  }
+  const glyph = OUTLINE.get(name);
+  if (glyph === undefined) return null;
   return (
     <svg
       className="pg-link-icon"
@@ -152,7 +182,7 @@ export function LinkGlyph({ name }: { name: LinkIconName }) {
       aria-hidden="true"
       focusable="false"
     >
-      {GLYPHS[name]}
+      {glyph}
     </svg>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import {
   useEffect,
   useId,
@@ -9,20 +10,27 @@ import {
   type Dispatch,
   type ReactNode,
 } from "react";
-import { ChevronDownIcon } from "@/components/app/icons";
+import { Icon } from "@/components/app/icon";
+import { cn } from "@/lib/cn";
 import {
   LIMITS,
+  LOGO_PLACEMENTS,
+  LOGO_PLACEMENT_LABELS,
   PHOTO_BORDERS,
   PHOTO_SHAPES,
   PHOTO_SIZES,
   PROFILE_OPTION_DEFAULTS,
   codePointLength,
+  pickLogoPlacement,
   resolveProfileOptions,
+  type DraftDoc,
   type ImageRef,
+  type LogoPlacement,
   type ProfileOptionKey,
   type ProfileOptions,
 } from "@/lib/document";
 import { profileInitials } from "@/lib/editor/initials";
+import { setLogoPlacement, setProfileLogo } from "@/lib/editor/page-extras";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
 import { ImageUploadControl } from "./image-upload-control";
 import { hiddenParts } from "./profile-hidden";
@@ -83,6 +91,10 @@ export function ProfileCard({
   nameError,
   focus,
   dispatch,
+  logo = null,
+  logoPlacement,
+  logoError = null,
+  onEdit,
 }: {
   name: string;
   bio: string;
@@ -93,8 +105,18 @@ export function ProfileCard({
   nameError: string | null;
   focus: FocusRequest | null;
   dispatch: Dispatch<EditorAction>;
+  /** The profile's logo (M9-24), or null. */
+  logo?: ImageRef | null;
+  /** Where the logo goes; absent reads as "beside the name". */
+  logoPlacement?: LogoPlacement | undefined;
+  /** The Publish gate's message for the logo, shown under its control. */
+  logoError?: string | null;
+  /** The workspace's draft edit, for the logo and its placement (each is one undo step). */
+  onEdit?: (update: (draft: DraftDoc) => DraftDoc, group?: string) => void;
 }) {
   const nameId = useId();
+  const logoRef = useRef<HTMLDivElement>(null);
+  const logoErrorId = useId();
   const bioId = useId();
   const bioCountId = useId();
   const nameErrorId = useId();
@@ -118,6 +140,16 @@ export function ProfileCard({
     nameRef.current?.focus({ preventScroll: true });
     dispatch({ type: "focus/handled", nonce: focusNonce });
   }, [focusNonce, dispatch]);
+
+  // A Publish error on the logo (M9-24) takes focus to its first button.
+  const logoNonce = focus?.kind === "profile-logo" ? focus.nonce : null;
+  useEffect(() => {
+    if (logoNonce === null) return;
+    const button = logoRef.current?.querySelector<HTMLElement>("button");
+    button?.scrollIntoView({ block: "center" });
+    button?.focus({ preventScroll: true });
+    dispatch({ type: "focus/handled", nonce: logoNonce });
+  }, [logoNonce, dispatch]);
 
   const photoOff = !shown.showPhoto;
   const hidden = hiddenParts(shown);
@@ -194,6 +226,36 @@ export function ProfileCard({
         </span>
       </div>
 
+      {onEdit ? (
+        <div data-testid="profile-logo" ref={logoRef} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-semibold text-ink-2">Logo</span>
+            <ImageUploadControl
+              kind="content"
+              label="logo"
+              help="JPG, PNG or WebP. Shown next to your name or in place of it."
+              value={logo}
+              onChange={(next) => onEdit((draft) => setProfileLogo(draft, next))}
+            />
+            {logoError ? (
+              <span id={logoErrorId} role="alert" className="text-[13px] text-bad">
+                {logoError}
+              </span>
+            ) : null}
+          </div>
+          <ChoiceGroup
+            label="Logo placement"
+            disabled={logo === null}
+            choices={LOGO_PLACEMENTS.map((value) => ({
+              value,
+              label: LOGO_PLACEMENT_LABELS[value],
+            }))}
+            current={pickLogoPlacement(logoPlacement)}
+            onPick={(value) => onEdit((draft) => setLogoPlacement(draft, value))}
+          />
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-2">
         <button
           type="button"
@@ -212,8 +274,8 @@ export function ProfileCard({
               </span>
             ) : null}
           </span>
-          <span aria-hidden="true" className={`shrink-0 ${open ? "rotate-180" : ""}`}>
-            <ChevronDownIcon size={16} />
+          <span aria-hidden="true" className={cn("shrink-0", open && "rotate-180")}>
+            <Icon icon={ChevronDown} size={16} />
           </span>
         </button>
 

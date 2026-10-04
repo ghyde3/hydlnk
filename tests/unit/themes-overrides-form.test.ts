@@ -142,7 +142,8 @@ describe("M3-18 color and corner radius overrides", () => {
     for (const block of [link(), card()]) {
       const { host } = mount(block);
       expect(labels(host)).toEqual(expect.arrayContaining(["Color", "Corner radius"]));
-      expect(host.querySelector('input[type="color"]')).not.toBeNull();
+      expect(host.querySelector('button[data-field="override-color-swatch"]')).not.toBeNull();
+      expect(host.querySelector('input[type="color"]')).toBeNull();
       const hex = field<HTMLInputElement>(host, "override-color");
       expect(hex.className).toContain("text-base"); // 16px, so iOS does not zoom
       expect(optionsOf(field<HTMLSelectElement>(host, "override-radius"))).toEqual([

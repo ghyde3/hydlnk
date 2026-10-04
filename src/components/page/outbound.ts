@@ -1,4 +1,4 @@
-import { mailtoHref, safeHref } from "@/lib/document";
+import { mailtoHref, safeHref, telHref } from "@/lib/document";
 
 /**
  * The one place the renderer gets an `href` from tenant content. Every outbound anchor spreads the
@@ -50,4 +50,25 @@ export function outboundHref(
  */
 export function mailtoLink(address: string | null | undefined): OutboundAttrs {
   return { href: mailtoHref(address), rel: OUTBOUND_REL };
+}
+
+/**
+ * `href` and `rel` for the contact block's phone number (M9-17): `tel:<+digits>` built by `telHref`
+ * from the leading "+" and the digits only, nothing for a value that is not a phone number. Like
+ * `mailto:`, a `tel:` link is not tracked.
+ */
+export function telLink(phone: string | null | undefined): OutboundAttrs {
+  return { href: telHref(phone), rel: OUTBOUND_REL };
+}
+
+/**
+ * `href` and `rel` for "Save contact" (M9-17, M9-18): the relative `/c/<pageId>/<blockId>` route of
+ * the page's own host, which builds the vCard on the server from the published block. Both segments
+ * are encoded, so an id can never add a segment or a query.
+ */
+export function vcardLink(target: OutboundTarget): OutboundAttrs {
+  return {
+    href: `/c/${encodeURIComponent(target.pageId)}/${encodeURIComponent(target.id)}`,
+    rel: OUTBOUND_REL,
+  };
 }

@@ -21,7 +21,9 @@ test.describe.configure({ timeout: 120_000 });
 test.afterAll(cleanupUsers);
 
 const card = (page: Page) => page.getByTestId("profile-card");
-const fileInput = (page: Page) => card(page).locator('input[type="file"]');
+// The Profile card holds two uploads since M9-24 (the photo and the logo): the photo's is in its own row.
+const fileInput = (page: Page) =>
+  card(page).getByTestId("profile-photo-row").locator('input[type="file"]');
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Position your photo" });
 const finder = (page: Page) => page.getByTestId("position-viewfinder");
 const picture = (page: Page) => page.getByTestId("position-picture");
@@ -94,6 +96,9 @@ async function setup(context: import("@playwright/test").BrowserContext, label: 
 async function pick(page: Page, buffer: Buffer, name = "photo.png") {
   await fileInput(page).setInputFiles(png(name, buffer));
   await expect(dialog(page)).toBeVisible();
+  // The viewfinder is ready once react-easy-crop has measured the picture (M9-08). A drag before that
+  // is clamped to an unmeasured picture, which a busy machine shows as a wrong crop.
+  await expect(finder(page)).toHaveAttribute("data-ready", "true");
 }
 
 /** The stored avatar the draft names, with its path. */

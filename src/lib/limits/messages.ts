@@ -45,3 +45,6 @@ export function planBlurb(plan: PlanId): string {
       return `${limits.pages} pages, ${limits.customDomains} custom domains, a year of analytics, no badge.`;
   }
 }
+
+/** Why a Free account cannot publish redirect mode (M9-31): the sentence the Publish gate and the Share tab use. */
+export const REDIRECT_MODE_MESSAGE = "Redirect mode is part of Pro. Upgrade to use it.";

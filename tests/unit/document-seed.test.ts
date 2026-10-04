@@ -42,9 +42,10 @@ describe("seed.sql: mara's draft", () => {
     expect(collectPublishErrors(draftJson)).toEqual([]);
   });
 
-  it("uses the Noir theme and has every block type, the image block hidden", () => {
+  it("uses the Noir theme and has every original block type, the image block hidden", () => {
     expect(draft.theme).toEqual({ ref: "00000000-0000-4000-8000-000000000001", overrides: {} });
-    expect(new Set(draft.blocks.map((b) => b.type))).toEqual(new Set(BLOCK_TYPES));
+    // The seed predates the Wave K blocks (M9-15 appends them after the nine originals) and stays as it is.
+    expect(new Set(draft.blocks.map((b) => b.type))).toEqual(new Set(BLOCK_TYPES.slice(0, 9)));
     expect(draft.blocks.filter((b) => !b.visible).map((b) => b.id)).toEqual([MARA_BLOCK_IDS.image]);
   });
 

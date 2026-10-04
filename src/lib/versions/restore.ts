@@ -25,9 +25,13 @@ export function ownedImagePaths(doc: PublishDoc, ownerId: string, mediaOrigin: s
     if (path !== null && path.startsWith(`${ownerId}/`)) paths.add(path);
   };
   own(doc.profile.photo?.path ?? null);
+  // The profile's logo (M9-24).
+  own(doc.profile.logo?.path ?? null);
   for (const block of doc.blocks) {
     if ((block.type === "card" || block.type === "image") && block.image) own(block.image.path);
     if (block.type === "link" && block.icon?.type === "image") own(block.icon.image.path);
+    // A book's cover (M9-20).
+    if (block.type === "book" && block.cover) own(block.cover.path);
   }
   own(doc.share?.image?.path ?? null);
   own(mediaPathOf(doc.tokens.bgImage, mediaOrigin));
@@ -72,6 +76,8 @@ export function nullMissingImages(
   };
 
   const photo = keep(doc.profile.photo);
+  // A logo that cannot be shown is left off the profile (M9-24), so the page is drawn without it.
+  const logo = doc.profile.logo ? keep(doc.profile.logo) : null;
   const blocks = doc.blocks.map((block): Block => {
     if ((block.type === "card" || block.type === "image") && block.image) {
       const image = keep(block.image);
@@ -82,6 +88,12 @@ export function nullMissingImages(
       const rest = { ...block };
       delete rest.icon;
       return rest;
+    }
+    // A cover that cannot be shown becomes null (the draft schema has the key as null): the book,
+    // its text and its store buttons stay, and the page draws no cover (M9-20).
+    if (block.type === "book" && block.cover) {
+      const cover = keep(block.cover);
+      return cover === block.cover ? block : ({ ...block, cover } as Block);
     }
     return block;
   });
@@ -110,7 +122,7 @@ export function nullMissingImages(
   return {
     doc: {
       ...doc,
-      profile: { ...doc.profile, photo },
+      profile: withLogo({ ...doc.profile, photo }, logo),
       blocks,
       ...(share === undefined ? {} : { share }),
       tokens,
@@ -118,6 +130,18 @@ export function nullMissingImages(
     missingImages: missing,
     backgroundMissing,
   };
+}
+
+/** The profile with its logo as checked: the key goes when the logo is gone (M9-24). */
+function withLogo<P extends { logo?: ImageRef | null | undefined }>(
+  profile: P,
+  logo: ImageRef | null,
+): P {
+  if (profile.logo === undefined || profile.logo === null) return profile;
+  if (logo !== null) return profile;
+  const rest = { ...profile };
+  delete rest.logo;
+  return rest;
 }
 
 /**
@@ -177,6 +201,11 @@ export function versionToDraft(doc: PublishDoc, theme: DocTheme, rev: number): D
     rev,
     profile: { ...doc.profile },
     ...(doc.share === undefined ? {} : { share: { ...doc.share } }),
+    // The version's support banner (M9-23), when it had one.
+    ...(doc.banner === undefined ? {} : { banner: { ...doc.banner } }),
+    // The version's UTM defaults and redirect mode (M9-27, M9-31), when it had them.
+    ...(doc.utm === undefined ? {} : { utm: { ...doc.utm } }),
+    ...(doc.redirect === undefined ? {} : { redirect: { ...doc.redirect } }),
     theme,
     blocks: doc.blocks.map((block) => ({ ...block, visible: true }) as Block),
   };

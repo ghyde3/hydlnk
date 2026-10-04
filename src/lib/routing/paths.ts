@@ -38,13 +38,14 @@ export function isInternalPath(pathname: string): boolean {
 }
 
 /**
- * The tracking routes of a tenant page (analytics): `/r/<pageId>/<blockId>` (the click redirect)
- * and `/api/e` (the view beacon). The page emits them as relative URLs, so they have to resolve on
- * the host the visitor is on: the proxy leaves them unrewritten on tenant hosts and on (resolved)
- * custom hosts, where every other path goes to the tenant 404.
+ * The tracking routes of a tenant page (analytics): `/r/<pageId>/<blockId>` (the click redirect),
+ * `/c/<pageId>/<blockId>` ("Save contact", the vCard of a contact block, M9-18) and `/api/e` (the
+ * view beacon). The page emits them as relative URLs, so they have to resolve on the host the
+ * visitor is on: the proxy leaves them unrewritten on tenant hosts and on (resolved) custom hosts,
+ * where every other path goes to the tenant 404.
  */
 export function isTrackingPath(pathname: string): boolean {
-  return pathname.startsWith("/r/") || pathname === "/api/e";
+  return pathname.startsWith("/r/") || pathname.startsWith("/c/") || pathname === "/api/e";
 }
 
 function join(prefix: string, pathname: string): string {

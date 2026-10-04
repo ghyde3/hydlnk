@@ -36,6 +36,9 @@ const allIds = (block: Block): string[] => [
   block.id,
   ...(block.type === "social" ? block.icons.map((icon) => icon.id) : []),
   ...(block.type === "grid" ? block.cells.map((cell) => cell.id) : []),
+  ...(block.type === "faq" ? block.items.map((item) => item.id) : []),
+  ...(block.type === "book" || block.type === "apps" ? block.links.map((link) => link.id) : []),
+  ...(block.type === "map" ? [block.googleId, block.appleId] : []),
 ];
 
 function deepFreeze<T>(value: T): T {
@@ -169,6 +172,12 @@ describe("M6-05 duplicate a block", () => {
       clone.id = "x";
       if (clone.icons) for (const icon of clone.icons) icon.id = "x";
       if (clone.cells) for (const cell of clone.cells) cell.id = "x";
+      if (type === "faq") for (const item of clone.items) item.id = "x";
+      if (type === "book" || type === "apps") for (const link of clone.links) link.id = "x";
+      if (type === "map") {
+        clone.googleId = "x";
+        clone.appleId = "x";
+      }
       return clone;
     };
     expect(strip(copy)).toEqual(strip(original));

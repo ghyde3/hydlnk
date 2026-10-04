@@ -48,6 +48,12 @@ const CONTROLS: Record<BlockType, string[]> = {
   grid: ["color", "radius", "borderWidth"],
   social: ["color"],
   divider: ["color"],
+  faq: ["color"],
+  contact: ["color"],
+  discount: ["color", "radius", "borderWidth"],
+  book: ["buttonStyle", "color", "radius"],
+  apps: ["color", "radius"],
+  map: ["radius", "borderWidth", "color"],
 };
 
 const LABELS: Record<BlockType, string> = {
@@ -60,6 +66,12 @@ const LABELS: Record<BlockType, string> = {
   grid: "Color",
   social: "Icon color",
   divider: "Line color",
+  faq: "Color",
+  contact: "Color",
+  discount: "Color",
+  book: "Color",
+  apps: "Color",
+  map: "Border color",
 };
 
 /** The keys the Color control writes for a color, per block type. */
@@ -73,6 +85,12 @@ const WRITTEN: Record<BlockType, Record<string, string>> = {
   grid: { border: COLOR, text: COLOR },
   social: { text: COLOR, border: COLOR },
   divider: { border: COLOR },
+  faq: { accent: COLOR, text: COLOR, border: COLOR },
+  contact: { text: COLOR, border: COLOR },
+  discount: { accent: COLOR, border: COLOR },
+  book: { buttonBg: COLOR, accent: COLOR, buttonText: "#F7F3EC" },
+  apps: { text: COLOR, border: COLOR },
+  map: { border: COLOR },
 };
 
 describe("M6-46 each block type's controls", () => {
@@ -85,12 +103,14 @@ describe("M6-46 each block type's controls", () => {
     }
   });
 
-  it("no type has a font, spacing or background control, and only a link has a button style", () => {
+  it("no type has a font, spacing or background control, and only a link and a book have a button style", () => {
     for (const type of BLOCK_TYPES) {
       for (const control of STYLE_SPECS[type].controls) {
         expect(["buttonStyle", "color", "radius", "borderWidth"]).toContain(control);
       }
-      expect(hasStyleControl(of(type), "buttonStyle"), type).toBe(type === "link");
+      expect(hasStyleControl(of(type), "buttonStyle"), type).toBe(
+        type === "link" || type === "book",
+      );
     }
   });
 

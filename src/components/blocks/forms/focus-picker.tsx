@@ -1,5 +1,6 @@
 "use client";
 
+import { Locate } from "lucide-react";
 import {
   useId,
   useRef,
@@ -7,6 +8,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Icon } from "@/components/app/icon";
+import { cn } from "@/lib/cn";
 import { focusOf, objectPositionOf, type Focus, type ImageRef } from "@/lib/document";
 import {
   describeFocus,
@@ -155,11 +158,12 @@ export function FocusPicker({
                 data-focus-y={current.y}
                 onKeyDown={onKeyDown}
                 style={markerPosition(current)}
-                className={`absolute flex size-11 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-md border-2 bg-surface ${
-                  invalid ? "border-bad" : "border-ink"
-                }`}
+                className={cn(
+                  "absolute flex size-11 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-md border-2 bg-surface",
+                  invalid ? "border-bad" : "border-ink",
+                )}
               >
-                <Crosshair />
+                <Icon icon={Locate} size={22} className="text-ink" />
               </button>
             </div>
           </div>
@@ -205,25 +209,5 @@ export function FocusPicker({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function Crosshair() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="22"
-      height="22"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-      focusable="false"
-      className="text-ink"
-    >
-      <circle cx="12" cy="12" r="5" />
-      <path d="M12 2v5M12 17v5M2 12h5M17 12h5" />
-    </svg>
   );
 }

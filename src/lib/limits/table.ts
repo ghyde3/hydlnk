@@ -1,6 +1,6 @@
 /**
  * The plan limits, in one table (M4-02). Postgres holds the same numbers in `public.plan_limits(p_plan)`
- * (migrations 20261002100003_plan_limits_v2.sql and 20261006000002_page_versions.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
+ * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
  * tests/unit/limits-parity.test.ts calls that function for every plan and column and fails when the
  * two differ. Change a number here and in the migration (a new one) together.
  *
@@ -30,6 +30,8 @@ export interface PlanLimits {
   analyticsBreakdowns: boolean;
   /** Published versions kept per page, newest first (M6-48); 0 = version history is not included. */
   versionsKept: number;
+  /** Redirect mode (M9-31): the live page may answer with a redirect to one link. */
+  redirectMode: boolean;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -43,6 +45,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     analyticsHistoryDays: 30,
     analyticsBreakdowns: false,
     versionsKept: 0,
+    redirectMode: false,
   },
   pro: {
     pages: 3,
@@ -52,6 +55,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     analyticsHistoryDays: 365,
     analyticsBreakdowns: true,
     versionsKept: 25,
+    redirectMode: true,
   },
   studio: {
     pages: 15,
@@ -61,6 +65,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     analyticsHistoryDays: 365,
     analyticsBreakdowns: true,
     versionsKept: 25,
+    redirectMode: true,
   },
 };
 
@@ -73,6 +78,7 @@ export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
   analyticsHistoryDays: "analytics_history_days",
   analyticsBreakdowns: "analytics_breakdowns",
   versionsKept: "versions_kept",
+  redirectMode: "redirect_mode",
 };
 
 export const PLAN_LABELS: Readonly<Record<PlanId, string>> = {

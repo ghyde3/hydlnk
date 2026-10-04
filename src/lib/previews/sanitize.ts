@@ -1,4 +1,4 @@
-import { stripHiddenCharacters, type Block, type PublishDoc } from "@/lib/document";
+import { redactLock, stripHiddenCharacters, type Block, type PublishDoc } from "@/lib/document";
 
 /**
  * The shared draft without hidden characters (M6-10). A share link draws a draft that never went
@@ -17,12 +17,20 @@ export function sanitizeSharedDoc(doc: PublishDoc): PublishDoc {
   return {
     ...doc,
     profile: clean(doc.profile),
+    // The support banner's message and label (M9-23) are text like any other.
+    ...(doc.banner ? { banner: clean(doc.banner) } : {}),
     blocks: doc.blocks.map(sanitizeBlock),
   };
 }
 
 function sanitizeBlock(block: Block): Block {
   const cleaned = clean(block);
+  // A link's lock (M9-29): the salt and hash never leave the owner's session. The marker keeps its
+  // kind (the shared link still draws the padlock) and the renderer gives the link no href there.
+  if (block.type === "link" && cleaned.type === "link" && block.lock !== undefined) {
+    const lock = redactLock(block.lock);
+    if (lock) return { ...cleaned, lock };
+  }
   if (block.type === "text" && cleaned.type === "text") {
     return { ...cleaned, text: stripHiddenCharacters(block.text, { multiline: true }) };
   }

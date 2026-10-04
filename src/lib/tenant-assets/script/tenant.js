@@ -16,6 +16,14 @@
  *    id comes from this script element's own data-page-id attribute and must be a UUID. Nothing is
  *    stored and nothing identifies the visitor: the server derives an anonymous daily hash from the request.
  *
+ * 3. Copy a discount code (M9-19). The same click listener: a click inside an element with
+ *    data-copy writes that value (cut to 64 characters) to the visitor's own clipboard, shows the
+ *    element's data-copied word on the button and in the block's status line for two seconds,
+ *    then puts both back. Without the Clipboard API, or when it refuses, the code's own text is
+ *    selected and the status line says so. It reads those two attributes and no other, never reads
+ *    the clipboard and sends nothing. At load it marks each .pg-discount with data-js, which is
+ *    what makes the Copy button visible: a page without this script never shows a dead button.
+ *
  * Defense in depth (the policy in src/lib/routing/tenant-headers.ts is the first wall): before
  * mounting, the origin of data-embed-src must be one of the nine frame origins below, over https.
  * Anything else, and any Twitch hostname that is not plain letters, digits, dots and dashes, mounts
@@ -81,11 +89,67 @@
     frame.focus();
   }
 
+  var COPY_MAX = 64;
+  var copying = new WeakMap();
+
+  function copied(button, status, word) {
+    var state = copying.get(button);
+    if (!state) {
+      state = { label: button.textContent, timer: 0 };
+      copying.set(button, state);
+    }
+    clearTimeout(state.timer);
+    button.textContent = word;
+    if (status) status.textContent = word;
+    state.timer = setTimeout(function () {
+      button.textContent = state.label;
+      if (status) status.textContent = "";
+    }, 2000);
+  }
+
+  function selectCode(block, status) {
+    var code = block && block.querySelector(".pg-discount-code");
+    var selection = window.getSelection && window.getSelection();
+    if (code && selection) {
+      var range = doc.createRange();
+      range.selectNodeContents(code);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    if (status) status.textContent = "Select and copy the code.";
+  }
+
+  function copy(button) {
+    var value = (button.getAttribute("data-copy") || "").slice(0, COPY_MAX);
+    var word = button.getAttribute("data-copied") || "Copied";
+    var block = button.closest(".pg-discount");
+    var status = block && block.querySelector(".pg-discount-status");
+    var clipboard = navigator.clipboard;
+    if (!clipboard || !clipboard.writeText) return selectCode(block, status);
+    try {
+      clipboard.writeText(value).then(
+        function () {
+          copied(button, status, word);
+        },
+        function () {
+          selectCode(block, status);
+        }
+      );
+    } catch {
+      selectCode(block, status);
+    }
+  }
+
   doc.addEventListener("click", function (event) {
     var target = event.target;
     var button = target && target.closest && target.closest("button.pg-embed-play[data-embed-src]");
-    if (button) mount(button);
+    if (button) return mount(button);
+    var copyButton = target && target.closest && target.closest("[data-copy]");
+    if (copyButton) copy(copyButton);
   });
+
+  var blocks = doc.querySelectorAll(".pg-discount");
+  for (var i = 0; i < blocks.length; i++) blocks[i].setAttribute("data-js", "");
 
   var pageId = doc.currentScript && doc.currentScript.getAttribute("data-page-id");
 

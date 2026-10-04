@@ -10,6 +10,7 @@ import { getTenantPageState, getTenantPageStateById } from "@/app/(tenant)/publi
 import { failureResponse } from "./failure";
 import { htmlResponse } from "./html-response";
 import { renderLivePage } from "./live-page";
+import { redirectModeResponse } from "./redirect";
 import {
   missingDocument,
   placeholderDocument,
@@ -40,6 +41,9 @@ export async function handleResponse(handle: string): Promise<Response> {
     switch (state.kind) {
       case "published": {
         const { page } = state;
+        // Redirect mode (M9-31): a Pro page that sends visitors straight to one link answers 302.
+        const redirected = redirectModeResponse(page);
+        if (redirected) return redirected;
         return htmlResponse(
           renderLivePage({
             pageId: page.pageId,
@@ -85,6 +89,8 @@ export async function siteResponse(pageId: string): Promise<Response> {
     if (state.kind !== "published") return plainNotFoundResponse();
 
     const { page } = state;
+    const redirected = redirectModeResponse(page);
+    if (redirected) return redirected;
     const hostname = await getPrimaryDomain(pageId);
     const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
     const urls = hostname

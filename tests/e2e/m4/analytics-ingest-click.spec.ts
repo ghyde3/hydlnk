@@ -1,6 +1,7 @@
 import type { Request } from "@playwright/test";
 import { DESKTOP, PHONE } from "../../../scripts/lib/viewports";
 import { adminClient } from "../fixtures/auth";
+import { expireOwnerPages } from "../fixtures/expire";
 import { cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { DEV_PORT } from "../helpers";
@@ -293,7 +294,7 @@ test.describe("M4-22 the redirect on the wire", () => {
     expect(await settledCount(p.pageId)).toBe(0);
   });
 
-  test("M4-22 republishing changes the redirect target at once", async ({}, info) => {
+  test("M4-22 republishing changes the redirect target at once", async ({ browser }, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
     const p = await ingestPage("rq");
     expect((await getClick(p, IDS.link)).location).toBe("https://example.com/book");
@@ -302,6 +303,9 @@ test.describe("M4-22 the redirect on the wire", () => {
       blocks: p.doc.blocks.map((b) => (b.id === IDS.link && b.type === "link" ? { ...b, url: "https://example.org/new" } : b)),
     };
     await adminClient().from("pages").update({ published: doc, published_at: new Date().toISOString() }).eq("id", p.pageId);
+    // Publish expires the page's tag, which a production build reads the click target under; this write
+    // went straight to the database, so expire it the way an admin action does.
+    await expireOwnerPages(browser, p.userId);
     expect((await getClick(p, IDS.link)).location).toBe("https://example.org/new");
   });
 });

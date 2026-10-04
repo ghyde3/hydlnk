@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -11,6 +12,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
+import { Icon } from "@/components/app/icon";
 import {
   cardTarget,
   canScrollNext,
@@ -310,16 +312,5 @@ export function ThemeCarousel({
 }
 
 function Chevron({ direction }: { direction: "left" | "right" }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      focusable="false"
-      className="size-5 fill-none stroke-current stroke-2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d={direction === "left" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"} />
-    </svg>
-  );
+  return <Icon icon={direction === "left" ? ChevronLeft : ChevronRight} size={20} />;
 }

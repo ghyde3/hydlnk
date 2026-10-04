@@ -11,14 +11,14 @@ type FontTokens = Pick<TokenSet, "fontHeading" | "fontBody" | "weightHeading">;
  * reaches a request. Server-rendered with the page: React hoists the links into `<head>`. The
  * stylesheet is requested with no Referer, so Google is not told which tenant page a visitor is on.
  */
-export function TenantFonts({ tokens }: { tokens: FontTokens }) {
+export function TenantFonts({ tokens, nameFont }: { tokens: FontTokens; nameFont?: unknown }) {
   return (
     <>
       <link rel="preconnect" href={GOOGLE_FONTS_API} />
       <link rel="preconnect" href={GOOGLE_FONTS_STATIC} crossOrigin="anonymous" />
       <link
         rel="stylesheet"
-        href={tenantFontStylesheetUrl(tokens)}
+        href={tenantFontStylesheetUrl(tokens, nameFont)}
         precedence="tenant-fonts"
         referrerPolicy="no-referrer"
       />
@@ -31,12 +31,16 @@ export function TenantFonts({ tokens }: { tokens: FontTokens }) {
  * change updates the one `href` in place instead of suspending the screen while a new stylesheet
  * loads. Used by the editor's preview panel and the Design screen's preview.
  */
-export function PreviewFonts({ tokens }: { tokens: FontTokens }) {
+export function PreviewFonts({ tokens, nameFont }: { tokens: FontTokens; nameFont?: unknown }) {
   return (
     <>
       <link rel="preconnect" href={GOOGLE_FONTS_API} />
       <link rel="preconnect" href={GOOGLE_FONTS_STATIC} crossOrigin="anonymous" />
-      <link rel="stylesheet" href={tenantFontStylesheetUrl(tokens)} data-preview-fonts="" />
+      <link
+        rel="stylesheet"
+        href={tenantFontStylesheetUrl(tokens, nameFont)}
+        data-preview-fonts=""
+      />
     </>
   );
 }

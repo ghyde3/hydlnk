@@ -1,6 +1,6 @@
 import "server-only";
 import { handleBeacon } from "./beacon";
-import { handleClick } from "./click";
+import { handleClick, handleClickPost } from "./click";
 import { ingestDeps } from "./deps";
 
 /**
@@ -22,4 +22,13 @@ export async function clickEndpoint(
 ): Promise<Response> {
   const { pageId, blockId } = await context.params;
   return handleClick(request, { pageId, blockId }, ingestDeps());
+}
+
+/** POST of /r/[pageId]/[blockId]: the answer to a locked link's interstitial (M9-29). */
+export async function clickPostEndpoint(
+  request: Request,
+  context: { params: Promise<{ pageId: string; blockId: string }> },
+): Promise<Response> {
+  const { pageId, blockId } = await context.params;
+  return handleClickPost(request, { pageId, blockId }, ingestDeps());
 }

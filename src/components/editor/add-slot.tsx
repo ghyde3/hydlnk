@@ -1,6 +1,8 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useId, useRef, type KeyboardEvent } from "react";
+import { Icon } from "@/components/app/icon";
 import type { BlockType } from "@/lib/document";
 import { BlockTypeChips } from "./block-type-chips";
 
@@ -61,7 +63,7 @@ export function AddSlot({
           aria-hidden="true"
           className="relative flex size-6 items-center justify-center rounded-full border border-line-3 bg-surface text-[16px] leading-none text-ink [@media(hover:hover)_and_(min-width:760px)]:scale-0 [@media(hover:hover)_and_(min-width:760px)]:group-hover:scale-100 [@media(hover:hover)_and_(min-width:760px)]:group-focus-visible:scale-100 [@media(hover:hover)_and_(min-width:760px)]:group-aria-expanded:scale-100"
         >
-          +
+          <Icon icon={Plus} size={14} />
         </span>
         <span
           aria-hidden="true"

@@ -34,6 +34,13 @@ export interface History {
   future: readonly DraftDoc[];
   /** The group (and batch) the last edit belonged to, while a following edit of it may still merge into it. */
   open: { key: string | undefined; at: number; batch: number | undefined } | null;
+  /**
+   * An editing session in progress (M9-12): the live edits of a rich text field that has the focus.
+   * `present` already holds them; `base` is the draft the session began with. The session is not a
+   * step yet: `commitSession` makes it one (one step, back to `base`), and every other edit, undo
+   * and redo commits it first. Absent when no session is open.
+   */
+  session?: { id: string; base: DraftDoc };
 }
 
 export function createHistory(present: DraftDoc): History {
@@ -55,6 +62,8 @@ export function recordEdit(
   options: { group?: string | undefined; at: number; batch?: number | undefined },
 ): History {
   if (next === history.present) return history;
+  // Any other edit ends an open editing session as one step of its own first.
+  if (history.session) history = commitSession(history);
   const { group, at, batch } = options;
   const open = history.open;
   const sameBatch = batch !== undefined && open !== null && open.batch === batch;
@@ -96,6 +105,7 @@ function restored(snapshot: DraftDoc, current: DraftDoc): DraftDoc {
 
 /** One step back. Returns `history` itself when there is nothing to undo. */
 export function undo(history: History): History {
+  if (history.session) history = commitSession(history);
   if (history.past.length === 0) return history;
   const previous = history.past[history.past.length - 1]!;
   return {
@@ -108,6 +118,7 @@ export function undo(history: History): History {
 
 /** One step forward. Returns `history` itself when there is nothing to redo. */
 export function redo(history: History): History {
+  if (history.session) history = commitSession(history);
   if (history.future.length === 0) return history;
   const next = history.future[0]!;
   return {
@@ -116,6 +127,44 @@ export function redo(history: History): History {
     future: history.future.slice(1),
     open: null,
   };
+}
+
+// Sessions --------------------------------------------------------------------------------------
+
+/**
+ * A live edit inside an editing session (M9-12): `next` becomes the present, but the history does not
+ * grow, so the screen's Undo stays as it was while the person types. The first edit of a session
+ * remembers the draft it began with and clears redo (a new edit always does). Returns `history`
+ * itself when `next` is the present already.
+ */
+export function recordSessionEdit(history: History, next: DraftDoc, id: string): History {
+  if (next === history.present) return history;
+  if (history.session?.id === id) return { ...history, present: next };
+  if (history.session) history = commitSession(history);
+  return { ...history, present: next, future: [], open: null, session: { id, base: history.present } };
+}
+
+/**
+ * Ends the open session: when it changed the draft, it is exactly one step (undo goes back to the
+ * draft it began with); when it changed nothing in the end (typed, then undone inside the field), it
+ * is no step at all. Returns `history` itself when no session is open.
+ */
+export function commitSession(history: History): History {
+  const session = history.session;
+  if (!session) return history;
+  const { session: _ended, ...rest } = history;
+  void _ended;
+  if (session.base === history.present || sameDraft(session.base, history.present)) return rest;
+  const past =
+    rest.past.length >= HISTORY_LIMIT
+      ? [...rest.past.slice(rest.past.length - HISTORY_LIMIT + 1), session.base]
+      : [...rest.past, session.base];
+  return { ...rest, past, future: [], open: null };
+}
+
+/** Whether two drafts hold the same content (their `rev` is the autosave's, not content). */
+function sameDraft(a: DraftDoc, b: DraftDoc): boolean {
+  return JSON.stringify({ ...a, rev: 0 }) === JSON.stringify({ ...b, rev: 0 });
 }
 
 // Images ----------------------------------------------------------------------------------------

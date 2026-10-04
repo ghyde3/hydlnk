@@ -1,6 +1,8 @@
 "use client";
 
+import { Upload } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { imageRefSchema, type ImageRef } from "@/lib/document";
 import { sniffImageType } from "@/lib/editor/sniff";
@@ -14,7 +16,6 @@ import {
 import { decodeForPositioning, type PositionPhoto } from "@/lib/media/position-crop";
 import { prepareImageForUpload } from "@/lib/media/upload-client";
 import { mediaUrl } from "@/lib/media/url";
-import { UploadIcon } from "./icons";
 import { PositionDialog, type PositionVariant } from "./position-dialog";
 
 /** The upload route's size limit (M2-08): 4 MB. Checked here first so a big file is never sent. */
@@ -280,7 +281,7 @@ export function ImageUploadControl({
             onClick={() => fileRef.current?.click()}
             className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line-3 bg-surface px-3 text-[13px] font-semibold text-ink disabled:cursor-progress disabled:opacity-60"
           >
-            <UploadIcon />
+            <Icon icon={Upload} size={15} strokeWidth={EDITOR_ICON_STROKE} />
             {busy ? "Uploading..." : value ? `Replace ${noun}` : `Upload ${noun}`}
           </button>
           {value && squareCrop ? (
@@ -420,7 +421,8 @@ function Thumbnail({ value, noun }: { value: ImageRef | null; noun: string }) {
           alt=""
           width={108}
           height={72}
-          className="size-full object-cover"
+          // A logo is shown whole (it is drawn contained on the page), a photo fills the box.
+          className={noun === "logo" ? "size-full object-contain" : "size-full object-cover"}
           referrerPolicy="no-referrer"
         />
       </span>

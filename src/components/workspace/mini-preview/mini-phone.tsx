@@ -1,6 +1,8 @@
 "use client";
 
+import { Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "@/components/app/icon";
 import type { PreviewTap } from "@/components/editor/preview-taps";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import type { PublishDoc } from "@/lib/document";
@@ -32,26 +34,6 @@ export interface MiniPhonePreviewProps {
   onTap?: (tap: PreviewTap) => void;
   /** A theme on show (M6-44, M7-06): the sheet gets its bar, and a tap on the page does nothing. */
   themePreview?: SheetThemePreview | null;
-}
-
-function PhoneGlyph() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={20}
-      height={20}
-      aria-hidden="true"
-      focusable="false"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="7" y="2.5" width="10" height="19" rx="2.2" />
-      <path d="M10.5 18.5h3" />
-    </svg>
-  );
 }
 
 /**
@@ -165,7 +147,7 @@ export function MiniPhonePreview({
           round ? "rounded-full" : "rounded-[8px]"
         }`}
       >
-        {round ? <PhoneGlyph /> : null}
+        {round ? <Icon icon={Smartphone} size={20} /> : null}
         {/* Kept mounted while it is round so it keeps following the draft; just not shown. */}
         <MiniThumbnail doc={doc} pageId={pageId} hidden={round} />
       </button>

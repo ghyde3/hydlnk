@@ -44,7 +44,7 @@ export function VersionPage({
   }
   const page = (
     <div data-testid="version-page" onClickCapture={onClickCapture} className="w-full">
-      <PreviewFonts tokens={doc.tokens} />
+      <PreviewFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
       <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} inertEmbeds />
     </div>
   );

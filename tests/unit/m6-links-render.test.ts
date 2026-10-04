@@ -59,6 +59,18 @@ const dom = (html: string): Document =>
 const anchor = (html: string): HTMLElement => dom(html).querySelector(".pg-link")!;
 const squash = (html: string) => html.replace(/\s+/g, " ");
 
+/** The eight brand entries of the icon list: real brand marks, filled (M9-04). */
+const BRAND_ICON_NAMES: readonly string[] = [
+  "instagram",
+  "tiktok",
+  "youtube",
+  "x",
+  "facebook",
+  "linkedin",
+  "github",
+  "threads",
+];
+
 describe("M6-20 a link without an icon", () => {
   it("is the bare label in the anchor, with none of the new attributes", () => {
     const a = anchor(render([link()]));
@@ -81,8 +93,11 @@ describe("M6-20 the built-in icon", () => {
     expect(first.getAttribute("height")).toBe("20");
     expect(first.getAttribute("aria-hidden")).toBe("true");
     expect(first.getAttribute("focusable")).toBe("false");
-    expect(first.getAttribute("fill")).toBe("none");
-    expect(first.getAttribute("stroke")).toBe("currentColor");
+    // The eight brand icons are filled marks (M9-04); the sixteen generic ones keep their line style.
+    const brand = BRAND_ICON_NAMES.includes(name);
+    expect(first.getAttribute("fill")).toBe(brand ? "currentColor" : "none");
+    expect(first.getAttribute("stroke")).toBe(brand ? "none" : "currentColor");
+    expect(first.hasAttribute("stroke-width")).toBe(!brand);
     expect(first.querySelectorAll("path, rect, circle").length).toBeGreaterThan(0);
     // Nothing remote: no <image>, <use>, href or xlink in the glyph.
     expect(first.innerHTML).not.toMatch(/<image|<use|href=|xlink|http/i);

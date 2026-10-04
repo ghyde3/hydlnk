@@ -28,6 +28,11 @@ export interface HeadInput {
   preloads?: readonly HeadPreload[];
   /** Whole `<link rel="preload" as="image">` tags React's renderer wrote ahead of the body (see live-page.tsx). */
   hints?: readonly string[];
+  /**
+   * The text of the page's one `application/ld+json` data block (M9-16), already escaped by
+   * `faqJsonLd`; absent for every page without a visible FAQ block, which is then byte-identical.
+   */
+  jsonLd?: string | null;
 }
 
 const FAVICON = '<link rel="icon" href="/icon.svg" sizes="any" type="image/svg+xml">';
@@ -119,8 +124,20 @@ function safeStyleText(css: string): string {
   return css;
 }
 
+/** The text of a data block must not hold anything that could close it or open markup (the escaper of `faq-json-ld.ts` has written those characters as escapes). */
+function safeJsonLdText(json: string): string {
+  if (/[<>&\u2028\u2029]/.test(json)) throw new Error("The structured data holds unescaped markup");
+  return json;
+}
+
 /** Everything inside `<head>`. */
-export function renderHead({ metadata, css, preloads = [], hints = [] }: HeadInput): string {
+export function renderHead({
+  metadata,
+  css,
+  preloads = [],
+  hints = [],
+  jsonLd = null,
+}: HeadInput): string {
   return (
     '<meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
@@ -128,7 +145,8 @@ export function renderHead({ metadata, css, preloads = [], hints = [] }: HeadInp
     FAVICON +
     preloads.map(preloadTag).join("") +
     hints.join("") +
-    `<style>${safeStyleText(css)}</style>`
+    `<style>${safeStyleText(css)}</style>` +
+    (jsonLd === null ? "" : `<script type="application/ld+json">${safeJsonLdText(jsonLd)}</script>`)
   );
 }
 

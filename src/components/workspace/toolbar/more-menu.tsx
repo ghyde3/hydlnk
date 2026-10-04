@@ -1,30 +1,15 @@
 "use client";
 
+import { Ellipsis } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MouseEvent } from "react";
+import { Icon } from "@/components/app/icon";
 import { useAccountPlan } from "@/components/versions/plan-context";
 import { PLAN_LIMITS } from "@/lib/limits";
 import { HISTORY_ROUTE } from "@/lib/versions/messages";
 import { isPlainClick } from "./plain-click";
-import { MENU_ITEM_CLASS, ToolbarMenu, useMenuApi } from "./toolbar-menu";
-
-function Ellipsis() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={18}
-      height={18}
-      aria-hidden="true"
-      focusable="false"
-      fill="currentColor"
-    >
-      <circle cx="5" cy="12" r="1.8" />
-      <circle cx="12" cy="12" r="1.8" />
-      <circle cx="19" cy="12" r="1.8" />
-    </svg>
-  );
-}
+import { MENU_ITEM_CLASS, ToolbarMenu, ToolbarMenuItem, useMenuApi } from "./toolbar-menu";
 
 /**
  * The toolbar's "⋯" menu (M7-05, `aria-label="More actions"`): "QR code" (to the Share tab's card,
@@ -46,7 +31,7 @@ export function MoreMenu({
     <ToolbarMenu
       label="More actions"
       buttonLabel="More actions"
-      buttonContent={<Ellipsis />}
+      buttonContent={<Icon icon={Ellipsis} size={18} />}
       buttonClassName="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-line-3 bg-surface text-ink"
     >
       <MoreItems flush={flush} onOpenShare={onOpenShare} />
@@ -80,40 +65,40 @@ function MoreItems({
 
   return (
     <>
-      <Link
-        role="menuitem"
-        tabIndex={-1}
-        href="/share#qr"
-        data-menu-item="qr"
-        onClick={(event) => {
-          if (!isPlainClick(event)) return;
-          event.preventDefault();
-          close(false);
-          onOpenShare("qr");
-        }}
-        className={MENU_ITEM_CLASS}
-      >
-        QR code
-      </Link>
-      <a
-        role="menuitem"
-        tabIndex={-1}
-        href={HISTORY_ROUTE}
-        data-menu-item="history"
-        data-history-link=""
-        onClick={(event) => void openHistory(event)}
-        className={MENU_ITEM_CLASS}
-      >
-        Version history
-        {needsPro ? (
-          <span
-            data-history-pro-chip=""
-            className="inline-block rounded-sm bg-brass-soft px-1.5 py-[2px] font-mono text-[11px] font-normal text-brass-soft-text"
-          >
-            Pro
-          </span>
-        ) : null}
-      </a>
+      <ToolbarMenuItem asChild>
+        <Link
+          href="/share#qr"
+          data-menu-item="qr"
+          onClick={(event) => {
+            if (!isPlainClick(event)) return;
+            event.preventDefault();
+            close(false);
+            onOpenShare("qr");
+          }}
+          className={MENU_ITEM_CLASS}
+        >
+          QR code
+        </Link>
+      </ToolbarMenuItem>
+      <ToolbarMenuItem asChild>
+        <a
+          href={HISTORY_ROUTE}
+          data-menu-item="history"
+          data-history-link=""
+          onClick={(event) => void openHistory(event)}
+          className={MENU_ITEM_CLASS}
+        >
+          Version history
+          {needsPro ? (
+            <span
+              data-history-pro-chip=""
+              className="inline-block rounded-sm bg-brass-soft px-1.5 py-[2px] font-mono text-[11px] font-normal text-brass-soft-text"
+            >
+              Pro
+            </span>
+          ) : null}
+        </a>
+      </ToolbarMenuItem>
     </>
   );
 }

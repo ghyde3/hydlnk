@@ -18,9 +18,12 @@ import {
   cropRegion,
   hasTransparency,
   initialCrop,
-  movePicture,
+  nudgePan,
   outputEdge,
-  pictureLayout,
+  panLimit,
+  panToCrop,
+  restrictPan,
+  scalePan,
   zoomAnnouncement,
   zoomCrop,
   type PositionPhoto,
@@ -73,42 +76,63 @@ describe("M6-24 the crop", () => {
     expect(zoomCrop(base, 0.2, W, H).zoom).toBe(1);
   });
 
-  it("dragging the picture right moves the square left, by the viewfinder's scale", () => {
-    const zoomed = zoomCrop(initialCrop(1000, 1000), 2, 1000, 1000);
-    // 280px viewfinder shows 500 source px: one screen pixel is 500/280 source pixels.
-    const moved = movePicture(zoomed, 28, 0, 1000, 1000, 280);
+  it("M9-08 the pan the library reports becomes the square: the picture moving right moves the square left, by the viewfinder's scale", () => {
+    // 1000 x 1000 at 2x in a 280px viewfinder shows 500 source px: one screen pixel is 500/280 source pixels.
+    const moved = panToCrop({ x: 28, y: 0 }, 2, 1000, 1000, 280);
     expect(moved.cx).toBeCloseTo(500 - 28 * (500 / 280), 6);
     expect(moved.cy).toBe(500);
+    expect(moved.zoom).toBe(2);
     // A 10px nudge, the arrow keys' step.
-    expect(movePicture(zoomed, -10, 0, 1000, 1000, 280).cx).toBeCloseTo(500 + 10 * (500 / 280), 6);
+    expect(panToCrop({ x: -10, y: 0 }, 2, 1000, 1000, 280).cx).toBeCloseTo(500 + 10 * (500 / 280), 6);
+    // A landscape picture: the shorter side fills the viewfinder, so the scale is the same.
+    const wide = panToCrop({ x: 0, y: 0 }, 1, 1200, 800, 280);
+    expect(cropRegion(wide, 1200, 800)).toEqual({ sx: 200, sy: 0, side: 800 });
   });
 
-  it("dragging far stops at the edge (no empty edges), and a zero-width viewfinder changes nothing", () => {
-    const zoomed = zoomCrop(initialCrop(1000, 1000), 2, 1000, 1000);
-    const far = movePicture(zoomed, -99999, 99999, 1000, 1000, 280);
+  it("M9-08 the pan stops at the edge (no empty edges), whatever the library or a key asks", () => {
+    // 1000 x 1000 in 280px at 2x: the picture is 560px wide, so it may move 140px each way.
+    expect(panLimit(1000, 1000, 280, 2)).toEqual({ x: 140, y: 140 });
+    expect(restrictPan({ x: -99999, y: 99999 }, 1000, 1000, 280, 2)).toEqual({ x: -140, y: 140 });
+    expect(panLimit(1000, 1000, 280, 1)).toEqual({ x: 0, y: 0 });
+    // Landscape 900 x 500: at 1x it is 504px wide in the 280px viewfinder, 112px of play each way.
+    expect(panLimit(900, 500, 280, 1).x).toBeCloseTo(112, 6);
+    expect(panLimit(900, 500, 280, 1).y).toBe(0);
+    // The square taken from the farthest pan sits on the picture's edge.
+    const far = panToCrop({ x: -99999, y: 99999 }, 2, 1000, 1000, 280);
     expect(far.cx).toBe(750);
     expect(far.cy).toBe(250);
-    expect(movePicture(zoomed, 50, 50, 1000, 1000, 0)).toEqual(clampCrop(zoomed, 1000, 1000));
+    // Bad numbers and an unmeasured viewfinder change nothing.
+    expect(restrictPan({ x: Number.NaN, y: Number.POSITIVE_INFINITY }, 1000, 1000, 280, 2)).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(restrictPan({ x: 50, y: 50 }, 1000, 1000, 0, 2)).toEqual({ x: 0, y: 0 });
+    expect(panToCrop({ x: 50, y: 50 }, 2, 1000, 1000, 0)).toEqual(
+      clampCrop({ cx: 500, cy: 500, zoom: 2 }, 1000, 1000),
+    );
+    expect(panToCrop({ x: Number.NaN, y: Number.NaN }, Number.NaN, 1000, 1000, 280)).toEqual({
+      cx: 500,
+      cy: 500,
+      zoom: 1,
+    });
   });
 
-  it("the picture's layout in the viewfinder covers it and follows the square", () => {
-    const layout = pictureLayout(initialCrop(1200, 800), 1200, 800);
-    // The viewfinder shows 800 of 1200 px across and all 800 down.
-    expect(layout.width).toBeCloseTo(150, 6);
-    expect(layout.height).toBeCloseTo(100, 6);
-    expect(layout.left).toBeCloseTo(-25, 6);
-    expect(layout.top).toBeCloseTo(0, 6);
-    for (const crop of [
-      { cx: 300, cy: 400, zoom: 2 },
-      { cx: 1000, cy: 100, zoom: 3.3 },
-      { cx: 600, cy: 400, zoom: 1 },
-    ]) {
-      const l = pictureLayout(crop, 1200, 800);
-      expect(l.left).toBeLessThanOrEqual(1e-9);
-      expect(l.top).toBeLessThanOrEqual(1e-9);
-      expect(l.left + l.width).toBeGreaterThanOrEqual(100 - 1e-9);
-      expect(l.top + l.height).toBeGreaterThanOrEqual(100 - 1e-9);
-    }
+  it("M9-08 arrow nudges move the picture by their pixels and stop at the limit", () => {
+    expect(nudgePan({ x: 0, y: 0 }, -10, 0, 1000, 1000, 280, 2)).toEqual({ x: -10, y: 0 });
+    expect(nudgePan({ x: 0, y: 0 }, 0, -1, 1000, 1000, 280, 2)).toEqual({ x: 0, y: -1 });
+    expect(nudgePan({ x: -135, y: 0 }, -10, 0, 1000, 1000, 280, 2).x).toBe(-140);
+    // At 1x a square picture has no play at all.
+    expect(nudgePan({ x: 0, y: 0 }, 10, 10, 1000, 1000, 280, 1)).toEqual({ x: 0, y: 0 });
+  });
+
+  it("M9-08 zooming keeps the visible center: the pan scales with the zoom", () => {
+    expect(scalePan({ x: 40, y: -20 }, 2, 4)).toEqual({ x: 80, y: -40 });
+    expect(scalePan({ x: 40, y: -20 }, 2, 1)).toEqual({ x: 20, y: -10 });
+    const before = panToCrop({ x: 40, y: -20 }, 2, 1000, 1000, 280);
+    const after = panToCrop(scalePan({ x: 40, y: -20 }, 2, 4), 4, 1000, 1000, 280);
+    expect(after.cx).toBeCloseTo(before.cx, 6);
+    expect(after.cy).toBeCloseTo(before.cy, 6);
+    expect(scalePan({ x: 5, y: 5 }, 0, 2)).toEqual({ x: 0, y: 0 });
   });
 
   it("the output is the real resolution of the square, at most 800px a side", () => {
@@ -153,14 +177,14 @@ describe("M6-24 the dialog's words", () => {
       }),
     );
 
-  it("the profile photo: Position your photo, Use photo, a circular outline", () => {
+  it("the profile photo: Position your photo, Use photo, a circular outline (M9-08: the library draws it)", () => {
     const markup = html();
     expect(markup).toContain("Position your photo");
     expect(markup).toContain(">Use photo<");
     expect(markup).toContain(">Reset<");
     expect(markup).toContain(">Cancel<");
     expect(markup).toContain('aria-modal="true"');
-    expect(markup).toContain("rounded-full");
+    expect(markup).toContain('data-shape="round"');
     expect(markup).toContain('data-variant="photo"');
   });
 
@@ -168,8 +192,7 @@ describe("M6-24 the dialog's words", () => {
     const markup = html("image");
     expect(markup).toContain("Position your image");
     expect(markup).toContain(">Use image<");
-    expect(markup).not.toContain("rounded-full");
-    expect(markup).toContain("rounded-md");
+    expect(markup).toContain('data-shape="square"');
     expect(markup).toContain('data-variant="image"');
     expect(markup).not.toContain("Use photo");
   });

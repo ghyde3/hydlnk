@@ -30,6 +30,7 @@ import {
 import {
   bannerRef,
   blocks,
+  bookCoverRef,
   fullDraft,
   fullPublished,
   noirTokens,
@@ -466,9 +467,9 @@ describe("code point helpers", () => {
 });
 
 describe("collectImageRefs", () => {
-  it("lists the photo, card images and image blocks", () => {
-    expect(collectImageRefs(fullDraft)).toEqual([photoRef, bannerRef, bannerRef]);
+  it("lists the photo, card images, image blocks and a book's cover (M9-20)", () => {
+    expect(collectImageRefs(fullDraft)).toEqual([photoRef, bannerRef, bannerRef, bookCoverRef]);
     expect(collectImageRefs(emptyDraft("mara"))).toEqual([]);
-    expect(collectImageRefs(fullPublished)).toEqual([photoRef, bannerRef, bannerRef]);
+    expect(collectImageRefs(fullPublished)).toEqual([photoRef, bannerRef, bannerRef, bookCoverRef]);
   });
 });

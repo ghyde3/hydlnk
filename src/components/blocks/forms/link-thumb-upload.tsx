@@ -1,8 +1,9 @@
 "use client";
 
+import { Upload } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
-import { UploadIcon } from "@/components/editor/icons";
+import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
 import { PositionDialog } from "@/components/editor/position-dialog";
 import { LINK_THUMB_UPLOAD_KIND, imageRefSchema, type ImageRef } from "@/lib/document";
 import { sniffImageType } from "@/lib/editor/sniff";
@@ -167,7 +168,7 @@ export function LinkThumbUpload({
           onClick={() => fileRef.current?.click()}
           className="inline-flex min-h-11 items-center gap-2 rounded-md border border-line-3 bg-surface px-3 text-[13px] font-semibold text-ink disabled:cursor-progress disabled:opacity-60"
         >
-          <UploadIcon />
+          <Icon icon={Upload} size={15} strokeWidth={EDITOR_ICON_STROKE} />
           {busy ? "Uploading..." : hasImage ? "Replace image" : "Upload image"}
         </button>
         {hasImage ? (

@@ -736,6 +736,7 @@ export type Database = {
           max_pages: number
           max_saved_themes: number
           max_upload_bytes: number
+          redirect_mode: boolean
           versions_kept: number
         }[]
       }

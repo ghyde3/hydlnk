@@ -23,12 +23,25 @@ const { FAULT_COOKIE, faultsEnabled, injectedFault, failIfInjected } =
   await import("@/lib/testing/faults");
 
 const env = process.env as Record<string, string | undefined>;
-const saved = env.NODE_ENV;
+const saved = {
+  NODE_ENV: env.NODE_ENV,
+  HYDLNK_QUERY_COUNTER: env.HYDLNK_QUERY_COUNTER,
+  VERCEL_ENV: env.VERCEL_ENV,
+};
+const restore = (name: keyof typeof saved) => {
+  if (saved[name] === undefined) delete env[name];
+  else env[name] = saved[name];
+};
 beforeEach(() => {
   cookieValue = undefined;
+  // The test hooks (M9-13) also switch faults on in a production build: start every case without them.
+  delete env.HYDLNK_QUERY_COUNTER;
+  delete env.VERCEL_ENV;
 });
 afterEach(() => {
-  env.NODE_ENV = saved;
+  restore("NODE_ENV");
+  restore("HYDLNK_QUERY_COUNTER");
+  restore("VERCEL_ENV");
 });
 
 describe("faults are a development and test switch only", () => {
@@ -50,6 +63,42 @@ describe("faults are a development and test switch only", () => {
         expect(await injectedFault(name), `${value} / ${name}`).toBe(false);
       }
       await expect(failIfInjected("draft-load")).resolves.toBeUndefined();
+    }
+  });
+
+  it("a flag that is not exactly 1 does not switch faults on in production", async () => {
+    env.NODE_ENV = "production";
+    cookieValue = "draft-load";
+    for (const flag of ["0", "", "true", "yes"]) {
+      env.HYDLNK_QUERY_COUNTER = flag;
+      expect(faultsEnabled(), flag).toBe(false);
+      expect(await injectedFault("draft-load"), flag).toBe(false);
+    }
+  });
+
+  it("M9-13: CI's production build with the test hooks on injects the named fault", async () => {
+    env.NODE_ENV = "production";
+    env.HYDLNK_QUERY_COUNTER = "1";
+    expect(faultsEnabled()).toBe(true);
+    cookieValue = "themes-load";
+    expect(await injectedFault("themes-load")).toBe(true);
+    expect(await injectedFault("draft-load")).toBe(false);
+    await expect(failIfInjected("themes-load")).rejects.toThrow("Injected fault: themes-load");
+    for (const vercelEnv of ["preview", "development"]) {
+      env.VERCEL_ENV = vercelEnv;
+      expect(faultsEnabled(), vercelEnv).toBe(true);
+    }
+  });
+
+  it("M9-13: on a Vercel production deployment the flag changes nothing, whatever the cookie says", async () => {
+    env.NODE_ENV = "production";
+    env.HYDLNK_QUERY_COUNTER = "1";
+    env.VERCEL_ENV = "production";
+    expect(faultsEnabled()).toBe(false);
+    for (const name of ["draft-load", "themes-load", "route-throw", "versions-load"] as const) {
+      cookieValue = name;
+      expect(await injectedFault(name), name).toBe(false);
+      await expect(failIfInjected(name)).resolves.toBeUndefined();
     }
   });
 
@@ -101,6 +150,6 @@ describe("only the screens that own a failure state call the switch", () => {
   it("the module is server-only, so a client component can never ship it", () => {
     const source = readFileSync(join(root, "lib/testing/faults.ts"), "utf8");
     expect(source).toContain('import "server-only"');
-    expect(source).toContain('process.env.NODE_ENV !== "production"');
+    expect(source).toContain('process.env.NODE_ENV !== "production" || testHooksEnabled()');
   });
 });

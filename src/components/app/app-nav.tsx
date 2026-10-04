@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useSelectedLayoutSegment } from "next/navigation";
+import { ChartColumn, Globe, LayoutGrid, User } from "lucide-react";
 import type { ReactNode } from "react";
-import { AccountIcon, AnalyticsIcon, DomainsIcon, EditorIcon } from "./icons";
+import { Icon } from "./icon";
 import { navKeyForSegment, type NavKey } from "./nav-items";
 
 interface NavItem {
@@ -20,24 +21,24 @@ const EDITOR: NavItem = {
   href: "/editor",
   label: "Editor",
   tabLabel: "Editor",
-  sidebarIcon: <EditorIcon size={16} />,
-  tabIcon: <EditorIcon size={20} />,
+  sidebarIcon: <Icon icon={LayoutGrid} size={16} />,
+  tabIcon: <Icon icon={LayoutGrid} size={20} />,
 };
 const ANALYTICS: NavItem = {
   key: "analytics",
   href: "/analytics",
   label: "Analytics",
   tabLabel: "Stats",
-  sidebarIcon: <AnalyticsIcon size={16} />,
-  tabIcon: <AnalyticsIcon size={20} />,
+  sidebarIcon: <Icon icon={ChartColumn} size={16} />,
+  tabIcon: <Icon icon={ChartColumn} size={20} />,
 };
 const DOMAINS: NavItem = {
   key: "domains",
   href: "/domains",
   label: "Domains",
   tabLabel: "Domains",
-  sidebarIcon: <DomainsIcon size={16} />,
-  tabIcon: <DomainsIcon size={20} />,
+  sidebarIcon: <Icon icon={Globe} size={16} />,
+  tabIcon: <Icon icon={Globe} size={20} />,
 };
 /** Phone only: "Settings & billing" is in the account menu on desktop (M7-01). */
 const ACCOUNT: NavItem = {
@@ -45,8 +46,8 @@ const ACCOUNT: NavItem = {
   href: "/settings",
   label: "Settings & billing",
   tabLabel: "Account",
-  sidebarIcon: <AccountIcon size={16} />,
-  tabIcon: <AccountIcon size={20} />,
+  sidebarIcon: <Icon icon={User} size={16} />,
+  tabIcon: <Icon icon={User} size={20} />,
 };
 
 /** The sidebar: Editor (one item for Edit, Design and Share), Analytics and Domains. */

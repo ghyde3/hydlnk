@@ -1,4 +1,4 @@
-import type { RateLimitResult } from "@/lib/rate-limit";
+import type { RateLimitOptions, RateLimitResult } from "@/lib/rate-limit";
 import type { VisitorHashInput } from "./hash";
 
 /** One row of `events` as the tracking routes write it (secret key, server side only). */
@@ -20,10 +20,23 @@ export interface BeaconPage {
   customHosts: string[];
 }
 
+/**
+ * The lock on a link (M9-29), as the click redirect reads it from the published document: an age
+ * check, a code with its salt and hash, or `invalid` for a stored lock whose shape is wrong, which
+ * is never treated as "no lock" (the handler answers 503 for it).
+ */
+export type ClickLock =
+  { kind: "age" } | { kind: "code"; salt: string; hash: string } | { kind: "invalid" };
+
 /** What the click redirect needs to know about a link: where it goes and which hosts may serve it. */
 export interface ClickTarget {
-  /** The URL in the page's published document. */
+  /**
+   * The URL in the page's published document, with the page's and the link's UTM tags added at
+   * redirect time (M9-27) when they apply: exactly the published URL when none do.
+   */
   url: string;
+  /** The link's lock, or absent for an unlocked link (M9-29). */
+  lock?: ClickLock | undefined;
   /** `pages.handle` of the page: `{handle}.{root}` serves it. */
   handle: string;
   /** Hostnames of the page's VERIFIED custom domains. */
@@ -36,13 +49,24 @@ export interface ClickTarget {
  * order of the steps (limit, then lookup, then insert) and the fail-open behaviour are proven.
  */
 export interface IngestDeps {
-  rateLimit: (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult>;
+  /** `options.failClosed` is for the link lock's code check only (M9-29); everything else fails open. */
+  rateLimit: (
+    key: string,
+    limit: number,
+    windowSeconds: number,
+    options?: Pick<RateLimitOptions, "failClosed">,
+  ) => Promise<RateLimitResult>;
   now: () => Date;
   visitorHash: (input: VisitorHashInput) => string;
   insertEvent: (row: EventRow) => Promise<void>;
   lookupBeaconPage: (pageId: string) => Promise<BeaconPage | null>;
   /** The link (block, icon or cell) in the page's published document with the hosts that serve it, or null. */
   resolveClickTarget: (pageId: string, id: string) => Promise<ClickTarget | null>;
+  /**
+   * Does `code` open this code lock (scrypt, constant-time compare)? Defaults to the real one
+   * (`verifyLockCode`); the unit tests pass a spy to prove it runs only after the limiter.
+   */
+  verifyLock?: (code: string, lock: { salt: string; hash: string }) => Promise<boolean>;
   /** Runs `task` after the response is sent (Next's `after`). */
   schedule: (task: () => Promise<void>) => void;
   /** NEXT_PUBLIC_ROOT_DOMAIN. */

@@ -381,7 +381,13 @@ test.describe("M2-17 social icons", () => {
       const svg = await box(anchor.locator("svg"));
       expect(svg.width).toBe(18);
       expect(svg.height).toBe(18);
-      expect(await css(anchor.locator("svg"), "stroke")).toBe(RGB.text);
+      // A brand mark is a filled path since M9-04 (fill is the text color, no stroke); Email stays
+      // a line drawing (stroke is the text color, no fill).
+      const isBrand = await anchor
+        .locator("svg")
+        .evaluate((el) => el.classList.contains("pg-social-glyph-brand"));
+      expect(await css(anchor.locator("svg"), isBrand ? "fill" : "stroke")).toBe(RGB.text);
+      expect(await css(anchor.locator("svg"), isBrand ? "stroke" : "fill")).toBe("none");
     }
     expect(await css(nav, "column-gap")).toBe("10px");
     expect(await css(nav, "flex-wrap")).toBe("wrap");

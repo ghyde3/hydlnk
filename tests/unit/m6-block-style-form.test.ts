@@ -117,6 +117,12 @@ const EXPECTED: Record<BlockType, string[]> = {
   grid: ["Color", "Corner radius", "Border thickness"],
   social: ["Icon color"],
   divider: ["Line color"],
+  faq: ["Color"],
+  contact: ["Color"],
+  discount: ["Color", "Corner radius", "Border thickness"],
+  book: ["Button style", "Color", "Corner radius"],
+  apps: ["Color", "Corner radius"],
+  map: ["Corner radius", "Border thickness", "Border color"],
 };
 
 describe("M6-46 every block type has a 'Style this block' group", () => {
@@ -138,10 +144,20 @@ describe("M6-46 every block type has a 'Style this block' group", () => {
     (blockType) => {
       const { host } = mount(blockDefaults[blockType]());
       const g = group(host)!;
-      // Everything else in the form comes before the group.
+      // Everything else in the form comes before the group, except a link's own tags and its lock
+      // (M9-28, M9-30): those groups follow it, in that order, and are the only ones that may.
+      const wave = '[data-testid="link-tags-field"], [data-testid="link-lock-field"]';
       const before = Array.from(host.querySelectorAll("input, select, textarea, button")).filter(
-        (el) => !g.contains(el),
+        (el) => !g.contains(el) && !el.closest(wave),
       );
+      const after = Array.from(host.querySelectorAll(wave));
+      expect(after.length, blockType).toBe(blockType === "link" ? 2 : 0);
+      for (const el of after) {
+        expect(
+          g.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING,
+          blockType,
+        ).toBeTruthy();
+      }
       for (const el of before) {
         expect(
           g.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_PRECEDING,
@@ -156,7 +172,12 @@ describe("M6-46 every block type has a 'Style this block' group", () => {
   it("a color control is a swatch, a 16px hex field and, once set, a Theme default button", () => {
     for (const blockType of BLOCK_TYPES) {
       const { host } = mount(blockDefaults[blockType]());
-      expect(host.querySelector('input[type="color"]'), blockType).not.toBeNull();
+      // M9-07: the swatch is a button that opens the picker.
+      expect(
+        host.querySelector('button[data-field="override-color-swatch"]'),
+        blockType,
+      ).not.toBeNull();
+      expect(host.querySelector('input[type="color"]'), blockType).toBeNull();
       const hex = field<HTMLInputElement>(host, "override-color")!;
       expect(hex.className, blockType).toContain("text-base"); // 16px, so iOS does not zoom
       expect(hex.maxLength).toBe(7);

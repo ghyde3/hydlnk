@@ -61,11 +61,16 @@ test.describe("M5-04 admin access", () => {
     context,
   }) => {
     await signInAsUser(context, "nonadm");
+    // The 404 streams in: on a production build `load` can fire before its text is in the body, and
+    // an innerText read then is empty. Wait for the page's own words before reading either side.
+    const NOT_FOUND = "That page doesn’t exist.";
     await page.goto(url("app", "/no-such-route-m504"));
+    await expect(page.locator("body")).toContainText(NOT_FOUND);
     const unknownText = (await page.locator("body").innerText()).trim();
     for (const path of ADMIN_PATHS) {
       const response = await page.goto(url("app", path));
       expect(response?.status(), path).toBe(404);
+      await expect(page.locator("body"), path).toContainText(NOT_FOUND);
       expect((await page.locator("body").innerText()).trim(), path).toBe(unknownText);
     }
     expect(unknownText.length).toBeGreaterThan(0);

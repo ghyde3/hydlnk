@@ -51,7 +51,8 @@ describe("M6-31 / M6-33 the two token systems stay apart", () => {
   );
 
   it.each(UI_FILES)("%s uses no tenant variable and no font or color of its own", (file) => {
-    const source = code(file);
+    // M9-25: the frame text of a styled SVG names the generic `sans-serif` family, and no other.
+    const source = code(file).replace(/\[\s*"font-family",\s*"sans-serif"\s*\]/g, "");
     expect(source).not.toMatch(/--t-/);
     expect(source).not.toMatch(/var\(--/);
     expect(source).not.toMatch(/fontFamily|font-family/);
@@ -144,7 +145,18 @@ describe("M6-31 the QR code makes no request and takes no input", () => {
       const imports = [...code(file).matchAll(/from "([^"]+)"/g)].map((match) => match[1]!);
       for (const spec of imports)
         expect(
-          ["qrcode-generator", "./generate", "@/lib/editor/urls"],
+          [
+            "qrcode-generator",
+            "./generate",
+            "@/lib/editor/urls",
+            // M9-25: the styled drawing's own modules, and the one pure color helper (normalizeHex).
+            "./layout",
+            "./png",
+            "./style",
+            "./styled-png",
+            "./styled-svg",
+            "@/lib/design/color",
+          ],
           `${file}: ${spec}`,
         ).toContain(spec);
     }

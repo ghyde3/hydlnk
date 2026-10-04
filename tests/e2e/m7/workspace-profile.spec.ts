@@ -57,8 +57,16 @@ test.describe("M7-03 Profile card with a collapsed options section", () => {
     for (const name of GROUPS) {
       await expect(card(page).getByRole("group", { name, exact: true })).toBeHidden();
     }
-    // Not focusable either: tabbing from the bio goes to the button, then past the card.
+    // Not focusable either: tabbing from the bio goes to the logo's button (M9-24 put the logo between
+    // the bio and the options button; its placement control is disabled without a logo), then to
+    // the options button, then past the card.
     await page.getByLabel("Bio", { exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(
+      card(page)
+        .getByTestId("profile-logo")
+        .getByRole("button", { name: /^(Upload|Replace) logo/ }),
+    ).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(button).toBeFocused();
   });

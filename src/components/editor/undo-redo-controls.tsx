@@ -1,6 +1,8 @@
 "use client";
 
-import { useSyncExternalStore, type ReactNode } from "react";
+import { Redo2, Undo2 } from "lucide-react";
+import { useSyncExternalStore } from "react";
+import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
 import type { UndoRedo } from "./use-undo-redo";
 
 const subscribeNothing = () => () => {};
@@ -25,25 +27,6 @@ export function redoTitle(apple: boolean): string {
 const BUTTON =
   "inline-flex size-11 shrink-0 items-center justify-center rounded-md border border-line-3 bg-surface text-ink aria-disabled:cursor-not-allowed aria-disabled:opacity-40";
 
-function Arrow({ children }: { children: ReactNode }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={18}
-      height={18}
-      aria-hidden="true"
-      focusable="false"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.9}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {children}
-    </svg>
-  );
-}
-
 /**
  * The Undo and Redo icon buttons of the Editor and Design headers (M6-07, M6-08): 44x44, white, 1px
  * #C9C5BE border, 6px radius, disabled while there is nothing to undo or redo. They are disabled
@@ -65,10 +48,7 @@ export function UndoRedoButtons({ controls }: { controls: UndoRedo }) {
         data-history-button="undo"
         className={BUTTON}
       >
-        <Arrow>
-          <path d="M9 14 4 9l5-5" />
-          <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
-        </Arrow>
+        <Icon icon={Undo2} size={18} strokeWidth={EDITOR_ICON_STROKE} />
       </button>
       <button
         type="button"
@@ -79,10 +59,7 @@ export function UndoRedoButtons({ controls }: { controls: UndoRedo }) {
         data-history-button="redo"
         className={BUTTON}
       >
-        <Arrow>
-          <path d="m15 14 5-5-5-5" />
-          <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
-        </Arrow>
+        <Icon icon={Redo2} size={18} strokeWidth={EDITOR_ICON_STROKE} />
       </button>
       <span role="status" aria-live="polite" className="sr-only" data-history-message="">
         <span key={controls.messageSeq}>{controls.message}</span>

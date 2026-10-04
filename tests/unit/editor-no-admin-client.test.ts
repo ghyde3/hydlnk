@@ -125,8 +125,11 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     }
     expect(seen.size).toBeGreaterThan(40);
     // The preview-link actions (M6-09) are the second Server Action module: the share dialog calls them.
+    // `hashLinkCode` (M9-30) is the third: the link form's 'Set code' button (the limiter behind it
+    // reads the counter store with the secret key), loaded with a dynamic import when a code is set.
     expect([...boundaries].sort()).toEqual([
       GATE_ACCOUNT_REPAIR,
+      "src/lib/links/actions.ts",
       "src/lib/previews/actions.ts",
       "src/lib/publish/actions.ts",
     ]);

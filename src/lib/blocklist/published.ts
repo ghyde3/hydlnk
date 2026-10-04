@@ -1,4 +1,4 @@
-import type { PublishDoc } from "@/lib/document";
+import { mapTargets, type PublishDoc } from "@/lib/document";
 import type { BlockedPublishError, BlockedReason } from "./check";
 import { BLOCKED_FIELD_MESSAGE } from "./messages";
 
@@ -65,6 +65,7 @@ function urlFieldsOf(doc: PublishDoc): UrlField[] {
         fields.push({ blockId: block.id, url: block.url });
         break;
       case "image":
+      case "discount":
         if (block.url) fields.push({ blockId: block.id, url: block.url });
         break;
       case "social":
@@ -84,9 +85,28 @@ function urlFieldsOf(doc: PublishDoc): UrlField[] {
             fields.push({ blockId: block.id, itemId: mark.id, url: mark.url });
         }
         break;
+      case "book":
+      case "apps":
+        // The store buttons (M9-20, M9-21), by each entry's id.
+        for (const link of block.links) {
+          fields.push({ blockId: block.id, itemId: link.id, url: link.url });
+        }
+        break;
+      case "map": {
+        // The two targets `/r/` builds for a map (M9-22): fixed hosts, judged as a defense.
+        const targets = mapTargets(block.name, block.address);
+        fields.push({ blockId: block.id, itemId: block.googleId, url: targets.google });
+        fields.push({ blockId: block.id, itemId: block.appleId, url: targets.apple });
+        break;
+      }
       default:
         break;
     }
+  }
+  // The support banner's link (M9-23): reported like the database does, with the block id 'banner'
+  // and the banner's own id as the item.
+  if (doc.banner && doc.banner.url) {
+    fields.push({ blockId: "banner", itemId: doc.banner.id, url: doc.banner.url });
   }
   return fields;
 }

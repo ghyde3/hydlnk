@@ -16,16 +16,11 @@ export interface NoticePage {
   homeHref: string;
 }
 
-export function noticePageHtml({ status, message, homeHref }: NoticePage): string {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex">
-<title>${status} - HYDLNK</title>
-<style>
-:root {
+/**
+ * The notice look as CSS (the :root variables and the card), shared with the link lock's
+ * interstitial (M9-29), which is the same HYDLNK notice with a small form in it.
+ */
+export const NOTICE_CSS = `:root {
   --hl-ink: #1c1b1a;
   --hl-text-2: #5e5a54;
   --hl-page: #f4f3f0;
@@ -77,7 +72,18 @@ a {
   text-decoration: none;
 }
 a:focus-visible { outline: 2px solid var(--hl-brass); outline-offset: 2px; }
-</style>
+`;
+
+export function noticePageHtml({ status, message, homeHref }: NoticePage): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>${status} - HYDLNK</title>
+<style>
+${NOTICE_CSS}</style>
 </head>
 <body>
 <main>

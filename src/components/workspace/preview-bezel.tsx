@@ -45,8 +45,9 @@ export function PreviewBezel({
     if (target.closest("button.pg-embed-play")) return;
     const tap = resolvePreviewTap(target, event.currentTarget);
     if (!tap) return;
-    // Nothing inside the page reacts to a tap that opens the editor (the YouTube Play button).
-    event.preventDefault();
+    // Nothing inside the page reacts to a tap that opens the editor (the YouTube Play button), except
+    // a FAQ question: its native open and close (M9-16) still happens, next to opening the block.
+    if (!target.closest("summary")) event.preventDefault();
     event.stopPropagation();
     onTap(tap);
   }
@@ -66,7 +67,7 @@ export function PreviewBezel({
             : ""
         }`}
       >
-        <PreviewFonts tokens={doc.tokens} />
+        <PreviewFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
         <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} />
       </div>
     </div>

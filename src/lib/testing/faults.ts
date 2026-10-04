@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { testHooksEnabled } from "@/lib/env/test-hooks";
 
 /**
  * Fault injection for the end-to-end specs, and nothing else (M5-15, M5-16, M5-20).
@@ -10,10 +11,13 @@ import { cookies } from "next/headers";
  * cookie on the app host to a comma-separated list of the names below, and the server code that owns
  * the load calls `failIfInjected(name)` right before it.
  *
- * It does nothing outside development and test: with NODE_ENV=production (every Vercel build,
- * preview and production alike, and `next start`) `injectedFault` is false whatever the cookie says,
- * and the bundler removes the cookie read. The cookie is read only on the app host, whose pages
- * already read the session cookie, so no page becomes dynamic because of it.
+ * It does nothing outside development, test and the end-to-end harness: with NODE_ENV=production
+ * (every Vercel build, preview and production alike, and `next start`) `injectedFault` is false
+ * whatever the cookie says, unless the test hooks are on (HYDLNK_QUERY_COUNTER=1 and not a Vercel
+ * production deployment, see src/lib/env/test-hooks.ts). CI's browser suite runs against the
+ * production build started that way (M9-13), so these specs still run there. The cookie is read only
+ * on the app host, whose pages already read the session cookie, so no page becomes dynamic because
+ * of it.
  */
 export const FAULT_COOKIE = "hl-fault";
 
@@ -28,7 +32,7 @@ export type FaultName =
   | "versions-load";
 
 export function faultsEnabled(): boolean {
-  return process.env.NODE_ENV !== "production";
+  return process.env.NODE_ENV !== "production" || testHooksEnabled();
 }
 
 /** True when the request carries the fault cookie naming `name`, and faults are enabled. */

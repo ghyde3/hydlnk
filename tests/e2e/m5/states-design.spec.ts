@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
-import { rawRequest } from "../fixtures/http";
+import { FAULT_COOKIE_IGNORED, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { mark, pageRow, seededUser, setDraft } from "../m2/editor-helpers";
 import {
@@ -20,14 +20,14 @@ import { clickTab } from "../m7/workspace-helpers";
  * Every spec makes its own user (nothing here touches mara's rows).
  *
  * Both reads on this screen are made by the Next.js server, which a Playwright route cannot abort.
- * They are switched off with the `hl-fault` cookie (src/lib/testing/faults.ts: dev server only, and
- * those specs skip themselves against a production build). The Retry on the themes row reads from
+ * They are switched off with the `hl-fault` cookie (src/lib/testing/faults.ts: a dev server, or a
+ * production build started with the test hooks on, as CI does; those specs skip themselves against a
+ * production server without them). The Retry on the themes row reads from
  * the browser, so there the acceptance's own mechanism applies: the themes request is aborted.
  */
 
 test.afterAll(cleanupUsers);
 
-const PROD_BUILD = process.env.E2E_PROD_BUILD === "1" || Boolean(process.env.HL_PROD_PORT);
 const THEMES_FAILED = "We couldn’t load your themes. Try again.";
 const HINT = "Saved themes appear here. Use Save as theme to reuse this design on any page.";
 const DELETED = "The theme this page used was deleted. It now uses the default theme.";
@@ -103,7 +103,10 @@ test.describe("M5-16 no saved themes yet", () => {
 });
 
 test.describe("M5-16 the themes cannot be loaded", () => {
-  test.skip(PROD_BUILD, "the fault cookie is honoured by the dev server only");
+  test.skip(
+    FAULT_COOKIE_IGNORED,
+    "this production server was started without the test hooks, so it ignores the fault cookie",
+  );
 
   test("M5-16 the row says so with Retry while the token controls and the preview stay usable; Retry (aborted, then not) loads them", async ({
     page,

@@ -4,6 +4,11 @@ import { CardForm, EmbedForm, ImageForm } from "./media-forms";
 import { LinkForm } from "./link-form";
 import { DividerForm, HeaderForm, TextForm } from "./simple-forms";
 import { GridForm, SocialForm } from "./list-forms";
+import { MapForm } from "./map-form";
+import { AppsForm, BookForm } from "./store-forms";
+import { ContactForm } from "./contact-form";
+import { DiscountForm } from "./discount-form";
+import { FaqForm } from "./faq-form";
 import type { BlockFormProps } from "./types";
 
 export type { BlockFormProps } from "./types";
@@ -23,4 +28,10 @@ export const BLOCK_FORMS: Record<BlockType, ComponentType<BlockFormProps>> = {
   embed: EmbedForm,
   grid: GridForm,
   divider: DividerForm,
+  faq: FaqForm,
+  contact: ContactForm,
+  discount: DiscountForm,
+  book: BookForm,
+  apps: AppsForm,
+  map: MapForm,
 };

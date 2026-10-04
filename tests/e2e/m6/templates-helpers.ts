@@ -121,6 +121,18 @@ export function describeBlocks(blocks: DraftDoc["blocks"]): string[] {
         return `social:${block.icons.map((icon) => icon.platform).join(",")}`;
       case "divider":
         return "divider";
+      case "faq":
+        return `faq:${block.items.map((item) => item.question).join(",")}`;
+      case "contact":
+        return `contact:${block.name}`;
+      case "discount":
+        return `discount:${block.code}`;
+      case "book":
+        return `book:${block.title}`;
+      case "apps":
+        return `apps:${block.links.map((link) => link.store).join(",")}`;
+      case "map":
+        return `map:${block.name}`;
     }
   });
 }

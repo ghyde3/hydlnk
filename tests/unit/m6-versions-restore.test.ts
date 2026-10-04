@@ -141,7 +141,11 @@ describe("M6-49 images: nothing outside the owner's folder, nothing that is gone
     const image = result.doc.blocks.find((b) => b.type === "image");
     expect(card?.type === "card" && card.image).toBeNull();
     expect(image?.type === "image" && image.image).toBeNull();
-    expect(result.missingImages).toBe(3);
+    // a book's cover (M9-20) is one more place: it becomes null and the book stays
+    const book = result.doc.blocks.find((b) => b.type === "book");
+    expect(book?.type === "book" && book.cover).toBeNull();
+    expect(book?.type === "book" && book.links).toHaveLength(3);
+    expect(result.missingImages).toBe(4);
     // everything else is the same document
     expect(result.doc.blocks.map((b) => b.id)).toEqual(fullPublished.blocks.map((b) => b.id));
     expect(result.doc.profile.name).toBe(fullPublished.profile.name);
@@ -368,7 +372,7 @@ describe("M6-49 images: link thumbnails (M6-20) and the share image (M6-32) foll
       tokens: { ...fullPublished.tokens, bgImage: bgUrl(OWNER_UID), bgType: "image" },
     };
     const result = nullMissingImages(doc, OWNER_UID, ORIGIN, () => false);
-    expect(result.missingImages).toBe(3 + 1 + 1 + 1);
+    expect(result.missingImages).toBe(3 + 1 + 1 + 1 + 1);
     expect(result.backgroundMissing).toBe(true);
   });
 

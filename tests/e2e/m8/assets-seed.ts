@@ -23,7 +23,7 @@ export interface Seeded {
 
 export async function seedFullPage(
   plan: "free" | "pro",
-  overrides: { name?: string; bio?: string } = {},
+  overrides: { name?: string; bio?: string; nameFont?: string } = {},
 ): Promise<Seeded> {
   const user = await makeUser(`m8-budget-${plan}`, { plan });
   const handle = `zq-m8-${plan}-${rand(5)}`;
@@ -97,12 +97,16 @@ export async function seedFullPage(
     },
     { id: newBlockId(), type: "divider", visible: true },
   ] as unknown as Block[];
-  const doc = publishDocOf(blocks, {
+  const base = publishDocOf(blocks, {
     name: overrides.name ?? "Mara Okafor",
     bio: overrides.bio ?? "Portrait and studio photographer, Orlando FL",
     photo,
     tokens: { fontHeading: "Fraunces", fontBody: "Inter", weightHeading: 700 },
   });
+  // M9-24: a name font in a third family (the variant of the budget); none by default.
+  const doc = overrides.nameFont
+    ? { ...base, profile: { ...base.profile, nameFont: overrides.nameFont } }
+    : base;
   const pageId = await insertPage(user.id, handle, {
     published: doc,
     published_at: new Date().toISOString(),

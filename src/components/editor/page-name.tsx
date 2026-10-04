@@ -1,8 +1,10 @@
 "use client";
 
+import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
+import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
 import { clampPageName, normalizePageName, PAGE_NAME_MAX } from "@/lib/pages/name";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 
@@ -142,7 +144,7 @@ export function PageName({ pageId, name }: { pageId: string; name: string }) {
           onClick={startEditing}
           className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-2 hover:bg-page disabled:cursor-not-allowed disabled:opacity-50 -my-2.5"
         >
-          <PencilIcon />
+          <Icon icon={Pencil} size={16} strokeWidth={EDITOR_ICON_STROKE} />
         </button>
       </div>
     );
@@ -201,25 +203,5 @@ export function PageName({ pageId, name }: { pageId: string; name: string }) {
         </button>
       </div>
     </form>
-  );
-}
-
-function PencilIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={16}
-      height={16}
-      aria-hidden="true"
-      focusable="false"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.9}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17z" />
-      <path d="M14.5 7.5l3 3" />
-    </svg>
   );
 }

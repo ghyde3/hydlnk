@@ -156,11 +156,15 @@ test("M2-31 a page with every block type renders identically in preview and live
   await page.getByLabel("Display name", { exact: true }).fill(NAME);
   await page.getByLabel("Bio", { exact: true }).fill(BIO);
   const profile = page.getByRole("region", { name: "Profile", exact: true });
-  await profile.locator("input[type=file]").setInputFiles({
-    name: "mara.jpg",
-    mimeType: "image/jpeg",
-    buffer: await jpeg400(page),
-  });
+  // The photo row's own file input: the logo (M9-24) has a second one in the same card.
+  await profile
+    .getByTestId("profile-photo-row")
+    .locator("input[type=file]")
+    .setInputFiles({
+      name: "mara.jpg",
+      mimeType: "image/jpeg",
+      buffer: await jpeg400(page),
+    });
   // M6-24: choosing a photo opens the position dialog; the upload starts at "Use photo".
   await confirmPhoto(page);
   await expect(profile.getByRole("button", { name: "Replace photo" })).toBeVisible({

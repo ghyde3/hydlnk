@@ -12,6 +12,7 @@ import {
 import type { DocTheme, DraftDoc } from "@/lib/document";
 import type { PlanId } from "@/lib/limits/table";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { resolveTokens, type TokenSet } from "@/lib/theme";
 import {
   SAVED_THEME_LIMIT,
   cardTag,
@@ -78,8 +79,15 @@ export interface ThemeLibrary {
   pending: boolean;
   message: ThemeMessage | null;
   dismissMessage: () => void;
+  /**
+   * M9-34: the person just deleted the theme this page used, so the Design tab shows the M5-16 notice
+   * at once. It stays until a theme is applied (the draft stops being on the default), Undo restores the
+   * theme, or the page is reloaded (a reload shows it only for a draft that still names a deleted theme).
+   */
+  deletedNotice: boolean;
   /** M3-20: point the draft at a theme and clear its page overrides; the message carries Undo. */
   apply: (id: string) => void;
+  /** Undo of the last "Applied" (the previous theme comes back) or "Deleted" (the theme is created again, and applied when it was the page's). */
   undo: () => void;
   /** M3-21: save the page's resolved tokens as a new theme and apply it. */
   saveAsTheme: () => Promise<void>;
@@ -124,6 +132,8 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
   const [themes, setThemes] = useState<ThemeRow[]>(options.initialThemes);
   const [message, setMessage] = useState<ThemeMessage | null>(null);
   const [pending, setPending] = useState(false);
+  // M9-34: the page's theme was just deleted here (see `ThemeLibrary.deletedNotice`).
+  const [deletedAppliedNotice, setDeletedAppliedNotice] = useState(false);
 
   // The latest values for callbacks that outlive a render (an awaited request, a timer).
   const draftRef = useRef(draft);
@@ -132,6 +142,10 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
   const tokenRef = useRef(0);
   /** Set by an apply: what Undo restores, and what the draft looked like right after it. */
   const undoRef = useRef<{ previous: DocTheme; appliedId: string } | null>(null);
+  /** Set by a delete: what its Undo creates again (the theme's name and resolved tokens) and whether it was the page's. */
+  const deletedUndoRef = useRef<{ name: string; tokens: TokenSet; wasApplied: boolean } | null>(
+    null,
+  );
   useEffect(() => {
     draftRef.current = draft;
     themesRef.current = themes;
@@ -139,12 +153,16 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
 
   const show = useCallback((kind: ThemeMessageKind, text: string, undo = false) => {
     tokenRef.current += 1;
-    if (!undo) undoRef.current = null;
+    if (!undo) {
+      undoRef.current = null;
+      deletedUndoRef.current = null;
+    }
     setMessage({ kind, text, undo, token: tokenRef.current });
   }, []);
 
   const dismissMessage = useCallback(() => {
     undoRef.current = null;
+    deletedUndoRef.current = null;
     setMessage(null);
   }, []);
 
@@ -155,6 +173,7 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
     if (token === null || sticky) return;
     const timer = setTimeout(() => {
       undoRef.current = null;
+      deletedUndoRef.current = null;
       setMessage((current) => (current?.token === token ? null : current));
     }, THEME_MESSAGE_MS);
     return () => clearTimeout(timer);
@@ -180,19 +199,12 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
       const current = draftRef.current.theme;
       if (current.ref === id && !hasOverrides(current)) return; // nothing to replace
       undoRef.current = { previous: current, appliedId: id };
+      setDeletedAppliedNotice(false);
       setDraft((doc) => ({ ...doc, theme: { ref: id, overrides: {} } }));
       show("applied", `Applied ${target.name}.`, true);
     },
     [setDraft, show],
   );
-
-  const undo = useCallback(() => {
-    const pendingUndo = undoRef.current;
-    if (!pendingUndo) return;
-    const { previous } = pendingUndo;
-    setDraft((doc) => ({ ...doc, theme: { ref: previous.ref, overrides: previous.overrides } }));
-    show("undone", "Undone.");
-  }, [setDraft, show]);
 
   /** Runs one write at a time: a second press while one is in flight does nothing. */
   const exclusive = useCallback(async <T>(work: () => Promise<T>): Promise<T | undefined> => {
@@ -206,6 +218,56 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
       setPending(false);
     }
   }, []);
+
+  /**
+   * The Undo of a "Deleted" message (M9-34): the theme is created again with its name and resolved
+   * tokens (a new row, so a page that named the old id is not brought back), and applied when it was
+   * this page's theme and the page is still on the default. A failure says so and keeps the Undo.
+   */
+  const restoreDeleted = useCallback(async () => {
+    const restoring = deletedUndoRef.current;
+    if (!restoring) return;
+    await exclusive(async () => {
+      const result = await insertSavedTheme(
+        createBrowserSupabase(),
+        ownerId,
+        restoring.name,
+        restoring.tokens,
+      );
+      if (!result.ok) {
+        if (result.reason === "limit") {
+          const used = ownThemes(themesRef.current).length;
+          show("limit", savedThemeLimitMessage(used, SAVED_THEME_LIMIT[plan] ?? used));
+        } else {
+          show("error", FAILURE_TEXT[result.reason]);
+        }
+        return;
+      }
+      const restored = result.theme;
+      setThemes((all) => [...all, restored]);
+      if (restoring.wasApplied) {
+        setDraft((doc) =>
+          doc.theme.ref === null
+            ? { ...doc, theme: { ref: restored.id, overrides: doc.theme.overrides } }
+            : doc,
+        );
+      }
+      setDeletedAppliedNotice(false);
+      show("undone", "Undone.");
+    });
+  }, [exclusive, ownerId, plan, setDraft, show]);
+
+  const undo = useCallback(() => {
+    if (deletedUndoRef.current) {
+      void restoreDeleted();
+      return;
+    }
+    const pendingUndo = undoRef.current;
+    if (!pendingUndo) return;
+    const { previous } = pendingUndo;
+    setDraft((doc) => ({ ...doc, theme: { ref: previous.ref, overrides: previous.overrides } }));
+    show("undone", "Undone.");
+  }, [restoreDeleted, setDraft, show]);
 
   const saveAsTheme = useCallback(async () => {
     await exclusive(async () => {
@@ -234,6 +296,7 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
           ? { ...doc, theme: { ref: saved.id, overrides: {} } }
           : doc,
       );
+      setDeletedAppliedNotice(false);
       show("saved", `Saved as ${saved.name}.`);
     });
   }, [exclusive, ownerId, plan, setDraft, show]);
@@ -299,12 +362,22 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
         setThemes((all) => all.filter((row) => row.id !== id));
         // This page's draft stops pointing at it (the overrides stay). Other pages keep their
         // dangling reference, which every reader resolves to the default.
+        const wasApplied = draftRef.current.theme.ref === id;
         setDraft((doc) =>
           doc.theme.ref === id
             ? { ...doc, theme: { ref: null, overrides: doc.theme.overrides } }
             : doc,
         );
-        show("deleted", `Deleted ${target.name}.`);
+        // M9-34: deleting the theme this page uses shows the M5-16 notice at once, next to the
+        // "Deleted" message; its Undo creates the theme again (and applies it when it was the page's).
+        setDeletedAppliedNotice(wasApplied);
+        undoRef.current = null;
+        deletedUndoRef.current = {
+          name: target.name,
+          tokens: resolveTokens(target.tokens, {}),
+          wasApplied,
+        };
+        show("deleted", `Deleted ${target.name}.`, true);
         return true;
       });
       return outcome === true;
@@ -329,6 +402,7 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
     pending,
     message,
     dismissMessage,
+    deletedNotice: deletedAppliedNotice,
     apply,
     undo,
     saveAsTheme,
