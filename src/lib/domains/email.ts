@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { HOSTNAME_MAX_LENGTH, HOSTNAME_PATTERN } from "./hostname";
 import { liveEmailContent } from "./live-email";
 
 /**
@@ -16,6 +17,10 @@ import { liveEmailContent } from "./live-email";
  *   nothing set, any deployment (VERCEL_ENV set or NODE_ENV=production)
  *                   skipped: one log line, no address, nothing thrown. Never a reason to fail a
  *                   verification.
+ *
+ * The content is rendered by react-email (M9-09: src/emails/domain-live.tsx), which is why building
+ * it is asynchronous. A hostname that is not the shape of a stored `domains.hostname` is refused
+ * before anything is rendered or sent.
  */
 
 export interface EmailEnv {
@@ -45,11 +50,24 @@ export interface EmailSenderDeps {
 
 const LOCAL_FROM = "HYDLNK <hello@hydlnk.com>";
 
+/** True for a value that could be a stored domains.hostname: the database's own pattern, at most 253 characters. */
+export function isStoredHostname(value: unknown): value is string {
+  return typeof value === "string" && value.length <= HOSTNAME_MAX_LENGTH && HOSTNAME_PATTERN.test(value);
+}
+
 export async function sendDomainLiveEmail(
   input: { to: string; hostname: string },
   env: EmailEnv,
   deps: EmailSenderDeps = {},
-): Promise<"sent" | "skipped"> {
+): Promise<"sent" | "skipped" | "refused"> {
+  // Before anything is rendered: a stored hostname is lower case letters, digits, hyphens and dots.
+  // Nothing else reaches the template, and the log line never holds the value.
+  if (!isStoredHostname(input.hostname)) {
+    (deps.log ?? console.warn)(
+      "[domains] the domain-live email was refused: the hostname is not a valid stored hostname (verification is unaffected)",
+    );
+    return "refused";
+  }
   const kind = emailTransportKind(env);
   if (kind === "skip") {
     (deps.log ?? console.warn)(
@@ -58,7 +76,7 @@ export async function sendDomainLiveEmail(
     return "skipped";
   }
 
-  const content = liveEmailContent(input.hostname);
+  const content = await liveEmailContent(input.hostname);
   if (kind === "smtp") {
     const port = env.SMTP_PORT ? Number(env.SMTP_PORT) : 587;
     const transport = (deps.createTransport ?? nodemailer.createTransport)({

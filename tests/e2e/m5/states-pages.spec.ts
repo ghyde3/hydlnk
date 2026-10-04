@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { cleanupUsers, makeUser, phoneOnly, desktopOnly } from "../fixtures/data";
 import { signInAs } from "../fixtures/auth";
-import { appRaw, rawRequest } from "../fixtures/http";
+import { FAULT_COOKIE_IGNORED, PRODUCTION_BUILD, appRaw, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { emptyUser } from "../m2/editor-helpers";
 
@@ -10,13 +10,13 @@ import { emptyUser } from "../m2/editor-helpers";
  * 1440x900. Statuses and bodies are read raw (no browser), the layout in the browser.
  *
  * "A route that throws" needs a server failure that a Playwright route cannot cause; the
- * `hl-fault=route-throw` cookie makes Settings throw on the dev server (src/lib/testing/faults.ts,
- * never honoured by a production build, so those specs skip against one).
+ * `hl-fault=route-throw` cookie makes Settings throw (src/lib/testing/faults.ts: on the dev server
+ * and on a production build started with the test hooks, as CI does; a production server without
+ * them ignores it, so those specs skip against one).
  */
 
 test.afterAll(cleanupUsers);
 
-const PROD_BUILD = process.env.E2E_PROD_BUILD === "1" || Boolean(process.env.HL_PROD_PORT);
 const NOT_FOUND = "That page doesn’t exist.";
 const ERROR = "Something went wrong. Try again.";
 const EXPIRED = "That sign-in link expired or was already used. Request a new one.";
@@ -102,7 +102,11 @@ test.describe("M5-20 the app host's 404", () => {
     await emptyUser(context, "nf2");
     for (const path of ["/nope/deeper/still", "/editor/nope", "/pages/nope", "/%E0%A4%A"]) {
       const res = await appRaw(path);
-      expect([404, 400], path).toContain(res.status);
+      // `next start` answers a malformed escape (%E0%A4%A) with its own plain 500, before any route
+      // of ours (the same on the root host; there is no decode in src/proxy.ts). `next dev` answers
+      // 400 and Vercel's edge rejects it with 400 before the app is reached.
+      const accepted = PRODUCTION_BUILD && path.includes("%E0%A4%A") ? [404, 400, 500] : [404, 400];
+      expect(accepted, path).toContain(res.status);
     }
   });
 });
@@ -229,7 +233,10 @@ test.describe("M5-20 sign-in link failures", () => {
 });
 
 test.describe("M5-20 a route that throws", () => {
-  test.skip(PROD_BUILD, "the fault cookie is honoured by the dev server only");
+  test.skip(
+    FAULT_COOKIE_IGNORED,
+    "this production server was started without the test hooks, so it ignores the fault cookie",
+  );
 
   test("M5-20 the error boundary: the sentence, Retry and a small reference id, inside the shell, no stack trace", async ({
     page,

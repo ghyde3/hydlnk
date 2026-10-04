@@ -1,7 +1,9 @@
 "use client";
 
 import "./globals.css";
+import { useEffect } from "react";
 import { ErrorPanel } from "@/components/error-panel";
+import { reportError } from "@/lib/sentry/report";
 
 /**
  * The last resort (M5-20): an error in a root layout itself. It replaces the document, so it brings
@@ -15,6 +17,8 @@ export default function GlobalError({
   error: Error & { digest?: string };
   retry: () => void;
 }) {
+  // Sentry (M9-10): a no-op unless the browser SDK was started, which only the app host does.
+  useEffect(() => reportError(error), [error]);
   return (
     <html lang="en">
       <body>

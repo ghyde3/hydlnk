@@ -1,17 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { emailTransportKind, sendDomainLiveEmail } from "@/lib/domains/email";
 import { liveEmailContent } from "@/lib/domains/live-email";
 
 /** M5-23: the words of the email and how it is sent (SMTP in production, Mailpit locally, skipped otherwise). */
 
 describe("M5-23 the email", () => {
-  const content = liveEmailContent("links.example.test");
+  // M9-09: the content is rendered by react-email, so it is built asynchronously.
+  let content: Awaited<ReturnType<typeof liveEmailContent>>;
+  beforeAll(async () => {
+    content = await liveEmailContent("links.example.test");
+  });
 
   it("subject, body sentence and the one link", () => {
     expect(content.subject).toBe("links.example.test is live");
     expect(content.text).toContain("Your page is now served at https://links.example.test.");
     expect(content.html).toContain("Your page is now served at https://links.example.test.");
-    expect(content.text).toContain("Open links.example.test: https://links.example.test/");
+    expect(content.text).toContain("Open links.example.test");
+    expect(content.text).toContain("https://links.example.test/");
     const links = [...content.html.matchAll(/<a\s[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g)];
     expect(links).toHaveLength(1);
     expect(links[0]![1]).toBe("https://links.example.test/");
@@ -19,15 +24,15 @@ describe("M5-23 the email", () => {
   });
 
   it("has an HTML and a plain-text part and no exclamation marks", () => {
-    expect(content.html).toMatch(/^<!doctype html>/);
+    expect(content.html).toMatch(/^<!doctype html/i);
     expect(content.text.length).toBeGreaterThan(20);
     // The words, not the markup: <!doctype html> is not copy.
     const visible = content.html.replace(/<[^>]*>/g, "");
     for (const part of [content.subject, content.text, visible]) expect(part).not.toContain("!");
   });
 
-  it("escapes what it embeds", () => {
-    const evil = liveEmailContent('x"><script>alert(1)</script>.example.test');
+  it("escapes what it embeds", async () => {
+    const evil = await liveEmailContent('x"><script>alert(1)</script>.example.test');
     expect(evil.html).not.toContain("<script>");
   });
 });

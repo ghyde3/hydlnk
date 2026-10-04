@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { axeViolations } from "../fixtures/a11y";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
+import { PRODUCTION_BUILD } from "../fixtures/http";
 import { rendererFixtureDoc } from "@/components/page/fixture-doc";
 import { TOKEN_KEYS, tokenCssVarName } from "@/lib/theme";
 import type { Block } from "@/lib/document";
@@ -297,6 +298,14 @@ test.describe("M2-05 the dev-only fixture route /dev/renderer", () => {
     page,
   }, testInfo) => {
     const response = await page.goto(url(undefined, "/dev/renderer"));
+    if (PRODUCTION_BUILD) {
+      // The fixture is dev-only: a production build answers 404 (RendererFixture), which is what
+      // CI's browser suite runs against. The stress layout is held on real pages by the specs above.
+      expect(response?.status(), "the fixture route must not exist in a production build").toBe(
+        404,
+      );
+      return;
+    }
     expect(response?.status(), "needs src/app/(marketing)/dev/renderer/page.tsx").toBe(200);
     await expectStressLayout(page, testInfo.project.name);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Abcdefghij".repeat(6));

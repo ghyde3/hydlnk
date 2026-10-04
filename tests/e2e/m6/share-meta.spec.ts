@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { adminClient, userClient } from "../fixtures/auth";
+import { expireOwnerPages } from "../fixtures/expire";
 import {
   cleanupUsers,
   desktopOnly,
@@ -203,7 +204,9 @@ test.describe("M6-32 the tags on the handle host", () => {
 });
 
 test.describe("M6-32 the social image", () => {
-  test("M6-32 /og draws the uploaded picture to cover the frame around its focus: x=0 is red at the center, x=1 is blue", async ({}, info) => {
+  test("M6-32 /og draws the uploaded picture to cover the frame around its focus: x=0 is red at the center, x=1 is blue", async ({
+    browser,
+  }, info) => {
     test.skip(!desktopOnly(info), "plain HTTP: one project is enough");
     const live = await publishedPage("mi1", docWith());
     const ref = await storeImage(live.userId, await splitImage(2400, 630), {
@@ -220,6 +223,9 @@ test.describe("M6-32 the social image", () => {
         live.pageId,
         docWith({ title: "T", image: { ...ref, focus: { x, y: 0.5 } } }),
       );
+      // A production build caches the image under the page's tag (Publish expires it): this write
+      // went straight to the database, so expire it the way an admin action does.
+      await expireOwnerPages(browser, live.userId);
       const res = await ogOf(live.handle);
       expect(res.status).toBe(200);
       expect(res.headers["content-type"]).toBe("image/png");
@@ -230,6 +236,7 @@ test.describe("M6-32 the social image", () => {
     }
     // No focus is the center: the red and blue halves meet in the middle of the frame.
     await republish(live.pageId, docWith({ image: ref }));
+    await expireOwnerPages(browser, live.userId);
     const centered = await ogOf(live.handle);
     expect(near(await pixelAt(centered.body, 300, 315), RED)).toBe(true);
     expect(near(await pixelAt(centered.body, 900, 315), BLUE)).toBe(true);

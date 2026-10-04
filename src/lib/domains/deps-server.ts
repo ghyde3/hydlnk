@@ -1,6 +1,7 @@
 import "server-only";
 import { clientEnv } from "@/lib/env/client";
 import { serverEnv } from "@/lib/env/server";
+import { testHooksEnabled } from "@/lib/env/test-hooks";
 import { invalidatePage } from "@/lib/publish/invalidate";
 import { rateLimit } from "@/lib/rate-limit";
 import { createAdminSupabase } from "@/lib/supabase/admin";
@@ -42,7 +43,10 @@ export function createDomainDeps(): DomainDeps {
           EMAIL_FROM: serverEnv.EMAIL_FROM,
           MAILPIT_URL: process.env.MAILPIT_URL,
           VERCEL_ENV: serverEnv.VERCEL_ENV,
-          NODE_ENV: serverEnv.NODE_ENV,
+          // The end-to-end harness (CI's browser suite runs `next start` with the test hooks on, never
+          // on a Vercel production deployment) sends like local development, to Mailpit: its specs read
+          // the "your domain is live" email there (M9-13).
+          NODE_ENV: testHooksEnabled() ? "test" : serverEnv.NODE_ENV,
         },
       );
     },

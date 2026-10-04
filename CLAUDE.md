@@ -7,7 +7,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 ## Commands
 - `./scripts/init.sh`: start of every session, safe to rerun. Installs, starts local Supabase, writes `.env.local`, resets and seeds the db, starts the dev server, runs the smoke test.
 - `pnpm dev`: dev server on :3000. `pnpm verify`: typecheck + lint + unit + db tests.
-- `pnpm test` (Vitest unit), `pnpm test:db` (pgTAP RLS), `pnpm test:e2e` (Playwright: phone 390x844 and desktop 1440x900), `pnpm test:e2e:prod` (production smoke, release only).
+- `pnpm test` (Vitest unit), `pnpm test:db` (pgTAP RLS), `pnpm test:e2e` (Playwright: phone 390x844 and desktop 1440x900, against `next dev` here and against a production build in CI), `pnpm test:e2e:prod` (production smoke, release only).
 - `pnpm screens <route> [--host app|<handle>]`: screenshots at both viewports into `tmp/screens/`.
 - `pnpm db:reset`: migrations + seed. `pnpm db:types`: regenerate `src/lib/supabase/database.types.ts`.
 - Plain `pnpm ...` works in Claude Code sessions: the SessionStart hook `pin-node.sh` puts Node 24 (from `.nvmrc`) and corepack's pnpm 10 on the Bash tool's PATH. In your own terminal, or any shell outside Claude Code, run `source ~/.nvm/nvm.sh && nvm use` first (the default node is older).
@@ -36,6 +36,47 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 - **Production only through `release`.** Production changes go through the `release` skill, with Gary's approval. Unattended sessions never touch production, live Stripe or other projects.
 - **Mobile first.** Nothing passes until it works at 390px, with touch targets of at least 44px.
 
+## Dependencies
+Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds these rules and fails, naming this section, when `package.json` and the list below disagree.
+1. Client libraries live on the app and editor side only. Public tenant pages (the static HTML pipeline in `src/lib/tenant-render/` and the one tenant script) never ship library JavaScript; a library may be used there only at server render to produce static markup (for example Simple Icons SVG paths).
+2. No library makes network calls (no telemetry, no CDN, no remote fonts, icons, images or schemas). The one Gary-approved exception is Sentry on the app side, off unless its DSN is set.
+3. Permissive licenses only: MIT, ISC, BSD, Apache-2.0, CC0-1.0, 0BSD, OFL for fonts. Three older packages are named exceptions in the test, for Gary to confirm: isbot (Unlicense, public domain), nodemailer (MIT-0, MIT without attribution), @axe-core/playwright (MPL-2.0, test tooling that never ships). sharp's prebuilt libvips binaries (LGPL, dynamically linked) are the one known and accepted transitive exception.
+4. Exact pinned versions: no `^`, no `~`, no ranges or tags.
+5. A new library needs Gary's approval in chat before it is installed, and an entry in the list below in the same change.
+6. The approved list. Runtime dependencies, one per line (name, version, what it is for):
+- `@dnd-kit/core` 6.3.1: drag and drop in the block builder
+- `@dnd-kit/sortable` 10.0.0: sortable lists for the block builder
+- `@dnd-kit/utilities` 3.2.2: helpers for dnd-kit
+- `@radix-ui/react-dialog` 1.1.23: one existing dialog (only this Radix component and the next one)
+- `@radix-ui/react-dropdown-menu` 2.1.24: the workspace toolbar menus and the account menu
+- `@sentry/nextjs` 11.4.0: error monitoring on the app host only, off unless NEXT_PUBLIC_SENTRY_DSN is set
+- `@supabase/ssr` 0.12.7: Supabase auth cookies and server clients
+- `@supabase/supabase-js` 2.117.2: Supabase client
+- `@tiptap/extension-link` 3.31.4: the link mark of the text editor
+- `@tiptap/extension-text-align` 3.31.4: paragraph alignment in the text editor
+- `@tiptap/extension-underline` 3.31.4: the underline mark of the text editor
+- `@tiptap/pm` 3.31.4: ProseMirror packages for Tiptap
+- `@tiptap/react` 3.31.4: the rich text editor for text blocks
+- `@tiptap/starter-kit` 3.31.4: bold, italic, strike and history for the text editor
+- `clsx` 2.1.1: class name joining (with tailwind-merge, in `cn`)
+- `isbot` 5.2.2: bot detection in the view and click tracking
+- `lucide-react` 1.51.0: UI icons on the app side
+- `next` 16.3.8: the framework
+- `nodemailer` 10.0.13: SMTP for the domain-live email
+- `qrcode-generator` 2.0.4: QR codes for the Share tab
+- `react` 19.3.0: UI
+- `react-colorful` 5.8.1: the color picker of Design and block overrides
+- `react-dom` 19.3.0: UI
+- `react-easy-crop` 6.2.3: positioning a photo or image
+- `react-email` 6.11.0: the domain-live email template, server only
+- `server-only` 0.0.1: marks modules that must never reach the browser
+- `sharp` 0.35.5: image resizing and WebP on upload
+- `simple-icons` 16.34.0: real brand marks as SVG paths
+- `stripe` 23.0.0: billing (sandbox only)
+- `tailwind-merge` 3.7.0: class name merging (with clsx, in `cn`)
+- `zod` 4.6.5: schemas for documents, env and inputs
+Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@playwright/test` 1.63.0, `@tailwindcss/postcss` 4.3.3, `@types/node` 24.19.0, `@types/nodemailer` 8.0.2, `@types/react` 19.3.0, `@types/react-dom` 19.3.0, `eslint` 9.39.5, `eslint-config-next` 16.3.8, `eslint-config-prettier` 10.1.8, `jsdom` 30.1.1, `jsqr` 1.4.0, `prettier` 3.9.9, `tailwindcss` 4.3.3, `tsx` 4.23.15, `typescript` 6.0.3, `vitest` 5.0.3
+
 ## Definition of done (every feature)
 - Acceptance steps pass in Playwright at 390 and 1440.
 - Unit and db tests are added.
@@ -56,7 +97,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 - Conventional commits, one per feature, feature id in the message. Never force push; never push to `main`.
 - Orchestrated waves (Gary's fast track, 2026-10-01): parallel agents build feature groups; one commit per feature group with every id in the message; only the integration agent flips `passes` in features.json, after running the tests itself; security-reviewer runs once per wave that touches auth, data, routing or payments. `tmp/orchestrating` pauses the Stop hook during a wave and is removed before release.
 - Test bar from Wave C on (Gary, 2026-10-02): full tests for security, auth, payments, RLS/limits and other users' data; elsewhere one phone + one desktop smoke per screen or flow (renders, main interaction works, no horizontal scroll); no exhaustive pixel/copy or axe assertions; full browser suite at release. `passes` flips only when every acceptance step is proven, so lightly tested features stay false and are listed in PROGRESS as built.
-- CI (Gary, 2026-10-03): every push runs only the fast job (typecheck, lint, unit, db, integration). The full browser suite runs nightly, from the Actions tab, or on a PR labelled `full-ci`; label release PRs that change screens.
+- CI (Gary, 2026-10-03): every push runs only the fast job (typecheck, lint, unit, db, integration). The full browser suite runs nightly, from the Actions tab, or on a PR labelled `full-ci`; label release PRs that change screens. In CI it runs over eight shards against a production build (`pnpm build` once per shard, served by `next start`, M9-13); locally it still runs against `next dev`.
 - Unattended sessions never merge. Merging to `main` deploys production, so it goes only through `/release`, which asks Gary.
 
 ## Unattended runs
