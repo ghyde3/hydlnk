@@ -224,8 +224,9 @@ describe("M6-42 the panel", () => {
 
     expect(root.querySelector('[data-color-row="gradientFrom"]')).not.toBeNull();
     expect(root.querySelector('[data-color-row="gradientTo"]')).not.toBeNull();
-    expect(root.querySelector('input[type="color"][aria-label="From color"]')).not.toBeNull();
-    expect(root.querySelector('input[type="color"][aria-label="To color"]')).not.toBeNull();
+    expect(root.querySelector('button[aria-label="From color"]')).not.toBeNull();
+    expect(root.querySelector('button[aria-label="To color"]')).not.toBeNull();
+    expect(root.querySelector('input[type="color"]')).toBeNull();
     expect(byText(root, "Swap colors")).toBeDefined();
     const presets = root.querySelector('[role="group"][aria-label="Presets"]')!;
     expect(

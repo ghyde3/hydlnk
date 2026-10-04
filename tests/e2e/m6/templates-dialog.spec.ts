@@ -193,7 +193,8 @@ test.describe("M6-40 on a phone", () => {
         top: el.scrollTop,
         pageBefore: before,
         pageAfter: window.scrollY,
-        overflow: getComputedStyle(document.documentElement).overflow,
+        // M9-06: Radix locks the page's scroll on the body (the document's own overflow is left alone).
+        overflow: getComputedStyle(document.body).overflow,
       };
     });
     expect(scrolled.scrollable).toBe(true);
@@ -216,9 +217,7 @@ test.describe("M6-40 on a phone", () => {
     // Closing gives the page its scroll back.
     await dialog.getByRole("button", { name: "Close", exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    expect(await page.evaluate(() => getComputedStyle(document.documentElement).overflow)).not.toBe(
-      "hidden",
-    );
+    expect(await page.evaluate(() => getComputedStyle(document.body).overflow)).not.toBe("hidden");
     await expect(startButton(page)).toBeFocused();
   });
 });
@@ -257,13 +256,13 @@ test.describe("M6-40 on a desktop", () => {
     await expect(templateButton(page, "Musician")).toBeFocused();
     for (let i = 0; i < 16; i++) {
       await page.keyboard.press("Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("dialog") !== null)).toBe(
+      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
         true,
       );
     }
     for (let i = 0; i < 16; i++) {
       await page.keyboard.press("Shift+Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("dialog") !== null)).toBe(
+      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
         true,
       );
     }

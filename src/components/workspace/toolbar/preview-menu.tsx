@@ -1,31 +1,14 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useId, type MouseEvent } from "react";
+import { Icon } from "@/components/app/icon";
 import { isPlainClick } from "./plain-click";
-import { MENU_ITEM_CLASS, ToolbarMenu, useMenuApi } from "./toolbar-menu";
+import { MENU_ITEM_CLASS, ToolbarMenu, ToolbarMenuItem, useMenuApi } from "./toolbar-menu";
 
 /** The description a disabled "View live page" carries until the page has been published. */
 export const NOT_PUBLISHED_YET = "Not published yet";
-
-function Chevron() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={14}
-      height={14}
-      aria-hidden="true"
-      focusable="false"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
 
 /**
  * The toolbar's "Preview" menu (M7-05): the three ways to look at the page.
@@ -63,7 +46,7 @@ export function PreviewMenu({
       buttonContent={
         <>
           Preview
-          <Chevron />
+          <Icon icon={ChevronDown} size={14} />
         </>
       }
     >
@@ -88,10 +71,8 @@ function PreviewItems({
   const draftHref = `/preview/${pageId}`;
 
   async function openDraft(event: MouseEvent<HTMLAnchorElement>) {
-    if (!isPlainClick(event)) {
-      close(false);
-      return;
-    }
+    // A modified click is left to the browser, and the menu closes as for any chosen item.
+    if (!isPlainClick(event)) return;
     event.preventDefault();
     close(true);
     const tab = window.open("about:blank", "_blank");
@@ -110,61 +91,62 @@ function PreviewItems({
 
   return (
     <>
-      <a
-        role="menuitem"
-        tabIndex={-1}
-        href={draftHref}
-        target="_blank"
-        rel="noopener"
-        data-menu-item="preview-draft"
-        onClick={(event) => void openDraft(event)}
-        className={MENU_ITEM_CLASS}
-      >
-        Preview your draft
-      </a>
-      {liveUrl ? (
+      <ToolbarMenuItem asChild>
         <a
-          role="menuitem"
-          tabIndex={-1}
-          href={liveUrl}
+          href={draftHref}
           target="_blank"
           rel="noopener"
-          data-menu-item="view-live"
-          onClick={() => close(false)}
+          data-menu-item="preview-draft"
+          onClick={(event) => void openDraft(event)}
           className={MENU_ITEM_CLASS}
         >
-          View live page
+          Preview your draft
         </a>
+      </ToolbarMenuItem>
+      {liveUrl ? (
+        <ToolbarMenuItem asChild>
+          <a
+            href={liveUrl}
+            target="_blank"
+            rel="noopener"
+            data-menu-item="view-live"
+            className={MENU_ITEM_CLASS}
+          >
+            View live page
+          </a>
+        </ToolbarMenuItem>
       ) : (
-        <div
-          role="menuitem"
-          tabIndex={-1}
-          aria-disabled="true"
-          aria-describedby={noteId}
-          data-menu-item="view-live"
-          className={`${MENU_ITEM_CLASS} flex-col items-start gap-0 py-1.5`}
-        >
-          View live page
-          <span id={noteId} className="text-xs font-normal">
-            {NOT_PUBLISHED_YET}
-          </span>
-        </div>
+        // `aria-disabled`, not Radix's `disabled`: it stays in the keyboard order and keeps its
+        // description, and choosing it does nothing (the select is canceled, so the menu stays open).
+        <ToolbarMenuItem asChild onSelect={(event) => event.preventDefault()}>
+          <div
+            aria-disabled="true"
+            aria-describedby={noteId}
+            data-menu-item="view-live"
+            className={`${MENU_ITEM_CLASS} flex-col items-start gap-0 py-1.5`}
+          >
+            View live page
+            <span id={noteId} className="text-xs font-normal">
+              {NOT_PUBLISHED_YET}
+            </span>
+          </div>
+        </ToolbarMenuItem>
       )}
-      <Link
-        role="menuitem"
-        tabIndex={-1}
-        href="/share#preview-links"
-        data-menu-item="preview-link"
-        onClick={(event) => {
-          if (!isPlainClick(event)) return;
-          event.preventDefault();
-          close(false);
-          onOpenShare("preview-links");
-        }}
-        className={MENU_ITEM_CLASS}
-      >
-        Private preview link…
-      </Link>
+      <ToolbarMenuItem asChild>
+        <Link
+          href="/share#preview-links"
+          data-menu-item="preview-link"
+          onClick={(event) => {
+            if (!isPlainClick(event)) return;
+            event.preventDefault();
+            close(false);
+            onOpenShare("preview-links");
+          }}
+          className={MENU_ITEM_CLASS}
+        >
+          Private preview link…
+        </Link>
+      </ToolbarMenuItem>
     </>
   );
 }

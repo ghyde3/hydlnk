@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ReportsTable } from "@/components/admin/reports-table";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
 import { requireAdmin } from "@/lib/admin/auth";
+import { cn } from "@/lib/cn";
 import { listReports } from "@/lib/admin/queries";
 import { REPORTS_LIMIT, parseReportFilter, type ReportFilter } from "@/lib/admin/view";
 
@@ -52,11 +53,12 @@ export default async function AdminReports({
                   item.value === "open" ? "/admin/reports" : `/admin/reports?status=${item.value}`
                 }
                 aria-current={active ? "true" : undefined}
-                className={`flex min-h-11 flex-1 items-center justify-center rounded-sm px-4 text-sm no-underline hl:flex-none ${
+                className={cn(
+                  "flex min-h-11 flex-1 items-center justify-center rounded-sm px-4 text-sm no-underline hl:flex-none",
                   active
                     ? "bg-surface font-semibold text-ink shadow-[0_0_0_1px_var(--hl-line-2)]"
-                    : "font-medium text-text-2"
-                }`}
+                    : "font-medium text-text-2",
+                )}
               >
                 {item.label}
               </Link>

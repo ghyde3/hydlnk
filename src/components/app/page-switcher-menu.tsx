@@ -1,5 +1,6 @@
 "use client";
 
+import { Check, ChevronDown, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,7 +14,7 @@ import {
 } from "react";
 import { selectPage } from "@/lib/pages/actions";
 import { handleAddress } from "@/lib/pages/plans";
-import { CheckIcon, ChevronDownIcon } from "./icons";
+import { Icon } from "./icon";
 
 export interface SwitcherPage {
   id: string;
@@ -197,7 +198,7 @@ export function PageSwitcherMenu({
           {address}
         </span>
         <span className="text-on-ink-muted">
-          <ChevronDownIcon size={isChip ? 14 : 15} />
+          <Icon icon={ChevronDown} size={isChip ? 14 : 15} />
         </span>
       </button>
 
@@ -237,7 +238,7 @@ export function PageSwitcherMenu({
                 </span>
                 {checked && (
                   <span className="text-brass">
-                    <CheckIcon size={14} />
+                    <Icon icon={Check} size={14} />
                   </span>
                 )}
               </button>
@@ -255,7 +256,7 @@ export function PageSwitcherMenu({
               onClick={() => close(false)}
               className="flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-on-ink no-underline hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2"
             >
-              <PlusIcon />
+              <Icon icon={Plus} size={15} />
               New page
             </Link>
           ) : (
@@ -273,7 +274,7 @@ export function PageSwitcherMenu({
                 onClick={(event) => event.preventDefault()}
                 className="flex min-h-11 w-full cursor-not-allowed items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-on-ink-muted"
               >
-                <PlusIcon />
+                <Icon icon={Plus} size={15} />
                 New page
               </button>
               <p
@@ -301,19 +302,5 @@ export function PageSwitcherMenu({
         </div>
       )}
     </div>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="size-[15px] flex-none fill-none stroke-current stroke-[2]"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 5v14M5 12h14" />
-    </svg>
   );
 }

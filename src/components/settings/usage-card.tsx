@@ -1,4 +1,5 @@
 import { Card } from "@/components/app/screen";
+import { cn } from "@/lib/cn";
 import type { Meter, PlanId } from "@/lib/limits";
 import { meterLevel, meterStateText } from "./meter-state";
 
@@ -46,7 +47,10 @@ export function UsageCard({ meters, plan = "free" }: { meters: Meter[]; plan?: P
                 >
                   <span
                     data-meter-fill
-                    className={`block h-1.5 rounded-[2px] ${level === "ok" ? "bg-brass" : "bg-bad"}`}
+                    className={cn(
+                      "block h-1.5 rounded-[2px]",
+                      level === "ok" ? "bg-brass" : "bg-bad",
+                    )}
                     style={{ width: `${meter.percent}%` }}
                   />
                 </span>

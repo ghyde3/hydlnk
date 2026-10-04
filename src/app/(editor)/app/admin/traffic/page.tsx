@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TrafficTable } from "@/components/admin/traffic-table";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
 import { requireAdmin } from "@/lib/admin/auth";
+import { cn } from "@/lib/cn";
 import {
   TRAFFIC_PAGE_SIZE,
   listTrafficFlags,
@@ -69,11 +70,12 @@ export default async function AdminTraffic({
                     : `/admin/traffic?status=${item.value}`
                 }
                 aria-current={active ? "true" : undefined}
-                className={`flex min-h-11 flex-1 items-center justify-center rounded-sm px-4 text-sm no-underline hl:flex-none ${
+                className={cn(
+                  "flex min-h-11 flex-1 items-center justify-center rounded-sm px-4 text-sm no-underline hl:flex-none",
                   active
                     ? "bg-surface font-semibold text-ink shadow-[0_0_0_1px_var(--hl-line-2)]"
-                    : "font-medium text-text-2"
-                }`}
+                    : "font-medium text-text-2",
+                )}
               >
                 {item.label}
               </Link>

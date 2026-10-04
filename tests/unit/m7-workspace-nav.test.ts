@@ -100,9 +100,10 @@ describe("M7-01 the account menu", () => {
 
   it("is one button that opens a menu named Account", () => {
     expect(source).toMatch(/aria-label="Account menu"/);
-    expect(source).toMatch(/aria-haspopup="menu"/);
-    expect(source).toMatch(/role="menu"/);
     expect(source).toMatch(/aria-label="Account"/);
+    // M9-05: Radix's dropdown menu draws aria-haspopup="menu" on the trigger and role="menu" on the panel.
+    expect(source).toMatch(/<DropdownMenu\.Trigger asChild>/);
+    expect(source).toMatch(/<DropdownMenu\.Content/);
   });
 
   it("takes the name and email from props and draws them as text", () => {

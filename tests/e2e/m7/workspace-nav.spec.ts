@@ -132,7 +132,7 @@ test.describe("M7-01 account menu", () => {
     }
   });
 
-  test("M7-01 arrows, Home and End move; Tab leaves and closes; a click outside closes", async ({
+  test("M7-01 arrows, Home and End move; Tab stays in the menu; a click outside closes", async ({
     page,
     context,
   }, info) => {
@@ -142,6 +142,9 @@ test.describe("M7-01 account menu", () => {
     const button = accountButton(page);
     await button.click();
     const items = accountMenu(page).getByRole("menuitem");
+    // M9-05: a pointer open leaves focus on the menu itself; the first arrow enters it.
+    await expect(accountMenu(page)).toBeFocused();
+    await page.keyboard.press("ArrowDown");
     await expect(items.nth(0)).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(items.nth(1)).toBeFocused();
@@ -151,13 +154,21 @@ test.describe("M7-01 account menu", () => {
     await expect(items.nth(1)).toBeFocused();
     await page.keyboard.press("Home");
     await expect(items.nth(0)).toBeFocused();
+    // M9-05: Radix keeps focus in an open menu, so Tab does not leave it; Escape closes it.
     await page.keyboard.press("Tab");
+    await expect(accountMenu(page)).toBeVisible();
+    await expect(items.nth(0)).toBeFocused();
+    await page.keyboard.press("Escape");
     await expect(accountMenu(page)).toBeHidden();
     await expect(button).toHaveAttribute("aria-expanded", "false");
+    await expect(button).toBeFocused();
 
     await button.click();
     await expect(accountMenu(page)).toBeVisible();
-    await page.mouse.click(700, 500);
+    // A press outside closes it. Radix arms its outside-press handler a few milliseconds after the
+    // menu is drawn (M9-05), so the press is made on an element (actionability waits a frame or
+    // two), not a raw mouse click issued the instant the menu appears.
+    await page.getByRole("heading", { name: "Profile" }).click();
     await expect(accountMenu(page)).toBeHidden();
   });
 

@@ -1,21 +1,24 @@
 "use client";
 
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
+  type ComponentProps,
   type ReactNode,
 } from "react";
+import { useMenuEntry } from "@/components/menu-entry";
 
-/** Every menu item is at least 44px tall (DESIGN.md: touch targets). */
+/**
+ * Every menu item is at least 44px tall (DESIGN.md: touch targets). Radix focuses the item under
+ * the pointer and marks it `data-highlighted`, so hover and keyboard focus read the same.
+ */
 export const MENU_ITEM_CLASS =
-  "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-semibold text-ink no-underline hover:bg-page focus-visible:bg-page aria-disabled:cursor-not-allowed aria-disabled:text-text-2";
+  "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-left text-sm font-semibold text-ink no-underline hover:bg-page focus-visible:bg-page data-[highlighted]:bg-page aria-disabled:cursor-not-allowed aria-disabled:text-text-2";
 
 /** The trigger button of both toolbar menus: the secondary button of DESIGN.md, 44px tall. */
 export const MENU_BUTTON_CLASS =
@@ -34,20 +37,32 @@ export function useMenuApi(): MenuApi {
 }
 
 /**
- * An accessible menu button for the pinned toolbar (M7-05): a button with `aria-haspopup="menu"`
- * and `aria-expanded`, and a `role="menu"` panel under it, the same keyboard behavior as the page
- * switcher's menu.
+ * One item of a `ToolbarMenu`: Radix's `DropdownMenu.Item`. Wrap the element that is the item with
+ * `asChild` (an `<a>`, a Next `<Link>`, a `<div>`); Radix gives it `role="menuitem"`, the roving
+ * `tabIndex` and the keyboard behavior (Enter and Space click it, so a link activates on both).
+ * Keeping the wrapper here keeps the Radix import in this file (M9-05).
+ */
+export function ToolbarMenuItem(props: ComponentProps<typeof DropdownMenu.Item>) {
+  return <DropdownMenu.Item {...props} />;
+}
+
+/**
+ * An accessible menu button for the pinned toolbar (M7-05), now on `@radix-ui/react-dropdown-menu`
+ * (M9-05): a button with `aria-haspopup="menu"`, `aria-expanded` and `aria-controls`, and a
+ * `role="menu"` panel in a portal at the end of `body`, positioned by Radix under the button.
  *
- *   - Enter, Space (the button's own click) and ArrowDown open it with focus on the first item;
- *     ArrowUp opens it with focus on the last.
- *   - Inside: ArrowDown and ArrowUp move (wrapping), Home and End jump, Escape closes and returns
- *     focus to the button, Tab closes and lets focus leave, a press outside closes.
- *   - Space on a link item activates it like Enter (a link does not do that on its own).
+ *   - Enter, Space and ArrowDown open it with focus on the first item; ArrowUp opens it with focus
+ *     on the last. A pointer open leaves focus on the menu itself.
+ *   - Inside: the arrows move and wrap, Home and End jump, a letter jumps to the item that starts
+ *     with it, Escape closes and returns focus to the button, a press outside closes. Tab does not
+ *     leave an open menu (Radix keeps focus in it).
+ *   - It is not modal (`modal={false}`): the page behind keeps its scroll and gets no padding or
+ *     inert attributes, so opening a menu moves nothing.
  *
  * Opening a menu is only a piece of view state: it never reads or writes the draft, adds no undo
- * step and sends no request. Items are focusable elements with `role="menuitem"` and
- * `tabIndex={-1}`; a disabled item is `aria-disabled` and stays focusable, like the page switcher's
- * "New page" at the plan limit.
+ * step and sends no request. The menu is unmounted while it is closed. A disabled item is
+ * `aria-disabled` with its select canceled, never Radix's `disabled`, which would take it out of
+ * keyboard focus (like the page switcher's "New page" at the plan limit).
  */
 export function ToolbarMenu({
   label,
@@ -64,129 +79,82 @@ export function ToolbarMenu({
   buttonContent: ReactNode;
   buttonClassName?: string;
   align?: "left" | "right";
-  /** The items: elements with `role="menuitem"` and `tabIndex={-1}`; they close the menu with `useMenuApi()`. */
+  /** The items: `ToolbarMenuItem`s; they close the menu with `useMenuApi()`. */
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  // Where focus goes when the menu opens: the first item, or the last for ArrowUp.
-  const focusOnOpen = useRef<"first" | "last">("first");
-  const menuId = useId();
+  // Whether closing puts focus back on the button (Escape, a chosen item that stays here) or not
+  // (an item that moves focus somewhere else, a press on another control).
+  const returnFocus = useRef(true);
+  const pressedOutside = useRef(false);
+  const { entry: entryRef, contentRef } = useMenuEntry();
 
-  const close = useCallback((returnFocus: boolean) => {
-    setOpen(false);
-    if (returnFocus) buttonRef.current?.focus();
+  // Focus goes back to the button here, in the same turn the menu closes, rather than through
+  // Radix's own close handling (a timeout): a key pressed right after Escape reaches the button.
+  const setMenuOpen = useCallback((next: boolean) => {
+    if (next) {
+      returnFocus.current = true;
+      pressedOutside.current = false;
+    } else if (returnFocus.current && !pressedOutside.current) {
+      buttonRef.current?.focus({ preventScroll: true });
+    }
+    setOpen(next);
   }, []);
+  const close = useCallback(
+    (focusButton: boolean) => {
+      returnFocus.current = focusButton;
+      setMenuOpen(false);
+    },
+    [setMenuOpen],
+  );
   const api = useMemo<MenuApi>(() => ({ close }), [close]);
 
-  const items = useCallback(
-    () => Array.from(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []),
-    [],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    const list = items();
-    (focusOnOpen.current === "last" ? list[list.length - 1] : list[0])?.focus();
-  }, [open, items]);
-
-  // A press outside closes the menu. Focus goes back to the button unless the press landed on
-  // something else focusable.
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (rootRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
-      requestAnimationFrame(() => {
-        const active = document.activeElement;
-        if (!active || active === document.body) buttonRef.current?.focus();
-      });
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [open]);
-
-  function onMenuKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const list = items();
-    const from = list.findIndex((item) => item === document.activeElement);
-    const move = (next: number) => {
-      event.preventDefault();
-      list[(next + list.length) % list.length]?.focus();
-    };
-    switch (event.key) {
-      case "ArrowDown":
-        move(from + 1);
-        break;
-      case "ArrowUp":
-        move(from <= 0 ? list.length - 1 : from - 1);
-        break;
-      case "Home":
-        move(0);
-        break;
-      case "End":
-        move(list.length - 1);
-        break;
-      case "Escape":
-        event.preventDefault();
-        // Only the menu closes: nothing behind it (the rename field's Escape) reacts.
-        event.stopPropagation();
-        close(true);
-        break;
-      case "Tab":
-        setOpen(false);
-        break;
-      case " ": {
-        // A link activates on Enter only; a menu item acts on Space too.
-        const target = event.target as HTMLElement;
-        if (target.tagName === "A") {
-          event.preventDefault();
-          target.click();
-        }
-        break;
-      }
-    }
-  }
-
   return (
-    <div ref={rootRef} className="relative">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-label={buttonLabel}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        onClick={() => {
-          focusOnOpen.current = "first";
-          setOpen((value) => !value);
-        }}
-        onKeyDown={(event) => {
-          if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
-            event.preventDefault();
-            focusOnOpen.current = event.key === "ArrowUp" ? "last" : "first";
-            setOpen(true);
-          }
-        }}
-        className={buttonClassName}
-      >
-        {buttonContent}
-      </button>
-      {open ? (
-        <div
-          ref={menuRef}
-          id={menuId}
-          role="menu"
-          aria-label={label}
-          onKeyDown={onMenuKeyDown}
-          className={`absolute top-full z-30 mt-1.5 flex w-[min(15rem,calc(100vw-2rem))] flex-col rounded-md border border-line-3 bg-surface p-1 ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
-        >
-          <MenuContext.Provider value={api}>{children}</MenuContext.Provider>
-        </div>
-      ) : null}
+    <div className="relative">
+      <DropdownMenu.Root modal={false} open={open} onOpenChange={setMenuOpen}>
+        <DropdownMenu.Trigger asChild>
+          <button
+            ref={buttonRef}
+            type="button"
+            aria-label={buttonLabel}
+            className={buttonClassName}
+            onKeyDown={(event) => {
+              // Radix opens on Enter, Space and ArrowDown; a menu button also opens on ArrowUp, at the end.
+              if (event.key === "ArrowUp" && !open) {
+                event.preventDefault();
+                entryRef.current = "last";
+                setMenuOpen(true);
+              }
+            }}
+          >
+            {buttonContent}
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            ref={contentRef}
+            // Named by what it is, not by its button ("Account menu" would read "Account menu menu").
+            aria-label={label}
+            aria-labelledby={undefined}
+            loop
+            side="bottom"
+            align={align === "right" ? "end" : "start"}
+            sideOffset={6}
+            collisionPadding={8}
+            onInteractOutside={() => {
+              pressedOutside.current = true;
+            }}
+            // Focus is returned in `setMenuOpen`, never by Radix's own close handling.
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            // Only the menu reacts to Escape: nothing behind it (a rename field, the preview sheet) does.
+            onEscapeKeyDown={(event) => event.stopPropagation()}
+            className="z-40 flex w-[min(15rem,calc(100vw-2rem))] flex-col rounded-md border border-line-3 bg-surface p-1"
+          >
+            <MenuContext.Provider value={api}>{children}</MenuContext.Provider>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 }

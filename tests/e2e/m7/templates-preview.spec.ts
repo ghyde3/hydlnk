@@ -140,8 +140,10 @@ test.describe("M7-07 the preview is the real page, small", () => {
     test.skip(!desktopOnly(info), "the phone run checks the layout; the structure is the same");
     await emptyPageUser(context, "tp7-b");
     await openEditor(page);
+    // M9-06: while the dialog is open the page behind is hidden from assistive technology, so the
+    // page's own h1s are counted before it opens and again after it closes.
+    const headingsBefore = await page.getByRole("heading", { level: 1 }).count();
     await openDialog(page);
-    const headingsOpen = await page.getByRole("heading", { level: 1 }).count();
     const tokens = await templateThemeTokens();
 
     for (const template of TEMPLATES) {
@@ -201,7 +203,7 @@ test.describe("M7-07 the preview is the real page, small", () => {
     // The page keeps the h1s it has: closing the dialog changes none.
     await page.keyboard.press("Escape");
     await expect(dialogOf(page)).toHaveCount(0);
-    expect(await page.getByRole("heading", { level: 1 }).count()).toBe(headingsOpen);
+    expect(await page.getByRole("heading", { level: 1 }).count()).toBe(headingsBefore);
     await openDialog(page);
 
     // No tab stop: Tab through the whole dialog twice and never land inside a preview.
@@ -406,8 +408,8 @@ test.describe("M7-07 on a phone", () => {
       const preview = await rect(previewOf(page, template.name));
       // Filling the card's width (its padding is 14px each side).
       expect(preview.width).toBeGreaterThanOrEqual(card.width - 32);
-      expect(preview.height).toBeGreaterThanOrEqual(150);
-      expect(preview.height).toBeLessThanOrEqual(230);
+      // M9-33: the window is 300px tall (it was about 190) and starts at the top of the page.
+      expect(Math.abs(preview.height - 300)).toBeLessThanOrEqual(1);
       // The page inside is scaled to the box: 390px laid out, drawn at the box's width.
       const scaled = await previewRootOf(page, template.name).evaluate(
         (el) => el.getBoundingClientRect().width,

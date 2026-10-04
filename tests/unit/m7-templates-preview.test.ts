@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { emptyDraft, type Block, type DraftDoc, PROFILE_OPTION_DEFAULTS } from "@/lib/document";
 import { PageRenderer } from "@/components/page/page-renderer";
-import { TemplateDialog } from "@/components/templates";
+import { TemplateDialogBody } from "@/components/templates/template-dialog";
 import { TEMPLATES, describeTemplate, templatePreviewDoc, type Template } from "@/lib/templates";
 import { SYSTEM_DEFAULT_TOKENS, resolveTokens, type TokenSet } from "@/lib/theme";
 import { photoRef } from "./fixtures/page-document";
@@ -171,11 +171,12 @@ describe("M7-07 the preview is a picture of the page, in the template's own them
 describe("M7-07 the card text", () => {
   const dialog = (draft: DraftDoc, themes: Record<string, Partial<TokenSet>> = {}) =>
     renderToStaticMarkup(
-      createElement(TemplateDialog, {
+      // M9-06: the dialog's shell is a Radix portal, which draws nothing on the server; the cards
+      // and the fonts link are `TemplateDialogBody`.
+      createElement(TemplateDialogBody, {
         draft,
         themes,
         onUse: () => undefined,
-        onClose: () => undefined,
       }),
     );
   const text = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
@@ -255,7 +256,7 @@ describe("M7-07 the preview imports no Supabase client and makes no network call
     expect(code).not.toMatch(/editor\/contracts|publish\/actions|analytics|beacon/i);
     for (const match of code.matchAll(/from\s+"([^"]+)"/g)) {
       expect(match[1]).toMatch(
-        /^(react|\.\/|@\/lib\/(document|theme|design|templates)|@\/components\/page\/page-renderer)/,
+        /^(react|\.\/|@\/lib\/(document|theme|design|templates)|@\/components\/page\/page-renderer|@radix-ui\/react-dialog$)/,
       );
     }
   });

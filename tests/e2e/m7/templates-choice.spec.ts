@@ -606,13 +606,13 @@ test.describe("M7-08 on a desktop", () => {
     // Tab and Shift+Tab never leave the dialog.
     for (let i = 0; i < 24; i++) {
       await page.keyboard.press("Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("dialog") !== null)).toBe(
+      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
         true,
       );
     }
     for (let i = 0; i < 24; i++) {
       await page.keyboard.press("Shift+Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("dialog") !== null)).toBe(
+      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
         true,
       );
     }

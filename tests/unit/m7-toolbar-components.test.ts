@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { UndoRedo } from "@/components/editor/use-undo-redo";
 import { PlanProvider } from "@/components/versions/plan-context";
 import { WorkspaceToolbar, type WorkspaceToolbarProps } from "@/components/workspace/toolbar";
-import { ToolbarMenu } from "@/components/workspace/toolbar/toolbar-menu";
+import { ToolbarMenu, ToolbarMenuItem } from "@/components/workspace/toolbar/toolbar-menu";
 import { saveIndicatorText } from "@/components/workspace/toolbar/save-status";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -96,82 +96,119 @@ const key = (target: Element, name: string) =>
     );
   });
 
-describe("M7-05 the menu button and its keyboard", () => {
+/** A press with the primary button, which is what opens a Radix menu button. */
+const press = (target: Element) =>
+  act(() => {
+    target.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, ctrlKey: false }),
+    );
+  });
+
+describe("M7-05, M9-05 the menu button and its keyboard (Radix)", () => {
   const items = () => Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'));
   const button = () => host.querySelector<HTMLButtonElement>("button[aria-haspopup='menu']")!;
+  const flushTimers = () => act(async () => void (await new Promise((r) => setTimeout(r, 30))));
 
   function menu() {
     // `children` arrive as extra arguments (react/no-children-prop); the cast
     // keeps the component's required `children` prop out of the way.
+    const item = (tag: string, props: Record<string, unknown>, text: string) =>
+      createElement(ToolbarMenuItem, { asChild: true }, createElement(tag, props, text));
     return createElement(
       ToolbarMenu,
       { label: "Test menu", buttonContent: "Open" } as ComponentProps<typeof ToolbarMenu>,
-      createElement("button", { role: "menuitem", tabIndex: -1 }, "One"),
-      createElement("a", { role: "menuitem", tabIndex: -1, href: "#two" }, "Two"),
-      createElement("button", { role: "menuitem", tabIndex: -1 }, "Three"),
+      item("button", {}, "One"),
+      item("a", { href: "#two" }, "Two"),
+      item("button", {}, "Three"),
     );
   }
 
   it("M7-05 a closed menu is a button with aria-haspopup and aria-expanded=false and no menu in the DOM", () => {
     render(menu());
+    expect(button().getAttribute("aria-haspopup")).toBe("menu");
     expect(button().getAttribute("aria-expanded")).toBe("false");
     expect(button().getAttribute("aria-controls")).toBeNull();
     expect(document.querySelector('[role="menu"]')).toBeNull();
   });
 
-  it("M7-05 a click opens a named menu with focus on the first item; Escape closes it and returns focus", () => {
+  it("M9-05 a press opens a menu named for what it is, in a portal at the end of body; Escape closes it and focus is back on the button at once", async () => {
     render(menu());
-    act(() => button().click());
+    press(button());
+    await flushTimers();
     const m = document.querySelector('[role="menu"]')!;
     expect(m.getAttribute("aria-label")).toBe("Test menu");
+    expect(m.hasAttribute("aria-labelledby")).toBe(false);
+    expect(m.closest("[data-radix-popper-content-wrapper]")?.parentElement).toBe(document.body);
+    expect(host.contains(m)).toBe(false);
     expect(button().getAttribute("aria-expanded")).toBe("true");
     expect(button().getAttribute("aria-controls")).toBe(m.id);
-    expect(document.activeElement).toBe(items()[0]);
+    expect(items().map((i) => i.textContent)).toEqual(["One", "Two", "Three"]);
+    // Not modal: nothing is locked and nothing is made inert.
+    expect(document.body.style.pointerEvents).not.toBe("none");
+    expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+    expect(host.hasAttribute("aria-hidden")).toBe(false);
     key(items()[0]!, "Escape");
     expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(button().getAttribute("aria-expanded")).toBe("false");
+    // Same turn, not a timeout: a key pressed right after Escape reaches the button.
     expect(document.activeElement).toBe(button());
   });
 
-  it("M7-05 arrows move and wrap, Home and End jump", () => {
+  it("M9-05 Enter, Space and ArrowDown open it on the first item, ArrowUp on the last", async () => {
     render(menu());
-    act(() => button().click());
-    key(items()[0]!, "ArrowDown");
-    expect(document.activeElement).toBe(items()[1]);
-    key(items()[1]!, "End");
-    expect(document.activeElement).toBe(items()[2]);
-    key(items()[2]!, "ArrowDown");
-    expect(document.activeElement).toBe(items()[0]);
-    key(items()[0]!, "ArrowUp");
-    expect(document.activeElement).toBe(items()[2]);
-    key(items()[2]!, "Home");
-    expect(document.activeElement).toBe(items()[0]);
+    for (const [name, expected] of [
+      ["Enter", 0],
+      [" ", 0],
+      ["ArrowDown", 0],
+      ["ArrowUp", 2],
+    ] as const) {
+      button().focus();
+      key(button(), name);
+      await flushTimers();
+      await flushTimers();
+      expect(document.querySelector('[role="menu"]'), name).not.toBeNull();
+      expect(document.activeElement, name).toBe(items()[expected]);
+      key(document.activeElement!, "Escape");
+      expect(document.activeElement).toBe(button());
+    }
   });
 
-  it("M7-05 ArrowDown and ArrowUp on the closed button open it on the first and the last item", () => {
+  it("M9-05 the arrows move and wrap, Home and End jump", async () => {
     render(menu());
     button().focus();
     key(button(), "ArrowDown");
+    await flushTimers();
     expect(document.activeElement).toBe(items()[0]);
-    key(items()[0]!, "Escape");
-    key(button(), "ArrowUp");
-    expect(document.activeElement).toBe(items()[2]);
+    // Radix moves focus in a timeout, so each key is followed by one.
+    for (const [from, name, to] of [
+      [0, "ArrowDown", 1],
+      [1, "End", 2],
+      [2, "ArrowDown", 0],
+      [0, "ArrowUp", 2],
+      [2, "Home", 0],
+    ] as const) {
+      key(items()[from]!, name);
+      await flushTimers();
+      expect(document.activeElement, `${name} from ${from}`).toBe(items()[to]);
+    }
   });
 
-  it("M7-05 Tab closes the menu and lets focus go; a press outside closes it", () => {
+  it("M9-05 Tab does not leave an open menu", async () => {
     render(menu());
-    act(() => button().click());
-    key(items()[0]!, "Tab");
-    expect(document.querySelector('[role="menu"]')).toBeNull();
-    act(() => button().click());
-    act(() => {
-      document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
-    });
-    expect(document.querySelector('[role="menu"]')).toBeNull();
+    button().focus();
+    key(button(), "ArrowDown");
+    await flushTimers();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    act(() => void items()[0]!.dispatchEvent(tab));
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
   });
 
-  it("M7-05 Space on a link item activates it like Enter", () => {
+  it("M7-05 Space on a link item activates it like Enter", async () => {
     render(menu());
-    act(() => button().click());
+    button().focus();
+    key(button(), "ArrowDown");
+    await flushTimers();
     const link = items()[1] as HTMLAnchorElement;
     const click = vi.fn((event: Event) => event.preventDefault());
     link.addEventListener("click", click);
@@ -192,7 +229,7 @@ describe("M7-05 the Preview and ⋯ menus", () => {
     const button = Array.from(host.querySelectorAll<HTMLButtonElement>("button")).find(
       (b) => (b.getAttribute("aria-label") ?? b.textContent?.trim()) === name,
     )!;
-    act(() => button.click());
+    press(button);
   };
   const items = () => Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'));
 

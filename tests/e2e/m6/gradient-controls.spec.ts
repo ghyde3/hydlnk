@@ -89,15 +89,15 @@ test.describe("M6-42 the gradient panel", () => {
       );
     }
 
-    // From and To: a swatch that opens the native picker and a 16px hex field showing the current stop.
+    // From and To: a swatch that opens the color picker (M9-07) and a 16px hex field showing the current stop.
     for (const [name, value] of [
       ["From", NOIR_SURFACE],
       ["To", NOIR_BG],
     ] as const) {
       await expect(page.getByLabel(`${name} color`, { exact: true })).toBeVisible();
       await expect(page.getByLabel(`${name} color`, { exact: true })).toHaveAttribute(
-        "type",
-        "color",
+        "aria-expanded",
+        "false",
       );
       await expect(hexField(page, name)).toHaveValue(value);
       expect(await hexField(page, name).evaluate((el) => getComputedStyle(el).fontSize)).toBe(
@@ -205,8 +205,9 @@ test.describe("M6-42 the gradient panel", () => {
     await expect.poll(() => previewVar(page, "--t-gradient-from")).toBe("#C46A4F");
     await expectOverrides(user.pageId, (o) => o.gradientFrom === "#C46A4F");
 
-    // The native picker.
-    await page.getByLabel("To color", { exact: true }).fill("#1b1814");
+    // M9-07: the swatch opens the color picker; the hex field is how a color is typed.
+    await page.getByLabel("To color", { exact: true }).click();
+    await hexField(page, "To").fill("#1b1814");
     await expect.poll(() => previewVar(page, "--t-gradient-to")).toBe("#1B1814");
     await expectOverrides(user.pageId, (o) => o.gradientTo === "#1B1814");
     await expect

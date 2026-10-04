@@ -61,7 +61,7 @@ test.describe("M7-05 the Preview and ⋯ menus", () => {
     await expect(saveStatus(page)).toHaveAttribute("data-save-status", "idle");
   });
 
-  test("M7-05 menu keyboard: Enter, Space and the arrows open it; arrows, Home and End move; Escape returns focus; Tab leaves; a click outside closes", async ({
+  test("M7-05 menu keyboard: Enter, Space and the arrows open it; arrows, Home and End move; Escape returns focus; Tab stays in the menu; a click outside closes", async ({
     page,
     context,
   }) => {
@@ -97,10 +97,14 @@ test.describe("M7-05 the Preview and ⋯ menus", () => {
     await page.keyboard.press("ArrowUp");
     await expect(items.last()).toBeFocused();
 
-    // Tab leaves the menu (it closes, focus moves on).
+    // M9-05: Radix keeps focus in an open menu, so Tab does not leave it; Escape closes it.
     await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(menu(page, "Preview")).toBeVisible();
+    await expect(items.last()).toBeFocused();
+    await page.keyboard.press("Escape");
     await expect(menu(page, "Preview")).toHaveCount(0);
-    await expect(button).not.toBeFocused();
+    await expect(button).toBeFocused();
 
     // A click outside closes it.
     await button.click();
@@ -214,7 +218,8 @@ test.describe("M7-05 the Preview and ⋯ menus", () => {
     for (let i = 0; i < 2; i++) expect((await box(items.nth(i))).height).toBeGreaterThanOrEqual(44);
     await items.filter({ hasText: "QR code" }).click();
     await expect(page).toHaveURL(/\/share#qr$/);
-    await expect(page.locator("#qr button").first()).toBeFocused();
+    // The QR card's first control is its 'Download PNG' (M9-25: the Style group comes before it in the DOM).
+    await expect(page.locator("#qr").getByRole("button", { name: "Download PNG" })).toBeFocused();
 
     // History: a name typed an instant ago is stored before the history screen opens.
     await clickTab(page, "Edit");

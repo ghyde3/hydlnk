@@ -11,6 +11,11 @@
  * from 1 (the whole shorter side) to 4. The square is always inside the picture, so the picture
  * covers the viewfinder and there are never empty edges. Everything here is pure except `decodeForPositioning`
  * and `cropToFile`, which need a browser. Safe to import in client components.
+ *
+ * M9-08: the viewfinder is drawn by react-easy-crop, which keeps the picture's position as a pan in
+ * screen pixels from the viewfinder's center (`Pan`). The dialog owns that pan and the zoom
+ * (controlled `crop` and `zoom`), and the functions below turn them into the `Crop` above, so the
+ * file that is uploaded never depends on what the library last reported.
  */
 
 /** The zoom range of the slider. */
@@ -55,27 +60,6 @@ export function clampCrop(crop: Crop, width: number, height: number): Crop {
   return { zoom, cx: clamp(cx, half, width - half), cy: clamp(cy, half, height - half) };
 }
 
-/**
- * The picture moved by (`dx`, `dy`) screen pixels in a viewfinder `viewfinderPx` wide: the square
- * moves the opposite way. The result is clamped, so the picture never leaves an empty edge.
- */
-export function movePicture(
-  crop: Crop,
-  dx: number,
-  dy: number,
-  width: number,
-  height: number,
-  viewfinderPx: number,
-): Crop {
-  if (!(viewfinderPx > 0)) return clampCrop(crop, width, height);
-  const perPixel = cropSide(crop, width, height) / viewfinderPx;
-  return clampCrop(
-    { ...crop, cx: crop.cx - dx * perPixel, cy: crop.cy - dy * perPixel },
-    width,
-    height,
-  );
-}
-
 /** A new zoom around the same center (the square stays inside the picture). */
 export function zoomCrop(crop: Crop, zoom: number, width: number, height: number): Crop {
   return clampCrop({ ...crop, zoom }, width, height);
@@ -92,23 +76,102 @@ export function cropRegion(
   return { sx: clamped.cx - side / 2, sy: clamped.cy - side / 2, side };
 }
 
+// The library's pan --------------------------------------------------------------------------------
+
 /**
- * Where the picture sits inside the viewfinder, as percentages of the viewfinder's side: the
- * viewfinder shows exactly `side` picture pixels, so the picture is `width / side` viewfinders
- * wide, and the square's corner is the viewfinder's corner.
+ * Where react-easy-crop has put the picture: its center, in screen pixels from the viewfinder's
+ * center (`{x: 0, y: 0}` is centered). The picture is laid out to cover the viewfinder
+ * (`objectFit="cover"`: its shorter side fills it), then scaled by the zoom.
  */
-export function pictureLayout(
-  crop: Crop,
+export interface Pan {
+  x: number;
+  y: number;
+}
+
+/** The picture as laid out under a square viewfinder `finder` px wide, before the zoom. */
+export function coverSize(
   width: number,
   height: number,
-): { left: number; top: number; width: number; height: number } {
-  const { sx, sy, side } = cropRegion(crop, width, height);
+  finder: number,
+): { width: number; height: number } {
+  const scale = finder / Math.min(width, height);
+  return { width: width * scale, height: height * scale };
+}
+
+/** How far the picture may be moved from the center, each way, before an edge shows. */
+export function panLimit(
+  width: number,
+  height: number,
+  finder: number,
+  zoom: number,
+): { x: number; y: number } {
+  const laid = coverSize(width, height, finder);
+  const z = Number.isFinite(zoom) ? clamp(zoom, MIN_ZOOM, MAX_ZOOM) : MIN_ZOOM;
   return {
-    left: (-sx / side) * 100,
-    top: (-sy / side) * 100,
-    width: (width / side) * 100,
-    height: (height / side) * 100,
+    x: Math.abs((laid.width * z) / 2 - finder / 2),
+    y: Math.abs((laid.height * z) / 2 - finder / 2),
   };
+}
+
+/** `pan` kept inside the limit (the library's own rule); bad numbers become the center. */
+export function restrictPan(
+  pan: Pan,
+  width: number,
+  height: number,
+  finder: number,
+  zoom: number,
+): Pan {
+  if (!(finder > 0) || !(width > 0) || !(height > 0)) return { x: 0, y: 0 };
+  const limit = panLimit(width, height, finder, zoom);
+  const one = (value: number, max: number): number =>
+    Number.isFinite(value) ? clamp(value, -max, max) : 0;
+  return { x: one(pan.x, limit.x), y: one(pan.y, limit.y) };
+}
+
+/** The same visible center after the zoom changes: the pan scales with it. */
+export function scalePan(pan: Pan, fromZoom: number, toZoom: number): Pan {
+  if (!(fromZoom > 0) || !Number.isFinite(toZoom)) return { x: 0, y: 0 };
+  const ratio = toZoom / fromZoom;
+  return { x: pan.x * ratio, y: pan.y * ratio };
+}
+
+/** The picture moved by (`dx`, `dy`) screen pixels (an arrow key), kept inside the limit. */
+export function nudgePan(
+  pan: Pan,
+  dx: number,
+  dy: number,
+  width: number,
+  height: number,
+  finder: number,
+  zoom: number,
+): Pan {
+  return restrictPan({ x: pan.x + dx, y: pan.y + dy }, width, height, finder, zoom);
+}
+
+/**
+ * The square the viewfinder shows, as a `Crop`: one screen pixel is `min(width, height) / (finder *
+ * zoom)` source pixels, and the picture moving right moves the square left. Total: the result is
+ * clamped, so the square is inside the picture whatever the library or a bad number says.
+ */
+export function panToCrop(
+  pan: Pan,
+  zoom: number,
+  width: number,
+  height: number,
+  finder: number,
+): Crop {
+  const z = Number.isFinite(zoom) ? clamp(zoom, MIN_ZOOM, MAX_ZOOM) : MIN_ZOOM;
+  if (!(finder > 0)) return clampCrop({ cx: width / 2, cy: height / 2, zoom: z }, width, height);
+  const perPixel = Math.min(width, height) / (finder * z);
+  return clampCrop(
+    {
+      cx: width / 2 - (Number.isFinite(pan.x) ? pan.x : 0) * perPixel,
+      cy: height / 2 - (Number.isFinite(pan.y) ? pan.y : 0) * perPixel,
+      zoom: z,
+    },
+    width,
+    height,
+  );
 }
 
 /** The size the square is drawn at: its real resolution, at most `MAX_CROP_EDGE`, at least 1. */
