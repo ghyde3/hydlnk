@@ -307,6 +307,19 @@ test.describe("M5-19 the URL and the API cannot upgrade an account", () => {
   });
 });
 
+/**
+ * Moves the fake clock past the 30 s poll limit until the notice says "slow". The server-rendered
+ * "confirming" notice is on screen before the page hydrates (on a production build, well before), and
+ * the 30 s are counted from the moment the component's effect starts them: a single runFor made
+ * before hydration advances a clock nothing is waiting on. Repeat it until the effect has run.
+ */
+async function runUntilSlow(page: import("@playwright/test").Page) {
+  await expect(async () => {
+    await page.clock.runFor(31_000);
+    await expect(notice(page)).toHaveAttribute("data-billing-notice", "slow", { timeout: 1_000 });
+  }).toPass({ timeout: 20_000 });
+}
+
 test.describe("M5-19 the Checkout return that takes longer than usual", () => {
   test("M5-19 after 30 seconds it says so, and gives the support address from SUPPORT_EMAIL", async ({
     page,
@@ -317,9 +330,7 @@ test.describe("M5-19 the Checkout return that takes longer than usual", () => {
     await page.clock.install();
     await page.goto(settings("?checkout=success"));
     await expect(notice(page)).toHaveText("Confirming your upgrade");
-    await page.clock.runFor(31_000);
-
-    await expect(notice(page)).toHaveAttribute("data-billing-notice", "slow");
+    await runUntilSlow(page);
     const text = (await notice(page).innerText()).replace(/\s+/g, " ").trim();
     expect(text).toContain(
       "This is taking longer than usual. Refresh in a minute. You are only charged once.",
@@ -340,8 +351,7 @@ test.describe("M5-19 the Checkout return that takes longer than usual", () => {
     await billingUser(context, { label: "b19t", customer: true });
     await page.clock.install();
     await page.goto(settings("?checkout=success"));
-    await page.clock.runFor(31_000);
-    await expect(notice(page)).toHaveAttribute("data-billing-notice", "slow");
+    await runUntilSlow(page);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
   });
