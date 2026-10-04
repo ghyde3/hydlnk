@@ -2,6 +2,18 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Wave L third security review fixes
+
+On `m11-mcp`, feature row M10-40 appended (`passes: false`). Migration `20261010000033_oauth_strict_reuse.sql`.
+
+- **A.** Refresh grace window removed (`token.ts`, SQL `oauth_rotate_refresh`, fake store). A rotated token is `lost` and ends its family. Tests and pgTAP 170, 172, 173, plus the e2e rows (`flow.spec.ts` (b), `oauth-connected-apps.spec.ts`, `oauth-dance.spec.ts`, `oauth-races.spec.ts`) no longer move `rotated_at` back.
+- **B.** `settled()` in `src/lib/mcp/endpoint.ts` reads through its own reader and races a 30 second timeout (route `maxDuration` is 60): cancels the stream, answers 500 `server_error`. SDK negotiates 2025-03-26 (batches allowed), so batches stay. Fake-timer test for the hanging batch plus the normal call.
+- **C.** A replayed used code ends the family only when `pkceMatches`; otherwise `invalid_grant`. Both tested.
+- **D.** Lock order did differ in effect: `oauth_end_family` held the grant and then updated every token of it (via `oauth_end_grant`), while rotation held a token and then waited for the grant, a real deadlock. All three functions now lock the grant first (no ordering test).
+- **E.** Accepted limits noted in `docs/PLAN.md`.
+
+Evidence: the new TS rows fail against the old `token.ts` and `endpoint.ts` (6 red) and pass now; the SQL rows were adjusted together with the migration and not run red first. A real SDK handler given `[tools/call, notifications/cancelled]` never answers, confirming the premise of B. `pnpm typecheck`, `pnpm lint` clean; `pnpm db:reset`, `pnpm test:db`: 42 files, 1,863 tests PASS (`db:types` unchanged); `REQUIRE_SUPABASE=1 pnpm test --retry 2`: 354 files, 9,562 tests pass; `tests/e2e/m10/` against one `pnpm dev` (`HYDLNK_QUERY_COUNTER=1`, `--workers=2`): 238 passed, 92 skipped, 0 failed at 390 and 1440, then the oauth and flow specs again after the last migration edit (62 passed). After `db:reset` the Kong container returned 502 for auth until restarted.
+
 ## 2026-10-04 — publish_page expires the page before it answers; one refresh token per install
 
 Two fixes on `m11-mcp` (Wave L, not released), each test first.

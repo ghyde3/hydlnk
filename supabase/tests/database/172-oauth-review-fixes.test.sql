@@ -5,12 +5,12 @@
 --   * oauth_decide_request: a second consent ends only the tokens that hold more than the new set.
 --   * oauth_redeem_code: a refresh token that survived a re-consent gives way, so the one-live-refresh
 --     index holds when a second install of the same app exchanges its code.
---   * oauth_rotate_refresh: a narrowed chain stays narrow; the 60 second grace window re-rotates a
---     token rotated a moment ago and revokes what the first exchange issued; the window never slides.
+--   * oauth_rotate_refresh: a narrowed chain stays narrow; a rotated token is lost
+--     at once (the 60 second grace window of M10-38 was removed by M10-40).
 --   * the hourly purge of unused client-metadata rows after 4 hours.
 
 begin;
-select plan(43);
+select plan(38);
 
 select tests.create_supabase_user('a', 'a-172@example.test');
 create temp table ids as select tests.get_supabase_uid('a') as a;
@@ -175,8 +175,7 @@ select is(
   'an empty scope list is invalid_scope'
 );
 
--- ---------------------------------------------------------------------------
--- The 60 second grace window
+-- No grace window (M10-40): a rotated refresh token is lost however recently it was rotated
 -- ---------------------------------------------------------------------------
 
 delete from public.oauth_tokens;
@@ -187,55 +186,31 @@ select is(
   'ok',
   'the first exchange works'
 );
--- pretend it happened 30 seconds ago
-update public.oauth_tokens set rotated_at = now() - interval '30 seconds' where id = '00000000-0000-4000-8000-000000172041';
-update public.oauth_tokens set created_at = now() - interval '30 seconds' where token_hash in (repeat('2', 63) || 'a', repeat('2', 63) || 'b');
-create temp table grace as
-  select * from public.oauth_rotate_refresh('00000000-0000-4000-8000-000000172041', repeat('3', 63) || 'a', repeat('3', 63) || 'b', null);
-select is((select outcome from grace), 'ok', 'the same token presented 30 seconds later is exchanged again');
-select is((select scopes from grace), array['hydlnk.read', 'hydlnk.write'], 'with the same scopes');
-select isnt(
-  (select revoked_at from public.oauth_tokens where token_hash = repeat('2', 63) || 'b'),
-  null,
-  'the refresh token the first exchange issued is revoked'
-);
-select isnt(
-  (select revoked_at from public.oauth_tokens where token_hash = repeat('2', 63) || 'a'),
-  null,
-  'and so is its access token'
+select is(
+  (select outcome from public.oauth_rotate_refresh('00000000-0000-4000-8000-000000172041', repeat('3', 63) || 'a', repeat('3', 63) || 'b', null)),
+  'lost',
+  'the same token presented again at once is lost, not exchanged again'
 );
 select is(
-  (select count(*)::int from public.oauth_tokens where grant_id = '00000000-0000-4000-8000-000000172001' and kind = 'refresh' and rotated_at is null and revoked_at is null),
-  1,
-  'one live refresh token per grant still holds'
+  (select count(*)::int from public.oauth_tokens where token_hash in (repeat('3', 63) || 'a', repeat('3', 63) || 'b')),
+  0,
+  'and nothing was issued for it'
 );
 select is(
-  (select count(*)::int from public.oauth_tokens where token_hash in (repeat('3', 63) || 'a', repeat('3', 63) || 'b') and revoked_at is null),
-  2,
-  'the new pair is live'
+  (select outcome from public.oauth_rotate_refresh('00000000-0000-4000-8000-000000172041', repeat('4', 63) || 'a', repeat('4', 63) || 'b', array['hydlnk.write'])),
+  'lost',
+  'a scope in the retry changes nothing: lost'
 );
 select is(
-  (select revoked_at from public.oauth_grants where id = '00000000-0000-4000-8000-000000172001'),
-  null,
-  'and the grant is not ended'
-);
-select cmp_ok(
-  (select rotated_at from public.oauth_tokens where id = '00000000-0000-4000-8000-000000172041'),
-  '<', now() - interval '29 seconds',
-  'the original rotation time is kept: the window does not slide'
+  (select count(*)::int from public.oauth_tokens where token_hash in (repeat('2', 63) || 'a', repeat('2', 63) || 'b') and revoked_at is not null),
+  0,
+  'the function itself revokes nothing (the caller ends the family)'
 );
 update public.oauth_tokens set rotated_at = now() - interval '61 seconds' where id = '00000000-0000-4000-8000-000000172041';
 select is(
-  (select outcome from public.oauth_rotate_refresh('00000000-0000-4000-8000-000000172041', repeat('4', 63) || 'a', repeat('4', 63) || 'b', null)),
-  'lost',
-  'presented 61 seconds after the first exchange it is lost (the caller ends the grant)'
-);
-update public.oauth_tokens set revoked_at = now() where id = '00000000-0000-4000-8000-000000172041';
-update public.oauth_tokens set rotated_at = now() - interval '5 seconds' where id = '00000000-0000-4000-8000-000000172041';
-select is(
   (select outcome from public.oauth_rotate_refresh('00000000-0000-4000-8000-000000172041', repeat('5', 63) || 'a', repeat('5', 63) || 'b', null)),
   'lost',
-  'a revoked token is lost even inside the window'
+  'and still lost a minute later'
 );
 
 -- ---------------------------------------------------------------------------

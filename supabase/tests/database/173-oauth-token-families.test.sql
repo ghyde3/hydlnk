@@ -4,12 +4,12 @@
 --   * oauth_tokens.family_id (every token belongs to one family); the one-live-refresh index is on it;
 --   * oauth_redeem_code starts a new family per code exchange and no longer retires the grant's other
 --     live refresh token (a second install of the same app keeps the first one working);
---   * oauth_rotate_refresh keeps the family, and its grace-window cleanup stays inside the family;
+--   * oauth_rotate_refresh keeps the family, and a rotated token is lost at once (M10-40: no grace window, lock order grant first);
 --   * oauth_end_family ends one family and the grant only when no live family is left;
 --   * oauth_revoke_by_token (RFC 7009) ends the family of the token, oauth_end_grant every family.
 
 begin;
-select plan(45);
+select plan(43);
 
 select tests.create_supabase_user('a', 'a-173@example.test');
 create temp table ids as select tests.get_supabase_uid('a') as a;
@@ -132,13 +132,13 @@ select is(
   'and nothing was revoked'
 );
 
--- The grace window re-rotates inside its own family only.
+-- No grace window (M10-40): install one's first refresh token, presented again at once, is lost, and
+-- the function changes nothing of install two's tokens.
 select is(
   (select outcome from public.oauth_rotate_refresh((select id from public.oauth_tokens where token_hash = repeat('1', 63) || 'e'), repeat('5', 63) || 'a', repeat('5', 63) || 'e', null)),
-  'ok',
-  'install one retries its first refresh inside the window (the answer was lost)'
+  'lost',
+  'a rotated refresh token is lost at once'
 );
-select isnt((select revoked_at from public.oauth_tokens where token_hash = repeat('3', 63) || 'e'), null, 'the pair the first exchange issued is revoked');
 select is(
   (select count(*)::int from public.oauth_tokens where token_hash in (repeat('2', 63) || 'a', repeat('4', 63) || 'a', repeat('4', 63) || 'e') and revoked_at is not null),
   0,
@@ -149,13 +149,6 @@ select is(
 -- Reuse ends one family
 -- ---------------------------------------------------------------------------
 
--- install one's first refresh token was rotated more than a minute ago: presented again it is lost
-update public.oauth_tokens set rotated_at = now() - interval '2 minutes' where token_hash = repeat('1', 63) || 'e';
-select is(
-  (select outcome from public.oauth_rotate_refresh((select id from public.oauth_tokens where token_hash = repeat('1', 63) || 'e'), repeat('6', 63) || 'a', repeat('6', 63) || 'e', null)),
-  'lost',
-  'a refresh token rotated more than a minute ago is lost'
-);
 select public.oauth_end_family((select family_id from public.oauth_tokens where token_hash = repeat('1', 63) || 'e'));
 select is(
   (select count(*)::int from public.oauth_tokens where family_id = (select family_id from public.oauth_tokens where token_hash = repeat('1', 63) || 'e') and revoked_at is null),

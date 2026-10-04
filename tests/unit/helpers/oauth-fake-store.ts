@@ -385,8 +385,8 @@ export class FakeOauthStore implements OauthStore {
     if (
       !old ||
       old.kind !== "refresh" ||
-      // Rotated more than 60 seconds ago: no longer a retry, a copy.
-      (old.rotatedAt !== null && old.rotatedAt <= this.clock - 60_000) ||
+      // Already rotated: a copy (no grace window, M10-40).
+      old.rotatedAt !== null ||
       old.revokedAt !== null ||
       old.expiresAt <= this.clock
     ) {
@@ -403,23 +403,7 @@ export class FakeOauthStore implements OauthStore {
       args.scopes === null ? base : base.filter((scope) => args.scopes!.includes(scope));
     if (wanted.length === 0) return { outcome: "invalid_scope" };
     const scopes = inOrder(wanted);
-    if (old.rotatedAt === null) {
-      old.rotatedAt = this.clock;
-    } else {
-      // The grace window: what the first exchange issued is revoked (its refresh token whatever its
-      // age, its access tokens by the time of the rotation); the original rotation time is kept.
-      for (const token of this.tokens) {
-        if (
-          token.id !== old.id &&
-          token.familyId === old.familyId &&
-          token.revokedAt === null &&
-          ((token.kind === "refresh" && token.rotatedAt === null) ||
-            (token.kind === "access" && token.createdAt >= old.rotatedAt))
-        ) {
-          token.revokedAt = this.clock;
-        }
-      }
-    }
+    old.rotatedAt = this.clock;
     const accessExp = this.clock + 3600_000;
     const refreshExp = Math.min(this.clock + 60 * 86400_000, grant.authorizedAt + 365 * 86400_000);
     this.addToken(grant, old.familyId, "access", args.accessHash, scopes, old.resource, accessExp);

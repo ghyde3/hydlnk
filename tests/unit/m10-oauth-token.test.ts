@@ -350,6 +350,26 @@ describe("M10-15 single use and reuse", () => {
     expect(h.store.tokens.every((t) => t.revokedAt === null)).toBe(true);
   });
 
+  // Wave L third review (M10-40): replaying a used code ends the family only with the right verifier.
+  it("a used code replayed with a wrong code_verifier is invalid_grant and ends nothing", async () => {
+    const h = harness();
+    const { code, verifier } = await issueCode(h);
+    expect((await exchange(h, code, verifier)).status).toBe(200);
+    const wrong = await exchange(h, code, "y".repeat(43));
+    expect(body(wrong).error).toBe("invalid_grant");
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
+    expect(h.store.tokens.every((t) => t.revokedAt === null)).toBe(true);
+  });
+
+  it("a used code replayed with the right code_verifier still ends its family", async () => {
+    const h = harness();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { code, verifier } = await issueCode(h);
+    expect((await exchange(h, code, verifier)).status).toBe(200);
+    expect(body(await exchange(h, code, verifier)).error).toBe("invalid_grant");
+    expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
+  });
+
   it("a user suspended between consent and exchange is invalid_grant and nothing is issued", async () => {
     const h = harness();
     const { code, verifier } = await issueCode(h);
@@ -617,15 +637,13 @@ describe("M10-16 refresh tokens", () => {
     expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
   });
 
-  it("two simultaneous requests with the same token both answer: the later one re-rotates and the earlier pair is revoked", async () => {
+  it("two simultaneous requests with the same token: one answers, the other is a copy and ends the family (accepted, M10-40)", async () => {
     const h = harness();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const a = await connect(h);
     const results = await Promise.all([refresh(h, a.refresh_token), refresh(h, a.refresh_token)]);
-    expect(results.map((r) => r.status)).toEqual([200, 200]);
-    expect(
-      h.store.tokens.filter((t) => t.kind === "refresh" && !t.rotatedAt && !t.revokedAt),
-    ).toHaveLength(1);
-    expect(h.store.grants[0]!.revokedAt).toBeNull();
+    expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
+    expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
   });
 
   it("every dead refresh token is the same invalid_grant", async () => {
@@ -761,60 +779,53 @@ describe("M10-16 refresh tokens", () => {
     expect(body(result).error).toBe("invalid_grant");
   });
 
-  // Wave L second review, finding 11: a refresh whose answer was lost is retried by the same app.
-  describe("the 60 second grace window", () => {
-    it("a token rotated 59 seconds ago, presented by the same app, re-rotates: a fresh pair, the first pair revoked, the grant kept", async () => {
-      const h = harness();
-      const a = await connect(h);
-      h.store.advance(1);
-      const first = body(await refresh(h, a.refresh_token));
-      h.store.advance(59);
-      const retry = await refresh(h, a.refresh_token);
-      expect(retry.status).toBe(200);
-      const second = body(retry);
-      expect(second.refresh_token).not.toBe(first.refresh_token);
-      // What the first answer carried is dead, the retry's pair lives.
-      expect(
-        await h.store.verifyAccessToken(sha256Hex(String(first.access_token)), RESOURCE),
-      ).toBeNull();
-      expect(
-        await h.store.verifyAccessToken(sha256Hex(String(second.access_token)), RESOURCE),
-      ).not.toBeNull();
-      expect(body(await refresh(h, String(first.refresh_token))).error).toBe("invalid_grant");
-      expect(h.store.grants[0]!.revokedAt).toBeNull();
-      // One live refresh token, and the new one works.
-      expect(
-        h.store.tokens.filter((t) => t.kind === "refresh" && !t.rotatedAt && !t.revokedAt),
-      ).toHaveLength(1);
-      expect((await refresh(h, String(second.refresh_token))).status).toBe(200);
-    });
-
-    it("the window does not slide: presented again 61 seconds after the first rotation it ends the grant", async () => {
+  // Wave L third review (M10-40): no grace window. Any presentation of a rotated token ends its family.
+  describe("strict refresh reuse (no grace window)", () => {
+    it("a token rotated 1 second ago, presented again by the same app, ends the family and issues nothing", async () => {
       const h = harness();
       vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const a = await connect(h);
       h.store.advance(1);
-      await refresh(h, a.refresh_token);
-      h.store.advance(30);
-      expect((await refresh(h, a.refresh_token)).status).toBe(200);
-      h.store.advance(31);
-      expect(body(await refresh(h, a.refresh_token)).error).toBe("invalid_grant");
+      const first = body(await refresh(h, a.refresh_token));
+      h.store.advance(1);
+      const before = h.store.tokens.length;
+      const retry = await refresh(h, a.refresh_token);
+      expect(body(retry).error).toBe("invalid_grant");
+      expect(h.store.tokens.length).toBe(before);
+      expect(
+        await h.store.verifyAccessToken(sha256Hex(String(first.access_token)), RESOURCE),
+      ).toBeNull();
+      expect(body(await refresh(h, String(first.refresh_token))).error).toBe("invalid_grant");
       expect(h.store.grants[0]!.revokedAt).not.toBeNull();
       expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
     });
 
-    it("after 61 seconds a reuse ends the grant, as before", async () => {
+    it("omitting scope on a reused token does not regain a narrowed scope", async () => {
+      const h = harness();
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const a = await connect(h, { scopes: ["hydlnk.read", "hydlnk.write"] });
+      await refresh(h, a.refresh_token, { scope: "hydlnk.read" });
+      const thief = await refresh(h, a.refresh_token);
+      expect(body(thief).error).toBe("invalid_grant");
+      expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
+    });
+
+    it("the store no longer exchanges a rotated token again, however recently it was rotated", async () => {
       const h = harness();
       vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const a = await connect(h);
-      h.store.advance(1);
       await refresh(h, a.refresh_token);
-      h.store.advance(61);
-      expect(body(await refresh(h, a.refresh_token)).error).toBe("invalid_grant");
-      expect(h.store.grants[0]!.revokedAt).not.toBeNull();
+      const found = await h.store.getTokenByHash(sha256Hex(a.refresh_token));
+      const result = await h.store.rotateRefresh({
+        oldId: found!.id,
+        accessHash: "a".repeat(64),
+        refreshHash: "b".repeat(64),
+        scopes: null,
+      });
+      expect(result.outcome).toBe("lost");
     });
 
-    it("another app presenting the token inside the window ends the grant", async () => {
+    it("another app presenting the token ends the grant", async () => {
       const h = harness();
       vi.spyOn(console, "warn").mockImplementation(() => undefined);
       h.store.addClient(`hlc_${"f".repeat(32)}`, [REDIRECT]);
@@ -823,14 +834,6 @@ describe("M10-16 refresh tokens", () => {
       const result = await refresh(h, a.refresh_token, { client_id: `hlc_${"f".repeat(32)}` });
       expect(body(result).error).toBe("invalid_grant");
       expect(h.store.grants[0]!.revokedAt).not.toBeNull();
-    });
-
-    it("a narrower retry stays narrower, and the retry never mints wider than the token", async () => {
-      const h = harness();
-      const a = await connect(h, { scopes: ["hydlnk.write"] });
-      await refresh(h, a.refresh_token, { scope: "hydlnk.read" });
-      const retry = await refresh(h, a.refresh_token, { scope: "hydlnk.read" });
-      expect(body(retry).scope).toBe("hydlnk.read");
     });
   });
 
@@ -942,18 +945,19 @@ describe("M10-39 one refresh token per install (token family)", () => {
     ).not.toBeNull();
   });
 
-  it("the grace window re-rotates inside the family and revokes only what that install was issued", async () => {
+  it("reusing a rotated token ends that install's family only", async () => {
     const h = harness();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const first = await connect(h);
     const second = await connect(h);
     const a = body(await refresh(h, first.refresh_token));
-    const b = await refresh(h, first.refresh_token);
-    expect(b.status).toBe(200);
+    expect(body(await refresh(h, first.refresh_token)).error).toBe("invalid_grant");
     expect(await h.store.verifyAccessToken(sha256Hex(String(a.access_token)), RESOURCE)).toBeNull();
     expect(
       await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE),
     ).not.toBeNull();
-    expect(live(h)).toHaveLength(2);
+    expect(live(h)).toHaveLength(1);
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
   });
 
   it("revoking one install's token (RFC 7009) ends its family; the grant ends with the last one", async () => {

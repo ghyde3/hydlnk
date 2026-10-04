@@ -41,11 +41,6 @@ export const TOKEN_MAX_BODY_BYTES = 16 * 1024;
  * addresses, so the budget is high; a wrong code or refresh token is still refused on every request.
  */
 export const TOKEN_PER_IP_PER_MINUTE = 600;
-/**
- * A refresh token that was rotated this recently, presented again by the same app, is a retry whose
- * answer was lost, not a copy (Wave L second review): it re-rotates. Measured from the first rotation.
- */
-export const REFRESH_GRACE_SECONDS = 60;
 
 const NO_STORE = { "Cache-Control": "no-store", Pragma: "no-cache" } as const;
 
@@ -250,11 +245,12 @@ async function exchangeCode(
   const row: RequestRow | null = await deps.store.getRequestByCodeHash(sha256Hex(code));
   if (!row || !row.user_id) return invalidGrant();
 
-  // A code that was used before comes back: someone copied it. The connection it started ends.
-  // It ends the connection only when the same app presents it: another app (anyone who has seen the
-  // code) is refused and ends nothing.
+  // A code that was used before comes back: someone copied it. The install it started ends, but only
+  // when the presenter holds the PKCE verifier too (M10-40): the same app, and the verifier that
+  // matches the stored challenge. Anyone else who has merely seen the code is refused and ends nothing.
   if (row.status === "used") {
     if (row.client_id !== clientId) return invalidGrant();
+    if (!pkceMatches(verifier, row.code_challenge)) return invalidGrant();
     await endFamily(deps, "code_reuse", row.client_id, await codeFamily(deps, row));
     return invalidGrant();
   }
@@ -278,7 +274,12 @@ async function exchangeCode(
   if (result.outcome === "not_redeemable") {
     // Used between the read and the write (two exchanges at once) is a copy; expired is just late.
     const again = await deps.store.getRequestByCodeHash(sha256Hex(code));
-    if (again?.status === "used" && again.user_id && again.client_id === clientId) {
+    if (
+      again?.status === "used" &&
+      again.user_id &&
+      again.client_id === clientId &&
+      pkceMatches(verifier, again.code_challenge)
+    ) {
       await endFamily(deps, "code_reuse", again.client_id, await codeFamily(deps, again));
     }
   }
@@ -294,11 +295,6 @@ async function codeFamily(deps: TokenDeps, row: RequestRow): Promise<string | nu
   if (!row.user_id) return null;
   const grant = await deps.store.getActiveGrant(row.user_id, row.client_id);
   return grant?.id ?? null;
-}
-
-function withinGrace(rotatedAt: string, nowMs: number): boolean {
-  const at = Date.parse(rotatedAt);
-  return Number.isFinite(at) && nowMs - at < REFRESH_GRACE_SECONDS * 1000;
 }
 
 async function refreshTokens(
@@ -319,12 +315,10 @@ async function refreshTokens(
   const found: TokenLookup | null = await deps.store.getTokenByHash(sha256Hex(presented));
   if (!found || found.kind !== "refresh") return invalidGrant();
 
-  // Another app's refresh token, or one that was exchanged more than a minute ago: it was copied. One
-  // exchanged within the last minute and presented again by the same app is a retry (the grace window).
-  if (
-    found.clientId !== clientId ||
-    (found.rotatedAt !== null && !withinGrace(found.rotatedAt, now()))
-  ) {
+  // Another app's refresh token, or one that was already exchanged: it was copied. There is no grace
+  // window (M10-40): the presented client id is public, so "the same app" proves nothing, and a false
+  // positive now ends one install only.
+  if (found.clientId !== clientId || found.rotatedAt !== null) {
     await endFamily(deps, "refresh_reuse", found.clientId, found.familyId);
     return invalidGrant();
   }
@@ -353,10 +347,9 @@ async function refreshTokens(
     case "invalid_scope":
       return oauthError(400, "invalid_scope", "That scope is wider than the app was allowed.");
     case "lost": {
-      // Exchanged more than a minute ago by the time the write ran is a copy; expired or revoked in
-      // the meantime is just late.
+      // Exchanged by the time the write ran is a copy; expired or revoked in the meantime is just late.
       const again = await deps.store.getTokenByHash(sha256Hex(presented));
-      if (again?.rotatedAt && !withinGrace(again.rotatedAt, now())) {
+      if (again?.rotatedAt) {
         await endFamily(deps, "refresh_reuse", found.clientId, found.familyId);
       }
       return invalidGrant();

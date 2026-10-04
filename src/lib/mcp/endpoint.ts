@@ -53,6 +53,13 @@ export interface McpEndpointOptions {
   maxBodyBytes?: number;
 }
 
+/**
+ * How long the endpoint waits for the SDK's answer to end (M10-40). Above the 25 seconds a tool may run
+ * and below the route's `maxDuration` of 60. Batches stay accepted: the SDK negotiates 2025-03-26, which
+ * allows them (batching was removed in 2025-06-18), so a hanging one is cut by this timeout.
+ */
+export const MCP_SETTLE_TIMEOUT_MS = 30_000;
+
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
 function jsonResponse(
@@ -164,12 +171,45 @@ export function createMcpEndpoint(options: McpEndpointOptions) {
    * held open: `maxSubscriptions: 0`), and a tool is cut off after 25 seconds, so this is bounded.
    */
   const settled = async (response: Response): Promise<Response> => {
-    const body = await response.arrayBuffer();
-    return new Response(body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
+    const stream = response.body;
+    if (!stream) return response;
+    // Read through our own reader, so a timeout can cancel it (a stream being read by arrayBuffer()
+    // is locked and cannot be canceled).
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    const read = (async () => {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        chunks.push(value);
+      }
+    })();
+    read.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), MCP_SETTLE_TIMEOUT_MS);
     });
+    try {
+      const result = await Promise.race([read, timeout]);
+      if (result === "timeout") {
+        // A legacy batch holding a call and its cancellation makes the SDK drop the answer: the stream
+        // never ends. Cancel it so the SDK tears down, and answer instead of holding the invocation.
+        await reader.cancel().catch(() => undefined);
+        log("[mcp] the answer did not complete in time; canceled");
+        return jsonResponse(500, {
+          jsonrpc: "2.0",
+          error: { code: -32000, message: "server_error" },
+          id: null,
+        });
+      }
+      return new Response(new Blob(chunks as BlobPart[]), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   };
 
   /** What runs after the bearer check passed (`req.auth` is set). */

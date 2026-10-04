@@ -820,12 +820,10 @@ select is(
   1,
   'exactly one live refresh token remains'
 );
--- a transaction has one clock, so the rotation is moved back past the 60 second grace window (M10-38)
-update public.oauth_tokens set rotated_at = now() - interval '61 seconds' where token_hash = repeat('a', 63) || '2';
 select is(
   (select outcome from public.oauth_rotate_refresh((select id from public.oauth_tokens where token_hash = repeat('a', 63) || '2'), repeat('6', 63) || '1', repeat('6', 63) || '2', null)),
   'lost',
-  'a rotated refresh token never works twice (after the grace window)'
+  'a rotated refresh token never works twice'
 );
 select is(
   (select outcome from public.oauth_rotate_refresh((select id from public.oauth_tokens where token_hash = repeat('7', 63) || '2'), repeat('6', 63) || '1', repeat('6', 63) || '2', array['hydlnk.read', 'hydlnk.publish'])),

@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- a tool result is JSON whose shape each step checks */
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { adminClient, signInAs } from "../fixtures/auth";
-import { sha256Hex } from "@/lib/oauth/tokens";
 import { cleanupUsers, desktopOnly, rand, signedInUser, trackUser } from "../fixtures/data";
 import { CIMD_CLIENT_ID, startCimdStub, stopCimdStub } from "../fixtures/cimd-stub-server";
 import { McpClient, discover, startLoopback } from "../fixtures/mcp-client";
@@ -285,13 +284,8 @@ test("M10-33 (b) a refresh gives a new pair, and the first refresh token present
   expect(second.body.access_token).not.toBe(connection.access);
   expect(second.body.refresh_token).not.toBe(connection.refresh);
   expect(await mcpStatus(String(second.body.access_token))).toBe(200);
-  // The first refresh token again, after the 60 second grace window (the rotation is moved back in the
-  // table rather than waiting a minute): a copied token. The family ends, and the grant with it, as
-  // this was the only install.
-  await adminClient()
-    .from("oauth_tokens")
-    .update({ rotated_at: new Date(Date.now() - 120_000).toISOString() })
-    .eq("token_hash", sha256Hex(connection.refresh));
+  // The first refresh token again, at once (there is no grace window, M10-40): a copied token. The
+  // family ends, and the grant with it, as this was the only install.
   const reuse = await refreshTokens(connection.clientId, connection.refresh);
   expect(reuse.status).toBe(400);
   expect(reuse.body.error).toBe("invalid_grant");

@@ -1,6 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { sha256Hex } from "@/lib/oauth/tokens";
 import { axeViolations } from "../fixtures/a11y";
 import { cleanupUsers, desktopOnly, phoneOnly, rand, signedInUser } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
@@ -171,11 +170,7 @@ test.describe("M10-18 the card", () => {
     // A connection that ended (the refresh token was copied and used twice) leaves the card.
     const rotated = await refreshTokens(mine.client_id, minted.refreshToken);
     expect(rotated.status).toBe(200);
-    // Past the 60 second grace window (moved back in the table rather than waiting).
-    await adminClient()
-      .from("oauth_tokens")
-      .update({ rotated_at: new Date(Date.now() - 120_000).toISOString() })
-      .eq("token_hash", sha256Hex(minted.refreshToken));
+    // Presented again at once: there is no grace window (M10-40).
     expect((await refreshTokens(mine.client_id, minted.refreshToken)).body.error).toBe(
       "invalid_grant",
     );

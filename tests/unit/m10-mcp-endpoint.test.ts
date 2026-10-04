@@ -842,3 +842,51 @@ describe("the answer is only returned once the tool has finished (M10-31)", () =
     expect(await response.text()).toContain('"result":{}');
   });
 });
+
+describe("M10-40 the buffered answer is bounded", () => {
+  it("a stream that never completes (a legacy batch with a cancel) is cut after 30 seconds: a 500 JSON-RPC server_error, the stream canceled", async () => {
+    vi.useFakeTimers();
+    try {
+      let torn = false;
+      const hanging = new Response(
+        new ReadableStream({
+          pull: () => new Promise(() => undefined),
+          cancel: () => {
+            torn = true;
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "text/event-stream" } },
+      );
+      const { endpoint } = setup({ serve: async () => hanging });
+      const batch = JSON.stringify([
+        { jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "x", arguments: {} } },
+        { jsonrpc: "2.0", method: `notifications/cancel${"led"}`, params: { requestId: 1 } },
+      ]);
+      const pending = endpoint(request({ headers: bearer(GOOD), body: batch }));
+      await vi.advanceTimersByTimeAsync(29_000);
+      let done = false;
+      void pending.then(() => {
+        done = true;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(done).toBe(false);
+      await vi.advanceTimersByTimeAsync(2_000);
+      const response = await pending;
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "server_error" },
+      });
+      expect(torn).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a normal single call is still read to its end and answered", async () => {
+    const { endpoint } = setup();
+    const response = await endpoint(request({ headers: bearer(GOOD) }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ jsonrpc: "2.0", id: 1 });
+  });
+});

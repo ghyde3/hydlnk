@@ -70,7 +70,7 @@ test("M10-15 two simultaneous exchanges of one code give one 200 and one invalid
   expect(grants[0]!.revoked_at).not.toBeNull();
 });
 
-test("M10-16 two simultaneous refreshes with one token both answer (the 60 second grace window), and only the later pair stays live", async ({
+test("M10-16 two simultaneous refreshes with one token: one answers, the other is a copy and ends the family (no grace window, M10-40)", async ({
   context,
 }, info) => {
   test.skip(!desktopOnly(info), "raw HTTP, no UI");
@@ -83,16 +83,14 @@ test("M10-16 two simultaneous refreshes with one token both answer (the 60 secon
     refreshTokens(client.client_id, minted.refreshToken),
     refreshTokens(client.client_id, minted.refreshToken),
   ]);
-  expect(results.map((r) => r.status)).toEqual([200, 200]);
-  // One of the two pairs was revoked by the other: exactly one refresh token still works, and the
-  // grant is not ended.
-  const next = [] as number[];
-  for (const result of results) {
-    next.push((await refreshTokens(client.client_id, String(result.body.refresh_token))).status);
-  }
-  expect(next.sort()).toEqual([200, 400]);
+  expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
+  // The loser was a copy: the only install's family ended, and the grant with it.
+  const winner = results.find((r) => r.status === 200)!;
+  expect((await refreshTokens(client.client_id, String(winner.body.refresh_token))).status).toBe(
+    400,
+  );
   const grants = await rows<{ revoked_at: string | null }>("oauth_grants", {
     client_id: client.client_id,
   });
-  expect(grants[0]!.revoked_at).toBeNull();
+  expect(grants[0]!.revoked_at).not.toBeNull();
 });

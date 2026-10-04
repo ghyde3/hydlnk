@@ -5084,6 +5084,23 @@
       ],
       "mockup": "",
       "passes": false
+    },
+    {
+      "id": "M10-40",
+      "milestone": 10,
+      "area": "security",
+      "title": "Wave L third review: no refresh grace window, bounded MCP buffering, PKCE before ending on code replay",
+      "acceptance": [
+        "Supersedes, in these respects only, the 60-second grace step of M10-38 and the replay step of M10-15/M10-38 (the one-live-refresh-token-per-install rule of M10-39 stands); every other step of those rows stands.",
+        "There is no refresh grace window: a refresh token that was already rotated, presented again by any client at any time (even one second later, with or without `scope`), is `invalid_grant`, issues nothing, and ends that token's family (the grant with it when it was the last live family); `oauth_rotate_refresh` answers `lost` for a rotated token and no longer re-rotates (`m10-oauth-token.test.ts`, pgTAP 170, 172, 173, `oauth-dance.spec.ts`, `flow.spec.ts` (b), `oauth-connected-apps.spec.ts`, `oauth-races.spec.ts`).",
+        "Migration `20261010000033_oauth_strict_reuse.sql` replaces `oauth_rotate_refresh`, `oauth_end_family` and `oauth_end_grant` (`create or replace`, empty search_path, `service_role` only): all three lock the grant row first, then the token rows, so a rotation and the ending of another family of the same grant cannot wait on each other (pgTAP 172, 173 for behavior; the ordering itself is not tested).",
+        "`createMcpEndpoint` reads the SDK's answer to its end only up to 30 seconds (below the route's `maxDuration` of 60): on a timeout (a legacy batch holding a `tools/call` and its cancellation) it cancels the response body and answers a 500 JSON-RPC `server_error`; a normal single call is unchanged. The SDK negotiates 2025-03-26, which allows batches, so batches stay accepted and the timeout bounds them (`m10-mcp-endpoint.test.ts`, fake timers).",
+        "A used code replayed by the same client ends its family only when the presented `code_verifier` matches the stored challenge; with a wrong verifier it is `invalid_grant` and nothing ends; with the right one the family still ends (`m10-oauth-token.test.ts`).",
+        "Accepted and recorded in `docs/PLAN.md` (Decided): concurrent refreshes by one app sharing a token store end the family, the more than 5,000 row trim ordering is unchanged, and a second consent keeps other families alive (Connected apps Revoke ends every install).",
+        "`pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm db:reset` and `pnpm test:db` pass, and `tests/e2e/m10/` passes at 390 and 1440 with `--workers=2`."
+      ],
+      "mockup": "",
+      "passes": false
     }
   ]
 }
