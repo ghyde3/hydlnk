@@ -1,8 +1,16 @@
 import { expect, test } from "@playwright/test";
+import sharp from "sharp";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, rand, signedInUser } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { authorizeUrl, authorizeRaw, pkcePair, removeClients, rows } from "../fixtures/oauth";
+import {
+  authorizeUrl,
+  authorizeRaw,
+  ownAddress,
+  pkcePair,
+  removeClients,
+  rows,
+} from "../fixtures/oauth";
 
 /**
  * M10-07 and M10-08 end to end: one Client ID Metadata Document pass against the stand-in website
@@ -74,7 +82,10 @@ function document(path: string, over: Record<string, unknown> = {}) {
   };
 }
 
-test.beforeEach(async ({}, info) => {
+test.beforeEach(async ({ context }, info) => {
+  // Its own address: the authorize and metadata-fetch limits count per address, and a busy run (or a
+  // repeat within a minute) would otherwise see the "Too many requests" page that the limit is meant to show.
+  await ownAddress(context);
   test.skip(!desktopOnly(info), "one viewport is enough for the fetch path");
   test.skip(
     !(await hooksOn()),
@@ -120,6 +131,54 @@ test("M10-08 a valid document is fetched once with the headers of the policy, sh
   await page.goto(authorizeUrl(clientId, pkcePair().challenge));
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Zq Stub App");
   expect(await hits(path)).toHaveLength(1);
+});
+
+test("M10-09 a metadata client's logo is fetched by the server, re-encoded to a 96x96 PNG and embedded as a data URI, and the browser fetches nothing for it", async ({
+  page,
+  context,
+}) => {
+  await signedInUser(context, { label: "cm-logo" });
+  const id = rand(8);
+  const path = `/cimd/${id}.json`;
+  const logoPath = `/cimd/${id}-logo.png`;
+  const source = await sharp({
+    create: { width: 200, height: 200, channels: 3, background: { r: 200, g: 30, b: 30 } },
+  })
+    .png()
+    .toBuffer();
+  const { clientId, json } = document(path, { logo_uri: `${STUB}${logoPath}` });
+  await setStub({ path, json });
+  await setStub({
+    path: logoPath,
+    base64: source.toString("base64"),
+    headers: { "content-type": "image/png" },
+  });
+
+  const requested: string[] = [];
+  page.on("request", (request) => requested.push(request.url()));
+  await page.goto(authorizeUrl(clientId, pkcePair().challenge));
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Zq Stub App");
+  await expect(page.locator(".avatar img")).toHaveAttribute("src", /^data:image\/png;base64,/);
+
+  // The server asked for the logo, once, with the policy's headers; the browser never did.
+  const logoHits = await hits(logoPath);
+  expect(logoHits).toHaveLength(1);
+  expect(logoHits[0]).toMatchObject({
+    method: "GET",
+    acceptEncoding: "identity",
+    userAgent: "HYDLNK-OAuth/1",
+    hasCookie: false,
+    hasAuthorization: false,
+  });
+  expect(requested.filter((address) => address.startsWith(STUB))).toEqual([]);
+
+  // What is stored is not the source: a 96x96 PNG of at most 20,480 bytes.
+  const row = (await rows<{ logo_png: string }>("oauth_clients", { client_id: clientId }))[0]!;
+  const stored = Buffer.from(row.logo_png.replace(/^\\x/, ""), "hex");
+  const meta = await sharp(stored).metadata();
+  expect([meta.format, meta.width, meta.height]).toEqual(["png", 96, 96]);
+  expect(stored.length).toBeLessThanOrEqual(20_480);
+  expect(stored.equals(source)).toBe(false);
 });
 
 test("M10-08 an invalid document is never stored or reused: the page says it could not verify the app, and the next request fetches again", async ({

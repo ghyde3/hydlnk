@@ -4970,7 +4970,7 @@
         "Wave closure, written to PROGRESS.md in this feature: the commands (`pnpm test:e2e tests/e2e/m10/flow.spec.ts --project=desktop`), the evidence, the run of `security-reviewer` over the wave and its fixed findings (Gary's rule for waves that touch auth, data and routing), and the 'Open for Gary' list collected from the wave: the `@modelcontextprotocol/client` approval (M10-01), `MCP_ALLOWED_ORIGINS` additions (M10-02), the logo host allow list (M10-09), no grace window for a retried refresh (M10-16), custom-scheme redirect clients cannot connect (M10-06), open registration and its limits (M10-10), the ChatGPT step labels to re-check (M10-34), the Privacy 'Last updated' date and whether to tell existing users (M10-35), and the three client documents to re-fetch before launch (M10-08). `tmp/orchestrating` stays out of the commit as for every wave."
       ],
       "mockup": "",
-      "passes": true
+      "passes": false
     },
     {
       "id": "M10-34",
