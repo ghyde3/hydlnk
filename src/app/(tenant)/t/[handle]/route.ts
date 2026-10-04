@@ -15,7 +15,8 @@ import { handleResponse } from "@/lib/tenant-render/respond";
  * `next dev` renders every request on demand and reads Postgres every time.
  *
  * Only GET and HEAD reach it: the proxy answers every other method with 405 (a static handler that
- * exported POST would stop being static), and /anything is the sibling [...rest] route.
+ * exported POST would stop being static). Every other path on the host is rewritten by the proxy to
+ * the one plain 404 (/sites/unknown), so an invented path never gets a cache entry of its own.
  */
 export const dynamic = "force-static";
 export const dynamicParams = true;

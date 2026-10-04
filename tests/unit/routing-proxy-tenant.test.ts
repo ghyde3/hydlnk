@@ -83,11 +83,13 @@ describe("M8-07 the CSP of a live tenant page", () => {
 });
 
 describe("M2-22 the proxy puts those headers on tenant and custom-domain responses only", () => {
-  it("a handle host is rewritten to /t/<handle> with the headers, for the page and every sub-path", async () => {
+  it("a handle host is rewritten to /t/<handle> (the page and /og) or to the one plain 404 (every other path), with the headers", async () => {
     for (const path of ["/", "/x", "/og"]) {
       const response = await proxy(request("mara.localhost:3000", path));
       const rewrite = response.headers.get("x-middleware-rewrite") ?? "";
-      expect(new URL(rewrite).pathname).toBe(path === "/" ? "/t/mara" : `/t/mara${path}`);
+      expect(new URL(rewrite).pathname).toBe(
+        path === "/" ? "/t/mara" : path === "/og" ? "/t/mara/og" : "/sites/unknown",
+      );
       for (const name of TENANT_HEADERS)
         expect(response.headers.get(name), `${path} ${name}`).toBeTruthy();
       expect(response.headers.get("content-security-policy")).toBe(TENANT_PAGE_CSP);
@@ -172,7 +174,13 @@ describe("M8-02 a tenant page answers GET and HEAD only", () => {
   });
 
   it("only the page is a 405: every other path is the plain 404 for a method that is not GET or HEAD, with the headers and no body", async () => {
-    for (const path of ["/anything", "/login", "/og", "/hl-query-count", "/app/api/domains/x.png"]) {
+    for (const path of [
+      "/anything",
+      "/login",
+      "/og",
+      "/hl-query-count",
+      "/app/api/domains/x.png",
+    ]) {
       const response = await proxy(methodRequest("mara.localhost:3000", "DELETE", path));
       expect(response.status, path).toBe(404);
       expect(response.headers.get("allow"), path).toBeNull();

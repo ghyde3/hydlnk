@@ -134,12 +134,13 @@ describe("M7-14 an instrumented proxy sees nothing of an image request", () => {
 
   it("a path the matcher does not exclude is routed like any other path of its host", async () => {
     const tenant = await through(HOSTS.tenant, "/media/x/y.html");
+    // A tenant or custom host has no /media: the one plain tenant 404, never a route of its own.
     expect(new URL(tenant!.headers.get("x-middleware-rewrite") ?? "").pathname).toBe(
-      "/t/mara/media/x/y.html",
+      "/sites/unknown",
     );
     const custom = await through(HOSTS.custom, "/media/x");
     expect(new URL(custom!.headers.get("x-middleware-rewrite") ?? "").pathname).toBe(
-      "/sites/page-1/media/x",
+      "/sites/unknown",
     );
     // The root host serves it as-is, so the /media route answers its own plain 404.
     const marketing = await through(HOSTS.marketing, "/media/x/y");

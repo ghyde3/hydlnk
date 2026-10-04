@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { cleanupUsers, rand } from "../fixtures/data";
 import {
@@ -41,9 +41,15 @@ test.describe("M8-04 the routes are static and cached", () => {
     );
     // The test hooks and the OG image are dynamic on purpose.
     expect(Object.keys(manifest.dynamicRoutes)).not.toContain("/t/[handle]/og");
+    // No catch-all: a route per invented sub-path would be one stored entry per path (Wave J security review).
+    expect(Object.keys(manifest.dynamicRoutes).filter((route) => route.includes("[..."))).toEqual(
+      [],
+    );
   });
 
-  test("M8-04 two GETs: the first is a MISS, the second a HIT, byte-identical, with s-maxage, and the public query ran once", async ({ context }) => {
+  test("M8-04 two GETs: the first is a MISS, the second a HIT, byte-identical, with s-maxage, and the public query ran once", async ({
+    context,
+  }) => {
     const user = await liveUser(context, "cc1");
     const first = await getTenant(user.handle);
     const second = await getTenant(user.handle);
@@ -55,7 +61,9 @@ test.describe("M8-04 the routes are static and cached", () => {
     expect(await queryCount(user.handle)).toBe(1);
   });
 
-  test("M8-04 a verified custom host, HEAD and ten requests that differ only in their query string all keep one read", async ({ context }) => {
+  test("M8-04 a verified custom host, HEAD and ten requests that differ only in their query string all keep one read", async ({
+    context,
+  }) => {
     const user = await liveUser(context, "cc2", { plan: "studio" });
     const host = await customHostOf(user.pageId);
     const first = await getTenant(user.handle);
@@ -66,7 +74,9 @@ test.describe("M8-04 the routes are static and cached", () => {
     expect(bodyOf(custom.text)).toBe(bodyOf(first.text));
     expect(cacheState(await getCustom(host))).toBe("HIT");
 
-    const head = await rawBuffer(`${user.handle}.localhost:${SERVER_PORT}`, "/", { method: "HEAD" });
+    const head = await rawBuffer(`${user.handle}.localhost:${SERVER_PORT}`, "/", {
+      method: "HEAD",
+    });
     expect(head.status).toBe(200);
     expect(head.body.length).toBe(0);
     expect(cacheState(head)).toBe("HIT");
@@ -81,7 +91,9 @@ test.describe("M8-04 the routes are static and cached", () => {
     expect(await queryCount(user.handle)).toBe(1);
   });
 
-  test("M8-04 one document for every visitor: user agent, language, Authorization, cookie and address change nothing, and the counter stays at one", async ({ context }) => {
+  test("M8-04 one document for every visitor: user agent, language, Authorization, cookie and address change nothing, and the counter stays at one", async ({
+    context,
+  }) => {
     const user = await liveUser(context, "cc3");
     const plain = await getTenant(user.handle);
     const variants: Array<Record<string, string>> = [
@@ -96,16 +108,22 @@ test.describe("M8-04 the routes are static and cached", () => {
       expect(res.text, JSON.stringify(headers)).toBe(plain.text);
       expect(cacheState(res), JSON.stringify(headers)).toBe("HIT");
       expect(res.headers["set-cookie"]).toBeUndefined();
-      expect(String(res.headers.vary ?? "").toLowerCase()).not.toMatch(/cookie|user-agent|accept-language|authorization/);
+      expect(String(res.headers.vary ?? "").toLowerCase()).not.toMatch(
+        /cookie|user-agent|accept-language|authorization/,
+      );
       expect(res.headers["content-security-policy"]).toBe(plain.headers["content-security-policy"]);
     }
     expect(await queryCount(user.handle)).toBe(1);
   });
 
-  test("M8-04 a POST never gets the cached page: the proxy answers 405 before the cache", async ({ context }) => {
+  test("M8-04 a POST never gets the cached page: the proxy answers 405 before the cache", async ({
+    context,
+  }) => {
     const user = await liveUser(context, "cc4");
     expect(cacheState(await getTenant(user.handle))).toBe("MISS");
-    const post = await rawBuffer(`${user.handle}.localhost:${SERVER_PORT}`, "/", { method: "POST" });
+    const post = await rawBuffer(`${user.handle}.localhost:${SERVER_PORT}`, "/", {
+      method: "POST",
+    });
     expect(post.status).toBe(405);
     expect(post.headers.allow).toBe("GET, HEAD");
     expect(post.text).not.toContain("data-page-root");
@@ -114,9 +132,13 @@ test.describe("M8-04 the routes are static and cached", () => {
 });
 
 test.describe("M8-04 failures are not cached and not mistaken for a 404", () => {
-  test("M8-04 a failed read is the 500 panel with no-store; the request after it regenerates the page, and only the retry counts", async ({ context }) => {
+  test("M8-04 a failed read is the 500 panel with no-store; the request after it regenerates the page, and only the retry counts", async ({
+    context,
+  }) => {
     const user = await liveUser(context, "cf1");
-    expect(await armFailure(user.handle), "start the server with HYDLNK_QUERY_COUNTER=1").toBe(true);
+    expect(await armFailure(user.handle), "start the server with HYDLNK_QUERY_COUNTER=1").toBe(
+      true,
+    );
     const failed = await getTenant(user.handle);
     expect(failed.status).toBe(500);
     expect(failed.headers["cache-control"]).toBe("no-store");
@@ -139,7 +161,9 @@ test.describe("M8-04 failures are not cached and not mistaken for a 404", () => 
     expect(await queryCount(user.handle)).toBe(1);
   });
 
-  test("M8-04 a cached page does not read the database, so an armed failure never reaches it", async ({ context }) => {
+  test("M8-04 a cached page does not read the database, so an armed failure never reaches it", async ({
+    context,
+  }) => {
     const user = await liveUser(context, "cf2");
     await getTenant(user.handle);
     expect(cacheState(await getTenant(user.handle))).toBe("HIT");
@@ -156,7 +180,9 @@ test.describe("M8-04 failures are not cached and not mistaken for a 404", () => 
 });
 
 test.describe("M8-04 abuse and cost", () => {
-  test("M8-04 the 404 of an invented handle is cached for seconds, not stored for good: one entry, no document read", async ({ context }) => {
+  test("M8-04 the 404 of an invented handle is cached for seconds, not stored for good: one entry, no document read", async ({
+    context,
+  }) => {
     const real = await liveUser(context, "ca1");
     await getTenant(real.handle);
     const before = await queryCount(real.handle);
@@ -173,7 +199,9 @@ test.describe("M8-04 abuse and cost", () => {
     expect(await queryCount(real.handle)).toBe(before);
   });
 
-  test("M8-04 200 requests to 200 invented handles each answer the 404 and the process stays healthy", async ({ context }) => {
+  test("M8-04 200 requests to 200 invented handles each answer the 404 and the process stays healthy", async ({
+    context,
+  }) => {
     const real = await liveUser(context, "ca2");
     await getTenant(real.handle);
     const before = await queryCount(real.handle);
@@ -194,7 +222,9 @@ test.describe("M8-04 abuse and cost", () => {
     expect(await queryCount(real.handle)).toBe(before);
   });
 
-  test("M8-04 sub-paths are plain 404s that read nothing: /anything and /a/b/c on a real page's host", async ({ context }) => {
+  test("M8-04 sub-paths are plain 404s that read nothing: /anything and /a/b/c on a real page's host", async ({
+    context,
+  }) => {
     const user = await liveUser(context, "ca3", { blocks: [link("lnk-ca3-0001", "Book now")] });
     await getTenant(user.handle);
     const before = await queryCount(user.handle);
@@ -205,5 +235,56 @@ test.describe("M8-04 abuse and cost", () => {
       expect(res.text, path).not.toContain(user.draft.profile.name);
     }
     expect(await queryCount(user.handle)).toBe(before);
+  });
+
+  test("M8-04 invented sub-paths cost ONE cache entry in total: dozens of distinct paths on a handle host and a custom host make at most one MISS", async ({
+    context,
+  }) => {
+    const user = await liveUser(context, "ca4", { plan: "studio" });
+    const host = await customHostOf(user.pageId, "subp");
+    expect(cacheState(await getTenant(user.handle))).toBe("MISS");
+    const states: string[] = [];
+    const tokens: string[] = [];
+    const expect404 = (res: Awaited<ReturnType<typeof getTenant>>, path: string) => {
+      expect(res.status, path).toBe(404);
+      expect(res.text, path).toContain("Page not found");
+      expect(res.text, path).not.toContain(user.draft.profile.name);
+      states.push(cacheState(res));
+    };
+    for (let i = 0; i < 30; i++) {
+      const token = rand(10);
+      tokens.push(token);
+      const path = `/${token}${i % 2 ? `/${rand(6)}` : ""}${i % 5 === 0 ? `?q=${rand(6)}` : ""}`;
+      expect404(await getTenant(user.handle, path), `handle ${path}`);
+      expect404(await getCustom(host, path), `custom ${path}`);
+    }
+    // Another handle's host and a host nobody owns land on the very same entry.
+    const lastToken = rand(8);
+    tokens.push(lastToken);
+    expect404(await getTenant(`zq-sub-${rand(8)}`, `/${lastToken}`), "invented handle");
+    expect404(await getCustom(`nobody-${rand(8)}.example.test`, `/${rand(8)}`), "unknown host");
+    const misses = states.filter((state) => state === "MISS");
+    expect(misses.length, states.join(",")).toBeLessThanOrEqual(1);
+    expect(states.filter((state) => state === "HIT").length).toBeGreaterThanOrEqual(
+      states.length - 1,
+    );
+    // The page itself was read once and is still a HIT.
+    expect(cacheState(await getTenant(user.handle))).toBe("HIT");
+    expect(await queryCount(user.handle)).toBe(1);
+
+    // On disk, where `next start` keeps what it stores: the shared 404 is there, and no entry is named
+    // after any of the invented paths (the entries are written a moment after the response).
+    const store = ".next/server/route-cache/APP_ROUTE";
+    expect(existsSync(store), "run against the production build in this checkout").toBe(true);
+    await expect
+      .poll(() =>
+        (readdirSync(store, { recursive: true }) as string[]).some((file) =>
+          file.endsWith("sites/unknown.body"),
+        ),
+      )
+      .toBe(true);
+    const stored = (readdirSync(store, { recursive: true }) as string[]).join("\n");
+    for (const token of tokens)
+      expect(stored, `an entry was stored for /${token}`).not.toContain(token);
   });
 });

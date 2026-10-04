@@ -14,12 +14,9 @@ const read = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
 const rel = (path: string) => relative(ROOT, path);
 
 const TENANT = "src/app/(tenant)";
-const ROUTES = [
-  `${TENANT}/t/[handle]/route.ts`,
-  `${TENANT}/t/[handle]/[...rest]/route.ts`,
-  `${TENANT}/sites/[pageId]/route.ts`,
-  `${TENANT}/sites/[pageId]/[...rest]/route.ts`,
-];
+// The `[...rest]` siblings are gone (Wave J security review): every path that is not a page answers
+// from /sites/unknown, which is `sites/[pageId]/route.ts` with the sentinel id.
+const ROUTES = [`${TENANT}/t/[handle]/route.ts`, `${TENANT}/sites/[pageId]/route.ts`];
 
 /** Source without comments (a word in a comment is not a use). */
 const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm, "$1");
@@ -107,7 +104,11 @@ describe("M8-02 the live path holds no client component", () => {
     for (const [file, source] of graph) {
       if (!/\.(tsx?|jsx?)$/.test(file)) continue;
       const text = code(source);
-      if (/\buse(State|Effect|Ref|Memo|Callback|Context|Reducer|LayoutEffect|Transition)\s*\(/.test(text))
+      if (
+        /\buse(State|Effect|Ref|Memo|Callback|Context|Reducer|LayoutEffect|Transition)\s*\(/.test(
+          text,
+        )
+      )
         offenders.push(`${rel(file)}: a hook`);
       if (/\b(window|localStorage|sessionStorage|navigator)\./.test(text))
         offenders.push(`${rel(file)}: a browser API`);
@@ -199,7 +200,9 @@ describe("M8-03 the tenant group has no page, layout or boundary file any more",
 
   it("finds no page.tsx, layout.tsx, template.tsx, loading.tsx, error.tsx, not-found.tsx or default.tsx", () => {
     const forbidden = all.filter((file) =>
-      /\/(page|layout|template|loading|error|global-error|not-found|default)\.(tsx|ts|jsx|js)$/.test(file),
+      /\/(page|layout|template|loading|error|global-error|not-found|default)\.(tsx|ts|jsx|js)$/.test(
+        file,
+      ),
     );
     expect(forbidden).toEqual([]);
   });
@@ -207,7 +210,9 @@ describe("M8-03 the tenant group has no page, layout or boundary file any more",
   it("holds only route handlers, the public read and the stylesheet source", () => {
     const unexpected = all.filter(
       (file) =>
-        !/\/route\.ts$/.test(file) && !/published-page\.ts$/.test(file) && !/tenant\.css$/.test(file),
+        !/\/route\.ts$/.test(file) &&
+        !/published-page\.ts$/.test(file) &&
+        !/tenant\.css$/.test(file),
     );
     expect(unexpected).toEqual([]);
   });
@@ -224,7 +229,15 @@ describe("M8-02 one renderer, one module that outputs block markup", () => {
     const text = code(read("src/components/page/page-renderer.tsx"));
     const body = /export interface PageRendererProps \{([\s\S]*?)\n\}/.exec(text)![1]!;
     const props = [...body.matchAll(/^\s{2}(\w+)\??:/gm)].map((match) => match[1]);
-    expect(props).toEqual(["doc", "pageId", "mode", "chrome", "footer", "thumbnail", "inertEmbeds"]);
+    expect(props).toEqual([
+      "doc",
+      "pageId",
+      "mode",
+      "chrome",
+      "footer",
+      "thumbnail",
+      "inertEmbeds",
+    ]);
   });
 
   it("nothing in the builder or the panels writes block or renderer markup of its own", () => {
@@ -244,7 +257,11 @@ describe("M8-02 one renderer, one module that outputs block markup", () => {
         if (entry.isDirectory()) scan(path);
         else if (/\.(tsx?|jsx?)$/.test(entry.name)) {
           const text = code(readFileSync(path, "utf8"));
-          if (/import\s*\{[^}]*\b(revalidateTag|updateTag)\b[^}]*\}\s*from\s*["']next\/cache["']/.test(text))
+          if (
+            /import\s*\{[^}]*\b(revalidateTag|updateTag)\b[^}]*\}\s*from\s*["']next\/cache["']/.test(
+              text,
+            )
+          )
             users.push(rel(path));
         }
       }

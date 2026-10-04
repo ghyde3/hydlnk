@@ -5,7 +5,7 @@
  * range belongs to which.
  */
 
-import type { FontFile } from "./fonts";
+import { UNICODE_RANGE_PATTERN, type FontFile } from "./fonts";
 
 export interface GoogleFace {
   family: string;
@@ -32,14 +32,20 @@ export function parseGoogleFontsCss(css: string): GoogleFace[] {
     const family = field("font-family")?.replace(/^['"]|['"]$/g, "");
     const style = field("font-style");
     const weight = field("font-weight")?.split(/\s+/).map(Number);
-    const url = /src\s*:[^;]*url\(\s*['"]?([^'")\s]+)['"]?\s*\)\s*format\(\s*['"]woff2['"]\s*\)/i.exec(
-      body,
-    )?.[1];
+    const url =
+      /src\s*:[^;]*url\(\s*['"]?([^'")\s]+)['"]?\s*\)\s*format\(\s*['"]woff2['"]\s*\)/i.exec(
+        body,
+      )?.[1];
     const range = field("unicode-range");
     if (!family || !style || !weight || weight.some(Number.isNaN) || !url || !range) {
       throw new Error(`Unreadable @font-face block for subset ${subset}`);
     }
     if (!GSTATIC.test(url)) throw new Error(`Font file is not on fonts.gstatic.com: ${url}`);
+    // The range is written into every page's inline <style>: only `U+...` ranges, nothing else.
+    const unicodeRange = range.replace(/\s+/g, "");
+    if (!UNICODE_RANGE_PATTERN.test(unicodeRange)) {
+      throw new Error(`Unexpected unicode-range for subset ${subset}: ${range.slice(0, 80)}`);
+    }
     faces.push({
       family,
       subset: subset.toLowerCase(),
@@ -47,7 +53,7 @@ export function parseGoogleFontsCss(css: string): GoogleFace[] {
       weightMin: weight[0]!,
       weightMax: weight[1] ?? weight[0]!,
       url,
-      unicodeRange: range.replace(/\s+/g, ""),
+      unicodeRange,
     });
   }
   return faces;

@@ -277,8 +277,9 @@ describe("M6-10 the proxy branch for /share/*", () => {
         headers: { host: "mara.localhost:3000" },
       }),
     );
+    // A tenant host has no /share: it is the one plain tenant 404 (Wave J security review).
     expect(tenant.headers.get("x-middleware-rewrite")).toBe(
-      "http://mara.localhost:3000/t/mara/share/" + TOKEN,
+      "http://mara.localhost:3000/sites/unknown",
     );
     expect(shareRateLimit).not.toHaveBeenCalled();
   });

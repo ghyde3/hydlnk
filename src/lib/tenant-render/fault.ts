@@ -1,4 +1,5 @@
 import "server-only";
+import { testHooksEnabled } from "@/lib/env/test-hooks";
 
 /**
  * A one-shot fault for the end-to-end specs, and nothing else (M8-03, M8-04): "the next database
@@ -9,8 +10,9 @@ import "server-only";
  * cannot fail each other's pages.
  *
  * It exists only when the server runs with HYDLNK_QUERY_COUNTER=1, the test flag that already turns
- * on `GET /hl-query-count` and is never set in production: with the flag unset `armFailNextRead`
- * does nothing and `failIfArmed` never throws. The set lives on globalThis so the route that arms it
+ * on `GET /hl-query-count` and is never set in production, and never on a Vercel production
+ * deployment even if it were (`testHooksEnabled`): with the hook off `armFailNextRead` does nothing
+ * and `failIfArmed` never throws, so the set of armed keys cannot grow there either. The set lives on globalThis so the route that arms it
  * and the page render that consumes it share it within one process.
  */
 const KEY = "__hydlnkFailNextRead";
@@ -22,7 +24,7 @@ const keyOf = (target: FaultTarget) =>
   "handle" in target ? `handle:${target.handle}` : `page:${target.pageId}`;
 
 export function faultInjectionEnabled(): boolean {
-  return process.env.HYDLNK_QUERY_COUNTER === "1";
+  return testHooksEnabled();
 }
 
 /** Arms (or, with `armed: false`, disarms) a failure of the next read for `target`. False when the hook is off. */

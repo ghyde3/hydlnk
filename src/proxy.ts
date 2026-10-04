@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/env/client";
+import { testHooksEnabled } from "@/lib/env/test-hooks";
 import { resolveCustomDomain } from "@/lib/routing/custom-domain";
 import { classifyHost, invalidHandleLabel } from "@/lib/routing/host";
 import {
   NOT_FOUND_PATH,
+  PLAIN_404_PATH,
   UNKNOWN_SITE_ID,
   appRewritePath,
   isInternalPath,
@@ -51,10 +53,17 @@ function tenantMethodRejected(pathname: string): NextResponse {
  *   hydlnk.com, *.vercel.app  marketing, served as-is (/login and /signup: 308 to the app host)
  *   www.hydlnk.com            308 to the root host
  *   app.hydlnk.com            rewrite to /app/..., refreshing the Supabase session (only here)
- *   <handle>.hydlnk.com       rewrite to /t/<handle>/...
- *   anything else             custom-domain lookup: a verified domain is rewritten to /sites/<pageId>,
- *                             which answers the plain 404 unless that page is published; an unknown host
- *                             is the plain 404 as well (M4-09, M8-10)
+ *   <handle>.hydlnk.com       rewrite to /t/<handle> (the page) or /t/<handle>/og (its image); every
+ *                             other path is rewritten to the one plain 404, /sites/unknown
+ *   anything else             custom-domain lookup: a verified domain is rewritten to /sites/<pageId>
+ *                             (or /sites/<pageId>/og), which answers the plain 404 unless that page is
+ *                             published; every other path, and an unknown host on every path, is the
+ *                             one plain 404 as well (M4-09, M8-10)
+ *
+ * Why one 404 path: the page routes are static, so Next.js stores one cache entry per distinct path
+ * it is asked for. A sub-path rewritten to a route of its own would let anybody fill the cache with
+ * invented paths (Wave J security review); every request that is not a page, its image, a tracking
+ * route or a test hook (flag on, never in production) is rewritten to the same URL instead.
  *
  * The internal prefixes (/app, /t, /sites) exist only as rewrite targets: a visitor asking for one
  * directly on the root host gets a 404. Consequences for later milestones:
@@ -75,6 +84,9 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const rewriteTo = (path: string) => {
+    // The one plain tenant 404 is the same URL whatever was asked for: no query string, no trailing
+    // slash, so everything that lands there shares one cache entry.
+    if (path === PLAIN_404_PATH) return new URL(PLAIN_404_PATH, request.nextUrl.origin);
     const url = request.nextUrl.clone();
     url.pathname = path;
     return url;
@@ -122,7 +134,9 @@ export async function proxy(request: NextRequest) {
     case "tenant": {
       if (isTrackingPath(pathname)) return NextResponse.next();
       if (!isReadMethod(request.method)) return tenantMethodRejected(pathname);
-      const response = NextResponse.rewrite(rewriteTo(tenantRewritePath(handle ?? "", pathname)));
+      const response = NextResponse.rewrite(
+        rewriteTo(tenantRewritePath(handle ?? "", pathname, testHooksEnabled())),
+      );
       setTenantHeaders(response.headers);
       return response;
     }
@@ -134,7 +148,9 @@ export async function proxy(request: NextRequest) {
       const label = invalidHandleLabel(host, rootDomain);
       if (label) {
         if (!isReadMethod(request.method)) return tenantMethodRejected(pathname);
-        const response = NextResponse.rewrite(rewriteTo(tenantRewritePath(label, pathname)));
+        const response = NextResponse.rewrite(
+          rewriteTo(tenantRewritePath(label, pathname, testHooksEnabled())),
+        );
         setTenantHeaders(response.headers);
         return response;
       }
@@ -148,19 +164,19 @@ export async function proxy(request: NextRequest) {
       // and a lookup error all rewrite to the plain tenant 404 (/sites/unknown), with no tenant data in it.
       // The lookup answers null on every failure; the catch is the second wall: never a 500 here.
       // M8-10: the lookup is remembered for a short while (src/lib/routing/custom-domain.ts). The
-      // test flag HYDLNK_QUERY_COUNTER=1 (never set in production) adds `x-hl-domain-cache: HIT|MISS`
+      // test flag HYDLNK_QUERY_COUNTER=1 (never set in production, and ignored on a Vercel production
+      // deployment, see testHooksEnabled) adds `x-hl-domain-cache: HIT|MISS`
       // to the response so a spec can tell a remembered answer from a database read.
       let pageId: string | null = null;
       let domainCache = null as string | null; // assigned from the callback below
       try {
-        pageId =
-          process.env.HYDLNK_QUERY_COUNTER === "1"
-            ? await resolveCustomDomain(host, {
-                report: (state) => {
-                  if (state === "HIT" || state === "MISS") domainCache = state;
-                },
-              })
-            : await resolveCustomDomain(host);
+        pageId = testHooksEnabled()
+          ? await resolveCustomDomain(host, {
+              report: (state) => {
+                if (state === "HIT" || state === "MISS") domainCache = state;
+              },
+            })
+          : await resolveCustomDomain(host);
       } catch {
         pageId = null;
       }
