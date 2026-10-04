@@ -192,11 +192,21 @@ test.describe("M9-11 parity and the chip", () => {
 
     // Only an alignment changes.
     await openBlock(page, TEXT_ID);
-    await selectText(page, TEXT_ID, 40);
+    // A toolbar button acts on the editor's own selection, which a loaded machine can take a moment to
+    // take over (or lose to a re-render): put the caret in the right-aligned line until the toolbar,
+    // which reads that selection, says so, and check each step the same way before the next click.
+    await expect(async () => {
+      await selectText(page, TEXT_ID, 40);
+      await expect(tool(page, TEXT_ID, "Align right")).toHaveAttribute("aria-pressed", "true", {
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 15_000 });
     await tool(page, TEXT_ID, "Align left").click();
+    await expect(tool(page, TEXT_ID, "Align left")).toHaveAttribute("aria-pressed", "true");
     await expect(statusChip(page)).toHaveText("Unpublished changes");
     await expect(editorOf(page, TEXT_ID)).toContainText("the right-aligned one");
     await tool(page, TEXT_ID, "Align right").click();
+    await expect(tool(page, TEXT_ID, "Align right")).toHaveAttribute("aria-pressed", "true");
     await expect(statusChip(page)).toHaveText("Published");
   });
 });
