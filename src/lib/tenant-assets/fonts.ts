@@ -7,7 +7,7 @@ import { TENANT_ASSET_PREFIX, TENANT_FONT_DIR } from "./constants";
  * The live page's fonts, from its own host (M8-01). The font files are vendored under
  * public/_t/f/ (woff2 files of the same typefaces Google Fonts serves, SIL Open Font License, split
  * by the same unicode ranges), named after the hash of their bytes and served with an immutable
- * cache; `font-manifest.json` is what `scripts/vendor-tenant-fonts.ts` wrote when it downloaded them.
+ * cache; `font-manifest.json` is what `scripts/vendor-tenant-fonts.mts` wrote when it downloaded them.
  * Nothing here talks to Google: the page's `@font-face` rules point at `/_t/f/...` and the document
  * preloads the same URLs, so each file is one request.
  *

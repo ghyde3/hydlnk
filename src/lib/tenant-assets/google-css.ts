@@ -1,7 +1,7 @@
 /**
  * Reads the CSS Google Fonts serves for a family (what a Chrome browser is sent: woff2 files split
  * by unicode range, each block headed by its subset's name) into plain records. Build-time only:
- * scripts/vendor-tenant-fonts.ts uses it once to learn which files to vendor and which unicode
+ * scripts/vendor-tenant-fonts.mts uses it once to learn which files to vendor and which unicode
  * range belongs to which.
  */
 

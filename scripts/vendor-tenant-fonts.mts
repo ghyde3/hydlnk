@@ -20,7 +20,7 @@ import { readWoff2Names } from "../src/lib/tenant-assets/woff2";
  * each family's license and copyright (read from the font files' own name tables).
  *
  * THIS SCRIPT DOWNLOADS FROM THE NETWORK (fonts.googleapis.com for the stylesheets, fonts.gstatic.com
- * for the files: roughly 4 MB in about 150 files) and so is run by hand, once, with the owner's say-so,
+ * for the files: 3.2 MB in about 250 files) and so is run by hand, once, with the owner's say-so,
  * and again only when the allowlist changes. The result is committed: no build and no request of the
  * running app ever fetches a font. A variable file that serves several weights is saved once.
  *
@@ -86,11 +86,20 @@ const report: string[] = [];
 for (const entry of FONT_CATALOG) {
   if (only && !only.has(entry.family)) continue;
   const weights = [...entry.weights];
-  const css = await (await get(googleCssUrl(entry.family, weights))).text();
-  const faces = parseGoogleFontsCss(css).filter(
-    (face: GoogleFace) => face.style === "normal" && face.family === entry.family,
-  );
-  if (faces.length === 0) throw new Error(`Google served no faces for ${entry.family}`);
+  // One stylesheet request per weight: Google serves a request for one weight a file cut down to
+  // that weight (Inter 400 latin is 23.8 KB), and a request for several weights the whole variable
+  // file (48.4 KB), so a page that asks for one weight is sent the smaller file. Files with the
+  // same bytes are saved once.
+  const facesByWeight = new Map<number, GoogleFace[]>();
+  for (const weight of weights) {
+    const css = await (await get(googleCssUrl(entry.family, [weight]))).text();
+    const found = parseGoogleFontsCss(css).filter(
+      (face: GoogleFace) => face.style === "normal" && face.family === entry.family,
+    );
+    if (found.length === 0) throw new Error(`Google served no faces for ${entry.family} ${weight}`);
+    facesByWeight.set(weight, found);
+  }
+  const faces = [...facesByWeight.values()].flat();
 
   let copyright = "";
   let license = "";
@@ -118,7 +127,25 @@ for (const entry of FONT_CATALOG) {
     googleBytes.set(name, file.googleBytes);
     saved.set(face, { file: name, bytes: file.bytes.length });
   }
-  const rows = manifestRows(faces, weights, (face) => saved.get(face)!);
+  // A range the family has no real glyphs for is served as a stub of about 1 KB (Plus Jakarta Sans
+  // cyrillic-ext): the browser would use a fallback font for those characters either way, so the
+  // subset is left out for every weight instead of shipping a file the size check cannot tell from
+  // a truncated download.
+  const stubs = new Set(
+    [...saved].filter(([, file]) => file.bytes < 1024).map(([face]) => face.subset),
+  );
+  for (const [face, file] of saved) if (stubs.has(face.subset)) files.delete(file.file);
+  if (stubs.size > 0)
+    console.log(`${entry.family}: no glyphs in ${[...stubs].join(", ")}, left out`);
+  const rows = weights
+    .flatMap((weight) =>
+      manifestRows(
+        facesByWeight.get(weight)!.filter((face) => !stubs.has(face.subset)),
+        [weight],
+        (face) => saved.get(face)!,
+      ),
+    )
+    .sort((a, b) => a.weight - b.weight);
   families[entry.family] = {
     license,
     faces: rows,

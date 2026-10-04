@@ -3582,7 +3582,7 @@
         "Supersedes: M3-04 step 1 (one Google stylesheet link plus preconnect hints to the two Google hosts) and the 'single family param' clause of step 2, for the live public page only (the editor preview keeps them); M5-21 step 3's clause 'fonts load with display=swap and preconnect and only the families the page's tokens use' (now: display=swap, preloaded, from the page's own host, only the faces the tokens select, no preconnect at all); M7-15 step 7's clause that the only requests leaving the page's own host are the Google Fonts hosts, and M6-34 step 3's allowlist of the Supabase Storage origin (now: nothing leaves the page's own host except images on the root `/media` origin); M3-25 step 2's clause 'the same Google Fonts family params' (now: the same `@font-face` rules and font files). M3-04 steps 3 to 6 and M3-01 hold unchanged. Playwright literals that expect `fonts.googleapis.com/css2` on a live page change in tests/e2e/m1/tenant-placeholder.spec.ts, m2/blocks-live.spec.ts, m3/design-tenant.spec.ts, m6/embeds-tenant.spec.ts, m6/links-public.spec.ts, m6/wave-g-done.spec.ts and m7/media-helpers.ts; the specs that drive the editor's own preview keep theirs."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M8-02",
@@ -3690,7 +3690,7 @@
         "Supersedes: for the policy a live tenant page carries, M2-22 step 7's CSP literal (`frame-src https://www.youtube-nocookie.com https://open.spotify.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'` with 'no script-src nonce'), M6-26 step 6's exact string (the frame-src list inside it is unchanged and is now one directive of the policy above; 'the app host's policy gains no frame-src' still holds; the constant `TENANT_CONTENT_SECURITY_POLICY` keeps that string for the share policy) and M6-34 step 5's 'the tenant CSP is exactly the M6-26 string'. The Vitest pins in tests/unit/m6-embeds-parse.test.ts, routing-proxy-tenant.test.ts, m7-media-origin.test.ts and auth-google-headers.test.ts that name the old live-page string change; those that pin the share policy and the app host policy (m6-pages-share-proxy.test.ts) do not. M2-22 steps 6 and 7's other headers, M4-09 step 5, M6-10 step 3 and M7-14 step 5 hold unchanged."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M8-08",
@@ -3706,7 +3706,7 @@
         "Supersedes: none. M2-05 steps 1 to 3 and 5 to 9, M2-31 steps 3 and 4, M6-03, M6-11 step 3's 'fonts as on the live page' (the preview keeps the Google stylesheet of the same families; the live page now uses the same families from its own host), M6-27 step 6 and M6-34 steps 2 and 8 hold unchanged and run against the live builder; the parity tests that call `TenantPage` (tests/unit/renderer-parity.test.ts, m6-preview-static.test.ts) are re-pointed to the builder."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M8-09",

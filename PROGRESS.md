@@ -25,15 +25,15 @@ Five findings from the Wave J security review, on `m9-cost-levers` (draft PR #20
 
 Wave J on branch `m9-cost-levers` (draft PR #20), approved by Gary on 2026-10-03 after the hosting cost model. Three builders (render, assets, levers) and one integration agent. Features M8-01 to M8-12.
 
-**Built.** The live page is finished HTML built by a route handler (M8-02): inline CSS, one hashed script (tap to play for all eight providers, Spotify now a facade, plus the view beacon), no framework runtime in the visitor's browser. Placeholder, 404s and the 500 panel come from the same path (M8-03); the page keeps its cache (M8-04); tenant pages carry a closed CSP (M8-07); the editor preview, shared draft and demos keep the React renderer (M8-08); the custom-domain lookup is cached with every domain change expiring it (M8-10, M8-11); raw events are kept 60 days (M8-12). Self-hosted theme fonts (M8-01) are built but the files are not vendored (see Open for Gary).
+**Built.** The live page is finished HTML built by a route handler (M8-02): inline CSS, one hashed script (tap to play for all eight providers, Spotify now a facade, plus the view beacon), no framework runtime in the visitor's browser. Placeholder, 404s and the 500 panel come from the same path (M8-03); the page keeps its cache (M8-04); tenant pages carry a closed CSP (M8-07); the editor preview, shared draft and demos keep the React renderer (M8-08); the custom-domain lookup is cached with every domain change expiring it (M8-10, M8-11); raw events are kept 60 days (M8-12). Self-hosted theme fonts (M8-01): built, and the files are now vendored (see "Fonts vendored" below).
 
 **Flipped to `passes: true` (every step seen proven): M8-02, M8-03, M8-05, M8-06, M8-10, M8-11, M8-12.**
 
 **Built but held at `passes: false`:**
-- M8-01: `src/lib/tenant-assets/font-manifest.json` is the "pending" stub; `pnpm tenant-fonts` downloads about 150 woff2 files (about 4 MB) from fonts.googleapis.com and fonts.gstatic.com and needs Gary's explicit approval, so no agent ran it. The five font gates in tests/unit/m8-assets-fonts.test.ts stay red on purpose, so a release cannot ship every theme in system fonts.
-- M8-09: the byte budget and the exactly-two-fonts shape cannot be proven without the font files. Everything else in the spec passes (see the numbers below). The document-size line is measured as gzip, see Deviations.
-- M8-07: steps 1 to 5 pass; the font files' `Cache-Control`, `nosniff` and no-cookie clause (step 2) has no files to exercise.
-- M8-08: steps 1, 2, 4, 5 pass; step 3's 1 px parity "with the preview's fonts fulfilled from the self-hosted files, so both sides use the same font bytes" needs the vendored files.
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-01: `src/lib/tenant-assets/font-manifest.json` is the "pending" stub; `pnpm tenant-fonts` downloads about 150 woff2 files (about 4 MB) from fonts.googleapis.com and fonts.gstatic.com and needs Gary's explicit approval, so no agent ran it. The five font gates in tests/unit/m8-assets-fonts.test.ts stay red on purpose, so a release cannot ship every theme in system fonts.
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-09: the byte budget and the exactly-two-fonts shape cannot be proven without the font files. Everything else in the spec passes (see the numbers below). The document-size line is measured as gzip, see Deviations.
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-07: steps 1 to 5 pass; the font files' `Cache-Control`, `nosniff` and no-cookie clause (step 2) has no files to exercise.
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-08: steps 1, 2, 4, 5 pass; step 3's 1 px parity "with the preview's fonts fulfilled from the self-hosted files, so both sides use the same font bytes" needs the vendored files.
 - M8-04: steps 1 to 3 and 5 to 7 pass on the production build, and so do the claim, delete-page, delete-account, plan-change, suspend/unsuspend, first-publish and custom-domain (og:url follows `getPrimaryDomain`) rows of step 4. Held for two reasons: the step 4 row "unpublish (page to placeholder)" has no product flow to test (nothing in the app sets `published` to null; the column is server-only), and step 6 is qualified (a client that retries within about 40 ms of a failure can be handed the 500 panel once more; the mechanism is proven on `next start`, 30 of 30 repeats, and untested on Vercel's cache handler).
 
 **Evidence (all on this tree, 2026-10-04).**
@@ -60,6 +60,94 @@ Wave J on branch `m9-cost-levers` (draft PR #20), approved by Gary on 2026-10-03
 | Fraunces plus Inter font bytes | from fonts.gstatic.com (not counted above) | not yet: Google serves the two latin files at 36.5 KB + 23.8 KB, the spec allows 64 KB |
 
 Images (two PNGs from `/media`, 2,978 B) are the same before and after. With the fonts vendored the page makes at most 2 more requests and about 60 KB more, so about 84 KB with the document uncompressed and about 72 KB with the edge's compression, under the 90 KB budget; the release-time measurement on Vercel (M8-09 step 8) is the proof. Reload: the second visit made the document and the beacon only, no script request (assets-budget, 10 of 10). Tapping the YouTube and Spotify posters added exactly the two iframe navigations and nothing to the page's own host.
+
+
+**Fonts vendored (2026-10-04, same wave; M8-01, M8-07, M8-08 flipped).** Gary approved vendoring the tenant fonts and approved the domain-cache staleness bounds (a removed or re-pointed domain can serve its old page for up to 60 s, a newly verified one can 404 for up to 10 s, on an instance the action did not run on), both on 2026-10-04. `pnpm tenant-fonts` was run once: 254 woff2 files (3.2 MB) and NOTICE.txt in `public/_t/f`, and `src/lib/tenant-assets/font-manifest.json`. The script is now `scripts/vendor-tenant-fonts.mts` (tsx refused top-level await in a .ts file; references in three source comments updated). Two changes to the script, both found when the gates ran:
+- One Google stylesheet request per weight. Google serves a single-weight request a file cut to that weight (Inter 400 latin 23,804 B) and a multi-weight request the whole variable file (Inter latin 48,432 B), so the first run (all weights in one request) made the Fraunces 700 plus Inter pair 85.0 KB against the 64 KB step. Per weight, the pair is 18,288 + 23,804 = 42,092 B. The cost is more files (254 against 81); files with identical bytes are saved once.
+- A subset a family has no glyphs for is left out for every weight of that family. Plus Jakarta Sans cyrillic-ext is a 1,016 to 1,044 byte stub at Google; the step's 1 KB floor (which exists to catch a truncated download) rejects it, and the browser falls back for those characters either way.
+
+Measurements on this tree's production build (`tests/e2e/m8/assets-budget.spec.ts`, the M8-09 fixture, fresh context, CDP, `next start -p 3100`): 5 requests to the page's own host at both 390x844 and 1440x900 (1 document, 2 woff2, 1 script, 1 beacon), 0 to any third party, no `/_next/` JS or CSS. Bytes to the page's own host, with the document counted as the edge would send it (gzip):
+| Free or Pro, viewport | total | document | script | beacon | fonts |
+|---|---|---|---|---|---|
+| Free, 390 | 51,112 B | 6,715 B | 1,416 B | 223 B | 42,758 B |
+| Pro, 390 | 51,081 B | 6,684 B | 1,416 B | 223 B | 42,758 B |
+| Free, 1440 | 51,103 B | 6,706 B | 1,416 B | 223 B | 42,758 B |
+| Pro, 1440 | 51,081 B | 6,684 B | 1,416 B | 223 B | 42,758 B |
+
+Against the budget: 5 of 6 requests, 51.1 KB of 90 KB, fonts 41.8 KB of 64 KB (the files are 42,092 B; 42,758 B on the wire with headers). Before (1e6e600): 19 requests, 322,717 B, 36 third-party requests. The first-visit line "fonts not yet vendored" in the table above is now this row.
+
+Size table, latin file of every family at every heading weight, ours next to the bytes Google serves for the same single-weight request (identical, the files are unmodified; last column is the number of subsets). Output of `pnpm tenant-fonts --dry`:
+
+| Family | Weight | Latin file, ours (bytes) | Latin file, Google (bytes) | Subsets |
+|---|---|---|---|---|
+| Inter | 400 | 23804 | 23804 | 7 |
+| Inter | 500 | 24356 | 24356 | 7 |
+| Inter | 600 | 24420 | 24420 | 7 |
+| Inter | 700 | 24456 | 24456 | 7 |
+| DM Sans | 400 | 14124 | 14124 | 2 |
+| DM Sans | 500 | 14288 | 14288 | 2 |
+| DM Sans | 600 | 14176 | 14176 | 2 |
+| DM Sans | 700 | 14256 | 14256 | 2 |
+| Manrope | 400 | 14196 | 14196 | 6 |
+| Manrope | 500 | 14048 | 14048 | 6 |
+| Manrope | 600 | 14148 | 14148 | 6 |
+| Manrope | 700 | 14260 | 14260 | 6 |
+| Geist | 400 | 13088 | 13088 | 5 |
+| Geist | 500 | 13336 | 13336 | 5 |
+| Geist | 600 | 13456 | 13456 | 5 |
+| Geist | 700 | 13452 | 13452 | 5 |
+| Space Grotesk | 400 | 13428 | 13428 | 3 |
+| Space Grotesk | 500 | 13372 | 13372 | 3 |
+| Space Grotesk | 600 | 13276 | 13276 | 3 |
+| Space Grotesk | 700 | 12848 | 12848 | 3 |
+| Outfit | 400 | 14096 | 14096 | 2 |
+| Outfit | 500 | 13400 | 13400 | 2 |
+| Outfit | 600 | 14196 | 14196 | 2 |
+| Outfit | 700 | 14064 | 14064 | 2 |
+| Sora | 400 | 14752 | 14752 | 2 |
+| Sora | 500 | 15024 | 15024 | 2 |
+| Sora | 600 | 15048 | 15048 | 2 |
+| Sora | 700 | 15140 | 15140 | 2 |
+| Poppins | 400 | 7900 | 7900 | 3 |
+| Poppins | 500 | 7740 | 7740 | 3 |
+| Poppins | 600 | 7992 | 7992 | 3 |
+| Poppins | 700 | 7848 | 7848 | 3 |
+| Plus Jakarta Sans | 400 | 11868 | 11868 | 3 |
+| Plus Jakarta Sans | 500 | 12300 | 12300 | 3 |
+| Plus Jakarta Sans | 600 | 12168 | 12168 | 3 |
+| Plus Jakarta Sans | 700 | 12280 | 12280 | 3 |
+| Bricolage Grotesque | 400 | 22396 | 22396 | 3 |
+| Bricolage Grotesque | 500 | 22400 | 22400 | 3 |
+| Bricolage Grotesque | 600 | 22296 | 22296 | 3 |
+| Bricolage Grotesque | 700 | 22400 | 22400 | 3 |
+| Instrument Serif | 400 | 15040 | 15040 | 2 |
+| Fraunces | 400 | 18016 | 18016 | 3 |
+| Fraunces | 500 | 17988 | 17988 | 3 |
+| Fraunces | 600 | 18120 | 18120 | 3 |
+| Fraunces | 700 | 18288 | 18288 | 3 |
+| Playfair Display | 400 | 21880 | 21880 | 4 |
+| Playfair Display | 500 | 23132 | 23132 | 4 |
+| Playfair Display | 600 | 23204 | 23204 | 4 |
+| Playfair Display | 700 | 23316 | 23316 | 4 |
+| DM Serif Display | 400 | 17844 | 17844 | 2 |
+| Lora | 400 | 21188 | 21188 | 7 |
+| Lora | 500 | 21928 | 21928 | 7 |
+| Lora | 600 | 21804 | 21804 | 7 |
+| Lora | 700 | 21212 | 21212 | 7 |
+| Cormorant Garamond | 400 | 22896 | 22896 | 5 |
+| Cormorant Garamond | 500 | 23260 | 23260 | 5 |
+| Cormorant Garamond | 600 | 23384 | 23384 | 5 |
+| Cormorant Garamond | 700 | 22388 | 22388 | 5 |
+| Space Mono | 400 | 9464 | 9464 | 3 |
+| Space Mono | 700 | 9552 | 9552 | 3 |
+| Geist Mono | 400 | 9872 | 9872 | 6 |
+| Geist Mono | 500 | 10088 | 10088 | 6 |
+| Geist Mono | 600 | 10164 | 10164 | 6 |
+| Geist Mono | 700 | 10128 | 10128 | 6 |
+
+Tests on this tree after the vendoring: `pnpm typecheck` and `pnpm lint` clean; `pnpm test` 254 files, 6,341 tests, all passed (the five font gates now pass); `pnpm db:reset` then `pnpm test:db` 32 files, 1,416 tests, PASS; `tests/unit/publish-bundle.test.ts` 4 passed against the build. Production build as CI runs it: m2/publish-cache, m4/billing-badge, m5/suspend-cache 35 passed, 3 skipped; tests/e2e/m8/ render-cache, assets-budget, assets-served, assets-fonts-live, levers-domain-cache 75 passed, 15 skipped (project-specific rows); closed-plans server 7 passed, 3 skipped; flag-off server 1 passed, 13 skipped. Dev server, `tests/e2e/m8/` plus `tests/e2e/m6/wave-g-done.spec.ts`: 138 passed, 82 skipped, 0 failed; render-parity 3 passed, 1 skipped (phone-only skip). No servers left running.
+
+**Flips from this run:** M8-01, M8-07 and M8-08 to `passes: true`. **Still held:** M8-09 (steps 1 to 7 and 9 are proven; step 8 is the release proof against links.hyde-co.com, recorded after `/release`, like M7-14) and M8-04 (as above: no unpublish flow to test, and step 6 is qualified).
 
 **Decisions and mechanisms (recorded as the specs ask).**
 - Technique (M8-02 step 1): `renderToStaticMarkup` imported from `next/dist/compiled/react-dom/server.node`, because Next refuses `react-dom/server` inside a route handler. It works in `next dev` and `next build` (Turbopack), and a parity test shows its output equals `react-dom/server`'s byte for byte.

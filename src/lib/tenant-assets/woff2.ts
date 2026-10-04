@@ -3,7 +3,7 @@ import { brotliDecompressSync } from "node:zlib";
 /**
  * Reads the `name` table of a WOFF2 file (copyright, family, license), so the notices shipped beside
  * the vendored fonts come from the files themselves and a download of the wrong typeface is caught.
- * Build-time only (scripts/vendor-tenant-fonts.ts and its test). WOFF2 stores every table but
+ * Build-time only (scripts/vendor-tenant-fonts.mts and its test). WOFF2 stores every table but
  * glyf and loca untransformed, so reading `name` needs only the table directory and Brotli.
  */
 

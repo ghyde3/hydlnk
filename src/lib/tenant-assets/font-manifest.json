@@ -1,4 +1,1873 @@
 {
-  "source": "pending: run `pnpm tenant-fonts` (scripts/vendor-tenant-fonts.ts) once, with Gary's approval to download the font files from Google Fonts",
-  "families": {}
+  "source": "fonts.googleapis.com/css2 (Chrome user agent); the woff2 files of fonts.gstatic.com, saved unmodified",
+  "families": {
+    "Inter": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "inter-cyrillic-ext.2dc6ebbc8458.woff2",
+          "bytes": 10236
+        },
+        {
+          "weight": 400,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "inter-cyrillic.ebba52acdbd2.woff2",
+          "bytes": 7788
+        },
+        {
+          "weight": 400,
+          "subset": "greek-ext",
+          "unicodeRange": "U+1F00-1FFF",
+          "file": "inter-greek-ext.ee560ac05f43.woff2",
+          "bytes": 5308
+        },
+        {
+          "weight": 400,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "inter-greek.074e683a6e11.woff2",
+          "bytes": 7848
+        },
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "inter-vietnamese.16f6d2b24e0d.woff2",
+          "bytes": 4980
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "inter-latin-ext.3c05d9f2f8b5.woff2",
+          "bytes": 35056
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "inter-latin.48a0c2503a9c.woff2",
+          "bytes": 23804
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "inter-cyrillic-ext.46b34b71181a.woff2",
+          "bytes": 10420
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "inter-cyrillic.ddddc9086f13.woff2",
+          "bytes": 8040
+        },
+        {
+          "weight": 500,
+          "subset": "greek-ext",
+          "unicodeRange": "U+1F00-1FFF",
+          "file": "inter-greek-ext.ed68c10557a1.woff2",
+          "bytes": 5416
+        },
+        {
+          "weight": 500,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "inter-greek.b0a6550a90b1.woff2",
+          "bytes": 7932
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "inter-vietnamese.83021b238712.woff2",
+          "bytes": 5108
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "inter-latin-ext.d73a8a42bdc3.woff2",
+          "bytes": 36104
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "inter-latin.a1eab7f4970e.woff2",
+          "bytes": 24356
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "inter-cyrillic-ext.94e82d55a83b.woff2",
+          "bytes": 10484
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "inter-cyrillic.4144f657ae5f.woff2",
+          "bytes": 7964
+        },
+        {
+          "weight": 600,
+          "subset": "greek-ext",
+          "unicodeRange": "U+1F00-1FFF",
+          "file": "inter-greek-ext.6ff69947a58d.woff2",
+          "bytes": 5440
+        },
+        {
+          "weight": 600,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "inter-greek.bde67bfb9f0c.woff2",
+          "bytes": 7948
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "inter-vietnamese.18c644efc552.woff2",
+          "bytes": 5200
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "inter-latin-ext.e35ba50effff.woff2",
+          "bytes": 36384
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "inter-latin.9a3d22c43636.woff2",
+          "bytes": 24420
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "inter-cyrillic-ext.d6fe4461385c.woff2",
+          "bytes": 10444
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "inter-cyrillic.e7a03e3a2670.woff2",
+          "bytes": 7952
+        },
+        {
+          "weight": 700,
+          "subset": "greek-ext",
+          "unicodeRange": "U+1F00-1FFF",
+          "file": "inter-greek-ext.25c5748a1b70.woff2",
+          "bytes": 5452
+        },
+        {
+          "weight": 700,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "inter-greek.f00c7b41796d.woff2",
+          "bytes": 7940
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "inter-vietnamese.470d8943bd82.woff2",
+          "bytes": 5136
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "inter-latin-ext.b0f3643451c1.woff2",
+          "bytes": 36300
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "inter-latin.ea90630996b1.woff2",
+          "bytes": 24456
+        }
+      ]
+    },
+    "DM Sans": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "dm-sans-latin-ext.06779986c5be.woff2",
+          "bytes": 7368
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "dm-sans-latin.f0a0ffc38828.woff2",
+          "bytes": 14124
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "dm-sans-latin-ext.0ddce392fcf3.woff2",
+          "bytes": 7380
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "dm-sans-latin.a6a1b2b70fa4.woff2",
+          "bytes": 14288
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "dm-sans-latin-ext.8848db8b67b1.woff2",
+          "bytes": 7464
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "dm-sans-latin.30d4fbc42b0a.woff2",
+          "bytes": 14176
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "dm-sans-latin-ext.6695df0f65e4.woff2",
+          "bytes": 7440
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "dm-sans-latin.d91b32eb570d.woff2",
+          "bytes": 14256
+        }
+      ]
+    },
+    "Manrope": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "manrope-cyrillic-ext.84a3ddd262d3.woff2",
+          "bytes": 1584
+        },
+        {
+          "weight": 400,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "manrope-cyrillic.1ad89dd22daa.woff2",
+          "bytes": 7896
+        },
+        {
+          "weight": 400,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "manrope-greek.09ca8a7fe58e.woff2",
+          "bytes": 5236
+        },
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "manrope-vietnamese.6788c01cb356.woff2",
+          "bytes": 4412
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "manrope-latin-ext.50973fb5c2f5.woff2",
+          "bytes": 8284
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "manrope-latin.f905aed25440.woff2",
+          "bytes": 14196
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "manrope-cyrillic-ext.7c30638be8ee.woff2",
+          "bytes": 1596
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "manrope-cyrillic.8e45fc0fcb65.woff2",
+          "bytes": 7876
+        },
+        {
+          "weight": 500,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "manrope-greek.9ce800ee9244.woff2",
+          "bytes": 5280
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "manrope-vietnamese.fceec04577ea.woff2",
+          "bytes": 4324
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "manrope-latin-ext.fe73841a0425.woff2",
+          "bytes": 8192
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "manrope-latin.611b17f15114.woff2",
+          "bytes": 14048
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "manrope-cyrillic-ext.a03b99c1aabd.woff2",
+          "bytes": 1604
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "manrope-cyrillic.af5215fae524.woff2",
+          "bytes": 7920
+        },
+        {
+          "weight": 600,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "manrope-greek.002985e2135d.woff2",
+          "bytes": 5228
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "manrope-vietnamese.f3aeaa292d19.woff2",
+          "bytes": 4376
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "manrope-latin-ext.20fe28d6272a.woff2",
+          "bytes": 8288
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "manrope-latin.c0ade936fbd1.woff2",
+          "bytes": 14148
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "manrope-cyrillic-ext.d2a73e9d5b87.woff2",
+          "bytes": 1560
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "manrope-cyrillic.a06b93b7cf7f.woff2",
+          "bytes": 7828
+        },
+        {
+          "weight": 700,
+          "subset": "greek",
+          "unicodeRange": "U+0370-0377,U+037A-037F,U+0384-038A,U+038C,U+038E-03A1,U+03A3-03FF",
+          "file": "manrope-greek.cabe848e78b2.woff2",
+          "bytes": 5292
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "manrope-vietnamese.b9c09907d8d3.woff2",
+          "bytes": 4544
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "manrope-latin-ext.c54e8e5c1a54.woff2",
+          "bytes": 8384
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "manrope-latin.cf6a6475e005.woff2",
+          "bytes": 14260
+        }
+      ]
+    },
+    "Geist": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-cyrillic-ext.e5cbd4a43cec.woff2",
+          "bytes": 3224
+        },
+        {
+          "weight": 400,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-cyrillic.841229bbcfa6.woff2",
+          "bytes": 6104
+        },
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-vietnamese.b21baa8a09b1.woff2",
+          "bytes": 3988
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-latin-ext.b9354ec50fb1.woff2",
+          "bytes": 7800
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-latin.ba884770e9f5.woff2",
+          "bytes": 13088
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-cyrillic-ext.5c2ebb32e624.woff2",
+          "bytes": 3228
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-cyrillic.7abf8d974c36.woff2",
+          "bytes": 6348
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-vietnamese.3cda56bb3063.woff2",
+          "bytes": 4084
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-latin-ext.12d30f6225bd.woff2",
+          "bytes": 8000
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-latin.b27228bf2a74.woff2",
+          "bytes": 13336
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-cyrillic-ext.642ca2634cc6.woff2",
+          "bytes": 3276
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-cyrillic.c814c0eb32dc.woff2",
+          "bytes": 6388
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-vietnamese.1bf4a4b8a4fc.woff2",
+          "bytes": 4124
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-latin-ext.4bd3519841ab.woff2",
+          "bytes": 7988
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-latin.6f8ac317a28e.woff2",
+          "bytes": 13456
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-cyrillic-ext.d7f18f7caee0.woff2",
+          "bytes": 3252
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-cyrillic.366f9076ffd8.woff2",
+          "bytes": 6340
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-vietnamese.b0ad4d880be0.woff2",
+          "bytes": 4076
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-latin-ext.3e0626dfcfd1.woff2",
+          "bytes": 7972
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-latin.182da49340e4.woff2",
+          "bytes": 13452
+        }
+      ]
+    },
+    "Space Grotesk": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "space-grotesk-vietnamese.3528208e6db2.woff2",
+          "bytes": 4280
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "space-grotesk-latin-ext.8e93a4a03acc.woff2",
+          "bytes": 12288
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "space-grotesk-latin.29d733b05dea.woff2",
+          "bytes": 13428
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "space-grotesk-vietnamese.82a673af2cf2.woff2",
+          "bytes": 4336
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "space-grotesk-latin-ext.5fab3a91e601.woff2",
+          "bytes": 12308
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "space-grotesk-latin.cedfe94cfb03.woff2",
+          "bytes": 13372
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "space-grotesk-vietnamese.17fae8b8daf2.woff2",
+          "bytes": 4308
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "space-grotesk-latin-ext.2db72353f5f2.woff2",
+          "bytes": 12260
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "space-grotesk-latin.564c913b0f49.woff2",
+          "bytes": 13276
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "space-grotesk-vietnamese.bde6f9a84273.woff2",
+          "bytes": 4232
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "space-grotesk-latin-ext.fc18f2146077.woff2",
+          "bytes": 12068
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "space-grotesk-latin.249284738618.woff2",
+          "bytes": 12848
+        }
+      ]
+    },
+    "Outfit": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "outfit-latin-ext.d9feb5ee9963.woff2",
+          "bytes": 6404
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "outfit-latin.9786922fdba6.woff2",
+          "bytes": 14096
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "outfit-latin-ext.b62d5fb7d817.woff2",
+          "bytes": 6232
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "outfit-latin.6ffbc6f6b80e.woff2",
+          "bytes": 13400
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "outfit-latin-ext.694130814d05.woff2",
+          "bytes": 6628
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "outfit-latin.3736ab9f280a.woff2",
+          "bytes": 14196
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "outfit-latin-ext.f86aca15df1c.woff2",
+          "bytes": 6508
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "outfit-latin.3ffee3eed9ef.woff2",
+          "bytes": 14064
+        }
+      ]
+    },
+    "Sora": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "sora-latin-ext.7d81141f19b7.woff2",
+          "bytes": 7352
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "sora-latin.0513acb430aa.woff2",
+          "bytes": 14752
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "sora-latin-ext.a35d04913af4.woff2",
+          "bytes": 7472
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "sora-latin.7a228bf09ccc.woff2",
+          "bytes": 15024
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "sora-latin-ext.ea5800381000.woff2",
+          "bytes": 7492
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "sora-latin.931ddd095949.woff2",
+          "bytes": 15048
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "sora-latin-ext.36537359ec0d.woff2",
+          "bytes": 7504
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "sora-latin.b990b9c6f438.woff2",
+          "bytes": 15140
+        }
+      ]
+    },
+    "Poppins": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "devanagari",
+          "unicodeRange": "U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+20B9,U+20F0,U+25CC,U+A830-A839,U+A8E0-A8FF,U+11B00-11B09",
+          "file": "poppins-devanagari.23617a1bf667.woff2",
+          "bytes": 39504
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "poppins-latin-ext.1fae5e73d278.woff2",
+          "bytes": 5640
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "poppins-latin.3dc5d0c52428.woff2",
+          "bytes": 7900
+        },
+        {
+          "weight": 500,
+          "subset": "devanagari",
+          "unicodeRange": "U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+20B9,U+20F0,U+25CC,U+A830-A839,U+A8E0-A8FF,U+11B00-11B09",
+          "file": "poppins-devanagari.9c8c47ee0aea.woff2",
+          "bytes": 39160
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "poppins-latin-ext.f8f0c28661c8.woff2",
+          "bytes": 5496
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "poppins-latin.289e0afc8be7.woff2",
+          "bytes": 7740
+        },
+        {
+          "weight": 600,
+          "subset": "devanagari",
+          "unicodeRange": "U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+20B9,U+20F0,U+25CC,U+A830-A839,U+A8E0-A8FF,U+11B00-11B09",
+          "file": "poppins-devanagari.6d8ef422be4d.woff2",
+          "bytes": 39384
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "poppins-latin-ext.72efc6a32cfd.woff2",
+          "bytes": 5552
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "poppins-latin.872e86291859.woff2",
+          "bytes": 7992
+        },
+        {
+          "weight": 700,
+          "subset": "devanagari",
+          "unicodeRange": "U+0900-097F,U+1CD0-1CF9,U+200C-200D,U+20A8,U+20B9,U+20F0,U+25CC,U+A830-A839,U+A8E0-A8FF,U+11B00-11B09",
+          "file": "poppins-devanagari.6eb8802d7319.woff2",
+          "bytes": 39204
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "poppins-latin-ext.2477683a4b12.woff2",
+          "bytes": 5448
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "poppins-latin.197a3cbd7290.woff2",
+          "bytes": 7848
+        }
+      ]
+    },
+    "Plus Jakarta Sans": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "plus-jakarta-sans-vietnamese.33b2382ae51c.woff2",
+          "bytes": 4108
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "plus-jakarta-sans-latin-ext.385d8d0a32a4.woff2",
+          "bytes": 10564
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "plus-jakarta-sans-latin.7539fd092fc8.woff2",
+          "bytes": 11868
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "plus-jakarta-sans-vietnamese.213f63f37cd1.woff2",
+          "bytes": 4280
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "plus-jakarta-sans-latin-ext.de59d17d0fc0.woff2",
+          "bytes": 10984
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "plus-jakarta-sans-latin.d49885abe6a9.woff2",
+          "bytes": 12300
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "plus-jakarta-sans-vietnamese.ebb2960fcbff.woff2",
+          "bytes": 4212
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "plus-jakarta-sans-latin-ext.6a953633bfe4.woff2",
+          "bytes": 10912
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "plus-jakarta-sans-latin.e76419f92a09.woff2",
+          "bytes": 12168
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "plus-jakarta-sans-vietnamese.b4578da1f8bb.woff2",
+          "bytes": 4272
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "plus-jakarta-sans-latin-ext.8cd51703e6be.woff2",
+          "bytes": 10936
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "plus-jakarta-sans-latin.388e45211c16.woff2",
+          "bytes": 12280
+        }
+      ]
+    },
+    "Bricolage Grotesque": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "bricolage-grotesque-vietnamese.78eb8ea8fa30.woff2",
+          "bytes": 5036
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "bricolage-grotesque-latin-ext.19e88a33c8f2.woff2",
+          "bytes": 10548
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "bricolage-grotesque-latin.20fe060fe59c.woff2",
+          "bytes": 22396
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "bricolage-grotesque-vietnamese.029aaeb2d812.woff2",
+          "bytes": 5048
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "bricolage-grotesque-latin-ext.23da3a0c7113.woff2",
+          "bytes": 10628
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "bricolage-grotesque-latin.9f73a88a8ffa.woff2",
+          "bytes": 22400
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "bricolage-grotesque-vietnamese.1e9f84c5a45d.woff2",
+          "bytes": 5128
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "bricolage-grotesque-latin-ext.622bcecdf5fc.woff2",
+          "bytes": 10668
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "bricolage-grotesque-latin.8928f6c9c1b5.woff2",
+          "bytes": 22296
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "bricolage-grotesque-vietnamese.032b5c9b62b1.woff2",
+          "bytes": 5088
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "bricolage-grotesque-latin-ext.caa470744c89.woff2",
+          "bytes": 10592
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "bricolage-grotesque-latin.f5a329f8dc54.woff2",
+          "bytes": 22400
+        }
+      ]
+    },
+    "Instrument Serif": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "instrument-serif-latin-ext.a8c4bd7cd707.woff2",
+          "bytes": 7828
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "instrument-serif-latin.60c06664b5a9.woff2",
+          "bytes": 15040
+        }
+      ]
+    },
+    "Fraunces": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "fraunces-vietnamese.bfb9240b97b4.woff2",
+          "bytes": 6236
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "fraunces-latin-ext.c18dc513940a.woff2",
+          "bytes": 17248
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "fraunces-latin.f415e27844fc.woff2",
+          "bytes": 18016
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "fraunces-vietnamese.608bc1e521ad.woff2",
+          "bytes": 6156
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "fraunces-latin-ext.8929a4881aea.woff2",
+          "bytes": 17272
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "fraunces-latin.c63d7a1c08a9.woff2",
+          "bytes": 17988
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "fraunces-vietnamese.80e376222577.woff2",
+          "bytes": 6200
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "fraunces-latin-ext.fb02c1bf9f38.woff2",
+          "bytes": 17356
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "fraunces-latin.f0f802aa2c59.woff2",
+          "bytes": 18120
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "fraunces-vietnamese.898badd4a488.woff2",
+          "bytes": 6268
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "fraunces-latin-ext.ba1b3892801e.woff2",
+          "bytes": 17672
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "fraunces-latin.a13496dc536e.woff2",
+          "bytes": 18288
+        }
+      ]
+    },
+    "Playfair Display": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "playfair-display-cyrillic.d2d5be11d4e7.woff2",
+          "bytes": 11424
+        },
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "playfair-display-vietnamese.dd8dc47a6f18.woff2",
+          "bytes": 5624
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "playfair-display-latin-ext.14a61a78daa9.woff2",
+          "bytes": 12432
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "playfair-display-latin.57edb864a5b7.woff2",
+          "bytes": 21880
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "playfair-display-cyrillic.c1c7becb64ae.woff2",
+          "bytes": 12284
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "playfair-display-vietnamese.a5d12841921e.woff2",
+          "bytes": 5680
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "playfair-display-latin-ext.ba75f1010f4d.woff2",
+          "bytes": 12948
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "playfair-display-latin.e299ff10d063.woff2",
+          "bytes": 23132
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "playfair-display-cyrillic.9b3dcefba3a1.woff2",
+          "bytes": 12228
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "playfair-display-vietnamese.50ef4a5225e6.woff2",
+          "bytes": 5712
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "playfair-display-latin-ext.6d3afd9d57d0.woff2",
+          "bytes": 12864
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "playfair-display-latin.9b70843ad207.woff2",
+          "bytes": 23204
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "playfair-display-cyrillic.cca811cbda6c.woff2",
+          "bytes": 12360
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "playfair-display-vietnamese.00ef6bc79801.woff2",
+          "bytes": 5712
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "playfair-display-latin-ext.29e6381bb7b5.woff2",
+          "bytes": 13052
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "playfair-display-latin.02af2688dd8c.woff2",
+          "bytes": 23316
+        }
+      ]
+    },
+    "DM Serif Display": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "dm-serif-display-latin-ext.dfea1d6549e7.woff2",
+          "bytes": 6800
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "dm-serif-display-latin.f273cf2c9ce9.woff2",
+          "bytes": 17844
+        }
+      ]
+    },
+    "Lora": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "lora-cyrillic-ext.d9fcbe975059.woff2",
+          "bytes": 12560
+        },
+        {
+          "weight": 400,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "lora-cyrillic.afdf193ef7fd.woff2",
+          "bytes": 11476
+        },
+        {
+          "weight": 400,
+          "subset": "math",
+          "unicodeRange": "U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF",
+          "file": "lora-math.de75ba91b2db.woff2",
+          "bytes": 16340
+        },
+        {
+          "weight": 400,
+          "subset": "symbols",
+          "unicodeRange": "U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF",
+          "file": "lora-symbols.a8221c1a30d9.woff2",
+          "bytes": 9424
+        },
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "lora-vietnamese.755476e345c2.woff2",
+          "bytes": 5244
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "lora-latin-ext.dede484815dc.woff2",
+          "bytes": 11944
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "lora-latin.00f287113972.woff2",
+          "bytes": 21188
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "lora-cyrillic-ext.de72bbbe9c15.woff2",
+          "bytes": 13332
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "lora-cyrillic.b20139929ab0.woff2",
+          "bytes": 11964
+        },
+        {
+          "weight": 500,
+          "subset": "math",
+          "unicodeRange": "U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF",
+          "file": "lora-math.808146f8ad9e.woff2",
+          "bytes": 16896
+        },
+        {
+          "weight": 500,
+          "subset": "symbols",
+          "unicodeRange": "U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF",
+          "file": "lora-symbols.eae0268a0fec.woff2",
+          "bytes": 9828
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "lora-vietnamese.e3f03109d455.woff2",
+          "bytes": 5476
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "lora-latin-ext.7bbde23612ac.woff2",
+          "bytes": 12180
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "lora-latin.3447a610bc2e.woff2",
+          "bytes": 21928
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "lora-cyrillic-ext.2b5b8bd2a06f.woff2",
+          "bytes": 13304
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "lora-cyrillic.73acb435eedf.woff2",
+          "bytes": 12016
+        },
+        {
+          "weight": 600,
+          "subset": "math",
+          "unicodeRange": "U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF",
+          "file": "lora-math.cab6e8d8c85b.woff2",
+          "bytes": 16900
+        },
+        {
+          "weight": 600,
+          "subset": "symbols",
+          "unicodeRange": "U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF",
+          "file": "lora-symbols.c17632f30b1e.woff2",
+          "bytes": 9776
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "lora-vietnamese.aa7b3d60d737.woff2",
+          "bytes": 5524
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "lora-latin-ext.88c7f0ca330d.woff2",
+          "bytes": 12256
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "lora-latin.b136a75b9f6d.woff2",
+          "bytes": 21804
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "lora-cyrillic-ext.9ce0d3503d27.woff2",
+          "bytes": 12660
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "lora-cyrillic.8da799a1d0aa.woff2",
+          "bytes": 11412
+        },
+        {
+          "weight": 700,
+          "subset": "math",
+          "unicodeRange": "U+0302-0303,U+0305,U+0307-0308,U+0310,U+0312,U+0315,U+031A,U+0326-0327,U+032C,U+032F-0330,U+0332-0333,U+0338,U+033A,U+0346,U+034D,U+0391-03A1,U+03A3-03A9,U+03B1-03C9,U+03D1,U+03D5-03D6,U+03F0-03F1,U+03F4-03F5,U+2016-2017,U+2034-2038,U+203C,U+2040,U+2043,U+2047,U+2050,U+2057,U+205F,U+2070-2071,U+2074-208E,U+2090-209C,U+20D0-20DC,U+20E1,U+20E5-20EF,U+2100-2112,U+2114-2115,U+2117-2121,U+2123-214F,U+2190,U+2192,U+2194-21AE,U+21B0-21E5,U+21F1-21F2,U+21F4-2211,U+2213-2214,U+2216-22FF,U+2308-230B,U+2310,U+2319,U+231C-2321,U+2336-237A,U+237C,U+2395,U+239B-23B7,U+23D0,U+23DC-23E1,U+2474-2475,U+25AF,U+25B3,U+25B7,U+25BD,U+25C1,U+25CA,U+25CC,U+25FB,U+266D-266F,U+27C0-27FF,U+2900-2AFF,U+2B0E-2B11,U+2B30-2B4C,U+2BFE,U+3030,U+FF5B,U+FF5D,U+1D400-1D7FF,U+1EE00-1EEFF",
+          "file": "lora-math.8bf8417f610b.woff2",
+          "bytes": 16380
+        },
+        {
+          "weight": 700,
+          "subset": "symbols",
+          "unicodeRange": "U+0001-000C,U+000E-001F,U+007F-009F,U+20DD-20E0,U+20E2-20E4,U+2150-218F,U+2190,U+2192,U+2194-2199,U+21AF,U+21E6-21F0,U+21F3,U+2218-2219,U+2299,U+22C4-22C6,U+2300-243F,U+2440-244A,U+2460-24FF,U+25A0-27BF,U+2800-28FF,U+2921-2922,U+2981,U+29BF,U+29EB,U+2B00-2BFF,U+4DC0-4DFF,U+FFF9-FFFB,U+10140-1018E,U+10190-1019C,U+101A0,U+101D0-101FD,U+102E0-102FB,U+10E60-10E7E,U+1D2C0-1D2D3,U+1D2E0-1D37F,U+1F000-1F0FF,U+1F100-1F1AD,U+1F1E6-1F1FF,U+1F30D-1F30F,U+1F315,U+1F31C,U+1F31E,U+1F320-1F32C,U+1F336,U+1F378,U+1F37D,U+1F382,U+1F393-1F39F,U+1F3A7-1F3A8,U+1F3AC-1F3AF,U+1F3C2,U+1F3C4-1F3C6,U+1F3CA-1F3CE,U+1F3D4-1F3E0,U+1F3ED,U+1F3F1-1F3F3,U+1F3F5-1F3F7,U+1F408,U+1F415,U+1F41F,U+1F426,U+1F43F,U+1F441-1F442,U+1F444,U+1F446-1F449,U+1F44C-1F44E,U+1F453,U+1F46A,U+1F47D,U+1F4A3,U+1F4B0,U+1F4B3,U+1F4B9,U+1F4BB,U+1F4BF,U+1F4C8-1F4CB,U+1F4D6,U+1F4DA,U+1F4DF,U+1F4E3-1F4E6,U+1F4EA-1F4ED,U+1F4F7,U+1F4F9-1F4FB,U+1F4FD-1F4FE,U+1F503,U+1F507-1F50B,U+1F50D,U+1F512-1F513,U+1F53E-1F54A,U+1F54F-1F5FA,U+1F610,U+1F650-1F67F,U+1F687,U+1F68D,U+1F691,U+1F694,U+1F698,U+1F6AD,U+1F6B2,U+1F6B9-1F6BA,U+1F6BC,U+1F6C6-1F6CF,U+1F6D3-1F6D7,U+1F6E0-1F6EA,U+1F6F0-1F6F3,U+1F6F7-1F6FC,U+1F700-1F7FF,U+1F800-1F80B,U+1F810-1F847,U+1F850-1F859,U+1F860-1F887,U+1F890-1F8AD,U+1F8B0-1F8BB,U+1F8C0-1F8C1,U+1F900-1F90B,U+1F93B,U+1F946,U+1F984,U+1F996,U+1F9E9,U+1FA00-1FA6F,U+1FA70-1FA7C,U+1FA80-1FA89,U+1FA8F-1FAC6,U+1FACE-1FADC,U+1FADF-1FAE9,U+1FAF0-1FAF8,U+1FB00-1FBFF",
+          "file": "lora-symbols.de7d6449a9de.woff2",
+          "bytes": 9412
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "lora-vietnamese.f54641325400.woff2",
+          "bytes": 5256
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "lora-latin-ext.182d90f68afd.woff2",
+          "bytes": 11960
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "lora-latin.f288a6520c48.woff2",
+          "bytes": 21212
+        }
+      ]
+    },
+    "Cormorant Garamond": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "cormorant-garamond-cyrillic-ext.fbc0241ad194.woff2",
+          "bytes": 13908
+        },
+        {
+          "weight": 400,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "cormorant-garamond-cyrillic.c78038b0250d.woff2",
+          "bytes": 12792
+        },
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "cormorant-garamond-vietnamese.56fb7f131c51.woff2",
+          "bytes": 6752
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "cormorant-garamond-latin-ext.d665c6081f3c.woff2",
+          "bytes": 19888
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "cormorant-garamond-latin.982538ce9654.woff2",
+          "bytes": 22896
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "cormorant-garamond-cyrillic-ext.5180d6a7153a.woff2",
+          "bytes": 14076
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "cormorant-garamond-cyrillic.bb505ca590d7.woff2",
+          "bytes": 12896
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "cormorant-garamond-vietnamese.b9ef6f47efee.woff2",
+          "bytes": 6760
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "cormorant-garamond-latin-ext.4760bc6fb6e7.woff2",
+          "bytes": 20188
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "cormorant-garamond-latin.98d352d9c9f4.woff2",
+          "bytes": 23260
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "cormorant-garamond-cyrillic-ext.fd1396367a03.woff2",
+          "bytes": 14196
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "cormorant-garamond-cyrillic.aadd174e117f.woff2",
+          "bytes": 13064
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "cormorant-garamond-vietnamese.235f62b8fc52.woff2",
+          "bytes": 6764
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "cormorant-garamond-latin-ext.d79559afd66f.woff2",
+          "bytes": 20300
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "cormorant-garamond-latin.53205cf81200.woff2",
+          "bytes": 23384
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "cormorant-garamond-cyrillic-ext.29ec794c821e.woff2",
+          "bytes": 13760
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "cormorant-garamond-cyrillic.e4e83060826f.woff2",
+          "bytes": 12512
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "cormorant-garamond-vietnamese.7946c43c359b.woff2",
+          "bytes": 6176
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "cormorant-garamond-latin-ext.edd79daead84.woff2",
+          "bytes": 19304
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "cormorant-garamond-latin.c4aef5d2c6f5.woff2",
+          "bytes": 22388
+        }
+      ]
+    },
+    "Space Mono": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "space-mono-vietnamese.1ab5cb4b90a5.woff2",
+          "bytes": 4116
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "space-mono-latin-ext.b4f90459adf4.woff2",
+          "bytes": 9752
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "space-mono-latin.e0c8e616bda2.woff2",
+          "bytes": 9464
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "space-mono-vietnamese.e9c42e9aad5b.woff2",
+          "bytes": 4168
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "space-mono-latin-ext.512458b32bf4.woff2",
+          "bytes": 9732
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "space-mono-latin.af7cf6d2b897.woff2",
+          "bytes": 9552
+        }
+      ]
+    },
+    "Geist Mono": {
+      "license": "OFL-1.1",
+      "faces": [
+        {
+          "weight": 400,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-mono-cyrillic-ext.aac11f1b5aa0.woff2",
+          "bytes": 2784
+        },
+        {
+          "weight": 400,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-mono-cyrillic.402a0f970923.woff2",
+          "bytes": 5588
+        },
+        {
+          "weight": 400,
+          "subset": "symbols2",
+          "unicodeRange": "U+2000-2001,U+2004-2008,U+200A,U+23B8-23BD,U+2500-259F",
+          "file": "geist-mono-symbols2.545e79aa6acc.woff2",
+          "bytes": 3344
+        },
+        {
+          "weight": 400,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-mono-vietnamese.55061797a3b3.woff2",
+          "bytes": 3836
+        },
+        {
+          "weight": 400,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-mono-latin-ext.b43bf733b5c2.woff2",
+          "bytes": 7012
+        },
+        {
+          "weight": 400,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-mono-latin.23840067d1dd.woff2",
+          "bytes": 9872
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-mono-cyrillic-ext.4e2f5eacb9d2.woff2",
+          "bytes": 2836
+        },
+        {
+          "weight": 500,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-mono-cyrillic.9a7822b17b5d.woff2",
+          "bytes": 5700
+        },
+        {
+          "weight": 500,
+          "subset": "symbols2",
+          "unicodeRange": "U+2000-2001,U+2004-2008,U+200A,U+23B8-23BD,U+2500-259F",
+          "file": "geist-mono-symbols2.87577dce1532.woff2",
+          "bytes": 3380
+        },
+        {
+          "weight": 500,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-mono-vietnamese.d33d61e05867.woff2",
+          "bytes": 3936
+        },
+        {
+          "weight": 500,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-mono-latin-ext.3a7379c5ee96.woff2",
+          "bytes": 7152
+        },
+        {
+          "weight": 500,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-mono-latin.320720dea18b.woff2",
+          "bytes": 10088
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-mono-cyrillic-ext.cb75978ca377.woff2",
+          "bytes": 2872
+        },
+        {
+          "weight": 600,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-mono-cyrillic.451ecd650352.woff2",
+          "bytes": 5768
+        },
+        {
+          "weight": 600,
+          "subset": "symbols2",
+          "unicodeRange": "U+2000-2001,U+2004-2008,U+200A,U+23B8-23BD,U+2500-259F",
+          "file": "geist-mono-symbols2.bec8e6c97eaf.woff2",
+          "bytes": 3320
+        },
+        {
+          "weight": 600,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-mono-vietnamese.abdfc0fcd361.woff2",
+          "bytes": 3944
+        },
+        {
+          "weight": 600,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-mono-latin-ext.888a6d572d4d.woff2",
+          "bytes": 7188
+        },
+        {
+          "weight": 600,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-mono-latin.92e22e33e984.woff2",
+          "bytes": 10164
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic-ext",
+          "unicodeRange": "U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F",
+          "file": "geist-mono-cyrillic-ext.bc26f132efe3.woff2",
+          "bytes": 2840
+        },
+        {
+          "weight": 700,
+          "subset": "cyrillic",
+          "unicodeRange": "U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116",
+          "file": "geist-mono-cyrillic.9d6f55ef2ae3.woff2",
+          "bytes": 5728
+        },
+        {
+          "weight": 700,
+          "subset": "symbols2",
+          "unicodeRange": "U+2000-2001,U+2004-2008,U+200A,U+23B8-23BD,U+2500-259F",
+          "file": "geist-mono-symbols2.2e179d3c8921.woff2",
+          "bytes": 3368
+        },
+        {
+          "weight": 700,
+          "subset": "vietnamese",
+          "unicodeRange": "U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB",
+          "file": "geist-mono-vietnamese.2e5f60fcbd73.woff2",
+          "bytes": 3936
+        },
+        {
+          "weight": 700,
+          "subset": "latin-ext",
+          "unicodeRange": "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+          "file": "geist-mono-latin-ext.5e8a52c9976d.woff2",
+          "bytes": 7144
+        },
+        {
+          "weight": 700,
+          "subset": "latin",
+          "unicodeRange": "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+          "file": "geist-mono-latin.6fd81712ffff.woff2",
+          "bytes": 10128
+        }
+      ]
+    }
+  }
 }

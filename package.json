@@ -22,7 +22,7 @@
     "db:types": "scripts/db-types.sh",
     "screens": "tsx scripts/screens.ts",
     "tenant-assets": "tsx scripts/build-tenant-assets.ts",
-    "tenant-fonts": "tsx scripts/vendor-tenant-fonts.ts",
+    "tenant-fonts": "tsx scripts/vendor-tenant-fonts.mts",
     "predev": "pnpm tenant-assets",
     "prebuild": "pnpm tenant-assets",
     "pretest": "pnpm tenant-assets"
