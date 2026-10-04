@@ -25,6 +25,7 @@ import {
 } from "./history-helpers";
 import { emptyUser } from "../m2/editor-helpers";
 import { BLOCK_ID_PATTERN } from "@/lib/document";
+import { inPreviewSheet } from "../m7/phone-preview";
 
 /**
  * M6-04: a "+" before, between and after the blocks adds a block exactly there. One smoke per
@@ -190,7 +191,7 @@ test.describe("M6-04 the + between blocks", () => {
     await expect.poll(async () => (await focused(page)).blockId).toBe(added);
     expect((await focused(page)).tag).toBe("INPUT");
     await expect(page.getByRole("heading", { level: 2, name: "Blocks · 8" })).toBeVisible();
-    await expect(previewScreen(page)).toContainText("New section");
+    await inPreviewSheet(page, () => expect(previewScreen(page)).toContainText("New section"));
     await expect(status(page, "Header added at position 3 of 8.")).toHaveCount(1);
     // The chooser closed itself.
     await expect(chooser(page, 3)).toHaveCount(0);
@@ -307,7 +308,7 @@ test.describe("M6-04 layout", () => {
       .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().top));
     expect(new Set(chipBoxes.map((top) => Math.round(top))).size).toBeGreaterThan(1);
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "#editor-panel-blocks");
+    await expectTapTargets(page, "[role='tabpanel']");
   });
 
   test("M6-04 desktop: a slot is a 20px hairline whose circle shows on hover and on focus, inside the 720px column", async ({
@@ -317,7 +318,7 @@ test.describe("M6-04 layout", () => {
     test.skip(!desktopOnly(info));
     await userWithBlocks(context, "insd", textBlocks(3));
     await openEditor(page);
-    const column = (await page.locator("#editor-panel-blocks").boundingBox())!;
+    const column = (await page.locator("[role='tabpanel']").boundingBox())!;
     expect(column.width).toBeLessThanOrEqual(720.5);
     const box = (await slotButton(page, 2).boundingBox())!;
     expect(box.height).toBeCloseTo(20, 0);
@@ -370,7 +371,7 @@ test.describe("M6-04 abuse: a repeated id written straight to the database", () 
     await openEditor(page);
     // Publish first so there is a live page that must not change.
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published", {
@@ -402,7 +403,7 @@ test.describe("M6-04 abuse: a repeated id written straight to the database", () 
     // The Publish gate refuses the stored draft itself (nothing was edited, so nothing was saved).
     expect((await pageRow(user.pageId)).draft.blocks).toHaveLength(3);
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     const alert = page.getByRole("alert").filter({ hasText: "before publishing" });

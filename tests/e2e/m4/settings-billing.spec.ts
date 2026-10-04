@@ -169,7 +169,8 @@ test.describe("M4-05 Settings & billing: plan band and plan cards", () => {
       // The content column is capped at 920px.
       expect((await box(page.locator("#plans"))).width).toBeLessThanOrEqual(920);
       const sidebar = page.getByRole("navigation", { name: "App" });
-      await expect(sidebar.locator("a[aria-current='page']")).toHaveText("Settings & billing");
+      // M7-01: Settings & billing is in the account menu; no sidebar link is current on /settings.
+      await expect(sidebar.locator("a[aria-current='page']")).toHaveCount(0);
       expect((await box(page.locator("aside"))).width).toBe(240);
     }
   });

@@ -102,6 +102,11 @@ export async function waitForEditorHydrated(page: Page): Promise<void> {
     const input = document.querySelector("input[autocomplete='name']");
     return !!input && Object.keys(input).some((key) => key.startsWith("__reactProps$"));
   });
+  // M7-02, M7-09: the workspace draws its preview one render after hydration, once the viewport is
+  // known: the bezel from 760px up, the mini phone below. Wait for it, so a spec that reads the
+  // preview right after opening the editor never catches the moment before it exists.
+  const width = page.viewportSize()?.width ?? 1440;
+  await page.getByTestId(width >= 760 ? "preview-bezel" : "mini-phone").waitFor();
 }
 
 /** Opens the editor and waits until the screen is interactive (rendered and hydrated). */

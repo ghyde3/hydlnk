@@ -2,17 +2,22 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { publishableKey } from "../fixtures/auth";
 import { cleanupUsers, makeUser } from "../fixtures/data";
 import { pageRow } from "../m2/editor-helpers";
+import { showPreview, showTokens } from "./design-helpers";
 import { resolveProfileOptions } from "@/lib/document/profile-options";
 import { SYSTEM_DEFAULT_TOKENS, resolveTokens, tokenSetSchema } from "@/lib/theme";
 import {
   IVORY,
   NOIR,
+  chooseThemeMenuItem,
+  openThemeMenu,
+  ownThemesRow,
   SYSTEM_THEME_COUNT,
   expectFits,
   expectNoHorizontalScroll,
   expectStoredTheme,
   expectTapTargets,
-  headerStatus,
+  expectAppliedTheme,
+  expectNoThemeApplied,
   isPhone,
   liveHtml,
   messageOf,
@@ -28,6 +33,7 @@ import {
   statusChip,
   storedTheme,
   switchTo,
+  systemThemesRow,
   themeCard,
   themeCards,
   themeRow,
@@ -57,8 +63,14 @@ async function box(locator: Locator) {
   return rect;
 }
 
+/** The preview's token variables. A phone draws the preview in the mini phone's sheet (M7-09): opened for the read, closed after. */
 async function varsOf(page: Page) {
-  return rootVars(previewRootOf(page));
+  await showPreview(page);
+  try {
+    return await rootVars(previewRootOf(page));
+  } finally {
+    await showTokens(page);
+  }
 }
 
 test.describe("M3-19 saved themes grid", () => {
@@ -71,38 +83,38 @@ test.describe("M3-19 saved themes grid", () => {
     await seedTheme(user.userId, "Day shift", { accent: "#AABBCC" });
     await openDesignWithCard(page);
 
-    await expect(
-      savedThemesCard(page).getByRole("heading", { name: "Saved themes" }),
-    ).toBeVisible();
-    await expect(savedThemesCard(page)).toContainText(
-      "Applying one replaces your page’s own style changes",
-    );
+    // M7-06: two rows, the user's own themes first, then the HYDLNK ones.
+    await expect(savedThemesCard(page).getByRole("heading", { level: 3 })).toHaveText([
+      "Your themes · 2",
+      "HYDLNK themes · 16",
+    ]);
+    await expect(savedThemesCard(page)).not.toContainText("Applying one replaces");
 
     const cards = themeCards(page);
     await expect(cards).toHaveCount(SYSTEM_THEME_COUNT + 2);
-    await expect(cards.nth(0)).toContainText("Noir");
-    await expect(cards.nth(SYSTEM_THEME_COUNT)).toContainText("Night shift");
-    await expect(cards.nth(SYSTEM_THEME_COUNT + 1)).toContainText("Day shift");
+    await expect(cards.nth(0)).toContainText("Night shift");
+    await expect(cards.nth(1)).toContainText("Day shift");
+    await expect(cards.nth(2)).toContainText("Noir");
 
     // The applied card: pressed and tagged. Everything else is not pressed and has no tag.
     const noir = themeCard(page, "Noir");
     await expect(noir).toHaveAttribute("aria-pressed", "true");
     await expect(tag(noir)).toHaveText("Applied");
     await expect(page.locator("[data-testid=theme-card][aria-pressed=true]")).toHaveCount(1);
-    await expect(headerStatus(page)).toHaveText("Theme · Noir");
+    await expectAppliedTheme(page, "Noir");
 
-    // The swatch is 56px tall with a filled and an outlined accent bar.
+    // The swatch is 48px tall with a filled and an outlined accent bar (M7-06).
     const swatch = noir.locator("[data-swatch]");
-    expect((await box(swatch)).height).toBe(56);
+    expect((await box(swatch)).height).toBe(48);
     await expect(swatch.locator("> span")).toHaveCount(2);
 
-    // The grid is repeat(auto-fill, minmax(130px, 1fr)): two columns on a phone.
-    const columns = await page
-      .getByTestId("theme-grid")
-      .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-    if (isPhone(page)) expect(columns).toBe(2);
-    else expect(columns).toBeGreaterThanOrEqual(4);
-    for (const index of [0, 1, SYSTEM_THEME_COUNT]) {
+    // Each row is a horizontal scroll container (M7-06), not a grid.
+    for (const row of [ownThemesRow(page), systemThemesRow(page)]) {
+      expect(await row.getByRole("region").evaluate((el) => getComputedStyle(el).overflowX)).toBe(
+        "auto",
+      );
+    }
+    for (const index of [0, 1, 2]) {
       expect((await box(cards.nth(index))).height).toBeGreaterThanOrEqual(44);
     }
     await expectTapTargets(page, "[data-testid=saved-themes-card]");
@@ -111,7 +123,7 @@ test.describe("M3-19 saved themes grid", () => {
     // After editing a colour, the tag reads Edited and the header says so.
     await accentSwatch(page, "Terracotta").click();
     await expect(tag(noir)).toHaveText("Edited");
-    await expect(headerStatus(page)).toHaveText("Theme · Noir · edited");
+    await expectAppliedTheme(page, "Noir", "Edited");
     expect(info.project.name).toMatch(/phone|desktop/);
   });
 
@@ -238,7 +250,7 @@ test.describe("M3-20 apply a theme to the draft, with Undo", () => {
       expect(m.x).toBeGreaterThanOrEqual(0);
       expect(m.x + m.width).toBeLessThanOrEqual(390);
     } else {
-      const grid = await box(page.getByTestId("theme-grid"));
+      const grid = await box(ownThemesRow(page));
       expect(m.y + m.height).toBeLessThanOrEqual(grid.y + 0.5);
       expect(grid.y - (m.y + m.height)).toBeLessThan(80);
     }
@@ -291,7 +303,7 @@ test.describe("M3-21 Save as theme", () => {
     expect(await varsOf(page)).toEqual(varsBefore);
     await expect(themeCard(page, "My theme 1")).toHaveAttribute("aria-pressed", "true");
     await expect(tag(themeCard(page, "My theme 1"))).toHaveText("Applied");
-    await expect(headerStatus(page)).toHaveText("Theme · My theme 1");
+    await expectAppliedTheme(page, "My theme 1");
     await expect(messageOf(page)).toHaveText(/Saved as My theme 1\./);
 
     // Later edits make it Edited and leave the saved row alone.
@@ -302,7 +314,7 @@ test.describe("M3-21 Save as theme", () => {
     expect(await liveHtml(user.handle)).toBe(liveBefore);
   });
 
-  test("M3-21 the button and the confirmation are 44px, visible and inside the viewport; on desktop the button sits next to Done", async ({
+  test("M3-21 the button and the confirmation are 44px, visible and inside the viewport; the button sits at the right of the 'Your themes' heading", async ({
     page,
     context,
   }) => {
@@ -321,12 +333,12 @@ test.describe("M3-21 Save as theme", () => {
     expect(m.y + m.height).toBeLessThanOrEqual(viewport.height);
     await expectNoHorizontalScroll(page);
 
-    if (!isPhone(page)) {
-      const done = await box(page.getByRole("link", { name: "Done" }));
-      const b = await box(button);
-      expect(b.x + b.width).toBeLessThanOrEqual(done.x);
-      expect(Math.abs(b.y + b.height / 2 - (done.y + done.height / 2))).toBeLessThan(12);
-    }
+    const heading = await box(
+      savedThemesCard(page).getByRole("heading", { level: 3, name: /^Your themes/ }),
+    );
+    const b = await box(button);
+    expect(b.x).toBeGreaterThan(heading.x + heading.width);
+    expect(Math.abs(b.y + b.height / 2 - (heading.y + heading.height / 2))).toBeLessThan(12);
   });
 });
 
@@ -350,7 +362,7 @@ test.describe("M3-22 the Free limit on the Design screen", () => {
 
     // Above the grid, fully visible, with a 44px Dismiss.
     const m = await box(message);
-    const grid = await box(page.getByTestId("theme-grid"));
+    const grid = await box(ownThemesRow(page));
     expect(m.y + m.height).toBeLessThanOrEqual(grid.y + 0.5);
     expect(m.x).toBeGreaterThanOrEqual(0);
     expect(m.x + m.width).toBeLessThanOrEqual(page.viewportSize()!.width);
@@ -439,7 +451,10 @@ test.describe("M3-23 update and rename a saved theme", () => {
     await expect(tag(themeCard(page, "Noir"))).toHaveText("Edited");
     await expect(page.getByTestId("theme-update")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save as theme" })).toBeVisible();
+    // A HYDLNK theme cannot be renamed: its menu has Preview only (M7-06).
     await expect(page.getByTestId("theme-rename")).toHaveCount(0);
+    const menu = await openThemeMenu(page, "Noir");
+    await expect(menu.getByRole("menuitem")).toHaveText(["Preview"]);
   });
 
   test("M3-23 rename: Enter saves, Escape cancels, whitespace is trimmed, empty is refused; other pages show the new name and nothing becomes unpublished", async ({
@@ -454,11 +469,14 @@ test.describe("M3-23 update and rename a saved theme", () => {
     const tokensBefore = (await themeRow(shared.id))!.tokens;
 
     await openDesignWithCard(page);
-    const trigger = page.getByRole("button", { name: "Rename Shared look" });
-    expect((await box(trigger)).height).toBeGreaterThanOrEqual(44);
+    const trigger = page.getByRole("button", { name: "More for Shared look", exact: true });
+    const moreBox = await box(trigger);
+    expect(moreBox.height).toBeGreaterThanOrEqual(44);
+    expect(moreBox.width).toBeGreaterThanOrEqual(44);
+    const rename = () => chooseThemeMenuItem(page, "Shared look", "Rename");
 
     // Escape cancels.
-    await trigger.click();
+    await rename();
     const input = page.getByTestId("theme-rename-input");
     await expect(input).toHaveValue("Shared look");
     await expect(input).toBeFocused();
@@ -471,7 +489,7 @@ test.describe("M3-23 update and rename a saved theme", () => {
     expect((await themeRow(shared.id))!.name).toBe("Shared look");
 
     // Empty is refused.
-    await trigger.click();
+    await rename();
     await input.fill("   ");
     await page.keyboard.press("Enter");
     await expect(page.getByText("Give the theme a name.")).toBeVisible();
@@ -482,7 +500,7 @@ test.describe("M3-23 update and rename a saved theme", () => {
     await page.keyboard.press("Enter");
     await expect(input).toHaveCount(0);
     await expect(themeCard(page, "Night Market")).toBeVisible();
-    await expect(headerStatus(page)).toHaveText("Theme · Night Market");
+    await expectAppliedTheme(page, "Night Market");
     await expect.poll(async () => (await themeRow(shared.id))!.name).toBe("Night Market");
     expect((await themeRow(shared.id))!.tokens).toEqual(tokensBefore);
 
@@ -491,7 +509,7 @@ test.describe("M3-23 update and rename a saved theme", () => {
     await expect(statusChip(page)).toHaveText("Published");
     await switchTo(context, second.pageId);
     await openDesignWithCard(page);
-    await expect(headerStatus(page)).toHaveText("Theme · Night Market");
+    await expectAppliedTheme(page, "Night Market");
     await openEditorPage(page);
     await expect(statusChip(page)).toHaveText("Published");
   });
@@ -516,7 +534,7 @@ test.describe("M3-24 delete a saved theme and fall back to the default", () => {
 
     await openDesignWithCard(page);
     const open = async () => {
-      await page.getByRole("button", { name: "Delete Shared look" }).click();
+      await chooseThemeMenuItem(page, "Shared look", "Delete");
       const dialog = page.getByTestId("delete-theme-dialog");
       await expect(dialog).toBeVisible();
       return dialog;
@@ -572,9 +590,9 @@ test.describe("M3-24 delete a saved theme and fall back to the default", () => {
     await dialog.getByRole("button", { name: "Delete theme" }).click();
     await expect(dialog).toHaveCount(0);
     await expect.poll(async () => await themeRow(shared.id)).toBeNull();
-    await expect(page.getByRole("button", { name: "Delete Shared look" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "More for Shared look" })).toHaveCount(0);
     await expect(themeCards(page)).toHaveCount(SYSTEM_THEME_COUNT);
-    await expect(headerStatus(page)).toHaveText("Theme · Default");
+    await expectNoThemeApplied(page);
     await expect(messageOf(page)).toContainText("Deleted Shared look.");
     expect((await varsOf(page)).accent).toBe(SYSTEM_DEFAULT_TOKENS.accent); // the system default accent
     await expectNoHorizontalScroll(page);
@@ -582,7 +600,7 @@ test.describe("M3-24 delete a saved theme and fall back to the default", () => {
     // The other page's draft: no error for the dangling reference, default plus its own overrides.
     await switchTo(context, second.pageId);
     await openDesignWithCard(page);
-    await expect(headerStatus(page)).toHaveText("Theme · Default");
+    await expectNoThemeApplied(page);
     const vars = await varsOf(page);
     expect(vars.accent).toBe(SYSTEM_DEFAULT_TOKENS.accent);
     expect(vars.radius).toBe("20px");
@@ -606,7 +624,7 @@ test.describe("M3-24 delete a saved theme and fall back to the default", () => {
     for (const name of ["One", "Two", "Three"]) await seedTheme(user.userId, name);
     await openDesignWithCard(page);
 
-    await page.getByRole("button", { name: "Delete Two" }).click();
+    await chooseThemeMenuItem(page, "Two", "Delete");
     await page
       .getByTestId("delete-theme-dialog")
       .getByRole("button", { name: "Delete theme" })

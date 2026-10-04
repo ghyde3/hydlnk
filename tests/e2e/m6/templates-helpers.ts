@@ -7,7 +7,6 @@ import {
   pageRow,
   saveIndicator,
   setDraft,
-  statusChip,
   seededUser,
   emptyUser,
   type DraftDoc,
@@ -49,7 +48,26 @@ export const toastUndo = (page: Page): Locator => page.getByTestId("template-und
 export const blocksHeading = (page: Page, count: number): Locator =>
   page.getByRole("heading", { level: 2, name: `Blocks · ${count}` });
 
-export const replaceConfirmation = (page: Page): Locator => page.getByTestId("template-confirm");
+/** M7-08: the choice a card asks in place after "Use this template" (it replaced the M6-40 confirmation). */
+export const choiceOf = (page: Page, name: string): Locator =>
+  dialogOf(page).getByRole("group", { name: `Apply the ${name} template`, exact: true });
+
+/**
+ * M7-08: presses "Use this template" on a card, picks a style when one is given (otherwise the
+ * default the page earns), and presses "Apply template". "template" is the template's blocks and
+ * style (what M6-40 applied); "keep" is the blocks only.
+ */
+export async function applyTemplateChoice(
+  page: Page,
+  name: string,
+  style?: "template" | "keep",
+): Promise<void> {
+  await templateButton(page, name).click();
+  const panel = choiceOf(page, name);
+  await expect(panel).toBeVisible();
+  if (style) await panel.locator(`[data-style-option="${style}"] input`).check();
+  await panel.getByRole("button", { name: "Apply template", exact: true }).click();
+}
 
 export async function openDialog(page: Page): Promise<void> {
   await startButton(page).click();
@@ -194,4 +212,13 @@ export async function userThemeRows(userId: string) {
   return data;
 }
 
-export { expectDraft, openEditor, pageRow, saveIndicator, setDraft, statusChip };
+/**
+ * The status chip and the Publish button as the person sees them: the workspace toolbar (M7-05)
+ * keeps one of each per layout, so these take the visible one instead of assuming there is only one.
+ */
+export const statusChip = (page: Page): Locator =>
+  page.locator("[data-publish-status]:visible").first();
+export const publishButton = (page: Page): Locator =>
+  page.getByRole("button", { name: "Publish", exact: true }).first();
+
+export { expectDraft, openEditor, pageRow, saveIndicator, setDraft };

@@ -8,6 +8,7 @@ import { accessToken, pageRow } from "../m2/editor-helpers";
 import { resolveTokens, tokenSetSchema, type TokenSet } from "@/lib/theme";
 import {
   NOIR,
+  expectNoThemeApplied,
   liveHtml,
   openEditorPage,
   publishFromEditor,
@@ -33,7 +34,7 @@ process.env.NEXT_PUBLIC_SUPABASE_URL ??= supabaseUrl();
 test.afterAll(cleanupUsers);
 
 const publishButton = (page: Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 const alertOf = (page: Page) => page.getByRole("alert").filter({ hasText: /before publishing/ });
 
 const mediaUrlOf = (path: string) => `${supabaseUrl()}/storage/v1/object/public/page-media/${path}`;
@@ -196,7 +197,7 @@ test.describe("M3-05 a theme the page owner cannot read is never resolved", () =
     // ... and /design shows the system default, never B's name or colours.
     await page.goto(DESIGN_URL);
     await waitForDesignHydrated(page);
-    await expect(page.locator("main > header p").first()).toHaveText("Theme · Default");
+    await expectNoThemeApplied(page);
     await expect(page.locator("body")).not.toContainText("B private");
     expect(await page.content()).not.toMatch(/#FF00AA/i);
 

@@ -134,7 +134,7 @@ export async function liveHtml(handle: string): Promise<string> {
 }
 
 const publishButton = (page: Page): Locator =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 
 export const statusChip = (page: Page): Locator => page.locator("[data-publish-status]");
 
@@ -164,7 +164,9 @@ export async function publishFromEditor(page: Page): Promise<void> {
 async function currentPageId(page: Page): Promise<string> {
   const cookie = (await page.context().cookies(url("app"))).find((c) => c.name === "hl-page");
   if (cookie) return cookie.value;
-  const handle = (await page.locator("main > header p").first().textContent())!.split(".")[0]!;
+  const handle = (await page.locator("[data-toolbar-name] p").first().textContent())!.split(
+    ".",
+  )[0]!;
   const { data, error } = await adminClient()
     .from("pages")
     .select("id")
@@ -202,7 +204,61 @@ export const themeCard = (page: Page, name: string): Locator =>
   });
 export const messageOf = (page: Page): Locator =>
   savedThemesCard(page).getByTestId("theme-message");
-export const headerStatus = (page: Page): Locator => page.locator("main > header p").first();
+
+/** M7-06: the two rows of the Themes card, "Your themes" and "HYDLNK themes". */
+export const ownThemesRow = (page: Page): Locator =>
+  savedThemesCard(page).getByTestId("own-themes");
+export const systemThemesRow = (page: Page): Locator =>
+  savedThemesCard(page).getByTestId("system-themes");
+
+/**
+ * M7-06: opens a card's menu through its "More" button (Playwright scrolls the card's row to it)
+ * and returns the menu, which is named like the theme.
+ */
+export async function openThemeMenu(page: Page, name: string): Promise<Locator> {
+  await savedThemesCard(page)
+    .getByRole("button", { name: `More for ${name}`, exact: true })
+    .click();
+  const menu = page.getByRole("menu", { name, exact: true });
+  await expect(menu).toBeVisible();
+  return menu;
+}
+
+/** M7-06: chooses Preview, Rename or Delete in a card's menu (Preview is named "Preview <theme>"). */
+export async function chooseThemeMenuItem(
+  page: Page,
+  name: string,
+  item: "Preview" | "Rename" | "Delete",
+): Promise<void> {
+  const menu = await openThemeMenu(page, name);
+  await menu
+    .getByRole("menuitem", { name: item === "Preview" ? `Preview ${name}` : item, exact: true })
+    .click();
+}
+/**
+ * No card is applied: the page follows the default (a draft with no theme, or one whose theme row
+ * is gone). The old header said "Theme · Default" here (M7-02, M7-05).
+ */
+export async function expectNoThemeApplied(page: Page): Promise<void> {
+  await expect(page.locator("[data-testid='theme-card']").first()).toBeVisible();
+  await expect(page.locator("[data-testid='theme-card'][aria-pressed='true']")).toHaveCount(0);
+}
+
+/**
+ * The theme that is applied, read from the Themes card (M7-06): the one pressed card, its name and
+ * its tag ("Applied", or "Edited" once the page's own style changes it). It replaces the Design
+ * header's "Theme · Noir · edited" line, which went with the old header (M7-02, M7-05).
+ */
+export async function expectAppliedTheme(
+  page: Page,
+  name: string,
+  tag: "Applied" | "Edited" = "Applied",
+): Promise<void> {
+  const card = page.locator("[data-testid='theme-card'][aria-pressed='true']");
+  await expect(card).toHaveCount(1);
+  await expect(card.locator("[data-theme-name]")).toHaveText(name);
+  await expect(card.locator("[data-theme-tag]")).toHaveText(tag);
+}
 
 function escapeRe(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

@@ -189,9 +189,14 @@ test.describe("M2-04 autosave", () => {
     await NAME(page).fill(`${text}a`);
     await expect(saveIndicator(page)).toHaveAttribute("data-save-status", "saving");
     await NAME(page).fill(`${text}ab`);
-    // A client-side navigation unmounts the editor, which flushes what is pending.
-    await page.getByRole("link", { name: "Design" }).filter({ visible: true }).first().click();
-    await expect(page).toHaveURL(url("app", "/design"));
+    // A client-side navigation out of the workspace unmounts it, which flushes what is pending (the
+    // Design tab keeps it: the draft and its queue belong to the workspace, M7-02).
+    await page
+      .getByRole("link", { name: /^(Analytics|Stats)$/ })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await expect(page).toHaveURL(url("app", "/analytics"));
     await expectDraft(user.pageId, (d) => d.profile.name === `${text}ab`);
   });
 
@@ -331,10 +336,11 @@ test.describe("M2-04 autosave", () => {
     await openEditor(page);
     const text = mark();
     await NAME(page).fill(text);
-    // A client-side navigation to Design unmounts the editor right away.
-    const nav = page.locator("nav a[href='/design']:visible");
+    // A client-side navigation out of the workspace (the Design tab is part of it, M7-02) unmounts
+    // it right away.
+    const nav = page.locator("nav a[href='/analytics']:visible");
     await nav.click();
-    await expect(page).toHaveURL(url("app", "/design"));
+    await expect(page).toHaveURL(url("app", "/analytics"));
     await expectDraft(user.pageId, (d) => d.profile.name === text);
   });
 });
@@ -387,7 +393,10 @@ test.describe("M2-04 database integrity, as the owner with the publishable key",
 });
 
 test.describe("M2-04 layout", () => {
-  test("M2-04 phone: the indicator and chip wrap inside the header; 44px controls; no sideways scroll", async ({
+  // M7-05 supersedes the header placements of these two tests: the status chip is in the pinned
+  // toolbar row, the save indicator is mono text in the toolbar from 760px and a small chip fixed
+  // above the tab bar (never under the mini phone) below it.
+  test("M2-04 phone: the chip is in the pinned row, the indicator chip ends before the mini phone; 44px controls; no sideways scroll", async ({
     page,
     context,
   }, info) => {
@@ -398,19 +407,20 @@ test.describe("M2-04 layout", () => {
     await expect(saveIndicator(page)).toHaveText("Saved");
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
-    const header = (await page.locator("main > header").boundingBox())!;
-    const title = (await page.locator("main > header h1").boundingBox())!;
+    // Below 760px the toolbar is `display: contents`; its pinned row is the box.
+    const row = (await page.getByTestId("workspace-toolbar-row").boundingBox())!;
     const chip = (await page.locator("[data-publish-status]").boundingBox())!;
+    expect(chip.x).toBeGreaterThanOrEqual(row.x);
+    expect(chip.x + chip.width).toBeLessThanOrEqual(row.x + row.width);
+    expect(chip.y).toBeGreaterThanOrEqual(row.y);
+    expect(chip.y + chip.height).toBeLessThanOrEqual(row.y + row.height);
     const indicator = (await saveIndicator(page).boundingBox())!;
-    for (const box of [chip, indicator]) {
-      expect(box.x).toBeGreaterThanOrEqual(header.x);
-      expect(box.x + box.width).toBeLessThanOrEqual(header.x + header.width);
-      expect(box.y).toBeGreaterThanOrEqual(title.y + title.height - 1); // no overlap with the title
-    }
-    expect(indicator.x).toBeGreaterThanOrEqual(chip.x + chip.width - 1); // beside the chip
+    expect(indicator.x).toBeGreaterThanOrEqual(0);
+    expect(indicator.x + indicator.width).toBeLessThanOrEqual(390 - 72); // ends before the mini phone's column
+    expect(indicator.y).toBeGreaterThan(row.y + row.height);
   });
 
-  test("M2-04 desktop: the indicator and chip sit on the right of the header row", async ({
+  test("M2-04 desktop: the chip and the indicator sit on the toolbar row, right of the page name", async ({
     page,
     context,
   }, info) => {
@@ -419,7 +429,8 @@ test.describe("M2-04 layout", () => {
     await openEditor(page);
     await NAME(page).fill(mark());
     await expect(saveIndicator(page)).toHaveText("Saved");
-    const title = (await page.locator("main > header h1").boundingBox())!;
+    const bar = (await page.getByTestId("workspace-toolbar").boundingBox())!;
+    const title = (await page.locator("[data-toolbar-name] h1").boundingBox())!;
     const chip = (await page.locator("[data-publish-status]").boundingBox())!;
     const indicator = (await saveIndicator(page).boundingBox())!;
     expect(chip.x).toBeGreaterThan(title.x + title.width);
@@ -427,6 +438,8 @@ test.describe("M2-04 layout", () => {
     expect(Math.abs(chip.y + chip.height / 2 - (indicator.y + indicator.height / 2))).toBeLessThan(
       8,
     );
-    expect(indicator.x).toBeGreaterThan(720);
+    expect(indicator.x + indicator.width).toBeLessThanOrEqual(bar.x + bar.width);
+    expect(indicator.y).toBeGreaterThanOrEqual(bar.y);
+    expect(indicator.y + indicator.height).toBeLessThanOrEqual(bar.y + bar.height);
   });
 });

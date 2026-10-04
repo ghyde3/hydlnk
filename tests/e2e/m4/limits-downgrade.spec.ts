@@ -246,7 +246,7 @@ test.describe("M4-33 a downgrade keeps every row and blocks only new writes", ()
       await page.getByLabel("Display name", { exact: true }).fill(name);
       await expect(statusChip(page)).toHaveText("Unpublished changes");
       await page
-        .locator("main > header")
+        .getByTestId("workspace-toolbar")
         .getByRole("button", { name: "Publish", exact: true })
         .click();
       await expect(statusChip(page)).toHaveText("Published", { timeout: 30_000 });

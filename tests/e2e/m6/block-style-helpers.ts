@@ -186,7 +186,10 @@ export async function plainUser(
 
 /** Clicks Publish in the editor and waits for the status chip to read Published. */
 export async function publishViaEditor(page: Page): Promise<void> {
-  await page.locator("main > header").getByRole("button", { name: "Publish", exact: true }).click();
+  await page
+    .getByTestId("workspace-toolbar")
+    .getByRole("button", { name: "Publish", exact: true })
+    .click();
   await expect(statusChip(page)).toHaveAttribute("data-publish-status", "published", {
     timeout: 30_000,
   });

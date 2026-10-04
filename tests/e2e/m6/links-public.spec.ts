@@ -235,7 +235,7 @@ test.describe("M6-20 abuse and the network", () => {
     expect(dialogs).toEqual([]);
   });
 
-  test("M6-20 three icon links request only the page's own host and the Supabase Storage origin", async ({
+  test("M6-20 three icon links request only the page's own host (the thumbnail from its /media route) and the fonts", async ({
     page,
   }) => {
     const live = await liveLinks("lk-net", (thumb) => [
@@ -257,12 +257,13 @@ test.describe("M6-20 abuse and the network", () => {
     const foreign = requested.filter((u) => {
       if (u.startsWith("data:") || u.startsWith("blob:")) return false;
       const origin = new URL(u).origin;
-      return origin !== own && origin !== storage && !fontHosts.has(origin);
+      return origin !== own && !fontHosts.has(origin);
     });
     expect(foreign, `requests to other origins: ${foreign.join(", ")}`).toEqual([]);
-    const fromStorage = requested.filter((u) => new URL(u).origin === storage);
-    expect(fromStorage).toEqual([
-      expect.stringContaining(`/storage/v1/object/public/page-media/${live.thumb.path}`),
+    // M7-15: the thumbnail comes from the page's own /media route, never from Storage.
+    expect(requested.filter((u) => new URL(u).origin === storage)).toEqual([]);
+    expect(requested.filter((u) => new URL(u).pathname.startsWith("/media/"))).toEqual([
+      `${own}/media/${live.thumb.path}`,
     ]);
     expect(requested.filter((u) => /favicon|icon\.horse|s2\/favicons/i.test(u))).toEqual([]);
   });

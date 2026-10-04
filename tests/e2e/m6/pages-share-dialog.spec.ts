@@ -16,58 +16,59 @@ import {
 } from "./pages-helpers";
 
 /**
- * M6-12 (and the dialog's side of M6-09): the Share preview dialog in the editor. Every spec makes
- * its own user, so nothing touches mara. Phone project = 390x844, desktop = 1440x900.
+ * M6-12 (and the dialog's side of M6-09): the private preview links. M7-04 moved them from the
+ * 'Share preview' dialog in the editor header to an inline card on the Share tab (/share); the
+ * behavior is the same, and these specs open that card. Every spec makes its own user, so nothing
+ * touches mara. Phone project = 390x844, desktop = 1440x900.
  */
 
 test.afterAll(cleanupUsers);
 
-const header = (page: Page) => page.locator("main > header");
-const shareButton = (page: Page) => header(page).getByRole("button", { name: "Share preview" });
-const dialog = (page: Page) => page.getByRole("dialog");
+/** The 'Private preview links' card (it was a dialog before M7-04; the name is kept for the diff's sake). */
+const dialog = (page: Page) => page.getByTestId("preview-links-card");
 const field = (page: Page) => dialog(page).getByLabel("Preview link");
 const ADDRESS = /^http:\/\/app\.localhost:3000\/share\/[A-Za-z0-9_-]{43}$/;
 
+/** Goes to the Share tab (by its tab when the workspace is open, so a typed edit stays) and waits for the card. */
 async function openDialog(page: Page): Promise<void> {
-  await shareButton(page).click();
+  if (new URL(page.url()).pathname === "/editor") {
+    await page.getByRole("tab", { name: "Share", exact: true }).click();
+  } else {
+    await page.goto(url("app", "/share"));
+  }
   await expect(dialog(page)).toBeVisible();
+  await expect(
+    dialog(page).getByRole("button", { name: "Create link", exact: true }),
+  ).toBeVisible();
 }
 
 test.describe("M6-12 the dialog", () => {
-  test("M6-12 'Share preview' opens a modal dialog with the words, focus stays inside, Escape and Close return focus to the button", async ({
+  test("M6-12 the card has the words, a 44px Create link and no dialog; it shows on the Share tab only", async ({
     page,
     context,
   }) => {
     await signedInUser(context, { label: "dlg" });
     await openEditor(page);
-    const button = shareButton(page);
-    await expect(button).toBeVisible();
-    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    // The 'Share preview' header button is gone (M7-04): the card is on the Share tab.
+    await expect(page.getByRole("button", { name: "Share preview" })).toHaveCount(0);
+    await expect(dialog(page)).toHaveCount(0);
 
     await openDialog(page);
     const box = dialog(page);
-    await expect(box).toHaveAttribute("aria-modal", "true");
-    await expect(box.getByRole("heading", { level: 2, name: "Share a preview" })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(
+      box.getByRole("heading", { level: 2, name: "Private preview links" }),
+    ).toBeVisible();
     await expect(box).toContainText(
       "Anyone with the link can see your unpublished draft for 7 days. They can’t edit it.",
     );
     await expect(box).toContainText("Shows your latest saved draft.");
-    // Focus is inside, and Tab keeps it inside.
-    const inside = () =>
-      page.evaluate(() => Boolean(document.activeElement?.closest("dialog[open]")));
-    expect(await inside()).toBe(true);
-    for (let i = 0; i < 6; i++) {
-      await page.keyboard.press("Tab");
-      expect(await inside()).toBe(true);
-    }
-    await page.keyboard.press("Escape");
-    await expect(box).toBeHidden();
-    await expect(button).toBeFocused();
-
-    await openDialog(page);
-    await box.getByRole("button", { name: "Close" }).click();
-    await expect(box).toBeHidden();
-    await expect(button).toBeFocused();
+    const create = box.getByRole("button", { name: "Create link", exact: true });
+    expect((await create.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    expect(await create.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+      "rgb(28, 27, 26)",
+    );
+    await expect(box.getByLabel("Preview link")).toHaveCount(0);
   });
 
   test("M6-12 Create link writes pending edits first, shows the address once, copies it, offers Share..., and lists the link", async ({
@@ -160,7 +161,6 @@ test.describe("M6-12 the dialog", () => {
     context,
   }) => {
     const owner = await signedInUser(context, { label: "off" });
-    await openEditor(page);
     await openDialog(page);
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
     await expect(field(page)).toBeVisible();
@@ -177,21 +177,20 @@ test.describe("M6-12 the dialog", () => {
     expect(after.body).toContain(INACTIVE);
     expect((await linkRows(owner.pageId))[0]!.revoked_at).not.toBeNull();
 
-    // Reopening shows no address and no row for the link that is off.
-    await dialog(page).getByRole("button", { name: "Close" }).click();
-    await expect(dialog(page)).toBeHidden();
+    // Leaving the tab and coming back shows no address and no row for the link that is off.
+    await page.getByRole("tab", { name: "Edit", exact: true }).click();
+    await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
     await openDialog(page);
     await expect(dialog(page).getByLabel("Preview link")).toHaveCount(0);
     await expect(dialog(page).locator("[data-preview-link]")).toHaveCount(0);
     expect(await page.content()).not.toContain(token);
   });
 
-  test("M6-12 the address and token live in component state only, and closing the dialog clears them", async ({
+  test("M6-12 the address and token live in component state only, and leaving the tab clears them", async ({
     page,
     context,
   }) => {
     await signedInUser(context, { label: "mem" });
-    await openEditor(page);
     await openDialog(page);
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
     await expect(field(page)).toBeVisible();
@@ -229,8 +228,8 @@ test.describe("M6-12 the dialog", () => {
       await page.evaluate(() => Object.keys(window).filter((k) => /token|share/i.test(k))),
     ).toEqual([]);
 
-    await dialog(page).getByRole("button", { name: "Close" }).click();
-    await expect(dialog(page)).toBeHidden();
+    await page.getByRole("tab", { name: "Edit", exact: true }).click();
+    await expect(dialog(page)).toHaveCount(0);
     await expect(page.getByLabel("Preview link")).toHaveCount(0);
     expect(await page.content()).not.toContain(token);
     expect(await leaks()).toEqual([]);
@@ -245,7 +244,6 @@ test.describe("M6-12 what the dialog says when it cannot", () => {
     const owner = await signedInUser(context, { label: "cap" });
     const links = [];
     for (let i = 0; i < 5; i++) links.push(await makeLink(owner.userId, owner.pageId));
-    await openEditor(page);
     await openDialog(page);
     const create = dialog(page).getByRole("button", { name: "Create link", exact: true });
     await expect(dialog(page).getByRole("alert")).toHaveText(
@@ -269,7 +267,6 @@ test.describe("M6-12 what the dialog says when it cannot", () => {
   }) => {
     const owner = await signedInUser(context, { label: "rl" });
     await hitLimiter(`preview-link:${owner.userId}`, 20, 3600, 20);
-    await openEditor(page);
     await openDialog(page);
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
     await expect(dialog(page).getByRole("alert")).toHaveText(
@@ -286,12 +283,11 @@ test.describe("M6-12 what the dialog says when it cannot", () => {
     context,
   }) => {
     const owner = await signedInUser(context, { label: "net" });
-    await openEditor(page);
     await openDialog(page);
     const create = dialog(page).getByRole("button", { name: "Create link", exact: true });
 
     let mode: "500" | "abort" | "pass" = "500";
-    await page.route("**/editor", async (route) => {
+    await page.route("**/share", async (route) => {
       const request = route.request();
       if (request.method() !== "POST" || !request.headers()["next-action"]) return route.continue();
       if (mode === "abort") return route.abort("failed");
@@ -324,7 +320,6 @@ test.describe("M6-12 what the dialog says when it cannot", () => {
     context,
   }) => {
     const owner = await signedInUser(context, { label: "so" });
-    await openEditor(page);
     await openDialog(page);
     await context.clearCookies();
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
@@ -342,8 +337,9 @@ test.describe("M6-12 what the dialog says when it cannot", () => {
     await openEditor(page);
     const name = page.getByLabel("Display name", { exact: true });
     await name.fill(`${await name.inputValue()} Edit`);
-    await context.clearCookies();
+    // To the Share tab first (a tab switch re-checks the session on the server), then the session ends.
     await openDialog(page);
+    await context.clearCookies();
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
     await expect(dialog(page).getByRole("alert")).toHaveText(
       "You’re signed out. Sign in again, then try again.",
@@ -351,7 +347,7 @@ test.describe("M6-12 what the dialog says when it cannot", () => {
     expect(await linkRows(owner.pageId)).toHaveLength(0);
   });
 
-  test("M6-12 a suspended owner sees 'Share preview' disabled with the reason", async ({
+  test("M6-12 a suspended owner sees 'Create link' disabled with the reason", async ({
     page,
     context,
   }) => {
@@ -360,9 +356,10 @@ test.describe("M6-12 what the dialog says when it cannot", () => {
       .from("accounts")
       .update({ suspended_at: new Date().toISOString() })
       .eq("id", owner.userId);
-    await openEditor(page);
-    await expect(shareButton(page)).toBeDisabled();
-    await expect(shareButton(page)).toHaveAttribute("title", "Your account is suspended.");
+    await page.goto(url("app", "/share"));
+    const create = dialog(page).getByRole("button", { name: "Create link", exact: true });
+    await expect(create).toBeDisabled();
+    await expect(create).toHaveAttribute("title", "Your account is suspended.");
   });
 });
 
@@ -380,7 +377,6 @@ test.describe("M6-09 / M6-12 replayed requests and other accounts", () => {
     );
     const theirLink = await makeLink(theirs.id, theirPage);
 
-    await openEditor(page);
     await openDialog(page);
     const createAction = await captureAction(
       page,
@@ -436,7 +432,6 @@ test.describe("M6-09 / M6-12 replayed requests and other accounts", () => {
     await makeLink(owner.userId, owner.pageId);
     await admin.from("accounts").update({ plan: "free" }).eq("id", owner.userId);
 
-    await openEditor(page);
     await openDialog(page);
     await expect(dialog(page).locator("[data-preview-link]")).toHaveCount(1);
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
@@ -446,50 +441,34 @@ test.describe("M6-09 / M6-12 replayed requests and other accounts", () => {
 });
 
 test.describe("M6-12 layout", () => {
-  test("M6-12 phone and desktop: the dialog fits, buttons are 44px, a long address scrolls inside its field, and the header button sits where the design puts it", async ({
+  test("M6-12 phone and desktop: the card fits, buttons are 44px, and a long address scrolls inside its field", async ({
     page,
     context,
   }, info) => {
     await signedInUser(context, { label: "lay" });
-    await openEditor(page);
+    await openDialog(page);
     const phone = info.project.name === "phone";
 
-    // Header placement: after Preview on desktop; wrapped onto the second row on a phone.
-    const share = (await shareButton(page).boundingBox())!;
-    expect(share.height).toBeGreaterThanOrEqual(44);
-    const title = (await header(page).getByRole("heading", { level: 1 }).boundingBox())!;
-    if (phone) {
-      expect(share.y).toBeGreaterThan(title.y + title.height - 1);
-    } else {
-      const preview = (await header(page)
-        .getByRole("link", { name: "Preview", exact: true })
-        .boundingBox())!;
-      expect(share.x).toBeGreaterThan(preview.x + preview.width - 1);
-      expect(Math.abs(share.y - preview.y)).toBeLessThan(8);
-    }
-
-    await openDialog(page);
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
     await expect(field(page)).toBeVisible();
     // The list of active links fills in after the create: measure once the layout has settled.
     await expect(dialog(page).locator("[data-preview-link]")).toHaveCount(1);
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "dialog");
+    await expectTapTargets(page, '[data-testid="preview-links-card"]');
 
     const viewport = page.viewportSize()!;
     const box = (await dialog(page).boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
-    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
     if (phone) {
       expect(box.width).toBeGreaterThanOrEqual(viewport.width - 33);
-      const buttons = dialog(page).getByRole("button", { name: /^(Create link|Copy link|Close)$/ });
+      const buttons = dialog(page).getByRole("button", { name: /^(Create link|Copy link)$/ });
       const count = await buttons.count();
-      const dialogInner = box.width - 34;
+      const inner = box.width - 34;
       let previousBottom = 0;
       for (let i = 0; i < count; i++) {
         const b = (await buttons.nth(i).boundingBox())!;
-        expect(b.width).toBeGreaterThanOrEqual(dialogInner - 2);
+        expect(b.width).toBeGreaterThanOrEqual(inner - 2);
         expect(b.height).toBeGreaterThanOrEqual(44);
         expect(b.y).toBeGreaterThanOrEqual(previousBottom - 1);
         previousBottom = b.y + b.height;
@@ -500,38 +479,49 @@ test.describe("M6-12 layout", () => {
       );
       expect(scrolls).toBe(true);
     } else {
-      expect(box.width).toBeLessThanOrEqual(480);
-      expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThan(2);
-      const backdrop = await dialog(page).evaluate(
-        (el) => getComputedStyle(el, "::backdrop").backgroundColor,
-      );
-      expect(backdrop).not.toBe("rgba(0, 0, 0, 0)");
+      expect(box.width).toBeLessThanOrEqual(720);
+      // Create link and Copy link sit in one row each; the preview-link buttons are side by side.
+      const copy = (await dialog(page).getByRole("button", { name: "Copy link" }).boundingBox())!;
+      const share = dialog(page).getByRole("button", { name: "Share..." });
+      if ((await share.count()) > 0) {
+        expect(Math.abs((await share.boundingBox())!.y - copy.y)).toBeLessThan(2);
+      }
     }
     await expect(saveIndicator(page)).toBeAttached();
   });
 });
 
 test.describe("M6-11 the Preview link", () => {
-  test("M6-11 'Preview' opens /preview/{pageId} in a new tab with the newest edits, and 'View live page' still opens the page", async ({
+  test("M6-11 'Preview your draft' (the toolbar's Preview menu) opens /preview/{pageId} in a new tab with the newest edits, and 'View live page' still opens the page", async ({
     page,
     context,
   }, info) => {
-    test.skip(!desktopOnly(info), "the Preview link shows from 760px up");
+    test.skip(!desktopOnly(info), "the Preview menu shows from 760px up");
     const owner = await signedInUser(context, { label: "pv" });
     await openEditor(page);
-    const link = header(page).getByRole("link", { name: "Preview", exact: true });
+    const menu = page.getByTestId("workspace-toolbar").getByRole("button", {
+      name: "Preview",
+      exact: true,
+    });
+    await menu.click();
+    const link = page.getByRole("menuitem", { name: "Preview your draft" });
     await expect(link).toHaveAttribute("target", "_blank");
     await expect(link).toHaveAttribute("rel", "noopener");
     await expect(link).toHaveAttribute("href", `/preview/${owner.pageId}`);
-    await expect(header(page).getByRole("link", { name: "View live page" })).toHaveAttribute(
+    await expect(page.getByRole("menuitem", { name: "View live page" })).toHaveAttribute(
       "href",
       `http://${owner.handle}.localhost:3000`,
     );
+    await page.keyboard.press("Escape");
 
     const name = page.getByLabel("Display name", { exact: true });
     const original = await name.inputValue();
     await name.fill(`${original} X`);
-    const [popup] = await Promise.all([context.waitForEvent("page"), link.click()]);
+    await menu.click();
+    const [popup] = await Promise.all([
+      context.waitForEvent("page"),
+      page.getByRole("menuitem", { name: "Preview your draft" }).click(),
+    ]);
     await popup.waitForURL(url("app", `/preview/${owner.pageId}`));
     await expect(popup.locator("h1")).toHaveText(`${original} X`);
     await popup.close();

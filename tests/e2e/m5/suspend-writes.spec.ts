@@ -352,7 +352,7 @@ test.describe("M5-09 the banner and the disabled controls", () => {
     await openEditor(page);
     const banner = page.locator(BANNER);
     const main = (await page.locator("main").filter({ has: banner }).first().boundingBox())!;
-    const header = (await page.locator("main > header").first().boundingBox())!;
+    const header = (await page.getByTestId("workspace-toolbar").first().boundingBox())!;
     const box = (await banner.boundingBox())!;
     expect(box.y).toBeGreaterThanOrEqual(main.y - 0.5);
     expect(box.y + box.height).toBeLessThanOrEqual(header.y + 0.5);

@@ -9,6 +9,7 @@ import {
   UNSUPPORTED_TYPE_MESSAGE,
 } from "@/lib/media/messages";
 import { downloadObject, halves, isBlue, isRed, pixelAt } from "./images-helpers";
+import { inPreviewSheet } from "../m7/phone-preview";
 
 /**
  * M6-24: choosing a profile photo opens "Position your photo" first; only what "Use photo" draws is
@@ -378,9 +379,11 @@ test.describe("M6-24 Use photo", () => {
     }
     // The editor's avatar and the live preview both show that file.
     await expect(avatarImg(page)).toHaveAttribute("src", new RegExp(`${path}$`));
-    await expect(
-      previewScreen(page).locator(".pg-avatar img, img.pg-avatar-img").first(),
-    ).toHaveAttribute("src", new RegExp(`${path}$`));
+    await inPreviewSheet(page, () =>
+      expect(
+        previewScreen(page).locator(".pg-avatar img, img.pg-avatar-img").first(),
+      ).toHaveAttribute("src", new RegExp(`${path}$`)),
+    );
   });
 
   test("M6-24 the left half in view gives a red avatar, and the request is the cropped JPEG, never the original", async ({
@@ -551,7 +554,8 @@ test.describe("M6-24 Adjust photo", () => {
     await expect(card(page).getByRole("button", { name: "Replace photo" })).toBeVisible();
     await storedAvatar(user.pageId);
 
-    await page.route("**/storage/v1/object/public/page-media/**", (route) => route.abort());
+    // "Adjust photo" reads the stored picture from this host's /media route (M7-15).
+    await page.route(/\/media\/[0-9a-f-]{36}\//, (route) => route.abort());
     await card(page).getByRole("button", { name: "Adjust photo", exact: true }).click();
     await expect(card(page).getByRole("alert")).toHaveText(
       "We couldn’t open that photo. Choose it again with Replace photo.",
@@ -610,7 +614,9 @@ test.describe("M6-24 layout", () => {
     test.skip(!desktopOnly(info), "desktop layout");
     await setup(context, "pl2");
     await openEditor(page);
-    // The editor page scrolls, so "does not scroll" means something.
+    // The editor page scrolls, so "does not scroll" means something. (The Edit tab's collapsed
+    // Profile card, M7-03, can leave a page shorter than the screen, so the page is made taller.)
+    await page.evaluate(() => (document.documentElement.style.minHeight = "2400px"));
     expect(
       await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight),
     ).toBe(true);

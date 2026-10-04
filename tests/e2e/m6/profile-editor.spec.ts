@@ -8,10 +8,10 @@ import {
   accessToken,
   css,
   expectDraft,
-  openEditor,
+  openEditor as openEditorBase,
   pageRow,
   previewScreen,
-  reloadEditor,
+  reloadEditor as reloadEditorBase,
   seededUser,
   statusChip,
 } from "../m2/editor-helpers";
@@ -30,6 +30,21 @@ import { PROFILE_OPTION_DEFAULTS } from "@/lib/document";
 test.describe.configure({ timeout: 120_000 });
 
 test.afterAll(cleanupUsers);
+
+// M7-03: the photo controls and the three show switches sit under the collapsed "Photo and header
+// options" button, so these specs open the section after the editor loads.
+async function openOptions(page: Page): Promise<void> {
+  const trigger = page.getByRole("button", { name: /^Photo and header options/ });
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
+}
+async function openEditor(page: Page): Promise<void> {
+  await openEditorBase(page);
+  await openOptions(page);
+}
+async function reloadEditor(page: Page): Promise<void> {
+  await reloadEditorBase(page);
+  await openOptions(page);
+}
 
 const NAME = (page: Page) => page.getByLabel("Display name", { exact: true });
 const BIO = (page: Page) => page.getByLabel("Bio", { exact: true });

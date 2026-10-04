@@ -146,7 +146,9 @@ test.describe("M6-10 the script policy of a shared draft, over HTTP", () => {
       // No script of the Supabase browser client or of the editor header reaches a visitor (the
       // development build names its chunks after their modules; a production build hashes them).
       const scripts = (res.body.match(/\bsrc="[^"]*"/g) ?? []).join(" ");
-      expect(scripts, label).not.toMatch(/supabase|auth-js|editor-header|share-preview|page-name/i);
+      expect(scripts, label).not.toMatch(
+        /supabase|auth-js|editor-header|workspace-toolbar|share-preview|page-name/i,
+      );
       expect(res.body, label).not.toMatch(/createPreviewLink|listPreviewLinks|revokePreviewLink/);
     }
   });

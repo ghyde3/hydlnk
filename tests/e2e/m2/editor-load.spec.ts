@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
@@ -23,6 +23,17 @@ import { signInAs } from "../fixtures/auth";
 
 test.afterAll(cleanupUsers);
 
+// M7-05: the header bar is the workspace's pinned toolbar. The page's address is the mono line above
+// its name, the name is the page's one h1 (the preview draws a heading of its own inside its frame).
+const toolbar = (page: Page) => page.getByTestId("workspace-toolbar");
+const addressLine = (page: Page, address: string) =>
+  page
+    .getByTestId("workspace")
+    .getByText(address, { exact: true })
+    .filter({ visible: true })
+    .first();
+const pageTitle = (page: Page) => page.locator("h1:not([data-page-frame] *)");
+
 test.describe("M2-03 the editor opens the current page's draft", () => {
   test("M2-03 mara's current page renders: breadcrumb, h1, name, bio and the seeded blocks", async ({
     page,
@@ -33,7 +44,7 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("Editor — HYDLNK");
 
-    const header = page.locator("main > header");
+    const header = page.getByTestId("workspace-toolbar");
     await expect(header.locator("p")).toHaveText("mara.hydlnk.com");
     await expect(header.getByRole("heading", { level: 1 })).toHaveText("Main page");
     await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Mara Okafor");
@@ -105,7 +116,7 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     expect(raw.body).not.toContain("Portrait sessions");
 
     await openEditor(page);
-    await expect(page.locator("main > header p")).toHaveText(`${jonas.handle}.hydlnk.com`);
+    await expect(addressLine(page, `${jonas.handle}.hydlnk.com`)).toBeVisible();
     await expect(page.getByLabel("Display name", { exact: true })).toHaveValue("Jonas Only");
     await expect(page.locator("body")).not.toContainText("Mara Okafor");
 
@@ -115,33 +126,36 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     expect(await direct.json()).toEqual([]);
   });
 
-  test("M2-03 header bar: mono breadcrumb, 22px title, Preview link and charcoal Publish", async ({
+  test("M2-03 header bar (the toolbar, M7-05): mono address, 22px title, Preview menu and charcoal Publish", async ({
     page,
     context,
   }, info) => {
     const user = await seededUser(context);
     await openEditor(page);
-    const header = page.locator("main > header");
-    const crumb = header.locator("p");
-    await expect(crumb).toHaveText(`${user.handle}.hydlnk.com`);
+    const crumb = addressLine(page, `${user.handle}.hydlnk.com`);
+    await expect(crumb).toBeVisible();
     expect(await css(crumb, "font-size")).toBe("12px");
     expect(await css(crumb, "font-family")).toMatch(/Geist.?Mono/);
     expect(await css(crumb, "color")).toBe("rgb(94, 90, 84)");
-    const h1 = header.getByRole("heading", { level: 1 });
+    const h1 = pageTitle(page);
     await expect(h1).toHaveText("Main page");
     expect(await css(h1, "font-size")).toBe("22px");
     expect(await css(h1, "font-weight")).toBe("700");
 
-    // By text, not role: on a phone the link is display:none, which getByRole leaves out.
-    const preview = header.locator("a", { hasText: /^Preview$/ });
-    // M6-11: the Preview button opens the draft preview, not the live page.
-    await expect(preview).toHaveAttribute("href", `/preview/${user.pageId}`);
-    await expect(preview).toHaveAttribute("target", "_blank");
-    await expect(preview).toHaveAttribute("rel", "noopener");
-    if (phoneOnly(info)) await expect(preview).toBeHidden();
-    else await expect(preview).toBeVisible();
+    // M6-11: 'Preview your draft' (in the Preview menu from 760px up) opens the draft preview, not the live page.
+    const menu = toolbar(page).getByRole("button", { name: "Preview", exact: true });
+    if (phoneOnly(info)) {
+      await expect(menu).toHaveCount(0);
+    } else {
+      await menu.click();
+      const preview = page.getByRole("menuitem", { name: "Preview your draft" });
+      await expect(preview).toHaveAttribute("href", `/preview/${user.pageId}`);
+      await expect(preview).toHaveAttribute("target", "_blank");
+      await expect(preview).toHaveAttribute("rel", "noopener");
+      await page.keyboard.press("Escape");
+    }
 
-    const publish = header.getByRole("button", { name: "Publish", exact: true });
+    const publish = toolbar(page).getByRole("button", { name: "Publish", exact: true });
     await expect(publish).toBeVisible();
     expect(await css(publish, "background-color")).toBe("rgb(28, 27, 26)");
     expect(await css(publish, "color")).toBe("rgb(255, 255, 255)");
@@ -226,7 +240,7 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     }
   });
 
-  test("M2-03 phone: the header wraps, every control is 44px, no sideways scroll", async ({
+  test("M2-03 phone: the pinned row holds Undo, Redo, the chip and Publish; every control is 44px, no sideways scroll", async ({
     page,
     context,
   }, info) => {
@@ -236,18 +250,16 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
 
-    const header = page.locator("main > header");
-    const h1 = (await header.getByRole("heading", { level: 1 }).boundingBox())!;
     const chip = (await page.locator("[data-publish-status]").boundingBox())!;
-    const publish = (await header.getByRole("button", { name: "Publish" }).boundingBox())!;
-    expect(chip.y).toBeGreaterThan(h1.y + h1.height - 1); // the title block comes first
-    expect(publish.y).toBeGreaterThan(h1.y + h1.height - 1);
+    const publish = (await toolbar(page).getByRole("button", { name: "Publish" }).boundingBox())!;
     expect(publish.height).toBeGreaterThanOrEqual(44);
     expect(chip.x + chip.width).toBeLessThanOrEqual(390);
     expect(publish.x + publish.width).toBeLessThanOrEqual(390);
+    // The chip and Publish share the one short row.
+    expect(Math.abs(chip.y + chip.height / 2 - (publish.y + publish.height / 2))).toBeLessThan(30);
   });
 
-  test("M2-03 desktop: breadcrumb and title left; chip, Preview and Publish on one row at the right", async ({
+  test("M2-03 desktop: address and title left; chip, Preview and Publish on one row at the right", async ({
     page,
     context,
   }, info) => {
@@ -255,13 +267,12 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     await seededUser(context);
     await openEditor(page);
     await expectNoHorizontalScroll(page);
-    const header = page.locator("main > header");
-    const title = (await header.getByRole("heading", { level: 1 }).boundingBox())!;
+    const title = (await pageTitle(page).boundingBox())!;
     const chip = (await page.locator("[data-publish-status]").boundingBox())!;
-    const preview = (await header
-      .getByRole("link", { name: "Preview", exact: true })
+    const preview = (await toolbar(page)
+      .getByRole("button", { name: "Preview", exact: true })
       .boundingBox())!;
-    const publish = (await header.getByRole("button", { name: "Publish" }).boundingBox())!;
+    const publish = (await toolbar(page).getByRole("button", { name: "Publish" }).boundingBox())!;
     const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
     for (const box of [chip, preview, publish]) {
       expect(Math.abs(mid(box) - mid(preview))).toBeLessThan(8);

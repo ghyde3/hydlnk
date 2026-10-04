@@ -7,7 +7,9 @@ import { uploadImage } from "../m2/blocks-helpers";
 import { SYSTEM_IDS, liveHtml, rootVars, seedTheme } from "./themes-helpers";
 import { setOverrides } from "../m3/design-helpers";
 import {
+  applyTemplateChoice,
   blocksHeading,
+  choiceOf,
   dialogOf,
   describeBlocks,
   describeTemplate,
@@ -18,8 +20,8 @@ import {
   openDialog,
   openEditor,
   pageRow,
+  publishButton,
   publishedUserWithEmptyDraft,
-  replaceConfirmation,
   saveIndicator,
   setDraft,
   statusChip,
@@ -69,7 +71,7 @@ test.describe("M6-40 apply to an empty page", () => {
 
     await openDialog(page);
     const appliedAt = Date.now();
-    await templateButton(page, "Musician").click();
+    await applyTemplateChoice(page, "Musician");
 
     // The dialog closes, and the count and the (desktop) preview update at once.
     await expect(dialogOf(page)).toHaveCount(0);
@@ -121,7 +123,7 @@ test.describe("M6-40 apply to an empty page", () => {
     });
     await openEditor(page);
     await openDialog(page);
-    await templateButton(page, "Coach").click();
+    await applyTemplateChoice(page, "Coach");
     await expect(blocksHeading(page, 6)).toBeVisible();
     const stored = await expectDraft(user.pageId, (draft) => draft.blocks.length === 6);
     expect(stored.profile.bio).toBe("My own words.");
@@ -139,7 +141,7 @@ test.describe("M6-40 on a phone", () => {
     const user = await emptyPageUser(context, "tpl-ph");
     await openEditor(page);
     await openDialog(page);
-    await templateButton(page, "Musician").click();
+    await applyTemplateChoice(page, "Musician");
     await expect(toastOf(page)).toBeVisible();
     await expect(blocksHeading(page, 6)).toBeVisible();
 
@@ -151,14 +153,12 @@ test.describe("M6-40 on a phone", () => {
     expect(toast.x + toast.width).toBeLessThanOrEqual(viewport.width);
     expect(toast.height).toBeGreaterThanOrEqual(44);
     expect((await box(toastUndo(page))).height).toBeGreaterThanOrEqual(44);
-    // Neither Publish (in the header) nor the docked preview is covered.
+    // Neither Publish (in the toolbar) nor the mini phone is covered.
     const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
       a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-    const publish = await box(
-      page.locator("main > header").getByRole("button", { name: "Publish", exact: true }),
-    );
+    const publish = await box(publishButton(page));
     expect(overlaps(toast, publish)).toBe(false);
-    const dock = page.getByTestId("preview-dock");
+    const dock = page.getByTestId("mini-phone");
     if ((await dock.count()) > 0 && (await dock.first().isVisible())) {
       expect(overlaps(toast, await box(dock.first()))).toBe(false);
     }
@@ -169,7 +169,7 @@ test.describe("M6-40 on a phone", () => {
 });
 
 test.describe("M6-40 apply to a page that has content", () => {
-  test("M6-40 it asks first; Keep my page, Escape and Close leave the draft exactly as it was; Replace my page replaces blocks, theme and overrides and nothing else", async ({
+  test("M6-40 it asks first; Cancel, Escape and Close leave the draft exactly as it was; the blocks and the template's style replace blocks, theme and overrides and nothing else", async ({
     page,
     context,
   }) => {
@@ -182,53 +182,34 @@ test.describe("M6-40 apply to a page that has content", () => {
     await openEditor(page);
     const writes = watchWrites(page);
 
-    // Pressing Use this template shows the confirmation in the dialog.
+    // M7-08: pressing Use this template asks the one choice, in place in the card (the details of
+    // the panel are in tests/e2e/m7/templates-choice.spec.ts).
     await openDialog(page);
     await templateButton(page, "Musician").click();
-    const confirm = replaceConfirmation(page);
-    await expect(confirm).toBeVisible();
-    await expect(
-      confirm.getByText(
-        "Replace your blocks and style with the Musician template? Your name, photo and saved themes stay. You can undo this.",
-      ),
-    ).toBeVisible();
-    const replace = confirm.getByRole("button", { name: "Replace my page", exact: true });
-    const keep = confirm.getByRole("button", { name: "Keep my page", exact: true });
-    for (const button of [replace, keep])
+    const choice = choiceOf(page, "Musician");
+    await expect(choice).toBeVisible();
+    await expect(choice.getByText("Your current blocks are replaced.")).toBeVisible();
+    for (const button of [
+      choice.getByRole("button", { name: "Apply template", exact: true }),
+      choice.getByRole("button", { name: "Cancel", exact: true }),
+    ])
       expect((await box(button)).height).toBeGreaterThanOrEqual(44);
-    const danger = await replace.evaluate((el) => {
-      const css = getComputedStyle(el);
-      return {
-        bg: css.backgroundColor,
-        color: css.color,
-        border: css.borderTopColor,
-        width: css.borderTopWidth,
-      };
-    });
-    expect(danger.bg).toBe("rgb(255, 255, 255)");
-    expect(danger.color).toBe(danger.border);
-    expect(danger.width).toBe("1px");
-    expect(danger.color).not.toBe("rgb(0, 0, 0)");
-    const secondary = await keep.evaluate((el) => {
-      const css = getComputedStyle(el);
-      return { bg: css.backgroundColor, color: css.color, border: css.borderTopColor };
-    });
-    expect(secondary.border).not.toBe(danger.border);
-    expect(secondary.color).not.toBe(danger.color);
 
-    // Keep my page.
-    await keep.click();
+    // Cancel.
+    await choice.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(choice).toHaveCount(0);
+    await dialogOf(page).getByRole("button", { name: "Close", exact: true }).click();
     await expect(dialogOf(page)).toHaveCount(0);
     // Escape.
     await openDialog(page);
     await templateButton(page, "Musician").click();
-    await expect(replaceConfirmation(page)).toBeVisible();
+    await expect(choiceOf(page, "Musician")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialogOf(page)).toHaveCount(0);
     // Close.
     await openDialog(page);
     await templateButton(page, "Musician").click();
-    await expect(replaceConfirmation(page)).toBeVisible();
+    await expect(choiceOf(page, "Musician")).toBeVisible();
     await dialogOf(page).getByRole("button", { name: "Close", exact: true }).click();
     await expect(dialogOf(page)).toHaveCount(0);
 
@@ -237,12 +218,9 @@ test.describe("M6-40 apply to a page that has content", () => {
     expect(withoutRev((await pageRow(user.pageId)).draft)).toEqual(withoutRev(before.draft));
     expect((await pageRow(user.pageId)).draft.rev).toBe(before.draft.rev);
 
-    // Replace my page.
+    // Apply the blocks and the template's style (this page has a theme, so the default is to keep).
     await openDialog(page);
-    await templateButton(page, "Musician").click();
-    await replaceConfirmation(page)
-      .getByRole("button", { name: "Replace my page", exact: true })
-      .click();
+    await applyTemplateChoice(page, "Musician", "template");
     await expect(dialogOf(page)).toHaveCount(0);
     await expect(blocksHeading(page, 6)).toBeVisible();
     const stored = await expectDraft(
@@ -292,10 +270,7 @@ test.describe("M6-40 Undo", () => {
 
     await openEditor(page);
     await openDialog(page);
-    await templateButton(page, "Shop").click();
-    await replaceConfirmation(page)
-      .getByRole("button", { name: "Replace my page", exact: true })
-      .click();
+    await applyTemplateChoice(page, "Shop", "template");
     await expect(blocksHeading(page, 7)).toBeVisible();
     await expect(toastOf(page)).toContainText("Applied the Shop template.");
     await expectDraft(user.pageId, (d) => d.theme.ref === SYSTEM_IDS.Paper);
@@ -331,10 +306,7 @@ test.describe("M6-40 Undo", () => {
 
     // Apply, then Undo: Published again.
     await openDialog(page);
-    await templateButton(page, "Streamer").click();
-    await replaceConfirmation(page)
-      .getByRole("button", { name: "Replace my page", exact: true })
-      .click();
+    await applyTemplateChoice(page, "Streamer", "template");
     await expect(blocksHeading(page, 5)).toBeVisible();
     await expect(statusChip(page)).toHaveText("Unpublished changes");
     await toastUndo(page).click();
@@ -343,10 +315,7 @@ test.describe("M6-40 Undo", () => {
 
     // Apply again and let the toast go: the template stays.
     await openDialog(page);
-    await templateButton(page, "Streamer").click();
-    await replaceConfirmation(page)
-      .getByRole("button", { name: "Replace my page", exact: true })
-      .click();
+    await applyTemplateChoice(page, "Streamer", "template");
     await expect(toastOf(page)).toBeVisible();
     await expect(toastOf(page)).toHaveCount(0, { timeout: 12_000 });
     await expect(blocksHeading(page, 5)).toBeVisible();
@@ -364,7 +333,7 @@ test.describe("M6-40 Undo", () => {
     await emptyPageUser(context, "tpl-ed");
     await openEditor(page);
     await openDialog(page);
-    await templateButton(page, "Artist").click();
+    await applyTemplateChoice(page, "Artist");
     await expect(toastOf(page)).toBeVisible();
     await page.getByLabel("Display name", { exact: true }).fill("A new name");
     await expect(toastOf(page)).toHaveCount(0);
@@ -380,14 +349,11 @@ test.describe("M6-40 Publish after applying", () => {
     const user = await emptyPageUser(context, "tpl-pb");
     await openEditor(page);
     await openDialog(page);
-    await templateButton(page, "Musician").click();
+    await applyTemplateChoice(page, "Musician");
     await expect(blocksHeading(page, 6)).toBeVisible();
     await expectDraft(user.pageId, (d) => d.blocks.length === 6);
 
-    await page
-      .locator("main > header")
-      .getByRole("button", { name: "Publish", exact: true })
-      .click();
+    await publishButton(page).click();
     const alert = page.getByRole("alert").filter({ hasText: /before publishing/ });
     await expect(alert).toContainText("Fix 5 blocks before publishing.");
     for (const title of ["Latest release", "Tour dates", "Merch", "New single"]) {
@@ -425,10 +391,7 @@ test.describe("M6-40 Publish after applying", () => {
     };
     await setDraft(user.pageId, filled);
     await openEditor(page);
-    await page
-      .locator("main > header")
-      .getByRole("button", { name: "Publish", exact: true })
-      .click();
+    await publishButton(page).click();
     await expect(page.getByText("Published.", { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(statusChip(page)).toHaveText("Published");
 

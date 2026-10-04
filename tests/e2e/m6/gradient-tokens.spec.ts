@@ -43,7 +43,7 @@ const styleOf = (page: Page, property: string) =>
   root(page).evaluate((el, name) => getComputedStyle(el).getPropertyValue(name).trim(), property);
 const alertOf = (page: Page) => page.getByRole("alert").filter({ hasText: /before publishing/ });
 const publishButton = (page: Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 
 /**
  * Publishes the draft from the editor and waits for the "Published" chip. Unlike the screen helper

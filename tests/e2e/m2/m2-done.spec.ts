@@ -320,17 +320,14 @@ test("M2-31 a page with every block type renders identically in preview and live
   await expect(previewScreen(page).getByRole("heading", { level: 1 })).toHaveText(NAME);
   await expect(live.getByRole("heading", { level: 1 })).toHaveText(NAME);
 
-  // 7. The editor at the project's viewport: on a phone the Preview tab shows the nine blocks, no
+  // 7. The editor at the project's viewport: on a phone the preview sheet shows the nine blocks, no
   //    bezel, no sideways scroll, and Publish is a 44px target; on desktop the bezel holds them.
   await expectNoHorizontalScroll(page);
   expect((await publishButton(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
   if (phoneOnly(info)) {
-    await expect(page.getByRole("tab", { name: "Preview" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    const bezel = page.getByTestId("preview-bezel");
-    expect(await bezel.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
+    // M7-09: the sheet (opened above) shows the page at full width with no bezel.
+    await expect(page.getByRole("dialog", { name: "Live preview" })).toBeVisible();
+    await expect(page.getByTestId("preview-bezel")).toHaveCount(0);
     await showView(page, "Blocks");
     await showView(page, "Preview");
     expect(await summarize(previewScreen(page))).toHaveLength(9);
@@ -357,6 +354,7 @@ test("M2-31 a page with every block type renders identically in preview and live
   expect(stale.body).toContain(BIO);
   expect(stale.body).not.toContain("Now booking spring.");
 
+  await showView(page, "Blocks"); // a phone closes the preview sheet, which covers the toolbar
   await publishButton(page).click();
   await expect(statusChip(page)).toHaveAttribute("data-publish-status", "published", {
     timeout: 30_000,

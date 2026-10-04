@@ -16,6 +16,7 @@ import {
   seededUser,
   setDraft,
 } from "./editor-helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /** M2-14: reorder blocks with dnd-kit (pointer, touch, keyboard) and with Move up / Move down. */
 
@@ -192,9 +193,9 @@ test.describe("M2-14 drag handles", () => {
     await expect(status).toHaveText("Moved to position 1 of 5");
     await expect(up).toBeDisabled(); // first now
     await expect(down).toBeFocused(); // focus moved to the twin button, not lost
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Preview" }).click();
+    if (phoneOnly(info)) await showPreviewSheet(page);
     expect(await previewOrder(page)).toEqual([FIVE[1], FIVE[0], FIVE[2], FIVE[3], FIVE[4]]);
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     await down.click();
     await down.click();

@@ -12,6 +12,8 @@ import {
   showPreview,
   showTokens,
 } from "../m3/design-helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
+import { clickTab } from "../m7/workspace-helpers";
 
 /**
  * M5-16: the Design screen's empty and error states. Phone project = 390x844, desktop = 1440x900.
@@ -46,7 +48,12 @@ async function expectTargets(page: Page, ...owned: string[]): Promise<void> {
   if (phoneOnly(test.info())) await expectTapTargets(page);
   else await expectTapTargets(page, owned.join(", ") || undefined);
 }
-const OWNED = ['[data-testid="saved-themes-card"]', "[data-save-problem]", '[data-testid="load-failure"]', '[data-testid="theme-deleted-notice"]'];
+const OWNED = [
+  '[data-testid="saved-themes-card"]',
+  "[data-save-problem]",
+  '[data-testid="load-failure"]',
+  '[data-testid="theme-deleted-notice"]',
+];
 
 /** The tenant tokens a page's HTML carries (`--t-radius:12px` ...): what "unchanged" means for a live page. */
 const tokensOf = (html: string): string[] => html.match(/--t-[a-z-]+:[^;"}]+/g) ?? [];
@@ -146,7 +153,9 @@ test.describe("M5-16 the themes cannot be loaded", () => {
     await expect(card(page).getByTestId("saved-themes-hint")).toHaveText(HINT);
     await expect(radius(page, 20)).toHaveAttribute("aria-pressed", "true");
     // The page's own theme (Noir) is applied again once the list is known.
-    await expect(page.locator("header p").first()).toHaveText(/^Theme · Noir/);
+    await expect(
+      page.locator("[data-testid='theme-card'][aria-pressed='true'] [data-theme-name]"),
+    ).toHaveText("Noir");
   });
 
   test("M5-16 a draft that cannot be read: the screen's header and a load-failure card with Retry", async ({
@@ -159,7 +168,8 @@ test.describe("M5-16 the themes cannot be loaded", () => {
     await expect(page.getByTestId("load-failure")).toHaveText(
       "We couldn’t load your page. Try again.",
     );
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Design");
+    // M7-02: a failed load shows the page header, whose only h1 is the page's name.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Main page");
     await expectNoHorizontalScroll(page);
     await expectTargets(page, ...OWNED);
     await clearFault(context);
@@ -184,9 +194,9 @@ test.describe("M5-16 the themes cannot be loaded", () => {
       "rgb(232, 196, 189)",
     );
     if (phoneOnly(test.info())) {
-      await page.getByRole("tab", { name: "Preview" }).click();
+      await showPreviewSheet(page);
       await expect(previewScreen(page)).toBeVisible();
-      await page.getByRole("tab", { name: "Style" }).click();
+      await hidePreviewSheet(page);
       await expect(error).toBeVisible();
     }
     if (desktopOnly(test.info())) {
@@ -225,7 +235,9 @@ test.describe("M5-16 the theme this page used was deleted", () => {
     const { user, themeId } = await pageWithSavedTheme(context, "d16g");
     // Before: the theme is there and applied, no notice.
     await openDesign(page);
-    await expect(page.locator("header p").first()).toHaveText("Theme · Gone soon");
+    await expect(
+      page.locator("[data-testid='theme-card'][aria-pressed='true'] [data-theme-name]"),
+    ).toHaveText("Gone soon");
     await expect(page.getByTestId("theme-deleted-notice")).toHaveCount(0);
 
     const before = await pageRow(user.pageId);
@@ -235,12 +247,15 @@ test.describe("M5-16 the theme this page used was deleted", () => {
     expect(gone.error).toBeNull();
 
     await page.reload();
-    await expect(page.getByRole("heading", { level: 1, name: "Design" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Design", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await showTokens(page);
     const notice = page.getByTestId("theme-deleted-notice");
     await expect(notice).toHaveText(DELETED);
     await expect(notice).toHaveAttribute("role", "status");
-    await expect(page.locator("header p").first()).toHaveText("Theme · Default");
+    // (The old header said "Theme · Default" here; the Themes card has no applied card instead.)
     // No theme card claims to be applied.
     await expect(card(page).getByText("Applied", { exact: true })).toHaveCount(0);
 
@@ -357,7 +372,7 @@ test.describe("M5-16 the Editor's save banners also appear on Design, and the ed
     await expectOverrides(user.pageId, (o) => o.radius === 20);
   });
 
-  test("M5-16 Done with a signed-out session stays on Design instead of losing the edit", async ({
+  test("M5-16 a signed-out session keeps the edit and its banner across the tabs instead of losing it (M7-02 replaces 'Done')", async ({
     page,
     context,
   }) => {
@@ -373,9 +388,11 @@ test.describe("M5-16 the Editor's save banners also appear on Design, and the ed
     });
     await radius(page, 20).click();
     await expect(page.locator('[data-save-problem="signed-out"]')).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("link", { name: "Done" }).click();
-    // The flush fails, so Done does not navigate: the edit is still in front of the person.
-    await page.waitForTimeout(1_000);
+    // The workspace keeps the edit: going to the Edit tab shows the same banner once, and the
+    // radius is still chosen when Design comes back (the old 'Done' link refused to leave).
+    await clickTab(page, "Edit");
+    await expect(page.locator('[data-save-problem="signed-out"]')).toHaveCount(1);
+    await clickTab(page, "Design");
     await expect(page).toHaveURL(url("app", "/design"));
     await expect(radius(page, 20)).toHaveAttribute("aria-pressed", "true");
     expect(mark()).toBeTruthy();

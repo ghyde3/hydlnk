@@ -436,7 +436,7 @@ test.describe("M3-18 per-block overrides: color and corner radius", () => {
 
 test.describe("M3-18 direct-API abuse: block overrides", () => {
   const publishButton = (page: Page) =>
-    page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+    page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 
   async function patchBlockOverrides(
     context: BrowserContext,

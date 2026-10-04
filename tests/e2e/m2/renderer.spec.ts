@@ -216,10 +216,7 @@ test.describe("M2-05 the shared page renderer", () => {
     await page.goto(live.url);
     const img = page.locator(".pg-avatar img");
     await expect(img).toHaveAttribute("alt", "Mara Okafor");
-    await expect(img).toHaveAttribute(
-      "src",
-      new RegExp(`/storage/v1/object/public/page-media/${photo.path}$`),
-    );
+    await expect(img).toHaveAttribute("src", new RegExp(`^/media/${photo.path}$`));
     expect(await css(img, "object-fit")).toBe("cover");
     const avatar = await box(page.locator(".pg-avatar"));
     expect(avatar.width).toBe(96);
@@ -326,7 +323,9 @@ test.describe("M2-05 the editor preview uses the same renderer", () => {
     await previewScreen(page).locator(`[data-block-id="${social.id}"] a`).first().click();
     await page.waitForTimeout(300);
     expect(page.url()).toBe(before);
-    // The renderer's root is the preview's root too, with the draft's resolved background.
+    // The renderer's root is the preview's root too, with the draft's resolved background. (A tap in
+    // the phone's sheet closed it, M7-09, so open it again.)
+    await showView(page, "Preview");
     const root = previewScreen(page).locator("[data-page-root]");
     await expect(root).toHaveCount(1);
     expect(await css(root, "background-color")).toBe("rgb(247, 247, 245)");

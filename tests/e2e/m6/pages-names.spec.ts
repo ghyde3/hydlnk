@@ -21,7 +21,7 @@ import { rawBytes } from "./pages-helpers";
 
 test.afterAll(cleanupUsers);
 
-const header = (page: Page) => page.locator("main > header");
+const header = (page: Page) => page.getByTestId("workspace-toolbar");
 const h1 = (page: Page) => header(page).getByRole("heading", { level: 1 });
 const pencil = (page: Page) => header(page).getByRole("button", { name: "Rename page" });
 const nameField = (page: Page) => header(page).getByLabel("Page name");
@@ -536,14 +536,15 @@ test.describe("M6-14 where names show", () => {
     await context.addCookies([{ name: "hl-fault", value: "draft-load", url: url("app") }]);
     await page.goto(url("app", "/editor"));
     await expect(page.getByTestId("load-failure")).toBeVisible();
-    await expect(h1(page)).toHaveText("Renamed before the failure");
-    await expect(header(page).locator("p")).toHaveText(`${owner.handle}.hydlnk.com`);
+    // M7-02: a failed load has no toolbar; the page header is the card's: the address and the name.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Renamed before the failure");
+    await expect(page.locator("main > header p")).toHaveText(`${owner.handle}.hydlnk.com`);
     await context.clearCookies({ name: "hl-fault" });
   });
 });
 
 test.describe("M6-14 layout", () => {
-  test("M6-14 a 60 character name with no spaces wraps inside the h1; the cluster keeps its row at 1440; at 390 the rename form stacks at full width", async ({
+  test("M6-14 a 60 character name with no spaces wraps inside the h1 on a phone and is cut with an ellipsis in the 56px toolbar; the cluster keeps its row at 1440; at 390 the rename form stacks at full width", async ({
     page,
     context,
   }, info) => {
@@ -553,12 +554,18 @@ test.describe("M6-14 layout", () => {
     await openEditor(page);
     await expect(h1(page)).toHaveText(long);
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "main > header");
+    await expectTapTargets(page, "[data-testid='workspace-toolbar']");
     const title = (await h1(page).boundingBox())!;
     const viewport = page.viewportSize()!;
     expect(title.x + title.width).toBeLessThanOrEqual(viewport.width);
-    // It wrapped: taller than one 22px line.
-    expect(title.height).toBeGreaterThan(30);
+    if (info.project.name === "desktop") {
+      // M7-05: the toolbar is one 56px row, so the long name stays on one line and is cut.
+      expect(title.height).toBeLessThanOrEqual(30);
+      expect(await h1(page).evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    } else {
+      // It wrapped: taller than one 22px line.
+      expect(title.height).toBeGreaterThan(30);
+    }
 
     const publish = (await header(page)
       .getByRole("button", { name: "Publish", exact: true })
@@ -582,7 +589,7 @@ test.describe("M6-14 layout", () => {
     expect(s!.height).toBeGreaterThanOrEqual(44);
     expect(c!.height).toBeGreaterThanOrEqual(44);
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "main > header");
+    await expectTapTargets(page, "[data-testid='workspace-toolbar']");
     if (info.project.name === "phone") {
       // Stacked, each as wide as the header's content.
       expect(s!.y).toBeGreaterThan(f!.y + f!.height - 1);

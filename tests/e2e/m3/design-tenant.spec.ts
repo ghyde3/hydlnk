@@ -4,6 +4,7 @@ import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { accessToken, openEditor, pageRow, seededUser } from "../m2/editor-helpers";
 import { openDesign, publishButton } from "./design-helpers";
+import { showPreviewSheet } from "../m7/phone-preview";
 
 /**
  * M3-04 (the public page loads only its two chosen families) and M3-02 (token values reach CSS
@@ -114,6 +115,7 @@ test.describe("M3-04 tenant fonts", () => {
     const urls = recordRequests(page);
     for (const open of [() => openEditor(page), () => openDesign(page)]) {
       await open();
+      await showPreviewSheet(page); // a phone draws the preview in the mini phone's sheet (M7-09)
       const root = page.locator("[data-testid='preview-screen'] [data-page-root]");
       // The unreadable override is dropped: the preview draws the theme's own fonts.
       const name = await root.locator(".pg-name").evaluate((el) => getComputedStyle(el).fontFamily);
@@ -181,6 +183,7 @@ test.describe("M3-02 token variables", () => {
 
     for (const target of [url("app", "/editor"), url("app", "/design")]) {
       await page.goto(target);
+      await showPreviewSheet(page); // a phone draws the preview in the mini phone's sheet (M7-09)
       await expect(page.locator("[data-testid='preview-screen'] [data-page-root]")).toHaveCount(1);
       const result = await page.evaluate(() => {
         const root = document.querySelector("[data-testid='preview-screen'] [data-page-root]")!;

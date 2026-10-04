@@ -6,6 +6,7 @@ import type { ImageRef } from "@/lib/document";
 import { pageRow, statusChip } from "../m2/editor-helpers";
 import type { DraftDoc } from "@/lib/document";
 import { tenantGet } from "../m2/publish-helpers";
+import { url } from "../helpers";
 
 /**
  * Shared setup for the share and QR specs (M6-31 .. M6-34): split-color pictures, objects stored
@@ -162,6 +163,19 @@ export const shareTitle = (page: Page): Locator =>
 export const shareDescription = (page: Page): Locator =>
   shareCard(page).getByLabel("Description", { exact: true });
 export const sharePreview = (page: Page): Locator => page.getByTestId("share-preview-card");
+
+/**
+ * Opens the Share tab (M7-04: the share card moved here from the Edit tab) and waits until its
+ * fields are interactive (rendered and hydrated).
+ */
+export async function openShare(page: Page): Promise<void> {
+  await page.goto(url("app", "/share"));
+  await expect(shareTitle(page)).toBeVisible();
+  await page.waitForFunction(() => {
+    const input = document.querySelector("input[data-field='share-title']");
+    return !!input && Object.keys(input).some((key) => key.startsWith("__reactProps$"));
+  });
+}
 
 /** Clicks Publish and waits until the page reads "Published". */
 export async function publishNow(page: Page): Promise<void> {

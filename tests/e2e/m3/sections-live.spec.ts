@@ -360,12 +360,14 @@ test.describe("M3-15 / M3-16 image background on the live page", () => {
     const user = await makeUser("bgi");
     const handle = `zq-bgi-${rand(5)}`;
     const image = await uploadImage(user.id, 1200, 800);
-    const imageUrl = `${supabaseUrl()}/storage/v1/object/public/page-media/${image.path}`;
+    // The token stores the Storage URL; the page draws it from its own /media route (M7-15).
+    const storedUrl = `${supabaseUrl()}/storage/v1/object/public/page-media/${image.path}`;
+    const imageUrl = `${url(handle).replace(/\/$/, "")}/media/${image.path}`;
     const doc = publishDocOf(blocksFor(), {
       tokens: {
         ...COLORS,
         bgType: "image",
-        bgImage: imageUrl,
+        bgImage: storedUrl,
         overlayOpacity: 0.6,
         blur: 12,
       },

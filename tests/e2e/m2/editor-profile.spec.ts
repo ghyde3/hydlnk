@@ -18,6 +18,7 @@ import {
 import { confirmPhoto } from "../m6/position-dialog-helpers";
 import { makeJpeg } from "../m5/images-fixtures";
 import { makePng } from "./editor-images";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /** M2-07 (display name and bio) and M2-09 (profile photo upload, replace, remove). */
 
@@ -32,7 +33,7 @@ const counter = (page: Page) => card(page).getByText(/^\d+ \/ 160$/);
 
 /** On a phone the preview is on its own tab. */
 async function showPreview(page: Page, info: { project: { name: string } }) {
-  if (info.project.name === "phone") await page.getByRole("tab", { name: "Preview" }).click();
+  if (info.project.name === "phone") await showPreviewSheet(page);
 }
 
 test.describe("M2-07 display name and bio", () => {
@@ -120,7 +121,7 @@ test.describe("M2-07 display name and bio", () => {
     await showPreview(page, info);
     await expect(previewScreen(page).locator("h1")).toHaveText(name);
     await expect(previewScreen(page)).toContainText(bio);
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     await expect(saveIndicator(page)).toHaveText("Saved");
     const stored = await expectDraft(user.pageId, (d) => d.profile.bio === bio);
@@ -213,7 +214,8 @@ test.describe("M2-07 display name and bio", () => {
     test.skip(!desktopOnly(info), "desktop layout");
     await seededUser(context, "pr8");
     await openEditor(page);
-    const column = (await page.getByRole("region", { name: "Blocks", exact: true }).boundingBox())!;
+    // M7-02: the block column is the workspace's tab panel.
+    const column = (await page.getByRole("tabpanel").boundingBox())!;
     const box = (await card(page).boundingBox())!;
     expect(box.width).toBeLessThanOrEqual(720);
     expect(Math.abs(box.width - column.width)).toBeLessThanOrEqual(1);
@@ -291,7 +293,7 @@ test.describe("M2-09 profile photo", () => {
       "src",
       new RegExp(first.path.replace(/[.]/g, "\\.")),
     );
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     // Before Publish, the live page does not know the new image; after Publish it does.
     const before = await rawRequest(`${user.handle}.localhost:3000`, "/");
@@ -320,7 +322,7 @@ test.describe("M2-09 profile photo", () => {
     await expectDraft(user.pageId, (d) => d.profile.photo === null);
     await showPreview(page, info);
     await expect(previewScreen(page).locator("header img")).toHaveCount(0);
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     // No Storage write or delete from the page, and both objects are still readable.
     expect(storageCalls).toEqual([]);
@@ -347,7 +349,7 @@ test.describe("M2-09 profile photo", () => {
     expect(before.body).not.toContain(photo.path);
 
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");

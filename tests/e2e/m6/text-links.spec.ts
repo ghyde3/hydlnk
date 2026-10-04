@@ -323,7 +323,7 @@ test.describe("M6-29 writes made straight through the publishable key", () => {
     await page.goto(url("app", "/editor"));
     await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     const alert = page.getByRole("alert").filter({ hasText: "Fix 1 block before publishing." });

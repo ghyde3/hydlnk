@@ -15,8 +15,8 @@ import {
 } from "./design-helpers";
 
 /**
- * M3-06: the Design screen frame, the live preview and the Tokens | Preview tabs on a phone.
- * One smoke per viewport (the bar for non-security screens), plus the signed-out redirect.
+ * M3-06: the Design screen frame (since M7-02 the Design tab of the workspace) and its live
+ * preview. One smoke per viewport (the bar for non-security screens), plus the signed-out redirect.
  */
 
 test.afterAll(cleanupUsers);
@@ -27,7 +27,7 @@ test.describe("M3-06 Design screen", () => {
     await expect(page).toHaveURL(/\/login/);
   });
 
-  test("M3-06 desktop: header, two columns, the preview matches the public page, Done goes to the editor", async ({
+  test("M3-06 desktop: the Design tab of the workspace, two columns, the preview matches the public page, no Done button", async ({
     page,
     context,
   }, info) => {
@@ -35,20 +35,24 @@ test.describe("M3-06 Design screen", () => {
     const user = await seededUser(context, "dsg1");
     await openDesign(page);
 
-    // Sidebar item, breadcrumb, title, header buttons.
-    await expect(page.getByRole("link", { name: "Design" }).first()).toHaveAttribute(
-      "aria-current",
-      "page",
+    // M7-02: Design is a tab of the one workspace. The sidebar's Editor item is current, the Design
+    // tab is selected, and the h1 is the page's name; there is no Done button (Publish is in the
+    // toolbar) and no screen header of its own.
+    await expect(
+      page
+        .getByRole("navigation", { name: "App", exact: true })
+        .getByRole("link", { name: "Editor" }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("tab", { name: "Design", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
     );
-    await expect(page.locator("header p").first()).toHaveText(/^Theme · Noir/);
-    const h1 = page.getByRole("heading", { level: 1, name: "Design" });
-    expect(await h1.evaluate((el) => getComputedStyle(el).fontSize)).toBe("22px");
-    expect(await h1.evaluate((el) => getComputedStyle(el).fontWeight)).toBe("700");
-    await expect(page.getByRole("button", { name: "Save as theme" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Done" })).toBeVisible();
+    await expect(page.locator("h1:not([data-page-frame] *)")).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Done" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Done" })).toHaveCount(0);
 
     // Two columns: token sections (max 720px) and the live preview with a 310x660 bezel.
-    const tokens = page.getByRole("region", { name: "Style settings" });
+    const tokens = page.getByRole("tabpanel");
     await expect(tokens).toBeVisible();
     expect((await tokens.boundingBox())!.width).toBeLessThanOrEqual(720);
     const preview = page.getByRole("region", { name: "Live preview" });
@@ -70,13 +74,9 @@ test.describe("M3-06 Design screen", () => {
     await live.close();
 
     await expectNoHorizontalScroll(page);
-
-    // Done leads to the editor.
-    await page.getByRole("link", { name: "Done" }).click();
-    await expect(page).toHaveURL(url("app", "/editor"));
   });
 
-  test("M3-06 phone: top bar, tab bar, Tokens | Preview tabs, no horizontal scroll", async ({
+  test("M3-06 phone: top bar, tab bar, the workspace tabs, no Style | Preview tabs, no horizontal scroll", async ({
     page,
     context,
   }, info) => {
@@ -84,41 +84,31 @@ test.describe("M3-06 Design screen", () => {
     await seededUser(context, "dsg2");
     await openDesign(page);
 
-    // Sidebar hidden; the tab bar shows Design active.
+    // Sidebar hidden; the tab bar shows Editor active (Design is a tab of it).
     await expect(page.locator("aside")).toBeHidden();
     const bar = page.getByRole("navigation", { name: "App sections" });
     await expect(bar).toBeVisible();
-    await expect(bar.getByRole("link", { name: "Design" })).toHaveAttribute("aria-current", "page");
+    await expect(bar.getByRole("link", { name: "Editor" })).toHaveAttribute("aria-current", "page");
+    await expect(bar.getByRole("link", { name: "Design" })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "header, [role=tablist], nav[aria-label='App sections']");
+    await expectTapTargets(page, "[role=tablist], nav[aria-label='App sections']");
 
-    // Tokens is selected by default; the preview pane is hidden.
-    const tablist = page.getByRole("tablist", { name: "Design view" });
+    // The workspace tabs replace the old Style | Preview tabs: the controls are always shown.
+    const tablist = page.getByRole("tablist", { name: "Workspace" });
     await expect(tablist).toBeVisible();
-    const tokensTab = tablist.getByRole("tab", { name: "Style" });
-    const previewTab = tablist.getByRole("tab", { name: "Preview" });
-    await expect(tokensTab).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tablist", { name: "Design view" })).toHaveCount(0);
+    await expect(tablist.getByRole("tab", { name: "Design" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(page.getByRole("button", { name: "Accent Brass" })).toBeVisible();
-    await expect(page.getByTestId("preview-screen")).toBeHidden();
-    for (const tab of [tokensTab, previewTab]) {
+    for (const tab of await tablist.getByRole("tab").all()) {
       expect((await tab.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
 
-    // Keyboard: ArrowRight selects Preview and moves focus; the preview is full width, no bezel.
-    await tokensTab.focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(previewTab).toHaveAttribute("aria-selected", "true");
-    await expect(previewTab).toBeFocused();
-    await expect(page.getByRole("button", { name: "Accent Brass" })).toBeHidden();
-    const screen = page.getByTestId("preview-screen");
-    await expect(screen).toBeVisible();
-    expect(Math.round((await screen.boundingBox())!.width)).toBe(390 - 32);
-    await expectNoHorizontalScroll(page);
-    await page.keyboard.press("ArrowLeft");
-    await expect(tokensTab).toHaveAttribute("aria-selected", "true");
-
     // Focus ring: 2px brass outline.
-    const outline = await tokensTab.evaluate((el) => {
+    await tablist.getByRole("tab", { name: "Design" }).focus();
+    const outline = await tablist.getByRole("tab", { name: "Design" }).evaluate((el) => {
       const s = getComputedStyle(el);
       return { width: s.outlineWidth, color: s.outlineColor };
     });
@@ -142,7 +132,7 @@ test.describe("M3-06 Design screen", () => {
       .toBe("20px");
   });
 
-  test("M3-06 the saved-themes card and Save as theme are wired to the screen's draft: applying Ivory updates the header and preview and autosaves", async ({
+  test("M3-06 the saved-themes card and Save as theme are wired to the workspace's draft: applying Ivory updates the chip and preview and autosaves", async ({
     page,
     context,
   }) => {
@@ -150,10 +140,16 @@ test.describe("M3-06 Design screen", () => {
     await openDesign(page);
     await expect(page.getByTestId("saved-themes-card")).toBeVisible();
     await expect(page.getByTestId("save-as-theme")).toBeVisible();
-    await expect(page.locator("header p").first()).toHaveText(/^Theme · Noir/);
+    await expect(page.locator("[data-publish-status]")).toHaveAttribute(
+      "data-publish-status",
+      "published",
+    );
 
     await page.getByTestId("theme-card").filter({ hasText: "Ivory" }).click();
-    await expect(page.locator("header p").first()).toHaveText("Theme · Ivory");
+    await expect(page.locator("[data-publish-status]")).toHaveAttribute(
+      "data-publish-status",
+      "unpublished-changes",
+    );
     await expect(saveStatus(page)).toHaveText("Saved", { timeout: 5_000 });
     await expectOverrides(user.pageId, (o) => Object.keys(o).length === 0);
     const row = await pageRow(user.pageId);
@@ -162,19 +158,7 @@ test.describe("M3-06 Design screen", () => {
     expect(await computed(previewRoot(page), "--t-bg")).not.toBe("#16120E");
   });
 
-  test("M3-06 phone: Enter on a focused tab selects it", async ({ page, context }, info) => {
-    test.skip(!phoneOnly(info), "phone layout");
-    await seededUser(context, "dsg5");
-    await openDesign(page);
-    const tablist = page.getByRole("tablist", { name: "Design view" });
-    const previewTab = tablist.getByRole("tab", { name: "Preview" });
-    await previewTab.focus();
-    await page.keyboard.press("Enter");
-    await expect(previewTab).toHaveAttribute("aria-selected", "true");
-    await expect(page.getByTestId("preview-screen")).toBeVisible();
-  });
-
-  test("M3-06 the tablist appears at 759px and is gone at 761px", async ({
+  test("M3-06 the bezel is in the page from 760px up and the phone layout has none", async ({
     page,
     context,
   }, info) => {
@@ -182,17 +166,31 @@ test.describe("M3-06 Design screen", () => {
     await seededUser(context, "dsg3");
     await page.setViewportSize({ width: 759, height: 900 });
     await openDesign(page);
-    await expect(page.getByRole("tablist", { name: "Design view" })).toBeVisible();
-    await page.setViewportSize({ width: 761, height: 900 });
+    await expect(page.getByTestId("preview-bezel")).toHaveCount(0);
     await expect(page.getByRole("tablist", { name: "Design view" })).toHaveCount(0);
+    await page.setViewportSize({ width: 761, height: 900 });
     await expect(page.getByRole("region", { name: "Live preview" })).toBeVisible();
+    await expect(page.locator("[data-page-root]")).toHaveCount(1);
   });
 
-  test("M3-06 mara's Design screen reads, never writes", async ({ page, context }) => {
+  test("M3-06 mara's Design screen reads, never writes", async ({ page, context }, info) => {
     await signInAs(context, MARA_EMAIL);
     await openDesign(page);
-    await expect(page.locator("header p").first()).toHaveText(/^Theme · /);
-    await showPreview(page);
-    await expect(previewRoot(page)).toBeVisible();
+    if (phoneOnly(info)) {
+      // A phone draws the page in the mini phone's thumbnail (M7-09).
+      await expect(page.getByTestId("mini-phone")).toBeVisible();
+    } else {
+      await showPreview(page);
+      await expect(previewRoot(page)).toBeVisible();
+    }
+    // Nothing was written by opening it.
+    const writes: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() === "PATCH" && request.url().includes("/rest/v1/pages")) {
+        writes.push(request.url());
+      }
+    });
+    await page.waitForTimeout(1500);
+    expect(writes).toEqual([]);
   });
 });

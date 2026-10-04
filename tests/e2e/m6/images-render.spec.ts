@@ -29,6 +29,7 @@ import {
   publishButton,
   userWithBlocks,
 } from "./images-helpers";
+import { markupOf } from "../m7/markup";
 
 /**
  * M6-23 on the live page and in the editor preview: a shaped image sits in a frame of its ratio, a
@@ -228,8 +229,8 @@ test.describe("M6-23 the live page", () => {
       info.project.name === "phone" ? { width: 390, height: 844 } : { width: 1440, height: 900 };
     const liveContext = await browser.newContext({ viewport });
     const lp = await liveContext.newPage();
-    // Hold every picture back for a moment.
-    await lp.route("**/storage/v1/object/public/page-media/**", async (route) => {
+    // Hold every picture back for a moment (they load from the page's own /media route, M7-15).
+    await lp.route(/\/media\/[0-9a-f-]{36}\//, async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 2500));
       await route.continue();
     });
@@ -272,13 +273,11 @@ test.describe("M6-23 parity and the chip", () => {
     ];
     const preview: Record<string, string> = {};
     for (const id of ids) {
-      preview[id] = await previewScreen(page)
-        .locator(`[data-block-id="${id}"]`)
-        .evaluate((el) => el.outerHTML);
+      preview[id] = await markupOf(previewScreen(page).locator(`[data-block-id="${id}"]`));
     }
     const live = await livePage(browser, user.handle, info.project.name);
     for (const id of ids) {
-      const html = await blockOn(live.page, id).evaluate((el) => el.outerHTML);
+      const html = await markupOf(blockOn(live.page, id));
       expect(html, id).toBe(preview[id]);
     }
     await live.context.close();

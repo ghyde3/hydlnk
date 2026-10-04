@@ -21,6 +21,7 @@ import {
   styles,
   type Look,
 } from "./block-style-helpers";
+import { styleAttrOf } from "../m7/markup";
 
 /**
  * M6-45 on a published page and in the editor's preview: every block type draws its own overrides
@@ -250,8 +251,8 @@ test.describe("M6-45 the editor preview", () => {
 
     // The same markup on the block's own element: the preview and the live page agree on the style.
     for (const pair of PAIRS) {
-      const a = await blockIn(preview, ID[pair].a).getAttribute("style");
-      const b = await blockIn(live.page, ID[pair].a).getAttribute("style");
+      const a = await styleAttrOf(blockIn(preview, ID[pair].a));
+      const b = await styleAttrOf(blockIn(live.page, ID[pair].a));
       expect(a, pair).toBe(b);
     }
     await live.context.close();

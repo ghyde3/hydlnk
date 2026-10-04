@@ -7,6 +7,7 @@ import { applyTemplate, templateById } from "@/lib/templates";
 import { insertPage } from "../fixtures/data";
 import { SYSTEM_IDS } from "./themes-helpers";
 import {
+  applyTemplateChoice,
   blocksHeading,
   describeBlocks,
   describeTemplate,
@@ -16,11 +17,10 @@ import {
   openDialog,
   openEditor,
   pageRow,
-  replaceConfirmation,
+  publishButton,
   saveIndicator,
   setDraft,
   statusChip,
-  templateButton,
   templateOf,
 } from "./templates-helpers";
 
@@ -59,7 +59,7 @@ test.describe("M6-40 what an apply writes", () => {
       }),
     );
     await openDialog(page);
-    await templateButton(page, "Podcaster").click();
+    await applyTemplateChoice(page, "Podcaster");
     await expect(blocksHeading(page, 8)).toBeVisible();
     await expect(saveIndicator(page)).toHaveText("Saved", { timeout: 3_000 });
     await page.waitForTimeout(1_000);
@@ -111,10 +111,7 @@ test.describe("M6-40 direct-API abuse", () => {
 
     // ... and Publish refuses it, with nothing published.
     await openEditor(page);
-    await page
-      .locator("main > header")
-      .getByRole("button", { name: "Publish", exact: true })
-      .click();
+    await publishButton(page).click();
     const alert = page.getByRole("alert").filter({ hasText: "Fix your page before publishing." });
     await expect(alert).toContainText("Use 50 blocks or fewer.");
     const refused = await pageRow(own.pageId);
@@ -124,10 +121,7 @@ test.describe("M6-40 direct-API abuse", () => {
 
     // A template replaces blocks, it never adds: the 51 become the template's 6.
     await openDialog(page);
-    await templateButton(page, "Musician").click();
-    await replaceConfirmation(page)
-      .getByRole("button", { name: "Replace my page", exact: true })
-      .click();
+    await applyTemplateChoice(page, "Musician");
     await expect(dialogOf(page)).toHaveCount(0);
     await expect(blocksHeading(page, 6)).toBeVisible();
     const stored = await expectDraft(own.pageId, (draft) => draft.blocks.length === 6);
@@ -145,10 +139,7 @@ test.describe("M6-40 direct-API abuse", () => {
     // The chips are off at the limit, and the template button still works.
     await expect(page.getByText("You’ve reached the 50-block limit.")).toBeVisible();
     await openDialog(page);
-    await templateButton(page, "Shop").click();
-    await replaceConfirmation(page)
-      .getByRole("button", { name: "Replace my page", exact: true })
-      .click();
+    await applyTemplateChoice(page, "Shop");
     await expect(blocksHeading(page, 7)).toBeVisible();
     const stored = await expectDraft(user.pageId, (draft) => draft.blocks.length === 7);
     expect(describeBlocks(stored.blocks)).toEqual(describeTemplate(templateOf("Shop")));

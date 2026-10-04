@@ -20,6 +20,7 @@ import {
   liveTags,
   metaContents,
   near,
+  openShare,
   pixelAt,
   publishNow,
   removeObjects,
@@ -356,7 +357,7 @@ test.describe("M6-32 timing: the live page changes at Publish and not before", (
   }, info) => {
     test.skip(!desktopOnly(info), "one project is enough: it drives one editor");
     const user = await seededUser(context, "mp1");
-    await openEditor(page);
+    await openShare(page);
     const tagsBefore = (await liveTags(user.handle)).tags;
     const imageBefore = (await ogOf(user.handle)).body;
 
@@ -399,7 +400,7 @@ test.describe("M6-32 timing on a custom host", () => {
     const user = await signedInUser(context, { label: "mp2", plan: "pro" });
     const host = hostnameFor("mp2");
     await addDomainRow({ pageId: user.pageId, hostname: host, status: "verified" });
-    await openEditor(page);
+    await openShare(page);
     const before = socialTags((await rawBuffer(host, "/")).text);
     const imageBefore = (await rawBuffer(host, "/og")).body;
 

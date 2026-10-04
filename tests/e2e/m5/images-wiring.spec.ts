@@ -8,6 +8,7 @@ import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { expectDraft, openEditor, pageRow, seededUser, statusChip } from "../m2/editor-helpers";
 import { addBlock } from "../m2/blocks-helpers";
 import { confirmPhoto } from "../m6/position-dialog-helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 import { GIF, SERVER_PORT, tenantGet } from "../m2/publish-helpers";
 import { computed, expectOverrides, isPhone, openDesign, previewRoot } from "../m3/design-helpers";
 import {
@@ -141,7 +142,7 @@ test.describe("M5-11 the avatar in the editor", () => {
     expect(stored.exif).toBeUndefined();
 
     // The avatar shows the new image without moving anything, and the screen fits the viewport.
-    await expect(avatar(page).locator("img")).toHaveAttribute("src", publicUrl(photo.path));
+    await expect(avatar(page).locator("img")).toHaveAttribute("src", `/media/${photo.path}`);
     const after = (await card(page).boundingBox())!;
     // M6-24: "Adjust photo" is a third button once there is a photo. On a 390px phone it wraps to a
     // second row (44px plus the 6px gap); nothing else moves. (Recorded as an accepted deviation.)
@@ -167,7 +168,7 @@ test.describe("M5-11 the avatar in the editor", () => {
     const first = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     // Publish: the live page now shows the first avatar.
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });
@@ -214,7 +215,7 @@ test.describe("M5-11 the avatar in the editor", () => {
     await confirmPhoto(page);
     const photo = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });
@@ -225,7 +226,7 @@ test.describe("M5-11 the avatar in the editor", () => {
     await live.goto(`http://${user.handle}.localhost:${SERVER_PORT}/`);
     const img = live.locator("img.pg-avatar-img");
     await expect(img).toHaveCount(1);
-    await expect(img).toHaveAttribute("src", publicUrl(photo.path));
+    await expect(img).toHaveAttribute("src", `/media/${photo.path}`);
     await expect(img).toHaveAttribute("width", /^\d+$/);
     await expect(img).toHaveAttribute("height", /^\d+$/);
     expect(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
@@ -276,7 +277,7 @@ test.describe("M5-11 the avatar in the editor", () => {
       d.blocks.some((b) => b.id === cardBlock.id && b.type === "card" && b.image !== null),
     );
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });
@@ -321,18 +322,21 @@ test.describe("M5-12 backgrounds and image blocks", () => {
     const meta = await sharp(await downloadObject(pathA)).metadata();
     expect([meta.format, meta.width, meta.height]).toEqual(["webp", 1600, 1200]);
 
-    // The preview draws the background from the WebP URL.
+    // The preview draws the background from the page's own /media address (M7-15; the stored form
+    // is the Storage URL), in the full-size sheet on a phone (M7-09).
+    await showPreviewSheet(page);
     await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "image");
     expect(
       await computed(previewRoot(page).locator("[data-bg-layer=image]"), "background-image"),
-    ).toBe(`url("${a}")`);
+    ).toBe(`url("${new URL(page.url()).origin}/media/${pathA}")`);
+    await hidePreviewSheet(page);
     await expectNoHorizontalScroll(page);
     if (isPhone(page)) await expectTapTargets(page, "main");
 
     // Publish, replace: the live page keeps showing A.
     await page.goto(page.url().replace("/design", "/editor"));
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });
@@ -439,7 +443,7 @@ test.describe("M5-12 backgrounds and image blocks", () => {
     );
     await page.goto(page.url().replace("/design", "/editor"));
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });
@@ -452,7 +456,9 @@ test.describe("M5-12 backgrounds and image blocks", () => {
     await expect(live.locator("img.pg-image-img")).toHaveCount(1);
     await live.waitForLoadState("networkidle");
     expect(requests.filter((u) => u.includes("/_next/image"))).toEqual([]);
-    expect(requests.filter((u) => u.includes(`/${BUCKET}/`)).length).toBeGreaterThanOrEqual(3);
+    // M7-15: the images come from the page's own /media address, never from the Storage origin.
+    expect(requests.filter((u) => u.includes("/media/")).length).toBeGreaterThanOrEqual(3);
+    expect(requests.filter((u) => u.includes(`/${BUCKET}/`))).toEqual([]);
     for (const img of await live.locator("img.pg-avatar-img, img.pg-image-img").all()) {
       await expect(img).toHaveAttribute("width", /^\d+$/);
       await expect(img).toHaveAttribute("height", /^\d+$/);
@@ -486,7 +492,7 @@ test.describe("M5-13 inline errors", () => {
     const photo = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     const unchanged = async () => {
       expect((await pageRow(user.pageId)).draft.profile.photo).toEqual(photo);
-      await expect(avatar(page).locator("img")).toHaveAttribute("src", publicUrl(photo.path));
+      await expect(avatar(page).locator("img")).toHaveAttribute("src", `/media/${photo.path}`);
     };
     const picker = uploadButton(page);
     expect((await picker.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -633,7 +639,7 @@ test.describe("M5-14 the editor works the cleanup queue", () => {
     await pick([200, 40, 40], "a.png");
     const a = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });
@@ -649,7 +655,7 @@ test.describe("M5-14 the editor works the cleanup queue", () => {
 
     // Publish: the Publish action works the queue off after updateTag, so A is gone and B is live.
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });

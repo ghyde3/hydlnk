@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { url } from "../helpers";
 import { pageRow, waitForEditorHydrated } from "../m2/editor-helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /**
  * Shared setup for the Design screen specs (M3-01 .. M3-10). Every writing spec makes its own user
@@ -22,25 +23,34 @@ export async function waitForDesignHydrated(page: Page): Promise<void> {
 /** Opens the Design screen and waits until it is interactive. On a phone the Tokens tab is open. */
 export async function openDesign(page: Page): Promise<void> {
   await page.goto(DESIGN_URL);
-  await expect(page.getByRole("heading", { level: 1, name: "Design" })).toBeVisible();
+  // M7-02: Design is a tab of the workspace; its h1 is the page's name. The tab says where we are.
+  await expect(page.getByRole("tab", { name: "Design", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await waitForDesignHydrated(page);
 }
 
 export async function reloadDesign(page: Page): Promise<void> {
   await page.reload();
-  await expect(page.getByRole("heading", { level: 1, name: "Design" })).toBeVisible();
+  // M7-02: Design is a tab of the workspace; its h1 is the page's name. The tab says where we are.
+  await expect(page.getByRole("tab", { name: "Design", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await waitForDesignHydrated(page);
 }
 
 export const isPhone = (page: Page): boolean => (page.viewportSize()?.width ?? 1440) < 760;
 
-/** On a phone the preview is a tab: open it. A no-op at 760px and up, where it is always shown. */
+/** On a phone the preview is the mini phone's full-size sheet (M7-09): open it. A no-op at 760px and up, where it is always shown. */
 export async function showPreview(page: Page): Promise<void> {
-  if (isPhone(page)) await page.getByRole("tab", { name: "Preview" }).click();
+  await showPreviewSheet(page);
 }
 
+/** Closes the phone's preview sheet again. A no-op at 760px and up. */
 export async function showTokens(page: Page): Promise<void> {
-  if (isPhone(page)) await page.getByRole("tab", { name: "Style" }).click();
+  await hidePreviewSheet(page);
 }
 
 export const previewScreen = (page: Page): Locator => page.getByTestId("preview-screen");
@@ -100,7 +110,7 @@ export async function tokenVars(root: Locator): Promise<Record<string, string>> 
 
 /** The editor header's Publish button. */
 export const publishButton = (page: Page): Locator =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 
 /** Publishes the current draft from the editor and waits for the "Published" chip. */
 export async function publishFromEditor(page: Page): Promise<void> {

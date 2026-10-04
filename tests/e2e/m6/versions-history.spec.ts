@@ -1,8 +1,9 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { openEditor } from "../m2/editor-helpers";
+import { clickTab } from "../m7/workspace-helpers";
 import {
   EDITOR_URL,
   HISTORY_URL,
@@ -30,22 +31,35 @@ test.use({ timezoneId: "America/Los_Angeles", locale: "en-US" });
 const FIRST_AT = "2026-10-03T16:11:00.000Z";
 const TIME_OF_THIRD = "Oct 3, 2026, 9:11 AM";
 
+/**
+ * M7-05 and M7-04 move the History link out of the editor header: from 760px it is the 'Version
+ * history' item of the toolbar's '⋯' menu, on a phone the link of the Share tab's 'Version history'
+ * card. Both are the same link, with the same Pro chip on a Free account.
+ */
+async function historyLink(page: Page, info: TestInfo): Promise<Locator> {
+  if (desktopOnly(info)) {
+    await page
+      .getByTestId("workspace-toolbar")
+      .getByRole("button", { name: "More actions" })
+      .click();
+    return page.getByRole("menuitem", { name: /^Version history/ });
+  }
+  await clickTab(page, "Share");
+  return page.getByRole("link", { name: /^Open version history/ });
+}
+
 test.describe("M6-50 the History link", () => {
-  test("M6-50 the editor header links to /editor/history on Pro, and Editor stays current", async ({
+  test("M6-50 the toolbar's menu (the Share tab on a phone) links to /editor/history on Pro, and Editor stays current", async ({
     page,
     context,
   }, info) => {
     await signedInUser(context, { label: "vh1", plan: "pro" });
     await page.goto(EDITOR_URL);
     await openEditor(page);
-    const link = page.locator("main > header").getByRole("link", { name: "History", exact: true });
+    const link = await historyLink(page, info);
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute("href", "/editor/history");
     expect(await link.evaluate((a) => (a as HTMLAnchorElement).href)).toBe(HISTORY_URL);
-    // 13px/600 underlined, at least 44px tall, like "View live page"
-    expect(await css(link, "font-size")).toBe("13px");
-    expect(await css(link, "font-weight")).toBe("600");
-    expect(await css(link, "text-decoration-line")).toBe("underline");
     expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     // no chip on a plan that has history
     await expect(link.locator("[data-history-pro-chip]")).toHaveCount(0);
@@ -60,14 +74,14 @@ test.describe("M6-50 the History link", () => {
     await expect(nav.locator("[aria-current=page]")).toHaveCount(1);
   });
 
-  test("M6-50 a Free account sees the History link with a brass-soft Pro chip, and it opens the locked card", async ({
+  test("M6-50 a Free account sees the link with a brass-soft Pro chip, and it opens the locked card", async ({
     page,
     context,
-  }) => {
+  }, info) => {
     await signedInUser(context, { label: "vh2", plan: "free" });
     await page.goto(EDITOR_URL);
     await openEditor(page);
-    const link = page.locator("main > header").getByRole("link", { name: /^History/ });
+    const link = await historyLink(page, info);
     await expect(link).toBeVisible();
     const chip = link.locator("[data-history-pro-chip]");
     await expect(chip).toHaveText("Pro");

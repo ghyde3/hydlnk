@@ -1,6 +1,9 @@
 import { expect, type Locator, type Page, type Request } from "@playwright/test";
 import {
-  headerStatus,
+  chooseThemeMenuItem,
+  openThemeMenu,
+  expectAppliedTheme,
+  expectNoThemeApplied,
   isPhone,
   messageOf,
   savedThemesCard,
@@ -51,9 +54,16 @@ export const SYSTEM_IDS = {
 export const SYSTEM_NAMES = Object.keys(SYSTEM_IDS) as (keyof typeof SYSTEM_IDS)[];
 export const NEW_THEME_NAMES = SYSTEM_NAMES.slice(7);
 
-/** The Preview button of one card (M6-44). */
+/**
+ * M7-06: a card's "More" button. Preview (M6-44) is the first item of its menu, and the focus comes
+ * back to this button when a preview ends. Use `startPreview` to start one.
+ */
 export const previewButton = (page: Page, name: string): Locator =>
-  page.getByRole("button", { name: `Preview ${name}`, exact: true });
+  page.getByRole("button", { name: `More for ${name}`, exact: true });
+
+/** Starts the preview of one theme: opens the card's menu and chooses Preview (M6-44, M7-06). */
+export const startPreview = (page: Page, name: string): Promise<void> =>
+  chooseThemeMenuItem(page, name, "Preview");
 
 export const applyPreviewButton = (page: Page, name: string): Locator =>
   page.getByRole("button", { name: `Apply ${name}`, exact: true });
@@ -99,7 +109,9 @@ export async function previewLook(page: Page) {
 }
 
 export {
-  headerStatus,
+  openThemeMenu,
+  expectAppliedTheme,
+  expectNoThemeApplied,
   isPhone,
   messageOf,
   savedThemesCard,

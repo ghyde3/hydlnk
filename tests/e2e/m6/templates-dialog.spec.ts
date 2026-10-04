@@ -69,7 +69,7 @@ test.describe("M6-40 the button and the dialog", () => {
     expect(style.color).toBe(reference);
   });
 
-  test("M6-40 the dialog names itself, says what to do, and shows the six templates in order with their themes' colors", async ({
+  test("M6-40 the dialog names itself, says what to do, and shows the six templates in order, each previewed in its theme's colors", async ({
     page,
     context,
   }) => {
@@ -96,16 +96,20 @@ test.describe("M6-40 the button and the dialog", () => {
       const card = cardOf(page, template.name);
       await expect(card.getByText(template.description, { exact: true })).toBeVisible();
       await expect(templateButton(page, template.name)).toHaveText("Use this template");
-      // The strip shows the theme's background and accent colors.
+      // M7-07: the live preview replaces the strip of colors; its root carries the theme's colors.
       const tokens = tokensById.get(template.theme.id)!;
-      const colors = await card
-        .getByTestId("template-colors")
-        .evaluate((el) =>
-          Array.from(el.children).map((child) => getComputedStyle(child).backgroundColor),
-        );
-      const rgb = (hex: string) =>
-        `rgb(${[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
-      expect(colors).toEqual([rgb(tokens.bg!), rgb(tokens.accent!)]);
+      await card.scrollIntoViewIfNeeded();
+      const root = card.getByTestId("template-preview").locator("[data-page-root]");
+      await expect(root).toBeAttached();
+      const colors = await root.evaluate((el) => {
+        const css = getComputedStyle(el);
+        return {
+          bg: css.getPropertyValue("--t-bg").trim(),
+          accent: css.getPropertyValue("--t-accent").trim(),
+        };
+      });
+      expect(colors.bg.toLowerCase()).toBe(tokens.bg!.toLowerCase());
+      expect(colors.accent.toLowerCase()).toBe(tokens.accent!.toLowerCase());
     }
     expect(user.pageId).toBeTruthy();
   });
@@ -121,7 +125,12 @@ test.describe("M6-40 the button and the dialog", () => {
       await openEditor(page);
       const button = await startButton(page).innerText();
       await openDialog(page);
-      const dialog = await dialogOf(page).innerText();
+      // M7-07: the cards also draw the person's own page; the text compared is the cards' own.
+      const dialog = await dialogOf(page).evaluate((el) => {
+        const copy = el.cloneNode(true) as HTMLElement;
+        copy.querySelectorAll("[data-testid=template-preview]").forEach((node) => node.remove());
+        return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
+      });
       expect(dialog).not.toMatch(/\bPro\b|\bStudio\b|upgrade|plan/i);
       seen.push({
         button,

@@ -12,6 +12,7 @@ import {
 } from "@/lib/document";
 import { resolveTokens, type TokenOverrides } from "@/lib/theme";
 import { url } from "../helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /**
  * Shared setup for the block specs (M2-15 .. M2-21): a fresh user per test (the phone and desktop
@@ -67,10 +68,13 @@ export async function openEditor(page: Page): Promise<void> {
   await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
 }
 
-/** The phone shows one of two tabs at a time; at 760px and up both are always there. */
+/**
+ * The phone's preview is the mini phone's full-size sheet (M7-09): "Preview" opens it, "Blocks"
+ * closes it. At 760px and up the preview is always beside the blocks, so this does nothing.
+ */
 export async function showView(page: Page, view: "Blocks" | "Preview"): Promise<void> {
-  const tablist = page.getByRole("tablist", { name: "Editor view" });
-  if (await tablist.isVisible()) await tablist.getByRole("tab", { name: view }).click();
+  if (view === "Preview") await showPreviewSheet(page);
+  else await hidePreviewSheet(page);
 }
 
 export const previewScreen = (page: Page): Locator => page.getByTestId("preview-screen");

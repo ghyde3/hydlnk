@@ -7,6 +7,7 @@ import { expectOverrides, openDesign, saveStatus } from "./design-helpers";
 import {
   IVORY,
   NOIR,
+  chooseThemeMenuItem,
   expectStoredTheme,
   liveHtml,
   messageOf,
@@ -231,7 +232,7 @@ test("M3-25 one saved theme on two pages matches exactly, stays frozen until rep
   );
 
   // Rename it "Shared look".
-  await page.getByRole("button", { name: `Rename ${saved!.name}` }).click();
+  await chooseThemeMenuItem(page, saved!.name as string, "Rename");
   const rename = page.getByTestId("theme-rename-input");
   await rename.fill("Shared look");
   await page.keyboard.press("Enter");
@@ -318,6 +319,7 @@ test("M3-25 one saved theme on two pages matches exactly, stays frozen until rep
     await expect
       .poll(async () => (await rootVars(previewRootOf(page))).accent, { timeout: 15_000 })
       .toBe(SAGE);
+    if (phone) await showView(page, "Blocks"); // close the sheet: it covers the page switcher
   }
 
   // ---- 4. Publish only page A: A shows Sage, B stays Terracotta; then Publish B: both match again.

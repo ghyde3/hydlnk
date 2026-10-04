@@ -48,7 +48,7 @@ test.afterAll(async () => {
 const ID = "lnk000000001";
 const link = (url: string) => ({ id: ID, type: "link", visible: true, label: "Mine", url });
 const publishButton = (page: Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 const urlInput = (page: Page) => rowOf(page, ID).locator('input[data-field="url"]');
 const openRow = (page: Page) => rowOf(page, ID).locator("button[aria-expanded]").first().click();
 
