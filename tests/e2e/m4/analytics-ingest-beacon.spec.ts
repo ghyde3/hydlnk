@@ -385,14 +385,13 @@ test.describe("M4-21 the public document is static", () => {
     expect(a.status).toBe(200);
     expect(a.setCookies).toEqual([]);
     expect(b.setCookies).toEqual([]);
-    // Dev-mode flight ids vary between renders (see m3-done.spec.ts), so compare what a visitor sees,
-    // and the beacon script on its own: it is the same bytes for everyone.
-    const visible = (html: string) => html.replace(/<script\b[\s\S]*?<\/script>/g, "");
-    expect(visible(a.body)).toBe(visible(b.body));
-    const beaconScript = (html: string) => /<script>\(function\(\)\{var id=[\s\S]*?<\/script>/.exec(html)?.[0];
+    // M8-02: the page is finished HTML now, so the two documents are the same bytes, whoever asks. The
+    // beacon is the one shared tenant script (M8-06), a deferred external file that carries the page id.
+    expect(a.body).toBe(b.body);
+    const beaconScript = (html: string) =>
+      /<script src="\/_t\/p\.[0-9a-f]{12}\.js"[^>]*><\/script>/.exec(html)?.[0];
     expect(beaconScript(a.body)).toBeDefined();
-    expect(beaconScript(a.body)).toBe(beaconScript(b.body));
-    expect(beaconScript(a.body)).toContain(p.pageId);
+    expect(beaconScript(a.body)).toContain(`data-page-id="${p.pageId}"`);
     // Loading the page recorded nothing: only the beacon does.
     expect(await countEvents(p.pageId)).toBe(0);
   });

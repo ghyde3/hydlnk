@@ -485,14 +485,22 @@ export function embedLabel(embed: Pick<ParsedEmbed, "provider" | "kind">): strin
 }
 
 /**
- * The height of each player once it is playing, in one table (M6-27). `"16:9"` is an aspect ratio
- * (the player fills the column width); a number is pixels. Spotify keeps its own two heights in the
- * renderer and is not listed. Keys are `provider` or `provider:kind` (see `embedHeight`).
+ * The height of each player once it is playing, in one table (M6-27, M8-05). `"16:9"` is an aspect
+ * ratio (the player fills the column width); a number is pixels. Spotify's two heights (152 for a
+ * single track or episode, 352 for the rest) are listed like every other provider's, so one table
+ * serves the renderer's facade, the editor's and the tenant script's player. Keys are `provider` or
+ * `provider:kind` (see `embedHeight`).
  */
 export const EMBED_HEIGHTS = {
   youtube: "16:9",
   vimeo: "16:9",
   twitch: "16:9",
+  "spotify:track": 152,
+  "spotify:episode": 152,
+  "spotify:album": 352,
+  "spotify:playlist": 352,
+  "spotify:show": 352,
+  "spotify:artist": 352,
   tiktok: 740,
   "instagram:post": 560,
   "instagram:reel": 640,
@@ -505,7 +513,7 @@ export const EMBED_HEIGHTS = {
   "applemusic:playlist": 450,
 } as const satisfies Record<string, "16:9" | number>;
 
-/** The playing height of an embed: `"16:9"` or pixels. Spotify and anything unknown: 16:9. */
+/** The playing height of an embed: `"16:9"` or pixels. Anything unknown: 16:9. */
 export function embedHeight(embed: Pick<ParsedEmbed, "provider" | "kind">): "16:9" | number {
   const table: Record<string, "16:9" | number> = EMBED_HEIGHTS;
   return table[`${embed.provider}:${embed.kind}`] ?? table[embed.provider] ?? "16:9";

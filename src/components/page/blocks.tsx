@@ -26,7 +26,7 @@ import {
   type BlockOverrides,
   type TokenSet,
 } from "@/lib/theme";
-import { EmbedFacade } from "./embed-facade";
+import { EmbedFacadeSlot } from "./embed-slot";
 import { EmbedPoster } from "./embed-poster";
 import { ImagePicture, focusStyle } from "./image-frame";
 import { LinkGlyph, LinkThumb, resolveLinkIcon } from "./link-icon";
@@ -349,11 +349,6 @@ function SocialView({ block, ctx }: { block: SocialBlock; ctx: BlockContext }) {
   );
 }
 
-/** Spotify embeds are 152px tall for a single track or episode, 352px for the rest. */
-function spotifyHeight(kind: string): number {
-  return kind === "track" || kind === "episode" ? 152 : 352;
-}
-
 function EmbedView({ block, ctx }: { block: EmbedBlock; ctx: BlockContext }) {
   const { style } = blockTokens(ctx.tokens, block.overrides);
   const embed = parseEmbed(block.url);
@@ -380,31 +375,14 @@ function EmbedView({ block, ctx }: { block: EmbedBlock; ctx: BlockContext }) {
       data-embed-provider={embed.provider}
       style={style}
     >
-      {embed.provider === "spotify" ? (
-        inert ? (
-          <div
-            className="pg-embed-spotify"
-            aria-hidden="true"
-            style={{ height: spotifyHeight(embed.kind) }}
-          />
-        ) : (
-          <iframe
-            className="pg-embed-spotify"
-            src={embed.src}
-            title={block.caption === "" ? "Spotify player" : `${block.caption} (Spotify player)`}
-            width="100%"
-            height={spotifyHeight(embed.kind)}
-            loading="lazy"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            referrerPolicy="strict-origin-when-cross-origin"
-          />
-        )
-      ) : inert ? (
+      {inert ? (
         <EmbedPoster embed={embed} />
       ) : (
-        // One facade for every other provider (M6-27); the key resets a tapped player when the
-        // author switches the address to another video.
-        <EmbedFacade
+        // One facade for every provider, Spotify included (M6-27, M8-05): a poster and a Play button
+        // that carry what the player needs, upgraded on a tap by the one tenant script on the live
+        // page and by the React `EmbedFacade` in the interactive previews. The key resets a tapped
+        // player when the author switches the address to another video.
+        <EmbedFacadeSlot
           key={embed.src}
           provider={embed.provider}
           kind={embed.kind}

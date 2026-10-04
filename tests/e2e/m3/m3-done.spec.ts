@@ -90,13 +90,18 @@ function draftOf(
   };
 }
 
-/** The `family=` params of the single Google Fonts stylesheet link in an HTML document. */
+/**
+ * The font families a live document uses (M8-01 replaced its Google Fonts stylesheet): the heading and
+ * body families of the root's `--t-font-*` variables, which are what the page's `@font-face` rules serve.
+ */
 function fontParams(html: string): string[] {
-  const links = [
-    ...html.matchAll(/<link[^>]*href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)"/g),
-  ];
-  expect(links).toHaveLength(1);
-  return new URL(links[0]![1]!.replace(/&amp;/g, "&")).searchParams.getAll("family");
+  const root = /<div class="pg-root"[^>]*style="([^"]*)"/.exec(html)?.[1] ?? "";
+  const families = [...root.replaceAll("&quot;", '"').matchAll(/--t-font-(?:heading|body):"([^"]+)"/g)].map(
+    (match) => match[1]!,
+  );
+  expect(families).toHaveLength(2);
+  expect(html).not.toMatch(/fonts\.googleapis\.com|fonts\.gstatic\.com/);
+  return [...new Set(families)];
 }
 
 const PROPERTIES = [

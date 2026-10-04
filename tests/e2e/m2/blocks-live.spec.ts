@@ -385,11 +385,9 @@ test.describe("M2-17 social icons", () => {
     }
     expect(await css(nav, "column-gap")).toBe("10px");
     expect(await css(nav, "flex-wrap")).toBe("wrap");
-    // The page's own host, plus the two hosts of its Google Fonts stylesheet and files (M3-04): the
-    // one stylesheet link for the two chosen families is the only outside request a tenant page makes.
-    expect([...hosts].sort()).toEqual(
-      [new URL(live.url).host, "fonts.googleapis.com", "fonts.gstatic.com"].sort(),
-    );
+    // The page's own host and nothing else: since M8-01 the theme fonts come from our own host, so a
+    // tenant page no longer asks Google for a stylesheet or for font files.
+    expect([...hosts]).toEqual([new URL(live.url).host]);
   });
 
   test("M2-17 eight icons wrap on a phone and are centered in the column on a desktop", async ({
@@ -596,33 +594,47 @@ test.describe("M2-19 embeds", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("M2-19 Spotify renders a lazy iframe, 152px for a track and 352px for an album, inside the column", async ({
+  test("M2-19 Spotify renders a facade as tall as its player, 152px for a track and 352px for an album, inside the column; a tap mounts the player", async ({
     page,
   }) => {
-    await page.route(/open\.spotify\.com/, (route) => route.abort());
+    // M8-05 supersedes the lazy iframe: nothing is requested from Spotify until a tap.
+    const requested: string[] = [];
+    await page.route(/open\.spotify\.com/, (route) => {
+      requested.push(route.request().url());
+      return route.abort();
+    });
     const live = await publishedPage(
       "es",
       publishDocOf([spotify("track"), spotify("album", "The album")], { tokens: NOIR }),
     );
     await page.goto(live.url);
-    const frames = page.locator("[data-block-type=embed] iframe");
-    await expect(frames).toHaveCount(2);
-    expect(await frames.evaluateAll((els) => els.map((el) => el.getAttribute("src")))).toEqual([
-      "https://open.spotify.com/embed/track/37i9dQZF1DXcBWIGoYBM5M",
-      "https://open.spotify.com/embed/album/37i9dQZF1DXcBWIGoYBM5M",
-    ]);
-    expect(await frames.evaluateAll((els) => els.map((el) => el.getAttribute("loading")))).toEqual([
-      "lazy",
-      "lazy",
-    ]);
+    await expect(page.locator("[data-block-type=embed] iframe")).toHaveCount(0);
+    const posters = page.locator("[data-block-type=embed] .pg-embed-play");
+    await expect(posters).toHaveCount(2);
     const col = await column(page);
-    const [track, album] = await Promise.all((await frames.all()).map((frame) => box(frame)));
+    const [track, album] = await Promise.all((await posters.all()).map((poster) => box(poster)));
     expect(track!.height).toBe(152);
     expect(album!.height).toBe(352);
     for (const rect of [track!, album!]) {
       expect(rect.width).toBeLessThanOrEqual(col.width + 1);
       expect(rect.x).toBeGreaterThanOrEqual(col.x - 1);
     }
+    expect(requested).toEqual([]);
+    await expectNoHorizontalScroll(page);
+
+    await posters.first().click();
+    await posters.first().click();
+    const frames = page.locator("[data-block-type=embed] iframe");
+    await expect(frames).toHaveCount(2);
+    expect(await frames.evaluateAll((els) => els.map((el) => el.getAttribute("src")))).toEqual([
+      "https://open.spotify.com/embed/track/37i9dQZF1DXcBWIGoYBM5M",
+      "https://open.spotify.com/embed/album/37i9dQZF1DXcBWIGoYBM5M",
+    ]);
+    const [playingTrack, playingAlbum] = await Promise.all(
+      (await frames.all()).map((frame) => box(frame)),
+    );
+    expect(playingTrack!.height).toBe(152);
+    expect(playingAlbum!.height).toBe(352);
     await expectNoHorizontalScroll(page);
   });
 

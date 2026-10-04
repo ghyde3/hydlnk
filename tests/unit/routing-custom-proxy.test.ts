@@ -174,8 +174,13 @@ describe("tracking routes on tenant hosts (the page emits them as relative URLs)
 describe("the sweep and polling routes live on the app host only", () => {
   it("a tenant, marketing or custom host never reaches them", async () => {
     resolveCustomDomain.mockResolvedValue(PAGE);
-    expect(rewriteOf(await proxy(request("mara.localhost:3000", "/api/cron/verify-domains", {}, "POST")))).toBe("/t/mara/api/cron/verify-domains");
-    expect(rewriteOf(await proxy(request("links.example.org", "/api/cron/verify-domains", {}, "POST")))).toBe(`/sites/${PAGE}/api/cron/verify-domains`);
+    // A POST on a tenant or custom host is the plain 404 right in the proxy (M8-02): it is never rewritten to
+    // an app route, and a custom host is not even looked up for it.
+    for (const host of ["mara.localhost:3000", "links.example.org"]) {
+      const response = await proxy(request(host, "/api/cron/verify-domains", {}, "POST"));
+      expect(response.status, host).toBe(404);
+      expect(rewriteOf(response), host).toBeNull();
+    }
     expect(rewriteOf(await proxy(request("links.example.org", "/api/domains/x")))).toBe(`/sites/${PAGE}/api/domains/x`);
     expect(rewriteOf(await proxy(request("app.localhost:3000", "/api/cron/verify-domains", {}, "POST")))).toBe("/app/api/cron/verify-domains");
   });

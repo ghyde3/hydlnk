@@ -21,6 +21,29 @@ import { rewriteWithSession } from "@/lib/routing/session";
 import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import { appOrigin, protocolFor } from "@/lib/routing/urls";
 
+/** A tenant page is a read-only document: it answers GET and HEAD. */
+function isReadMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD";
+}
+
+/**
+ * Any method but GET and HEAD on a tenant or custom host, other than the tracking routes (which the
+ * callers pass through first). On the page itself (`/`) it is 405 with `Allow: GET, HEAD` and the
+ * tenant security headers (M8-02): answered here because a static route handler cannot also export
+ * POST, and because Next.js would otherwise hand a POST the cached copy of the page. On every other
+ * path it is the plain 404 it always was (M4-09: nothing but the page, its image and the tracking
+ * routes lives on these hosts), with the same headers and no body. Never a lookup, never a cookie.
+ */
+function tenantMethodRejected(pathname: string): NextResponse {
+  const page = pathname === "/";
+  const response = new NextResponse(null, {
+    status: page ? 405 : 404,
+    headers: { ...(page ? { Allow: "GET, HEAD" } : {}), "Cache-Control": "no-store" },
+  });
+  setTenantHeaders(response.headers);
+  return response;
+}
+
 /**
  * Host routing (PLAN.md -> Architecture). Next.js 16's `proxy` is the renamed middleware and runs
  * on the Node.js runtime. Everything below keys off the Host header:
@@ -97,6 +120,7 @@ export async function proxy(request: NextRequest) {
 
     case "tenant": {
       if (isTrackingPath(pathname)) return NextResponse.next();
+      if (!isReadMethod(request.method)) return tenantMethodRejected(pathname);
       const response = NextResponse.rewrite(rewriteTo(tenantRewritePath(handle ?? "", pathname)));
       setTenantHeaders(response.headers);
       return response;
@@ -108,9 +132,15 @@ export async function proxy(request: NextRequest) {
       // is a plain DNS label (see invalidHandleLabel) and no page can ever have such a handle.
       const label = invalidHandleLabel(host, rootDomain);
       if (label) {
+        if (!isReadMethod(request.method)) return tenantMethodRejected(pathname);
         const response = NextResponse.rewrite(rewriteTo(tenantRewritePath(label, pathname)));
         setTenantHeaders(response.headers);
         return response;
+      }
+      // A custom host answers GET and HEAD and nothing else, apart from the tracking routes (which a
+      // resolved host passes through below): any other method is the 405 or 404 above, with no lookup.
+      if (!isReadMethod(request.method) && !isTrackingPath(pathname)) {
+        return tenantMethodRejected(pathname);
       }
       // The real Host header only. A verified domain whose page is published rewrites to its page;
       // an unknown host, a pending or draft-only domain and a lookup error all rewrite to the

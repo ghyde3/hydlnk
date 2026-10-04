@@ -51,7 +51,8 @@ describe("a tenant page draws every image from the root origin", () => {
         mode: "live",
       }),
     );
-    const srcs = [...html.matchAll(/\bsrc="([^"]+)"/g)].map((m) => m[1]!);
+    // (`data-embed-src` is a facade's player address, which a tap turns into an iframe: not an image.)
+    const srcs = [...html.matchAll(/(?<![-\w])src="([^"]+)"/g)].map((m) => m[1]!);
     expect(srcs.length).toBeGreaterThan(0);
     for (const src of srcs) expect(src.startsWith(`${ROOT}/media/`)).toBe(true);
     const urls = [...html.matchAll(/url\((?:&quot;|")([^&")]+)/g)].map((m) => m[1]!);

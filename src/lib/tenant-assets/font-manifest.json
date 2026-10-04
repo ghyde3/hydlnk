@@ -1,0 +1,4 @@
+{
+  "source": "pending: run `pnpm tenant-fonts` (scripts/vendor-tenant-fonts.ts) once, with Gary's approval to download the font files from Google Fonts",
+  "families": {}
+}

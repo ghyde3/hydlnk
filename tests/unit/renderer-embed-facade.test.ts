@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "./fixtures/react-facade";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { act } from "react";

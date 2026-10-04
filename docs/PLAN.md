@@ -41,7 +41,7 @@ tenant  ──▶ │ host proxy: hydlnk.com | app.* | {handle}.*      │      
 
 - **Routing.** `hydlnk.com` → marketing (`www` redirects to it). `app.hydlnk.com` → editor. `{handle}.hydlnk.com` → that tenant's page. Any other host → look up `domains.hostname`, rewrite to the internal `/sites/[pageId]` route (App Router treats `_` folders as private, so internal segments can't start with `_`). Tenant pages are subdomains only; `hydlnk.com/handle` can be added later as a redirect. hydlnk.com is on Vercel nameservers, so the wildcard works. Local dev: `localhost:3000`, `app.localhost:3000`, `{handle}.localhost:3000`.
 - **Auth.** Sign-in happens only on `app.hydlnk.com`, with host-only cookies, so tenant subdomains never receive the session. The landing page's "Claim it" hands off to `app.hydlnk.com/signup?handle=…`.
-- **Rendering.** Public pages are static and cached with a per-page cache tag. Publish calls `updateTag` in its Server Action, so Postgres is hit on publish, not on every view.
+- **Rendering.** Public pages are static and cached with a per-page cache tag. Publish calls `updateTag` in its Server Action, so Postgres is hit on publish, not on every view. The live page (M8-02) is finished HTML: a static route handler (`src/app/(tenant)/t/[handle]/route.ts` for a handle host, `src/app/(tenant)/sites/[pageId]/route.ts` for a verified custom host) that `src/lib/tenant-render` builds from the very same `PageRenderer` the editor preview draws in the browser, with `renderToStaticMarkup`: no framework runtime and no hydration data in the browser. The document carries one inline `<style>` (the tenant base rules, the renderer rules for the block types the page holds and the page's `@font-face` rules), the theme fonts from our own host (M8-01), and one deferred same-origin script (`/_t/p.{hash}.js`: tap to play for every embed provider, and the view beacon). The placeholder, every 404 and the 500 panel come from the same builder (M8-03) and carry no script. The editor preview, the shared draft and the demos keep the React renderer. The route is static (`force-static`, `revalidate` 24 hours as a backstop) and reads no request API, so one document serves every visitor and is invalidated through the same tags (`pageTag`, `handleTag`) as before; a failure is the 500 panel with `no-store`, never a cache entry. The tenant policy is a closed list (`script-src 'self'`, no inline script; M8-07).
 - **Custom domains.** The editor calls the Vercel Domains API to add the host, shows the DNS records Vercel returns for this project (each project gets its own CNAME target, and the apex A-record IP can differ, so never hard-code them), polls verification; Vercel issues SSL. Hobby allows 50 custom domains per project.
 - **Data access.** The editor reads and edits drafts with the user's Supabase session under RLS. Anything that needs validation, a plan limit or billing state is written by server-only code. Public rendering and tracking use server-only queries against published data.
 - **Images.** Tenant images are served from the page's own address at `/media/{uid}/{file}` (cached by Vercel's CDN, so Storage is fetched once per host and region per cache period, M7-14), with Supabase Storage as the origin; documents and themes still store the Storage URL.
@@ -68,7 +68,7 @@ Each page is one JSON document (profile + blocks + theme reference + token overr
 - **Seed vs migration.** Reserved handles and system themes ship in migrations so they reach production; `seed.sql` is local demo data only.
 - **JSON for blocks.** The editor saves the whole layout at once, ordering is array order, and Zod validates it on write. Each block carries a nanoid so analytics can key on it.
 - **Public reads** go through a server-side query that only returns `published`, never `draft`. The one exception is the share link below.
-- **Events** are append-only. Keep 90 days raw; `pg_cron` rolls them into `daily_stats` nightly.
+- **Events** are append-only. Keep 60 days raw (M8-12, was 90); `pg_cron` rolls them into `daily_stats` nightly.
 
 ## Tenant page design system
 
@@ -90,7 +90,7 @@ Every visual choice on a tenant page is a token; tokens become CSS variables on 
 
 ## Analytics
 
-Views via client beacon, clicks via server redirect, because cached pages never run server code on a view.
+Views via client beacon (sent by the page's one script, after `load`), clicks via server redirect, because cached pages never run server code on a view.
 
 - **Views.** On load the page calls `navigator.sendBeacon('/api/e')` with page id and referrer. Country from `x-vercel-ip-country`; device from user agent.
 - **Clicks.** Link blocks point to `/r/[pageId]/[blockId]`, which finds the block in that page's published document, logs the event and 302s to the block's URL (never a URL taken from the request). Works without JS.

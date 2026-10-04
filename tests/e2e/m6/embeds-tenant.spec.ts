@@ -28,9 +28,9 @@ test.describe("M6-26 and M6-27 live embeds", () => {
     const res = await tenantGet(fx.handle);
     expect(res.status).toBe(200);
     expect(res.headers["content-security-policy"]).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     );
-    expect(res.headers["content-security-policy"]).not.toMatch(/script-src|nonce/);
+    expect(res.headers["content-security-policy"]).not.toMatch(/nonce|unsafe-eval/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
     const app = await rawBuffer("app.localhost:3000", "/login");
@@ -50,18 +50,16 @@ test.describe("M6-26 and M6-27 live embeds", () => {
     await page.goto(fx.url);
     await expect(page.locator(".pg-embed")).toHaveCount(CASES.length);
     await page.waitForLoadState("networkidle");
-    // Spotify is the one provider that loads an iframe at once (as before M6-27): it is the only
-    // host, apart from the page's own Google Fonts (M3-04), which no embed has to do with.
-    const fonts = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
-    const outside = hosts.filter(
-      (host) => !/(^|\.)localhost$/.test(host) && host !== "127.0.0.1" && !fonts.has(host),
-    );
-    expect(outside.filter((host) => !/spotify\.com$|scdn\.co$/.test(host))).toEqual([]);
-    expect(seen.filter((host) => !/spotify\.com$|scdn\.co$/.test(host))).toEqual([]);
-    // The embed blocks other than Spotify hold no URL, image or iframe before a tap.
-    for (const c of CASES.filter((c) => c.provider !== "spotify")) {
+    // M8-05: Spotify is a facade like the rest, so no provider (Spotify included) is asked for anything
+    // before a tap, and the page makes no third-party request at all (M8-01: the fonts are our own).
+    const outside = hosts.filter((host) => !/(^|\.)localhost$/.test(host) && host !== "127.0.0.1");
+    expect(outside).toEqual([]);
+    expect(seen).toEqual([]);
+    // Every embed block holds no image or iframe before a tap, and the only URL in it is the player's
+    // own address in `data-embed-src` (what the one tenant script mounts on a tap).
+    for (const c of CASES) {
       const html = await embedOf(page, c.id).evaluate((el) => el.outerHTML);
-      expect(html, c.name).not.toContain("://");
+      expect(html.replace(/ data-embed-src="[^"]*"/, ""), c.name).not.toContain("://");
       expect(html, c.name).not.toMatch(/<(iframe|img|script|link|video|source)\b/);
     }
   });

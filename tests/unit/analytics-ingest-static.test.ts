@@ -5,10 +5,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { PageRenderer } from "@/components/page/page-renderer";
-import { TenantPage } from "@/components/tenant/tenant-page";
-import { ViewBeacon, viewBeaconScript } from "@/components/tenant/view-beacon";
 import { fullPublished } from "./fixtures/page-document";
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/media/url", () => ({
   mediaUrl: (path: string) => `https://media.test/page-media/${path}`,
 }));
@@ -20,50 +19,59 @@ vi.mock("@/lib/env/client", () => ({
   },
 }));
 
+const { renderLivePage, scriptTag } = await import("@/lib/tenant-render/live-page");
+const { TENANT_SCRIPT_SRC } = await import("@/lib/tenant-assets");
+
 const PAGE_ID = "00000000-0000-4000-8000-0000000000b1";
 const root = process.cwd();
 const read = (path: string) => readFileSync(resolve(root, path), "utf8");
 const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, "$1");
 
-describe("M4-21 the view beacon script", () => {
+/** The one script every published page loads (M8-05, M8-06): the file the document names, as built. */
+const SCRIPT = read(`public${TENANT_SCRIPT_SRC}`);
+
+/** Runs the script the way a browser does: with its own <script data-page-id> element as `document.currentScript`. */
+function run(pageId: string | null) {
+  const element = document.createElement("script");
+  if (pageId !== null) element.setAttribute("data-page-id", pageId);
+  Object.defineProperty(document, "currentScript", { value: element, configurable: true });
+  new Function(SCRIPT)();
+}
+
+describe("M4-21 the view beacon (the shared tenant script, M8-06)", () => {
   it("calls navigator.sendBeacon once, with a relative URL, a JSON string of {pageId, referrer}, after load", () => {
-    const script = viewBeaconScript(PAGE_ID);
-    expect((script.match(/sendBeacon\(/g) ?? []).length).toBe(1);
-    expect(script).toContain("sendBeacon('/api/e',JSON.stringify({pageId:id,referrer:document.referrer}))");
-    expect(script).not.toMatch(/https?:\/\//);
-    expect(script).toContain(`var id="${PAGE_ID}"`);
+    expect((SCRIPT.match(/sendBeacon\(/g) ?? []).length).toBe(1);
+    expect(SCRIPT).toContain('"/api/e"');
+    expect(SCRIPT).toContain("JSON.stringify({ pageId: pageId, referrer: doc.referrer })");
     // After load: now if the document is already complete, else on the load event, and only once.
-    expect(script).toContain("document.readyState==='complete'");
-    expect(script).toContain("addEventListener('load',s,{once:true})");
+    expect(SCRIPT).toContain('doc.readyState === "complete"');
+    expect(SCRIPT).toContain('window.addEventListener("load", beacon, { once: true })');
   });
 
   it("uses no cookie and no storage", () => {
-    const script = viewBeaconScript(PAGE_ID);
-    expect(script).not.toMatch(/cookie\b(?!:)/);
-    expect(script).not.toMatch(/localStorage|sessionStorage|indexedDB/);
-    expect(script).not.toMatch(/doNotTrack/i);
+    expect(SCRIPT).not.toMatch(/document\.cookie|\.cookie\b/);
+    expect(SCRIPT).not.toMatch(/localStorage|sessionStorage|indexedDB/);
+    expect(SCRIPT).not.toMatch(/doNotTrack/i);
   });
 
-  it("is a few lines: under 400 bytes", () => {
-    expect(viewBeaconScript(PAGE_ID).length).toBeLessThan(400);
-  });
-
-  it("refuses anything that is not a UUID, so nothing else is ever written into the script", () => {
-    for (const bad of ['"};alert(1);//', "p1", "", "</script>", `${PAGE_ID}"`]) {
-      expect(() => viewBeaconScript(bad)).toThrow();
+  it("takes the page id from its own element and sends nothing for a missing, empty or tampered one", () => {
+    const sendBeacon = vi.fn(() => true);
+    Object.defineProperty(navigator, "sendBeacon", { value: sendBeacon, configurable: true });
+    Object.defineProperty(document, "readyState", { get: () => "complete", configurable: true });
+    for (const bad of [null, "", '"><x', "p1", "</script>", `${PAGE_ID}"`]) {
+      expect(() => run(bad), String(bad)).not.toThrow();
     }
+    expect(sendBeacon).not.toHaveBeenCalled();
   });
 
   it("runs once per load and posts the page id and the referrer (jsdom)", () => {
     const sendBeacon = vi.fn(() => true);
     Object.defineProperty(navigator, "sendBeacon", { value: sendBeacon, configurable: true });
     Object.defineProperty(document, "referrer", { value: "https://l.instagram.com/?u=x", configurable: true });
-    const original = Object.getOwnPropertyDescriptor(Document.prototype, "readyState");
-    const states: string[] = [];
-    Object.defineProperty(document, "readyState", { get: () => states.at(-1) ?? "loading", configurable: true });
+    const states: string[] = ["loading"];
+    Object.defineProperty(document, "readyState", { get: () => states.at(-1), configurable: true });
 
-    states.push("loading");
-    new Function(viewBeaconScript(PAGE_ID))();
+    run(PAGE_ID);
     expect(sendBeacon).not.toHaveBeenCalled(); // waits for load
     window.dispatchEvent(new Event("load"));
     window.dispatchEvent(new Event("load"));
@@ -74,59 +82,71 @@ describe("M4-21 the view beacon script", () => {
 
     sendBeacon.mockClear();
     states.push("complete");
-    new Function(viewBeaconScript(PAGE_ID))();
+    run(PAGE_ID);
     expect(sendBeacon).toHaveBeenCalledTimes(1);
-
-    if (original) Object.defineProperty(document, "readyState", original);
-    else delete (document as unknown as Record<string, unknown>).readyState;
   });
 
   it("a sendBeacon that throws or is missing never breaks the page", () => {
+    Object.defineProperty(document, "readyState", { get: () => "complete", configurable: true });
     Object.defineProperty(navigator, "sendBeacon", {
       value: () => {
         throw new Error("blocked");
       },
       configurable: true,
     });
-    const states = ["complete"];
-    Object.defineProperty(document, "readyState", { get: () => states[0], configurable: true });
-    expect(() => new Function(viewBeaconScript(PAGE_ID))()).not.toThrow();
+    expect(() => run(PAGE_ID)).not.toThrow();
+    Object.defineProperty(navigator, "sendBeacon", { value: undefined, configurable: true });
+    expect(() => run(PAGE_ID)).not.toThrow();
   });
 });
 
 describe("M4-21 where the beacon is, and where it is not", () => {
-  it("the live page carries exactly one beacon script; the renderer alone and the preview carry none", () => {
-    const live = renderToStaticMarkup(
-      createElement(TenantPage, { document: fullPublished, pageId: PAGE_ID, plan: "free" }),
-    );
+  it("the live page carries exactly one script, with the page id; the renderer alone and the preview carry none", () => {
+    const live = renderLivePage({ pageId: PAGE_ID, document: fullPublished, plan: "free", urls: null });
     expect((live.match(/<script/g) ?? []).length).toBe(1);
-    expect(live).toContain("/api/e");
+    expect(live).toContain(`data-page-id="${PAGE_ID}"`);
+    expect(live).not.toContain("/api/e"); // the call is in the script file, never in the document
 
     const renderer = renderToStaticMarkup(
       createElement(PageRenderer, { doc: fullPublished, pageId: PAGE_ID, mode: "preview" }),
     );
     expect(renderer).not.toContain("<script");
     expect(renderer).not.toContain("/api/e");
+    expect(renderer).not.toContain("data-page-id");
   });
 
-  it("only TenantPage renders ViewBeacon: not the renderer, not the editor", () => {
+  it("only the live builder writes the script tag: not the renderer, not the editor, not a draft view", () => {
     const users: string[] = [];
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const full = join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
-        else if (/\.(tsx?|jsx?)$/.test(entry.name) && /ViewBeacon|view-beacon/.test(readFileSync(full, "utf8"))) {
+        else if (
+          /\.(tsx?|jsx?)$/.test(entry.name) &&
+          /TENANT_SCRIPT_SRC|from "@\/lib\/tenant-assets"/.test(readFileSync(full, "utf8"))
+        ) {
           users.push(full.slice(root.length + 1));
         }
       }
     };
     walk(join(root, "src"));
-    expect(users.sort()).toEqual(["src/components/tenant/tenant-page.tsx", "src/components/tenant/view-beacon.tsx"]);
+    // (The builder's module and the style filter of the state pages take the CSS and the script path from
+    // the assets folder; only live-page.tsx writes the tag.)
+    expect(users.filter((file) => !file.startsWith("src/lib/tenant-assets/")).sort()).toEqual([
+      "src/lib/tenant-render/live-page.tsx",
+      "src/lib/tenant-render/state-css.ts",
+    ]);
+    const tagWriters = users.filter((file) => /TENANT_SCRIPT_SRC/.test(read(file)) && !file.startsWith("src/lib/tenant-assets/"));
+    expect(tagWriters).toEqual(["src/lib/tenant-render/live-page.tsx"]);
   });
 
-  it("the beacon element is a plain script with the inline code and nothing else", () => {
-    const html = renderToStaticMarkup(createElement(ViewBeacon, { pageId: PAGE_ID }));
-    expect(html).toBe(`<script>${viewBeaconScript(PAGE_ID)}</script>`);
+  it("the script tag is a plain deferred external script, and refuses an id that is not a UUID", () => {
+    expect(scriptTag(PAGE_ID)).toMatch(
+      /^<script src="\/_t\/p\.[0-9a-f]{12}\.js"( integrity="[^"]+")? data-page-id="[0-9a-f-]{36}" defer><\/script>$/,
+    );
+    for (const bad of ['"};alert(1);//', "p1", "", "</script>", `${PAGE_ID}"`]) {
+      expect(() => scriptTag(bad)).toThrow();
+    }
   });
 });
 

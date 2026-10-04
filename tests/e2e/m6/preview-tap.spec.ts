@@ -167,7 +167,7 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     expect(await css(inPreview(page, cellB), "cursor")).toBe("pointer");
   });
 
-  test("M6-03 a Spotify player cannot swallow the tap, and a YouTube poster plays in place (M6-27)", async ({
+  test("M6-03 a Spotify poster and a YouTube poster both play in place, and neither swallows a tap on the rest of the block (M6-27, M8-05)", async ({
     page,
     context,
   }, info) => {
@@ -188,9 +188,17 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     } as Block;
     await userWithBlocks(context, "tp5", () => [spotify, youtube]);
     await openEditor(page);
+    // M8-05: Spotify is a facade like the others, so there is no iframe until a tap, and a tap on its
+    // poster plays it in place (as on the live page) and does not open the block.
+    const poster = previewScreen(page).locator(`[data-block-id="${spotify.id}"] .pg-embed-play`);
+    await expect(previewScreen(page).locator(`[data-block-id="${spotify.id}"] iframe`)).toHaveCount(0);
+    expect((await poster.boundingBox())!.height).toBe(152);
+    await poster.click();
     const frame = previewScreen(page).locator(`[data-block-id="${spotify.id}"] iframe`);
     await expect(frame).toHaveCount(1);
     expect(await css(frame, "pointer-events")).toBe("none");
+    await expect(rowToggle(page, spotify.id)).toHaveAttribute("aria-expanded", "false");
+    // Once playing, a tap on the player's own area is a tap on the block: it opens its row.
     await frame.click({ force: true });
     await expectOpened(page, spotify.id);
     await closeRows(page);

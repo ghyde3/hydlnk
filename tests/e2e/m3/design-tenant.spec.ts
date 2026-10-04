@@ -31,44 +31,31 @@ function recordRequests(page: Page): string[] {
 }
 
 test.describe("M3-04 tenant fonts", () => {
-  test("M3-04 mara's page links exactly the two chosen families, with preconnect hints and no other font host", async ({
+  test("M3-04 mara's page uses exactly the two chosen families, from its own host: no stylesheet link, no preconnect, no font host", async ({
     page,
   }, info) => {
     test.skip(!desktopOnly(info), "same document at both widths; asserted once");
+    // M8-01 supersedes the Google Fonts stylesheet of M3-04: the faces are @font-face rules in the page's
+    // one inline <style>, pointing at the font files under /_t/f/ on the page's own host.
     const urls = recordRequests(page);
     await page.goto(MARA);
     await expect(page.locator(".pg-name")).toBeVisible();
 
-    const sheets = await page
-      .locator("link[rel='stylesheet'][href*='fonts.googleapis.com']")
-      .evaluateAll((els) => els.map((el) => el.getAttribute("href")!));
-    expect(sheets).toHaveLength(1);
-    const sheet = new URL(sheets[0]!);
-    expect(sheet.origin + sheet.pathname).toBe("https://fonts.googleapis.com/css2");
-    expect(sheet.searchParams.getAll("family")).toEqual(NOIR_FONTS);
-    expect(sheets[0]).toContain("family=Instrument+Serif&family=Geist");
-    expect(sheet.searchParams.get("display")).toBe("swap");
+    expect(await page.locator("link[rel='stylesheet']").count()).toBe(0);
+    expect(await page.locator("link[rel='preconnect'], link[rel='dns-prefetch']").count()).toBe(0);
+    const css = await page.locator("style").first().innerText();
+    const families = new Set([...css.matchAll(/@font-face\{font-family:"([^"]+)"/g)].map((m) => m[1]));
+    // Only the chosen families have faces (none until the font files are vendored), and never another.
+    expect([...families].every((family) => NOIR_FONTS.includes(family!))).toBe(true);
 
-    const hints = await page
-      .locator("link[rel='preconnect']")
-      .evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-    expect(hints).toEqual(
-      expect.arrayContaining(["https://fonts.googleapis.com", "https://fonts.gstatic.com"]),
-    );
-
-    // No other font host, in the markup or on the network, and no family that is not in use.
-    const fontish = /font|typekit|bunny|adobe|cdnfonts/i;
-    const hosts = new Set(urls.map((u) => new URL(u).hostname).filter((h) => fontish.test(h)));
-    expect([...hosts].every((h) => h === "fonts.googleapis.com" || h === "fonts.gstatic.com")).toBe(
-      true,
-    );
+    // No font host, in the markup or on the network: every request goes to the page's own host.
+    const fontish = /font|typekit|bunny|adobe|cdnfonts|google|gstatic/i;
+    expect(urls.map((u) => new URL(u).hostname).filter((h) => fontish.test(h))).toEqual([]);
     const allHrefs = await page
       .locator("link[href]")
       .evaluateAll((els) => els.map((el) => el.getAttribute("href")!));
     for (const href of allHrefs) {
-      if (/^https?:/.test(href) && fontish.test(new URL(href).hostname)) {
-        expect(["fonts.googleapis.com", "fonts.gstatic.com"]).toContain(new URL(href).hostname);
-      }
+      if (/^https?:/.test(href)) expect(new URL(href).hostname).not.toMatch(fontish);
     }
     expect(urls.filter((u) => /family=Fraunces/i.test(u))).toEqual([]);
 

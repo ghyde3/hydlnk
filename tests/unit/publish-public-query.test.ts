@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fullPublished } from "./fixtures/page-document";
 
@@ -69,7 +67,7 @@ function query(table: string) {
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => ({ from: query }) }));
 
 const { getTenantPageState } = await import("../../src/app/(tenant)/published-page");
-const { TenantPage } = await import("@/components/tenant/tenant-page");
+const { renderLivePage } = await import("@/lib/tenant-render/live-page");
 
 beforeEach(() => {
   calls.length = 0;
@@ -109,13 +107,12 @@ describe("M2-25 the live page reads only `published`: no call to themes", () => 
     expect(state.kind).toBe("published");
     if (state.kind !== "published") return;
 
-    const html = renderToStaticMarkup(
-      createElement(TenantPage, {
-        document: state.page.document,
-        pageId: state.page.pageId,
-        plan: state.page.plan,
-      }),
-    );
+    const html = renderLivePage({
+      pageId: state.page.pageId,
+      document: state.page.document,
+      plan: state.page.plan,
+      urls: null,
+    });
     expect(html).toContain("Mara Okafor");
     expect(html).toContain("--t-bg:#16120E");
 

@@ -5,10 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { PreviewBezel } from "@/components/workspace/preview-bezel";
-import { TenantPage } from "@/components/tenant/tenant-page";
 import { pageChrome } from "@/lib/publish/chrome";
-import { fullPublished } from "./fixtures/page-document";
+import { PARITY_DOCS } from "./fixtures/m8-render-docs";
 
+vi.mock("server-only", () => ({}));
 vi.mock("@/lib/media/url", () => ({
   mediaUrl: (path: string) => `https://media.test/page-media/${path}`,
 }));
@@ -22,10 +22,24 @@ vi.mock("@/lib/env/client", () => ({
 // The preview wrapper imports the publish Server Action through the editor contracts module.
 vi.mock("@/lib/publish/actions", () => ({ publishPage: vi.fn() }));
 
+const { renderLivePage } = await import("@/lib/tenant-render/live-page");
+const { provideEmbedFacade } = await import("@/components/page/embed-slot");
+const { EmbedFacade } = await import("@/components/page/embed-facade");
+const { EmbedFacadeMarkup } = await import("@/components/page/embed-facade-markup");
+
+// The editor's seam registers the React facade for the preview (src/lib/editor/contracts.ts). The live
+// route handler is a different module graph in the real build, so it never sees that registration;
+// in one test process the two share the module, so each side sets its own facade before it renders.
+const asPreview = () => provideEmbedFacade(EmbedFacade);
+const asLive = () => provideEmbedFacade(EmbedFacadeMarkup);
+
 /**
  * M2-31 step 3, one renderer and not two: the same published document, drawn through the editor's
- * preview wrapper and through the public page component, gives identical HTML for [data-page-root];
- * and the two reach the one renderer module.
+ * preview wrapper (React in the browser) and through the live page builder (finished HTML built on
+ * the server, M8-02), gives identical HTML for [data-page-root]; and the two reach the one renderer
+ * module. M8-08 runs it on the M2-31 nine-block fixture and on the Wave G fixture (all eight embed
+ * providers, link icons and thumbnails, a featured link, image focus and shapes, text marks, a share
+ * card, a gradient, block overrides, a profile photo with options).
  */
 
 const PAGE_ID = "00000000-0000-4000-8000-0000000000b1";
@@ -38,27 +52,41 @@ function rootHtml(html: string): string {
 }
 
 describe("M2-31 the editor preview and the public page draw the same markup", () => {
-  it.each(["free", "pro", "studio", "gibberish"])(
-    "plan %s: [data-page-root] is identical through PreviewBezel and TenantPage",
-    (plan) => {
-      const preview = renderToStaticMarkup(
-        createElement(PreviewBezel, {
-          doc: fullPublished,
-          pageId: PAGE_ID,
-          chrome: pageChrome(plan, PAGE_ID),
-        }),
-      );
-      const live = renderToStaticMarkup(
-        createElement(TenantPage, { document: fullPublished, pageId: PAGE_ID, plan }),
-      );
-      expect(rootHtml(preview)).toBe(rootHtml(live));
-      // And it is a whole page, not an empty shell: every block of the fixture is there.
-      const blockIds = [...rootHtml(live).matchAll(/data-block-id="([^"]+)"/g)].map((m) => m[1]);
-      expect(blockIds).toEqual(fullPublished.blocks.filter((b) => b.visible).map((b) => b.id));
-    },
-  );
+  describe.each(PARITY_DOCS)("%s", (_name, doc) => {
+    it.each(["free", "pro", "studio", "gibberish"])(
+      "plan %s: [data-page-root] is identical through PreviewBezel and the live builder",
+      (plan) => {
+        asPreview();
+        const preview = renderToStaticMarkup(
+          createElement(PreviewBezel, {
+            doc,
+            pageId: PAGE_ID,
+            chrome: pageChrome(plan, PAGE_ID),
+          }),
+        );
+        asLive();
+        const live = renderLivePage({ pageId: PAGE_ID, document: doc, plan, urls: null });
+        expect(rootHtml(preview)).toBe(rootHtml(live));
+        // And it is a whole page, not an empty shell: every block of the fixture is there.
+        const blockIds = [...rootHtml(live).matchAll(/data-block-id="([^"]+)"/g)].map((m) => m[1]);
+        expect(blockIds).toEqual(doc.blocks.filter((b) => b.visible).map((b) => b.id));
+      },
+    );
+  });
 
-  it("the preview wrapper and the public page both reach the one renderer module", () => {
+  it("the full live document differs from the editor's markup only by the head, the style, the preloads and the one script", () => {
+    asLive();
+    const [, doc] = PARITY_DOCS[1]!;
+    const html = renderLivePage({ pageId: PAGE_ID, document: doc, plan: "free", urls: null });
+    const parsed = new DOMParser().parseFromString(html, "text/html");
+    const extra = [...parsed.body.children]
+      .filter((el) => !el.hasAttribute("data-page-root"))
+      .map((el) => el.tagName.toLowerCase());
+    expect(extra).toEqual(["script"]);
+    expect([...parsed.head.children].every((el) => ["meta", "title", "link", "style"].includes(el.tagName.toLowerCase()))).toBe(true);
+  });
+
+  it("the preview wrapper and the live builder both reach the one renderer module", () => {
     const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
     expect(read("src/components/workspace/preview-bezel.tsx")).toMatch(
       /import\s*\{[^}]*\bPageRenderer\b[^}]*\}\s*from\s*"@\/lib\/editor\/contracts"/,
@@ -66,7 +94,7 @@ describe("M2-31 the editor preview and the public page draw the same markup", ()
     expect(read("src/lib/editor/contracts.ts")).toMatch(
       /export\s*\{\s*PageRenderer\s*\}\s*from\s*"@\/components\/page\/page-renderer"/,
     );
-    expect(read("src/components/tenant/tenant-page.tsx")).toMatch(
+    expect(read("src/lib/tenant-render/live-page.tsx")).toMatch(
       /import\s*\{\s*PageRenderer\s*\}\s*from\s*"@\/components\/page\/page-renderer"/,
     );
   });

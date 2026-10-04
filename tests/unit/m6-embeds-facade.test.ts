@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "./fixtures/react-facade";
 import { createElement } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -279,7 +280,9 @@ describe("M6-27 the facade of each new provider", () => {
     const host = mount([embedBlock(c)]);
     const block = host.querySelector("[data-block-type=embed]")!;
     // The block has no URL at all (no src, no href, no srcset, no thumbnail) and no element that loads one.
-    expect(block.outerHTML).not.toContain("://");
+    // (The one URL the markup carries is the player's own address in `data-embed-src`, which only the tap
+    // upgrades into an iframe: M8-05.)
+    expect(block.outerHTML.replace(/ data-embed-src="[^"]*"/, "")).not.toContain("://");
     expect(
       block.querySelector(
         "[src], [href], [srcset], [data-src], iframe, img, script, link, video, source, object, embed",
@@ -337,16 +340,23 @@ describe("M6-27 the facade of each new provider", () => {
     expect(frame.getAttribute("title")).toBe("Behind the lens, ep. 4 (YouTube video)");
   });
 
-  it("Spotify stays a lazy iframe, as before", () => {
+  it("Spotify is a facade like the rest (M8-05): a poster as tall as its player, and a tap mounts the same iframe the old one was", () => {
     const host = mount([
       embedBlock({ url: "https://open.spotify.com/track/37i9dQZF1DXcBWIGoYBM5M", caption: "Song" }),
     ]);
-    expect(host.querySelector("button")).toBeNull();
+    expect(host.querySelector("iframe")).toBeNull();
+    const button = host.querySelector<HTMLButtonElement>("[data-block-type=embed] button")!;
+    expect(button.getAttribute("aria-label")).toBe("Play music: Song");
+    expect(button.getAttribute("data-embed-fit")).toBe("player");
+    expect(button.style.height).toBe("152px");
+    expect(host.querySelector(".pg-embed-caption")?.textContent).toBe("Song · Spotify");
+    act(() => button.click());
     const frame = host.querySelector("iframe")!;
     expect(frame.getAttribute("src")).toBe(
       "https://open.spotify.com/embed/track/37i9dQZF1DXcBWIGoYBM5M",
     );
-    expect(frame.getAttribute("loading")).toBe("lazy");
+    expect(frame.getAttribute("title")).toBe("Song (Spotify player)");
+    expect(frame.style.height).toBe("152px");
   });
 
   it("a stored embed that parses to nothing renders no iframe on the live page", () => {
@@ -455,7 +465,7 @@ describe("M6-27 static scan: an iframe src is built from the parsed embed only",
     // It sits inside the `playing` branch, never in the first render.
     const playing = facade.indexOf("if (playing) {");
     const hostname = facade.indexOf("window.location.hostname");
-    const poster = facade.lastIndexOf("posterFit(embed)");
+    const poster = facade.lastIndexOf("<EmbedFacadeMarkup");
     expect(playing).toBeGreaterThan(0);
     expect(hostname).toBeGreaterThan(playing);
     expect(hostname).toBeLessThan(poster);

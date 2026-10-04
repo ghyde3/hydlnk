@@ -598,6 +598,13 @@ describe("M6-27 helpers", () => {
       "applemusic:song": 175,
       "applemusic:album": 450,
       "applemusic:playlist": 450,
+      // M8-05: Spotify's heights live in the same table.
+      "spotify:track": 152,
+      "spotify:episode": 152,
+      "spotify:album": 352,
+      "spotify:playlist": 352,
+      "spotify:show": 352,
+      "spotify:artist": 352,
     });
   });
 
@@ -614,6 +621,9 @@ describe("M6-27 helpers", () => {
     expect(embedHeight(of(`https://music.apple.com/us/album/a/${AM}?i=1440857790`))).toBe(175);
     expect(embedHeight(of(`https://music.apple.com/us/album/a/${AM}`))).toBe(450);
     expect(embedHeight(of(`https://music.apple.com/us/playlist/a/${PL}`))).toBe(450);
+    expect(embedHeight(of("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"))).toBe(152);
+    expect(embedHeight(of("https://open.spotify.com/album/4uLU6hMCjMI75M1A2tKUQC"))).toBe(352);
+    expect(embedFacadeHeight(of("https://open.spotify.com/episode/4uLU6hMCjMI75M1A2tKUQC"))).toBe(152);
     // Before a tap: 16:9, the player's own height, or a 120px bar.
     expect(embedFacadeHeight(of(`https://vimeo.com/${ID}`))).toBe("16:9");
     expect(embedFacadeHeight(of("https://soundcloud.com/mara/track-1"))).toBe(166);

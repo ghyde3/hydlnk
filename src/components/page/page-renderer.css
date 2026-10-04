@@ -765,7 +765,7 @@
   stroke-linejoin: round;
 }
 
-/* Embed: a click-to-play poster for YouTube, a lazy player for Spotify ------------------------ */
+/* Embed: a click-to-play poster for every provider, Spotify included ---------------------------- */
 
 [data-page-root] .pg-embed {
   width: 100%;
@@ -811,14 +811,6 @@
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: var(--t-border-width) solid var(--t-border);
-  border-radius: var(--t-radius);
-}
-
-[data-page-root] .pg-embed-spotify {
-  display: block;
-  width: 100%;
-  max-width: 100%;
   border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
 }

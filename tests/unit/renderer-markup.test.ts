@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "./fixtures/react-facade";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -479,8 +480,10 @@ describe("M2-19 embed block", () => {
     expect(parsed.querySelector(".pg-embed-caption")?.textContent).toBe(
       "Behind the lens, ep. 4 · YouTube",
     );
-    // No request to a third party before the click: no thumbnail, no preconnect, no script.
-    expect(html).not.toMatch(/youtube\.com|youtube-nocookie|youtu\.be|google/);
+    // No request to a third party before the click: no thumbnail, no preconnect, no script. (The player's
+    // own address rides in the button's `data-embed-*` attributes, which only a tap turns into an iframe.)
+    const bare = html.replace(/ data-embed-[a-z]+="[^"]*"/g, "");
+    expect(bare).not.toMatch(/youtube\.com|youtube-nocookie|youtu\.be|google/);
     expect(html).not.toContain("ytimg");
     expect(html).not.toContain("<script");
   });
@@ -498,27 +501,28 @@ describe("M2-19 embed block", () => {
     ["playlist", 352],
     ["show", 352],
     ["artist", 352],
-  ])("renders a lazy Spotify %s iframe %ipx tall from the rebuilt embed url", (kind, height) => {
+  ])("renders a Spotify %s facade %ipx tall that carries the rebuilt embed url (M8-05)", (kind, height) => {
     const parsed = dom(render(doc({}, [sp(kind)])));
-    const frame = parsed.querySelector("iframe")!;
-    expect(frame.getAttribute("src")).toBe(
+    expect(parsed.querySelector("iframe")).toBeNull();
+    const button = parsed.querySelector("[data-block-type=embed] button")!;
+    expect(button.getAttribute("data-embed-src")).toBe(
       `https://open.spotify.com/embed/${kind}/37i9dQZF1DXcBWIGoYBM5M`,
     );
-    expect(frame.getAttribute("height")).toBe(String(height));
-    expect(frame.getAttribute("width")).toBe("100%");
-    expect(frame.getAttribute("loading")).toBe("lazy");
-    expect(frame.getAttribute("title")).toBe("Studio playlist (Spotify player)");
-    expect(frame.getAttribute("allow")).toContain("encrypted-media");
-    expect(parsed.querySelector("button")).toBeNull();
+    expect(button.getAttribute("data-embed-height")).toBe(String(height));
+    expect(button.getAttribute("style")).toContain(`height:${height}px`);
+    expect(button.getAttribute("data-embed-fit")).toBe("player");
+    expect(button.getAttribute("data-embed-title")).toBe("Studio playlist (Spotify player)");
+    expect(button.getAttribute("data-embed-allow")).toContain("encrypted-media");
+    expect(button.getAttribute("aria-label")).toBe("Play music: Studio playlist");
   });
 
-  it("builds the iframe src from the parsed id, never from the typed url", () => {
+  it("builds the player url from the parsed id, never from the typed url", () => {
     const tricky = {
       ...sp("track"),
       url: "https://open.spotify.com/track/37i9dQZF1DXcBWIGoYBM5M?x=%22%20onload%3Dalert(1)",
     };
-    const frame = dom(render(doc({}, [tricky]))).querySelector("iframe")!;
-    expect(frame.getAttribute("src")).toBe(
+    const button = dom(render(doc({}, [tricky]))).querySelector("[data-block-type=embed] button")!;
+    expect(button.getAttribute("data-embed-src")).toBe(
       "https://open.spotify.com/embed/track/37i9dQZF1DXcBWIGoYBM5M",
     );
   });

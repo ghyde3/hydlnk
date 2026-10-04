@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url": "http://[::1]:3000/"}
+import "./fixtures/react-facade";
 import { createElement } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";

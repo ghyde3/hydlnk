@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { TENANT_ASSET_HEADERS } from "./src/lib/tenant-assets/headers";
 
 // Host routing lives in src/proxy.ts (local dev hosts need no allowedDevOrigins in Next.js 16).
 //
@@ -13,6 +14,12 @@ const rootHostname = rootDomain.split(":")[0] ?? "";
 const isLocal = rootHostname === "localhost" || rootHostname.endsWith(".localhost");
 
 const nextConfig: NextConfig = {
+  // The tenant script and the theme font files are static files under public/_t/ at hashed paths:
+  // a year, immutable, nosniff (M8-01, M8-05). The platform serves public/ files as they are, so this
+  // is the only place their headers can be declared.
+  async headers() {
+    return TENANT_ASSET_HEADERS;
+  },
   async redirects() {
     if (!rootDomain) return [];
     return [
