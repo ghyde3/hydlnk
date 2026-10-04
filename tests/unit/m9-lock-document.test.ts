@@ -6,10 +6,12 @@ import {
   LOCK_CODE_MESSAGE,
   LOCK_ONLY_ON_LINKS_MESSAGE,
   LOCK_SET_CODE_MESSAGE,
+  LOCK_SHORT_NUMBER_WARNING,
   collectPublishErrors,
   draftDocSchema,
   isLockShape,
   lockCodeError,
+  lockCodeWarning,
   lockMarker,
   normalizeLockCode,
   publishLock,
@@ -129,6 +131,40 @@ describe("M9-29 the code's normal form", () => {
     expect(lockCodeError("😀".repeat(33))).toBe(LOCK_CODE_MESSAGE);
     expect(lockCodeError("ﬃ".repeat(11))).toBe(LOCK_CODE_MESSAGE); // 11 x "ffi" = 33
     expect(lockCodeError("ﬃ".repeat(10))).toBeNull();
+  });
+});
+
+describe("M9-30 the short number warning (a hint, never an error)", () => {
+  it("warns about a code of digits only that is shorter than 6: a PIN has few values to guess", () => {
+    for (const short of ["1234", "12345", " 1234 ", "０１２３"]) {
+      expect(lockCodeWarning(short), JSON.stringify(short)).toBe(LOCK_SHORT_NUMBER_WARNING);
+    }
+    expect(LOCK_SHORT_NUMBER_WARNING).toBe(
+      "A short number is easy to guess. Use 6 or more characters, or add letters.",
+    );
+  });
+
+  it("is quiet for 6 or more digits, for a code with a letter, and for a code that has no digits", () => {
+    for (const fine of [
+      "123456",
+      "1234567890",
+      "abcd",
+      "ab12",
+      "1234a",
+      "pässwörd",
+      "Spring2026",
+    ]) {
+      expect(lockCodeWarning(fine), fine).toBeNull();
+    }
+  });
+
+  it("leaves a code the rule already refuses to the error, and never blocks one: the rule is unchanged", () => {
+    for (const refused of ["", "12", "123", "12 34", "1".repeat(33), 1234, undefined, null]) {
+      expect(lockCodeWarning(refused), JSON.stringify(refused)).toBeNull();
+    }
+    // The short number is still a valid code: 'Set code' accepts it.
+    expect(lockCodeError("1234")).toBeNull();
+    expect(lockCodeError("12345")).toBeNull();
   });
 });
 

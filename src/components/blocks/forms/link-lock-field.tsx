@@ -6,6 +6,7 @@ import {
   LOCK_SET_FAILED_MESSAGE,
   codePointLength,
   lockCodeError,
+  lockCodeWarning,
   type LinkBlock,
   type PublishError,
 } from "@/lib/document";
@@ -61,6 +62,8 @@ export function LinkLockField({
   // Typing shows the rule at once; nothing is sent until 'Set code'.
   const typed = code === "" ? null : lockCodeError(code);
   const fieldError = problem ?? typed ?? (hasCode ? null : publishError);
+  // A short number is allowed but easy to guess: a hint under the field, never an error.
+  const warning = code === "" || fieldError !== null ? null : lockCodeWarning(code);
 
   function choose(next: Choice): void {
     setCode("");
@@ -127,6 +130,9 @@ export function LinkLockField({
           <Field
             label="Code"
             error={fieldError}
+            hint={
+              warning === null ? undefined : <span data-testid="lock-code-warning">{warning}</span>
+            }
             suffix={
               <span className="font-mono text-[11px] text-text-2" aria-hidden="true">
                 {codePointLength(code)} / {LOCK_CODE_MAX}

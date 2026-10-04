@@ -286,6 +286,42 @@ test.describe("M9-29 the limits", () => {
     expect(checked + limited).toBe(20);
   });
 
+  test("M9-29 sixty tries from different clients heat a link: the next client gets one try, then a 429 for ten minutes, and a right code from yet another client still opens it", async ({}, info) => {
+    test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
+    const { live } = await setup("lk7h");
+    // 60 clients, one wrong try each (ten at a time): every one is checked, none is limited.
+    const heating: number[] = [];
+    for (let start = 0; start < 60; start += 10) {
+      const batch = await Promise.all(
+        Array.from({ length: 10 }, (_, i) =>
+          postClick(live, ID.code, form({ code: `wrong-${start + i}-x` }), { ip: randomIp() }),
+        ),
+      );
+      heating.push(...batch.map((response) => response.status));
+    }
+    expect(heating).toHaveLength(60);
+    expect(heating.every((status) => status === 403)).toBe(true);
+
+    // The link is hot: a fresh client has ONE try (checked), and its second is refused for minutes.
+    const ip = randomIp();
+    expect((await postClick(live, ID.code, form({ code: "wrong-hot-1" }), { ip })).status).toBe(
+      403,
+    );
+    const held = await postClick(live, ID.code, form({ code: "wrong-hot-2" }), { ip });
+    expect(held.status).toBe(429);
+    expect(held.location).toBeNull();
+    const retry = Number(held.headers["retry-after"]);
+    expect(retry).toBeGreaterThan(60);
+    expect(retry).toBeLessThanOrEqual(600);
+    expect(held.body).toContain("This link has had a lot of tries. Wait 10 minutes and try again.");
+    expectNoDestination(held, SECRET_HOST);
+    // Held whatever it sends; nobody else is: a client that has not tried yet opens it with the right code.
+    expect((await postClick(live, ID.code, form({ code: CODE }), { ip })).status).toBe(429);
+    const open = await postClick(live, ID.code, form({ code: CODE }), { ip: randomIp() });
+    expect(open.status).toBe(303);
+    expect(open.location).toContain(SECRET_HOST);
+  });
+
   test("M9-29 waiting out the window allows the correct code again", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     test.setTimeout(180_000);

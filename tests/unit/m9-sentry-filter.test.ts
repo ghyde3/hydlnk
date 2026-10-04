@@ -113,9 +113,19 @@ describe("M9-10 the address of a server request error", () => {
     expect(requestUrlOf({ path: "/t/mara", method: "GET", headers: { host: "mara.hydlnk.com", "x-forwarded-host": "mara.hydlnk.com" } }, ROOT)).toBe("https://mara.hydlnk.com/t/mara");
   });
 
-  it("prefers the forwarded host, and has none when the request names no host", () => {
-    expect(requestUrlOf({ path: "/a", method: "GET", headers: { host: "internal", "x-forwarded-host": ["app.hydlnk.com"] } }, ROOT)).toBe("https://app.hydlnk.com/a");
+  it("reads the Host header only, never X-Forwarded-Host (the proxy's rule), and has none when the request names no host", () => {
+    // A client-set X-Forwarded-Host must not turn a tenant or marketing error into an app-host one.
+    expect(requestUrlOf({ path: "/a", method: "GET", headers: { host: "mara.hydlnk.com", "x-forwarded-host": "app.hydlnk.com" } }, ROOT)).toBe("https://mara.hydlnk.com/a");
+    expect(requestUrlOf({ path: "/a", method: "GET", headers: { host: "mara.hydlnk.com", "x-forwarded-host": ["app.hydlnk.com"] } }, ROOT)).toBe("https://mara.hydlnk.com/a");
+    expect(requestUrlOf({ path: "/a", method: "GET", headers: { host: ["app.hydlnk.com"], "x-forwarded-host": "mara.hydlnk.com" } }, ROOT)).toBe("https://app.hydlnk.com/a");
+    // No Host, only a forwarded one: no address at all, so the event is dropped, never judged by it.
+    expect(requestUrlOf({ path: "/a", method: "GET", headers: { "x-forwarded-host": "app.hydlnk.com" } }, ROOT)).toBeUndefined();
     expect(requestUrlOf({ path: "/a", method: "GET", headers: {} }, ROOT)).toBeUndefined();
+  });
+
+  it("an error on a tenant host that lies about X-Forwarded-Host is still not an app event", () => {
+    const url = requestUrlOf({ path: "/x", method: "GET", headers: { host: "mara.hydlnk.com", "x-forwarded-host": "app.hydlnk.com" } }, ROOT);
+    expect(isAppRequestUrl(url, ROOT)).toBe(false);
   });
 
   it("the address it builds is judged by the same filter", () => {

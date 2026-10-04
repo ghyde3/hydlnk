@@ -80,12 +80,33 @@ describe("M9-18 vcardFor", () => {
     expect(n("  Ada   Lovelace  ")).toBe("N:Lovelace;Ada;;;");
   });
 
+  it("a semicolon in the name stays inside its N: component: exactly five components, never more", () => {
+    const n = (name: string) =>
+      unfoldVcard(vcardFor({ name }, URL_)).find((line) => line.startsWith("N:"))!;
+    // Components are split on a ';' that is not escaped with a backslash.
+    const components = (line: string) => line.slice(2).split(/(?<!\\);/);
+    for (const name of ["Jane Doe;Dr.;;", "Jane;Dr. Doe", ";;;;;", "Mara; Okafor", "A;B C;D;E;F"]) {
+      const line = n(name);
+      expect(components(line), name).toHaveLength(5);
+      // The whole of what was typed is still in the card, only escaped.
+      expect(line, name).toContain("\\;");
+    }
+    expect(n("Jane Doe;Dr.;;")).toBe("N:Doe\\;Dr.\\;\\;;Jane;;;");
+    // And in FN and NOTE every semicolon is escaped, so the value is one value.
+    const lines = unfoldVcard(vcardFor({ name: "Jane;Doe", phone: "5551234", hours: "a;b" }, URL_));
+    expect(lines).toContain("FN:Jane\\;Doe");
+    expect(lines).toContain("NOTE:a\\;b");
+  });
+
   it("escapes backslash, comma, semicolon and line breaks inside values", () => {
-    expect(escapeText("a\\b,c;d\ne")).toBe("a\\\\b\\,c\;d\\ne");
+    expect(escapeText("a\\b,c;d\ne")).toBe("a\\\\b\\,c\\;d\\ne");
+    // A semicolon becomes a backslash and a semicolon: two characters, not the bare one.
+    expect(escapeText(";")).toBe("\\;");
+    expect(escapeText(";")).toHaveLength(2);
     const text = vcardFor({ name: "A;B,C", phone: "5551234", hours: "a;b,c\\d\nline two" }, URL_);
     const lines = unfoldVcard(text);
-    expect(lines).toContain("FN:A\;B\\,C");
-    expect(lines).toContain("NOTE:a\;b\\,c\\\\d\\nline two");
+    expect(lines).toContain("FN:A\\;B\\,C");
+    expect(lines).toContain("NOTE:a\\;b\\,c\\\\d\\nline two");
   });
 
   it("removes control and bidi characters, and turns CRLF in hours into one escaped line break", () => {
@@ -117,7 +138,7 @@ describe("M9-18 vcardFor", () => {
     expect(names.filter((name) => name === "TEL")).toHaveLength(1);
     expect(lines.find((line) => line.startsWith("TEL"))).toBe("TEL;TYPE=VOICE:5551234");
     expect(lines.find((line) => line.startsWith("NOTE:"))).toBe(
-      "NOTE:a\;b\\,c\\\\d\\nTEL:+1888\\nEND:VCARD",
+      "NOTE:a\\;b\\,c\\\\d\\nTEL:+1888\\nEND:VCARD",
     );
   });
 

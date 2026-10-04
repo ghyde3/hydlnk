@@ -481,6 +481,33 @@ test.describe("M9-30 Lock this link", () => {
     ).toBeVisible();
   });
 
+  test("M9-30 a short number gets a hint to use more characters, not an error: Set code still takes it", async ({
+    page,
+    context,
+  }) => {
+    await userWithDraft(context, "lk3b", (h) => draftOf(h, [link(A)]));
+    await openEditor(page);
+    const panel = await expand(page, A);
+    await kind(panel).selectOption("code");
+    const hint = lockField(panel).getByTestId("lock-code-warning");
+    await expect(hint).toHaveCount(0);
+    await codeInput(panel).fill("1234");
+    await expect(hint).toHaveText(
+      "A short number is easy to guess. Use 6 or more characters, or add letters.",
+    );
+    await expect(codeInput(panel)).not.toHaveAttribute("aria-invalid", "true");
+    await codeInput(panel).fill("123456");
+    await expect(hint).toHaveCount(0);
+    await codeInput(panel).fill("abcd");
+    await expect(hint).toHaveCount(0);
+    await codeInput(panel).fill("1234");
+    await expect(hint).toBeVisible();
+    await lockField(panel).getByTestId("lock-set-code").click();
+    await expect(
+      lockField(panel).getByText("A code is set. Enter a new one to change it."),
+    ).toBeVisible();
+  });
+
   test("M9-30 a code lock with no hash saves and fails at Publish: 'Set a code for this lock.' under the field, with focus", async ({
     page,
     context,

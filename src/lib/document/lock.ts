@@ -28,6 +28,9 @@ export const LOCK_SET_CODE_MESSAGE = "Set a code for this lock.";
 export const LOCK_KIND_MESSAGE = "Choose an age check or a code.";
 export const LOCK_ONLY_ON_LINKS_MESSAGE = "A lock only works on a link block.";
 export const LOCK_SET_FAILED_MESSAGE = "Couldn’t set the code. Try again.";
+/** The editor's hint under a code that is a short number: allowed, but easy to guess. */
+export const LOCK_SHORT_NUMBER_WARNING =
+  "A short number is easy to guess. Use 6 or more characters, or add letters.";
 
 /** The lock of a draft: lenient, so a half-set lock (a code lock with no hash yet) autosaves. */
 export interface DraftLock {
@@ -64,6 +67,17 @@ export function lockCodeError(code: unknown): string | null {
   if (length < LOCK_CODE_MIN || length > LOCK_CODE_MAX) return LOCK_CODE_MESSAGE;
   if (WHITESPACE.test(normal) || HIDDEN.test(normal)) return LOCK_CODE_MESSAGE;
   return null;
+}
+
+/**
+ * A hint (not an error: the code is still accepted) for a code that is a short number. A 4 digit PIN
+ * has 10,000 values, which even a limited guesser gets through; a longer number or any letter does
+ * not. Null for every other code, and for one `lockCodeError` already refuses (that sentence wins).
+ */
+export function lockCodeWarning(code: unknown): string | null {
+  if (lockCodeError(code) !== null) return null;
+  const normal = normalizeLockCode(code as string);
+  return /^[0-9]+$/.test(normal) && codePointLength(normal) < 6 ? LOCK_SHORT_NUMBER_WARNING : null;
 }
 
 /** The shape check of a stored code lock: both parts present and exactly the right length. */

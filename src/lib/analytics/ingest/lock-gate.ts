@@ -2,6 +2,7 @@ import { rateLimitClientKey } from "./client-ip";
 import { notice, recordClick } from "./click-common";
 import {
   LOCK_PAGE_HEADERS,
+  LINK_BUSY_MESSAGE,
   LOCK_UNAVAILABLE_MESSAGE,
   MISSING_CODE_MESSAGE,
   MISSING_CONFIRM_MESSAGE,
@@ -27,6 +28,21 @@ import type { ClickLock, ClickTarget, IngestDeps } from "./types";
  * A code is accepted from the POST body only, so it never lands in a URL, a log or the history. The
  * attempts are limited through the one limiter, failing CLOSED (the only caller besides the code
  * hashing action that asks for it): a limiter that cannot count must not let anyone guess a code.
+ *
+ * Three limits, checked in this order and all before a single code is hashed:
+ *   1  per client and link (5 a minute) and per client overall (20 in ten minutes);
+ *   2  per link, ALL clients together (60 an hour): the heat of the link. Under it nothing changes;
+ *   3  once the link is over it ("hot"), each client gets ONE try per ten minutes on that link.
+ * Limits 1 and 2 stop one client; they do nothing against many, and a short code (a 4 digit PIN has
+ * 10,000 values) falls to a few dozen addresses. Limit 3 is the backoff that grows with the guessing:
+ * a sustained attack drops from 5 tries a minute per address to 1 in ten, while nobody is ever locked
+ * out. There is no ceiling on the link: every client keeps a try of its own, so a stranger cannot
+ * shut real visitors out, and a visitor who types the right code first time is never slowed.
+ *
+ * Known limits: the heat counts tries, not only wrong ones (a link that really is that busy goes hot,
+ * where visitors still open it with a right first try); and the sliding window cannot pass an hour
+ * (`rate_limit_hit` refuses more), so the heat and its backoff are measured inside that. A code that
+ * is long enough is the real defence; the editor warns about a short number (`lockCodeWarning`).
  */
 
 /** Code tries a client may make on one link per minute, and on all links per ten minutes. */
@@ -34,6 +50,12 @@ export const LOCK_LINK_LIMIT = 5;
 export const LOCK_LINK_WINDOW_SECONDS = 60;
 export const LOCK_CLIENT_LIMIT = 20;
 export const LOCK_CLIENT_WINDOW_SECONDS = 600;
+/** Code tries one link takes from every client together in an hour before it counts as hot. */
+export const LOCK_LINK_WIDE_LIMIT = 60;
+export const LOCK_LINK_WIDE_WINDOW_SECONDS = 3600;
+/** On a hot link: one try per client per ten minutes. */
+export const LOCK_HOT_CLIENT_LIMIT = 1;
+export const LOCK_HOT_CLIENT_WINDOW_SECONDS = 600;
 
 /** The most a POST body may hold, in bytes: a code is at most 32 characters. */
 export const LOCK_BODY_MAX_BYTES = 1024;
@@ -195,6 +217,28 @@ export async function handleLockedPost(
   if (overall.failed) return notice(503, LOCK_UNAVAILABLE_MESSAGE, homeHref, false);
   if (!overall.allowed) return tooManyTries(action, overall.retryAfter);
 
+  // The link's heat, after the client limits so that a client already being refused cannot heat the
+  // link for everyone. A refused call is not counted, so a flood does not extend the heat.
+  const pageId = params.pageId.toLowerCase();
+  const wide = await deps.rateLimit(
+    `lock-link:${pageId}:${params.blockId}`,
+    LOCK_LINK_WIDE_LIMIT,
+    LOCK_LINK_WIDE_WINDOW_SECONDS,
+    { failClosed: true },
+  );
+  if (wide.failed) return notice(503, LOCK_UNAVAILABLE_MESSAGE, homeHref, false);
+  if (!wide.allowed) {
+    // Hot: this client's one try per ten minutes on this link.
+    const slow = await deps.rateLimit(
+      `lock-slow:${client}:${pageId}:${params.blockId}`,
+      LOCK_HOT_CLIENT_LIMIT,
+      LOCK_HOT_CLIENT_WINDOW_SECONDS,
+      { failClosed: true },
+    );
+    if (slow.failed) return notice(503, LOCK_UNAVAILABLE_MESSAGE, homeHref, false);
+    if (!slow.allowed) return tooManyTries(action, slow.retryAfter, LINK_BUSY_MESSAGE);
+  }
+
   if (!deps.verifyLock) return notice(503, LOCK_UNAVAILABLE_MESSAGE, homeHref, false);
   let ok = false;
   try {
@@ -208,10 +252,14 @@ export async function handleLockedPost(
   return pass(request, params, target, deps);
 }
 
-function tooManyTries(action: string, retryAfter: number): Response {
+function tooManyTries(
+  action: string,
+  retryAfter: number,
+  message: string = TOO_MANY_TRIES_MESSAGE,
+): Response {
   return interstitial("code", action, false, {
     status: 429,
-    error: TOO_MANY_TRIES_MESSAGE,
+    error: message,
     extra: { "Retry-After": String(Math.max(1, retryAfter)) },
   });
 }

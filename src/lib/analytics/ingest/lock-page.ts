@@ -22,6 +22,8 @@ export const WRONG_CODE_MESSAGE = "That code didn’t match. Try again.";
 export const MISSING_CODE_MESSAGE = "Enter the code.";
 export const MISSING_CONFIRM_MESSAGE = "Press Continue to open this link.";
 export const TOO_MANY_TRIES_MESSAGE = "Too many tries. Wait a minute and try again.";
+/** A link many different visitors have tried to open with wrong codes (the hot link, M9-29). */
+export const LINK_BUSY_MESSAGE = "This link has had a lot of tries. Wait 10 minutes and try again.";
 export const LOCK_UNAVAILABLE_MESSAGE =
   "This link can’t be opened right now. Try again in a moment.";
 

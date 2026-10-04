@@ -2,6 +2,25 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Wave K security review fixes
+
+The security review of Wave K (branch `m10-quick-wins`, draft PR #21) found one medium and five lows. Four are fixed with tests written first, one is documented as accepted, one is Gary's call. No migration, no feature flipped (M9-10 stays `passes: false`).
+
+**Fixed.**
+- Medium, a code lock could be guessed slowly across many addresses (M9-29, M9-30; `src/lib/analytics/ingest/lock-gate.ts`): after the two per-client limits, each link now counts tries from all clients together (`lock-link:{page}:{block}`, 60 an hour, failing closed); over that the link is "hot" and each client gets one try per ten minutes on it (`lock-slow:`, answered 429 with its own sentence and a `Retry-After`). Nobody is locked out (every client keeps a try of its own, a right first try is never slowed). A hot link takes a sustained attack from 5 tries a minute per address to 1 in ten. The editor shows a hint, not an error, under a code of fewer than 6 digits (`lockCodeWarning`).
+- Low, vCard `escapeText` never escaped a semicolon (M9-18): `"\;"` is just `;` in JavaScript, and the unit test had the same mistake in four places. Fixed, a test that a semicolon in a name leaves `N:` with exactly five components, and ESLint `no-useless-escape` is now on for the whole repo (nothing else was flagged).
+- Low, click and input breadcrumbs could carry draft text to Sentry through aria-label, alt and title (M9-10): every `ui.*` breadcrumb is dropped whole.
+- Low, the Sentry request address read `X-Forwarded-Host` before `Host` (M9-10): `Host` only, like `src/proxy.ts`.
+
+**Accepted, noted in docs/PLAN.md (Decided).** Two pages in redirect mode may point at each other (M9-31): the browser stops after about 20 hops, each hop is one limited `/r` click, and the only effect is the owner's own analytics. Refusing every `*.{root}` target would also stop a redirect to the owner's other page.
+
+**Gary decides.**
+1. Raise `LOCK_CODE_MIN` from 4 to 6? Left at 4: the acceptance steps of M9-29 and M9-30 name "4 to 32" and features.json steps may not be reworded. The hint covers the short all-digit case; a 6 minimum would be the stronger fix.
+2. Allow Simple Icons path data in the marketing "try" page's bundle (`src/components/marketing/try/try-phone.tsx` pulls it in through `PageRenderer`), or have the try page use a server component or a static snapshot? The dependency rule says client libraries on the app and editor side only; the data is CC0, tree-shaken to about 11.5 KB, no network calls.
+3. Is the lock's hot-link limit (60 tries an hour per link, then 1 per client per ten minutes) the right trade? Many addresses still get one try each per ten minutes, so a short code is slowed, not safe, and a link that is really that busy goes hot (visitors still open it with a right first try). Not done: telling the owner about "many wrong tries".
+
+**Evidence.** `pnpm typecheck` and `pnpm lint` clean (with `no-useless-escape` on). `REQUIRE_SUPABASE=1 pnpm test --retry 2`: 320 files, 8,433 tests, all pass (Wave K integration: 8,416; 17 new: the hot link, the short-number hint, the five-component `N:`, `ui.*` breadcrumbs, `Host` only). Each new test was seen failing before its fix (the short-number test by changing its threshold). `pnpm db:reset` then `pnpm test:db`: 38 files, 1,509 tests, PASS (no migration changed; run before `pnpm test` on a used database, `135-gradient-tokens` fails on a "Broken" theme row that `tests/unit/themes-publish.test.ts` and `m6-themes-preview.test.ts` leave behind, so reset first). Playwright on the shared dev server, `--workers=2`: `tests/e2e/m9/` 588 passed, 116 skipped (the other project of pure-HTTP rows), 0 failed, 0 flaky. New rows: `links-lock.spec.ts` "sixty tries from different clients heat a link" (real limiter and database: 60 checked, the next client gets one try then a 429 with a `Retry-After` of 61 to 600, another client opens it with the right code) and `links-editor.spec.ts` "a short number gets a hint ... Set code still takes it" (both viewports).
+
 ## 2026-10-04 — Wave K: libraries, rich text and quick wins
 
 Wave K on branch `m10-quick-wins` (draft PR #21), approved by Gary on 2026-10-04 under the fast track (libraries 1 to 4, the "worth considering" list, a few Radix components, a Tiptap rich text editor, Sentry, and his quick-win picks from the Linktree comparison). Parallel builders on one shared working tree, then one integration agent. Features M9-01 to M9-34 are appended to `docs/features.json` (254 features now). Nothing here touches production, the Stripe live mode or the Sentry account.

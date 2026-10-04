@@ -40,13 +40,21 @@ interface BreadcrumbLike {
   data?: Record<string, unknown> | undefined;
 }
 
+/** A click, an input or any other user interface breadcrumb: `ui.click`, `ui.input`, `ui.lifecycle`. */
+function isUiCategory(category: string | undefined): boolean {
+  return category === "ui" || (category?.startsWith("ui.") ?? false);
+}
+
 /**
- * Console output is dropped (it holds whatever the app printed). A request or a navigation keeps
- * its address without the query string; everything is scrubbed like an event.
+ * Console output is dropped (it holds whatever the app printed), and so is every `ui.*` breadcrumb:
+ * the SDK describes a clicked or typed-in element with its `aria-label`, `title`, `alt` and `name`,
+ * and the editor's preview writes the owner's draft text into those (a book's title, a place's name,
+ * an image's alt text), which the brief says must never leave the browser. A request or a navigation
+ * keeps its address without the query string; everything is scrubbed like an event.
  */
 export function createBeforeBreadcrumb(options: ScrubOptions) {
   return function beforeBreadcrumb<B extends BreadcrumbLike>(breadcrumb: B): B | null {
-    if (breadcrumb.category === "console") return null;
+    if (breadcrumb.category === "console" || isUiCategory(breadcrumb.category)) return null;
     const copy = scrubJson(breadcrumb, options);
     const data = copy.data;
     if (data) {

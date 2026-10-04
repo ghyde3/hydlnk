@@ -271,10 +271,34 @@ describe("M9-10 breadcrumbs", () => {
     expect(out.data).toEqual({ from: "/t/[handle]", to: "/share/[token]" });
   });
 
-  it("any other breadcrumb is scrubbed, and a user's click text is not kept with an email", () => {
-    const out = beforeBreadcrumb({ category: "ui.click", message: "button.save[gary@example.com]" })!;
-    expect(out.message).toBe("button.save[[email]]");
+  it("click and input breadcrumbs are dropped whole: they describe the element with its aria-label, title, alt and name, which hold draft text", () => {
+    // What the SDK writes for a click on the mini-phone preview of a book link and of a map block.
+    const draft = [
+      'a[aria-label="The Hollow Year on Amazon"]',
+      'a[aria-label="Open Café Okafor in Google Maps"]',
+      'img[alt="Mara signing copies at Powell’s"]',
+      'input[name="note"][title="Private launch notes"]',
+    ];
+    for (const message of draft) {
+      expect(beforeBreadcrumb({ category: "ui.click", message }), message).toBeNull();
+      expect(beforeBreadcrumb({ category: "ui.input", message }), message).toBeNull();
+    }
+    // Any ui.* category (a lifecycle or another handler) and the bare "ui" go the same way.
+    expect(beforeBreadcrumb({ category: "ui.lifecycle", message: "Private launch notes" })).toBeNull();
+    expect(beforeBreadcrumb({ category: "ui", message: "Private launch notes" })).toBeNull();
+    // Data on such a breadcrumb never gets a chance to be sent either.
+    expect(
+      beforeBreadcrumb({ category: "ui.click", data: { "ui.component_name": "BookForm" } }),
+    ).toBeNull();
+  });
+
+  it("every other breadcrumb is kept and scrubbed: an email in its text is replaced", () => {
+    const out = beforeBreadcrumb({ category: "custom", message: "saved for gary@example.com" })!;
+    expect(out.message).toBe("saved for [email]");
     expect(beforeBreadcrumb({ category: "custom" })).toEqual({ category: "custom" });
+    // A category that only starts with the letters ui is not a ui breadcrumb.
+    expect(beforeBreadcrumb({ category: "uikit-sync" })).toEqual({ category: "uikit-sync" });
+    expect(beforeBreadcrumb({ message: "no category" })).toEqual({ message: "no category" });
   });
 });
 

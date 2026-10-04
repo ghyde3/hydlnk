@@ -73,10 +73,13 @@ const first = (value: string | string[] | undefined): string | undefined =>
 
 /**
  * The address a request was made to, from the Host header and the path (without its query string).
- * Built here, on purpose, so the event carries the host the filter judges it by.
+ * Built here, on purpose, so the event carries the host the filter judges it by. Only the real Host
+ * header is read, never X-Forwarded-Host: a client can set that one on any host that is not behind
+ * a platform that overwrites it, and would label a tenant or marketing error as an app-host error
+ * (the same rule as `src/proxy.ts`).
  */
 export function requestUrlOf(request: RequestInfo, rootDomain: string | undefined): string | undefined {
-  const host = first(request.headers["x-forwarded-host"]) ?? first(request.headers.host);
+  const host = first(request.headers.host);
   if (!host) return undefined;
   const protocol = rootDomain ? protocolFor(rootDomain) : "https";
   const path = request.path.startsWith("/") ? request.path : `/${request.path}`;

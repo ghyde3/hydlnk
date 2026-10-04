@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { handleClick, handleClickPost } from "@/lib/analytics/ingest/click";
+import {
+  LOCK_HOT_CLIENT_LIMIT,
+  LOCK_HOT_CLIENT_WINDOW_SECONDS,
+  LOCK_LINK_WIDE_LIMIT,
+  LOCK_LINK_WIDE_WINDOW_SECONDS,
+} from "@/lib/analytics/ingest/lock-gate";
+import { LINK_BUSY_MESSAGE } from "@/lib/analytics/ingest/lock-page";
 import { resolveLink } from "@/lib/analytics/ingest/link-target";
 import type { ClickTarget, IngestDeps } from "@/lib/analytics/ingest/types";
 import { toPublishForm, type DraftDoc, type PublishDoc } from "@/lib/document";
@@ -743,6 +750,176 @@ describe("M9-29 the limits", () => {
     expect(posted.status).toBe(429);
     expect(posted.headers.get("retry-after")).toBe("30");
     expect(s.verify).not.toHaveBeenCalled();
+  });
+});
+
+describe("M9-29 a link that is guessed at in bulk (the hot link)", () => {
+  // 10.1.0.1 ... : as many distinct clients as a test needs.
+  const ipOf = (i: number) => `10.1.${Math.floor(i / 200)}.${(i % 200) + 1}`;
+  const FRESH = "198.51.100.200";
+  const wrongFrom = (ip: string) => post(CODE_ID, `code=${WRONG}`, { "x-forwarded-for": ip });
+  const rightFrom = (ip: string) => post(CODE_ID, `code=${CODE}`, { "x-forwarded-for": ip });
+
+  /** The code check without scrypt: 60 real hashes would only slow the test down. */
+  function fakeVerify() {
+    return vi.fn(async (code: string) => code.trim().toLowerCase() === CODE.toLowerCase());
+  }
+
+  /** A link that 60 different clients have each tried once, in memory. */
+  async function hotLink(wrap?: (inner: IngestDeps["rateLimit"]) => IngestDeps["rateLimit"]) {
+    await setup();
+    const memory = memoryLimiter();
+    const verify = fakeVerify();
+    const s = build({
+      rateLimit: wrap ? wrap(memory.limiter) : memory.limiter,
+      verifyLock: verify,
+    });
+    for (let i = 0; i < LOCK_LINK_WIDE_LIMIT; i++) {
+      const response = await handleClickPost(wrongFrom(ipOf(i)), params(CODE_ID), s.deps);
+      expect(response.status, `heating try ${i}`).toBe(403);
+    }
+    expect(verify).toHaveBeenCalledTimes(LOCK_LINK_WIDE_LIMIT);
+    return { memory, verify, s };
+  }
+
+  it("the numbers: 60 tries an hour on a link from all clients, then one try per client per ten minutes", () => {
+    expect(LOCK_LINK_WIDE_LIMIT).toBe(60);
+    expect(LOCK_LINK_WIDE_WINDOW_SECONDS).toBe(3600);
+    expect(LOCK_HOT_CLIENT_LIMIT).toBe(1);
+    expect(LOCK_HOT_CLIENT_WINDOW_SECONDS).toBe(600);
+    // rate_limit_hit refuses a window over an hour; failing closed that would be a 503 for everyone.
+    expect(LOCK_LINK_WIDE_WINDOW_SECONDS).toBeLessThanOrEqual(3600);
+    expect(LOCK_HOT_CLIENT_WINDOW_SECONDS).toBeLessThanOrEqual(3600);
+  });
+
+  it("counts the link across clients under a key with no client in it, failing closed", async () => {
+    await setup();
+    const memory = memoryLimiter();
+    const s = build({ rateLimit: memory.limiter });
+    await handleClickPost(wrongFrom("203.0.113.7"), params(CODE_ID), s.deps);
+    const wide = memory.calls.filter((call) => call.key.startsWith("lock-link:"));
+    expect(wide).toHaveLength(1);
+    expect(wide[0]).toMatchObject({
+      key: `lock-link:${PAGE_ID}:${CODE_ID}`,
+      limit: LOCK_LINK_WIDE_LIMIT,
+      window: LOCK_LINK_WIDE_WINDOW_SECONDS,
+      options: { failClosed: true },
+    });
+    expect(wide[0]?.key).not.toContain("203.0.113.7");
+  });
+
+  it("a cold link is unchanged: a fresh client still has its 5 tries a minute and never touches the slow bucket", async () => {
+    await setup();
+    const memory = memoryLimiter();
+    const s = build({ rateLimit: memory.limiter });
+    for (let i = 0; i < 5; i++) {
+      const response = await handleClickPost(wrongFrom(FRESH), params(CODE_ID), s.deps);
+      expect(response.status).toBe(403);
+    }
+    expect((await handleClickPost(wrongFrom(FRESH), params(CODE_ID), s.deps)).status).toBe(429);
+    expect(memory.calls.filter((call) => call.key.startsWith("lock-slow:"))).toEqual([]);
+  });
+
+  it("60 tries from different clients heat the link: the next client gets one try, then a 429 for ten minutes", async () => {
+    const { s, verify } = await hotLink();
+    const first = await handleClickPost(wrongFrom(FRESH), params(CODE_ID), s.deps);
+    expect(first.status).toBe(403);
+    expect(verify).toHaveBeenCalledTimes(LOCK_LINK_WIDE_LIMIT + 1);
+
+    const second = await handleClickPost(wrongFrom(FRESH), params(CODE_ID), s.deps);
+    expect(second.status).toBe(429);
+    expect(second.headers.get("retry-after")).toBe(String(LOCK_HOT_CLIENT_WINDOW_SECONDS));
+    expect(second.headers.get("location")).toBeNull();
+    const html = await second.text();
+    expect(html).toContain(LINK_BUSY_MESSAGE);
+    expect(html).toContain("10 minutes");
+    expect(`${headersText(second)}${html}`).not.toContain("secret.example");
+    // Nothing was checked for the refused try.
+    expect(verify).toHaveBeenCalledTimes(LOCK_LINK_WIDE_LIMIT + 1);
+  });
+
+  it("a hot link never locks anyone out: every fresh client still gets one try, and the right code opens it", async () => {
+    const { s, verify } = await hotLink();
+    const right = await handleClickPost(rightFrom(FRESH), params(CODE_ID), s.deps);
+    expect(right.status).toBe(303);
+    expect(right.headers.get("location")).toBe(tagged);
+    const other = await handleClickPost(rightFrom("198.51.100.201"), params(CODE_ID), s.deps);
+    expect(other.status).toBe(303);
+    await s.flush();
+    expect(s.inserted).toHaveLength(2);
+    expect(verify).toHaveBeenCalledTimes(LOCK_LINK_WIDE_LIMIT + 2);
+  });
+
+  it("the hot budget is per client: a client that used its one try is held while a new client is not", async () => {
+    const { s } = await hotLink();
+    expect((await handleClickPost(wrongFrom(FRESH), params(CODE_ID), s.deps)).status).toBe(403);
+    // Held, whatever it sends: the right code is refused too.
+    expect((await handleClickPost(rightFrom(FRESH), params(CODE_ID), s.deps)).status).toBe(429);
+    expect(
+      (await handleClickPost(rightFrom("198.51.100.201"), params(CODE_ID), s.deps)).status,
+    ).toBe(303);
+  });
+
+  it("a client that its own limits already refuse does not heat the link for everyone", async () => {
+    await setup();
+    const memory = memoryLimiter();
+    const s = build({ rateLimit: memory.limiter, verifyLock: fakeVerify() });
+    for (let i = 0; i < 40; i++) {
+      await handleClickPost(wrongFrom(FRESH), params(CODE_ID), s.deps);
+    }
+    // Five tries were let through (and counted on the link); the other 35 stopped at the client limit.
+    expect(memory.calls.filter((call) => call.key.startsWith("lock-link:"))).toHaveLength(5);
+  });
+
+  it("an age lock and a GET take nothing from the link counter", async () => {
+    await setup();
+    const memory = memoryLimiter();
+    const s = build({ rateLimit: memory.limiter });
+    await handleClickPost(post(AGE_ID, "confirm=1"), params(AGE_ID), s.deps);
+    await handleClick(get(CODE_ID), params(CODE_ID), s.deps);
+    expect(memory.calls.filter((call) => call.key.startsWith("lock-link:"))).toEqual([]);
+  });
+
+  it("a link counter that failed (closed) is a 503 and nothing is checked, the right code included", async () => {
+    await setup();
+    const memory = memoryLimiter();
+    const verify = fakeVerify();
+    const failing: IngestDeps["rateLimit"] = async (key, limit, window, options) =>
+      key.startsWith("lock-link:")
+        ? { allowed: false, retryAfter: 1, failed: true }
+        : memory.limiter(key, limit, window, options);
+    const s = build({ rateLimit: failing, verifyLock: verify });
+    const response = await handleClickPost(rightFrom(FRESH), params(CODE_ID), s.deps);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("location")).toBeNull();
+    expect(verify).not.toHaveBeenCalled();
+  });
+
+  it("a slow bucket that failed (closed) on a hot link is a 503 and nothing is checked", async () => {
+    const { s, verify } = await hotLink(
+      (inner) => async (key, limit, window, options) =>
+        key.startsWith("lock-slow:")
+          ? { allowed: false, retryAfter: 1, failed: true }
+          : inner(key, limit, window, options),
+    );
+    const response = await handleClickPost(rightFrom(FRESH), params(CODE_ID), s.deps);
+    expect(response.status).toBe(503);
+    expect(response.headers.get("location")).toBeNull();
+    expect(verify).toHaveBeenCalledTimes(LOCK_LINK_WIDE_LIMIT);
+  });
+
+  it("the slow bucket is keyed by client and link, has its own limit and window, and fails closed", async () => {
+    const { s, memory } = await hotLink();
+    await handleClickPost(wrongFrom(FRESH), params(CODE_ID), s.deps);
+    const slow = memory.calls.filter((call) => call.key.startsWith("lock-slow:"));
+    expect(slow).toHaveLength(1);
+    expect(slow[0]).toMatchObject({
+      limit: LOCK_HOT_CLIENT_LIMIT,
+      window: LOCK_HOT_CLIENT_WINDOW_SECONDS,
+      options: { failClosed: true },
+    });
+    expect(slow[0]?.key).toContain(`:${PAGE_ID}:${CODE_ID}`);
+    expect(slow[0]?.key).not.toBe(`lock-slow:${PAGE_ID}:${CODE_ID}`);
   });
 });
 
