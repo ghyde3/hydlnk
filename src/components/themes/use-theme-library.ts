@@ -13,6 +13,7 @@ import type { DocTheme, DraftDoc } from "@/lib/document";
 import type { PlanId } from "@/lib/limits/table";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { resolveTokens, type TokenSet } from "@/lib/theme";
+import { applyThemeToDoc } from "@/lib/themes/apply-theme";
 import {
   SAVED_THEME_LIMIT,
   cardTag,
@@ -200,7 +201,7 @@ export function useThemeLibrary(options: ThemeLibraryOptions): ThemeLibrary {
       if (current.ref === id && !hasOverrides(current)) return; // nothing to replace
       undoRef.current = { previous: current, appliedId: id };
       setDeletedAppliedNotice(false);
-      setDraft((doc) => ({ ...doc, theme: { ref: id, overrides: {} } }));
+      setDraft((doc) => applyThemeToDoc(doc, id));
       show("applied", `Applied ${target.name}.`, true);
     },
     [setDraft, show],
