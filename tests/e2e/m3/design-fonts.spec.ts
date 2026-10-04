@@ -44,13 +44,19 @@ const familyOf = (locator: Locator): Promise<string> =>
 const previewName = (page: Page): Locator => previewRoot(page).locator(".pg-name");
 const previewBio = (page: Page): Locator => previewRoot(page).locator(".pg-bio");
 
-/** The family= params of the single Google Fonts stylesheet link in an HTML document. */
+/**
+ * The font families the live page draws, in first-use order (heading, then body, each once), read from
+ * the inline @font-face rules. Wave J (M8-07) replaced the single fonts.googleapis.com stylesheet link
+ * with self-hosted faces under /_t/f; the superseded literal was `family=` params of that link.
+ */
 function fontParams(html: string): string[] {
-  const links = [
-    ...html.matchAll(/<link[^>]*href="(https:\/\/fonts\.googleapis\.com\/css2[^"]*)"/g),
-  ];
-  expect(links).toHaveLength(1);
-  return new URL(links[0]![1]!.replace(/&amp;/g, "&")).searchParams.getAll("family");
+  expect(html).not.toContain("fonts.googleapis.com");
+  const families: string[] = [];
+  for (const m of html.matchAll(/@font-face\{font-family:"([^"]+)"/g)) {
+    if (!families.includes(m[1]!)) families.push(m[1]!);
+  }
+  expect(families.length).toBeGreaterThan(0);
+  return families;
 }
 
 test.describe("M3-09 font pickers", () => {
@@ -121,7 +127,7 @@ test.describe("M3-09 font pickers", () => {
       (o) => o.fontHeading === "Fraunces" && o.fontBody === "Inter",
     );
 
-    // After Publish the live page draws Fraunces, and the single link lists Fraunces, not Instrument Serif.
+    // After Publish the live page draws Fraunces, and the inline faces list Fraunces, not Instrument Serif.
     await publishFromEditor(page);
     await expect
       .poll(async () => fontParams(await liveHtml(user.handle)).join("|"))
@@ -132,7 +138,7 @@ test.describe("M3-09 font pickers", () => {
     expect(await familyOf(live.locator(".pg-bio"))).toMatch(/^"?Inter"?,\s*sans-serif$/);
     await live.close();
 
-    // Both Fraunces: a single family param.
+    // Both Fraunces: a single family.
     await openDesign(page);
     await pick(page, "Body font", "Fraunces");
     await expectOverrides(user.pageId, (o) => o.fontBody === "Fraunces");

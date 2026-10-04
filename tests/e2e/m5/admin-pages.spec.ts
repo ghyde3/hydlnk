@@ -20,6 +20,13 @@ const search = async (page: Page, q: string) => {
   await expect(page.getByRole("heading", { level: 1, name: "Pages" })).toBeVisible();
 };
 
+/**
+ * On a cold dev server the list can paint before its stylesheet applies (the full run's first
+ * attempt measured the unstyled table, thead included, at 477px). The phone layout hides the
+ * header row, so waiting for that is waiting for the styles; the layout checks then run on them.
+ */
+const stylesApplied = (page: Page) => expect(page.locator("thead").first()).toBeHidden();
+
 const rowOf = (page: Page, handle: string) => page.locator(`tr[data-handle="${handle}"]`);
 
 async function seedOwners() {
@@ -161,6 +168,7 @@ test.describe("M5-07 admin pages layout", () => {
     const owner = await signInAsUser(await browser.newContext(), "adm");
     await signInAsAdmin(context, "adm");
     await page.goto(url("app", "/admin/pages"));
+    await stylesApplied(page);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
 
@@ -170,6 +178,7 @@ test.describe("M5-07 admin pages layout", () => {
     await expect(page).toHaveURL(/q=/);
     const row = rowOf(page, owner.handle!);
     await expect(row).toBeVisible();
+    await stylesApplied(page);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
 
@@ -186,6 +195,35 @@ test.describe("M5-07 admin pages layout", () => {
     await expectNoHorizontalScroll(page);
     await row.getByRole("button", { name: /^Unsuspend/ }).click();
     await expect(row.locator("[data-state]")).toHaveText("Live", { timeout: 15_000 });
+  });
+
+  test("M5-07 at 390x844 a 30-character handle and a 200-character email wrap inside the card: no horizontal scroll", async ({
+    page,
+    context,
+    browser,
+  }, info) => {
+    test.skip(info.project.name !== "phone", "phone layout");
+    // 30 is the longest handle; the email is one unbroken local part, the worst case for wrapping.
+    const handle = `zq-${rand(8)}`.padEnd(30, "x");
+    const email = `zq-long-${"a".repeat(180)}-${rand()}@example.com`;
+    const owner = await signInAsUser(await browser.newContext(), "adlong");
+    const admin = adminClient();
+    await admin.auth.admin.updateUserById(owner.userId, { email });
+    const moved = await admin.from("pages").update({ handle }).eq("owner_id", owner.userId);
+    expect(moved.error).toBeNull();
+    await signInAsAdmin(context, "adlong2");
+    await page.goto(url("app", "/admin/pages"));
+    await stylesApplied(page);
+    await expectNoHorizontalScroll(page);
+    await page.goto(url("app", `/admin/pages?q=${encodeURIComponent(handle)}`));
+    await expect(rowOf(page, handle)).toBeVisible();
+    await stylesApplied(page);
+    await expectNoHorizontalScroll(page);
+    await expectTapTargets(page);
+    for (const path of ["/admin/traffic", "/admin/reports", "/admin/blocked-links"]) {
+      await page.goto(url("app", path));
+      await expectNoHorizontalScroll(page);
+    }
   });
 
   test("M5-07 at 1440x900 the list is a data table: header row on the page color, mono numbers", async ({
