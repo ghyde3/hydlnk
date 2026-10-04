@@ -7,14 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Block, PublishDoc } from "@/lib/document";
 import { PageRenderer } from "@/components/page/page-renderer";
 import { checkTap, resolvePreviewTap } from "@/components/editor/preview-taps";
-import {
-  DOCK_HEIGHT,
-  DOCK_STRIP_HEIGHT,
-  BACK_BAR_HEIGHT,
-  isTextField,
-  stackHeight,
-  toastLift,
-} from "@/components/editor/mini-preview-dock";
+import { isTextField } from "@/components/workspace/mini-preview/measures";
 import { blocks, fullPublished, noirTokens } from "./fixtures/page-document";
 
 // The editor's contracts module re-exports the Publish server action, which needs the server.
@@ -290,7 +283,7 @@ describe("M6-10 the inert-embeds mode of the renderer (the shared preview)", () 
 
   it("M6-10 the share page draws its page this way and the owner's own preview does not", () => {
     expect(
-      readFileSync(resolve(process.cwd(), "src/app/(share)/app/share/page.tsx"), "utf8"),
+      readFileSync(resolve(process.cwd(), "src/app/(share)/app/shared-draft/page.tsx"), "utf8"),
     ).toMatch(/<PageRenderer[^>]*\binertEmbeds\b/);
     expect(
       readFileSync(
@@ -301,18 +294,9 @@ describe("M6-10 the inert-embeds mode of the renderer (the shared preview)", () 
   });
 });
 
-describe("M6-01 the dock's measures", () => {
-  it("M6-01 the toasts are lifted by the dock, the strip or the bar, and not at all without them", () => {
-    expect(toastLift(0)).toBe(0);
-    expect(stackHeight("none", false)).toBe(0);
-    expect(stackHeight("dock", false)).toBe(DOCK_HEIGHT);
-    expect(stackHeight("dock", true)).toBe(DOCK_STRIP_HEIGHT);
-    expect(stackHeight("bar", false)).toBe(BACK_BAR_HEIGHT);
-    // The toast keeps its 11px over what is below it: 57 tab bar + 8 gap + height + 11 - 68.
-    expect(toastLift(DOCK_HEIGHT)).toBe(57 + 8 + 96 + 11 - 68);
-    expect(toastLift(DOCK_STRIP_HEIGHT)).toBeLessThan(toastLift(DOCK_HEIGHT));
-  });
-
+// M7-09: the 96px dock and its `stackHeight`/`toastLift` are gone (the mini phone replaced them;
+// its measures are in tests/unit/m7-mini-phone-measures.test.ts). `isTextField` moved with it.
+describe("M6-01 isTextField", () => {
   it("M6-01 isTextField: text inputs, textareas and selects, not buttons, checkboxes or files", () => {
     const make = (html: string) => {
       const host = document.createElement("div");
