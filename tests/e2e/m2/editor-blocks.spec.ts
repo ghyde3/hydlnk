@@ -76,7 +76,7 @@ function dividers(n: number) {
 // ---------------------------------------------------------------------------------------------
 
 test.describe("M2-10 add a block", () => {
-  test("M2-10 nine chips in order, 4px radius, #D9D6D0 border and a brass plus", async ({
+  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store and Map), 4px radius, #D9D6D0 border and a brass plus", async ({
     page,
     context,
   }) => {
@@ -84,11 +84,17 @@ test.describe("M2-10 add a block", () => {
     await openEditor(page);
     const card = page.getByRole("region", { name: "Add a block" });
     await expect(card.getByText("Goes to the end of the page")).toBeVisible();
-    // The nine chips; the card's secondary "Start from a template" button (M6-40) is not one.
+    // One chip per block type; the card's secondary "Start from a template" button (M6-40) is not one.
     const chips = card.locator("button:not([data-testid='start-from-template'])");
-    await expect(chips).toHaveText(
-      BLOCK_TYPES.map((t) => `+${BLOCK_TYPE_LABELS[t]}`).map((t) => t),
-    );
+    // The brass plus is an icon (M9-02), so a chip's text is its label.
+    await expect(chips).toHaveText(BLOCK_TYPES.map((t) => BLOCK_TYPE_LABELS[t]));
+    // M9-15: the fifteen chips wrap into at most three rows at 1440px.
+    if (page.viewportSize()!.width >= 1440) {
+      const tops = await chips.evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().top)),
+      );
+      expect(new Set(tops).size).toBeLessThanOrEqual(3);
+    }
     expect(BLOCK_TYPES.map((t) => BLOCK_TYPE_LABELS[t])).toEqual([
       "Link",
       "Card",
@@ -99,11 +105,17 @@ test.describe("M2-10 add a block", () => {
       "Embed",
       "Grid",
       "Divider",
+      "FAQ",
+      "Contact",
+      "Discount code",
+      "Book",
+      "App store",
+      "Map",
     ]);
     const first = chips.first();
     expect(await css(first, "border-top-left-radius")).toBe("4px");
     expect(await css(first, "border-top-color")).toBe("rgb(217, 214, 208)");
-    expect(await css(first.locator("span"), "color")).toBe("rgb(132, 104, 57)");
+    expect(await css(first.locator("svg"), "color")).toBe("rgb(132, 104, 57)");
   });
 
   test("M2-10 each chip appends one block with its defaults, a fresh id, and the draft saves", async ({
@@ -135,17 +147,19 @@ test.describe("M2-10 add a block", () => {
           };
         });
         expect(focused.inside, `${type}: focus is inside the new row`).toBe(true);
-        expect(["INPUT", "TEXTAREA", "SELECT"]).toContain(focused.tag);
+        // A text block's field is the rich text editor (M9-12): a contenteditable, or its placeholder
+        // for the moment before the editor module arrives.
+        expect(type === "text" ? ["DIV"] : ["INPUT", "TEXTAREA", "SELECT"]).toContain(focused.tag);
       }
     }
     await expect(saveIndicator(page)).toHaveText("Saved");
-    const draft = await expectDraft(user.pageId, (d) => d.blocks.length === 9);
+    const draft = await expectDraft(user.pageId, (d) => d.blocks.length === BLOCK_TYPES.length);
     expect(draftDocSchema.safeParse(draft).success).toBe(true);
     const byType: Record<string, Record<string, unknown>> = Object.fromEntries(
       draft.blocks.map((b) => [b.type, b]),
     );
     expect(draft.blocks.map((b) => b.type)).toEqual([...BLOCK_TYPES]);
-    expect(new Set(draft.blocks.map((b) => b.id)).size).toBe(9);
+    expect(new Set(draft.blocks.map((b) => b.id)).size).toBe(BLOCK_TYPES.length);
     expect(byType.link).toMatchObject({ label: "New link", url: "", visible: true });
     expect(byType.card).toMatchObject({ title: "New card", caption: "", url: "", image: null });
     expect(byType.header).toMatchObject({ text: "New section" });
@@ -155,6 +169,21 @@ test.describe("M2-10 add a block", () => {
     expect(byType.embed).toMatchObject({ url: "", caption: "Video or music" });
     expect(byType.grid!.cells).toHaveLength(2);
     expect(byType.divider).toMatchObject({ type: "divider", visible: true });
+    // M9-16, M9-17, M9-19: a FAQ starts with one empty question, a contact and a discount code empty.
+    expect(byType.faq).toMatchObject({ items: [{ question: "", answer: "" }] });
+    expect(byType.contact).toMatchObject({ name: "", phone: "", email: "", hours: "" });
+    expect(byType.discount).toMatchObject({ code: "", description: "", url: "" });
+    // M9-20, M9-21, M9-22: a book starts with one empty Amazon row, an app block with one empty App
+    // Store row, a map with two fresh ids that are neither equal nor the block's.
+    expect(byType.book).toMatchObject({
+      title: "",
+      author: "",
+      cover: null,
+      links: [{ store: "amazon", url: "" }],
+    });
+    expect(byType.apps).toMatchObject({ links: [{ store: "appstore", url: "" }] });
+    expect(byType.map).toMatchObject({ name: "", address: "" });
+    expect(new Set([byType.map!.id, byType.map!.googleId, byType.map!.appleId]).size).toBe(3);
 
     // The live preview follows: the new link shows its label.
     await openPreviewTab(page, info);

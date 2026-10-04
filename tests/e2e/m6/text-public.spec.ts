@@ -361,7 +361,7 @@ test.describe("M6-28 parity and the status chip", () => {
     await selectText(page, TEXT_ID, 26, 30);
     await toolbarOf(page, TEXT_ID).getByRole("button", { name: "Bold" }).click();
     await expect(statusChip(page)).toHaveText("Unpublished changes");
-    await expect(panel.locator("textarea")).toHaveValue(text);
+    await expect(panel.locator('[data-field="text"][contenteditable="true"]')).toHaveText(text);
     await expect(page.locator(`li[data-block-id="${TEXT_ID}"]`)).toContainText(text);
   });
 });

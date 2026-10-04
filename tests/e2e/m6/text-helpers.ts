@@ -73,22 +73,76 @@ export function longFixture() {
 
 export const toolbarOf = (page: Page, blockId: string): Locator =>
   page.locator(`#block-panel-${blockId}`).getByRole("toolbar", { name: "Text formatting" });
+/**
+ * The text field of a block: since M9-12 the Tiptap editor's contenteditable (it was a textarea in
+ * M6-30). The name is kept so the older specs still read as they did.
+ */
 export const textareaOf = (page: Page, blockId: string): Locator =>
-  page.locator(`#block-panel-${blockId} textarea[data-field="text"]`);
+  page.locator(`#block-panel-${blockId} [data-field="text"][contenteditable="true"]`);
 
-/** Selects `[start, end)` (UTF-16 indices; the samples are ASCII) in the block's textarea, focused. */
+/**
+ * Selects `[start, end)` (code points of the block's text; each paragraph break counts one) in the
+ * block's editor, focused, the way a drag or a long press leaves the selection.
+ */
 export async function selectText(page: Page, blockId: string, start: number, end = start) {
-  const area = textareaOf(page, blockId);
-  await area.evaluate(
-    (el, range) => {
-      const textarea = el as HTMLTextAreaElement;
-      textarea.focus();
-      textarea.setSelectionRange(range.start, range.end);
+  const editor = textareaOf(page, blockId);
+  await editor.focus();
+  await editor.evaluate(
+    (root, range) => {
+      const paragraphs = Array.from(root.querySelectorAll(":scope > p"));
+      const locate = (offset: number): [Node, number] => {
+        let remaining = offset;
+        for (const paragraph of paragraphs) {
+          const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+          const nodes: Text[] = [];
+          for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n as Text);
+          const length = nodes.reduce((sum, node) => sum + Array.from(node.data).length, 0);
+          if (remaining <= length) {
+            let left = remaining;
+            for (const node of nodes) {
+              const size = Array.from(node.data).length;
+              if (left <= size) {
+                return [node, Array.from(node.data).slice(0, left).join("").length];
+              }
+              left -= size;
+            }
+            return [paragraph, 0];
+          }
+          remaining -= length + 1;
+        }
+        const last = paragraphs[paragraphs.length - 1]!;
+        return [last, last.childNodes.length];
+      };
+      const [startNode, startOffset] = locate(range.start);
+      const [endNode, endOffset] = locate(range.end);
+      window.getSelection()!.setBaseAndExtent(startNode, startOffset, endNode, endOffset);
     },
     { start, end },
   );
-  // The textarea reports a selection change after the event loop turns.
-  await page.waitForTimeout(60);
+  // ProseMirror reads the selection on `selectionchange`, a little after it was set; the toolbar and
+  // the shortcuts act on ITS selection, so wait until it is the one that was set (a loaded machine
+  // can take longer than any fixed pause).
+  await editor.evaluate(async (root) => {
+    const view = (
+      root as unknown as {
+        editor?: {
+          state: { selection: { anchor: number; head: number } };
+          view: { posAtDOM: (node: Node, offset: number) => number };
+        };
+      }
+    ).editor;
+    if (!view) return;
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const dom = window.getSelection()!;
+      if (dom.anchorNode && dom.focusNode) {
+        const anchor = view.view.posAtDOM(dom.anchorNode, dom.anchorOffset);
+        const head = view.view.posAtDOM(dom.focusNode, dom.focusOffset);
+        if (view.state.selection.anchor === anchor && view.state.selection.head === head) return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  });
 }
 
 /** The block as it is stored: the draft's block with this id. */

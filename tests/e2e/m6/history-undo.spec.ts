@@ -286,7 +286,11 @@ test.describe("M6-07 shortcuts, steps and saves", () => {
 
     // An edit inside an open row: Undo keeps the row open.
     const row = await openRow(page, bid(2));
-    await row.locator("textarea, input[type=text]").first().fill("Edited text");
+    // A text block's field is the editor (a contenteditable) since M9-12: while it has the focus its
+    // edits are one session, and the session becomes one step when the focus leaves.
+    const field = row.locator('[data-field="text"][contenteditable="true"]');
+    await field.fill("Edited text");
+    await field.blur();
     await expect(undoButton(page)).toBeEnabled();
     await undoButton(page).click();
     await expect(undoButton(page))
@@ -480,7 +484,8 @@ test.describe("M6-07 every change is undoable", () => {
     owners.push(user.id);
     await openEditor(page);
     const card = page.getByRole("region", { name: "Profile", exact: true });
-    const fileInput = card.locator("input[type=file]");
+    // The Profile card holds two uploads since M9-24 (the photo and the logo): the photo's is in its own row.
+    const fileInput = card.getByTestId("profile-photo-row").locator("input[type=file]");
     const jpegA = await makeJpeg({ width: 400, height: 400 });
     const jpegB = await makeJpeg({ width: 420, height: 420, color: [30, 120, 90] });
 

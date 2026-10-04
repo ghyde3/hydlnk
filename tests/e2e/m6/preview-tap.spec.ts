@@ -27,7 +27,9 @@ import {
 
 test.afterAll(cleanupUsers);
 
-const FIRST_FIELD = "input:not([type=file]):not([type=hidden]), textarea, select";
+// A text block's first field is the rich text editor, a contenteditable (M9-12), and it comes first in the panel.
+const FIRST_FIELD =
+  'input:not([type=file]):not([type=hidden]), textarea, select, [data-field="text"][contenteditable="true"]';
 /** A profile with a bio: without one the page draws no bio to tap. */
 const WITH_BIO = { profile: { name: "Tap Test", bio: "A short bio", photo: null } } as never;
 const bioInput = (page: Page) => page.getByLabel("Bio", { exact: true });

@@ -82,13 +82,15 @@ const waitSaved = async (page: Page) =>
   expect(page.locator('[data-save-status="saved"]')).toBeVisible({ timeout: 20_000 });
 
 /**
- * Selects characters `start` to `end` of a textarea: the caret is put at `start`, then Shift+Right
- * extends the selection key by key, so the browser sends every selection and key event a person
- * with a keyboard would (the toolbar listens to them).
+ * Selects characters `start` to `end` of a text block's editor: the caret goes to the start of the
+ * text, then Right moves it to `start` and Shift+Right extends the selection key by key, so the
+ * browser sends every selection and key event a person with a keyboard would (the toolbar listens
+ * to them). The editor is a contenteditable since M9-12 (it was a textarea).
  */
-async function select(page: Page, textarea: Locator, start: number, end: number): Promise<void> {
-  await textarea.focus();
-  await textarea.evaluate((el, at) => (el as HTMLTextAreaElement).setSelectionRange(at, at), start);
+async function select(page: Page, editor: Locator, start: number, end: number): Promise<void> {
+  await editor.focus();
+  await page.keyboard.press("ControlOrMeta+ArrowUp");
+  for (let i = 0; i < start; i += 1) await page.keyboard.press("ArrowRight");
   for (let i = start; i < end; i += 1) await page.keyboard.press("Shift+ArrowRight");
 }
 
@@ -118,7 +120,9 @@ async function buildPage(page: Page, user: SignedInUser): Promise<Built> {
     await page.getByLabel("Display name", { exact: true }).fill(built.profileName);
     await page.getByLabel("Bio", { exact: true }).fill(built.bio);
     const card = page.getByTestId("profile-card");
+    // The Profile card holds two uploads since M9-24 (the photo and the logo): the photo's is in its own row.
     await card
+      .getByTestId("profile-photo-row")
       .locator('input[type="file"]')
       .setInputFiles(png("photo.png", await splitImage(800, 800, "png")));
     const dialog = page.getByRole("dialog", { name: "Position your photo" });

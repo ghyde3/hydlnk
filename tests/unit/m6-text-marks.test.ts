@@ -389,7 +389,7 @@ describe("M6-28 the Publish gate is strict about each mark", () => {
   });
 
   it("another type is refused, extra keys are stripped", () => {
-    const refused = errorsOf(text("Hello", [{ type: "underline", start: 0, end: 3 }]));
+    const refused = errorsOf(text("Hello", [{ type: "code", start: 0, end: 3 }]));
     expect(refused).toHaveLength(1);
     expect(refused[0]).toMatchObject({ blockId: TEXT_ID, field: "marks" });
     const parsed = draftDocSchema.parse(
@@ -492,7 +492,9 @@ describe("M6-28 no raw HTML anywhere: structured marks only", () => {
     };
     const names = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
     const banned =
-      /^(marked|markdown-it|remark.*|rehype.*|unified|mdast.*|micromark.*|showdown|snarkdown|commonmark|html-react-parser|react-markdown|sanitize-html|dompurify|isomorphic-dompurify|parse5|htmlparser2|cheerio|turndown|slate|lexical|@tiptap\/.*|prosemirror.*|quill|draft-js)$/;
+      /^(marked|markdown-it|remark.*|rehype.*|unified|mdast.*|micromark.*|showdown|snarkdown|commonmark|html-react-parser|react-markdown|sanitize-html|dompurify|isomorphic-dompurify|parse5|htmlparser2|cheerio|turndown|slate|lexical|prosemirror.*|quill|draft-js)$/;
+    // M9-12: the text editor is the one approved exception, `@tiptap/*` (it converts at the edge and
+    // never stores or renders HTML: tests/unit/m9-text-boundary.test.ts holds that line).
     expect(names.filter((name) => banned.test(name))).toEqual([]);
   });
 

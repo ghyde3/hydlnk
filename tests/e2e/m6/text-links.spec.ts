@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
+import { expireOwnerPages } from "../fixtures/expire";
 import { cleanupUsers, makeUser, rand } from "../fixtures/data";
 import { restAs } from "../fixtures/http";
 import { DAY_MS, dayAt, makeOwner, seed, signInOwner } from "../m4/analytics-dash-helpers";
@@ -123,9 +124,11 @@ test.describe("M6-29 the click redirect for a link in text", () => {
     expect((await clickRows(pageId)).map((row) => row.block_id)).toEqual([L1]);
   });
 
-  test("M6-29 a link mark whose stored URL has another scheme is 404, and so are the open-redirect tricks", async () => {
+  test("M6-29 a link mark whose stored URL has another scheme is 404, and so are the open-redirect tricks", async ({
+    browser,
+  }) => {
     const block = textBlock("Book a session now", [link(5, 14, L1, "https://example.com/book")]);
-    const { handle, pageId, form } = await liveWith("tlc3", [block]);
+    const { user, handle, pageId, form } = await liveWith("tlc3", [block]);
     // The open-redirect parameters and a different Host never change Location.
     const tricky = await rawBuffer(
       host(handle),
@@ -158,7 +161,9 @@ test.describe("M6-29 the click redirect for a link in text", () => {
         .update({ published: tampered })
         .eq("id", pageId);
       expect(error).toBeNull();
-      // A tenant page is cached after its first render; a click always reads the current document.
+      // A production build reads the click target from the cache under the page's tag; this write
+      // went straight to the database, so expire the tag the way an admin action does.
+      await expireOwnerPages(browser, user.id);
       const res = await rawBuffer(host(handle), `/r/${pageId}/${L1}`);
       expect(res.status, hostile).toBe(404);
       expect(res.headers.location, hostile).toBeUndefined();

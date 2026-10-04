@@ -165,7 +165,8 @@ test.describe("M2-16 header, text and divider panels", () => {
 
     const text = await addBlock(page, "text");
     await expect(text.row).toContainText("New text block");
-    await expect(text.panel.getByRole("textbox", { name: "Text", exact: true })).toHaveValue(
+    // M9-12: the text field is the Tiptap editor (a contenteditable), so it has text, not a value.
+    await expect(text.panel.getByRole("textbox", { name: "Text", exact: true })).toHaveText(
       "New text block",
     );
     await expect(text.panel).toContainText("14 / 600");
@@ -182,18 +183,21 @@ test.describe("M2-16 header, text and divider panels", () => {
     await openEditor(page);
     const { panel } = await addBlock(page, "divider");
     // M6-05 puts 'Duplicate block' in every panel, the divider's included (it was three buttons before).
+    // The first, with no text, is the line color's swatch: a button since M9-07 (it opens the picker).
     await expect(panel.getByRole("button")).toHaveText([
+      "",
       "Move up",
       "Move down",
       "Duplicate block",
       "Delete block",
     ]);
-    // M6-46: the divider's only fields are its own style group's, the line's color (a swatch and a
-    // hex field); it has no text, address or select of its own.
-    await expect(panel.locator("input, textarea, select")).toHaveCount(2);
+    await expect(panel.getByRole("button", { name: "Color swatch" })).toBeVisible();
+    // M6-46: the divider's only field is its own style group's, the line's color (the hex field next
+    // to the swatch); it has no text, address or select of its own.
+    await expect(panel.locator("input, textarea, select")).toHaveCount(1);
     await expect(
       panel.getByTestId("override-controls").locator("input, textarea, select"),
-    ).toHaveCount(2);
+    ).toHaveCount(1);
     await expect(panel.getByLabel("Line color", { exact: true })).toBeVisible();
   });
 
@@ -204,9 +208,18 @@ test.describe("M2-16 header, text and divider panels", () => {
     const area = panel.getByRole("textbox", { name: "Text", exact: true });
     await area.fill("line one\nline two");
     await expect(panel).toContainText("17 / 600");
-    await area.fill("x".repeat(650));
+    // M9-12: a long paste over the whole text (the editor cuts it to the 600 that fit).
+    await area.click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await area.evaluate((el) => {
+      const transfer = new DataTransfer();
+      transfer.setData("text/plain", "x".repeat(650));
+      el.dispatchEvent(
+        new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
+      );
+    });
     await expect(panel).toContainText("600 / 600");
-    expect((await area.inputValue()).length).toBe(600);
+    expect(Array.from(await area.innerText())).toHaveLength(600);
     await expectDraft(user.pageId, (d) =>
       d.blocks.some((b) => b.id === id && b.type === "text" && b.text.length === 600),
     );
