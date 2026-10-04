@@ -12,8 +12,10 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 const EDITOR_DIRS = [
+  "src/app/(editor)/app/(screens)/(workspace)",
   "src/app/(editor)/app/(screens)/editor",
   "src/components/editor",
+  "src/components/workspace",
   "src/lib/editor",
 ];
 
@@ -42,7 +44,9 @@ const FORBIDDEN: [RegExp, string][] = [
 describe("M2-03: the editor never uses the secret-key client", () => {
   it("finds the editor's modules", () => {
     const names = files.map((file) => relative(ROOT, file));
-    expect(names).toContain("src/app/(editor)/app/(screens)/editor/page.tsx");
+    expect(names).toContain("src/app/(editor)/app/(screens)/(workspace)/layout.tsx");
+    expect(names).toContain("src/app/(editor)/app/(screens)/(workspace)/editor/page.tsx");
+    expect(names).toContain("src/components/workspace/workspace-provider.tsx");
     expect(names).toContain("src/lib/editor/page-data.ts");
     expect(names).toContain("src/components/editor/editor-screen.tsx");
   });
@@ -83,7 +87,13 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     };
     const seen = new Set<string>();
     const boundaries = new Set<string>();
-    const queue = [resolve(ROOT, "src/app/(editor)/app/(screens)/editor/page.tsx")];
+    const workspace = "src/app/(editor)/app/(screens)/(workspace)";
+    const queue = [
+      resolve(ROOT, `${workspace}/layout.tsx`),
+      resolve(ROOT, `${workspace}/editor/page.tsx`),
+      resolve(ROOT, `${workspace}/design/page.tsx`),
+      resolve(ROOT, `${workspace}/share/page.tsx`),
+    ];
     while (queue.length > 0) {
       const file = queue.pop()!;
       if (seen.has(file)) continue;
@@ -127,7 +137,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     expect(loader).toContain("@/lib/supabase/server");
     expect(loader).toContain("createServerSupabase");
     const page = readFileSync(
-      resolve(ROOT, "src/app/(editor)/app/(screens)/editor/page.tsx"),
+      resolve(ROOT, "src/app/(editor)/app/(screens)/(workspace)/layout.tsx"),
       "utf8",
     );
     expect(page).toContain("getAppContext");

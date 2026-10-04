@@ -17,7 +17,7 @@ import { shareRateLimit, type ShareLimitResult } from "./share-limit";
  *
  *   1. rate limit by client IP (`share:{ip}`, 60 a minute). Over the limit: 429 with Retry-After and
  *      the plain page, before anything else is looked at;
- *   2. rewrite to the internal route `destination` (`/app/share`), with the first path segment in the
+ *   2. rewrite to the internal route `destination` (`/app/shared-draft`), with the first path segment in the
  *      `x-hl-share-token` request header (a client-sent header of that name is replaced, never read);
  *   3. set the share headers on the response (never stored, noindex, no Referer, the share CSP).
  *

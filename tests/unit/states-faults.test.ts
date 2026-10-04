@@ -92,9 +92,8 @@ describe("only the screens that own a failure state call the switch", () => {
       .sort();
     // The version history screen (M6-50) owns a failure state too: "We couldn’t load your versions."
     expect(importers).toEqual([
-      "app/(editor)/app/(screens)/design/page.tsx",
+      "app/(editor)/app/(screens)/(workspace)/layout.tsx",
       "app/(editor)/app/(screens)/editor/history/page.tsx",
-      "app/(editor)/app/(screens)/editor/page.tsx",
       "app/(editor)/app/(screens)/settings/page.tsx",
     ]);
   });

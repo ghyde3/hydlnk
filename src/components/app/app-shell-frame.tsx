@@ -8,7 +8,7 @@ import { AppLogo } from "./app-logo";
 import { SidebarNav, TabBar } from "./app-nav";
 import { PageSwitcher, type SwitcherPage } from "./page-switcher";
 import { PlanCard } from "./plan-card";
-import { UserBlock } from "./user-block";
+import { AccountMenu } from "./account-menu";
 
 /**
  * The signed-in app chrome (DESIGN.md -> Layout and responsive rules), shared by every screen:
@@ -59,7 +59,7 @@ export async function AppShellFrame({
         <div className="flex-1" />
         <PlanCard plan={plan} pageCount={pages.length} pageLimit={pageLimit} />
         {admin ? <AdminLink variant="sidebar" /> : null}
-        <UserBlock email={user.email} />
+        <AccountMenu email={user.email} />
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col pb-[calc(84px+env(safe-area-inset-bottom))] hl:pb-0">

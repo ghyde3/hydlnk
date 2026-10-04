@@ -9,7 +9,7 @@ import {
   type History,
 } from "@/lib/editor/history";
 import type { DraftDoc } from "@/lib/document";
-import { mediaOrigin, mediaUrl } from "@/lib/media/url";
+import { mediaOrigin, storageUrl } from "@/lib/media/url";
 
 export type HistoryDirection = "undo" | "redo";
 
@@ -128,7 +128,7 @@ export function useUndoRedo(args: {
         try {
           const verdict = await checkImagesExist(missing, {
             fetch: window.fetch.bind(window),
-            urlOf: mediaUrl,
+            urlOf: storageUrl,
           });
           if (verdict === "gone") {
             setRefusal({

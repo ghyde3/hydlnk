@@ -11,7 +11,11 @@ import {
   siteRewritePath,
   tenantRewritePath,
 } from "@/lib/routing/paths";
-import { isSharePath } from "@/lib/previews/share-headers";
+import {
+  SHARE_INTERNAL_PATH,
+  isShareInternalPath,
+  isSharePath,
+} from "@/lib/previews/share-headers";
 import { shareProxy } from "@/lib/previews/share-proxy";
 import { rewriteWithSession } from "@/lib/routing/session";
 import { setTenantHeaders } from "@/lib/routing/tenant-headers";
@@ -80,7 +84,15 @@ export async function proxy(request: NextRequest) {
     case "app":
       // The private share link (M6-10) is the one app-host path that never touches the session: the
       // proxy rate limits it, sets its headers and only rewrites (see src/lib/previews/share-proxy.ts).
-      if (isSharePath(pathname)) return shareProxy(request, rewriteTo(appRewritePath("/share")));
+      if (isSharePath(pathname)) {
+        return shareProxy(request, rewriteTo(appRewritePath(SHARE_INTERNAL_PATH)));
+      }
+      // That internal route is a rewrite target only. Asked for directly it would skip the rate
+      // limit, the share headers and the nonce policy above and read a token from a request header
+      // the client chose, so it is the app's plain 404 like any other unknown path.
+      if (isShareInternalPath(pathname)) {
+        return rewriteWithSession(request, rewriteTo(appRewritePath(NOT_FOUND_PATH)));
+      }
       return rewriteWithSession(request, rewriteTo(appRewritePath(pathname)));
 
     case "tenant": {
