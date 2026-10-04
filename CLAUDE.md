@@ -16,6 +16,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 ## Repo map
 - `src/proxy.ts`, `src/lib/routing/`: host routing (marketing, `app.*`, `{handle}.*`, custom domains).
 - `src/app/`: route groups `(marketing)`, `(editor)/app/` (app host only), `(share)/app/share` (the private draft link on the app host, its own root layout), `(tenant)/t/[handle]` and `(tenant)/sites/[pageId]` (tenant pages by handle and by custom domain). `r/`, `api/` (click redirect, beacon, Stripe webhook) and `auth/callback` arrive in later milestones.
+- `src/lib/tenant-render/`: the live page as finished HTML (route handlers under `src/app/(tenant)` call it; no React in the visitor's browser), plus the placeholder, 404 and 500 panels. `src/lib/tenant-assets/`: the one tenant script (`script/tenant.js`, built by `pnpm tenant-assets` into hashed `public/_t/p.*.js`), the inline CSS split, and the self-hosted theme fonts (`pnpm tenant-fonts` vendors them once, needs network).
 - `src/lib/theme/`: tenant token types, resolver, CSS variables. `src/lib/document/`: the page document (Zod draft and publish schemas, limits, URL and embed rules, block defaults, `toPublishForm`). `src/lib/schemas/`: the handle rule.
 - `src/lib/supabase/` (server, browser, admin clients, generated types), `src/lib/env/` (Zod-validated server and client env).
 - `supabase/`: `migrations/`, `seed.sql` (local demo tenant `mara`), `tests/database/` (pgTAP), `config.toml`.

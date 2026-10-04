@@ -268,11 +268,18 @@ jobs:
           trap 'kill "$prod_pid" 2>/dev/null || true' EXIT
           start_prod tmp/start-3100.log
           HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts tests/e2e/m4/billing-badge.spec.ts tests/e2e/m5/suspend-cache.spec.ts
+          # Wave J (M8-04, M8-09, M8-10, M8-11): the finished page's cache, the first-visit budget, the
+          # script and font files' headers, and the custom-host lookup cache, all of which exist only in a production build.
+          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m8/render-cache.spec.ts tests/e2e/m8/assets-budget.spec.ts tests/e2e/m8/assets-served.spec.ts tests/e2e/m8/assets-fonts-live.spec.ts tests/e2e/m8/levers-domain-cache.spec.ts
           # PAID_PLANS_OPEN is read when the server starts: stop this one, start the same build with the
           # plans closed and run its spec.
           stop_prod
           start_prod tmp/start-3100-closed.log PAID_PLANS_OPEN=false
           HL_PROD_PORT=3100 HL_PLANS_CLOSED=1 pnpm exec playwright test tests/e2e/m4/billing-plans-closed.spec.ts
+          # M8-10: without the test flag the proxy never sends x-hl-domain-cache (start_prod's last setting wins).
+          stop_prod
+          start_prod tmp/start-3100-noflag.log HYDLNK_QUERY_COUNTER=0
+          HL_PROD_PORT=3100 HL_COUNTER_OFF=1 pnpm exec playwright test tests/e2e/m8/levers-domain-cache.spec.ts --project=desktop
 
       # The screens script needs a running dev server; Playwright stopped its own after the tests.
       # Runs only when the e2e tests passed. Fills the "screens" artifact below.
@@ -317,7 +324,7 @@ jobs:
         run: |
           ps -eo pid,ppid,etime,args | grep -E 'next|pnpm' | grep -v grep || true
           ss -ltnp 2>/dev/null | grep -E ':(3000|3100)\b' || true
-          for f in tmp/start-3100.log tmp/start-3100-closed.log; do
+          for f in tmp/start-3100.log tmp/start-3100-closed.log tmp/start-3100-noflag.log; do
             if [ -f "$f" ]; then echo "::group::$f (last 40 lines)"; tail -40 "$f"; echo "::endgroup::"; fi
           done
 
