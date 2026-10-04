@@ -4,6 +4,7 @@ import { clientEnv } from "@/lib/env/client";
 import { accountHasPage, claimHandle } from "@/lib/handles/claim";
 import { PENDING_HANDLE_COOKIE } from "@/lib/handles/pending";
 import { clearPendingMetadata, readPendingHandle } from "@/lib/handles/pending-server";
+import { oauthResumeAvailable } from "@/lib/oauth/resume";
 import { appOrigin } from "@/lib/routing/urls";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,10 @@ export async function GET() {
     }
     await clearPendingMetadata(user.id);
   }
+
+  // Wave L (M10-12): a new account that signed up through an app's connection goes back to its
+  // consent screen once it has its page, when the request is still inside its ten minutes.
+  if (target === "/editor" && (await oauthResumeAvailable(user.id))) target = "/oauth/authorize";
 
   const response = redirectTo(target);
   response.cookies.delete(PENDING_HANDLE_COOKIE);

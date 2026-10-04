@@ -144,6 +144,10 @@ describe("only the screens that own a failure state call the switch", () => {
       "app/(editor)/app/(screens)/(workspace)/layout.tsx",
       "app/(editor)/app/(screens)/editor/history/page.tsx",
       "app/(editor)/app/(screens)/settings/page.tsx",
+      // Wave L: the Connected apps card has a failure state (M10-18), and the account deletion has a
+      // first step that can be made to fail (M10-19).
+      "components/settings/connected-apps-card.tsx",
+      "lib/pages/delete-account.ts",
     ]);
   });
 

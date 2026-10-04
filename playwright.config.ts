@@ -48,5 +48,14 @@ export default defineConfig({
       reuseExistingServer: true,
       timeout: 30_000,
     },
+    {
+      // Wave L (M10-07): a client's website for the one client-metadata pass of the OAuth specs. The
+      // server fetches it only while the test hooks are on; with them off the specs skip. Fixed port.
+      command:
+        "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON tests/e2e/fixtures/cimd-stub-server.ts 12113",
+      url: "http://127.0.0.1:12113/__stub/health",
+      reuseExistingServer: true,
+      timeout: 30_000,
+    },
   ],
 });

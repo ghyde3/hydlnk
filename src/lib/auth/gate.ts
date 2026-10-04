@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { resumeOauthRequest } from "@/lib/oauth/resume";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getSessionUser, requireUser, type SessionUser } from "./session";
 
@@ -66,5 +67,8 @@ export async function redirectIfSignedIn(): Promise<void> {
   const user = await getSessionUser();
   if (!user) return;
   const pages = await listOwnPages(user.id);
+  // Wave L (M10-12): a person who came here to sign in for an app's connection goes back to its
+  // consent screen. An account with no page claims one first, and the claim resumes the request.
+  if (pages.length > 0) await resumeOauthRequest(user.id);
   redirect(pages.length > 0 ? "/editor" : "/claim");
 }

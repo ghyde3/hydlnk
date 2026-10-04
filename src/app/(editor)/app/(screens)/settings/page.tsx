@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DeleteAccountDialog } from "@/components/app/delete-account-dialog";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
 import { CheckoutReturnNotice } from "@/components/billing/checkout-return";
+import { ConnectedAppsCard } from "@/components/settings/connected-apps-card";
 import { PagesCard } from "@/components/settings/pages-card";
 import { PlanBand } from "@/components/settings/plan-band";
 import { PlanCards } from "@/components/settings/plan-cards";
@@ -29,8 +30,8 @@ const FIELD_VALUE =
  * Settings & billing (Billing.dc.html). Top to bottom: the "Current plan" band (the account's plan,
  * its price and renewal, the portal buttons), Usage (pages, custom domains, uploads, saved themes
  * against the plan's limits), Plans (Free, Pro, Studio and what each button does), Pages (delete a
- * page) and Account (Milestone 1: the session user's email, the current page's handle, Sign out and
- * Delete account).
+ * page), Connected apps (apps the person let manage their pages, Wave L) and Account (Milestone 1: the
+ * session user's email, the current page's handle, Sign out and Delete account).
  *
  * The gate runs first (`getAppContext`): a signed-out request redirects to sign-in before anything
  * below is read, so no plan data is rendered for it. Everything shown is the signed-in user's own:
@@ -74,6 +75,8 @@ export default async function SettingsScreen({ searchParams }: PageProps<"/app/s
             published: page.published_at !== null,
           }))}
         />
+        {/* Wave L (M10-18): apps the person let manage their pages, between Pages and Account. */}
+        <ConnectedAppsCard userId={user.id} />
 
         <Card className="flex flex-col gap-3.5">
           <h2 className="text-sm font-semibold">Account</h2>

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth/session";
 import { EMAIL_ERROR, emailSchema } from "@/lib/auth/email";
+import { resumeOauthRequest } from "@/lib/oauth/resume";
 import { checkHandle } from "./availability";
 import { claimHandle } from "./claim";
 import { normalizeHandle } from "./rules";
@@ -103,11 +104,14 @@ export async function claimHandleAction(
   }
   if (result.ok) {
     (await cookies()).delete(PENDING_HANDLE_COOKIE);
+    // Wave L (M10-12): a new account that signed up through an app's connection resumes it now.
+    await resumeOauthRequest(user.id);
     redirect("/editor");
   }
 
   if (result.error === "page_limit") {
     // The account already has its page (a double submit): nothing left to claim.
+    await resumeOauthRequest(user.id);
     redirect("/editor");
   }
   if (result.error === "suspended") return { kind: "error", message: SUSPENDED_MESSAGE };

@@ -11,6 +11,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 vi.mock("server-only", () => ({}));
+// M10-19: disconnecting the connected apps is the first step of a deletion; its own tests are in
+// m10-oauth-delete-account.test.ts, here it is a no-op.
+vi.mock("@/lib/oauth/grants", () => ({ revokeAllGrants: async () => 0 }));
 vi.mock("next/cache", () => ({
   updateTag: vi.fn(),
   revalidateTag: vi.fn(),
