@@ -3,10 +3,10 @@
 import type { ThemeLibrary } from "./use-theme-library";
 
 /**
- * "Save as theme" (M3-21), the Design header's secondary button next to Done: 44px tall, a 6px
- * radius, a 1px border. It saves the page's resolved tokens as a new theme through the library;
- * a second press while one save is in flight does nothing. The confirmation (or the Free limit
- * message) shows in the saved-themes card.
+ * "Save as theme" (M3-21), a secondary button at the right of the "Your themes" heading in the
+ * Themes card (M7-06): 44px tall, a 6px radius, a 1px border. It saves the page's resolved tokens as
+ * a new theme through the library; a second press while one save is in flight does nothing. The
+ * confirmation (or the Free limit message) shows in the Themes card, above its rows.
  */
 export function SaveAsThemeButton({
   library,

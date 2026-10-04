@@ -5,15 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { emptyDraft, type DraftDoc } from "@/lib/document";
 import { SYSTEM_DEFAULT_TOKENS, resolveTokens, type TokenSet } from "@/lib/theme";
 import type { ThemeRow } from "@/lib/themes";
-import {
-  SaveAsThemeButton,
-  SavedThemesCard,
-  THEME_MESSAGE_MS,
-  useThemeLibrary,
-} from "@/components/themes";
+import { SavedThemesCard, THEME_MESSAGE_MS, useThemeLibrary } from "@/components/themes";
 
 /**
- * M3-19 .. M3-24 at the component level: the saved-themes card and its hook against an in-memory
+ * M3-19 .. M3-24 at the component level (as laid out by M7-06: two rows, a menu per card, Rename in a
+ * dialog): the Themes card and its hook against an in-memory
  * stand-in for the user's Supabase session. The browser flows (RLS, the real limit trigger, two
  * pages, live pages) are in tests/e2e/m3/themes-ui.spec.ts and themes-api.spec.ts.
  */
@@ -140,7 +136,6 @@ function mount(opts: { saved?: Row[]; theme?: DraftDoc["theme"]; plan?: "free" |
     });
     return createElement("div", null, [
       createElement("p", { key: "s", "data-status": "" }, lib.statusLabel),
-      createElement(SaveAsThemeButton, { key: "b", library: lib }),
       createElement(SavedThemesCard, { key: "c", library: lib }),
     ]);
   }
@@ -178,6 +173,14 @@ const buttonByText = (text: string) =>
     (button) => button.textContent?.trim() === text,
   );
 const click = (el: Element | undefined | null) => act(() => (el as HTMLElement).click());
+/** M7-06: a card's "More" button opens a menu (drawn in a portal); choose one of its items. */
+const choose = (themeName: string, item: string) => {
+  click(host.querySelector(`button[aria-label="More for ${themeName}"]`));
+  const entry = Array.from(
+    document.body.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]'),
+  ).find((el) => el.textContent === item);
+  click(entry);
+};
 const settle = async () => {
   await act(async () => {
     await Promise.resolve();
@@ -208,19 +211,24 @@ const editOverrides = (overrides: DraftDoc["theme"]["overrides"]) =>
   act(() => setDocument((doc) => ({ ...doc, theme: { ...doc.theme, overrides } })));
 
 describe("M3-19 the grid and its states", () => {
-  it("lists every system theme then the saved ones; the applied card is pressed and tagged Applied", () => {
+  it("lists the saved themes, then every system theme; the applied card is pressed and tagged Applied", () => {
     mount({ saved: [savedRow("saved-a", "Night shift")] });
     expect(cards().map((c) => c.querySelector("[data-theme-name]")?.textContent)).toEqual([
+      "Night shift",
       "Noir",
       "Ivory",
-      "Night shift",
     ]);
     expect(cardNamed("Noir").getAttribute("aria-pressed")).toBe("true");
     expect(tagOf("Noir")).toBe("Applied");
     expect(cardNamed("Ivory").getAttribute("aria-pressed")).toBe("false");
     expect(tagOf("Ivory")).toBeNull();
     expect(host.querySelector("[data-status]")!.textContent).toBe("Theme · Noir");
-    expect(host.textContent).toContain("Applying one replaces your page’s own style changes");
+    // The old hint is gone (M7-06): the two rows are named with their counts instead.
+    expect(host.textContent).not.toContain("Applying one replaces");
+    expect(Array.from(host.querySelectorAll("h3")).map((h) => h.textContent)).toEqual([
+      "Your themes · 1",
+      "HYDLNK themes · 2",
+    ]);
   });
 
   it("an override makes the applied card Edited and the header says so", () => {
@@ -410,21 +418,26 @@ describe("M3-23 update and rename", () => {
     mount({ theme: { ref: "sys-noir", overrides: { accent: "#8FA68A" } } });
     expect(tagOf("Noir")).toBe("Edited");
     expect(buttonByText("Update Noir")).toBeUndefined();
-    expect(host.querySelector("[data-testid=theme-rename]")).toBeNull();
+    expect(host.querySelector('button[aria-label="More for Noir"]')).toBeNull(); // no menu at all
   });
 
   it("Rename opens a prefilled input; Escape cancels; whitespace is trimmed; empty is refused; Enter saves", async () => {
     mount({ saved: saved() });
-    click(host.querySelector("[data-testid=theme-rename]"));
+    choose("Shared look", "Rename");
     const input = host.querySelector<HTMLInputElement>("[data-testid=theme-rename-input]")!;
     expect(input.value).toBe("Shared look");
 
     typeInto(input, "Discarded");
-    key(input, "Escape");
+    // Escape is the dialog's own cancel event.
+    act(() => {
+      host
+        .querySelector("[data-testid=rename-theme-dialog]")!
+        .dispatchEvent(new Event("cancel", { bubbles: false, cancelable: true }));
+    });
     expect(host.querySelector("[data-testid=theme-rename-input]")).toBeNull();
     expect(store.rows[0]!.name).toBe("Shared look");
 
-    click(host.querySelector("[data-testid=theme-rename]"));
+    choose("Shared look", "Rename");
     const again = host.querySelector<HTMLInputElement>("[data-testid=theme-rename-input]")!;
     typeInto(again, "   ");
     await act(async () => {
@@ -447,22 +460,25 @@ describe("M3-23 update and rename", () => {
     expect(cardNamed("Night Market")).toBeTruthy();
   });
 
-  it("the input is 16px-capable plain text and 44px buttons carry their own names", () => {
+  it("the More button is named for its theme and its menu items are 44px tall", () => {
     mount({ saved: saved() });
-    const rename = host.querySelector<HTMLButtonElement>("[data-testid=theme-rename]")!;
-    expect(rename.getAttribute("aria-label")).toBe("Rename Shared look");
-    expect(
-      host
-        .querySelector<HTMLButtonElement>("[data-testid=theme-delete]")!
-        .getAttribute("aria-label"),
-    ).toBe("Delete Shared look");
-    expect(rename.className).toContain("min-h-11");
+    const more = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="More for Shared look"]',
+    )!;
+    expect(more.getAttribute("aria-haspopup")).toBe("menu");
+    expect(more.className).toContain("size-11");
+    click(more);
+    const menu = document.body.querySelector<HTMLElement>('[role="menu"]')!;
+    expect(menu.getAttribute("aria-label")).toBe("Shared look");
+    const items = Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+    expect(items.map((item) => item.textContent)).toEqual(["Rename", "Delete"]);
+    expect(items.every((item) => item.className.includes("min-h-11"))).toBe(true);
   });
 
   it("a refused rename keeps the input and says why", async () => {
     mount({ saved: saved() });
     store.noMatch = true;
-    click(host.querySelector("[data-testid=theme-rename]"));
+    choose("Shared look", "Rename");
     const input = host.querySelector<HTMLInputElement>("[data-testid=theme-rename-input]")!;
     typeInto(input, "Other");
     await act(async () => {
@@ -482,7 +498,7 @@ describe("M3-24 delete", () => {
 
   it("opens a dialog with the copy and two 44px buttons; Escape and Cancel close it without deleting", () => {
     mount({ saved: saved() });
-    click(host.querySelector("[data-testid=theme-delete]"));
+    choose("Shared look", "Delete");
     expect(dialog()!.textContent).toContain("Delete Shared look?");
     expect(dialog()!.textContent).toContain(
       "Drafts using it fall back to the default theme. Live pages keep their look until you republish.",
@@ -497,7 +513,7 @@ describe("M3-24 delete", () => {
     expect(dialog()).toBeNull();
     expect(store.rows).toHaveLength(1);
 
-    click(host.querySelector("[data-testid=theme-delete]"));
+    choose("Shared look", "Delete");
     click(buttonByText("Cancel"));
     expect(dialog()).toBeNull();
     expect(store.rows).toHaveLength(1);
@@ -505,7 +521,7 @@ describe("M3-24 delete", () => {
 
   it("Tab wraps inside the dialog, both ways", () => {
     mount({ saved: saved() });
-    click(host.querySelector("[data-testid=theme-delete]"));
+    choose("Shared look", "Delete");
     const [cancel, confirm] = Array.from(dialog()!.querySelectorAll("button"));
     confirm!.focus();
     key(dialog()!, "Tab");
@@ -529,7 +545,7 @@ describe("M3-24 delete", () => {
       saved: saved(),
       theme: { ref: "saved-a", overrides: { radius: 20 } },
     });
-    click(host.querySelector("[data-testid=theme-delete]"));
+    choose("Shared look", "Delete");
     await clickAsync(buttonByText("Delete theme"));
     await settle();
     expect(store.rows).toHaveLength(0);
@@ -545,7 +561,7 @@ describe("M3-24 delete", () => {
 
   it("deleting a theme another page uses leaves this page's draft alone", async () => {
     mount({ saved: saved() });
-    click(host.querySelector("[data-testid=theme-delete]"));
+    choose("Shared look", "Delete");
     await clickAsync(buttonByText("Delete theme"));
     await settle();
     expect(draft.theme).toEqual({ ref: "sys-noir", overrides: {} });
@@ -554,7 +570,7 @@ describe("M3-24 delete", () => {
   it("a delete the database refuses says so and keeps the card", async () => {
     mount({ saved: saved() });
     store.noMatch = true;
-    click(host.querySelector("[data-testid=theme-delete]"));
+    choose("Shared look", "Delete");
     await clickAsync(buttonByText("Delete theme"));
     await settle();
     expect(message()!.textContent).toContain("Couldn’t delete the theme. Try again.");

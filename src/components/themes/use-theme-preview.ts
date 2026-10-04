@@ -39,17 +39,18 @@ export interface ThemePreview {
   form: PublishDoc | null;
   /** For the preview column and the phone bar; null when nothing is on show. */
   view: ThemePreviewView | null;
-  /** The Preview button of a card was pressed. Pressing another card's replaces the preview. */
+  /** Preview was chosen in a card's menu. Choosing another card's replaces the preview. */
   start: (id: string) => void;
   /**
-   * Puts the page back. `focus` (default true) returns focus to the previewed card's Preview button;
+   * Puts the page back. `focus` (default true) returns focus to the previewed card's More button;
    * pass false when something else is taking focus (a control, Done, a tab).
    */
   stop: (options?: { focus?: boolean }) => void;
 }
 
+/** The card's More button (M7-06): the menu item that started the preview is gone with its menu. */
 const previewButtonOf = (id: string): HTMLElement | null =>
-  document.querySelector<HTMLElement>(`li[data-theme-id="${id}"] [data-testid="theme-preview"]`);
+  document.querySelector<HTMLElement>(`li[data-theme-id="${id}"] [data-testid="theme-more"]`);
 
 /**
  * Previewing a theme on the Design screen (M6-44). A preview is derived state and nothing else:
