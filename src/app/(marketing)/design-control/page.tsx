@@ -155,7 +155,7 @@ export default function DesignPage() {
           eyebrow="What you can change"
           titleId="tokens-title"
           title="23 settings in five groups."
-          lead="Every block follows these settings. That’s why changing one changes the whole page, and nothing ever looks out of place."
+          lead="Every block follows these settings. That’s why changing one changes the whole page, and nothing ever looks out of place. Choose any color with a color picker, or type its hex code."
         />
         <div className="mt-10 grid gap-3 min-[760px]:grid-cols-2 min-[1080px]:grid-cols-3">
           {SETTING_GROUPS.map(({ group, settings }) => (
@@ -260,7 +260,7 @@ export default function DesignPage() {
             eyebrow="Type"
             titleId="fonts-title"
             title="Eighteen fonts, picked for link pages."
-            lead="Pick one font for headings and one for body text. The list is short on purpose: every font on it reads well on a phone, so any pairing looks good."
+            lead="Pick one font for headings and one for body text, and a third for your name alone if you like. The list is short on purpose: every font on it reads well on a phone, so any pairing looks good. Text blocks take bold, italic, underline, links and alignment."
           />
           <div className="grid gap-3 min-[640px]:grid-cols-3">
             {Object.entries(FONTS).map(([kind, names]) => (

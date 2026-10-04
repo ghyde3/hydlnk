@@ -88,7 +88,7 @@ export default function HomePage() {
             eyebrow="Same blocks, three looks"
             titleId="demos-title"
             title="Your page should look like your brand."
-            lead="A pottery studio, a coffee roaster and a photographer, all built from the same nine blocks. Only the colors, fonts and photos are different."
+            lead="A pottery studio, a coffee roaster and a photographer, all built from the same blocks. Only the colors, fonts and photos are different."
           />
           <ButtonLink href="/design-control" variant="secondary">
             See how themes work

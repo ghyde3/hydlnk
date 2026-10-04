@@ -37,7 +37,7 @@ export const plansAndBilling: GuideBody = {
           <tr>
             <td>Pro</td>
             <td>{priceSentence("pro")}</td>
-            <td>1 custom domain you own, 3 pages, no badge, unlimited saved themes, a year of analytics with referrers, devices and countries, 100 MB of uploads</td>
+            <td>1 custom domain you own, 3 pages, no badge, unlimited saved themes, a year of analytics with referrers, devices and countries, redirect mode, 100 MB of uploads</td>
           </tr>
           <tr>
             <td>Studio</td>

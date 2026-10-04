@@ -136,7 +136,31 @@ export default function AnalyticsPage() {
         </div>
       </Section>
 
-      <Section id="limits" labelledBy="limits-title">
+      <Section id="export" labelledBy="export-title">
+        <SectionIntro
+          eyebrow="Tags and exports"
+          titleId="export-title"
+          title="Follow a campaign. Take the numbers with you."
+        />
+        <div className="mt-10 grid gap-3 min-[760px]:grid-cols-2">
+          <div className="flex flex-col gap-3 rounded-md border border-line bg-surface p-[22px]">
+            <h3 className="text-lg font-semibold">UTM tags</h3>
+            <p className="text-[15px] leading-[1.6] text-text-2">
+              Add a source, medium and campaign to every link on your page, and change them on any
+              single link. The sites you link to can then see which visits came from your page.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 rounded-md border border-line bg-surface p-[22px]">
+            <h3 className="text-lg font-semibold">CSV export</h3>
+            <p className="text-[15px] leading-[1.6] text-text-2">
+              Download daily totals or clicks per link as a file for your spreadsheet. Free covers
+              the last 7 and 30 days. Pro and Studio add 90 days and a year.
+            </p>
+          </div>
+        </div>
+      </Section>
+
+      <Section id="limits" tone="page" labelledBy="limits-title">
         <SectionIntro
           eyebrow="Honest numbers"
           titleId="limits-title"

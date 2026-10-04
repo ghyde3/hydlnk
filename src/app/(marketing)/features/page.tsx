@@ -21,7 +21,7 @@ export const metadata: Metadata = marketingMetadata({
   path: "/features",
   title: "Features",
   description:
-    "Nine kinds of blocks, a profile, an editor with a live phone preview, drafts that save themselves and a Publish button you control. Every feature is on every plan, free included, except version history on Pro and Studio.",
+    "Fifteen kinds of blocks, a profile with your logo, link tools, a branded QR code, CSV analytics, an editor with a live phone preview and a Publish button you control. Every feature is on every plan, free included, except version history and redirect mode on Pro and Studio.",
   image: "features",
 });
 
@@ -90,6 +90,36 @@ const EDITOR = [
     ),
   },
   {
+    title: "Text with some style",
+    body: "Format a text block with bold, italic, underline, strikethrough, links and left, center or right alignment. A toolbar with large buttons sits right above the text, with undo and redo.",
+    icon: (
+      <Icon>
+        <path d="M6 5h7a3.5 3.5 0 0 1 0 7H6zM6 12h8a3.5 3.5 0 0 1 0 7H6z" />
+      </Icon>
+    ),
+  },
+  {
+    title: "A real color picker",
+    body: "Drag to pick a color, or type its hex code. It works in your page’s Design colors and in the colors of each block.",
+    icon: (
+      <Icon>
+        <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.7-.8 1.7-1.6 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-.9.7-1.6 1.6-1.6H17a3.5 3.5 0 0 0 3.5-3.5C20.5 6.9 16.7 3.5 12 3.5z" />
+        <circle cx="8" cy="11" r="1" />
+        <circle cx="11" cy="7.5" r="1" />
+        <circle cx="15.5" cy="8.5" r="1" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Frame your photo by hand",
+    body: "Drag your photo or a link’s picture into place and zoom with a pinch or a slider, until the crop shows what matters.",
+    icon: (
+      <Icon>
+        <path d="M8 4v12h12M4 8h12v12" />
+      </Icon>
+    ),
+  },
+  {
     title: "Start from a template",
     body: "Pick a starting point for musicians, podcasters, artists, shops, coaches or streamers, then change anything you like.",
     icon: (
@@ -152,8 +182,8 @@ const PUBLISHING = [
     ),
   },
   {
-    title: "A QR code for your page",
-    body: "Download a QR code that opens your page, as a PNG or an SVG, for flyers, menus and printed cards.",
+    title: "A QR code in your colors",
+    body: "Choose the code’s colors, put your logo in the center and add a Scan me frame. Download it as a PNG or an SVG, for flyers, menus and printed cards.",
     icon: (
       <Icon>
         <rect x="4" y="4" width="6" height="6" />
@@ -179,6 +209,59 @@ const PUBLISHING = [
     icon: (
       <Icon>
         <path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" />
+      </Icon>
+    ),
+  },
+];
+
+const LINKS = [
+  {
+    title: "Real logos for your icons",
+    body: "Social icons and link icons show the real mark of each site. The social row now also covers Reddit, Snapchat, Pinterest, Discord, Twitch and Spotify.",
+    icon: (
+      <Icon>
+        <circle cx="6" cy="12" r="2.5" />
+        <circle cx="12" cy="12" r="2.5" />
+        <circle cx="18" cy="12" r="2.5" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Lock a link",
+    body: "Ask visitors for an age check or a code before a link opens. The real address stays out of your page until they pass.",
+    icon: (
+      <Icon>
+        <rect x="5" y="11" width="14" height="9" rx="2" />
+        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+      </Icon>
+    ),
+  },
+  {
+    title: "UTM tags on your links",
+    body: "Add a source, medium and campaign to every link once, and change them on any single link. Sites you link to can then see which visits came from your page.",
+    icon: (
+      <Icon>
+        <path d="M4 12.5V5a1 1 0 0 1 1-1h7.5l7.5 7.5-8.5 8.5z" />
+        <circle cx="8.5" cy="8.5" r="1.2" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Redirect mode on Pro and Studio",
+    body: "Send visitors straight to one link instead of showing your page. Every visit is counted as a click on that link. Turn it on and off from the Share tab.",
+    icon: (
+      <Icon>
+        <path d="M5 12h12M13 7l5 5-5 5" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Export your numbers as CSV",
+    body: "Download daily totals or clicks per link for a spreadsheet. Free covers the last 7 and 30 days. Pro and Studio add 90 days and a year.",
+    icon: (
+      <Icon>
+        <path d="M5 4h11l3 3v13H5z" />
+        <path d="M12 10v6M9.5 13.5L12 16l2.5-2.5" />
       </Icon>
     ),
   },
@@ -232,7 +315,7 @@ export default function FeaturesPage() {
       <PageHero
         eyebrow="Features"
         title="Everything a link page needs. Nothing it doesn’t."
-        lead="Nine kinds of block, a profile, an editor with a live phone preview, drafts that save themselves and a page that goes live only when you press Publish. All of it is on every plan, free included, apart from version history on Pro and Studio."
+        lead="Fifteen kinds of block, a profile with your logo, tools for your links, an editor with a live phone preview and a page that goes live only when you press Publish. All of it is on every plan, free included, apart from version history and redirect mode on Pro and Studio."
         aside={
           <figure className="flex flex-col items-center gap-3">
             <PhoneFrame>
@@ -249,8 +332,8 @@ export default function FeaturesPage() {
         <SectionIntro
           eyebrow="Blocks"
           titleId="blocks-title"
-          title="Nine blocks, in any order."
-          lead="A page is a column of blocks under your profile. Add up to 50, drag them into order, style each one and switch any of them off without deleting it. Links take an icon or a small thumbnail, and up to 3 can be featured with a bolder look."
+          title="Fifteen blocks, in any order."
+          lead="A page is a column of blocks under your profile. Add up to 50, drag them into order, style each one and switch any of them off without deleting it. Links take an icon or a small thumbnail, and up to 3 can be featured with a bolder look. The last six blocks are for what you sell, answer and share: FAQ, contact details, discount codes, books, apps and places."
         />
         <ul className="mt-10 grid gap-3 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3">
           {BLOCK_CATALOG.map((block) => (
@@ -276,7 +359,7 @@ export default function FeaturesPage() {
               eyebrow="Profile"
               titleId="profile-title"
               title="A profile that introduces you."
-              lead="Your photo, your name and one line about what you do sit at the top of every page, set in your theme’s fonts."
+              lead="Your photo or logo, your name and one line about what you do sit at the top of every page, with an optional message above them."
             />
             <ul className="mt-6 flex flex-col gap-3 text-[15px] leading-[1.6] text-text-2">
               <li>
@@ -285,13 +368,23 @@ export default function FeaturesPage() {
                 one, your initials stand in, drawn in your accent color.
               </li>
               <li>
+                <strong className="font-semibold text-ink">Logo.</strong> Show a logo beside your
+                name, or in place of it.
+              </li>
+              <li>
                 <strong className="font-semibold text-ink">Display name.</strong> Up to 60
-                characters, in your heading font. Hide the name and bio if you would rather build
-                the top of your page from blocks.
+                characters. It uses your heading font unless you pick another font and a size from
+                small to extra large for the name alone. Hide the name and bio if you would rather
+                build the top of your page from blocks.
               </li>
               <li>
                 <strong className="font-semibold text-ink">Bio.</strong> Up to 160 characters: say
                 what you do and what you want people to tap.
+              </li>
+              <li>
+                <strong className="font-semibold text-ink">Support banner.</strong> A short
+                message, up to 100 characters, with an optional link, above your profile. Visitors
+                can dismiss it for their visit, and it sets no cookie.
               </li>
             </ul>
           </div>
@@ -379,9 +472,21 @@ export default function FeaturesPage() {
         </div>
       </Section>
 
+      <Section id="links" tone="page" labelledBy="links-title">
+        <SectionIntro
+          eyebrow="Links and numbers"
+          titleId="links-title"
+          title="Control where each tap goes."
+          lead="Lock a link, tag it for your campaigns, point your whole page at one link, and take your click numbers into a spreadsheet."
+        />
+        <div className="mt-10">
+          <FeatureList items={LINKS} />
+        </div>
+      </Section>
+
       <CtaBand
         title="Nearly every feature here is on the free plan."
-        note="Upgrade only when you want your own domain, more pages, a year of analytics or version history."
+        note="Upgrade only when you want your own domain, more pages, a year of analytics, version history or redirect mode."
       />
     </MarketingShell>
   );

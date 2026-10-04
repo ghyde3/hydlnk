@@ -8,8 +8,8 @@ import type { TryPreset } from "../try/try-builder";
  *
  * Every claim here has to be true of the product today (see plans.ts, block-catalog.tsx and
  * faq-data.ts): embeds are YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music and
- * Twitch (not Bandcamp or Apple Podcasts), the social icon row has no Twitch, Spotify or Discord
- * icon, the Grid block holds linked tiles without pictures, HYDLNK takes no payments and
+ * Twitch (not Bandcamp or Apple Podcasts), the social icon row has Twitch, Spotify, Discord and
+ * five more (since Wave K), the Grid block holds linked tiles without pictures, HYDLNK takes no payments and
  * has no booking tool, and referrers, devices and countries are Pro and Studio. The platform steps
  * were checked against each platform's own help text where it could be read; where a platform
  * decides who gets a feature, the copy says so and sends people to the platform's help center.
@@ -22,9 +22,23 @@ export type AudienceKind = "platform" | "creator";
 
 /** The block types from block-catalog.tsx, used for the icon and the block's name. */
 export type BlockId =
-  "link" | "card" | "header" | "text" | "image" | "social" | "embed" | "grid" | "divider";
+  | "link"
+  | "card"
+  | "header"
+  | "text"
+  | "image"
+  | "social"
+  | "embed"
+  | "grid"
+  | "divider"
+  | "faq"
+  | "contact"
+  | "discount"
+  | "book"
+  | "apps"
+  | "map";
 
-/** A feature card's icon: one of the nine blocks, or a general one. */
+/** A feature card's icon: one of the fifteen blocks, or a general one. */
 export type FitIcon = BlockId | "design" | "phone" | "chart" | "domain" | "preview" | "tag";
 
 export interface AudienceStep {
@@ -247,7 +261,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         icon: "social",
         title: "Your other accounts in one row",
-        body: "A Social block holds up to eight icons. Choose from Instagram, TikTok, YouTube, X, Facebook, LinkedIn, GitHub, Threads, email and your website.",
+        body: "A Social block holds up to eight icons. Choose from Instagram, TikTok, YouTube, X, Facebook, LinkedIn, GitHub, Threads, Reddit, Snapchat, Pinterest, Discord, Twitch, Spotify, email and your website.",
       },
       {
         icon: "preview",
@@ -475,7 +489,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         icon: "link",
         title: "A button for every place your viewers go",
-        body: "Discord, merch, your tip page and sponsor codes each get a Link block with a label you write. Twitch and Discord aren’t in the social icon row, so buttons are the right fit for them.",
+        body: "Merch, your tip page and sponsor links each get a Link block with a label you write. Discord and Twitch have icons in the social row too, so one tap reaches your server or your channel.",
       },
       {
         icon: "embed",
@@ -518,7 +532,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         block: "social",
         title: "TikTok, YouTube, X and Instagram",
-        body: "Icons for the accounts that have icons, next to buttons for the rest.",
+        body: "Icons for TikTok, YouTube, X, Instagram and Discord, next to buttons for the rest.",
       },
     ],
     tryTitle: "Try a Twitch page",
@@ -526,7 +540,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         question: "Can I link my Discord server?",
         answer:
-          "Yes. Add a Link block with your server’s invite address and a label like “Join the Discord”. Discord isn’t one of the social icons, so a button is the way to do it.",
+          "Yes. Add a Discord icon to a Social block, or add a Link block with your server’s invite address and a label like “Join the Discord”. The button is easier to spot.",
       },
       {
         question: "Can I embed my live stream on the page?",
@@ -653,7 +667,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         question: "Can I link my X account from my HYDLNK page?",
         answer:
-          "Yes. The Social block includes an X icon, alongside Instagram, TikTok, YouTube, Facebook, LinkedIn, GitHub, Threads, email and your website.",
+          "Yes. The Social block includes an X icon, alongside Instagram, TikTok, YouTube, Facebook, LinkedIn, GitHub, Threads, Reddit, Snapchat, Pinterest, Discord, Twitch, Spotify, email and your website.",
       },
       {
         question: "Does it cost anything?",
@@ -1094,6 +1108,11 @@ export const AUDIENCES: readonly Audience[] = [
         icon: "tag",
         title: "No cut of your sales",
         body: "We never take a cut of your sales, on any plan. Your links go to your own checkout, so what you earn there is yours.",
+      },
+      {
+        icon: "map",
+        title: "Directions and a discount code",
+        body: "A Map location block shows your address with an Open in Maps button. A Discount code block gives customers a code to tap and copy, and you can link it to your shop.",
       },
       {
         icon: "chart",

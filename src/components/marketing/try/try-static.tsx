@@ -1,7 +1,7 @@
 import { BLOCK_CATALOG } from "../block-catalog";
 import { ButtonLink } from "../primitives";
 import { signupUrl } from "../signup-handoff";
-import { PREVIEW_HINT, buildTryDoc, type TryPreset } from "./sample-page";
+import { PREVIEW_HINT, TRY_BLOCK_KINDS, buildTryDoc, type TryPreset } from "./sample-page";
 import { initialTryState } from "./try-state";
 import { TryLayout, TryPhone } from "./try-phone";
 
@@ -23,7 +23,9 @@ export function TryStatic({ preset, rootDomain }: { preset?: TryPreset; rootDoma
             every block is free on every plan.
           </p>
           <ul className="try-static-list">
-            {BLOCK_CATALOG.map((block) => (
+            {BLOCK_CATALOG.filter((block) =>
+              (TRY_BLOCK_KINDS as readonly string[]).includes(block.id),
+            ).map((block) => (
               <li key={block.id}>
                 <p className="text-sm font-semibold">{block.name}</p>
                 <p className="mt-1 text-[13px] leading-[1.45] text-text-2">{block.short}</p>

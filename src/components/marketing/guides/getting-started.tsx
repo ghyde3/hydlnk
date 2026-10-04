@@ -63,7 +63,9 @@ export const gettingStarted: GuideBody = {
       <h2 id="blocks">Add your blocks</h2>
       <p>
         Use the Add a block chips to add links, cards, headers, text, images, social icons, video
-        and music embeds, grids and dividers. A few habits help:
+        and music embeds, grids and dividers. There are also blocks for questions and answers,
+        contact details, discount codes, books, app store buttons and a map location. A few habits
+        help:
       </p>
       <ul>
         <li>Start with three to five links. The fewer there are, the easier each one is to find.</li>
@@ -107,7 +109,7 @@ export const gettingStarted: GuideBody = {
         <li>Put it in the bio of your social profiles: that’s what a link in bio is for.</li>
         <li>Add it to your email signature, your newsletter footer and your printed cards.</li>
         <li>When someone shares it, the link shows the title, description and image you chose, or your page’s own preview image.</li>
-        <li>Download a QR code for your page, as a PNG or an SVG, for flyers and printed cards.</li>
+        <li>Download a QR code for your page, in your own colors and with your logo if you like, as a PNG or an SVG, for flyers and printed cards.</li>
       </ul>
 
       <h2 id="next">What to do next</h2>

@@ -11,7 +11,8 @@ import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 const SIGNUP = url("app", "/signup");
 const APP = url("app");
-const OUT_OF_SCOPE = /schedul|csv|invite editors|team access|custom css/i;
+// CSV export shipped in Wave K (M9-26), so it is no longer out of scope.
+const OUT_OF_SCOPE = /schedul|invite editors|team access|custom css/i;
 const POSTAL = "11156 Hanlon Terrace Alley, Winter Garden, Florida 34787, United States";
 
 const PAGES: { path: string; title: RegExp; current: string | null }[] = [
@@ -113,6 +114,27 @@ for (const { path, title, current } of PAGES) {
     }
   });
 }
+
+test("features: the block catalog shows all fifteen blocks and nothing scrolls sideways", async ({
+  page,
+}) => {
+  await page.goto(url(null, "/features"));
+  const cards = page.locator("#blocks ul > li");
+  await expect(cards).toHaveCount(15);
+  for (const name of [
+    "FAQ",
+    "Contact details",
+    "Discount code",
+    "Book links",
+    "App store buttons",
+    "Map location",
+  ]) {
+    await expect(page.locator("#blocks h3", { hasText: name })).toBeVisible();
+  }
+  await expect(page.locator("#blocks")).toContainText("Fifteen blocks");
+  await expect(page.locator("#links")).toContainText("Redirect mode on Pro and Studio");
+  await expectNoHorizontalScroll(page);
+});
 
 test("legal pages: last-updated date, a column no wider than 70 characters, linked from the footer", async ({
   page,
