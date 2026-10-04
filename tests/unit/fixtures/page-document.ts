@@ -46,6 +46,13 @@ export const bannerRef: ImageRef = {
   height: 480,
 };
 
+/** A book's cover (M9-20): a 2:3 portrait in the owner's folder. */
+export const bookCoverRef: ImageRef = {
+  path: `${OWNER_UID}/night-market-cover.webp`,
+  width: 800,
+  height: 1200,
+};
+
 /** A complete, publishable block of each type, with fixed ids. */
 export const blocks = {
   link: {
@@ -116,6 +123,83 @@ export const blocks = {
     ],
   },
   divider: { id: "divider-0001", type: "divider", visible: true },
+  book: {
+    id: "book-night-mkt1",
+    type: "book",
+    visible: true,
+    title: "The Night Market",
+    author: "Mara Okafor",
+    cover: bookCoverRef,
+    links: [
+      { id: "book-amazon-001", store: "amazon", url: "https://www.amazon.com/dp/0000000000" },
+      {
+        id: "book-apple-0001",
+        store: "apple",
+        url: "https://books.apple.com/us/book/id0000000000",
+      },
+      {
+        id: "book-bkshop-001",
+        store: "bookshop",
+        url: "https://bookshop.org/p/books/the-night-market",
+      },
+    ],
+  },
+  apps: {
+    id: "apps-studio-001",
+    type: "apps",
+    visible: true,
+    links: [
+      { id: "app-appstore-01", store: "appstore", url: "https://apps.apple.com/app/id0000000000" },
+      {
+        id: "app-googleplay1",
+        store: "googleplay",
+        url: "https://play.google.com/store/apps/details?id=com.example.studio",
+      },
+    ],
+  },
+  map: {
+    id: "map-studio-0001",
+    type: "map",
+    visible: true,
+    name: "Okafor Studio",
+    address: "12 Canal Street, Brooklyn, NY 11201",
+    googleId: "map-google-0001",
+    appleId: "map-apple-00001",
+  },
+  faq: {
+    id: "faq-block-001",
+    type: "faq",
+    visible: true,
+    items: [
+      {
+        id: "faq-item-0001",
+        question: "Do you ship worldwide?",
+        answer: "Yes.\nOrders leave the studio within three days.",
+      },
+      {
+        id: "faq-item-0002",
+        question: "Can I commission a piece?",
+        answer: "Send a message with what you have in mind.",
+      },
+    ],
+  },
+  contact: {
+    id: "contact-0001",
+    type: "contact",
+    visible: true,
+    name: "Mara Okafor",
+    phone: "+1 (555) 123-4567",
+    email: "hello@maraokafor.com",
+    hours: "Mon to Fri, 9am to 5pm\nSat by appointment",
+  },
+  discount: {
+    id: "discount-0001",
+    type: "discount",
+    visible: true,
+    code: "SAVE10",
+    description: "10% off your first print",
+    url: "https://maraokafor.com/prints",
+  },
 } satisfies Record<string, Block>;
 
 /** A valid draft with one block of every type, a hidden block, a block override and a page override. */
@@ -143,7 +227,13 @@ export const fullDraft: DraftDoc = {
     blocks.image,
     blocks.grid,
     blocks.divider,
+    blocks.faq,
+    blocks.contact,
+    blocks.discount,
     blocks.text,
+    blocks.book,
+    blocks.apps,
+    blocks.map,
     { id: "header-hidden-1", type: "header", visible: false, text: "Coming soon" },
   ],
 };

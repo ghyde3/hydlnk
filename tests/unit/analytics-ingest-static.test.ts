@@ -102,7 +102,13 @@ describe("M4-21 the view beacon (the shared tenant script, M8-06)", () => {
 
 describe("M4-21 where the beacon is, and where it is not", () => {
   it("the live page carries exactly one script, with the page id; the renderer alone and the preview carry none", () => {
-    const live = renderLivePage({ pageId: PAGE_ID, document: fullPublished, plan: "free", urls: null });
+    // M9-16: a page with a visible FAQ block also carries one `ld+json` data block (never executable);
+    // the original rule runs on a page without one, and the FAQ case is in m9-blocks-faq-*.test.ts.
+    const withoutFaq = {
+      ...fullPublished,
+      blocks: fullPublished.blocks.filter((block) => block.type !== "faq"),
+    };
+    const live = renderLivePage({ pageId: PAGE_ID, document: withoutFaq, plan: "free", urls: null });
     expect((live.match(/<script/g) ?? []).length).toBe(1);
     expect(live).toContain(`data-page-id="${PAGE_ID}"`);
     expect(live).not.toContain("/api/e"); // the call is in the script file, never in the document
@@ -193,7 +199,9 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
 
   it("the click handler schedules its insert with after(), and the beacon route does not redirect", () => {
     expect(read("src/lib/analytics/ingest/deps.ts")).toMatch(/after\(task\)/);
-    expect(read("src/lib/analytics/ingest/click.ts")).toMatch(/deps\.schedule\(/);
+    // The recording of a click lives in click-common.ts since M9-29, shared by the GET and the lock's POST.
+    expect(read("src/lib/analytics/ingest/click-common.ts")).toMatch(/deps\.schedule\(/);
+    expect(strip(read("src/lib/analytics/ingest/click.ts"))).toMatch(/recordClick\(/);
     expect(strip(read("src/lib/analytics/ingest/click.ts"))).not.toMatch(/NextResponse\.redirect|new URL\(request/);
     expect(strip(read("src/lib/analytics/ingest/beacon.ts"))).not.toMatch(/redirect/i);
   });
@@ -207,7 +215,11 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
   });
 
   it("the two routes exist, each dynamic, and no copy of them hides under the tenant routes", () => {
-    const routes = ["src/app/api/e/route.ts", "src/app/r/[pageId]/[blockId]/route.ts"];
+    const routes = [
+      "src/app/api/e/route.ts",
+      "src/app/r/[pageId]/[blockId]/route.ts",
+      "src/app/c/[pageId]/[blockId]/route.ts",
+    ];
     for (const route of routes) {
       const source = read(route);
       expect(source, route).toMatch(/export const dynamic = "force-dynamic"/);
@@ -218,6 +230,8 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     // The proxy leaves the tracking paths unrewritten on tenant and custom hosts, so one pair of
     // routes serves every host (src/lib/routing/paths.ts, src/proxy.ts).
     expect(read("src/proxy.ts")).toMatch(/isTrackingPath\(pathname\)/);
-    expect(read("src/lib/routing/paths.ts")).toMatch(/pathname\.startsWith\("\/r\/"\) \|\| pathname === "\/api\/e"/);
+    expect(read("src/lib/routing/paths.ts")).toMatch(
+      /pathname\.startsWith\("\/r\/"\) \|\| pathname\.startsWith\("\/c\/"\) \|\| pathname === "\/api\/e"/,
+    );
   });
 });

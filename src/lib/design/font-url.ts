@@ -59,12 +59,18 @@ type FontTokens = Pick<TokenSet, "fontHeading" | "fontBody" | "weightHeading">;
  * of a synthesized bold. Tokens that are not allowlisted fall back to the system default fonts, so
  * this never throws and never returns a URL built from a raw string.
  */
-export function tenantFontStylesheetUrl(tokens: Partial<FontTokens>): string {
+export function tenantFontStylesheetUrl(tokens: Partial<FontTokens>, nameFont?: unknown): string {
   const heading = fontEntry(tokens.fontHeading)?.family ?? SYSTEM_DEFAULT_TOKENS.fontHeading;
   const body = fontEntry(tokens.fontBody)?.family ?? SYSTEM_DEFAULT_TOKENS.fontBody;
   const weight: HeadingWeight = nearestWeight(heading, Number(tokens.weightHeading) || 400);
   const requests: FontRequest[] =
     weight === 400 ? [heading, body] : [{ family: heading, weights: [400, weight] }, body];
+  // The profile's name font (M9-24), at the heading weight its family supports: a family the page
+  // already asks for only gains that weight, any other is one more `family=` parameter.
+  const name = fontEntry(nameFont)?.family;
+  if (name) {
+    requests.push({ family: name, weights: [nearestWeight(name, Number(tokens.weightHeading) || 400)] });
+  }
   // Both families are allowlisted here, so the builder cannot return null.
   return buildFontStylesheetUrl(requests)!;
 }

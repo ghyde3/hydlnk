@@ -50,7 +50,7 @@ export default async function SharedPreviewPage() {
 
   return (
     <>
-      <TenantFonts tokens={shared.doc.tokens} />
+      <TenantFonts tokens={shared.doc.tokens} nameFont={shared.doc.profile.nameFont} />
       <ShareBar expires={formatLinkDate(shared.expiresAt)} />
       <PreviewFrame>
         <PageRenderer

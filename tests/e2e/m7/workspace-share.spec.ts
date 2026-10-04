@@ -23,7 +23,7 @@ const card = (page: Page, name: string): Locator => page.getByRole("region", { n
 const address = (page: Page): Locator => page.getByTestId("page-address");
 
 test.describe("M7-04 the cards", () => {
-  test("M7-04 four cards in order, each with an h2; the Edit tab has no Share card", async ({
+  test("M7-04 the cards in order, each with an h2 (M9-32 and M9-28 add Redirect mode and Link tracking); the Edit tab has no Share card", async ({
     page,
     context,
   }) => {
@@ -33,9 +33,11 @@ test.describe("M7-04 the cards", () => {
       .getByRole("tabpanel")
       .getByRole("heading", { level: 2 })
       .allTextContents();
-    expect(headings.slice(0, 4)).toEqual([
+    expect(headings.slice(0, 6)).toEqual([
       "Your page address",
+      "Redirect mode",
       "Share card",
+      "Link tracking",
       "QR code",
       "Private preview links",
     ]);
@@ -266,6 +268,8 @@ test.describe("M7-04 safety and layout", () => {
     page.on("request", (request) => {
       const u = new URL(request.url());
       if (/\/(_next\/|__nextjs)/.test(u.pathname) || /fonts\.g/.test(u.host)) return;
+      // A production build prefetches the nav links' routes (`?_rsc=`); they are not the tab's calls.
+      if (u.searchParams.has("_rsc")) return;
       calls.push(`${request.method()} ${u.pathname}`);
     });
     await openTab(page, "Share");

@@ -7,6 +7,7 @@ import type { StatsData, StatsResponse } from "@/lib/analytics/dashboard/types";
 import { PLAN_LIMITS, type PlanId } from "@/lib/limits";
 import { BreakdownCards } from "./breakdown-cards";
 import { ChartCard } from "./chart-card";
+import { ExportRow } from "./export-row";
 import { KpiStrip } from "./kpi-strip";
 import { LinksTable } from "./links-table";
 import { RangeControl } from "./range-control";
@@ -119,6 +120,7 @@ export function AnalyticsScreen({
               {data.sample ? <SampleNote published={data.published} /> : null}
               <KpiStrip kpis={data.kpis} />
               <ChartCard chart={data.chart} views={data.kpis.views} />
+              <ExportRow range={range} available={!data.sample && data.published} />
               <LinksTable links={data.links} views={data.kpis.views} />
               <BreakdownCards breakdowns={data.breakdowns} />
               <Footnote free={data.breakdowns === null} />

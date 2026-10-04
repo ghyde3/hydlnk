@@ -1,7 +1,7 @@
 import type { Template } from "./catalog";
 
-/** Block types whose name does not change with the count: "2 text", "2 social". */
-const SAME_WHEN_MANY: ReadonlySet<string> = new Set(["text", "social"]);
+/** Block types whose name does not change with the count: "2 text", "2 social", "2 apps". */
+const SAME_WHEN_MANY: ReadonlySet<string> = new Set(["text", "social", "apps"]);
 
 /**
  * What a template holds, in plain words (M7-07): the count of blocks, then each block type in the

@@ -22,8 +22,10 @@ import { applyTemplate, isTemplateStyle, templateById, type TemplateStyle } from
 import { collectIds, duplicateBlock } from "./duplicate";
 import {
   blockEditGroup,
+  commitSession,
   createHistory,
   recordEdit,
+  recordSessionEdit,
   redo as redoHistory,
   undo as undoHistory,
   type History,
@@ -55,7 +57,14 @@ export type FocusRequest =
   | { kind: "invalid-input"; blockId: string; nonce: number }
   | { kind: "profile-name"; nonce: number }
   /** A field of the share card (M6-33): its first control takes focus (a Publish error names it). */
-  | { kind: "share-field"; field: ShareField; nonce: number };
+  | { kind: "share-field"; field: ShareField; nonce: number }
+  /** A field of the support banner (M9-23): the first one a Publish error names takes focus. */
+  | { kind: "banner-field"; field: BannerFocusField; nonce: number }
+  /** The profile's logo upload (M9-24): a Publish error on the logo takes focus to its button. */
+  | { kind: "profile-logo"; nonce: number };
+
+/** The banner's three fields, as `banner.text`, `banner.label` and `banner.url`. */
+export type BannerFocusField = "text" | "label" | "url";
 
 /** The three fields of the share card, as `share.title`, `share.description` and `share.image`. */
 export type ShareField = "title" | "description" | "image";
@@ -128,7 +137,15 @@ export type EditorAction = (
    */
   | { type: "expand"; id: string; itemId?: string }
   | { type: "block/update"; block: Block }
-  /** An upload finished: set the image of a card or image block on top of the block as it is now. */
+  /**
+   * A live edit of a rich text field that has the focus (M9-12): like `block/update`, but the history
+   * does not grow while the session lasts (`session` names it, one per time the field has the
+   * focus). `block/session-end` (the field lost the focus or went away) makes the whole session one
+   * step; any other edit, undo or redo ends it first.
+   */
+  | { type: "block/session-update"; block: Block; session: string }
+  | { type: "block/session-end" }
+  /** An upload finished: set the image of a card or image block (the cover of a book) on top of the block as it is now. */
   | { type: "block/set-image"; id: string; image: ImageRef | null }
   | { type: "block/toggle-visible"; id: string }
   | { type: "block/toggle-expanded"; id: string }
@@ -268,6 +285,24 @@ function shareFieldOf(errors: readonly PublishError[]): ShareField | null {
   return null;
 }
 
+/**
+ * The banner field a Publish error names, the first in the order text, label, address (M9-23). The
+ * gate's own errors say `banner.text`, `banner.label` and `banner.url`; a link refused by the
+ * blocklist says block `banner`, field `url`.
+ */
+export function bannerFieldOf(errors: readonly PublishError[]): BannerFocusField | null {
+  const named = new Set<BannerFocusField>();
+  for (const error of errors) {
+    if (error.blockId === null && error.field.startsWith("banner.")) {
+      const field = error.field.slice("banner.".length).split(".")[0];
+      if (field === "text" || field === "label" || field === "url") named.add(field);
+    } else if (error.blockId === "banner" && error.field === "url") {
+      named.add("url");
+    }
+  }
+  return (["text", "label", "url"] as const).find((field) => named.has(field)) ?? null;
+}
+
 // Insert, duplicate, expand ---------------------------------------------------------------------
 
 /** Where focus goes in a block that was just added, duplicated or opened: its first input, or the row for a divider. */
@@ -380,6 +415,15 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
 function reduceWithHistory(state: EditorState, action: EditorAction): EditorState {
   if (action.type === "history/undo") return stepHistory(state, "undo", action.expect);
   if (action.type === "history/redo") return stepHistory(state, "redo", action.expect);
+  if (action.type === "block/session-end") {
+    const history = commitSession(state.history);
+    return history === state.history ? state : { ...state, history };
+  }
+  if (action.type === "block/session-update") {
+    const next = reduceEditor(state, { type: "block/update", block: action.block });
+    if (next === state || next.draft === state.draft) return next;
+    return { ...next, history: recordSessionEdit(state.history, next.draft, action.session) };
+  }
   const next = reduceEditor(state, action);
   if (next === state || next.draft === state.draft) return next;
   return {
@@ -499,6 +543,12 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
           : rest;
         return withBlocks(state, blocks);
       }
+      if (block?.type === "book") {
+        // M9-20: a book's cover. Replacing or removing it changes only the draft.
+        const blocks = draft.blocks.slice();
+        blocks[index] = { ...block, cover: action.image };
+        return withBlocks(state, blocks);
+      }
       if (!block || (block.type !== "card" && block.type !== "image")) return state;
       const blocks = draft.blocks.slice();
       blocks[index] = { ...block, image: action.image };
@@ -587,6 +637,10 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
       const first = firstFailingBlockId(draft, action.errors);
       const nameFailed = action.errors.some((error) => error.field === "profile.name");
       const shareField = shareFieldOf(action.errors);
+      const bannerField = bannerFieldOf(action.errors);
+      const logoFailed = action.errors.some(
+        (error) => error.blockId === null && error.field.startsWith("profile.logo"),
+      );
       const nonce = state.seq + 1;
       return {
         ...state,
@@ -596,9 +650,13 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
           ? { kind: "invalid-input", blockId: first, nonce }
           : nameFailed
             ? { kind: "profile-name", nonce }
-            : shareField
-              ? { kind: "share-field", field: shareField, nonce }
-              : state.focus,
+            : logoFailed
+              ? { kind: "profile-logo", nonce }
+              : bannerField
+                ? { kind: "banner-field", field: bannerField, nonce }
+                : shareField
+                  ? { kind: "share-field", field: shareField, nonce }
+                  : state.focus,
         seq: nonce,
       };
     }
@@ -634,6 +692,8 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
     // Handled by `editorReducer` before this runs.
     case "history/undo":
     case "history/redo":
+    case "block/session-update":
+    case "block/session-end":
       return state;
   }
 }

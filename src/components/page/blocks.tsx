@@ -4,11 +4,16 @@ import {
   SOCIAL_PLATFORM_LABELS,
   isLinkFeatured,
   parseEmbed,
+  textLines,
   textSegments,
+  type AlignValue,
   type Block,
   type CardBlock,
+  type ContactBlock,
+  type DiscountBlock,
   type DividerBlock,
   type EmbedBlock,
+  type FaqBlock,
   type GridBlock,
   type HeaderBlock,
   type ImageBlock,
@@ -30,8 +35,10 @@ import { EmbedFacadeSlot } from "./embed-slot";
 import { EmbedPoster } from "./embed-poster";
 import { ImagePicture, focusStyle } from "./image-frame";
 import { LinkGlyph, LinkThumb, resolveLinkIcon } from "./link-icon";
-import { mailtoLink, outboundHref, type OutboundAttrs } from "./outbound";
+import { LockMark, lockOf, lockedLinkAttrs } from "./lock-mark";
+import { mailtoLink, outboundHref, telLink, vcardLink, type OutboundAttrs } from "./outbound";
 import { SocialGlyph } from "./social-icons";
+import { AppsView, BookView, MapView } from "./store-blocks";
 
 /**
  * The block renderers. Nothing outside `src/components/page/` outputs block markup: the editor's
@@ -76,7 +83,7 @@ export interface BlockContext {
  * plain box with the same classes and no href, rel or label: a small copy of the page must not
  * hold dozens of tiny links, and nothing in it can be activated anyway.
  */
-function LinkBox({
+export function LinkBox({
   thumbnail,
   link,
   ...props
@@ -97,7 +104,7 @@ function LinkBox({
  * is left out and that block follows the page. With no usable override, `style` is `undefined` and
  * the block's markup is what it was before overrides existed.
  */
-function blockTokens(
+export function blockTokens(
   tokens: TokenSet,
   overrides: BlockOverrides | undefined,
 ): {
@@ -130,17 +137,26 @@ function LinkView({ block, ctx }: { block: LinkBlock; ctx: BlockContext }) {
   // anchor holds the bare label, as it always did. M6-22: `data-featured` comes from a lookup of
   // the three allowed words, so any other stored value renders no attribute.
   const icon = resolveLinkIcon(block.icon);
+  // M9-30: a locked link keeps its /r/ href on the live page and gains `data-locked`, a padlock and
+  // hidden words; in the preview, the shared draft and the dock it has no href at all.
+  const lock = lockOf(block);
+  const link = lockedLinkAttrs(
+    outboundHref(block.url, { pageId: ctx.pageId, id: block.id }),
+    lock,
+    ctx.mode === "preview" || ctx.thumbnail === true,
+  );
   return (
     <LinkBox
-      className="pg-link"
+      className={lock === null ? "pg-link" : "pg-link pg-lock"}
       data-block-id={block.id}
       data-block-type="link"
       data-button-style={resolved.buttonStyle}
       data-icon={icon?.kind}
       data-featured={isLinkFeatured(block.featured) ? block.featured : undefined}
+      data-locked={lock ?? undefined}
       style={style}
       thumbnail={ctx.thumbnail}
-      link={outboundHref(block.url, { pageId: ctx.pageId, id: block.id })}
+      link={link}
     >
       {icon === null ? (
         block.label
@@ -154,6 +170,7 @@ function LinkView({ block, ctx }: { block: LinkBlock; ctx: BlockContext }) {
           <span className="pg-link-label">{block.label}</span>
         </>
       )}
+      {lock === null ? null : <LockMark kind={lock} />}
     </LinkBox>
   );
 }
@@ -210,28 +227,42 @@ function HeaderView({ block, ctx }: { block: HeaderBlock; ctx: BlockContext }) {
   );
 }
 
-/** One piece of formatted text: italic inside bold, so overlapping ranges nest as `<strong><em>`. */
-function formatted(segment: { text: string; bold: boolean; italic: boolean }): ReactNode {
+/**
+ * One piece of formatted text: the marks nest as `<strong><em><s><u>`, bold outermost (a link, when
+ * there is one, wraps whatever it covers).
+ */
+function formatted(segment: {
+  text: string;
+  bold: boolean;
+  italic: boolean;
+  strike: boolean;
+  underline: boolean;
+}): ReactNode {
   let node: ReactNode = segment.text;
+  if (segment.underline) node = <u>{node}</u>;
+  if (segment.strike) node = <s>{node}</s>;
   if (segment.italic) node = <em>{node}</em>;
   if (segment.bold) node = <strong>{node}</strong>;
   return node;
 }
 
+/** The `data-align` of a line, written from the closed list, never from the document's own string. */
+function alignAttribute(align: AlignValue | null): "left" | "center" | "right" | undefined {
+  if (align === "left") return "left";
+  if (align === "center") return "center";
+  if (align === "right") return "right";
+  return undefined;
+}
+
 /**
- * A text block (M2-16, M6-28). The text itself is never parsed: `white-space: pre-line` keeps the
- * author's line breaks, and bold, italic and links come only from the block's structured `marks`.
- * Every piece of text is a React text node (escaped); a link's `href` and `rel` come from
- * `outboundHref`, so it points at the click redirect and never carries its destination. A link
- * without a usable address (a draft) and every link in a thumbnail render as plain or inert text.
+ * The pieces of one run of text as React nodes: formatted pieces, with each link's pieces gathered
+ * under one anchor. A link's `href` and `rel` come from `outboundHref`, so it points at the click
+ * redirect and never carries its destination. A link without a usable address (a draft) renders as
+ * plain text, and every link in a thumbnail as inert text.
  */
-function TextView({ block, ctx }: { block: TextBlock; ctx: BlockContext }) {
-  const { style } = blockTokens(ctx.tokens, block.overrides);
-  const segments = textSegments(block.text, block.marks);
-  const plain =
-    segments.length === 1 && !segments[0]!.link && !segments[0]!.bold && !segments[0]!.italic;
+function textRun(segments: ReturnType<typeof textSegments>, ctx: BlockContext): ReactNode[] {
   const children: ReactNode[] = [];
-  for (let i = 0; i < segments.length && !plain;) {
+  for (let i = 0; i < segments.length;) {
     const link = segments[i]!.link;
     if (!link) {
       children.push(<Fragment key={i}>{formatted(segments[i]!)}</Fragment>);
@@ -260,9 +291,45 @@ function TextView({ block, ctx }: { block: TextBlock; ctx: BlockContext }) {
       );
     }
   }
+  return children;
+}
+
+/**
+ * A text block (M2-16, M6-28, M9-11). The text itself is never parsed: `white-space: pre-line` keeps
+ * the author's line breaks, and bold, italic, strike, underline, links and alignment come only from
+ * the block's structured `marks`. Every piece of text is a React text node (escaped).
+ *
+ * A block without an `align` mark is one run in the paragraph. A block with one draws every line as
+ * a `.pg-text-line` block of its own (the line breaks are the spans' own, so they are not written
+ * as text) with `data-align` for the alignments the author chose; the stylesheet sets `text-align`
+ * from that attribute, so no `style` and no tenant string reaches the markup.
+ */
+function TextView({ block, ctx }: { block: TextBlock; ctx: BlockContext }) {
+  const { style } = blockTokens(ctx.tokens, block.overrides);
+  const lines = textLines(block.text, block.marks);
+  if (lines) {
+    return (
+      <p className="pg-text" data-block-id={block.id} data-block-type="text" style={style}>
+        {lines.map((line, index) => (
+          <span key={index} className="pg-text-line" data-align={alignAttribute(line.align)}>
+            {textRun(line.segments, ctx)}
+          </span>
+        ))}
+      </p>
+    );
+  }
+  const segments = textSegments(block.text, block.marks);
+  const only = segments[0]!;
+  const plain =
+    segments.length === 1 &&
+    !only.link &&
+    !only.bold &&
+    !only.italic &&
+    !only.strike &&
+    !only.underline;
   return (
     <p className="pg-text" data-block-id={block.id} data-block-type="text" style={style}>
-      {plain ? block.text : children}
+      {plain ? block.text : textRun(segments, ctx)}
     </p>
   );
 }
@@ -418,6 +485,112 @@ function GridView({ block, ctx }: { block: GridBlock; ctx: BlockContext }) {
 }
 
 /**
+ * A FAQ (M9-16): one native `<details>` per question, all closed, every answer already in the
+ * HTML. The disclosure is the browser's own (a tap, Enter or Space), so it needs no script and
+ * works with JavaScript off. Questions and answers are React text (escaped) and the answer is plain
+ * text: no marks and no links. In a thumbnail (the editor's dock) there is nothing to open: only the
+ * questions are drawn, as plain boxes.
+ */
+function FaqView({ block, ctx }: { block: FaqBlock; ctx: BlockContext }) {
+  const { style } = blockTokens(ctx.tokens, block.overrides);
+  return (
+    <div className="pg-faq" data-block-id={block.id} data-block-type="faq" style={style}>
+      {block.items.map((item) =>
+        ctx.thumbnail ? (
+          <div key={item.id} className="pg-faq-item">
+            <div className="pg-faq-q">{item.question}</div>
+          </div>
+        ) : (
+          <details key={item.id} className="pg-faq-item">
+            <summary className="pg-faq-q">{item.question}</summary>
+            <p className="pg-faq-a">{item.answer}</p>
+          </details>
+        ),
+      )}
+    </div>
+  );
+}
+
+/**
+ * Contact details (M9-17): the name, a phone number and an email address as plain `tel:` and
+ * `mailto:` links (not tracked, like the social email icon), the hours, and "Save contact", which
+ * goes to the page's own `/c/<pageId>/<blockId>` route (M9-18). Every value is React text; an
+ * address that is not usable (a draft) renders without an `href`. Nothing here needs JavaScript.
+ */
+function ContactView({ block, ctx }: { block: ContactBlock; ctx: BlockContext }) {
+  const { style } = blockTokens(ctx.tokens, block.overrides);
+  const phone = block.phone ?? "";
+  const email = block.email ?? "";
+  const hours = block.hours ?? "";
+  return (
+    <div className="pg-contact" data-block-id={block.id} data-block-type="contact" style={style}>
+      <p className="pg-contact-name">{block.name}</p>
+      {phone === "" ? null : (
+        <LinkBox className="pg-contact-phone" thumbnail={ctx.thumbnail} link={telLink(phone)}>
+          {phone}
+        </LinkBox>
+      )}
+      {email === "" ? null : (
+        <LinkBox className="pg-contact-email" thumbnail={ctx.thumbnail} link={mailtoLink(email)}>
+          {email}
+        </LinkBox>
+      )}
+      {hours === "" ? null : <p className="pg-contact-hours">{hours}</p>}
+      <LinkBox
+        className="pg-contact-save"
+        thumbnail={ctx.thumbnail}
+        link={vcardLink({ pageId: ctx.pageId, id: block.id })}
+        {...(ctx.thumbnail ? {} : { download: true })}
+      >
+        Save contact
+      </LinkBox>
+    </div>
+  );
+}
+
+/**
+ * A discount code (M9-19): the description, the code itself (always visible and selectable in one
+ * gesture), a Copy button and, with a shop link, "Shop now" through `/r/<pageId>/<blockId>` (the
+ * destination is never in the markup). The Copy button is drawn hidden until the one tenant script
+ * marks the block `data-js`, so a page without JavaScript never shows a dead button; the script
+ * copies the `data-copy` value and writes `data-copied` and the status text. The code is React text
+ * and an escaped attribute. In a thumbnail there is no button at all (a button inside the dock's
+ * button is not valid markup, and nothing in a thumbnail can be pressed).
+ */
+function DiscountView({ block, ctx }: { block: DiscountBlock; ctx: BlockContext }) {
+  const { style } = blockTokens(ctx.tokens, block.overrides);
+  const shop =
+    (block.url ?? "").trim() === ""
+      ? null
+      : outboundHref(block.url, { pageId: ctx.pageId, id: block.id });
+  const description = block.description ?? "";
+  return (
+    <div className="pg-discount" data-block-id={block.id} data-block-type="discount" style={style}>
+      {description === "" ? null : <p className="pg-discount-desc">{description}</p>}
+      <code className="pg-discount-code">{block.code}</code>
+      {ctx.thumbnail ? null : (
+        <>
+          <button
+            type="button"
+            className="pg-discount-copy"
+            data-copy={block.code}
+            data-copied="Copied"
+          >
+            Copy
+          </button>{" "}
+          <span className="pg-discount-status" role="status"></span>
+        </>
+      )}
+      {shop === null ? null : (
+        <LinkBox className="pg-discount-shop" thumbnail={ctx.thumbnail} link={shop}>
+          Shop now
+        </LinkBox>
+      )}
+    </div>
+  );
+}
+
+/**
  * One block. Hidden blocks render nothing (Publish already strips them; this is defense in depth),
  * and so does a `type` this version does not know, without throwing.
  */
@@ -442,6 +615,18 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockContext }) {
       return <GridView block={block} ctx={ctx} />;
     case "divider":
       return <DividerView block={block} ctx={ctx} />;
+    case "faq":
+      return <FaqView block={block} ctx={ctx} />;
+    case "contact":
+      return <ContactView block={block} ctx={ctx} />;
+    case "discount":
+      return <DiscountView block={block} ctx={ctx} />;
+    case "book":
+      return <BookView block={block} ctx={ctx} />;
+    case "apps":
+      return <AppsView block={block} ctx={ctx} />;
+    case "map":
+      return <MapView block={block} ctx={ctx} />;
     default:
       return null;
   }

@@ -2,17 +2,20 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, type Dispatch } from "react";
 import { LIMITS, type Block, type PublishError } from "@/lib/document";
 import { BLOCK_FORMS, blockRowSummary } from "@/lib/editor/contracts";
 import { BLOCK_LIMIT_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
+import { Icon } from "@/components/app/icon";
 import { FeaturedChip } from "@/components/blocks/featured-chip";
+import { LinkTagsChip, LockChip } from "@/components/blocks/link-field-chips";
 import { OverrideChip } from "@/components/themes";
-import { GripIcon } from "./icons";
 
 /** A text control to start typing in: the file input of an image control is hidden, so it is skipped. */
-const FIRST_FIELD = "input:not([type=file]):not([type=hidden]), textarea, select";
+const FIRST_FIELD =
+  "input:not([type=file]):not([type=hidden]), textarea, select, [contenteditable=true], [data-text-editor-first]";
 
 interface BlockRowProps {
   block: Block;
@@ -142,7 +145,7 @@ export const BlockRow = memo(function BlockRow({
       data-block-type={block.type}
       data-invalid={invalid ? "" : undefined}
       data-hidden={hidden ? "true" : undefined}
-      className={`overflow-hidden rounded-md border ${border} ${sortable.isDragging ? "opacity-40" : ""}`}
+      className={`overflow-clip rounded-md border ${border} ${sortable.isDragging ? "opacity-40" : ""}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div className="flex items-center gap-0.5 pr-1">
@@ -165,7 +168,7 @@ export const BlockRow = memo(function BlockRow({
             {...listeners}
             className="flex size-11 shrink-0 cursor-grab touch-none items-center justify-center text-[#9a958d]"
           >
-            <GripIcon />
+            <Icon icon={GripVertical} size={15} />
           </button>
           <button
             ref={mainRef}
@@ -198,6 +201,8 @@ export const BlockRow = memo(function BlockRow({
         </div>
         <OverrideChip block={block} />
         <FeaturedChip block={block} />
+        <LinkTagsChip block={block} />
+        <LockChip block={block} />
         {hidden ? (
           <span className="hidden shrink-0 rounded-sm bg-track px-[7px] py-[3px] font-mono text-[11px] whitespace-nowrap text-text-2 hl:inline-block">
             Hidden
@@ -231,6 +236,10 @@ export const BlockRow = memo(function BlockRow({
             block={block}
             errors={errors}
             onChange={(next) => dispatch({ type: "block/update", block: next })}
+            onSessionChange={(next, session) =>
+              dispatch({ type: "block/session-update", block: next, session })
+            }
+            onSessionEnd={() => dispatch({ type: "block/session-end" })}
             onImage={(image) => dispatch({ type: "block/set-image", id: block.id, image })}
           />
           <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-1.5">

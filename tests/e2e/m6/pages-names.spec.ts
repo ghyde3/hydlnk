@@ -8,7 +8,7 @@ import {
   makeUser,
   signedInUser,
 } from "../fixtures/data";
-import { rawRequest } from "../fixtures/http";
+import { FAULT_COOKIE_IGNORED, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { openEditor, pageRow, statusChip } from "../m2/editor-helpers";
 import { rawBytes } from "./pages-helpers";
@@ -527,7 +527,10 @@ test.describe("M6-14 where names show", () => {
     context,
   }, info) => {
     test.skip(!desktopOnly(info), "same data path at both widths");
-    test.skip(process.env.E2E_PROD_BUILD === "1", "the fault switch is dev only");
+    test.skip(
+      FAULT_COOKIE_IGNORED,
+      "this production server was started without the test hooks, so it ignores the fault cookie",
+    );
     const owner = await signedInUser(context, { label: "lf" });
     await adminClient()
       .from("pages")

@@ -6,8 +6,11 @@ import {
 } from "@/lib/theme";
 import { pickShape, publishFocus } from "./focus";
 import { publishTextAndMarks } from "./marks";
+import { publishLock } from "./lock";
+import { publishBanner, publishNameStyle } from "./page-extras";
 import { resolveProfileOptions } from "./profile-options";
 import { publishShare } from "./share";
+import { publishLinkUtm, publishPageUtm } from "./utm";
 import {
   publishDocSchema,
   type Block,
@@ -44,9 +47,21 @@ export function toPublishForm(draft: DraftDoc, themeTokens: Partial<TokenSet> | 
   }
   // The share card (M6-32): trimmed, empty fields omitted, no `share` key at all when all are empty.
   const share = publishShare(draft.share);
+  // The support banner (M9-23): trimmed; no key at all when it is hidden or empty.
+  const banner = publishBanner(draft.banner);
+  // The logo and the name's own style (M9-24): written only when they differ from the defaults, so a
+  // page that uses none publishes byte-identically to before. A logo's focus is dropped.
+  const logo = imageRef(draft.profile.logo ?? null);
+  // The page's UTM defaults (M9-27) and redirect mode (M9-31): written only when set, so a page that
+  // never used either publishes byte-identically to before.
+  const utm = publishPageUtm(draft.utm);
+  const redirect = publishRedirect(draft.redirect);
   return {
     version: 1,
     ...(share ? { share } : {}),
+    ...(banner ? { banner } : {}),
+    ...(utm ? { utm } : {}),
+    ...(redirect ? { redirect } : {}),
     profile: {
       name: draft.profile.name.trim(),
       bio: draft.profile.bio.trim(),
@@ -54,6 +69,8 @@ export function toPublishForm(draft: DraftDoc, themeTokens: Partial<TokenSet> | 
       // Always written, every one filled (M6-15, M6-17), so the form deep-equals a stored
       // document that the strict schema has parsed (which fills the same defaults).
       ...resolveProfileOptions(draft.profile),
+      ...(logo ? { logo } : {}),
+      ...publishNameStyle(draft.profile, logo !== null),
     },
     theme: { ref: draft.theme.ref, overrides: { ...draft.theme.overrides } },
     tokens: resolveTokens(themeTokens, draft.theme.overrides),
@@ -93,19 +110,41 @@ function cleanOverrides(overrides: BlockOverrides | undefined): { overrides?: Bl
  * A link's `icon` and `featured` (M6-20, M6-22), each only when set: the built-in name, or the
  * image's path, width and height and nothing else. Two equal drafts give equal forms.
  */
-function linkDecorations(block: LinkBlock): Pick<LinkBlock, "icon" | "featured"> {
-  const out: Pick<LinkBlock, "icon" | "featured"> = {};
+function linkDecorations(block: LinkBlock): Pick<LinkBlock, "icon" | "featured" | "utm" | "lock"> {
+  const out: Pick<LinkBlock, "icon" | "featured" | "utm" | "lock"> = {};
   const icon = block.icon;
   if (icon?.type === "builtin") out.icon = { type: "builtin", name: icon.name };
   else if (icon?.type === "image") out.icon = { type: "image", image: imageRef(icon.image)! };
   if (block.featured !== undefined) out.featured = block.featured;
+  // This link's own UTM tags (M9-27) and its lock (M9-29): each only when it says something.
+  const utm = publishLinkUtm(block.utm);
+  if (utm) out.utm = utm;
+  const lock = publishLock(block.lock);
+  if (lock) out.lock = lock;
   return out;
+}
+
+/** Redirect mode as Publish stores it: `{linkId}` (trimmed), or no key when it is off. */
+function publishRedirect(redirect: DraftDoc["redirect"]): { linkId: string } | undefined {
+  if (!redirect || typeof redirect.linkId !== "string") return undefined;
+  const linkId = redirect.linkId.trim();
+  return linkId === "" ? undefined : { linkId };
+}
+
+/** A multi-line value as Publish stores it: line breaks as LF, trimmed (a FAQ answer, the contact hours). */
+function publishLines(value: string): string {
+  return value.replace(/\r\n?/g, "\n").trim();
 }
 
 function publishIcon(icon: SocialIcon): SocialIcon {
   return icon.platform === "email"
     ? { id: icon.id, platform: "email", address: icon.address.trim() }
     : { id: icon.id, platform: icon.platform, url: icon.url.trim() };
+}
+
+/** One store button of a book or app block (M9-20, M9-21): its id, the store and the trimmed address. */
+function publishStoreLink<L extends { id: string; store: string; url: string }>(link: L) {
+  return { id: link.id, store: link.store, url: link.url.trim() };
 }
 
 function publishBlock(block: Block): Block | null {
@@ -190,6 +229,66 @@ function publishBlock(block: Block): Block | null {
       };
     case "divider":
       return { ...base, type: "divider", ...cleanOverrides(block.overrides) };
+    case "faq":
+      return {
+        ...base,
+        type: "faq",
+        items: block.items.map((item) => ({
+          id: item.id,
+          question: item.question.trim(),
+          answer: publishLines(item.answer),
+        })),
+        ...cleanOverrides(block.overrides),
+      };
+    case "contact":
+      return {
+        ...base,
+        type: "contact",
+        name: block.name.trim(),
+        phone: block.phone.trim(),
+        email: block.email.trim(),
+        hours: publishLines(block.hours),
+        ...cleanOverrides(block.overrides),
+      };
+    case "discount": {
+      const link = block.url?.trim() ?? "";
+      return {
+        ...base,
+        type: "discount",
+        code: block.code.trim(),
+        description: block.description.trim(),
+        ...(link === "" ? {} : { url: link }),
+        ...cleanOverrides(block.overrides),
+      };
+    }
+    case "book":
+      return {
+        ...base,
+        type: "book",
+        title: block.title.trim(),
+        author: block.author.trim(),
+        // A cover is a plain reference: no focus (it is always cropped from its middle).
+        cover: imageRef(block.cover),
+        links: block.links.map(publishStoreLink),
+        ...cleanOverrides(block.overrides),
+      };
+    case "apps":
+      return {
+        ...base,
+        type: "apps",
+        links: block.links.map(publishStoreLink),
+        ...cleanOverrides(block.overrides),
+      };
+    case "map":
+      return {
+        ...base,
+        type: "map",
+        name: block.name.trim(),
+        address: block.address.trim(),
+        googleId: block.googleId,
+        appleId: block.appleId,
+        ...cleanOverrides(block.overrides),
+      };
     default:
       // Not a block this version knows (only reachable with unparsed data): never published.
       return null;
@@ -226,15 +325,19 @@ export function publishFormsEqual(a: unknown, b: unknown): boolean {
  * share image (M6-32), last.
  */
 export function collectImageRefs(doc: {
-  profile: { photo: ImageRef | null };
+  profile: { photo: ImageRef | null; logo?: ImageRef | null | undefined };
   share?: { image?: ImageRef | null } | undefined;
   blocks: readonly Block[];
 }): ImageRef[] {
   const refs: ImageRef[] = [];
   if (doc.profile.photo) refs.push(doc.profile.photo);
+  // The profile's logo (M9-24) is an image of the owner's folder like the photo.
+  if (doc.profile.logo) refs.push(doc.profile.logo);
   for (const block of doc.blocks) {
     if ((block.type === "card" || block.type === "image") && block.image) refs.push(block.image);
     if (block.type === "link" && block.icon?.type === "image") refs.push(block.icon.image);
+    // A book's cover (M9-20) is an image of the owner's folder like a card's.
+    if (block.type === "book" && block.cover) refs.push(block.cover);
   }
   if (doc.share?.image) refs.push(doc.share.image);
   return refs;
@@ -276,7 +379,11 @@ export function collectPublishErrors(draft: unknown): PublishError[] {
       const blockId = typeof rawBlock?.id === "string" ? rawBlock.id : null;
       const rest = path.slice(2);
       const list =
-        rest[0] === "icons" || rest[0] === "cells" || rest[0] === "marks"
+        rest[0] === "icons" ||
+        rest[0] === "cells" ||
+        rest[0] === "marks" ||
+        rest[0] === "items" ||
+        rest[0] === "links"
           ? rawBlock?.[rest[0]]
           : undefined;
       if (Array.isArray(list) && typeof rest[1] === "number") {
@@ -292,8 +399,13 @@ export function collectPublishErrors(draft: unknown): PublishError[] {
         };
       } else {
         // A focus outside the picture (M6-23) is one error on the block's `focus`, not one per axis.
+        // A lock (M9-29) is one error on the block's `lock`, whichever of its parts is wrong.
         const field =
-          rest[0] === "image" && rest[1] === "focus" ? "focus" : rest.join(".") || "type";
+          rest[0] === "image" && rest[1] === "focus"
+            ? "focus"
+            : rest[0] === "lock"
+              ? "lock"
+              : rest.join(".") || "type";
         error = { blockId, field, message: issue.message };
       }
     } else {

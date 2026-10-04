@@ -6,6 +6,7 @@ import { StartFromTemplate } from "@/components/templates";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { blockedFieldErrors } from "@/lib/blocklist/fields";
 import { AddBlockCard } from "./add-block-card";
+import { BannerCard } from "./banner-card";
 import { BlockList } from "./block-list";
 import { focusProfilePart } from "./preview-taps";
 import { ProfileCard } from "./profile-card";
@@ -18,8 +19,16 @@ import { ProfileCard } from "./profile-card";
  * through `useWorkspace()`.
  */
 export function EditTab() {
-  const { state, dispatch, form, autosave, templateThemes, profileTap, clearProfileTap } =
-    useWorkspace();
+  const {
+    state,
+    dispatch,
+    editDraft,
+    form,
+    autosave,
+    templateThemes,
+    profileTap,
+    clearProfileTap,
+  } = useWorkspace();
   const { draft } = state;
 
   // The URL fields the database refused as links to blocked sites (M5-03), shown under those fields
@@ -34,6 +43,21 @@ export function EditTab() {
   );
   const nameError =
     state.publishErrors.find((error) => error.field === "profile.name")?.message ?? null;
+  // The logo's own Publish error (M9-24: a missing, foreign or vanished upload), under its control.
+  const logoError =
+    state.publishErrors.find(
+      (error) => error.blockId === null && error.field.startsWith("profile.logo"),
+    )?.message ?? null;
+  // The banner's errors (M9-23): the gate's own and the blocklist's, under their exact fields.
+  const bannerErrors = useMemo(
+    () =>
+      listErrors.filter(
+        (error) =>
+          error.blockId === "banner" ||
+          (error.blockId === null && error.field.startsWith("banner")),
+      ),
+    [listErrors],
+  );
 
   // A tap on the avatar, name or bio in the preview (M6-03): the workspace asks for the field, and
   // it is focused once this tab is on screen (a tap on another tab goes to Edit first).
@@ -54,6 +78,17 @@ export function EditTab() {
         options={draft.profile}
         nameError={nameError}
         focus={state.focus}
+        dispatch={dispatch}
+        logo={draft.profile.logo ?? null}
+        logoPlacement={draft.profile.logoPlacement}
+        logoError={logoError}
+        onEdit={editDraft}
+      />
+      <BannerCard
+        banner={draft.banner}
+        errors={bannerErrors}
+        focus={state.focus}
+        edit={editDraft}
         dispatch={dispatch}
       />
       <AddBlockCard

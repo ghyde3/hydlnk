@@ -1,6 +1,7 @@
 import {
   BLOCK_TYPE_LABELS,
   SOCIAL_PLATFORM_LABELS,
+  appStoreLabel,
   singleLine,
   truncateToCodePoints,
   type Block,
@@ -76,6 +77,56 @@ export function blockRowSummary(block: Block): BlockRowSummary {
       };
     case "divider":
       return { typeLabel, title: "Divider", sub: "" };
+    case "faq":
+      return {
+        typeLabel,
+        title: line(
+          truncateToCodePoints(
+            singleLine(block.items[0]?.question ?? "").trim(),
+            TEXT_TITLE_LENGTH,
+          ),
+          "FAQ",
+        ),
+        sub: count(block.items.length, "question", "questions"),
+      };
+    case "contact": {
+      const phone = (block.phone ?? "").trim() !== "";
+      const email = (block.email ?? "").trim() !== "";
+      return {
+        typeLabel,
+        title: line(block.name, untitled),
+        sub: phone && email ? "Phone and email" : phone ? "Phone" : email ? "Email" : "",
+      };
+    }
+    case "discount":
+      return {
+        typeLabel,
+        title: line(block.code, untitled),
+        sub: line(block.description ?? "", "Discount code"),
+      };
+    case "book":
+      // M9-20: the book's title, and how many stores sell it.
+      return {
+        typeLabel,
+        title: line(block.title, untitled),
+        sub: count(block.links.length, "store", "stores"),
+      };
+    case "apps":
+      // M9-21: the stores' names ("App Store, Google Play"), in the stored order.
+      return {
+        typeLabel,
+        title: line(
+          block.links
+            .map((link) => appStoreLabel(link.store) ?? "")
+            .filter((name) => name !== "")
+            .join(", "),
+          untitled,
+        ),
+        sub: count(block.links.length, "store", "stores"),
+      };
+    case "map":
+      // M9-22: the place name, and its address under it.
+      return { typeLabel, title: line(block.name, untitled), sub: line(block.address, "") };
     default:
       return { typeLabel: "Block", title: "Unknown block", sub: "" };
   }

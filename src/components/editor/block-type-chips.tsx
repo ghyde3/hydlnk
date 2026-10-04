@@ -1,5 +1,7 @@
 "use client";
 
+import { Plus } from "lucide-react";
+import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
 import { BLOCK_TYPES, BLOCK_TYPE_LABELS, type BlockType } from "@/lib/document";
 
 /**
@@ -23,12 +25,13 @@ export function BlockTypeChips({
           onClick={() => onPick(type)}
           className="inline-flex min-h-11 items-center gap-1.5 rounded-sm border border-line-2 bg-surface px-2.5 text-[13px] text-ink disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span
-            aria-hidden="true"
-            className="text-[15px] leading-none font-semibold text-brass-text"
-          >
-            +
-          </span>
+          {/* The 15px icon takes the room the 8.6px "+" did (-3.2px each side), so a chip is as wide as it was. */}
+          <Icon
+            icon={Plus}
+            size={15}
+            strokeWidth={EDITOR_ICON_STROKE}
+            className="-mx-[3.2px] text-brass-text"
+          />
           {BLOCK_TYPE_LABELS[type]}
         </button>
       ))}

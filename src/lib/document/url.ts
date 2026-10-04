@@ -142,3 +142,32 @@ export const emailAddress = z
 export function mailtoHref(address: string | null | undefined): string | undefined {
   return isEmailAddress(address) ? `mailto:${address}` : undefined;
 }
+
+// Phone numbers ----------------------------------------------------------------------------------
+
+/** Message shown for a phone number that fails `isPhoneNumber` (the contact block, M9-17). */
+export const PHONE_ERROR_MESSAGE = "Enter a valid phone number, like +1 555 123 4567.";
+
+/** Only digits, spaces, dots, hyphens and parentheses, with an optional leading "+". */
+const PHONE_SHAPE = /^\+?[0-9 .\-()]+$/;
+
+/**
+ * A phone number as people write one: digits with spaces, dots, hyphens and parentheses between
+ * them, an optional leading "+", and 7 to 15 digits in all. Anything else (a letter, a second "+",
+ * a scheme, a `;` or `@`) is not a number. Does not trim.
+ */
+export function isPhoneNumber(value: unknown): value is string {
+  if (typeof value !== "string" || !PHONE_SHAPE.test(value)) return false;
+  const digits = value.replace(/\D/g, "").length;
+  return digits >= 7 && digits <= 15;
+}
+
+/**
+ * `tel:<+digits>` for a valid number, `undefined` otherwise. Built from the leading "+" and the
+ * digits only, never from the raw string, so nothing a person typed beyond those can reach an href.
+ */
+export function telHref(value: string | null | undefined): string | undefined {
+  const number = typeof value === "string" ? value.trim() : "";
+  if (!isPhoneNumber(number)) return undefined;
+  return `tel:${number.startsWith("+") ? "+" : ""}${number.replace(/\D/g, "")}`;
+}

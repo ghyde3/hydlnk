@@ -28,6 +28,12 @@ import { inkFor, isHexColor } from "./color";
  *   grid     "Color"         border and text (every cell's border and title)
  *   social   "Icon color"    text and border (every icon's glyph and ring)
  *   divider  "Line color"    border (the line)
+ *   faq      "Color"         accent, text and border (marker, questions, lines)
+ *   contact  "Color"         text and border (name, links, card)
+ *   discount "Color"         accent and border (code, Copy button, box)
+ *   book     "Color"         buttonBg and accent = the color, buttonText = its ink (as a link)
+ *   apps     "Color"         text and border (every badge's fill and line)
+ *   map      "Border color"  border (the card's line, drawn once it has a thickness)
  *
  * Every function is pure and returns the same block object when nothing changes.
  */
@@ -119,6 +125,46 @@ export const STYLE_SPECS: Readonly<Record<StyleBlockType, StyleSpec>> = Object.f
     controls: ["color"],
     color: { label: "Line color", keys: ["border"], source: "border", border: false },
   },
+  // M9-16: the marker and focus ring (accent), the questions (text) and the lines between them (border).
+  faq: {
+    controls: ["color"],
+    color: {
+      label: "Color",
+      keys: ["accent", "text", "border"],
+      source: "accent",
+      border: false,
+    },
+  },
+  // M9-17: the name, the links and the border of the card.
+  contact: {
+    controls: ["color"],
+    color: { label: "Color", keys: ["text", "border"], source: "text", border: false },
+  },
+  // M9-19: the code, the Copy button and the box around them (accent and border), its corners and its line.
+  discount: {
+    controls: ["color", "radius", "borderWidth"],
+    color: { label: "Color", keys: ["accent", "border"], source: "accent", border: false },
+  },
+  // M9-20: the store buttons follow the page's button style, so the control is the link's.
+  book: {
+    controls: ["buttonStyle", "color", "radius"],
+    color: {
+      label: "Color",
+      keys: ["buttonBg", "accent", "buttonText"],
+      source: "buttonBg",
+      border: false,
+    },
+  },
+  // M9-21: a badge is filled with the text color and lettered in the page color, with a border line.
+  apps: {
+    controls: ["color", "radius"],
+    color: { label: "Color", keys: ["text", "border"], source: "text", border: false },
+  },
+  // M9-22: the card has a line of its own, like an image or an embed.
+  map: {
+    controls: ["radius", "borderWidth", "color"],
+    color: { label: "Border color", keys: ["border"], source: "border", border: true },
+  },
 });
 
 /** The spec of a block type, or null for a type this version does not know (stored data). */
@@ -202,7 +248,7 @@ function colorValues(block: Block, color: string): Record<string, string> {
   const spec = styleSpecOf(block)!;
   const out: Record<string, string> = {};
   for (const key of spec.color.keys) out[key] = color;
-  if (block.type === "link") out.buttonText = inkFor(color);
+  if (block.type === "link" || block.type === "book") out.buttonText = inkFor(color);
   return out;
 }
 

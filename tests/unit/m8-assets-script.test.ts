@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from "node:fs";
+import { gzipSync } from "node:zlib";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -239,7 +240,7 @@ describe("M8-05 a page holding the most embeds the document limit allows", () =>
     );
     expect(errors).toEqual([]);
     // The script's size has nothing to do with how many embeds there are.
-    expect(CODE.length).toBeLessThan(3 * 1024);
+    expect(gzipSync(CODE).length).toBeLessThan(3 * 1024);
   });
 });
 

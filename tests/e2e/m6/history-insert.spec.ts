@@ -24,7 +24,7 @@ import {
   userWithBlocks,
 } from "./history-helpers";
 import { emptyUser } from "../m2/editor-helpers";
-import { BLOCK_ID_PATTERN } from "@/lib/document";
+import { BLOCK_ID_PATTERN, BLOCK_TYPES, BLOCK_TYPE_LABELS } from "@/lib/document";
 import { inPreviewSheet } from "../m7/phone-preview";
 
 /**
@@ -35,17 +35,8 @@ import { inPreviewSheet } from "../m7/phone-preview";
 
 test.afterAll(cleanupUsers);
 
-const TYPE_ORDER = [
-  "Link",
-  "Card",
-  "Header",
-  "Text",
-  "Image",
-  "Social",
-  "Embed",
-  "Grid",
-  "Divider",
-];
+// The chips follow BLOCK_TYPES (M9-15): the nine originals, then the Wave K blocks.
+const TYPE_ORDER = BLOCK_TYPES.map((type) => BLOCK_TYPE_LABELS[type]);
 
 test.describe("M6-04 the + between blocks", () => {
   test("M6-04 there is a + before, between and after the rows, in page order, outside the sortable items", async ({
@@ -353,11 +344,11 @@ test.describe("M6-04 layout", () => {
     await slotButton(page, 2).click();
     const chooserBox = (await chooser(page, 2).boundingBox())!;
     expect(chooserBox.width).toBeLessThanOrEqual(720.5);
-    // Nine chips fit in at most two rows.
+    // The chips (fifteen with the Wave K blocks) fit in at most three rows at 1440px (M9-15).
     const tops = await chooser(page, 2)
       .getByRole("button")
       .evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
-    expect(new Set(tops).size).toBeLessThanOrEqual(2);
+    expect(new Set(tops).size).toBeLessThanOrEqual(3);
     expect(isPhone(page)).toBe(false);
   });
 });

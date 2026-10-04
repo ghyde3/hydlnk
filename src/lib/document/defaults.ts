@@ -1,9 +1,13 @@
 import { newBlockId } from "./ids";
 import { PROFILE_OPTION_DEFAULTS } from "./profile-options";
+import type { AppStore, BookStore } from "./stores";
 import type {
+  AppLink,
   Block,
   BlockType,
+  BookLink,
   DraftDoc,
+  FaqItem,
   GridCell,
   ImageBlock,
   SocialBlock,
@@ -29,9 +33,24 @@ export function changeSocialPlatform(icon: SocialIcon, platform: SocialPlatform)
   return { id: icon.id, platform, url: icon.url };
 }
 
+/** A new, empty store button of a book block (Amazon unless another store is asked for), with a fresh id. */
+export function newBookLink(store: BookStore = "amazon"): BookLink {
+  return { id: newBlockId(), store, url: "" };
+}
+
+/** A new, empty store button of an app block (the App Store unless another is asked for), with a fresh id. */
+export function newAppLink(store: AppStore = "appstore"): AppLink {
+  return { id: newBlockId(), store, url: "" };
+}
+
 /** A new, empty grid cell with a fresh id. */
 export function newGridCell(): GridCell {
   return { id: newBlockId(), title: "", subtitle: "", url: "" };
+}
+
+/** A new, empty FAQ question with a fresh id (M9-16). */
+export function newFaqItem(): FaqItem {
+  return { id: newBlockId(), question: "", answer: "" };
 }
 
 /**
@@ -80,6 +99,44 @@ export const blockDefaults: Record<BlockType, () => Block> = {
     cells: [newGridCell(), newGridCell()],
   }),
   divider: () => ({ id: newBlockId(), type: "divider", visible: true }),
+  faq: () => ({ id: newBlockId(), type: "faq", visible: true, items: [newFaqItem()] }),
+  contact: () => ({
+    id: newBlockId(),
+    type: "contact",
+    visible: true,
+    name: "",
+    phone: "",
+    email: "",
+    hours: "",
+  }),
+  discount: () => ({
+    id: newBlockId(),
+    type: "discount",
+    visible: true,
+    code: "",
+    description: "",
+    url: "",
+  }),
+  book: () => ({
+    id: newBlockId(),
+    type: "book",
+    visible: true,
+    title: "",
+    author: "",
+    cover: null,
+    links: [newBookLink()],
+  }),
+  apps: () => ({ id: newBlockId(), type: "apps", visible: true, links: [newAppLink()] }),
+  // The two ids are made here and never reused: each button of the card is counted by its own.
+  map: () => ({
+    id: newBlockId(),
+    type: "map",
+    visible: true,
+    name: "",
+    address: "",
+    googleId: newBlockId(),
+    appleId: newBlockId(),
+  }),
 };
 
 /**

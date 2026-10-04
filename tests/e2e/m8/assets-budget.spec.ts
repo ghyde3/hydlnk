@@ -34,8 +34,11 @@ const KB = 1024;
  * everything else is asserted today, and tests/unit/m8-assets-fonts.test.ts stays red until then.
  */
 const FONTS_VENDORED = !String(
-  (JSON.parse(readFileSync("src/lib/tenant-assets/font-manifest.json", "utf8")) as { source: string })
-    .source,
+  (
+    JSON.parse(readFileSync("src/lib/tenant-assets/font-manifest.json", "utf8")) as {
+      source: string;
+    }
+  ).source,
 ).startsWith("pending");
 
 /**
@@ -174,6 +177,58 @@ for (const plan of ["free", "pro"] as const) {
 
     // The document has the badge on a Free page and not on a Pro page.
     expect(await page.getByText("Made with HYDLNK").count()).toBe(plan === "free" ? 1 : 0);
+    await context.close();
+  });
+}
+
+/**
+ * M9-24 (supersedes M8-09 step 3 for a page that sets a name font in a third family): the page adds
+ * exactly that family's latin file at the heading weight, so a first visit makes at most 7 requests
+ * to its own host (the document, 3 woff2 files, the script and the beacon, and nothing else), at most
+ * 115 KB, and none to a third party. The original fixture above (no name font) is unchanged: 1
+ * document, 2 fonts, 1 script, 1 beacon, at most 90 KB.
+ */
+for (const device of ["phone", "desktop"] as const) {
+  test(`M9-24 a full page with a name font in a third family (${device}): 3 woff2 files, at most 7 requests and 115 KB, none to a third party`, async ({
+    browser,
+  }, info) => {
+    test.skip(info.project.name !== device, "one run per project");
+    const target = await seedFullPage("free", { nameFont: "Lora" });
+    const own = `${target.handle}.localhost:${PORT}`;
+    const { context, page, recorder } = await firstVisit(
+      browser,
+      device === "phone" ? PHONE : DESKTOP,
+      target,
+    );
+    const seen = classify(recorder.entries(), own);
+    const listing = seen.counted
+      .map(
+        (entry) => `${entry.method} ${new URL(entry.url).pathname} ${entry.type} ${entry.bytes}B`,
+      )
+      .join("\n");
+    expect(seen.documents, listing).toHaveLength(1);
+    expect(seen.fonts.length, `Fraunces, Inter and Lora, latin\n${listing}`).toBe(
+      FONTS_VENDORED ? 3 : 0,
+    );
+    expect(new Set(seen.fonts.map((entry) => entry.url)).size).toBe(seen.fonts.length);
+    expect(seen.scripts, listing).toHaveLength(1);
+    expect(seen.beacons, listing).toHaveLength(1);
+    expect(seen.counted.length, listing).toBeLessThanOrEqual(7);
+    expect(seen.thirdParty.map((entry) => entry.url)).toEqual([]);
+    const documentBytes = await documentWireBytes(page, seen.documents[0]!);
+    const total =
+      seen.counted.reduce((sum, entry) => sum + entry.bytes, 0) -
+      seen.documents[0]!.bytes +
+      documentBytes;
+    info.annotations.push({
+      type: "bytes",
+      description: `third-family ${info.project.name}: ${total} B to the page's own host (fonts ${seen.fonts.reduce((sum, entry) => sum + entry.bytes, 0)})`,
+    });
+    expect(total, listing).toBeLessThanOrEqual(115 * KB);
+    // The name uses the family at the heading weight: the page's own rule names it, nothing else does.
+    expect(
+      await page.locator("h1.pg-name").evaluate((el) => getComputedStyle(el).fontFamily),
+    ).toMatch(/Lora/);
     await context.close();
   });
 }

@@ -5,15 +5,23 @@ import {
   buildLinks,
   combineRows,
   rollupRawEvents,
+  type Combined,
   type DailyRow,
+  type DayTotals,
   type DimRow,
   type RawEvent,
 } from "./dashboard/aggregate";
 import { formatCtr } from "./dashboard/format";
 import { linkLabelsFromPublished } from "./dashboard/labels";
-import { addDays, dayStartIso, rangeWindow, type RangeDays } from "./dashboard/range";
+import {
+  addDays,
+  dayStartIso,
+  rangeWindow,
+  type RangeDays,
+  type RangeWindow,
+} from "./dashboard/range";
 import { sampleStats } from "./dashboard/sample";
-import type { StatsData, StatsResult } from "./dashboard/types";
+import type { LinkRow, StatsData, StatsResult } from "./dashboard/types";
 
 export { DEFAULT_RANGE, RANGE_BUTTONS, RANGE_VALUES, parseRange } from "./dashboard/range";
 export type { RangeDays, RangeWindow } from "./dashboard/range";
@@ -72,7 +80,37 @@ export interface LoadStatsInput {
   now?: Date;
 }
 
-export async function loadStats(input: LoadStatsInput, source: StatsSource): Promise<StatsResult> {
+/** What `gather` finds for a page that has recorded something: the combined rows and, when asked for and allowed, the breakdown rows. */
+interface Recorded {
+  combined: Combined;
+  dims: DimRow[];
+}
+
+type Gathered =
+  | { ok: false; error: "plan_required" | "not_found"; window: RangeWindow; plan: PlanId }
+  | {
+      ok: true;
+      window: RangeWindow;
+      plan: PlanId;
+      page: PageForStats;
+      published: boolean;
+      /** null: the page has never recorded a view or a click (the screen shows its sample set). */
+      recorded: Recorded | null;
+    };
+
+/**
+ * The shared middle of every read of a page's numbers: ownership, the plan's window, then the
+ * rollup rows and the raw events of the days the rollup has not written yet, combined into one row
+ * per day. The Analytics screen (`loadStats`) and the CSV export (`loadExport`) both read through
+ * it, so the file and the screen cannot disagree about which rows count, and no day is counted from
+ * two places. `withDims` asks for the referrer, device and country rows too (only read when the
+ * plan has breakdowns); the export never asks for them.
+ */
+async function gather(
+  input: LoadStatsInput,
+  source: StatsSource,
+  withDims: boolean,
+): Promise<Gathered> {
   const window = rangeWindow(input.range, input.now ?? new Date());
   const page = await source.resolvePage(input.ownerId, input.pageId);
   if (!page) return { ok: false, error: "not_found", window, plan: "free" };
@@ -85,17 +123,15 @@ export async function loadStats(input: LoadStatsInput, source: StatsSource): Pro
 
   const published = page.published !== null && page.published !== undefined;
   if (!(await source.hasActivity(input.pageId))) {
-    return {
-      ok: true,
-      data: sampleStats(window, plan, published, limits.analyticsBreakdowns),
-    };
+    return { ok: true, window, plan, page, published, recorded: null };
   }
 
+  const readDims = withDims && limits.analyticsBreakdowns;
   const today = window.end;
   const yesterday = addDays(today, -1);
   const [dailyRows, dimRows] = await Promise.all([
     source.dailyStats(input.pageId, window.start, yesterday),
-    limits.analyticsBreakdowns
+    readDims
       ? source.dailyDims(input.pageId, window.start, yesterday)
       : Promise.resolve<DimRow[]>([]),
   ]);
@@ -113,7 +149,35 @@ export async function loadStats(input: LoadStatsInput, source: StatsSource): Pro
   const rawDaily = raw.daily.filter((row) => rawDays.has(row.day));
   const rawDims = raw.dims.filter((row) => rawDays.has(row.day));
 
-  const combined = combineRows(window, [...dailyRows, ...rawDaily]);
+  return {
+    ok: true,
+    window,
+    plan,
+    page,
+    published,
+    recorded: {
+      combined: combineRows(window, [...dailyRows, ...rawDaily]),
+      dims: readDims
+        ? [...dimRows, ...rawDims].filter((row) => row.day >= window.start && row.day <= today)
+        : [],
+    },
+  };
+}
+
+export async function loadStats(input: LoadStatsInput, source: StatsSource): Promise<StatsResult> {
+  const found = await gather(input, source, true);
+  if (!found.ok) return found;
+
+  const { window, plan, page, published, recorded } = found;
+  const limits = PLAN_LIMITS[plan];
+  if (!recorded) {
+    return {
+      ok: true,
+      data: sampleStats(window, plan, published, limits.analyticsBreakdowns),
+    };
+  }
+
+  const { combined, dims } = recorded;
   const { views, clicks, uniques } = combined.totals;
   const data: StatsData = {
     window,
@@ -123,11 +187,45 @@ export async function loadStats(input: LoadStatsInput, source: StatsSource): Pro
     kpis: { views, clicks, ctr: formatCtr(clicks, views), uniques },
     chart: buildChart(window, combined.days),
     links: buildLinks(combined.clicksByBlock, linkLabelsFromPublished(page.published), views),
-    breakdowns: limits.analyticsBreakdowns
-      ? buildBreakdowns(
-          [...dimRows, ...rawDims].filter((row) => row.day >= window.start && row.day <= today),
-        )
-      : null,
+    breakdowns: limits.analyticsBreakdowns ? buildBreakdowns(dims) : null,
   };
   return { ok: true, data };
+}
+
+/** What the CSV export writes (M9-26): one entry per UTC day of the range, and the links that were clicked. */
+export type ExportResult =
+  | {
+      ok: true;
+      window: RangeWindow;
+      /** Oldest first, zero days included: the same rows the chart and the KPIs are made of. */
+      days: DayTotals[];
+      /** Most clicks first (then by name): the rows of "Clicks by link". */
+      links: LinkRow[];
+    }
+  | { ok: false; error: "plan_required" | "not_found"; window: RangeWindow; plan: PlanId };
+
+/**
+ * The numbers of the CSV export: the same ownership check, plan window and freshness rule as the
+ * screen (`gather`), and never the sample set. A page that has recorded nothing exports real zeros:
+ * a zero row for every day and no link rows. No breakdown (referrer, device, country) is read.
+ */
+export async function loadExport(
+  input: LoadStatsInput,
+  source: StatsSource,
+): Promise<ExportResult> {
+  const found = await gather(input, source, false);
+  if (!found.ok) return found;
+
+  const { window, page, recorded } = found;
+  const combined = recorded?.combined ?? combineRows(window, []);
+  return {
+    ok: true,
+    window,
+    days: combined.days,
+    links: buildLinks(
+      combined.clicksByBlock,
+      linkLabelsFromPublished(page.published),
+      combined.totals.views,
+    ),
+  };
 }

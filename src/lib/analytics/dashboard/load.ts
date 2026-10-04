@@ -1,5 +1,5 @@
 import "server-only";
-import { loadStats, type LoadStatsInput } from "../stats";
+import { loadExport, loadStats, type ExportResult, type LoadStatsInput } from "../stats";
 import type { StatsResponse } from "./types";
 import { createAdminStatsSource } from "./source";
 
@@ -13,6 +13,22 @@ export async function loadStatsResponse(input: LoadStatsInput): Promise<StatsRes
     return await loadStats(input, createAdminStatsSource());
   } catch (error) {
     console.error(`[analytics] loading stats for page ${input.pageId} failed`, error);
+    return { ok: false, error: "load_failed" };
+  }
+}
+
+/**
+ * `loadExport` against the real database, for the CSV export route (M9-26): the same source, so the
+ * same ownership check and plan window as the screen. A failure is logged and answered as
+ * `load_failed`.
+ */
+export async function loadExportResponse(
+  input: LoadStatsInput,
+): Promise<ExportResult | { ok: false; error: "load_failed" }> {
+  try {
+    return await loadExport(input, createAdminStatsSource());
+  } catch (error) {
+    console.error(`[analytics] exporting stats for page ${input.pageId} failed`, error);
     return { ok: false, error: "load_failed" };
   }
 }

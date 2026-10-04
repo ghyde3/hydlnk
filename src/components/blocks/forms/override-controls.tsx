@@ -1,6 +1,12 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
+import {
+  ColorPanel,
+  ColorSwatchButton,
+  pickerValue,
+  useColorPanel,
+} from "@/components/design/color-picker";
 import { usePageTokens } from "@/components/themes/page-tokens-context";
 import {
   BORDER_WIDTH_OPTIONS,
@@ -239,7 +245,7 @@ function normalizeHex(input: string): string | null {
 }
 
 /**
- * Color: a swatch (the native color picker) and a 16px hex field. The field keeps what is being
+ * Color: a swatch (opens the color picker, M9-07) and a 16px hex field. The field keeps what is being
  * typed; only a complete #RRGGBB reaches the block, so a half-typed value never makes the draft
  * invalid. Clearing the field, or "Theme default", removes the override.
  */
@@ -263,8 +269,16 @@ function ColorControl({
 
   const themeValue = tokens?.[spec.source];
   const themeColor = typeof themeValue === "string" ? themeValue : undefined;
-  // A native color input only takes #rrggbb: a theme color in another form (#RGB, #RRGGBBAA) shows white.
+  // The swatch and the picker show #rrggbb: a theme color in another form (#RGB, #RRGGBBAA) shows
+  // its six-digit equivalent, and the draft is not rewritten until the person picks a color.
   const swatch = stored ?? (isHexColor(themeColor) ? themeColor : "#FFFFFF");
+  const panel = useColorPanel();
+  const swatchButton = useRef<HTMLButtonElement>(null);
+  /** Done and Escape: the panel closes and focus goes back to the swatch. */
+  function closePanel() {
+    panel.close();
+    swatchButton.current?.focus();
+  }
   const partial = text.trim() !== "" && normalizeHex(text) === null;
   const message = error ?? (partial ? "Use a #RRGGBB color, for example #C46A4F." : null);
 
@@ -278,52 +292,68 @@ function ColorControl({
   }
 
   return (
-    <Field label={spec.label} error={message} className="flex-1 basis-[220px]">
-      {(control) => (
-        <div className="flex items-center gap-2">
-          <input
-            type="color"
-            aria-label="Color swatch"
-            value={swatch.toLowerCase()}
-            data-field="override-color-swatch"
-            onChange={(event) => {
-              setTyped(null);
-              commit(event.target.value);
-            }}
-            className="size-11 shrink-0 cursor-pointer rounded-md border border-line-3 bg-surface p-1"
-          />
-          <input
-            {...control}
-            type="text"
-            inputMode="text"
-            autoComplete="off"
-            spellCheck={false}
-            maxLength={7}
-            placeholder={themeColor ? themeColor.toUpperCase() : "#RRGGBB"}
-            value={text}
-            data-field="override-color"
-            onFocus={() => setTyped(stored ?? "")}
-            onBlur={() => setTyped(null)}
-            onChange={(event) => {
-              setTyped(event.target.value);
-              commit(event.target.value);
-            }}
-            className={controlClass(partial || error !== null, "min-w-0 flex-1 font-mono")}
-          />
-          {hasColorOverride(block) ? (
-            <button
-              type="button"
-              onClick={() => {
-                setTyped(null);
-                onChange(setColor(block, null));
+    <>
+      <Field label={spec.label} error={message} className="flex-1 basis-[220px]">
+        {(control) => (
+          <div className="flex items-center gap-2">
+            <ColorSwatchButton
+              name={spec.label}
+              label="Color swatch"
+              color={pickerValue(swatch, "#FFFFFF")}
+              open={panel.open}
+              panelId={panel.panelId}
+              onToggle={panel.toggle}
+              onEscape={closePanel}
+              buttonRef={swatchButton}
+              data-field="override-color-swatch"
+            />
+            <input
+              {...control}
+              type="text"
+              inputMode="text"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={7}
+              placeholder={themeColor ? themeColor.toUpperCase() : "#RRGGBB"}
+              value={text}
+              data-field="override-color"
+              onFocus={() => setTyped(stored ?? "")}
+              onBlur={() => setTyped(null)}
+              onChange={(event) => {
+                setTyped(event.target.value);
+                commit(event.target.value);
               }}
-              className={`${FORM_BUTTON} shrink-0`}
-            >
-              Theme default
-            </button>
-          ) : null}
+              className={controlClass(partial || error !== null, "min-w-0 flex-1 font-mono")}
+            />
+            {hasColorOverride(block) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setTyped(null);
+                  onChange(setColor(block, null));
+                }}
+                className={`${FORM_BUTTON} shrink-0`}
+              >
+                Theme default
+              </button>
+            ) : null}
+          </div>
+        )}
+      </Field>
+      {panel.open ? (
+        <div className="basis-full">
+          <ColorPanel
+            id={panel.panelId}
+            name={spec.label}
+            value={swatch}
+            onPick={(hex) => {
+              setTyped(null);
+              commit(hex);
+            }}
+            onDone={closePanel}
+          />
         </div>
-      )}
-    </Field>
+      ) : null}
+    </>
   );
 }

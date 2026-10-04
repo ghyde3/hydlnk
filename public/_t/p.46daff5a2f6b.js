@@ -50,11 +50,62 @@ frame.style.aspectRatio = "auto";
 button.replaceWith(frame);
 frame.focus();
 }
+var COPY_MAX = 64;
+var copying = new WeakMap();
+function copied(button, status, word) {
+var state = copying.get(button);
+if (!state) {
+state = { label: button.textContent, timer: 0 };
+copying.set(button, state);
+}
+clearTimeout(state.timer);
+button.textContent = word;
+if (status) status.textContent = word;
+state.timer = setTimeout(function () {
+button.textContent = state.label;
+if (status) status.textContent = "";
+}, 2000);
+}
+function selectCode(block, status) {
+var code = block && block.querySelector(".pg-discount-code");
+var selection = window.getSelection && window.getSelection();
+if (code && selection) {
+var range = doc.createRange();
+range.selectNodeContents(code);
+selection.removeAllRanges();
+selection.addRange(range);
+}
+if (status) status.textContent = "Select and copy the code.";
+}
+function copy(button) {
+var value = (button.getAttribute("data-copy") || "").slice(0, COPY_MAX);
+var word = button.getAttribute("data-copied") || "Copied";
+var block = button.closest(".pg-discount");
+var status = block && block.querySelector(".pg-discount-status");
+var clipboard = navigator.clipboard;
+if (!clipboard || !clipboard.writeText) return selectCode(block, status);
+try {
+clipboard.writeText(value).then(
+function () {
+copied(button, status, word);
+},
+function () {
+selectCode(block, status);
+}
+);
+} catch {
+selectCode(block, status);
+}
+}
 doc.addEventListener("click", function (event) {
 var target = event.target;
 var button = target && target.closest && target.closest("button.pg-embed-play[data-embed-src]");
-if (button) mount(button);
+if (button) return mount(button);
+var copyButton = target && target.closest && target.closest("[data-copy]");
+if (copyButton) copy(copyButton);
 });
+var blocks = doc.querySelectorAll(".pg-discount");
+for (var i = 0; i < blocks.length; i++) blocks[i].setAttribute("data-js", "");
 var pageId = doc.currentScript && doc.currentScript.getAttribute("data-page-id");
 function beacon() {
 try {

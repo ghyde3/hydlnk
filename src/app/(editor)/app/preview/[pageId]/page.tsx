@@ -61,7 +61,7 @@ export default async function DraftPreviewPage({ params }: PageProps<"/app/previ
 
   return (
     <>
-      <TenantFonts tokens={doc.tokens} />
+      <TenantFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
       <DraftPreviewBar status={status} />
       <PreviewFrame>
         <InteractivePageRenderer

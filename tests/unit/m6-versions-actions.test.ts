@@ -413,7 +413,7 @@ describe("M6-49 the work", () => {
       { admin: client, mediaExists: async () => false },
     );
     if (!result.ok) throw new Error("unreachable");
-    expect(result.missingImages).toBe(3);
+    expect(result.missingImages).toBe(4);
     expect(result.doc.profile.photo).toBeNull();
   });
 
@@ -495,7 +495,7 @@ describe("M6-49 the work", () => {
       { pageId: PAGE, versionId: VERSION, userId: OWNER },
       { admin: client, mediaExists: async () => false },
     );
-    expect(result).toEqual({ ok: true, restored: 8, missingImages: 4 });
+    expect(result).toEqual({ ok: true, restored: 8, missingImages: 5 });
     const draft = (
       writes(calls)[0]!.payload as {
         draft: { profile: { photo: unknown }; theme: { overrides: Record<string, unknown> } };

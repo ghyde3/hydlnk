@@ -17,11 +17,7 @@ import "server-only";
  * The script and the font files are static files under public/_t/, served by the platform with an
  * immutable cache (the `headers()` rule in next.config.ts), so they never reach the proxy or a function.
  */
-export {
-  TENANT_SCRIPT_FILE,
-  TENANT_SCRIPT_INTEGRITY,
-  TENANT_SCRIPT_SRC,
-} from "./generated";
+export { TENANT_SCRIPT_FILE, TENANT_SCRIPT_INTEGRITY, TENANT_SCRIPT_SRC } from "./generated";
 export { STYLED_BLOCK_TYPES, tenantInlineCss, tenantStateCss, type TenantCssInput } from "./css";
 export { tenantFontFaces, tenantFontPreloads } from "./fonts";
 export { TENANT_ASSET_PREFIX, TENANT_FONT_DIR } from "./constants";

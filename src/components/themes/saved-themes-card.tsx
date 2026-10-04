@@ -1,7 +1,11 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { SAVED_THEMES_HINT, THEMES_LOAD_FAILED_MESSAGE } from "@/lib/editor/messages";
+import {
+  SAVED_THEMES_HINT,
+  THEMES_LOAD_FAILED_MESSAGE,
+  THEME_DELETED_NOTICE,
+} from "@/lib/editor/messages";
 import { ownThemes } from "@/lib/themes";
 import { DeleteThemeDialog } from "./delete-theme-dialog";
 import { RenameThemeDialog } from "./rename-theme-dialog";
@@ -32,6 +36,7 @@ export function SavedThemesCard({
   onPreview,
   previewingId = null,
   onBeforeSave,
+  deletedNotice = false,
 }: {
   library: ThemeLibrary;
   /**
@@ -44,6 +49,11 @@ export function SavedThemesCard({
   previewingId?: string | null;
   /** Runs first on every press of "Save as theme": the Design screen ends a theme preview here (M6-44). */
   onBeforeSave?: (() => void) | undefined;
+  /**
+   * The page's theme is gone (M5-16, M9-34): a draft that names a deleted theme, or the theme the
+   * person has just deleted. The card says so under its message region, in its own status element.
+   */
+  deletedNotice?: boolean;
   /**
    * Set when the server could not read the themes (M5-16): the card says so and offers Retry instead
    * of the rows, and nothing else on the screen changes.
@@ -107,6 +117,16 @@ export function SavedThemesCard({
       <div role="status" aria-live="polite" data-testid="theme-message-region">
         {library.message ? <Message message={library.message} library={library} /> : null}
       </div>
+
+      {deletedNotice ? (
+        <p
+          role="status"
+          data-testid="theme-deleted-notice"
+          className="mb-3 rounded-md border border-line-2 bg-surface px-4 py-3 text-sm text-ink-2"
+        >
+          {THEME_DELETED_NOTICE}
+        </p>
+      ) : null}
 
       {loadFailed ? (
         <div

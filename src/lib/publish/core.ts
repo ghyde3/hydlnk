@@ -12,6 +12,7 @@ import {
   type PublishError,
 } from "@/lib/document";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
+import { checkLinkRules } from "./link-rules";
 import { mediaOrigin } from "@/lib/media/url";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -174,6 +175,22 @@ export async function publishPageCore(
     ]);
   }
 
+  // Redirect mode and locks (M9-29, M9-31): the rules that need the raw draft, the plan or the
+  // page's hosts. Nothing is written yet; a failed read refuses (closed, never "fine").
+  let linkErrors: PublishError[];
+  try {
+    linkErrors = await checkLinkRules(admin, {
+      pageId: pageId.data,
+      userId,
+      form: checked.data,
+      raw,
+    });
+  } catch (error) {
+    console.error("[publish] checking the link rules failed", error);
+    return refuse("error");
+  }
+  if (linkErrors.length > 0) return refuse("invalid", linkErrors);
+
   // The authoritative blocklist check (M5-03): on the FINAL form, the exact document about to be
   // stored and served, with the platform's own URL parser (what a browser follows). The database
   // check above (the same function the `pages` trigger runs) is the early, specific one; its Postgres
@@ -239,6 +256,10 @@ function placedImages(form: PublishDoc): Placed[] {
   if (form.profile.photo) {
     placed.push({ ref: form.profile.photo, blockId: null, field: "profile.photo" });
   }
+  // The logo (M9-24): the same ownership and existence rules, under its own field.
+  if (form.profile.logo) {
+    placed.push({ ref: form.profile.logo, blockId: null, field: "profile.logo" });
+  }
   for (const block of form.blocks) {
     if ((block.type === "card" || block.type === "image") && block.image) {
       placed.push({ ref: block.image, blockId: block.id, field: "image" });
@@ -246,6 +267,10 @@ function placedImages(form: PublishDoc): Placed[] {
     // A link's thumbnail (M6-20): the same rules, reported under the field `icon`.
     if (block.type === "link" && block.icon?.type === "image") {
       placed.push({ ref: block.icon.image, blockId: block.id, field: "icon" });
+    }
+    // A book's cover (M9-20): the same rules, reported under the field `cover`.
+    if (block.type === "book" && block.cover) {
+      placed.push({ ref: block.cover, blockId: block.id, field: "cover" });
     }
   }
   // The share image (M6-32): the same ownership and existence rules, under its own field.

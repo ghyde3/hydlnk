@@ -2,7 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { axeViolations } from "../fixtures/a11y";
 import { accessTokenFor, cleanupUsers, makeUser } from "../fixtures/data";
-import { restAs } from "../fixtures/http";
+import { FAULT_COOKIE_IGNORED, restAs } from "../fixtures/http";
 import { url } from "../helpers";
 import {
   expectNoHorizontalScroll,
@@ -279,12 +279,14 @@ test.describe("M7-06 moving along a row", () => {
     const row = systemRow(page);
     const requests: string[] = [];
     page.on("request", (request) => {
-      // Our own origins and the database: the preview's Google Fonts links are not the row's.
+      // Our own origins and the database: the preview's Google Fonts links are not the row's. A
+      // production build also prefetches the nav links' routes (`?_rsc=`) once they are idle; that is
+      // the framework's, not the row's.
       const target = request.url();
       const ours =
         /^https?:\/\/([a-z0-9-]+\.)?localhost(:\d+)?\//.test(target) ||
         target.includes("127.0.0.1");
-      if (ours && !/hot-update|webpack-hmr|__nextjs|_next\/static|\.map$/.test(target)) {
+      if (ours && !/hot-update|webpack-hmr|__nextjs|_next\/static|\.map$|[?&]_rsc=/.test(target)) {
         requests.push(`${request.method()} ${target}`);
       }
     });
@@ -501,8 +503,8 @@ test.describe("M7-06 the applied theme after a Redo and after Retry", () => {
     context,
   }) => {
     test.skip(
-      process.env.E2E_PROD_BUILD === "1" || Boolean(process.env.HL_PROD_PORT),
-      "the fault cookie is honoured by the dev server only",
+      FAULT_COOKIE_IGNORED,
+      "this production server was started without the test hooks, so it ignores the fault cookie",
     );
     const user = await themeUser(context, "m7t-retry", "pro");
     await setTheme(user.pageId, SYSTEM_IDS.Plum);

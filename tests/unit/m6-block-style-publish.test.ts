@@ -83,6 +83,7 @@ describe.skipIf(!run)("M6-45 publish gate (local Supabase)", () => {
         ({
           ...fixtureBlocks[type],
           ...(type === "card" || type === "image" ? { image } : {}),
+          ...(type === "book" ? { cover: image } : {}),
           overrides: { ...style, ...stray },
         }) as Block,
     );

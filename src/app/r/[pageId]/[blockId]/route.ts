@@ -1,4 +1,4 @@
-import { clickEndpoint } from "@/lib/analytics/ingest/routes";
+import { clickEndpoint, clickPostEndpoint } from "@/lib/analytics/ingest/routes";
 
 export const dynamic = "force-dynamic";
 
@@ -21,4 +21,15 @@ export async function HEAD(
   context: { params: Promise<{ pageId: string; blockId: string }> },
 ) {
   return clickEndpoint(request, context);
+}
+
+/**
+ * The answer to a locked link's interstitial (M9-29): `confirm=1` for an age check, `code=...` for
+ * a code. Any other link answers 405. See src/lib/analytics/ingest/lock-gate.ts.
+ */
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ pageId: string; blockId: string }> },
+) {
+  return clickPostEndpoint(request, context);
 }

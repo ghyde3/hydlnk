@@ -11,6 +11,7 @@ import {
   tenantInlineCss,
 } from "@/lib/tenant-assets";
 import { escapeHtml } from "./escape";
+import { faqJsonLd } from "./faq-json-ld";
 import { renderDocument, renderHead, type HeadPreload } from "./head";
 import { renderStatic } from "./static-markup";
 
@@ -101,15 +102,18 @@ function baseMetadata(document: PublishDoc): Metadata {
 export function renderLivePage(input: LivePageInput): string {
   const { document, pageId, urls } = input;
   const { hints, root } = renderPage(input);
-  const preloads: HeadPreload[] = tenantFontPreloads(document.tokens).map(
-    (href): HeadPreload => ({ as: "font", href, type: "font/woff2" }),
-  );
+  // The name font (M9-24) is preloaded like the heading and body faces when it is a third family.
+  const preloads: HeadPreload[] = tenantFontPreloads({
+    ...document.tokens,
+    nameFont: document.profile.nameFont,
+  }).map((href): HeadPreload => ({ as: "font", href, type: "font/woff2" }));
   return renderDocument(
     renderHead({
       metadata: urls ? pageMetadata(document, urls) : baseMetadata(document),
       css: tenantInlineCss(document),
       preloads,
       hints,
+      jsonLd: faqJsonLd(document),
     }),
     root + scriptTag(pageId),
   );

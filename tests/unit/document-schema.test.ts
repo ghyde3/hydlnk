@@ -29,8 +29,9 @@ const publishOk = (doc: unknown) => publishDocSchema.safeParse(doc).success;
 const both = (doc: unknown) => [draftOk(doc), publishOk(doc)];
 
 describe("block types (M2-01)", () => {
-  it("has exactly nine types, in chip order", () => {
-    expect([...BLOCK_TYPES]).toEqual([
+  it("has the nine originals, then faq, contact, discount, book, apps and map, in chip order (M9-15)", () => {
+    // Each Wave K block lands on its own, so the list is the full order cut to the types that exist.
+    const order = [
       "link",
       "card",
       "header",
@@ -40,7 +41,15 @@ describe("block types (M2-01)", () => {
       "embed",
       "grid",
       "divider",
-    ]);
+      "faq",
+      "contact",
+      "discount",
+      "book",
+      "apps",
+      "map",
+    ];
+    expect(BLOCK_TYPES.length).toBeGreaterThanOrEqual(12);
+    expect([...BLOCK_TYPES]).toEqual(order.slice(0, BLOCK_TYPES.length));
   });
 
   it("the full fixture covers every type and passes both schemas", () => {

@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
-import { rawRequest } from "../fixtures/http";
+import { FAULT_COOKIE_IGNORED, rawRequest } from "../fixtures/http";
 import {
   draftWith,
   emptyUser,
@@ -22,14 +22,13 @@ import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
  *
  * The draft is read by the Next.js server, so a Playwright route cannot abort that read. The load
  * failure is switched on with the `hl-fault` cookie (src/lib/testing/faults.ts), which the dev
- * server honours and a production build never does; those specs skip themselves against a
- * production build. The 401 and the publish failure are browser requests (the autosave PATCH to
+ * server honours, and so does a production build started with the test hooks on (CI); those specs
+ * skip themselves against a production server without them. The 401 and the publish failure are browser requests (the autosave PATCH to
  * Supabase and the Server Action POST), so they are routed here exactly as the acceptance says.
  */
 
 test.afterAll(cleanupUsers);
 
-const PROD_BUILD = process.env.E2E_PROD_BUILD === "1" || Boolean(process.env.HL_PROD_PORT);
 const NAME = (page: Page) => page.getByLabel("Display name", { exact: true });
 const publishButton = (page: Page) =>
   page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
@@ -117,7 +116,10 @@ test.describe("M5-15 a page with nothing to show", () => {
 });
 
 test.describe("M5-15 the draft cannot be loaded", () => {
-  test.skip(PROD_BUILD, "the fault cookie is honoured by the dev server only");
+  test.skip(
+    FAULT_COOKIE_IGNORED,
+    "this production server was started without the test hooks, so it ignores the fault cookie",
+  );
 
   test("M5-15 an error card with Retry, never a blank screen or error text; Retry loads the editor once the fault is gone", async ({
     page,

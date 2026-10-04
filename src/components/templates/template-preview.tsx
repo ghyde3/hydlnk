@@ -8,25 +8,21 @@ import type { TokenSet } from "@/lib/theme";
 
 /** The width the page is laid out at inside the card: a phone screen. */
 export const PREVIEW_PAGE_WIDTH = 390;
-/** The card's picture is this tall whatever the page holds. */
-export const PREVIEW_HEIGHT = 190;
 /**
- * How far above its first line the picture starts, in page pixels (before scaling). A phone page
- * opens with the person's photo and name, 250px or more before the first block; drawn from the very
- * top, a card this small would show those and none of the template. The picture starts at the bio
- * instead (at the name when there is no bio, at the first block when there is neither): the line
- * that marks it as their page, then the template's blocks, in its theme. Nothing is cut through a
- * line of text, and the full page is still what is drawn.
+ * The card's picture is this tall whatever the page holds (M9-33, Gary's decision closing the held
+ * M7-07: it was 190). The window starts at the very top of the page, so the person's photo and
+ * display name show, and a phone page spends about 250px of its 390px width on them: 300px leaves the
+ * first block of the template visible below them (at least 24px of it, at both viewports).
  */
-export const PREVIEW_LEAD = 8;
+export const PREVIEW_HEIGHT = 300;
 /** Cards a little way below the fold are drawn before they are scrolled to. */
 const PRELOAD_MARGIN = "240px";
 
 /**
- * A template's card picture (M7-07): the real `PageRenderer` fed what applying the template would
- * give (`templatePreviewDoc`: the person's own profile, the template's blocks, its own theme),
+ * A template's card picture (M7-07, M9-33): the real `PageRenderer` fed what applying the template
+ * would give (`templatePreviewDoc`: the person's own profile, the template's blocks, its own theme),
  * laid out as a 390px phone page and scaled by a CSS transform to the card's width, clipped to a
- * short window that starts at the bio (see `PREVIEW_LEAD`).
+ * 300px window that starts at the top of the page.
  *
  * It is a picture, not a page: `inert` and `aria-hidden` take it out of the tab order and the
  * accessibility tree (the dialog keeps no extra heading, landmark or tab stop), the renderer's
@@ -50,13 +46,10 @@ export function TemplatePreview({
   themeTokens: Partial<TokenSet> | null;
 }) {
   const box = useRef<HTMLDivElement>(null);
-  const frame = useRef<HTMLDivElement>(null);
   // No observer (an old browser, a unit test): draw at once.
   const [near, setNear] = useState(() => typeof IntersectionObserver === "undefined");
-  // The box's width gives the scale; 0 until the dialog is shown. The offset is how far down the
-  // page the window starts, in page pixels.
+  // The box's width gives the scale; 0 until the dialog is shown.
   const [width, setWidth] = useState(0);
-  const [offset, setOffset] = useState(0);
   const scale = width > 0 ? width / PREVIEW_PAGE_WIDTH : 0.77;
 
   // Memoized so the fresh block ids are made once: a re-render of the card (a radio was picked) must
@@ -94,31 +87,6 @@ export function TemplatePreview({
     return () => observer.disconnect();
   }, []);
 
-  // Where the window starts, in page pixels: the bio, else the name, else the first block. The page
-  // is re-measured when its column changes size (a web font arriving moves the profile's lines);
-  // only layout is read.
-  useLayoutEffect(() => {
-    const element = frame.current;
-    if (!near || !element || width <= 0) return;
-    const measure = () => {
-      const anchor =
-        element.querySelector('[data-profile-part="bio"]') ??
-        element.querySelector('[data-profile-part="name"]') ??
-        element.querySelector("main");
-      if (!anchor) return;
-      // The window's own shift moves both rectangles alike, so it cancels out.
-      const top =
-        (anchor.getBoundingClientRect().top - element.getBoundingClientRect().top) / scale;
-      setOffset(Math.max(0, Math.round(top - PREVIEW_LEAD)));
-    };
-    measure();
-    const column = element.querySelector(".pg-column");
-    if (!column || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(column);
-    return () => observer.disconnect();
-  }, [near, width, scale]);
-
   return (
     <div
       ref={box}
@@ -131,13 +99,12 @@ export function TemplatePreview({
     >
       {near ? (
         <div
-          ref={frame}
           data-testid="template-preview-page"
           data-page-frame=""
           style={{
             width: PREVIEW_PAGE_WIDTH,
-            height: PREVIEW_HEIGHT / scale + offset,
-            transform: `translateY(${-offset * scale}px) scale(${scale})`,
+            height: PREVIEW_HEIGHT / scale,
+            transform: `scale(${scale})`,
           }}
           className="absolute top-0 left-0 origin-top-left overflow-hidden"
         >

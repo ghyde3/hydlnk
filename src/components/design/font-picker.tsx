@@ -1,6 +1,9 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Icon } from "@/components/app/icon";
+import { cn } from "@/lib/cn";
 import {
   FONT_CATALOG,
   FONT_CATEGORY_LABELS,
@@ -104,15 +107,7 @@ export function FontPicker({
         </span>
         <span className="flex shrink-0 items-center gap-2 text-xs text-text-2">
           {FONT_CATEGORY_LABELS[current.category]}
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            className={`size-4 fill-none stroke-current stroke-[1.8] ${open ? "rotate-180" : ""}`}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M7 10l5 5 5-5" />
-          </svg>
+          <Icon icon={ChevronDown} size={16} className={cn(open && "rotate-180")} />
         </span>
       </button>
       {open ? (

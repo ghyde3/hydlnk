@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { filterCss, parseCss, serializeCss } from "@/lib/tenant-assets/css-split";
 import {
   STYLED_BLOCK_TYPES,
+  STYLED_PAGE_FEATURES,
   pageRulesCss,
   tenantInlineCss,
   tenantStateCss,
@@ -99,6 +100,12 @@ describe("M8-02 step 3: the renderer rules a page needs", () => {
         social: [".pg-social"],
         embed: [".pg-embed"],
         grid: [".pg-grid", ".pg-cell"],
+        faq: [".pg-faq", ".pg-faq-item", ".pg-faq-q", ".pg-faq-a"],
+        contact: [".pg-contact", ".pg-contact-name", ".pg-contact-save"],
+        discount: [".pg-discount", ".pg-discount-code", ".pg-discount-copy"],
+        book: [".pg-book", ".pg-book-link"],
+        apps: [".pg-apps", ".pg-app-badge"],
+        map: [".pg-map", ".pg-map-link"],
       };
       for (const prefix of prefixes[type]!) expect(all, `${type}: ${prefix}`).toContain(prefix);
     }
@@ -113,7 +120,8 @@ describe("M8-02 step 3: the renderer rules a page needs", () => {
       (selector) =>
         !selector.includes("[data-page-frame]") && !selector.includes(".pg-placeholder"),
     );
-    const got = new Set(flat(parseCss(pageRulesCss([...BLOCK_TYPES]))));
+    // Every block type and every page feature (the banner, the logo, the name style: M9-23, M9-24).
+    const got = new Set(flat(parseCss(pageRulesCss([...BLOCK_TYPES], STYLED_PAGE_FEATURES))));
     for (const selector of wanted) expect(got.has(selector), selector).toBe(true);
   });
 

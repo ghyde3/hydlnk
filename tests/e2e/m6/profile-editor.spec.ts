@@ -238,6 +238,7 @@ test.describe("M6-16 photo controls in the Profile card", () => {
 
     // Upload a photo first, so there is a file the draft references.
     await card(page)
+      .getByTestId("profile-photo-row")
       .locator("input[type=file]")
       .setInputFiles({ name: "me.png", mimeType: "image/png", buffer: makePng(80, 80) });
     await confirmPhoto(page); // M6-24: the position dialog first
@@ -583,8 +584,12 @@ test.describe("M6-15 / M6-17 stored values outside the lists", () => {
     expect((await pageRow(user.pageId)).published).toEqual(before.published);
     const html = await (await page.request.get(url(user.handle))).text();
     expect(html).not.toMatch(/blob|url\(x\)/);
-    // The inline renderer CSS legitimately holds "border-radius:999px", so look at the markup only.
-    const markup = html.replace(/<style\b[\s\S]*?<\/style>/g, "").replace(/<script\b[\s\S]*?<\/script>/g, "");
+    // The inline renderer CSS legitimately holds "border-radius:999px", and an inline brand mark's path
+    // data (M9-04, Simple Icons) can hold any digits, so look at the markup outside <style>, <script> and <svg>.
+    const markup = html
+      .replace(/<style\b[\s\S]*?<\/style>/g, "")
+      .replace(/<script\b[\s\S]*?<\/script>/g, "")
+      .replace(/<svg\b[\s\S]*?<\/svg>/g, "");
     expect(markup).not.toContain("999");
   });
 

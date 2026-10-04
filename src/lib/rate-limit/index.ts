@@ -18,12 +18,20 @@ import { createSupabaseRateLimitStore } from "./store";
  *
  * Fails open: when the counter store throws or does not answer in time, the request is allowed and
  * the failure is logged (without the key). A limiter outage must never break page views or clicks.
+ *
+ * One exception, by option (M9-29): `failClosed: true` makes a store error or a timeout answer
+ * `{ allowed: false, retryAfter: 1, failed: true }` instead. Only the two callers that guard a secret,
+ * the link lock's code check (src/lib/analytics/ingest/lock-gate.ts) and `hashLinkCode`
+ * (src/lib/links/actions.ts), pass it: a limiter that cannot count must not let anyone guess a code.
+ * Every other caller keeps the default, and a test scans the source tree to keep it that way.
  */
 
 export interface RateLimitResult {
   allowed: boolean;
   /** Seconds until a request would be allowed again (1 to `windowSeconds`) when blocked, else 0. */
   retryAfter: number;
+  /** Set only by `failClosed`: the counter store failed, so nothing was counted and the request is refused. */
+  failed?: true;
 }
 
 export interface RateLimitStore {
@@ -45,6 +53,8 @@ export interface RateLimitOptions {
   /** Defaults to the visitor-hash secret. */
   secret?: string;
   timeoutMs?: number;
+  /** On a store error or a timeout, refuse (`failed: true`) instead of allowing. See the note at the top. */
+  failClosed?: boolean;
 }
 
 export async function rateLimit(
@@ -53,7 +63,12 @@ export async function rateLimit(
   windowSeconds: number,
   options: RateLimitOptions = {},
 ): Promise<RateLimitResult> {
-  if (!Number.isInteger(limit) || limit < 1 || !Number.isInteger(windowSeconds) || windowSeconds < 1) {
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    !Number.isInteger(windowSeconds) ||
+    windowSeconds < 1
+  ) {
     throw new RangeError("rateLimit needs a whole limit and window of at least 1");
   }
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -68,10 +83,12 @@ export async function rateLimit(
     });
     return await Promise.race([store.hit(bucket, limit, windowSeconds), timeout]);
   } catch (error) {
-    console.error(
-      "[rate-limit] the counter store failed; allowing the request:",
-      error instanceof Error ? error.message : "unknown error",
-    );
+    const reason = error instanceof Error ? error.message : "unknown error";
+    if (options.failClosed === true) {
+      console.error("[rate-limit] the counter store failed; refusing the request:", reason);
+      return { allowed: false, retryAfter: 1, failed: true };
+    }
+    console.error("[rate-limit] the counter store failed; allowing the request:", reason);
     return { allowed: true, retryAfter: 0 };
   } finally {
     if (timer) clearTimeout(timer);

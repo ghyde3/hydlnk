@@ -20,7 +20,12 @@ import { styleOverrides, tryTheme, type TryStyle, type TryThemeId } from "./them
  */
 
 export type TryBlockKind = BlockType;
-export const TRY_BLOCK_KINDS: readonly TryBlockKind[] = BLOCK_TYPES;
+/**
+ * The block kinds the demo offers: the nine v1 originals (M1-25). The Wave K blocks (M9-15: faq,
+ * contact, discount, book, apps, map) are drawn by `makeBlock` all the same, but the landing page's
+ * builder does not list them.
+ */
+export const TRY_BLOCK_KINDS: readonly TryBlockKind[] = BLOCK_TYPES.slice(0, 9);
 
 /** The most blocks the demo page holds. The product allows 50; a phone preview has no use for that. */
 export const TRY_MAX_BLOCKS = 12;
@@ -66,6 +71,12 @@ const SOCIAL_URLS: Record<Exclude<SocialPlatform, "email">, string> = {
   linkedin: "https://www.linkedin.com/",
   github: "https://github.com/",
   threads: "https://www.threads.net/",
+  reddit: "https://www.reddit.com/",
+  snapchat: "https://www.snapchat.com/",
+  pinterest: "https://www.pinterest.com/",
+  discord: "https://discord.com/",
+  twitch: "https://www.twitch.tv/",
+  spotify: "https://open.spotify.com/",
   website: "https://example.com/",
 };
 
@@ -90,7 +101,11 @@ function socialIcons(id: string, platforms: readonly SocialPlatform[]): SocialIc
 export function makeBlock(
   kind: TryBlockKind,
   serial: number,
-  options: { variant?: number; socials?: readonly SocialPlatform[]; linkLabels?: readonly string[] } = {},
+  options: {
+    variant?: number;
+    socials?: readonly SocialPlatform[];
+    linkLabels?: readonly string[];
+  } = {},
 ): Block {
   const id = blockId(kind, serial);
   const common = { id, visible: true } as const;
@@ -125,7 +140,11 @@ export function makeBlock(
     case "image":
       return { ...common, type: "image", image: null, alt: "Your photo goes here" };
     case "social":
-      return { ...common, type: "social", icons: socialIcons(id, options.socials ?? DEFAULT_SOCIALS) };
+      return {
+        ...common,
+        type: "social",
+        icons: socialIcons(id, options.socials ?? DEFAULT_SOCIALS),
+      };
     case "embed":
       return {
         ...common,
@@ -138,12 +157,81 @@ export function makeBlock(
         ...common,
         type: "grid",
         cells: [
-          { id: `${id}-0`, title: "Prints", subtitle: "Small batches", url: "https://example.com/prints" },
+          {
+            id: `${id}-0`,
+            title: "Prints",
+            subtitle: "Small batches",
+            url: "https://example.com/prints",
+          },
           { id: `${id}-1`, title: "Zines", subtitle: "Out now", url: "https://example.com/zines" },
         ],
       };
     case "divider":
       return { ...common, type: "divider" };
+    case "faq":
+      return {
+        ...common,
+        type: "faq",
+        items: [
+          {
+            id: `${id}-0`,
+            question: "Do you ship worldwide?",
+            answer: "Yes. Orders leave the studio within three days.",
+          },
+          {
+            id: `${id}-1`,
+            question: "Can I commission a piece?",
+            answer: "Send me a message with what you have in mind.",
+          },
+        ],
+      };
+    case "contact":
+      return {
+        ...common,
+        type: "contact",
+        name: "Mara Okafor",
+        phone: "+1 555 123 4567",
+        email: "hello@example.com",
+        hours: "Mon to Fri, 9am to 5pm",
+      };
+    case "discount":
+      return {
+        ...common,
+        type: "discount",
+        code: "SAVE10",
+        description: "10% off your first order",
+        url: "https://example.com/shop",
+      };
+    case "book":
+      return {
+        ...common,
+        type: "book",
+        title: "The Night Market",
+        author: "Mara Okafor",
+        cover: null,
+        links: [
+          { id: `${id}-0`, store: "amazon", url: "https://example.com/amazon" },
+          { id: `${id}-1`, store: "bookshop", url: "https://example.com/bookshop" },
+        ],
+      };
+    case "apps":
+      return {
+        ...common,
+        type: "apps",
+        links: [
+          { id: `${id}-0`, store: "appstore", url: "https://example.com/app-store" },
+          { id: `${id}-1`, store: "googleplay", url: "https://example.com/google-play" },
+        ],
+      };
+    case "map":
+      return {
+        ...common,
+        type: "map",
+        name: "Okafor Studio",
+        address: "12 Canal Street, Brooklyn, NY",
+        googleId: `${id}-g`,
+        appleId: `${id}-a`,
+      };
   }
 }
 
@@ -219,5 +307,17 @@ export function blockSummary(block: Block): string {
       return clip(block.cells.map((cell) => cell.title).join(", "));
     case "divider":
       return "A quiet line";
+    case "faq":
+      return clip(block.items[0]?.question || "Questions and answers");
+    case "contact":
+      return clip(block.name || "Contact details");
+    case "discount":
+      return clip(block.code || "Discount code");
+    case "book":
+      return clip(block.title || "Book links");
+    case "apps":
+      return "App Store and Google Play";
+    case "map":
+      return clip(block.name || "Map location");
   }
 }

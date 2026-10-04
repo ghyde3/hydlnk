@@ -106,7 +106,10 @@ describe("add a block (M2-10)", () => {
     expect(byType.social).toMatchObject({ icons: [{ platform: "instagram", url: "" }] });
     expect((byType.grid as { cells: unknown[] }).cells).toHaveLength(2);
     expect(byType.divider).toMatchObject({ type: "divider" });
-    expect(new Set(ids(state)).size).toBe(9);
+    expect(byType.faq).toMatchObject({ items: [{ question: "", answer: "" }] });
+    expect(byType.contact).toMatchObject({ name: "", phone: "", email: "", hours: "" });
+    expect(byType.discount).toMatchObject({ code: "", description: "", url: "" });
+    expect(new Set(ids(state)).size).toBe(BLOCK_TYPES.length);
   });
 
   it("does nothing at the 50-block limit", () => {

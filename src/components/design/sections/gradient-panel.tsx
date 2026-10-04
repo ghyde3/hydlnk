@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowUp } from "lucide-react";
+import { Icon } from "@/components/app/icon";
 import type { DesignSectionProps } from "@/components/design/types";
 import {
   GRADIENT_DIRECTIONS,
@@ -26,16 +28,7 @@ import { ColorRow } from "./color-section";
 /** An arrow that points the way the gradient runs; `angle` is the CSS angle (0 is up, 90 is right). */
 function Arrow({ angle }: { angle: number }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="size-5 fill-none stroke-current stroke-[2]"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      style={{ transform: `rotate(${angle}deg)` }}
-    >
-      <path d="M12 19V5M6 11l6-6 6 6" />
-    </svg>
+    <Icon icon={ArrowUp} size={20} style={{ transform: `rotate(${angle}deg)` }} />
   );
 }
 

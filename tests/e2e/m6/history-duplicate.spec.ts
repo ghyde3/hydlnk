@@ -361,6 +361,8 @@ test.describe("M6-05 layout of the panel buttons", () => {
     await userWithBlocks(context, "dupl", textBlocks(3));
     await openEditor(page);
     const row = await openRow(page, bid(2));
+    // The text editor (M9-12) arrives as its own chunk and changes the panel's height: measure after it.
+    await expect(row.locator('[data-field="text"][contenteditable="true"]')).toBeVisible();
     const boxes = [];
     for (const name of ["Move up", "Move down", "Duplicate block", "Delete block"]) {
       const box = (await row.getByRole("button", { name, exact: true }).boundingBox())!;
@@ -386,6 +388,8 @@ test.describe("M6-05 layout of the panel buttons", () => {
     await userWithBlocks(context, "dupd", textBlocks(3));
     await openEditor(page);
     const row = await openRow(page, bid(2));
+    // The text editor (M9-12) arrives as its own chunk and changes the panel's height: measure after it.
+    await expect(row.locator('[data-field="text"][contenteditable="true"]')).toBeVisible();
     const tops = [];
     for (const name of ["Move up", "Move down", "Duplicate block", "Delete block"]) {
       tops.push(

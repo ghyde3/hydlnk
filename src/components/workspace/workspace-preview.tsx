@@ -20,7 +20,7 @@ import { useWorkspace } from "./workspace-context";
  * navigates), and during a theme preview it does nothing either.
  */
 export function WorkspacePreview() {
-  const { shownForm, pageId, chrome, preview, activeTab, onPreviewTap } = useWorkspace();
+  const { shownForm, pageId, chrome, preview, activeTab, onPreviewTap, draft } = useWorkspace();
   const themePreview = preview.view;
   return (
     <section
@@ -50,6 +50,15 @@ export function WorkspacePreview() {
           </span>
         </div>
       )}
+      {draft.redirect && themePreview === null ? (
+        // M9-32: the preview still draws the page (redirect mode is the live page's behavior only).
+        <p
+          data-testid="redirect-caption"
+          className="m-0 w-full rounded-md border border-line bg-surface px-3 py-2 text-xs text-text-2"
+        >
+          Redirect mode is on. Visitors skip this page.
+        </p>
+      ) : null}
     </section>
   );
 }

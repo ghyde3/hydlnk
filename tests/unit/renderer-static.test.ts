@@ -161,7 +161,7 @@ describe("M2-05 renderer code: untrusted content", () => {
     expect(`${blocks}${facade}`).not.toMatch(/src=\{block\.url|src=\{[a-z]*\.url\}/);
   });
 
-  it("imports only the document, theme, media, env and routing helpers from the app", () => {
+  it("imports only the document, theme, media, env and routing helpers from the app, and the brand marks' data", () => {
     const allowed = [
       /^react$/,
       /^react-dom/,
@@ -172,6 +172,8 @@ describe("M2-05 renderer code: untrusted content", () => {
       /^@\/lib\/media\/url$/,
       /^@\/lib\/env\/client$/,
       /^@\/lib\/routing\/urls$/,
+      // M9-04: the brand marks' path data (plain data, CC0), imported by name in brand-marks.ts only.
+      /^simple-icons$/,
     ];
     for (const file of rendererCode) {
       const code = read(file)

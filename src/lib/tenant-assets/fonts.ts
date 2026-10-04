@@ -63,9 +63,21 @@ function faceIsWellFormed(face: FontFile): boolean {
   return FONT_FILE_PATTERN.test(face.file) && UNICODE_RANGE_PATTERN.test(face.unicodeRange);
 }
 
-type FontTokens = { fontHeading?: unknown; fontBody?: unknown; weightHeading?: unknown };
+/**
+ * The font tokens of a page and, from its profile, the name's own font (M9-24): `nameFont` is an
+ * allowlisted family or anything else (absent, a hostile string), which counts as no name font.
+ */
+type FontTokens = {
+  fontHeading?: unknown;
+  fontBody?: unknown;
+  weightHeading?: unknown;
+  nameFont?: unknown;
+};
 
-/** The family and weight each role needs: the heading at its chosen weight, the body at 400. */
+/**
+ * The family and weight each role needs: the heading at its chosen weight, the body at 400, and the
+ * name font (when the profile has one) at the heading weight its family supports.
+ */
 export function selectedFaces(tokens: FontTokens): { family: FontFamily; weight: number }[] {
   const heading = fontEntry(tokens?.fontHeading)?.family ?? SYSTEM_DEFAULT_TOKENS.fontHeading;
   const body = fontEntry(tokens?.fontBody)?.family ?? SYSTEM_DEFAULT_TOKENS.fontBody;
@@ -74,6 +86,14 @@ export function selectedFaces(tokens: FontTokens): { family: FontFamily; weight:
     { family: heading, weight },
     { family: body, weight: 400 },
   ];
+  // The name font (M9-24): the name uses it at the heading weight token. Only an allowlisted family
+  // counts. A face the page already loads (the heading's, or the body's at 400) adds nothing.
+  const name = fontEntry(tokens?.nameFont)?.family;
+  if (name)
+    wanted.push({
+      family: name,
+      weight: nearestWeight(name, Number(tokens?.weightHeading) || 400),
+    });
   // A family used for both roles at one weight is one set of rules, not two.
   return wanted.filter(
     (face, index) =>

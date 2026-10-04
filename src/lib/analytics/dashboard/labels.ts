@@ -1,4 +1,10 @@
-import { SOCIAL_PLATFORM_LABELS, type SocialPlatform } from "@/lib/document";
+import {
+  SOCIAL_PLATFORM_LABELS,
+  appStoreLabel,
+  bookStoreLabel,
+  truncateToCodePoints,
+  type SocialPlatform,
+} from "@/lib/document";
 
 /** What a click row says for an id that is no longer in the published document. */
 export const REMOVED_LINK = "Removed link";
@@ -36,6 +42,12 @@ function linkedText(source: unknown, mark: Record<string, unknown>): string {
   return chars.slice(0, 60).join("").replace(/\s+/g, " ").trim();
 }
 
+/** At most 60 characters (code points), the length every click-by-link label is held to. */
+function cutTo60(value: string): string {
+  const chars = Array.from(value);
+  return chars.length <= 60 ? value : `${chars.slice(0, 59).join("")}\u2026`;
+}
+
 /**
  * Click ids to link names, read from the currently published document: a link by its label, a card
  * by its title, an image link by its alt text, a grid cell by its own title, a social icon by its
@@ -46,6 +58,15 @@ function linkedText(source: unknown, mark: Record<string, unknown>): string {
 export function linkLabelsFromPublished(published: unknown): Map<string, string> {
   const labels = new Map<string, string>();
   const blocks = isRecord(published) && Array.isArray(published.blocks) ? published.blocks : [];
+  // The support banner's link (M9-23): "Banner: {label}", cut to 60 characters like the others.
+  if (
+    isRecord(published) &&
+    isRecord(published.banner) &&
+    typeof published.banner.id === "string"
+  ) {
+    const label = text(published.banner.label);
+    labels.set(published.banner.id, cutTo60(`Banner: ${label || "link"}`));
+  }
   for (const block of blocks) {
     if (!isRecord(block) || typeof block.id !== "string") continue;
     switch (block.type) {
@@ -72,6 +93,38 @@ export function linkLabelsFromPublished(published: unknown): Map<string, string>
             labels.set(mark.id, nameOf(linkedText(block.text, mark), mark.url));
           }
         }
+        break;
+      case "discount":
+        // The shop link of a discount code (M9-19) is clicked under the block's own id.
+        if (text(block.url) !== "") {
+          labels.set(block.id, truncateToCodePoints(`Discount ${text(block.code)}`, 60).trim());
+        }
+        break;
+      case "contact":
+        // "Save contact" (M9-18) is counted under the contact block's own id.
+        labels.set(block.id, truncateToCodePoints(`Save contact: ${text(block.name)}`, 60).trim());
+        break;
+      case "book":
+        // A store button of a book (M9-20): "{title} on Amazon", each under its own id.
+        for (const link of Array.isArray(block.links) ? block.links : []) {
+          if (!isRecord(link) || typeof link.id !== "string") continue;
+          const store = bookStoreLabel(link.store);
+          if (store === null) continue;
+          labels.set(link.id, truncateToCodePoints(`${text(block.title)} on ${store}`, 60).trim());
+        }
+        break;
+      case "apps":
+        // A badge of the app store block (M9-21): "App Store" or "Google Play", each under its own id.
+        for (const link of Array.isArray(block.links) ? block.links : []) {
+          if (!isRecord(link) || typeof link.id !== "string") continue;
+          const store = appStoreLabel(link.store);
+          if (store !== null) labels.set(link.id, store);
+        }
+        break;
+      case "map":
+        // The two buttons of a map (M9-22), each under its own id.
+        if (typeof block.googleId === "string") labels.set(block.googleId, "Map: Google Maps");
+        if (typeof block.appleId === "string") labels.set(block.appleId, "Map: Apple Maps");
         break;
       case "social":
         for (const icon of Array.isArray(block.icons) ? block.icons : []) {

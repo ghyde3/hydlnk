@@ -2,9 +2,14 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { publishedDocSchema } from "@/lib/document";
 import { PAGE_REVALIDATE_SECONDS, PUBLIC_READ_CACHE_VERSION, pageTag } from "@/lib/publish/tags";
+import { getPrimaryDomain } from "@/lib/domains/primary";
+import { clientEnv } from "@/lib/env/client";
+import { tenantOrigin } from "@/lib/publish/urls";
+import { customOrigin } from "@/lib/routing/urls";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { findLinkUrl } from "./target";
+import { resolveLink } from "./link-target";
 import type { BeaconPage, ClickTarget } from "./types";
+import type { ContactCard } from "./vcard";
 
 /**
  * The two reads the tracking routes make, both with the secret key (RLS does not apply, so these
@@ -36,8 +41,7 @@ export async function lookupBeaconPage(pageId: string): Promise<BeaconPage | nul
 
 /** What the cached click read hands back: plain JSON, so the data cache can store it. */
 type PublishedRead =
-  | { found: true; published: unknown; handle: string; customHosts: string[] }
-  | { found: false };
+  { found: true; published: unknown; handle: string; customHosts: string[] } | { found: false };
 
 async function readPublished(pageId: string): Promise<PublishedRead> {
   const { data, error } = await createAdminSupabase()
@@ -47,7 +51,8 @@ async function readPublished(pageId: string): Promise<PublishedRead> {
     .maybeSingle();
   // A database failure is an error, not a "not found": nobody should be told a link is gone
   // because Postgres hiccuped (and the data cache never stores a throw).
-  if (error) throw new Error(`Loading published page ${pageId} for a click failed: ${error.message}`);
+  if (error)
+    throw new Error(`Loading published page ${pageId} for a click failed: ${error.message}`);
   if (!data || data.published === null || data.accounts.suspended_at !== null) {
     return { found: false };
   }
@@ -68,15 +73,20 @@ async function readPublished(pageId: string): Promise<PublishedRead> {
  */
 function readPublishedCached(pageId: string): Promise<PublishedRead> {
   if (process.env.NODE_ENV !== "production") return readPublished(pageId);
-  return unstable_cache(readPublished, ["click-target", "host-bound", PUBLIC_READ_CACHE_VERSION, pageId], {
-    tags: [pageTag(pageId)],
-    revalidate: PAGE_REVALIDATE_SECONDS,
-  })(pageId);
+  return unstable_cache(
+    readPublished,
+    ["click-target", "host-bound", PUBLIC_READ_CACHE_VERSION, pageId],
+    {
+      tags: [pageTag(pageId)],
+      revalidate: PAGE_REVALIDATE_SECONDS,
+    },
+  )(pageId);
 }
 
 /**
  * The link with this id in the page's published document, with the handle and verified custom hosts
- * of its page (the hosts the redirect may be served on), or null: unknown page,
+ * of its page (the hosts the redirect may be served on), its lock and its UTM-tagged destination
+ * (M9-27, M9-29: `resolveLink`), or null: unknown page,
  * nothing published, suspended owner, a document that fails the published schema, an id that is not
  * a link, or a URL that is not plain http(s).
  */
@@ -85,6 +95,46 @@ export async function resolveClickTarget(pageId: string, id: string): Promise<Cl
   if (!read.found) return null;
   const parsed = publishedDocSchema.safeParse(read.published);
   if (!parsed.success) return null;
-  const url = findLinkUrl(parsed.data, id);
-  return url === null ? null : { url, handle: read.handle, customHosts: read.customHosts };
+  const link = resolveLink(parsed.data, id);
+  return link === null
+    ? null
+    : {
+        url: link.url,
+        ...(link.lock ? { lock: link.lock } : {}),
+        handle: read.handle,
+        customHosts: read.customHosts,
+      };
+}
+
+/**
+ * The contact block with this id in the page's published document, for "Save contact" (M9-18): its
+ * stored fields, the page's public address (its primary custom domain when one is verified, else
+ * its handle host, decided here and never from the request) and the hosts that may serve the
+ * download. Null for an unknown page, nothing published, a suspended owner, a document that fails
+ * the published schema, an id that is not a visible contact block (a hidden one, another type, a
+ * draft-only one). Throws when the database fails.
+ */
+export async function resolveContactCard(
+  pageId: string,
+  blockId: string,
+): Promise<ContactCard | null> {
+  const read = await readPublishedCached(pageId);
+  if (!read.found) return null;
+  const parsed = publishedDocSchema.safeParse(read.published);
+  if (!parsed.success) return null;
+  const block = parsed.data.blocks.find(
+    (candidate) => candidate.id === blockId && candidate.type === "contact",
+  );
+  if (!block || block.type !== "contact" || block.visible === false) return null;
+  const hostname = await getPrimaryDomain(pageId);
+  const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
+  return {
+    name: block.name,
+    phone: block.phone,
+    email: block.email,
+    hours: block.hours,
+    pageUrl: hostname ? `${customOrigin(hostname, rootDomain)}/` : `${tenantOrigin(read.handle)}/`,
+    handle: read.handle,
+    customHosts: read.customHosts,
+  };
 }

@@ -136,7 +136,8 @@ describe("try builder sample page", () => {
     const state = initialTryState();
     expect(publishedDocSchema.safeParse(buildTryDoc(state)).success).toBe(true);
     const all = presetBlocks({ blocks: everyKind });
-    expect(all).toHaveLength(8);
+    // Every kind but Image (it needs an upload).
+    expect(all).toHaveLength(everyKind.length);
     expect(publishedDocSchema.safeParse(buildTryDoc({ ...state, blocks: all })).success).toBe(true);
   });
 
