@@ -3545,7 +3545,7 @@
         "Supersedes: none. M2-08 step 3 (the Storage public URL returns 200 with a long cache-control) and M3-15 step 3 (the Storage URL of an old image still returns 200) still hold, because Storage itself is unchanged; M5-26 step 1 (images long-cached, no optimizer calls) still holds and gains this layer."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M7-15",

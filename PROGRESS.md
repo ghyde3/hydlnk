@@ -2,6 +2,14 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Release: Wave I (one Editor workspace and visual-pass fixes)
+
+- PR #19 merged, merge commit 4826c14. Migrations applied through release-migrations.yml (run 37170415708): 20261007000001_traffic_two_months (flag_high_traffic_pages and admin_traffic_flags recreated with the two-month rule, grants restated), 20261007000002_blocked_links_admin (admin_audit action check widened with block_domain and unblock_domain). Deployment https://vercel.com/ghyde3s-projects/hydlnk/2TDr1NXd6xdUskk9PxzTAbqRWCBU (success).
+- Checks: full browser suite green (run 37168878730, all four shards); `pnpm verify` PASS (5834 unit, pgTAP PASS after db:reset); `pnpm test:e2e:prod` 12/12.
+- M7-14 step 6 proven on production and flipped: an image on links.hyde-co.com loads from https://hydlnk.com/media/...; requests 1, 2, 3 returned `x-vercel-cache: MISS`, `HIT`, `HIT` with `cache-control: public, max-age=31536000, immutable`; the same path on links.hyde-co.com returns 404; the page HTML contains no supabase.co/storage URLs.
+- CI: the integration-test step retries twice (`vitest --retry 2`) for the local Supabase gateway's transient "invalid response from the upstream server".
+- Still held: M7-06 (deleted-applied-theme notice), M7-07 (preview window starts under the color band), M7-13 (two states unit-proven only).
+
 ## 2026-10-03 — One canonical image origin
 
 - **Asked by Gary (2026-10-03, to avoid surprise hosting bills):** the previous host rule still let anyone force a CDN miss, a function call and a Storage fetch per invented subdomain. Now `/media` is served from ONE origin, the root host (`NEXT_PUBLIC_ROOT_DOMAIN`: `https://hydlnk.com`, `http://localhost:3000`). `mediaUrl()` is absolute on it; `mediaHostAllowed` is true only for the router's "marketing" kind (root, `*.vercel.app`, local loopback); app, handles, custom domains, `www` and anything else get the short 404 and no Storage request. Path validation, immutable caching, HEAD handling and the cache tag are unchanged; 200s add `Access-Control-Allow-Origin: *` (public images, no `Vary`) so the editor's "Adjust" `fetch()` from the app host can read the picture.
