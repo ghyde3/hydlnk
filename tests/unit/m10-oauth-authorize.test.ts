@@ -2,16 +2,24 @@ import { describe, expect, it } from "vitest";
 import { AUTHORIZE_MAX_QUERY_BYTES, STATE_MAX_LENGTH } from "@/lib/oauth/authorize";
 import { buildClientRedirect, errorParams, successParams } from "@/lib/oauth/redirect";
 import {
+  CLAUDE_ID,
+  CLAUDE_REDIRECT,
   DCR_ID,
   ISSUER,
   OTHER,
+  OTHER_CIMD_ID,
+  OTHER_CIMD_REDIRECT,
   REDIRECT,
   RESOURCE,
   USER,
+  addClaude,
+  addOtherCimd,
+  allow,
   authorizeQuery,
   harness,
   pkce,
 } from "./helpers/oauth-flow";
+import { TEST_STUB_ORIGIN } from "@/lib/oauth/ssrf";
 import { memoryLimiter } from "./helpers/oauth-fake-store";
 
 /**
@@ -164,15 +172,15 @@ describe("M10-11 errors that never redirect", () => {
     const h = harness();
     const limited = harness({ limit: memoryLimiter(() => h.store.clock) });
     for (let i = 0; i < 60; i += 1) {
-      expect((await limited.authorize(authorizeQuery(), { user: null })).kind).toBe("login");
+      expect((await limited.authorize(authorizeQuery(), { user: USER })).kind).toBe("consent");
     }
-    const result = await limited.authorize(authorizeQuery(), { user: null });
+    const result = await limited.authorize(authorizeQuery(), { user: USER });
     expect(result).toMatchObject({ kind: "error_page", status: 429, errorClass: "too_many" });
     expect((result as { retryAfter: number }).retryAfter).toBeGreaterThanOrEqual(1);
     // Another address is not affected.
     expect(
-      (await limited.authorize(authorizeQuery(), { user: null, clientKey: "198.51.100.9" })).kind,
-    ).toBe("login");
+      (await limited.authorize(authorizeQuery(), { user: USER, clientKey: "198.51.100.9" })).kind,
+    ).toBe("consent");
     // The limit key is the first thing asked.
     expect(h.limiter.calls).toHaveLength(0);
   });
@@ -197,6 +205,15 @@ describe("M10-11 errors that never redirect", () => {
     expect(h.store.requests.size).toBe(0);
   });
 });
+
+/**
+ * Errors go back to the app only for a client whose return address can be trusted: one of the three
+ * real client-metadata documents, or a metadata client this person has connected before (Wave L review,
+ * finding 3). The rows below run against Claude's; the next block shows every other client getting the
+ * error page instead.
+ */
+const claudeQuery = (over: Record<string, string | null> = {}, challenge = pkce().challenge) =>
+  authorizeQuery({ client_id: CLAUDE_ID, redirect_uri: CLAUDE_REDIRECT, ...over }, challenge);
 
 describe("M10-11 errors that go back to the app", () => {
   const cases: Array<[string, Record<string, string | null>, string, string?]> = [
@@ -234,9 +251,10 @@ describe("M10-11 errors that go back to the app", () => {
 
   it.each(cases)("%s", async (_name, over, error, description) => {
     const h = harness();
-    const result = await h.authorize(authorizeQuery(over));
+    addClaude(h);
+    const result = await h.authorize(claudeQuery(over));
     const url = parsedRedirect(result);
-    expect(`${url.origin}${url.pathname}`).toBe(REDIRECT);
+    expect(`${url.origin}${url.pathname}`).toBe(CLAUDE_REDIRECT);
     expect(url.searchParams.get("error")).toBe(error);
     expect(url.searchParams.get("error_description")).toBeTruthy();
     if (description) expect(url.searchParams.get("error_description")).toBe(description);
@@ -247,15 +265,16 @@ describe("M10-11 errors that go back to the app", () => {
 
   it("two resource values are invalid_target, and a parameter given twice is invalid_request", async () => {
     const h = harness();
-    const twoResources = `${authorizeQuery()}&resource=${encodeURIComponent(RESOURCE)}`;
+    addClaude(h);
+    const twoResources = `${claudeQuery()}&resource=${encodeURIComponent(RESOURCE)}`;
     expect(parsedRedirect(await h.authorize(twoResources)).searchParams.get("error")).toBe(
       "invalid_target",
     );
-    const twoScopes = `${authorizeQuery()}&scope=hydlnk.read`;
+    const twoScopes = `${claudeQuery()}&scope=hydlnk.read`;
     expect(parsedRedirect(await h.authorize(twoScopes)).searchParams.get("error")).toBe(
       "invalid_request",
     );
-    const twoChallenges = `${authorizeQuery()}&code_challenge=${pkce().challenge}`;
+    const twoChallenges = `${claudeQuery()}&code_challenge=${pkce().challenge}`;
     expect(parsedRedirect(await h.authorize(twoChallenges)).searchParams.get("error")).toBe(
       "invalid_request",
     );
@@ -263,13 +282,14 @@ describe("M10-11 errors that go back to the app", () => {
 
   it("a state over 512 characters is invalid_request, sent without the state", async () => {
     const h = harness();
+    addClaude(h);
     const url = parsedRedirect(
-      await h.authorize(authorizeQuery({ state: "s".repeat(STATE_MAX_LENGTH + 1) })),
+      await h.authorize(claudeQuery({ state: "s".repeat(STATE_MAX_LENGTH + 1) })),
     );
     expect(url.searchParams.get("error")).toBe("invalid_request");
     expect(url.searchParams.has("state")).toBe(false);
     expect(url.searchParams.get("iss")).toBe(ISSUER);
-    const ok = await h.authorize(authorizeQuery({ state: "s".repeat(STATE_MAX_LENGTH) }), {
+    const ok = await h.authorize(claudeQuery({ state: "s".repeat(STATE_MAX_LENGTH) }), {
       user: null,
     });
     expect(ok.kind).toBe("login");
@@ -277,16 +297,197 @@ describe("M10-11 errors that go back to the app", () => {
 
   it("a request error carries no state when none was sent", async () => {
     const h = harness();
+    addClaude(h);
     const url = parsedRedirect(
-      await h.authorize(authorizeQuery({ state: null, response_type: "token" })),
+      await h.authorize(claudeQuery({ state: null, response_type: "token" })),
     );
     expect(url.searchParams.has("state")).toBe(false);
   });
 
   it("request and request_uri are refused even when everything else is valid", async () => {
     const h = harness();
-    const url = parsedRedirect(await h.authorize(`${authorizeQuery()}&request=abc`));
+    addClaude(h);
+    const url = parsedRedirect(await h.authorize(`${claudeQuery()}&request=abc`));
     expect(url.searchParams.get("error")).toBe("request_not_supported");
+  });
+});
+
+// Wave L review, finding 3: RFC 9700 section 4.11.2. A client can be created by anyone in one
+// unauthenticated call (a registration, or a metadata document on a host they own), and an error sent
+// to its return address needs no sign-in and no click, so it would make this endpoint a redirector
+// that starts on a hydlnk.com address.
+describe("Wave L review: the authorize endpoint is not a redirector", () => {
+  const problems: Array<[string, Record<string, string | null>]> = [
+    ["a missing response_type", { response_type: null }],
+    ["response_type=token", { response_type: "token" }],
+    ["an unknown scope", { scope: "hydlnk.admin" }],
+    ["a missing code_challenge", { code_challenge: null }],
+    ["code_challenge_method=plain", { code_challenge_method: "plain" }],
+    ["another resource", { resource: "https://app.hydlnk.com/mcp" }],
+    ["prompt=none", { prompt: "none" }],
+    ["a request object", { request: "abc" }],
+    ["a request_uri", { request_uri: "https://x.example/r" }],
+    ["a state over 512 characters", { state: "s".repeat(513) }],
+  ];
+
+  it.each(problems)("%s from a registered client is the error page, with no redirect and no row", async (_n, over) => {
+    const h = harness();
+    for (const user of [null, USER]) {
+      const result = await h.authorize(authorizeQuery(over), { user });
+      expect(result).toEqual({ kind: "error_page", status: 400, errorClass: "invalid" });
+    }
+    expect(h.store.requests.size).toBe(0);
+  });
+
+  it("a registered client is never trusted, not even by a person who has connected it before", async () => {
+    const h = harness();
+    await allow(h);
+    expect(await h.authorize(authorizeQuery({ prompt: "none" }))).toEqual({
+      kind: "error_page",
+      status: 400,
+      errorClass: "invalid",
+    });
+  });
+
+  it("a metadata client nobody knows gets the error page from a signed-out person and from one who never connected it", async () => {
+    const h = harness();
+    addOtherCimd(h);
+    const query = authorizeQuery(
+      { client_id: OTHER_CIMD_ID, redirect_uri: OTHER_CIMD_REDIRECT, prompt: "none" },
+    );
+    for (const user of [null, USER]) {
+      expect(await h.authorize(query, { user })).toEqual({
+        kind: "error_page",
+        status: 400,
+        errorClass: "invalid",
+      });
+    }
+  });
+
+  it("a metadata client the signed-in person has connected before may send errors back", async () => {
+    const h = harness();
+    addOtherCimd(h);
+    await allow(h, { query: { client_id: OTHER_CIMD_ID, redirect_uri: OTHER_CIMD_REDIRECT } });
+    const query = authorizeQuery(
+      { client_id: OTHER_CIMD_ID, redirect_uri: OTHER_CIMD_REDIRECT, prompt: "none" },
+    );
+    const url = parsedRedirect(await h.authorize(query));
+    expect(`${url.origin}${url.pathname}`).toBe(OTHER_CIMD_REDIRECT);
+    expect(url.searchParams.get("error")).toBe("consent_required");
+    // Someone else, signed in, has not connected it; and a signed-out request cannot be told apart.
+    expect((await h.authorize(query, { user: OTHER })).kind).toBe("error_page");
+    expect((await h.authorize(query, { user: null })).kind).toBe("error_page");
+  });
+
+  it("a revoked grant is not trust", async () => {
+    const h = harness();
+    addOtherCimd(h);
+    await allow(h, { query: { client_id: OTHER_CIMD_ID, redirect_uri: OTHER_CIMD_REDIRECT } });
+    for (const grant of h.store.grants) grant.revokedAt = h.store.clock;
+    const query = authorizeQuery(
+      { client_id: OTHER_CIMD_ID, redirect_uri: OTHER_CIMD_REDIRECT, scope: "nope" },
+    );
+    expect((await h.authorize(query)).kind).toBe("error_page");
+  });
+
+  it("the three real documents are known, signed in or not, and need no grant", async () => {
+    for (const id of [
+      "https://claude.ai/oauth/mcp-oauth-client-metadata",
+      "https://claude.ai/oauth/claude-code-client-metadata",
+      "https://chatgpt.com/oauth/client.json",
+    ]) {
+      const h = harness();
+      const redirect =
+        id.startsWith("https://chatgpt")
+          ? "https://chatgpt.com/connector_platform_oauth_redirect"
+          : id.endsWith("claude-code-client-metadata")
+            ? "http://localhost/callback"
+            : CLAUDE_REDIRECT;
+      h.store.addClient(id, [redirect]);
+      const query = authorizeQuery({ client_id: id, redirect_uri: redirect, prompt: "none" });
+      for (const user of [null, USER]) {
+        expect((await h.authorize(query, { user })).kind, id).toBe("redirect");
+      }
+    }
+  });
+
+  it("an address that only looks like a known client is not one", async () => {
+    for (const id of [
+      "https://claude.ai.evil.example/oauth/mcp-oauth-client-metadata",
+      "https://claude.ai/oauth/mcp-oauth-client-metadata/",
+      "https://claude.ai/oauth/mcp-oauth-client-metadata?x=1",
+      "https://CLAUDE.AI/oauth/mcp-oauth-client-metadata",
+      "https://evil.example/oauth/mcp-oauth-client-metadata",
+    ]) {
+      const h = harness();
+      h.store.addClient(id, ["https://evil.example/cb"]);
+      const result = await h.authorize(
+        authorizeQuery({ client_id: id, redirect_uri: "https://evil.example/cb", prompt: "none" }),
+      );
+      expect(result.kind, id).toBe("error_page");
+    }
+  });
+
+  it("the end-to-end stub is known only while the test hooks say so", async () => {
+    const id = `${TEST_STUB_ORIGIN}/client.json`;
+    const redirect = `${TEST_STUB_ORIGIN}/cb`;
+    const query = authorizeQuery({ client_id: id, redirect_uri: redirect, prompt: "none" });
+    const off = harness();
+    off.store.addClient(id, [redirect]);
+    expect((await off.authorize(query)).kind).toBe("error_page");
+    const on = harness({ allowTestStub: true });
+    on.store.addClient(id, [redirect]);
+    expect((await on.authorize(query)).kind).toBe("redirect");
+  });
+
+  it("an error page names no part of the request", async () => {
+    const h = harness();
+    const result = await h.authorize(authorizeQuery({ scope: "<script>x</script>", state: "<b>" }));
+    expect(JSON.stringify(result)).not.toMatch(/script|<b>/);
+  });
+});
+
+
+// Wave L review, finding 7: a signed-out request is stored (a row of up to 3 KB) before anyone has
+// signed in, so an unauthenticated caller's rows get a tighter budget than the general 60 a minute.
+describe("Wave L review: a signed-out request costs a row, so it is limited tighter", () => {
+  it("20 a minute per address for a request that is stored with nobody signed in, then a 429 page and no row", async () => {
+    const h = harness();
+    const limited = harness({ limit: memoryLimiter(() => h.store.clock) });
+    for (let i = 0; i < 20; i += 1) {
+      expect((await limited.authorize(authorizeQuery(), { user: null })).kind).toBe("login");
+    }
+    expect(limited.store.requests.size).toBe(20);
+    const over = await limited.authorize(authorizeQuery(), { user: null });
+    expect(over).toMatchObject({ kind: "error_page", status: 429, errorClass: "too_many" });
+    expect((over as { retryAfter: number }).retryAfter).toBeGreaterThanOrEqual(1);
+    expect(limited.store.requests.size).toBe(20);
+    // Another address is not affected, and neither is a signed-in person on this one.
+    expect(
+      (await limited.authorize(authorizeQuery(), { user: null, clientKey: "198.51.100.9" })).kind,
+    ).toBe("login");
+    expect((await limited.authorize(authorizeQuery(), { user: USER })).kind).toBe("consent");
+  });
+
+  it("only a request that would be stored counts: refusals and signed-in requests do not use the budget", async () => {
+    const h = harness();
+    const limited = harness({ limit: memoryLimiter(() => h.store.clock) });
+    for (let i = 0; i < 25; i += 1) {
+      expect((await limited.authorize(authorizeQuery({ scope: "nope" }), { user: null })).kind).toBe(
+        "error_page",
+      );
+      expect((await limited.authorize(authorizeQuery(), { user: USER })).kind).toBe("consent");
+    }
+    expect((await limited.authorize(authorizeQuery(), { user: null })).kind).toBe("login");
+  });
+
+  it("there is no bucket shared by every caller: nothing but the caller's address is counted", async () => {
+    const h = harness();
+    await h.authorize(authorizeQuery(), { user: null });
+    expect(h.limiter.calls.map((call) => call.key)).toEqual([
+      "oauth-authorize:203.0.113.7",
+      "oauth-authorize-new:203.0.113.7",
+    ]);
   });
 });
 

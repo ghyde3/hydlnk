@@ -1,4 +1,5 @@
 import "server-only";
+import { testHooksEnabled } from "@/lib/env/test-hooks";
 import { rateLimit } from "@/lib/rate-limit";
 import type { AuthorizeDeps } from "./authorize";
 import type { ConsentDeps } from "./consent";
@@ -25,6 +26,7 @@ export function authorizeDeps(clientKey: string): AuthorizeDeps {
     now,
     issuer: config.issuer,
     resource: config.resource,
+    allowTestStub: testHooksEnabled(),
     resolveClient: (clientId) =>
       resolveClient(clientId, {
         store,

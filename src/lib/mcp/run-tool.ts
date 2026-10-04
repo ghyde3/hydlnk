@@ -35,7 +35,8 @@ import type { AnyToolDefinition, ToolCall, ToolDeps, ToolIdentity } from "./type
  *   4. the input parses with the tool's schema;
  *   5. the page is loaded and checked for ownership;
  *   6. the handler runs (cut off after 25 seconds);
- *   7. one activity row is written, after the response;
+ *   7. one activity row is written, after the response (a rate_limited refusal at most once a minute
+ *      per token);
  *   8. the result is shaped.
  *
  * Nothing thrown by a handler reaches the SDK: the SDK would put the message into the answer, and a
@@ -150,10 +151,14 @@ export async function runTool(
   if (!outcome.ok) deps.log(logLine(tool.name, false, outcome.code));
 
   // Step 7: the activity row, after the response. A failed insert is logged by code and never
-  // changes the result.
+  // changes the result. A rate_limited refusal leaves a row once a minute per token, not once per
+  // call: a client that loops on a refused call must not be able to grow the table without bound.
   try {
     deps.defer(async () => {
       try {
+        if (!outcome.ok && outcome.code === "rate_limited" && !(await mayLogRefusal(identity))) {
+          return;
+        }
         await deps.recordActivity({
           userId: identity.userId,
           clientId: identity.clientId,
@@ -172,6 +177,15 @@ export async function runTool(
     deps.log(`[mcp] activity not scheduled tool=${tool.name}`);
   }
   return result;
+
+  /** The once-a-minute allowance for logging a rate_limited refusal. A limiter that fails allows it. */
+  async function mayLogRefusal(who: ToolIdentity): Promise<boolean> {
+    try {
+      return (await deps.limit(`mcp-rl-log:${who.tokenId}`, 1, 60)).allowed;
+    } catch {
+      return true;
+    }
+  }
 
   async function run(): Promise<ToolResult> {
     const refuse = (failure: ToolFailureInfo): ToolResult => {

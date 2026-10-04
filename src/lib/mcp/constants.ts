@@ -30,6 +30,14 @@ export const MCP_TOKEN_PER_MINUTE = 30;
 /** Publishes per person per hour, across every token, on top of the general limits. */
 export const MCP_PUBLISH_PER_HOUR = 10;
 
+/**
+ * Requests per access token per minute, of any kind (`initialize`, `tools/list`, a tool call), counted
+ * after the credential has been checked (Wave L review). A tool call is limited again, more tightly,
+ * by the three limits above; this one bounds what a refused or a non-tool request can cost, so a
+ * looping or malicious connected app cannot load the database without limit.
+ */
+export const MCP_REQUESTS_PER_MINUTE = 120;
+
 /** Requests that fail authentication, per client address per minute (M10-04). */
 export const MCP_FAILED_AUTH_PER_MINUTE = 120;
 

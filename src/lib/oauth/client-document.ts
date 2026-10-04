@@ -1,4 +1,5 @@
 import { HYDLNK_NAME_REFUSAL, namesHydlnk, sanitizeClientName } from "./client-name";
+import { VENDOR_NAME_REFUSAL, namesVendorWithoutRight } from "./known-clients";
 import { validateRedirectUriList } from "./redirect-uri";
 
 /**
@@ -48,6 +49,7 @@ export function validateClientDocument(
   json: unknown,
   url: string,
   host: string,
+  options: { rootDomain?: string } = {},
 ): ValidatedDocument {
   if (typeof json !== "object" || json === null || Array.isArray(json)) {
     return { ok: false, reason: "not_an_object" };
@@ -59,7 +61,10 @@ export function validateClientDocument(
   if (typeof rawName !== "string" || rawName.trim() === "")
     return { ok: false, reason: "bad_name" };
 
-  const redirects = validateRedirectUriList(read(json, "redirect_uris"));
+  const redirects = validateRedirectUriList(
+    read(json, "redirect_uris"),
+    options.rootDomain ? { rootDomain: options.rootDomain } : {},
+  );
   if (!redirects.ok) return { ok: false, reason: "bad_redirect_uris" };
 
   const method = read(json, "token_endpoint_auth_method");
@@ -83,6 +88,10 @@ export function validateClientDocument(
   const name = sanitizeClientName(rawName, host);
   if (namesHydlnk(name)) {
     return { ok: false, reason: "name_impersonates", description: HYDLNK_NAME_REFUSAL };
+  }
+  // 'Claude' or 'ChatGPT' only for a client that returns to that company (or to this computer).
+  if (namesVendorWithoutRight(name, redirects.uris)) {
+    return { ok: false, reason: "name_impersonates", description: VENDOR_NAME_REFUSAL };
   }
 
   const logo = read(json, "logo_uri");

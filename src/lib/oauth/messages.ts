@@ -27,6 +27,18 @@ export const CONSENT_TITLE = "Connect an app";
 
 export const consentHeading = (name: string): string => `${name} wants to connect to your HYDLNK`;
 
+/**
+ * A registered app has proved nothing, so its heading leads with that and with where you will go
+ * back to, the two things a look-alike name cannot fake: '“Claude” (unverified) at claude-ai.app wants
+ * to connect to your HYDLNK'. The name is in quotes so it reads as what the app calls itself.
+ */
+export const unverifiedConsentHeading = (
+  name: string,
+  returnLabel: string,
+  returnIsLoopback: boolean,
+): string =>
+  `“${name}” (unverified) ${returnIsLoopback ? "on this computer" : `at ${returnLabel}`} wants to connect to your HYDLNK`;
+
 export const REGISTERED_NOT_VERIFIED = "Registered automatically. HYDLNK hasn’t verified this app.";
 export const addressLine = (host: string): string => `Address: ${host}`;
 export const returnLine = (host: string): string => `When you choose, you’ll go back to ${host}.`;

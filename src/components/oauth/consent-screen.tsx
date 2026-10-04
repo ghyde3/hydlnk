@@ -16,6 +16,7 @@ import {
   consentHeading,
   differentSiteLine,
   returnLine,
+  unverifiedConsentHeading,
 } from "@/lib/oauth/messages";
 
 /**
@@ -68,7 +69,11 @@ export function ConsentScreen({ view }: { view: ConsentView }) {
     <>
       <div className="who">
         <Avatar name={view.clientName} logo={view.logoDataUri} />
-        <h1>{consentHeading(view.clientName)}</h1>
+        <h1>
+          {view.clientKind === "dcr"
+            ? unverifiedConsentHeading(view.clientName, view.returnLabel, view.returnIsLoopback)
+            : consentHeading(view.clientName)}
+        </h1>
       </div>
 
       <ul className="facts">

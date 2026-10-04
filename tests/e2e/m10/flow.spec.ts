@@ -105,7 +105,7 @@ async function connect(
     await expect(page).toHaveURL(`${APP_ORIGIN}/oauth/authorize`);
     // The consent screen of the same request: who, how it registered, where it returns, what it gets.
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      `${name} wants to connect to your HYDLNK`,
+      `“${name}” (unverified) on this computer wants to connect to your HYDLNK`,
     );
     await expect(page.locator("body")).toContainText(
       "Registered automatically. HYDLNK hasn’t verified this app.",

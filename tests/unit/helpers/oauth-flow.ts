@@ -12,6 +12,12 @@ export const ISSUER = "http://app.localhost:3000";
 export const RESOURCE = "http://app.localhost:3000/mcp";
 export const DCR_ID = `hlc_${"a".repeat(32)}`;
 export const REDIRECT = "https://a.example/cb";
+/** A known client (Claude's metadata address) and its one return address: errors may go back to it. */
+export const CLAUDE_ID = "https://claude.ai/oauth/mcp-oauth-client-metadata";
+export const CLAUDE_REDIRECT = "https://claude.ai/api/mcp/auth_callback";
+/** A client-metadata client nobody knows, and its return address. */
+export const OTHER_CIMD_ID = "https://app.example.org/oauth/client.json";
+export const OTHER_CIMD_REDIRECT = "https://app.example.org/cb";
 export const USER = { id: "11111111-1111-4111-8111-111111111111", email: "person@example.com" };
 export const OTHER = { id: "22222222-2222-4222-8222-222222222222", email: "other@example.com" };
 
@@ -68,11 +74,23 @@ export interface Harness {
   ) => Promise<HttpResult>;
 }
 
+/** Puts the Claude client (a cached client-metadata row) into the harness's store. */
+export function addClaude(h: { store: FakeOauthStore }) {
+  h.store.addClient(CLAUDE_ID, [CLAUDE_REDIRECT], { client_name: "Claude" });
+}
+
+/** Puts a client-metadata client nobody knows into the harness's store. */
+export function addOtherCimd(h: { store: FakeOauthStore }) {
+  h.store.addClient(OTHER_CIMD_ID, [OTHER_CIMD_REDIRECT], { client_name: "Some app" });
+}
+
 /** One store, one clock, every core function wired to it. */
 export function harness(
   options: {
     limit?: AuthorizeDeps["limit"];
     clientUris?: string[];
+    /** The end-to-end stub's address counts as a known client. */
+    allowTestStub?: boolean;
   } = {},
 ): Harness {
   const store = new FakeOauthStore();
@@ -90,6 +108,7 @@ export function harness(
     now,
     issuer: ISSUER,
     resource: RESOURCE,
+    allowTestStub: options.allowTestStub ?? false,
     resolveClient: (clientId) =>
       resolveClient(clientId, {
         store,

@@ -1,4 +1,5 @@
 import { rateLimitClientKey } from "@/lib/analytics/ingest/client-ip";
+import { oauthConfig } from "@/lib/oauth/config";
 import { postEndpoint } from "@/lib/oauth/endpoint";
 import { mediaType, readCappedBody } from "@/lib/oauth/http";
 import { REGISTER_MAX_BODY_BYTES, registerClient } from "@/lib/oauth/register";
@@ -15,7 +16,11 @@ const endpoint = postEndpoint((request) =>
       mediaType: mediaType(request),
       readBody: () => readCappedBody(request, REGISTER_MAX_BODY_BYTES),
     },
-    { store: defaultOauthStore(), limit: (key, limit, window) => rateLimit(key, limit, window) },
+    {
+      store: defaultOauthStore(),
+      limit: (key, limit, window) => rateLimit(key, limit, window),
+      rootDomain: oauthConfig().rootDomain,
+    },
   ),
 );
 

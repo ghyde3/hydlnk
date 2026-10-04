@@ -1,3 +1,4 @@
+import { logOauthEvent } from "./log";
 import { TEST_STUB_ORIGIN } from "./ssrf";
 import type { ClientRow, OauthStore } from "./store";
 
@@ -33,7 +34,20 @@ export function classifyClientId(clientId: string): ClientIdKind {
 
 export type ClientResolution =
   | { ok: true; client: ClientRow }
-  | { ok: false; reason: "unknown_app" | "cannot_verify" | "too_many"; retryAfter?: number };
+  | {
+      ok: false;
+      reason: "unknown_app" | "cannot_verify" | "too_many";
+      retryAfter?: number;
+      /**
+       * Present (true) when the document could not be read for a reason that says nothing about the
+       * document itself: the host was slow, unreachable or answered with an error, or our own store
+       * failed. Only then may an expired cached copy be used instead.
+       */
+      transient?: true;
+    };
+
+/** An expired client-metadata row stands in for a host that cannot answer, for this long after it was fetched. */
+export const CIMD_STALE_SECONDS = 7 * 24 * 60 * 60;
 
 export interface ResolveClientDeps {
   store: Pick<OauthStore, "getClient" | "touchClient">;
@@ -70,5 +84,24 @@ export async function resolveClient(
     await deps.store.touchClient(clientId).catch(() => undefined);
     return { ok: true, client: cached };
   }
-  return deps.loadCimdClient(clientId);
+  const loaded = await deps.loadCimdClient(clientId);
+  if (loaded.ok) return loaded;
+
+  // A client the person has connected before is not locked out because its host is slow, down or
+  // being asked for too much for a minute (Wave L review): the expired copy stands in until a refetch
+  // succeeds, and for a week at most after it was fetched. A document that is now invalid is not
+  // "the host is down": it is refused, whatever the copy says.
+  const unavailable =
+    loaded.reason === "too_many" || (loaded.reason === "cannot_verify" && loaded.transient === true);
+  if (unavailable && cached && cached.kind === "cimd" && usableAsStale(cached, deps.now())) {
+    logOauthEvent("client_document_stale");
+    await deps.store.touchClient(clientId).catch(() => undefined);
+    return { ok: true, client: cached };
+  }
+  return loaded;
+}
+
+function usableAsStale(row: ClientRow, nowMs: number): boolean {
+  const fetched = Date.parse(row.fetched_at ?? row.expires_at ?? "");
+  return Number.isFinite(fetched) && fetched + CIMD_STALE_SECONDS * 1000 > nowMs;
 }

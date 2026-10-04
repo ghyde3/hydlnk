@@ -8,6 +8,7 @@ import {
   RESOURCE,
   answer,
   authorizeUrl,
+  dcrHeading,
   ownAddress,
   codesCount,
   exchangeCode,
@@ -69,7 +70,7 @@ test.describe("M10-12 signing in before consent, and coming back to it", () => {
     trackUser(user.userId);
     await page.goto(`${APP_ORIGIN}/`);
     await expect(page).toHaveURL(`${APP_ORIGIN}/oauth/authorize`);
-    await expect(heading(page)).toHaveText(`${name} wants to connect to your HYDLNK`);
+    await expect(heading(page)).toHaveText(dcrHeading(name));
     await expect(page.locator("body")).toContainText(`Connecting as ${email}.`);
   });
 
@@ -97,7 +98,7 @@ test.describe("M10-12 signing in before consent, and coming back to it", () => {
 
     // The page exists now, and the request that started the sign-in is still inside its ten minutes.
     await expect(page).toHaveURL(`${APP_ORIGIN}/oauth/authorize`, { timeout: 30_000 });
-    await expect(heading(page)).toHaveText(`${name} wants to connect to your HYDLNK`);
+    await expect(heading(page)).toHaveText(dcrHeading(name));
     await expect(page.locator("body")).toContainText(`Connecting as ${email}.`);
   });
 
@@ -423,7 +424,7 @@ test.describe("M10-13 what the person decides", () => {
 });
 
 test.describe("M10-11 resource and issuer in the dance", () => {
-  test("M10-15 a token carries the canonical resource; a request for another resource goes back to the app as invalid_target", async ({
+  test("M10-15 a token carries the canonical resource; a request for another resource from a registered app is the 400 page, not a redirect", async ({
     page,
     context,
   }) => {
@@ -435,10 +436,11 @@ test.describe("M10-11 resource and issuer in the dance", () => {
       authorizeUrl(client.client_id, pair.challenge, { resource: "https://app.hydlnk.com/mcp" }),
       { maxRedirects: 0 },
     );
-    expect(wrong.status()).toBe(303);
-    const back = new URL(wrong.headers()["location"]!);
-    expect(back.searchParams.get("error")).toBe("invalid_target");
-    expect(back.searchParams.get("iss")).toBe(ISSUER);
+    // A registered app's return address is never sent an error before anyone has answered (Wave L
+    // review); the known-client redirect with iss is proved in oauth-endpoints.spec.ts.
+    expect(wrong.status()).toBe(400);
+    expect(wrong.headers()["location"]).toBeUndefined();
+    expect(await wrong.text()).toContain("This sign-in request isn’t valid.");
 
     await page.goto(authorizeUrl(client.client_id, pair.challenge, { resource: null }));
     const decision = await answer(page, "Allow");

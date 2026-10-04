@@ -36,12 +36,19 @@ export function sanitizeClientName(raw: unknown, fallback: string): string {
 /**
  * Does the name pose as this product? 'hydlnk' once spaces, hyphens, dots, underscores and invisible
  * characters are removed and case is folded ('HYDLNK Support', 'hyd lnk', 'H-Y-D-L-N-K'). Names like
- * 'Claude' or 'ChatGPT' are not blocked: real clients use them, and the consent screen always shows
- * the verified address beside the name.
+ * 'Claude' or 'ChatGPT' are judged by `namesVendorWithoutRight` (known-clients.ts), because real
+ * clients use them and only a client that returns to that company can.
  */
 export function namesHydlnk(name: string): boolean {
-  const folded = name.normalize("NFKC").replace(INVISIBLE, "").replace(SPREADERS, "").toLowerCase();
-  return folded.includes("hydlnk");
+  return foldName(name).includes("hydlnk");
+}
+
+/**
+ * A name as a person would read it, for comparison: compatibility-normalized, invisible characters,
+ * spaces, hyphens, dots and underscores removed, case folded ('C-l-a-u-d-e' and 'claude' are one name).
+ */
+export function foldName(name: string): string {
+  return name.normalize("NFKC").replace(INVISIBLE, "").replace(SPREADERS, "").toLowerCase();
 }
 
 /**

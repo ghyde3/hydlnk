@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { OAUTH_SCOPES, UNUSED_DCR_CAP } from "./constants";
 import { HYDLNK_NAME_REFUSAL, UNNAMED_APP, namesHydlnk, sanitizeClientName } from "./client-name";
+import { VENDOR_NAME_REFUSAL, namesVendorWithoutRight } from "./known-clients";
 import { logOauthEvent, logOauthFailure } from "./log";
 import { validateRedirectUriList } from "./redirect-uri";
 import type { BodyRead } from "./http";
@@ -14,7 +15,12 @@ import type { OauthStore } from "./store";
  *   - public clients only: no secret is ever issued, `token_endpoint_auth_method` is `none`;
  *   - redirect URIs by the one rule of M10-06, matched exactly later;
  *   - the name cleaned and refused when it poses as this product (M10-09);
- *   - 20 registrations an hour per address and 300 an hour overall, then 429;
+ *   - a vendor's name (Claude, ChatGPT and so on) only for an app that returns to that vendor or to
+ *     this computer, and no return address on this product's own hosts (Wave L review);
+ *   - 20 registrations an hour per address, then 429. There is no overall bucket: one budget for
+ *     every caller would let about fifteen addresses spend it and keep every real client's fallback
+ *     registration at a 429 for the hour. Storage is bounded by the 20,000-row trim and the nightly
+ *     purge;
  *   - an unused registration is deleted when 20,000 of them pile up, oldest first, and by the nightly
  *     job after a week;
  *   - registration proves nothing about the app: the consent screen says "not verified".
@@ -25,7 +31,6 @@ import type { OauthStore } from "./store";
 
 export const REGISTER_MAX_BODY_BYTES = 8 * 1024;
 export const REGISTER_PER_IP_PER_HOUR = 20;
-export const REGISTER_ALL_PER_HOUR = 300;
 
 export type LimitFn = (
   key: string,
@@ -46,6 +51,8 @@ export interface RegisterDeps {
   now?: () => number;
   newClientId?: () => string;
   unusedCap?: number;
+  /** `NEXT_PUBLIC_ROOT_DOMAIN`: return addresses on it are refused. */
+  rootDomain?: string;
 }
 
 export interface RegisterInput {
@@ -77,19 +84,15 @@ export async function registerClient(
   input: RegisterInput,
   deps: RegisterDeps,
 ): Promise<HttpResult> {
-  // 1. limits, before anything else is looked at. A limiter failure fails open (rateLimit logs it).
+  // 1. the limit, before anything else is looked at. A limiter failure fails open (rateLimit logs it).
   const perAddress = await deps.limit(
     `oauth-register:${input.clientKey}`,
     REGISTER_PER_IP_PER_HOUR,
     3600,
   );
-  const overall = perAddress.allowed
-    ? await deps.limit("oauth-register-all", REGISTER_ALL_PER_HOUR, 3600)
-    : perAddress;
-  if (!perAddress.allowed || !overall.allowed) {
-    const retryAfter = Math.max(1, (perAddress.allowed ? overall : perAddress).retryAfter);
+  if (!perAddress.allowed) {
     return failure(429, "temporarily_unavailable", "Too many registrations. Try again later.", {
-      "Retry-After": String(retryAfter),
+      "Retry-After": String(Math.max(1, perAddress.retryAfter)),
     });
   }
 
@@ -118,7 +121,10 @@ export async function registerClient(
     Object.hasOwn(json as object, name) ? (json as Record<string, unknown>)[name] : undefined;
 
   // 3. validation.
-  const redirects = validateRedirectUriList(read("redirect_uris"));
+  const redirects = validateRedirectUriList(
+    read("redirect_uris"),
+    deps.rootDomain ? { rootDomain: deps.rootDomain } : {},
+  );
   if (!redirects.ok) {
     return failure(400, "invalid_redirect_uri", "Use https redirect URIs, or http on localhost.");
   }
@@ -135,6 +141,9 @@ export async function registerClient(
   const name = sanitizeClientName(rawName, UNNAMED_APP);
   if (namesHydlnk(name)) {
     return failure(400, "invalid_client_metadata", HYDLNK_NAME_REFUSAL);
+  }
+  if (namesVendorWithoutRight(name, redirects.uris)) {
+    return failure(400, "invalid_client_metadata", VENDOR_NAME_REFUSAL);
   }
 
   const grantTypes = read("grant_types");

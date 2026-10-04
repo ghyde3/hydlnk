@@ -21,6 +21,39 @@ export const RESOURCE = `${APP_ORIGIN}/mcp`;
 export const ISSUER = APP_ORIGIN;
 export const CLIENT_REDIRECT = "https://a.example/cb";
 
+/**
+ * The heading of the consent screen for a registered ("hlc_") app (Wave L review): it leads with that
+ * the app is unverified and with where you go back to. `where` is the return host, or "this computer".
+ */
+export const dcrHeading = (name: string, where = "a.example", loopback = false): string =>
+  `“${name}” (unverified) ${loopback ? "on this computer" : `at ${where}`} wants to connect to your HYDLNK`;
+
+/**
+ * A client that errors may go back to before anyone has answered (Wave L review): one of the three
+ * real client-metadata documents. Its row is cached with a day to live, so authorize needs no fetch.
+ * Only the spec that needs it makes it, and removes it again.
+ */
+export const KNOWN_CLIENT_ID = "https://claude.ai/oauth/mcp-oauth-client-metadata";
+export const KNOWN_CLIENT_REDIRECT = "https://claude.ai/api/mcp/auth_callback";
+
+export async function knownClient(): Promise<{ client_id: string; redirect_uri: string }> {
+  const { error } = await adminClient()
+    .from("oauth_clients")
+    .upsert(
+      {
+        client_id: KNOWN_CLIENT_ID,
+        kind: "cimd",
+        client_name: "Claude",
+        redirect_uris: [KNOWN_CLIENT_REDIRECT],
+        fetched_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      },
+      { onConflict: "client_id" },
+    );
+  if (error) throw new Error(`knownClient failed: ${error.message}`);
+  return { client_id: KNOWN_CLIENT_ID, redirect_uri: KNOWN_CLIENT_REDIRECT };
+}
+
 const octet = () => Math.floor(Math.random() * 254) + 1;
 /** A client address of this test's own: the limits count per address. */
 export const ownIp = (): string => `10.${octet()}.${octet()}.${octet()}`;

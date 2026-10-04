@@ -24,7 +24,10 @@ import type { OauthStore, RequestRow, TokenLookup } from "./store";
  *   2. client authentication is NONE: a `client_secret` is `invalid_client`, a Basic header is accepted
  *      only when it names exactly this `client_id` with an empty password, `client_assertion` is
  *      ignored (the client is authenticated by the code and the PKCE verifier alone);
- *   3. per-client limit; an unknown client is `invalid_client`;
+ *   3. an unknown client is `invalid_client`. There is NO per-client limit: a client address is shared
+ *      by everyone who connects that app (Claude's is one URL for every person), so a bucket keyed on
+ *      it would be one budget for all of them and a lever for one caller to starve the rest (Wave L
+ *      review). The address limit above is the only brake before the code or the token is checked;
  *   4. the grant itself. Every failure of the code checks is the same `invalid_grant` with a fixed
  *      description, so nothing says which part was wrong.
  *
@@ -34,7 +37,6 @@ import type { OauthStore, RequestRow, TokenLookup } from "./store";
 
 export const TOKEN_MAX_BODY_BYTES = 16 * 1024;
 export const TOKEN_PER_IP_PER_MINUTE = 120;
-export const TOKEN_PER_CLIENT_PER_MINUTE = 300;
 
 const NO_STORE = { "Cache-Control": "no-store", Pragma: "no-cache" } as const;
 
@@ -160,14 +162,7 @@ export async function handleTokenRequest(input: TokenInput, deps: TokenDeps): Pr
   }
   if (clientId === undefined) return invalidRequest("client_id is required.");
 
-  // 3. the client.
-  const perClient = await deps.limit(
-    `oauth-token-client:${clientId}`,
-    TOKEN_PER_CLIENT_PER_MINUTE,
-    60,
-  );
-  if (!perClient.allowed) return limited(perClient.retryAfter);
-
+  // 3. the client (no limit keyed on the client id: see the head of this file).
   const grantType = params.get("grant_type");
   if (grantType === undefined) return invalidRequest("grant_type is required.");
   if (grantType !== "authorization_code" && grantType !== "refresh_token") {

@@ -207,16 +207,40 @@ export function isLoopbackOnly(uris: readonly string[]): boolean {
 export type RedirectListResult =
   { ok: true; uris: string[] } | { ok: false; reason: "invalid_redirect_uri" };
 
+export interface RedirectListOptions {
+  /**
+   * `NEXT_PUBLIC_ROOT_DOMAIN`: when given, an https return address on that domain or any name under it
+   * (`hydlnk.com`, `app.hydlnk.com`, `mara.hydlnk.com`) is refused. A client's code has no business
+   * going back to one of this product's own hosts, and one that said it would look first-party on the
+   * consent screen. The same rule as the fetch policy's own-host check (ssrf.ts). The caller passes
+   * it because this file reads no configuration.
+   */
+  rootDomain?: string;
+}
+
+/** Is this https host the product's own, or a name under it? Loopback hosts are never. */
+function isOwnHost(host: string, rootDomain: string): boolean {
+  const root = rootDomain.split(":")[0]!.toLowerCase();
+  const name = host.toLowerCase();
+  return root !== "" && (name === root || name.endsWith(`.${root}`));
+}
+
 /**
  * A client's declared list: an array of 1 to 10 distinct valid URIs. Duplicates are dropped before
  * counting; an 11th distinct one, an empty list and any invalid entry make the whole list invalid.
  */
-export function validateRedirectUriList(value: unknown): RedirectListResult {
+export function validateRedirectUriList(
+  value: unknown,
+  options: RedirectListOptions = {},
+): RedirectListResult {
   if (!Array.isArray(value)) return { ok: false, reason: "invalid_redirect_uri" };
   const unique: string[] = [];
   for (const entry of value) {
     const parsed = parseRedirectUri(entry);
     if (!parsed.ok) return { ok: false, reason: "invalid_redirect_uri" };
+    if (!parsed.loopback && options.rootDomain && isOwnHost(parsed.host, options.rootDomain)) {
+      return { ok: false, reason: "invalid_redirect_uri" };
+    }
     if (!unique.includes(parsed.uri)) unique.push(parsed.uri);
   }
   if (unique.length < 1 || unique.length > MAX_REDIRECT_URIS) {

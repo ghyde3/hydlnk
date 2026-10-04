@@ -145,6 +145,77 @@ describe("no credential: a bare challenge", () => {
   });
 });
 
+// Wave L review, finding 6: once a token is verified, nothing bounded how often it could ask. Every
+// request costs a token lookup, and a tool call costs limiter writes and an activity row even when it
+// is refused, so a looping or malicious connected app could load the database without limit.
+describe("a connected app has a request budget", () => {
+  const TOKEN_ID = "44444444-4444-4444-8444-444444444444";
+
+  it("is counted per token, after the credential has been checked, at 120 a minute", async () => {
+    const calls: Array<[string, number, number]> = [];
+    const { endpoint, served } = setup({
+      limit: async (key, limit, window) => {
+        calls.push([key, limit, window]);
+        return { allowed: true, retryAfter: 0 };
+      },
+    });
+    expect((await endpoint(request({ headers: bearer(GOOD) }))).status).toBe(200);
+    expect(served).toHaveLength(1);
+    expect(calls).toEqual([[`mcp-req:${TOKEN_ID}`, 120, 60]]);
+  });
+
+  it("over the budget is a 429 with Retry-After, and the body is never read or served", async () => {
+    const { endpoint, served } = setup({
+      limit: async (key) =>
+        key.startsWith("mcp-req:")
+          ? { allowed: false, retryAfter: 41 }
+          : { allowed: true, retryAfter: 0 },
+    });
+    const response = await endpoint(request({ headers: bearer(GOOD) }));
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("41");
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({ error: "rate_limited" });
+    expect(served).toEqual([]);
+  });
+
+  it("the 121st request in a minute is refused and the 120th is not (a real window)", async () => {
+    const hits: number[] = [];
+    const { endpoint, served } = setup({
+      limit: async (key, limit) => {
+        if (!key.startsWith("mcp-req:")) return { allowed: true, retryAfter: 0 };
+        hits.push(1);
+        return hits.length <= limit
+          ? { allowed: true, retryAfter: 0 }
+          : { allowed: false, retryAfter: 12 };
+      },
+    });
+    for (let i = 0; i < 120; i += 1) {
+      expect((await endpoint(request({ headers: bearer(GOOD) }))).status).toBe(200);
+    }
+    expect((await endpoint(request({ headers: bearer(GOOD) }))).status).toBe(429);
+    expect(served).toHaveLength(120);
+  });
+
+  it("a limiter that fails lets the request through", async () => {
+    const { endpoint, served } = setup({
+      limit: async (key) => {
+        if (key.startsWith("mcp-req:")) throw new Error("the limiter is down");
+        return { allowed: true, retryAfter: 0 };
+      },
+    });
+    expect((await endpoint(request({ headers: bearer(GOOD) }))).status).toBe(200);
+    expect(served).toHaveLength(1);
+  });
+
+  it("a request with no or a bad credential is not counted against any token's budget", async () => {
+    const { endpoint, limitCalls } = setup();
+    await endpoint(request());
+    await endpoint(request({ headers: bearer("x".repeat(43)) }));
+    expect(limitCalls.every((key) => key.startsWith("mcp-401:"))).toBe(true);
+  });
+});
+
 describe("credentials that never work", () => {
   const cases: Array<[string, Record<string, string>, boolean]> = [
     ["an unknown 43-character value", bearer("x".repeat(43)), true],
@@ -236,10 +307,12 @@ describe("failures are limited per client address", () => {
     await endpoint(request({ headers: { "x-forwarded-for": "203.0.113.7" } }));
     await endpoint(request({ headers: { ...bearer("nope"), "x-forwarded-for": "203.0.113.7" } }));
     await endpoint(request({ headers: { ...bearer(GOOD), "x-forwarded-for": "203.0.113.7" } }));
-    expect(seen).toEqual([
+    // The good request is not a failure: it is counted against its token's own budget instead.
+    expect(seen.filter(([key]) => key.startsWith("mcp-401:"))).toEqual([
       ["mcp-401:203.0.113.7", 120, 60],
       ["mcp-401:203.0.113.7", 120, 60],
     ]);
+    expect(seen.filter(([key]) => key.startsWith("mcp-req:"))).toHaveLength(1);
   });
 
   it("the 121st failing request in a minute is a 429 with Retry-After, and another address is unaffected", async () => {

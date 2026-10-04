@@ -449,7 +449,7 @@ describe("M10-15 the request itself", () => {
     for (const sample of samples) expect(sample.headers["Cache-Control"]).toBe("no-store");
   });
 
-  it("limits per address and per client: 429 temporarily_unavailable with Retry-After", async () => {
+  it("limits per address: 429 temporarily_unavailable with Retry-After", async () => {
     const base = harness();
     const h = harness({ limit: memoryLimiter(() => base.store.clock) });
     for (let i = 0; i < 120; i += 1)
@@ -458,19 +458,47 @@ describe("M10-15 the request itself", () => {
     expect(limited.status).toBe(429);
     expect(body(limited).error).toBe("temporarily_unavailable");
     expect(Number(limited.headers["Retry-After"])).toBeGreaterThanOrEqual(1);
-    // Another address, the same client: the per-client limit counts all of them.
-    const c = harness({ limit: memoryLimiter(() => base.store.clock) });
-    for (let i = 0; i < 300; i += 1) {
-      await c.token(
-        { grant_type: "authorization_code", client_id: DCR_ID },
-        { clientKey: `198.51.100.${i % 200}.${i}` },
-      );
-    }
-    const over = await c.token(
+    // Another address is not affected.
+    const other = await h.token(
       { grant_type: "authorization_code", client_id: DCR_ID },
       { clientKey: "192.0.2.1" },
     );
-    expect(over.status).toBe(429);
+    expect(other.status).toBe(400);
+  });
+
+  // Wave L review, finding 1: Claude's client_id is ONE address shared by every person who connects
+  // Claude, so a bucket keyed on the client_id alone is one budget for all of them (and a way for one
+  // caller to starve the rest). The only limit before validation is the caller's address.
+  it("the client_id is never a bucket: 400 bad requests for it from other addresses do not limit a valid refresh", async () => {
+    const base = harness();
+    const inner = memoryLimiter(() => base.store.clock);
+    const keys: string[] = [];
+    const h = harness({
+      limit: async (key, max, window) => {
+        keys.push(key);
+        return inner(key, max, window);
+      },
+    });
+    const connected = await connect(h);
+    for (let i = 0; i < 400; i += 1) {
+      const bad = await h.token(
+        { grant_type: "refresh_token", refresh_token: `hl_rt_${"x".repeat(43)}`, client_id: DCR_ID },
+        { clientKey: `bad-caller-${i}` },
+      );
+      expect(bad.status).toBe(400);
+    }
+    const refreshed = await h.token(
+      { grant_type: "refresh_token", refresh_token: connected.refresh_token, client_id: DCR_ID },
+      { clientKey: "192.0.2.77" },
+    );
+    expect(refreshed.status).toBe(200);
+    expect(keys.some((key) => key.startsWith("oauth-token-client"))).toBe(false);
+  });
+
+  it("asks only for the address limit before the grant is looked at", async () => {
+    const h = harness();
+    await h.token({ grant_type: "authorization_code", client_id: DCR_ID });
+    expect(h.limiter.calls.map((call) => call.key)).toEqual(["oauth-token:203.0.113.7"]);
   });
 
   it("a store failure is a 500 server_error that says nothing of it, and logs no secret", async () => {

@@ -10,6 +10,7 @@ import {
   APP_ORIGIN,
   CLIENT_REDIRECT,
   authorizeUrl,
+  dcrHeading,
   ownAddress,
   ownIp,
   pkcePair,
@@ -120,6 +121,8 @@ test.describe("M10-13 what the screen says", () => {
     await signedIn(context, "ui3");
     const client = await registerClient([CLIENT_REDIRECT], "Zq Registered");
     await page.goto(authorizeUrl(client.client_id, pkcePair().challenge));
+    // The heading leads with that the app is unverified and where you go back to (Wave L review).
+    await expect(heading(page)).toHaveText(dcrHeading("Zq Registered"));
     const facts = page.locator("ul.facts li");
     await expect(facts.nth(0)).toHaveText(
       "Registered automatically. HYDLNK hasn’t verified this app.",
@@ -210,11 +213,11 @@ test.describe("M10-13 and M10-09 everything shown is text", () => {
   }) => {
     await signedIn(context, "ui8");
     const rlo = String.fromCodePoint(0x202e);
-    const client = await registerClientViaApi([CLIENT_REDIRECT], `Cla${rlo}ude Code`);
-    expect(client.client_name).toBe("Claude Code");
+    const client = await registerClientViaApi([CLIENT_REDIRECT], `Pel${rlo}ican Notes`);
+    expect(client.client_name).toBe("Pelican Notes");
     await page.goto(authorizeUrl(client.client_id, pkcePair().challenge));
     const text = await heading(page).innerText();
-    expect(text).toBe("Claude Code wants to connect to your HYDLNK");
+    expect(text).toBe(dcrHeading("Pelican Notes"));
     expect(text).not.toContain(rlo);
     expect(await page.content()).not.toContain(rlo);
   });

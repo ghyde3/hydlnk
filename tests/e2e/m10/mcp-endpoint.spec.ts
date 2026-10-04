@@ -462,4 +462,24 @@ test.describe("failed requests are limited per client address", () => {
     });
     expect(valid.response.status).toBe(200);
   });
+
+  // Wave L review: once a token is verified nothing bounded how often it could ask, and every request
+  // costs a token lookup (a tool call also limiter writes and a row, even when refused).
+  test("a connected app has 120 requests a minute per token, of any kind, then a 429 with Retry-After; another token is unaffected", async () => {
+    test.setTimeout(120_000);
+    const user = await makeUser("mcp-budget", { plan: "pro" });
+    const one = (await mintToken(user.id)).token;
+    const two = (await mintToken(user.id)).token;
+    const send = (token: string) =>
+      post(LIST, { ...bearer(token), "mcp-protocol-version": "2025-06-18" });
+    for (let n = 1; n <= 120; n++) {
+      expect((await send(one)).response.status, `request ${n}`).toBe(200);
+    }
+    const blocked = await send(one);
+    expect(blocked.response.status).toBe(429);
+    expect(JSON.parse(blocked.text)).toEqual({ error: "rate_limited" });
+    expect(Number(blocked.response.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(blocked.response.headers.get("cache-control")).toBe("no-store");
+    expect((await send(two)).response.status).toBe(200);
+  });
 });

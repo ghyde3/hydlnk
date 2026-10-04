@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  REGISTER_ALL_PER_HOUR,
   REGISTER_MAX_BODY_BYTES,
   REGISTER_PER_IP_PER_HOUR,
   newDcrClientId,
@@ -36,6 +35,7 @@ function register(
     store?: FakeOauthStore;
     clientKey?: string;
     raw?: string;
+    rootDomain?: string;
   } = {},
 ) {
   const store = over.store ?? new FakeOauthStore();
@@ -51,7 +51,12 @@ function register(
             ? { ok: false as const, reason: "too_large" as const }
             : { ok: true as const, text },
       },
-      { store, limit: over.limit ?? openLimiter().limit, now: () => store.clock },
+      {
+        store,
+        limit: over.limit ?? openLimiter().limit,
+        now: () => store.clock,
+        ...(over.rootDomain ? { rootDomain: over.rootDomain } : {}),
+      },
     ),
   };
 }
@@ -244,21 +249,25 @@ describe("M10-10 registration", () => {
       ).status,
     ).toBe(201);
 
-    // 300 overall: fifteen addresses of 20 reach it.
+    // There is no overall bucket (Wave L review): it was one budget for every caller, so about fifteen
+    // addresses could spend it and keep every real client's fallback registration at a 429 for the hour.
+    // Storage is bounded by the 20,000-row trim and the nightly purge instead.
     const wide = new FakeOauthStore();
-    const wideLimit = memoryLimiter(wide.now);
-    for (let i = 0; i < REGISTER_ALL_PER_HOUR; i += 1) {
+    const keys: string[] = [];
+    const inner = memoryLimiter(wide.now);
+    const wideLimit: RegisterDeps["limit"] = async (key, max, window) => {
+      keys.push(key);
+      return inner(key, max, window);
+    };
+    for (let i = 0; i < 400; i += 1) {
       const result = await register(
         { redirect_uris: ["https://a.example/cb"] },
         { store: wide, limit: wideLimit, clientKey: `192.0.2.${Math.floor(i / 15)}.${i % 15}` },
       ).result;
       expect(result.status).toBe(201);
     }
-    const last = await register(
-      { redirect_uris: ["https://a.example/cb"] },
-      { store: wide, limit: wideLimit, clientKey: "10.9.9.9" },
-    ).result;
-    expect(last.status).toBe(429);
+    expect(keys.every((key) => key.startsWith("oauth-register:"))).toBe(true);
+    expect(keys).not.toContain("oauth-register-all");
   });
 
   it("makes room first: it trims unused registrations at the cap, and a limiter failure fails open", async () => {
@@ -266,6 +275,62 @@ describe("M10-10 registration", () => {
     await register({ redirect_uris: ["https://a.example/cb"] }, { store }).result;
     expect(store.trimmed).toEqual([UNUSED_DCR_CAP]);
     expect(UNUSED_DCR_CAP).toBe(20000);
+  });
+
+  // Wave L review, finding 4: a registered app cannot call itself Claude on a consent screen.
+  it.each([
+    ["Claude", "https://evil.example/cb"],
+    ["Claude Code (my server)", "https://claude-ai.app/cb"],
+    ["C-l-a-u-d-e", "https://a.example/cb"],
+    ["ChatGPT", "https://claude.ai/api/mcp/auth_callback"],
+    ["OpenAI Connector", "https://a.example/cb"],
+    ["Anthropic Support", "https://a.example/cb"],
+    ["ＣＬＡＵＤＥ", "https://a.example/cb"],
+  ])("refuses the name %j with the return address %s", async (name, redirect) => {
+    const { result, store } = register({ redirect_uris: [redirect], client_name: name });
+    const out = await result;
+    expect(out.status).toBe(400);
+    expect(body(out).error).toBe("invalid_client_metadata");
+    expect(String(body(out).error_description)).toMatch(/Claude, Anthropic, ChatGPT or OpenAI/);
+    expect(store.clients.size).toBe(0);
+  });
+
+  it.each([
+    ["Claude", ["https://claude.ai/api/mcp/auth_callback"]],
+    ["Claude Code (my server)", ["http://localhost:51234/callback"]],
+    ["Claude Code", ["http://localhost/callback", "http://127.0.0.1/callback"]],
+    ["ChatGPT", ["https://chatgpt.com/connector_platform_oauth_redirect"]],
+    ["Notes for people who like pelicans", ["https://a.example/cb"]],
+  ])("accepts the name %j when it returns where that name lives", async (name, redirects) => {
+    const { result } = register({ redirect_uris: redirects, client_name: name });
+    expect((await result).status).toBe(201);
+  });
+
+  it("refuses a return address on this product's own hosts, and accepts a look-alike", async () => {
+    for (const bad of [
+      "https://hydlnk.com/cb",
+      "https://mara.hydlnk.com/cb",
+      "https://app.hydlnk.com/oauth/consent",
+      "https://HYDLNK.COM/cb",
+    ]) {
+      const out = await register({ redirect_uris: [bad] }, { rootDomain: "hydlnk.com" }).result;
+      expect(out.status, bad).toBe(400);
+      expect(body(out).error, bad).toBe("invalid_redirect_uri");
+    }
+    for (const good of [
+      "https://nothydlnk.com/cb",
+      "https://hydlnk.com.evil.example/cb",
+      "http://localhost:3000/cb",
+    ]) {
+      const out = await register({ redirect_uris: [good] }, { rootDomain: "hydlnk.com" }).result;
+      expect(out.status, good).toBe(201);
+    }
+    // A list is refused as a whole.
+    const mixed = await register(
+      { redirect_uris: ["https://a.example/cb", "https://x.hydlnk.com/cb"] },
+      { rootDomain: "hydlnk.com" },
+    ).result;
+    expect(mixed.status).toBe(400);
   });
 
   it("a store failure is a 500 that names nothing", async () => {

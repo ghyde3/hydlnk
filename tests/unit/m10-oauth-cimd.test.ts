@@ -370,15 +370,108 @@ describe("M10-08 the loader and the cache", () => {
     expect(t.limiter.calls.length).toBe(limitCalls);
   });
 
-  it("after the lifetime the next request fetches again, and a failed refetch refuses it (no stale use)", async () => {
+  it("after the lifetime the next request fetches again", async () => {
     const t = loaderSetup();
-    t.queue.push(t.doc(good()), { ok: false, reason: "timeout", host: "app.example.com" });
+    t.queue.push(t.doc(good(), "max-age=3600"), t.doc(good({ client_name: "Renamed" })));
+    expect((await t.resolveWith(URL_)).ok).toBe(true);
+    t.store.advance(3601);
+    expect(await t.resolveWith(URL_)).toMatchObject({ ok: true, client: { client_name: "Renamed" } });
+    expect(t.calls.fetch).toBe(2);
+  });
+
+  // Wave L review, finding 2: a client that connected before must not be locked out by a host that
+  // is slow, down or rate limited for a minute. The expired row is used for up to a week.
+  it.each([
+    ["a timeout", { ok: false, reason: "timeout", host: "app.example.com" }],
+    ["a network failure", { ok: false, reason: "network", host: "app.example.com" }],
+    ["a bad status", { ok: false, reason: "bad_status", host: "app.example.com" }],
+  ] as const)("%s on the refetch uses the expired document, for up to seven days", async (_n, failure) => {
+    const t = loaderSetup();
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    t.queue.push(t.doc(good()), failure, failure);
     expect((await t.resolveWith(URL_)).ok).toBe(true);
     t.store.advance(3601);
     const stale = await t.resolveWith(URL_);
-    expect(stale).toEqual({ ok: false, reason: "cannot_verify" });
+    expect(stale).toMatchObject({ ok: true, client: { client_id: URL_, client_name: "Example" } });
     expect(t.calls.fetch).toBe(2);
+    // The row is kept as it was: it is not renewed by a failure.
+    expect(t.store.clients.get(URL_)!.expires_at).toBe(
+      new Date(Date.UTC(2026, 9, 4, 12, 0, 0) + 3600_000).toISOString(),
+    );
+    // A week after it was fetched it is no longer used.
+    t.store.advance(7 * 86400);
+    expect(await t.resolveWith(URL_)).toEqual({
+      ok: false,
+      reason: "cannot_verify",
+      transient: true,
+    });
+  });
+
+  it("a successful refetch replaces the stale row", async () => {
+    const t = loaderSetup();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    t.queue.push(
+      t.doc(good({ client_name: "Old" })),
+      { ok: false, reason: "timeout", host: "app.example.com" },
+      t.doc(good({ client_name: "New" })),
+    );
+    await t.resolveWith(URL_);
+    t.store.advance(3601);
+    expect(await t.resolveWith(URL_)).toMatchObject({ client: { client_name: "Old" } });
+    expect(await t.resolveWith(URL_)).toMatchObject({ client: { client_name: "New" } });
+    expect(t.store.clients.get(URL_)!.client_name).toBe("New");
+  });
+
+  it.each([
+    ["a document that is no longer valid", (t: ReturnType<typeof loaderSetup>) => t.doc(good({ redirect_uris: [] }))],
+    ["a name posing as the product", (t: ReturnType<typeof loaderSetup>) => t.doc(good({ client_name: "HYDLNK Support" }))],
+    ["an address that now fails the policy", () => ({ ok: false, reason: "ssrf_blocked", host: "app.example.com" }) as const],
+    ["a redirect", () => ({ ok: false, reason: "redirected", host: "app.example.com" }) as const],
+    ["a body that is too large", () => ({ ok: false, reason: "too_large", host: "app.example.com" }) as const],
+    ["the wrong content type", () => ({ ok: false, reason: "bad_type", host: "app.example.com" }) as const],
+  ])("%s on the refetch is refused: the expired document is not used", async (_n, refetch) => {
+    const t = loaderSetup();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    t.queue.push(t.doc(good()), refetch(t));
+    expect((await t.resolveWith(URL_)).ok).toBe(true);
+    t.store.advance(3601);
+    expect(await t.resolveWith(URL_)).toEqual({ ok: false, reason: "cannot_verify" });
+  });
+
+  it("a refetch that is rate limited uses the expired document, and a client with no cached row is told to wait", async () => {
+    const base = loaderSetup();
+    const t = loaderSetup();
+    // Everything but the address limit is spent.
+    t.deps.limit = async (key) =>
+      key.startsWith("cimd-ip:") ? { allowed: true, retryAfter: 0 } : { allowed: false, retryAfter: 30 };
+    t.store.addClient(URL_, ["https://app.example.com/cb"], {
+      fetched_at: new Date(t.store.clock - 2 * 86400_000).toISOString(),
+      expires_at: new Date(t.store.clock - 60_000).toISOString(),
+    });
+    expect(await t.resolveWith(URL_)).toMatchObject({ ok: true, client: { client_id: URL_ } });
+    expect(t.calls.fetch).toBe(0);
+    // No row at all: still too_many.
+    expect(await t.resolveWith("https://other.example.com/oauth/client.json")).toMatchObject({
+      ok: false,
+      reason: "too_many",
+    });
+    void base;
+  });
+
+  it("an expired row that was fetched more than a week ago is not used even when the host cannot answer", async () => {
+    const t = loaderSetup();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    t.queue.push({ ok: false, reason: "timeout", host: "app.example.com" });
+    t.store.addClient(URL_, ["https://app.example.com/cb"], {
+      fetched_at: new Date(t.store.clock - 8 * 86400_000).toISOString(),
+      expires_at: new Date(t.store.clock - 7 * 86400_000).toISOString(),
+    });
+    expect(await t.resolveWith(URL_)).toMatchObject({ ok: false, reason: "cannot_verify" });
+  });
+
+  it("a registered client never goes through the stale path", async () => {
+    const t = loaderSetup();
+    expect(await t.resolveWith(`hlc_${"c".repeat(32)}`)).toEqual({ ok: false, reason: "unknown_app" });
   });
 
   it("errors and invalid documents are never stored or reused: a 500 then a valid document is fetched again on the very next request", async () => {
@@ -389,7 +482,12 @@ describe("M10-08 the loader and the cache", () => {
       t.doc(good({ redirect_uris: [] })),
       t.doc(good()),
     );
-    expect(await t.resolveWith(URL_)).toEqual({ ok: false, reason: "cannot_verify" });
+    // A bad status is the host's (transient); an empty redirect list is the document's.
+    expect(await t.resolveWith(URL_)).toEqual({
+      ok: false,
+      reason: "cannot_verify",
+      transient: true,
+    });
     expect(t.store.clients.has(URL_)).toBe(false);
     expect(await t.resolveWith(URL_)).toEqual({ ok: false, reason: "cannot_verify" });
     expect(t.store.clients.has(URL_)).toBe(false);
@@ -537,6 +635,58 @@ describe("M10-08 the loader and the cache", () => {
     expect(
       await u.resolveWith("https://h99.example.com/client.json", "10.9.9.8"),
     ).not.toMatchObject({ reason: "too_many" });
+  });
+
+  // Wave L review, finding 2: any path on a host is a cache miss, so counting every miss against the
+  // host and the whole service lets one caller spend the budget of the clients that matter most.
+  it("the three known clients are counted against the caller's address only, never the host or the service", async () => {
+    const t = loaderSetup();
+    t.queue.push(t.doc(fixture("claude.json")));
+    expect((await t.resolveWith(CLAUDE)).ok).toBe(true);
+    expect(t.limiter.calls.map((call) => call.key)).toEqual(["cimd-ip:203.0.113.7"]);
+    const code = loaderSetup();
+    code.queue.push(code.doc(fixture("claude-code.json")));
+    expect((await code.resolveWith(CLAUDE_CODE)).ok).toBe(true);
+    expect(code.limiter.calls.map((call) => call.key)).toEqual(["cimd-ip:203.0.113.7"]);
+    const gpt = loaderSetup();
+    gpt.queue.push(gpt.doc(fixture("chatgpt.json")));
+    expect((await gpt.resolveWith(CHATGPT)).ok).toBe(true);
+    expect(gpt.limiter.calls.map((call) => call.key)).toEqual(["cimd-ip:203.0.113.7"]);
+  });
+
+  it("a host hammered with made-up paths cannot lock a known client out, and the made-up paths stay limited", async () => {
+    const t = loaderSetup();
+    t.deps.limit = memoryLimiter(() => t.store.clock);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    t.deps.fetchDocument = async (address) =>
+      address === CLAUDE
+        ? t.doc(fixture("claude.json"))
+        : { ok: false, reason: "bad_status", host: "claude.ai" };
+    for (let i = 0; i < 25; i += 1) {
+      await t.resolveWith(`https://claude.ai/made-up/${i}`, `10.1.1.${i}`);
+    }
+    expect(await t.resolveWith("https://claude.ai/made-up/99", "10.3.3.3")).toMatchObject({
+      ok: false,
+      reason: "too_many",
+    });
+    expect((await t.resolveWith(CLAUDE, "10.2.2.2")).ok).toBe(true);
+  });
+
+  it("the service-wide limit does not stop a known client either, but it still stops an unknown one", async () => {
+    const t = loaderSetup();
+    t.deps.limit = async (key) =>
+      key === "cimd-all" ? { allowed: false, retryAfter: 40 } : { allowed: true, retryAfter: 0 };
+    t.queue.push(t.doc(fixture("chatgpt.json")));
+    expect((await t.resolveWith(CHATGPT)).ok).toBe(true);
+    expect(await t.resolveWith(URL_)).toMatchObject({ ok: false, reason: "too_many", retryAfter: 40 });
+  });
+
+  it("the caller's own address limit still applies to a known client", async () => {
+    const t = loaderSetup();
+    t.deps.limit = async (key) =>
+      key.startsWith("cimd-ip:") ? { allowed: false, retryAfter: 9 } : { allowed: true, retryAfter: 0 };
+    expect(await t.resolveWith(CLAUDE)).toMatchObject({ ok: false, reason: "too_many", retryAfter: 9 });
+    expect(t.calls.fetch).toBe(0);
   });
 
   it("logs the reason and the host only: never the path, the body or an address", async () => {

@@ -5,6 +5,7 @@ import { rateLimitClientKey } from "@/lib/analytics/ingest/client-ip";
 import {
   MCP_FAILED_AUTH_PER_MINUTE,
   MCP_MAX_BODY_BYTES,
+  MCP_REQUESTS_PER_MINUTE,
   MCP_RESOURCE_METADATA_PATH,
 } from "./constants";
 import { MCP_ALLOWED_HEADERS, MCP_EXPOSED_HEADERS, isAllowedMcpOrigin } from "./origin";
@@ -22,6 +23,9 @@ import type { ToolDeps } from "./types";
  *                      code without credentials); counted against the client address
  *   withMcpAuth        a credential that fails is the library's 401 `invalid_token`, the same for
  *                      every kind of failure; counted against the client address
+ *   request budget    120 a minute per verified token, of any kind: over it is a 429 before the body is
+ *                      read (a refused tool call still costs limiter writes and a row, so a looping
+ *                      app must not be able to ask without bound)
  *   GET, DELETE        405 with `Allow: POST` (stateless: no event stream, no sessions)
  *   POST               the body read with a cap, then mcp-handler's stateless Streamable HTTP
  *
@@ -132,8 +136,29 @@ export function createMcpEndpoint(options: McpEndpointOptions) {
     }
   };
 
+  /** The per-token request budget: a 429 response when it is spent, else null. A limiter that fails allows. */
+  const overBudget = async (req: Request): Promise<Response | null> => {
+    const extra = req.auth?.extra as { tokenId?: unknown } | undefined;
+    const tokenId = typeof extra?.tokenId === "string" ? extra.tokenId : req.auth?.token;
+    if (!tokenId) return null;
+    try {
+      const verdict = await options.limit(`mcp-req:${tokenId}`, MCP_REQUESTS_PER_MINUTE, 60);
+      if (verdict.allowed) return null;
+      const seconds = Math.max(1, Math.ceil(verdict.retryAfter));
+      return jsonResponse(429, { error: "rate_limited" }, { "Retry-After": String(seconds) });
+    } catch {
+      log("[mcp] the request limiter failed; allowing the request");
+      return null;
+    }
+  };
+
   /** What runs after the bearer check passed (`req.auth` is set). */
   const authenticated = async (req: Request): Promise<Response> => {
+    const spent = await overBudget(req);
+    if (spent) {
+      await req.body?.cancel().catch(() => undefined);
+      return spent;
+    }
     if (req.method !== "POST") {
       return jsonResponse(
         405,

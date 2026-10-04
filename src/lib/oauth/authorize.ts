@@ -1,6 +1,7 @@
 import { allScopes, parseScopeParam } from "./scopes";
 import { OAUTH_REQUEST_SECONDS, orderedScopes, type OauthScope } from "./constants";
 import type { AuthorizeErrorClass, RedirectErrorCode } from "./messages";
+import { isKnownClientId } from "./known-clients";
 import { logOauthFailure } from "./log";
 import { matchesAnyRedirectUri, parseRedirectUri, redirectHostLabel } from "./redirect-uri";
 import { buildClientRedirect, errorParams } from "./redirect";
@@ -21,8 +22,13 @@ import type { ClientRow, OauthStore, RequestRow } from "./store";
  *      fetched), and failure is the error page;
  *   4. `redirect_uri` must match one of the client's URIs, exactly (M10-06), and a mismatch is the
  *      error page, never a redirect;
- *   5. only now, with a redirect address that can be trusted, every other problem is sent to the app as
- *      a 303 with `error`, a fixed `error_description`, `state` and `iss`;
+ *   5. every other problem is sent to the app as a 303 with `error`, a fixed `error_description`,
+ *      `state` and `iss`, but ONLY for a client whose return address can be trusted: one of the three
+ *      real client-metadata documents (known-clients.ts), or a metadata client this signed-in person
+ *      has connected before. Anyone can create any other client in one unauthenticated call (a
+ *      registration, or a document on a host they own), and an error sent to its address needs no
+ *      sign-in and no click, which would make this endpoint a redirector that starts on a hydlnk.com
+ *      address (RFC 9700 section 4.11.2). For those clients the same problems are the error page;
  *   6. a valid request is stored as one pending row, and the person is sent to sign in (a 303 to
  *      /login with a cookie, M10-12) or shown the consent screen (M10-13).
  *
@@ -31,6 +37,13 @@ import type { ClientRow, OauthStore, RequestRow } from "./store";
  */
 
 export const AUTHORIZE_PER_IP_PER_MINUTE = 60;
+/**
+ * A request that is stored before anyone has signed in is a row (up to about 3 KB) written for a
+ * stranger, so the address gets a tighter budget for those (Wave L review). Counted per address only:
+ * a bucket shared by everyone would let one caller lock every other person out of connecting an app.
+ * The rows themselves are deleted after an hour by `purge-oauth-requests`.
+ */
+export const AUTHORIZE_NEW_PER_IP_PER_MINUTE = 20;
 export const AUTHORIZE_MAX_QUERY_BYTES = 8 * 1024;
 export const AUTHORIZE_MAX_VALUE_LENGTH = 2048;
 export const STATE_MAX_LENGTH = 512;
@@ -94,6 +107,8 @@ export interface AuthorizeDeps {
   /** The canonical MCP URL. */
   resource: string;
   resolveClient: (clientId: string) => Promise<ClientResolution>;
+  /** The end-to-end stub's address counts as a known client (only while the test hooks are on). */
+  allowTestStub?: boolean;
   newRequestId?: () => string;
   newCsrf?: () => string;
 }
@@ -205,13 +220,21 @@ async function run(input: AuthorizeInput, deps: AuthorizeDeps): Promise<Authoriz
   const stateValue = once("state");
   const stateUsable =
     typeof stateValue === "string" && stateValue.length <= STATE_MAX_LENGTH ? stateValue : null;
-  const fail = (error: RedirectErrorCode, description?: string): AuthorizeResult => ({
-    kind: "redirect",
-    location: buildClientRedirect(
-      redirectUri,
-      errorParams(error, stateUsable, deps.issuer, description),
-    ),
-  });
+  let mayRedirect: boolean | undefined;
+  const trustsReturnAddress = async (): Promise<boolean> => {
+    mayRedirect ??= await clientMayReceiveErrors(client, input.user, deps);
+    return mayRedirect;
+  };
+  const fail = async (error: RedirectErrorCode, description?: string): Promise<AuthorizeResult> =>
+    (await trustsReturnAddress())
+      ? {
+          kind: "redirect",
+          location: buildClientRedirect(
+            redirectUri,
+            errorParams(error, stateUsable, deps.issuer, description),
+          ),
+        }
+      : errorPage("invalid");
 
   if (query.has("request")) return fail("request_not_supported");
   if (query.has("request_uri")) return fail("request_uri_not_supported");
@@ -249,7 +272,15 @@ async function run(input: AuthorizeInput, deps: AuthorizeDeps): Promise<Authoriz
   const prompt = once("prompt");
   if (prompt !== null && prompt.split(" ").includes("none")) return fail("consent_required");
 
-  // 6. a valid request: one pending row, then sign in or consent.
+  // 6. a valid request: one pending row, then sign in or consent. A row for nobody is limited tighter.
+  if (!input.user) {
+    const fresh = await deps.limit(
+      `oauth-authorize-new:${input.clientKey}`,
+      AUTHORIZE_NEW_PER_IP_PER_MINUTE,
+      60,
+    );
+    if (!fresh.allowed) return errorPage("too_many", fresh.retryAfter);
+  }
   const requestId = (deps.newRequestId ?? randomRequestId)();
   await deps.store.insertRequest({
     id: requestId,
@@ -262,6 +293,22 @@ async function run(input: AuthorizeInput, deps: AuthorizeDeps): Promise<Authoriz
   });
   if (!input.user) return { kind: "login", requestId };
   return consentFor(requestId, client, input.user, deps);
+}
+
+/**
+ * May an error be sent to this client's return address before anyone has answered? Only a client of
+ * the kind whose address cannot be chosen by a stranger: a known metadata client, or a metadata
+ * client this signed-in person has an active grant for. A registered ("hlc_") client never is.
+ */
+async function clientMayReceiveErrors(
+  client: ClientRow,
+  user: SignedInUser | null,
+  deps: Pick<AuthorizeDeps, "store" | "allowTestStub">,
+): Promise<boolean> {
+  if (client.kind !== "cimd") return false;
+  if (isKnownClientId(client.client_id, { allowTestStub: deps.allowTestStub === true })) return true;
+  if (!user) return false;
+  return (await deps.store.getActiveGrant(user.id, client.client_id)) !== null;
 }
 
 /**

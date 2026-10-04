@@ -536,7 +536,18 @@ describe("runTool: the activity row", () => {
       [string, Parameters<typeof makeDeps>[0], unknown, Partial<ReturnType<typeof identity>>]
     > = [
       ["insufficient_scope", {}, {}, { scopes: ["hydlnk.read"] }],
-      ["rate_limited", { limit: async () => ({ allowed: false, retryAfter: 3 }) }, {}, {}],
+      [
+        "rate_limited",
+        {
+          // Everything is over its limit except the once-a-minute allowance for logging a refusal.
+          limit: async (key: string) =>
+            key.startsWith("mcp-rl-log:")
+              ? { allowed: true, retryAfter: 0 }
+              : { allowed: false, retryAfter: 3 },
+        },
+        {},
+        {},
+      ],
       ["account_suspended", { isSuspended: async () => true }, {}, {}],
       ["invalid_input", {}, { n: "x" }, {}],
     ];
@@ -547,6 +558,66 @@ describe("runTool: the activity row", () => {
       expect(activity).toHaveLength(1);
       expect(activity[0]).toMatchObject({ ok: false, errorCode: code });
     }
+  });
+
+  // Wave L review, finding 6: a client that loops on a refused call must not grow the table without
+  // bound. A rate_limited refusal leaves a row once a minute per token, not once per call.
+  it("a rate_limited refusal leaves one row a minute per token, however often it happens", async () => {
+    const seen = new Map<string, number>();
+    const { deps, flush, activity } = makeDeps({
+      limit: async (key) => {
+        if (key.startsWith("mcp-rl-log:")) {
+          const hits = (seen.get(key) ?? 0) + 1;
+          seen.set(key, hits);
+          return hits <= 1 ? { allowed: true, retryAfter: 0 } : { allowed: false, retryAfter: 59 };
+        }
+        return { allowed: false, retryAfter: 3 };
+      },
+    });
+    for (let i = 0; i < 25; i += 1) {
+      const result = await runTool(tool(), identity(), {}, deps);
+      expect(result.structuredContent).toMatchObject({ error: { code: "rate_limited" } });
+      await flush();
+    }
+    expect(activity).toHaveLength(1);
+    expect(activity[0]).toMatchObject({ ok: false, errorCode: "rate_limited" });
+    expect([...seen.keys()]).toEqual([`mcp-rl-log:${identity().tokenId}`]);
+    // Another token has its own allowance.
+    const other = identity({ tokenId: "55555555-5555-4555-8555-555555555555" });
+    await runTool(tool(), other, {}, deps);
+    await flush();
+    expect(activity).toHaveLength(2);
+    expect(activity[1]).toMatchObject({ tokenId: other.tokenId });
+  });
+
+  it("the sample is the refusal only: ok calls and every other refusal always leave their row, and never ask for the allowance", async () => {
+    const keys: string[] = [];
+    const { deps, flush, activity } = makeDeps({
+      limit: async (key) => {
+        keys.push(key);
+        return { allowed: true, retryAfter: 0 };
+      },
+    });
+    for (let i = 0; i < 4; i += 1) {
+      await runTool(tool(), identity(), {}, deps);
+      await runTool(tool(), identity({ scopes: ["hydlnk.read"] }), {}, deps);
+      await runTool(tool(), identity(), { n: "x" }, deps);
+      await flush();
+    }
+    expect(activity).toHaveLength(12);
+    expect(keys.some((key) => key.startsWith("mcp-rl-log:"))).toBe(false);
+  });
+
+  it("a limiter that fails while sampling still records the refusal", async () => {
+    const { deps, flush, activity } = makeDeps({
+      limit: async (key) => {
+        if (key.startsWith("mcp-rl-log:")) throw new Error("the limiter is down");
+        return { allowed: false, retryAfter: 3 };
+      },
+    });
+    await runTool(tool(), identity(), {}, deps);
+    await flush();
+    expect(activity).toHaveLength(1);
   });
 
   it("a failed insert is logged by code and never changes the result", async () => {

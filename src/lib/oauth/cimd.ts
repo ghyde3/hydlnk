@@ -4,6 +4,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { cacheLifetimeSeconds, validateClientDocument } from "./client-document";
 import type { ClientResolution } from "./clients";
 import { oauthConfig } from "./config";
+import { isKnownClientId } from "./known-clients";
 import { loadLogo } from "./logo";
 import { logOauthEvent, logOauthFailure } from "./log";
 import type { LimitFn } from "./register";
@@ -29,7 +30,10 @@ import { defaultOauthStore } from "./store-supabase";
  *      hosts), before any lookup;
  *   2. a request for the same address already in flight is joined, not repeated;
  *   3. limits, before the lookup: 30 a minute per client address, 20 per document host, 300 overall
- *      (a limiter failure fails open and is logged without the address);
+ *      (a limiter failure fails open and is logged without the address). The three real client
+ *      documents (known-clients.ts) are counted against the address only: any path on a host is a
+ *      cache miss, so the host and service budgets can be spent by anyone, and they must not be
+ *      able to lock out Claude or ChatGPT (Wave L review);
  *   4. the fetch (safe-fetch.ts: public addresses only, no redirects, 5 KB, 3 seconds), the document
  *      validated (client-document.ts), the name cleaned, a safe logo fetched and re-encoded or skipped;
  *   5. one upsert on `client_id`: the fetch time and the lifetime from the response's Cache-Control.
@@ -57,9 +61,19 @@ export interface CimdDeps {
 
 const sharedInflight = new Map<string, Promise<ClientResolution>>();
 
+/**
+ * Refusals that say nothing about the document itself: the host was slow, unreachable or answered
+ * with an error status. Only these let an expired cached document stand in (clients.ts); a document
+ * that is now invalid, too large, of the wrong type, redirected or aimed at a private address is not
+ * "the host is down", and the old copy is not used for it.
+ */
+const TRANSIENT_FETCH_REFUSALS: ReadonlySet<string> = new Set(["timeout", "network", "bad_status"]);
+
 const cannotVerify = (reason: FetchRefusal | string, host: string | null): ClientResolution => {
   logOauthEvent("client_document_refused", { reason, ...(host ? { host } : {}) });
-  return { ok: false, reason: "cannot_verify" };
+  return TRANSIENT_FETCH_REFUSALS.has(reason)
+    ? { ok: false, reason: "cannot_verify", transient: true }
+    : { ok: false, reason: "cannot_verify" };
 };
 
 export async function loadCimdClientWith(
@@ -89,14 +103,18 @@ export async function loadCimdClientWith(
   if (running) return running;
 
   const work = (async (): Promise<ClientResolution> => {
-    // Limits first: each distinct client address can cost an outbound request.
+    // Limits first: each distinct client address can cost an outbound request. A known client is
+    // counted against the caller's address only (see the head of this file).
+    const known = isKnownClientId(clientId, {
+      allowTestStub: deps.fetchDeps.allowTestStub ?? testHooksEnabled(),
+    });
     const perAddress = await deps.limit(`cimd-ip:${clientKey}`, CIMD_PER_IP_PER_MINUTE, 60);
-    const perHost = perAddress.allowed
-      ? await deps.limit(`cimd-host:${address.host}`, CIMD_PER_HOST_PER_MINUTE, 60)
-      : perAddress;
-    const overall = perHost.allowed
-      ? await deps.limit("cimd-all", CIMD_ALL_PER_MINUTE, 60)
-      : perHost;
+    const perHost =
+      perAddress.allowed && !known
+        ? await deps.limit(`cimd-host:${address.host}`, CIMD_PER_HOST_PER_MINUTE, 60)
+        : perAddress;
+    const overall =
+      perHost.allowed && !known ? await deps.limit("cimd-all", CIMD_ALL_PER_MINUTE, 60) : perHost;
     if (!perAddress.allowed || !perHost.allowed || !overall.allowed) {
       const blocked = !perAddress.allowed ? perAddress : !perHost.allowed ? perHost : overall;
       logOauthEvent("client_document_refused", { reason: "rate_limited", host: address.host });
@@ -118,7 +136,9 @@ export async function loadCimdClientWith(
     } catch {
       return cannotVerify("bad_type", address.host);
     }
-    const document = validateClientDocument(json, clientId, address.host);
+    const document = validateClientDocument(json, clientId, address.host, {
+      rootDomain: deps.fetchDeps.rootDomain,
+    });
     if (!document.ok) return cannotVerify(`invalid_${document.reason}`, address.host);
 
     // A logo is shown only for a client whose document we fetched ourselves, and only a safe one.
@@ -154,7 +174,7 @@ export async function loadCimdClientWith(
       });
     } catch (error) {
       logOauthFailure("clientDocument", error);
-      return { ok: false, reason: "cannot_verify" };
+      return { ok: false, reason: "cannot_verify", transient: true };
     }
     return { ok: true, client: row };
   })();
