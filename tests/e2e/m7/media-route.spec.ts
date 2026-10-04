@@ -8,7 +8,7 @@ import { SERVER_PORT, rawBuffer, type RawBufferResponse } from "../m2/publish-he
 import { BUCKET, removeFolders, sessionCookie, uploadMedia, uploaded } from "../m5/images-helpers";
 
 /**
- * M7-14: GET and HEAD /media/{uid}/{file} on every host, against the local stack: the exact bytes
+ * M7-14: GET and HEAD /media/{uid}/{file} on the root host (every other host is a 404), against the local stack: the exact bytes
  * of the Storage object, the cache headers (the cost protection), and the refusals (never an open
  * proxy). Local runs have no CDN, so every request reaches Storage and these specs assert headers,
  * not hits; the proof of the cache is the release-time check in PROGRESS.md. The unit twins with an
@@ -72,7 +72,7 @@ function expectMiss(res: RawBufferResponse, label: string): void {
 }
 
 test.describe("M7-14 the /media route", () => {
-  test("M7-14 an uploaded image is served on every host with the exact bytes and the cache headers", async ({
+  test("M7-14 an uploaded image is served on the root host only, with the exact bytes and the cache headers", async ({
     browser,
   }, info) => {
     test.skip(!desktopOnly(info), "not viewport dependent");
@@ -103,15 +103,25 @@ test.describe("M7-14 the /media route", () => {
     await addDomainRow({ pageId: site.pageId, hostname: customHost, status: "verified" });
 
     const path = `/media/${image.path}`;
-    for (const [name, host] of [...Object.entries(HOSTS), ["custom", customHost]] as const) {
-      expectImage(await get(host, path), "image/webp", bytes);
-      // With the owner's auth cookie on the request nothing changes and nothing is set.
-      const withCookie = await get(host, path, { cookie });
-      expectImage(withCookie, "image/webp", bytes);
-      expect(withCookie.headers["cache-control"], `${name} with a cookie`).toBe(CACHE);
+    const root = HOSTS.marketing;
+    expectImage(await get(root, path), "image/webp", bytes);
+    // With the owner's auth cookie on the request nothing changes and nothing is set.
+    const withCookie = await get(root, path, { cookie });
+    expectImage(withCookie, "image/webp", bytes);
+    expect(withCookie.headers["cache-control"], "root with a cookie").toBe(CACHE);
+    expect(withCookie.headers["access-control-allow-origin"]).toBe("*");
+    // One canonical origin: the app host, a handle's host and a custom domain answer the short 404.
+    for (const [name, host] of [
+      ["app", HOSTS.app],
+      ["tenant", HOSTS.tenant],
+      ["custom", customHost],
+    ] as const) {
+      const refused = await get(host, path);
+      expectMiss(refused, name);
+      expect(refused.headers["vercel-cache-tag"], name).toBeUndefined();
     }
     // The browser's own request shape, on a tenant host.
-    const tenant = await get(HOSTS.tenant, path, {
+    const tenant = await get(HOSTS.marketing, path, {
       headers: { accept: "image/avif,image/webp,*/*", "sec-fetch-dest": "image" },
     });
     expectImage(tenant, "image/webp", bytes);
@@ -135,8 +145,8 @@ test.describe("M7-14 the /media route", () => {
     await store(pngPath, pngBytes, "image/png");
     await store(jpgPath, jpgBytes, "image/jpeg");
 
-    expectImage(await get(HOSTS.tenant, `/media/${pngPath}`), "image/png", pngBytes);
-    expectImage(await get(HOSTS.app, `/media/${jpgPath}`), "image/jpeg", jpgBytes);
+    expectImage(await get(HOSTS.marketing, `/media/${pngPath}`), "image/png", pngBytes);
+    expectImage(await get(HOSTS.marketing, `/media/${jpgPath}`), "image/jpeg", jpgBytes);
   });
 
   test("M7-14 HEAD answers the same status and headers with no body; POST, PUT, PATCH and DELETE are 405", async ({
@@ -155,8 +165,8 @@ test.describe("M7-14 the /media route", () => {
       }),
     );
     const path = `/media/${image.path}`;
-    const got = await get(HOSTS.tenant, path);
-    const head = await get(HOSTS.tenant, path, { method: "HEAD" });
+    const got = await get(HOSTS.marketing, path);
+    const head = await get(HOSTS.marketing, path, { method: "HEAD" });
     expect(head.status).toBe(200);
     expect(head.body.length).toBe(0);
     for (const name of [
@@ -176,13 +186,13 @@ test.describe("M7-14 the /media route", () => {
     const [uid, file] = image.path.split("/") as [string, string];
     expect(got.headers["vercel-cache-tag"]).toBe(`media-${uid},media-${uid}-${file}`);
     // HEAD of a missing image is the same short 404.
-    const missing = await get(HOSTS.app, `/media/${me.userId}/img-${"0".repeat(32)}.webp`, {
+    const missing = await get(HOSTS.marketing, `/media/${me.userId}/img-${"0".repeat(32)}.webp`, {
       method: "HEAD",
     });
     expectMiss(missing, "HEAD of a missing image");
 
     for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
-      const res = await get(HOSTS.tenant, path, {
+      const res = await get(HOSTS.marketing, path, {
         method,
         body: method === "DELETE" ? undefined : "x",
       });
@@ -190,7 +200,7 @@ test.describe("M7-14 the /media route", () => {
       expect(res.headers.allow, method).toBe("GET, HEAD");
       expect(res.headers["set-cookie"], method).toBeUndefined();
     }
-    const options = await get(HOSTS.tenant, path, { method: "OPTIONS" });
+    const options = await get(HOSTS.marketing, path, { method: "OPTIONS" });
     expect(options.status).toBe(204);
     expect(options.headers.allow).toBe("GET, HEAD");
   });
@@ -212,8 +222,12 @@ test.describe("M7-14 the /media route", () => {
     );
     const path = `/media/${image.path}`;
     const bytes = Buffer.from(await (await fetch(storageUrl(image.path))).arrayBuffer());
-    // The CDN keeps a copy per host: a label that cannot be a page's address is not worth a copy.
+    // The CDN keeps a copy per host: only the root host serves, so varying the subdomain buys no cache miss.
     const hosts = [
+      HOSTS.app,
+      HOSTS.tenant,
+      `a1.localhost:${PORT}`,
+      `a2.localhost:${PORT}`,
       `a.b.localhost:${PORT}`,
       `ab.localhost:${PORT}`,
       `-x1.localhost:${PORT}`,
@@ -236,9 +250,8 @@ test.describe("M7-14 the /media route", () => {
     const www = await get(`www.localhost:${PORT}`, path);
     expect(www.status).toBe(308);
     expect(String(www.headers.location)).toBe(`http://localhost:${PORT}${path}`);
-    // The real hosts are untouched.
-    for (const host of Object.values(HOSTS))
-      expectImage(await get(host, path), "image/webp", bytes);
+    // The root host is untouched.
+    expectImage(await get(HOSTS.marketing, path), "image/webp", bytes);
   });
 
   test("M7-14 a missing or deleted image is a short-cached 404, never a 200 or a 5xx", async ({
@@ -251,13 +264,13 @@ test.describe("M7-14 the /media route", () => {
 
     // Well-formed, never stored.
     expectMiss(
-      await get(HOSTS.tenant, `/media/${me.userId}/img-${"0".repeat(32)}.webp`),
+      await get(HOSTS.marketing, `/media/${me.userId}/img-${"0".repeat(32)}.webp`),
       "missing",
     );
     // Someone else's folder with a name that does not exist.
     expectMiss(
       await get(
-        HOSTS.app,
+        HOSTS.marketing,
         `/media/00000000-0000-4000-8000-000000000000/img-${"1".repeat(32)}.webp`,
       ),
       "unknown folder",
@@ -268,10 +281,10 @@ test.describe("M7-14 the /media route", () => {
     const path = `${me.userId}/img-${"a".repeat(32)}.png`;
     const bytes = await png();
     await store(path, bytes, "image/png");
-    expectImage(await get(HOSTS.tenant, `/media/${path}`), "image/png", bytes);
+    expectImage(await get(HOSTS.marketing, `/media/${path}`), "image/png", bytes);
     const removed = await adminClient().storage.from(BUCKET).remove([path]);
     expect(removed.error).toBeNull();
-    expectMiss(await get(HOSTS.tenant, `/media/${path}`), "deleted");
+    expectMiss(await get(HOSTS.marketing, `/media/${path}`), "deleted");
   });
 
   test("M7-14 never an open proxy: traversal, encodings, other buckets, queries and odd names are all 404 and never an image", async ({
@@ -317,7 +330,7 @@ test.describe("M7-14 the /media route", () => {
       ["a storage path", `/media/storage/v1/object/public/page-media/${image.path}`],
     ];
     for (const [label, path] of refused) {
-      let res = await get(HOSTS.tenant, path);
+      let res = await get(HOSTS.marketing, path);
       // Never an image from the odd address. Where the route itself answers (almost always) it is
       // the short public 404; where the framework or the host answers first it is still a 404.
       // Next.js collapses a doubled slash with a 308 to the canonical address first: that address
@@ -326,7 +339,7 @@ test.describe("M7-14 the /media route", () => {
         const location = String(res.headers.location);
         expect(location, label).toMatch(/^\/media\/[0-9a-z./-]+$/);
         expect(location, label).not.toMatch(/\/\/|\.\./);
-        res = await get(HOSTS.tenant, location);
+        res = await get(HOSTS.marketing, location);
         if (label === "an empty segment") {
           expect(res.status, label).toBe(200);
           continue;
@@ -340,7 +353,7 @@ test.describe("M7-14 the /media route", () => {
     // trailing slash: a 308 to the canonical address, which is then the normal request. Neither
     // serves an image from the odd address, and neither reaches Storage.
     for (const path of [`/media/${uid}\\${file}`, `/media/${image.path}/`]) {
-      const res = await get(HOSTS.tenant, path);
+      const res = await get(HOSTS.marketing, path);
       expect(res.status, path).toBe(308);
       expect(res.headers.location, path).toBe(`/media/${image.path}`);
       expect(res.body.toString("utf8"), path).not.toMatch(/^(RIFF|\x89PNG)/);
@@ -355,13 +368,13 @@ test.describe("M7-14 the /media route", () => {
       `/media/${uid}%2f${file}`,
       `/media/${uid}/${stem}.gif`,
     ]) {
-      expectMiss(await get(HOSTS.tenant, path), path);
+      expectMiss(await get(HOSTS.marketing, path), path);
     }
 
     // A bare "?" is no query string at all by the time the framework hands the request over
     // (Next drops it from request.url), so it is the same request as none: at most one extra key
     // per image in the CDN's cache, never an unbounded number. Any `?x=1` is refused above.
-    expectImage(await get(HOSTS.tenant, `/media/${image.path}?`), "image/webp", bytes0);
+    expectImage(await get(HOSTS.marketing, `/media/${image.path}?`), "image/webp", bytes0);
 
     // Hosts the visitor controls change nothing about where the route fetches from.
     const bytes = bytes0;
@@ -373,13 +386,13 @@ test.describe("M7-14 the /media route", () => {
     ];
     for (const headers of hostile) {
       expectImage(
-        await get(HOSTS.tenant, `/media/${image.path}`, { headers }),
+        await get(HOSTS.marketing, `/media/${image.path}`, { headers }),
         "image/webp",
         bytes,
       );
     }
-    // An unknown host (a custom domain that is not ours) still gets only the Storage object.
-    expectImage(await get("evil.example", `/media/${image.path}`), "image/webp", bytes);
+    // An unknown host (a custom domain that is not ours) gets the short 404, not even the image.
+    expectMiss(await get("evil.example", `/media/${image.path}`), "evil host");
     expectMiss(await get("evil.example", `/media/${uid}/%2e%2e/${file}`), "evil host, traversal");
   });
 
@@ -404,7 +417,7 @@ test.describe("M7-14 the /media route", () => {
         Array.from({ length: 10 }, (_, i) => {
           const n = round * 10 + i;
           return get(
-            HOSTS.tenant,
+            HOSTS.marketing,
             `/media/${me.userId}/img-${n.toString(16).padStart(32, "0")}.webp`,
           );
         }),
@@ -418,7 +431,7 @@ test.describe("M7-14 the /media route", () => {
     expect(new Set(statuses)).toEqual(new Set([404]));
     // Still healthy: the real image comes back, and an unrelated page of the same host renders.
     const bytes = Buffer.from(await (await fetch(storageUrl(image.path))).arrayBuffer());
-    expectImage(await get(HOSTS.tenant, `/media/${image.path}`), "image/webp", bytes);
-    expect((await get(HOSTS.tenant, "/")).status).toBe(200);
+    expectImage(await get(HOSTS.marketing, `/media/${image.path}`), "image/webp", bytes);
+    expect((await get(HOSTS.marketing, "/")).status).toBe(200);
   });
 });

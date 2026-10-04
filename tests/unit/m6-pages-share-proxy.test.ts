@@ -94,7 +94,7 @@ describe("M6-10 share paths", () => {
 
 /** The four directives the tenant policy has, in order: every share policy starts with them. */
 const TENANT_DIRECTIVES =
-  "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+  "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 const NONCE_SHAPE = /^[A-Za-z0-9+/]{22}==$/;
 /** The nonce a policy names in its script-src (null when it names none). */
 const nonceOf = (policy: string | null): string | null =>

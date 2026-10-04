@@ -354,7 +354,7 @@ test.describe("M7-07 edge states", () => {
         if (name === "N".repeat(60)) {
           const src = await root.locator("img.pg-avatar-img").getAttribute("src");
           expect(src).toContain(user.images.photo.path);
-          expect(src).not.toMatch(/^https?:/);
+          expect(src).toMatch(/^http:\/\/localhost:\d+\/media\//); // the root origin (one CDN cache key per image)
         }
       }
       await expectNoHorizontalScroll(page);

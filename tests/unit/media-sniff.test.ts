@@ -133,8 +133,8 @@ describe("M2-08 limits and public URLs", () => {
     expect(storageUrl("a b/c#d?.png")).toBe(
       "http://127.0.0.1:54321/storage/v1/object/public/page-media/a%20b/c%23d%3F.png",
     );
-    expect(mediaUrl(path)).toBe(`/media/${path}`);
-    expect(mediaUrl("a b/c#d?.png")).toBe("/media/a%20b/c%23d%3F.png");
+    expect(mediaUrl(path)).toBe(`http://localhost:3000/media/${path}`);
+    expect(mediaUrl("a b/c#d?.png")).toBe("http://localhost:3000/media/a%20b/c%23d%3F.png");
     expect(mediaOrigin()).toBe("http://127.0.0.1:54321");
   });
 });

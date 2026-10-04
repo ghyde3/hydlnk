@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll } from "../helpers";
+import { expectNoHorizontalScroll, url } from "../helpers";
 import {
   LONG_LABEL,
   anchorOf,
@@ -235,7 +235,7 @@ test.describe("M6-20 abuse and the network", () => {
     expect(dialogs).toEqual([]);
   });
 
-  test("M6-20 three icon links request only the page's own host (the thumbnail from its /media route) and the fonts", async ({
+  test("M6-20 three icon links request only the page's own host (the thumbnail from the root origin's /media route) and the fonts", async ({
     page,
   }) => {
     const live = await liveLinks("lk-net", (thumb) => [
@@ -250,6 +250,8 @@ test.describe("M6-20 abuse and the network", () => {
     await page.waitForLoadState("networkidle");
 
     const own = new URL(live.url).origin;
+    // Images load from the one canonical media origin: the root host (not the page's own host).
+    const root = url(null).replace(/\/$/, "");
     const storage = new URL(supabaseUrl()).origin;
     // The page's web fonts (Google Fonts, the theme's font tokens) are not something an icon
     // causes: they load the same with no icon on the page. Everything else must be ours.
@@ -257,13 +259,13 @@ test.describe("M6-20 abuse and the network", () => {
     const foreign = requested.filter((u) => {
       if (u.startsWith("data:") || u.startsWith("blob:")) return false;
       const origin = new URL(u).origin;
-      return origin !== own && !fontHosts.has(origin);
+      return origin !== own && origin !== root && !fontHosts.has(origin);
     });
     expect(foreign, `requests to other origins: ${foreign.join(", ")}`).toEqual([]);
-    // M7-15: the thumbnail comes from the page's own /media route, never from Storage.
+    // M7-15: the thumbnail comes from the root origin's /media route, never from Storage.
     expect(requested.filter((u) => new URL(u).origin === storage)).toEqual([]);
     expect(requested.filter((u) => new URL(u).pathname.startsWith("/media/"))).toEqual([
-      `${own}/media/${live.thumb.path}`,
+      `${root}/media/${live.thumb.path}`,
     ]);
     expect(requested.filter((u) => /favicon|icon\.horse|s2\/favicons/i.test(u))).toEqual([]);
   });

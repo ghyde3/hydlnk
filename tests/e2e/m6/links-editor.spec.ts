@@ -399,7 +399,10 @@ test.describe("M6-21 Your image", () => {
     // The tile and the preview show the thumbnail; the button says Replace image; Remove shows.
     await expect(field.getByTestId("link-icon-tile")).toHaveAttribute("data-icon", "image");
     const tileImg = field.getByTestId("link-icon-tile").locator("img");
-    await expect(tileImg).toHaveAttribute("src", new RegExp(`^/media/${user.userId}/avatar-`));
+    await expect(tileImg).toHaveAttribute(
+      "src",
+      new RegExp(`^http://localhost:\\d+/media/${user.userId}/avatar-`),
+    );
     expect(await tileImg.evaluate((img: HTMLImageElement) => [img.width, img.height])).toEqual([
       40, 40,
     ]);

@@ -1,4 +1,5 @@
 import { clientEnv } from "@/lib/env/client";
+import { rootOrigin } from "@/lib/routing/urls";
 import { MEDIA_BUCKET } from "./limits";
 
 /** Each segment of a path encoded on its own, so a stray character can never change the shape. */
@@ -10,18 +11,21 @@ function encodePath(path: string): string {
 }
 
 /**
- * The address a browser loads an uploaded image from: `/media/{path}` on the page's own host
- * (M7-15). Relative on purpose, one slash and no query string: the route in
- * `src/app/media/[...path]/route.ts` answers it on every host and the CDN caches it, so Storage
- * is fetched about once per image instead of once per page view. `path` is an image reference's
- * `{uid}/{file}.{jpg|png|webp}` (checked by `imageRefSchema`); each segment is still encoded here.
+ * The address a browser loads an uploaded image from: `{root origin}/media/{path}`, absolute, on
+ * the ONE canonical media origin (the root marketing host: `https://hydlnk.com`, or
+ * `http://localhost:3000` locally). Never the page's own host: the CDN keeps one copy per host, so
+ * an address that varies with the page (a handle's host, a custom domain, the app host) would give
+ * every host its own cache entry and Storage fetch for the same image. One origin means one copy
+ * per image. The route in `src/app/media/[...path]/route.ts` answers only on that host
+ * (`mediaHostAllowed`). `path` is an image reference's `{uid}/{file}.{jpg|png|webp}` (checked by
+ * `imageRefSchema`); each segment is still encoded here, and there is no query string.
  *
  * Use this for anything a browser draws (`<img src>`, CSS `url()`, the editor's previews). It is
  * never stored: documents, themes and versions keep the Storage form, `storageUrl`. Safe in server
- * and client code.
+ * and client code. The tenant and share Content-Security-Policy lists this origin under `img-src`.
  */
 export function mediaUrl(path: string): string {
-  return `/media/${encodePath(path)}`;
+  return `${rootOrigin(clientEnv.NEXT_PUBLIC_ROOT_DOMAIN)}/media/${encodePath(path)}`;
 }
 
 /**

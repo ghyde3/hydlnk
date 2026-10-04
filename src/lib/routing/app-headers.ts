@@ -11,6 +11,10 @@ import { GOOGLE_GSI_CSP_SOURCES } from "@/lib/auth/google-shared";
  * development) and has to list every origin the editor talks to (Supabase, fonts, YouTube and
  * Spotify embeds in the preview). That hardening is its own piece of work.
  *
+ * No `img-src` here: with none, an image from the root origin (`/media`, see src/lib/media/url.ts) is
+ * already allowed, and a restrictive one would block the editor's blob: and data: previews. Tenant and
+ * share pages, which have a policy, list the root origin exactly.
+ *
  * What that means for "Sign in with Google" (Google Identity Services): nothing is blocked today,
  * so the button, its iframe and its popup work. `buildContentSecurityPolicy` is the single place
  * that keeps it that way: when a directive Google documents (script-src, frame-src, connect-src,

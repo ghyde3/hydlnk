@@ -137,10 +137,11 @@ describe("M7-07 the preview is a picture of the page, in the template's own them
       expect(body).not.toMatch(/<a[\s>]/);
       expect(body).not.toMatch(/<iframe|<form|<input|<button|<script/);
       expect(body).not.toMatch(/href=/);
-      // No absolute address anywhere: nothing is requested from another origin.
-      expect(html).not.toMatch(/https?:\/\//);
-      // The photo, when there is one, is a same-origin address (the /media route).
-      for (const match of html.matchAll(/src="([^"]+)"/g)) expect(match[1]).toMatch(/^\/media\//);
+      // No absolute address anywhere but the canonical media origin (the root host's /media).
+      expect(html.replace(/http:\/\/localhost:3000\/media\//g, "")).not.toMatch(/https?:\/\//);
+      // The photo, when there is one, loads from that one origin.
+      for (const match of html.matchAll(/src="([^"]+)"/g))
+        expect(match[1]).toMatch(/^http:\/\/localhost:3000\/media\//);
     }
   });
 

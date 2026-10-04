@@ -15,7 +15,6 @@ import { addBlock, showView } from "../m2/blocks-helpers";
 import { accessToken, emptyUser, openEditor, pageRow } from "../m2/editor-helpers";
 import { pngSizeOf, rawBuffer } from "../m2/publish-helpers";
 import { collectPublishErrors } from "@/lib/document";
-import { TENANT_CONTENT_SECURITY_POLICY } from "@/lib/routing/tenant-headers";
 import { embedOf, stubThirdParties, tapAndGetSrc, watchCsp } from "./embeds-helpers";
 import { css } from "./links-helpers";
 import { expectQrOf, readDownload } from "./qr-helpers";
@@ -34,6 +33,10 @@ import {
   splitImage,
   waitDraft,
 } from "./share-helpers";
+
+/** The tenant CSP as the proxy sends it (src/lib/routing/tenant-headers.ts; not imported: it reads the env). */
+const TENANT_CONTENT_SECURITY_POLICY =
+  "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 
 /**
  * M6-34, "Done when" for Wave G: a page that uses every Wave G feature, built from nothing but the
@@ -341,8 +344,9 @@ async function markupOf(
 const HOSTS_ALLOWED_TO_BE_REQUESTED = (own: string) =>
   new Set([
     own,
-    // (M7-15 supersedes M6-34 step 3: the uploaded images load from the page's own /media route,
-    // so the Supabase Storage origin is no longer one of them.)
+    // (M7-15 supersedes M6-34 step 3: the uploaded images load from /media on the root origin, not
+    // from the Supabase Storage origin and not same-origin, to keep one CDN cache key per image.)
+    "localhost",
     // Google Fonts for the page's font token: an existing request (see PROGRESS.md), not a Wave G one.
     "fonts.googleapis.com",
     "fonts.gstatic.com",
@@ -490,7 +494,7 @@ test.describe("M6-34 a page using every Wave G feature", () => {
     // The tenant CSP is exactly the M6-26 string, on the response itself.
     expect(response!.headers()["content-security-policy"]).toBe(TENANT_CONTENT_SECURITY_POLICY);
     expect(TENANT_CONTENT_SECURITY_POLICY).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     );
 
     // Clicking the featured link and the text link follows /r/ to their destinations and writes events.

@@ -216,7 +216,10 @@ test.describe("M2-05 the shared page renderer", () => {
     await page.goto(live.url);
     const img = page.locator(".pg-avatar img");
     await expect(img).toHaveAttribute("alt", "Mara Okafor");
-    await expect(img).toHaveAttribute("src", new RegExp(`^/media/${photo.path}$`));
+    await expect(img).toHaveAttribute(
+      "src",
+      new RegExp(`^http://localhost:\\d+/media/${photo.path}$`),
+    );
     expect(await css(img, "object-fit")).toBe("cover");
     const avatar = await box(page.locator(".pg-avatar"));
     expect(avatar.width).toBe(96);

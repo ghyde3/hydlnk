@@ -5,13 +5,14 @@ import { cleanupUsers, setPlan } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
 import { draftOf, userWithDraft } from "../m2/blocks-helpers";
-import { rawBuffer } from "../m2/publish-helpers";
+import { SERVER_PORT, rawBuffer } from "../m2/publish-helpers";
 import { makeLink } from "../m6/pages-helpers";
 import { removeFolders, sessionCookie, uploadMedia, uploaded } from "../m5/images-helpers";
 import { openEditor } from "../m2/editor-helpers";
 import { UNDO_IMAGE_GONE } from "@/lib/editor/history";
 import {
   FONT_HOSTS,
+  MEDIA,
   STORAGE_ORIGIN,
   allLoaded,
   expectOwnAddresses,
@@ -27,7 +28,7 @@ import {
  * is loaded on every surface that draws uploaded media: the live page, a verified custom domain's
  * markup, the editor's preview, the owner's /preview/{pageId}, a private link, the Design screen's
  * background thumbnail and the OG image. On each, no request goes to the Storage origin and every
- * image is a same-origin /media address that loads. Phone (390x844) and desktop (1440x900).
+ * image is an address on the root origin's /media that loads (one CDN cache key per image). Phone (390x844) and desktop (1440x900).
  */
 
 test.describe.configure({ timeout: 180_000 });
@@ -58,13 +59,13 @@ test.describe("M7-15 images load through /media", () => {
       const bgVar = await page
         .locator("[data-page-root]")
         .evaluate((el) => (el as HTMLElement).style.getPropertyValue("--t-bg-image"));
-      expect(bgVar).toBe(`url("/media/${s.bg.path}")`);
+      expect(bgVar).toBe(`url("${MEDIA}/media/${s.bg.path}")`);
       await expect
         .poll(() => w.media.some((r) => r.url.endsWith(`/media/${s.bg.path}`)))
         .toBe(true);
       expect(w.media.length).toBeGreaterThanOrEqual(5);
 
-      // Only the page's own host, and the two Google Fonts hosts, are ever contacted.
+      // Only the page's own host, the root origin (images) and the two Google Fonts hosts, are ever contacted.
       const hosts = new Set(
         w.requests
           .map((request) => new URL(request))
@@ -73,7 +74,9 @@ test.describe("M7-15 images load through /media", () => {
       );
       for (const host of hosts) {
         expect(
-          host === new URL(url(s.handle)).host || FONT_HOSTS.has(host),
+          host === new URL(url(s.handle)).host ||
+            host === new URL(MEDIA).host ||
+            FONT_HOSTS.has(host),
           `${round}: ${host}`,
         ).toBe(true);
       }
@@ -132,12 +135,13 @@ test.describe("M7-15 images load through /media", () => {
     const res = await rawBuffer(host, "/");
     expect(res.status).toBe(200);
     const html = res.text;
-    for (const path of mediaPaths(s)) expect(html).toContain(`/media/${path}`);
-    expect(html).toContain(`url(&quot;/media/${s.bg.path}&quot;)`);
+    for (const path of mediaPaths(s)) expect(html).toContain(`${MEDIA}/media/${path}`);
+    expect(html).toContain(`url(&quot;${MEDIA}/media/${s.bg.path}&quot;)`);
     expect(html).not.toContain(STORAGE_ORIGIN);
     expect(html).not.toContain("/storage/v1/");
-    // And the address works on that host.
-    const image = await rawBuffer(host, `/media/${s.image.path}`);
+    // The custom host does not serve images itself (one CDN cache key per image): the root host does.
+    expect((await rawBuffer(host, `/media/${s.image.path}`)).status).toBe(404);
+    const image = await rawBuffer(`localhost:${SERVER_PORT}`, `/media/${s.image.path}`);
     expect(image.status).toBe(200);
     expect(image.headers["content-type"]).toBe("image/png");
     await context.close();
@@ -160,7 +164,7 @@ test.describe("M7-15 images load through /media", () => {
       await page
         .locator("[data-page-root]")
         .evaluate((el) => (el as HTMLElement).style.getPropertyValue("--t-bg-image")),
-    ).toBe(`url("/media/${s.bg.path}")`);
+    ).toBe(`url("${MEDIA}/media/${s.bg.path}")`);
 
     // A private preview link, opened with no session at all.
     const link = await makeLink(s.userId, s.pageId);
@@ -189,9 +193,9 @@ test.describe("M7-15 images load through /media", () => {
 
     // The profile photo's thumbnail in the editor is the same address.
     const thumbs = await page
-      .locator('main img[src^="/media/"], form img[src^="/media/"]')
+      .locator(`main img[src^="${MEDIA}/media/"], form img[src^="${MEDIA}/media/"]`)
       .evaluateAll((els) => els.map((el) => el.getAttribute("src")));
-    for (const src of thumbs) expect(src).toMatch(/^\/media\//);
+    for (const src of thumbs) expect(src?.startsWith(`${MEDIA}/media/`)).toBe(true);
     await context.close();
   });
 
@@ -285,7 +289,7 @@ test.describe("M7-15 images load through /media", () => {
     await page.goto(url("app", "/design"));
     const thumb = page.locator('[role="img"][aria-label="Current background image"] img');
     await expect(thumb).toBeVisible();
-    await expect(thumb).toHaveAttribute("src", `/media/${s.bg.path}`);
+    await expect(thumb).toHaveAttribute("src", `${MEDIA}/media/${s.bg.path}`);
     await expect
       .poll(() => thumb.evaluate((el) => (el as HTMLImageElement).naturalWidth))
       .toBeGreaterThan(0);

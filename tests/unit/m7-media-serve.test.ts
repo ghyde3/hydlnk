@@ -136,6 +136,7 @@ describe("M7-14 an image is served with exactly the headers it needs", () => {
     const res = await serve(spy);
     expect(res.status).toBe(200);
     expect(headerNames(res)).toEqual([
+      "access-control-allow-origin",
       "cache-control",
       "content-length",
       "content-type",
@@ -325,7 +326,7 @@ describe("M7-14 never an open proxy: every refusal makes no upstream request", (
     const spy = makeFetch();
     const res = await serve(spy, `/media/${A}`, {
       headers: {
-        host: "evil.example",
+        host: "localhost:3000",
         "x-forwarded-host": "evil.example",
         "x-original-host": "evil.example",
         "x-forwarded-proto": "https",
@@ -342,47 +343,41 @@ describe("M7-14 never an open proxy: every refusal makes no upstream request", (
   });
 });
 
-describe("M7-14 only a real address gets an image (Wave I review)", () => {
-  // The CDN keeps a copy per host, so an address nobody owns would be one more cache miss, one more
-  // Storage fetch and one more byte of transfer for every label an attacker invents. The gate is
-  // syntactic (the route may not hold a database key), so it narrows the host space and does not
-  // bound it: the per-IP rate rule and the spend limit at Vercel are the ceiling (PROGRESS.md).
+describe("M7-14 one canonical media origin: only the root host serves an image", () => {
+  // The CDN keeps a copy per host, so every host that answered would multiply cache misses, function
+  // calls and Storage fetches for one image (an attacker varies the subdomain). Only the root host
+  // (and the deployment and loopback hosts the router already treats as the marketing host) serves.
   const served = [
     ["the root host", "localhost:3000"],
+    ["the root host in upper case", "LOCALHOST:3000"],
+    ["the loopback address in development", "127.0.0.1:3000"],
+    ["a deployment host", "hydlnk-git-m8-ghyde3.vercel.app"],
+  ] as const;
+  const refused = [
     ["the app host", "app.localhost:3000"],
     ["a handle's host", "mara.localhost:3000"],
     ["a handle with digits and hyphens", "a-1-b.localhost:3000"],
-    ["the loopback address in development", "127.0.0.1:3000"],
-    ["a deployment host", "hydlnk-git-m8-ghyde3.vercel.app"],
+    ["an invented handle-shaped label", "a1.localhost:3000"],
     ["a custom domain", "links.example.com"],
     ["a custom domain with a port and a trailing dot", "links.example.com.:8443"],
     ["a custom domain that is not ours at all", "evil.example"],
-    ["a host in upper case", "MARA.LOCALHOST:3000"],
-  ] as const;
-  const refused = [
     ["www, which only redirects", "www.localhost:3000"],
     ["two labels under the root", "a.b.localhost:3000"],
-    ["a label that is not a handle (too short)", "ab.localhost:3000"],
-    ["a label that is not a handle (leading hyphen)", "-x1.localhost:3000"],
-    ["a label that is not a handle (31 characters)", `${"a".repeat(31)}.localhost:3000`],
-    ["a label with an underscore", "a_b_c.localhost:3000"],
+    ["a label that is not a handle", "-x1.localhost:3000"],
     ["the root on the wrong port", "localhost:4000"],
     ["a handle on the wrong port", "mara.localhost:4000"],
-    ["a handle with no port", "mara.localhost"],
     ["an IP address that is not the loopback", "203.0.113.7"],
     ["a single-label name", "intranet"],
     ["garbage", "not a host!"],
-    ["a name with a path in it", "evil.example/x"],
-    [
-      "a name over 253 characters",
-      `${"a".repeat(60)}.${"b".repeat(60)}.${"c".repeat(60)}.${"d".repeat(60)}.${"e".repeat(20)}.example`,
-    ],
   ] as const;
 
   it.each(served)("%s is served", async (_label, host) => {
     const spy = makeFetch();
     const res = await serve(spy, `/media/${PATH}`, { headers: { host } });
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe(MEDIA_BROWSER_CACHE_CONTROL);
+    expect(res.headers.get("vercel-cdn-cache-control")).toBe(MEDIA_CDN_CACHE_CONTROL);
+    expect(res.headers.get("vercel-cache-tag")).toBe(`media-${UID},media-${UID}-${FILE}`);
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
@@ -399,11 +394,11 @@ describe("M7-14 only a real address gets an image (Wave I review)", () => {
   it("only the real Host header decides, never a forwarded one", async () => {
     const spy = makeFetch();
     const hostile = await serve(spy, `/media/${PATH}`, {
-      headers: { host: "a.b.localhost:3000", "x-forwarded-host": "mara.localhost:3000" },
+      headers: { host: "a1.localhost:3000", "x-forwarded-host": "localhost:3000" },
     });
     expectMiss(hostile);
     const friendly = await serve(spy, `/media/${PATH}`, {
-      headers: { host: "mara.localhost:3000", "x-forwarded-host": "a.b.localhost:3000" },
+      headers: { host: "localhost:3000", "x-forwarded-host": "a1.localhost:3000" },
     });
     expect(friendly.status).toBe(200);
     expect(spy).toHaveBeenCalledTimes(1);

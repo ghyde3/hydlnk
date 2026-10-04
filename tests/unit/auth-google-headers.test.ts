@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   APP_CONTENT_SECURITY_POLICY,
   APP_DIRECTIVES,
@@ -8,6 +8,14 @@ import {
 import { GOOGLE_GSI_CSP_SOURCES } from "@/lib/auth/google-shared";
 import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import { parseEnv, publicEnvSchema } from "@/lib/env/shared";
+
+vi.mock("@/lib/env/client", () => ({
+  clientEnv: {
+    NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000",
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+  },
+}));
 
 /**
  * The app host's headers around Google Identity Services, and the optional client id. Google's own

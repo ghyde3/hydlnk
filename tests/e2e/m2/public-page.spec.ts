@@ -214,7 +214,7 @@ test.describe("M2-22 public page", () => {
   test("M2-22 response headers: CSP without a script nonce, nosniff, referrer policy", async () => {
     const res = await tenantGet("mara");
     expect(res.headers["content-security-policy"]).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     );
     expect(res.headers["content-security-policy"]).not.toMatch(/nonce|script-src/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");

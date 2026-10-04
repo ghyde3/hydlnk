@@ -7,6 +7,7 @@ import {
   userWithDraft,
   type TestPage,
 } from "../m2/blocks-helpers";
+import { SERVER_PORT } from "../m2/publish-helpers";
 import { emptyDraft, newBlockId, type Block, type ImageRef } from "@/lib/document";
 
 /**
@@ -22,6 +23,8 @@ process.env.NEXT_PUBLIC_SUPABASE_URL ??= supabaseUrl();
 export const owners: string[] = [];
 
 export const STORAGE_ORIGIN = new URL(supabaseUrl()).origin;
+/** The one canonical media origin: the root host. Every image loads from `${MEDIA}/media/...`. */
+export const MEDIA = `http://localhost:${SERVER_PORT}`;
 export const FONT_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
 
 export interface Seed extends TestPage {
@@ -134,7 +137,7 @@ export async function allLoaded(page: Page, scope: string): Promise<{ srcs: stri
 
 export const mediaPaths = (s: Seed) => [s.photo, s.image, s.card, s.thumb].map((ref) => ref.path);
 
-/** What every surface must satisfy: same-origin /media images that loaded, nothing from Storage. */
+/** What every surface must satisfy: /media images from the root origin that loaded, nothing from Storage. */
 export function expectOwnAddresses(
   s: Seed,
   srcs: string[],
@@ -144,13 +147,15 @@ export function expectOwnAddresses(
 ): void {
   const own = srcs.filter((src) => src.includes(s.userId));
   for (const path of opts.all === false ? [] : mediaPaths(s)) {
-    expect(own, `${label}: ${path}`).toContain(`/media/${path}`);
+    expect(own, `${label}: ${path}`).toContain(`${MEDIA}/media/${path}`);
   }
   for (const src of srcs) {
     expect(src, label).not.toContain("/storage/v1/");
     expect(src, label).not.toContain(STORAGE_ORIGIN);
     if (src.includes(s.userId))
-      expect(src, label).toMatch(/^\/media\/[0-9a-f-]{36}\/[a-z0-9-]+\.(png|webp|jpg)$/);
+      expect(src, label).toMatch(
+        new RegExp(`^${MEDIA}/media/[0-9a-f-]{36}/[a-z0-9-]+\\.(png|webp|jpg)$`),
+      );
   }
   expect(
     w.requests.filter((request) => request.startsWith(`${STORAGE_ORIGIN}/storage/`)),

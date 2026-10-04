@@ -116,12 +116,15 @@ for (const { path, title, current } of PAGES) {
 test("legal pages: last-updated date, a column no wider than 70 characters, linked from the footer", async ({
   page,
 }) => {
-  for (const path of ["/privacy", "/terms"]) {
+  for (const [path, label, iso] of [
+    ["/privacy", "October 2, 2026", "2026-10-02"],
+    ["/terms", "October 3, 2026", "2026-10-03"],
+  ] as const) {
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));
     await page.goto(url(null, path));
-    await expect(page.getByText(/^Last updated October 2, 2026$/)).toBeVisible();
-    await expect(page.locator("time[datetime='2026-10-02']")).toHaveCount(1);
+    await expect(page.getByText(`Last updated ${label}`, { exact: true })).toBeVisible();
+    await expect(page.locator(`time[datetime='${iso}']`)).toHaveCount(1);
     const fits = await page.locator(".prose-hl").evaluate((el) => {
       const context = document.createElement("canvas").getContext("2d")!;
       context.font = getComputedStyle(el).font;

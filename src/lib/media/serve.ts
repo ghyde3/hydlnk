@@ -4,7 +4,7 @@ import { storageUrl } from "./url";
 
 /**
  * The `/media/{uid}/{file}` route's whole job (M7-14): answer a browser's request for an uploaded
- * image from the page's own address, by fetching the public Storage object once and letting the
+ * image from the one canonical media origin, by fetching the public Storage object once and letting the
  * CDN keep it. Pure of the framework on purpose (`Request` in, `Response` out, an injectable
  * `fetch`), so the tests can pin every refusal and every header without a server. The route file
  * `src/app/media/[...path]/route.ts` only calls it.
@@ -173,7 +173,7 @@ export async function serveMedia(
   if (path === null) return missing();
 
   // The real Host header only (as the proxy reads it), or the URL's own host when a caller sent none.
-  // An address nobody owns gets the same short 404, and Storage is not asked (see ./host).
+  // Every host but the root host (app, handles, custom domains, www, made-up labels) gets the same short 404, and Storage is not asked (see ./host).
   const host = request.headers.get("host") || new URL(request.url).host;
   if (!mediaHostAllowed(host)) return missing();
 
@@ -218,6 +218,9 @@ export async function serveMedia(
     "Vercel-CDN-Cache-Control": MEDIA_CDN_CACHE_CONTROL,
     "Vercel-Cache-Tag": mediaCacheTags(path),
     "X-Content-Type-Options": "nosniff",
+    // Public images, no credentials: the editor (app host) reads one back with fetch() for Adjust.
+    // `*` needs no Vary: Origin, so the CDN keeps one copy.
+    "Access-Control-Allow-Origin": "*",
   });
   // A HEAD answer is never stored by the CDN: if it were keyed like a GET, one HEAD would leave every
   // GET for the image with an empty body for a week. The CDN reads this header and never passes it

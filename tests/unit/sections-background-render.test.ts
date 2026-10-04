@@ -28,7 +28,7 @@ const BASE = "http://127.0.0.1:54321/storage/v1/object/public/page-media";
 const FILE = "0b8f2f7a-1e01-4c0b-9d57-6f1c2a523a1e.jpg";
 const OWN = `${BASE}/${OWNER_UID}/${FILE}`;
 /** What is drawn (M7-15): the stored Storage URL is rebuilt as this host's /media address. */
-const DRAWN = `/media/${OWNER_UID}/${FILE}`;
+const DRAWN = `http://localhost:3000/media/${OWNER_UID}/${FILE}`;
 const PAGE_ID = "00000000-0000-4000-8000-0000000000b1";
 
 function render(patch: Partial<TokenSet>): Document {

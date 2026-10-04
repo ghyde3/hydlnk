@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { backgroundImagePath, backgroundImageUrl } from "@/components/page/background";
 import { PageRenderer } from "@/components/page/page-renderer";
 import { mediaPathOf } from "@/lib/themes/bg-image";
+import { rootOrigin } from "@/lib/routing/urls";
 import { mediaOrigin, mediaUrl, storageUrl } from "@/lib/media/url";
 import { PUBLIC_READ_CACHE_VERSION } from "@/lib/publish/tags";
 import { isProjectMediaUrl, tokenSetSchema } from "@/lib/theme/tokens";
@@ -30,6 +31,8 @@ vi.mock("@/lib/env/client", () => ({
  * stored form does not change, nothing is migrated, and nothing outside url.ts spells it.
  */
 
+/** The canonical media origin: the root host, not the page's own host. */
+const ROOT = "http://localhost:3000";
 const STORAGE = "http://127.0.0.1:54321/storage/v1/object/public/page-media";
 const UID = "0b6f1a5e-7c1d-4a52-9d0e-3a7c5e8f2b14";
 const LONG = `${"abcdef0123456789".repeat(4)}`; // 64 characters
@@ -44,22 +47,32 @@ describe("M7-15 mediaUrl and storageUrl on six paths", () => {
     ["a 64-character name", `${UID}/${LONG}.webp`, null],
   ])("%s", (_name, path, encoded) => {
     const tail = encoded ?? path;
-    expect(mediaUrl(path)).toBe(`/media/${tail}`);
+    expect(mediaUrl(path)).toBe(`${ROOT}/media/${tail}`);
     expect(storageUrl(path)).toBe(`${STORAGE}/${tail}`);
   });
 
-  it("mediaUrl is relative, has one leading slash and never a query, fragment or origin", () => {
+  it("mediaUrl is absolute on the root origin and never has a query or a fragment", () => {
     for (const path of [`${UID}/img-0123456789ab.webp`, "x/y?z=1#f", "../x", ""]) {
       const url = mediaUrl(path);
-      expect(url.startsWith("/media/")).toBe(true);
-      expect(url.startsWith("//")).toBe(false);
-      expect(url).not.toMatch(/[?#]|:\/\//);
+      expect(url.startsWith(`${ROOT}/media/`)).toBe(true);
+      expect(new URL(url).origin).toBe(ROOT);
+      expect(url).not.toMatch(/[?#]/);
     }
   });
 
+  it("is the root origin in every environment, never a handle's or the app's host", () => {
+    for (const [domain, origin] of [
+      ["localhost:3000", "http://localhost:3000"],
+      ["hydlnk.com", "https://hydlnk.com"],
+    ] as const) {
+      expect(rootOrigin(domain)).toBe(origin);
+    }
+    expect(mediaUrl("a/b.webp")).not.toMatch(/\/\/(app|www)\./);
+  });
+
   it("encodes each segment, so a stray character never changes the shape", () => {
-    expect(mediaUrl("a/b/../c")).toBe("/media/a/b/../c"); // dots are not encoded; the route refuses them
-    expect(mediaUrl("a%2Fb/c")).toBe("/media/a%252Fb/c");
+    expect(mediaUrl("a/b/../c")).toBe(`${ROOT}/media/a/b/../c`); // dots are not encoded; the route refuses them
+    expect(mediaUrl("a%2Fb/c")).toBe(`${ROOT}/media/a%252Fb/c`);
     expect(storageUrl("a%2Fb/c")).toBe(`${STORAGE}/a%252Fb/c`);
   });
 
@@ -78,7 +91,7 @@ describe("M7-15 the stored form does not change", () => {
     expect(backgroundImagePath(stored)).toBe(`${UID}/bg-0123456789ab.webp`);
   });
 
-  it("a relative /media address written as bgImage is refused everywhere", () => {
+  it("a /media address written as bgImage is refused everywhere", () => {
     const relativeForm = mediaUrl(`${UID}/bg-0123456789ab.webp`);
     expect(isProjectMediaUrl(relativeForm)).toBe(false);
     expect(tokenSetSchema.shape.bgImage.safeParse(relativeForm).success).toBe(false);
@@ -89,8 +102,13 @@ describe("M7-15 the stored form does not change", () => {
 
   it("backgroundImageUrl rebuilds /media from the validated path", () => {
     expect(backgroundImageUrl({ bgType: "image", bgImage: stored })).toBe(
-      `/media/${UID}/bg-0123456789ab.webp`,
+      `${ROOT}/media/${UID}/bg-0123456789ab.webp`,
     );
+  });
+
+  it("a bare relative /media path written as bgImage is refused too", () => {
+    expect(isProjectMediaUrl(`/media/${UID}/bg-0123456789ab.webp`)).toBe(false);
+    expect(mediaPathOf(`/media/${UID}/bg-0123456789ab.webp`, mediaOrigin())).toBeNull();
   });
 
   it.each([
@@ -134,8 +152,8 @@ describe("M7-15 the stored form does not change", () => {
         mode: "live",
       }),
     );
-    expect(html).toContain(`src="/media/${photoRef.path}"`);
-    expect(html).toContain(`url(&quot;/media/${UID}/bg-0123456789ab.webp&quot;)`);
+    expect(html).toContain(`src="${ROOT}/media/${photoRef.path}"`);
+    expect(html).toContain(`url(&quot;${ROOT}/media/${UID}/bg-0123456789ab.webp&quot;)`);
     expect(html).not.toContain("127.0.0.1:54321");
     expect(html).not.toContain("/storage/v1/");
   });

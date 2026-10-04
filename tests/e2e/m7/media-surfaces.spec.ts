@@ -7,7 +7,7 @@ import { makeLink } from "../m6/pages-helpers";
 import { makeVersions } from "../m6/versions-helpers";
 import { removeFolders } from "../m5/images-helpers";
 import { showPreviewSheet } from "./phone-preview";
-import { STORAGE_ORIGIN, allLoaded, owners, seed, watch, type Seed } from "./media-helpers";
+import { MEDIA, STORAGE_ORIGIN, allLoaded, owners, seed, watch, type Seed } from "./media-helpers";
 
 /**
  * M7-15 steps 2, 5 and 6 on the surfaces media-pages.spec.ts does not load: the Edit tab's own
@@ -25,7 +25,7 @@ test.afterAll(async () => {
   await cleanupUsers();
 });
 
-/** Every uploaded-media `<img>` in `scope`: a same-origin /media address that decoded. */
+/** Every uploaded-media `<img>` in `scope`: an address on the root origin's /media that decoded. */
 async function expectOnlyMediaImages(scope: Locator, label: string): Promise<number> {
   const images = scope.locator("img");
   const found = await images.evaluateAll((els) =>
@@ -38,7 +38,7 @@ async function expectOnlyMediaImages(scope: Locator, label: string): Promise<num
     expect(image.src, label).not.toContain("/storage/v1/");
     expect(image.src, label).not.toContain(STORAGE_ORIGIN);
   }
-  return found.filter((image) => image.src.startsWith("/media/")).length;
+  return found.filter((image) => image.src.startsWith(`${MEDIA}/media/`)).length;
 }
 
 const noStorageRequests = (requests: string[]): string[] =>
@@ -75,7 +75,7 @@ test.describe("M7-15 the Edit tab's own controls draw from /media", () => {
 
     // The profile photo's preview in the Profile card.
     const profile = page.getByRole("region", { name: "Profile", exact: true });
-    await expect(profile.locator(`img[src="/media/${s.photo.path}"]`)).toBeVisible();
+    await expect(profile.locator(`img[src="${MEDIA}/media/${s.photo.path}"]`)).toBeVisible();
     expect(await expectOnlyMediaImages(profile, "profile photo")).toBeGreaterThan(0);
 
     // Each block with a picture, opened in turn: the image block (picture and focus picker), the
@@ -91,7 +91,7 @@ test.describe("M7-15 the Edit tab's own controls draw from /media", () => {
       await toggle.click();
       const panel = page.locator("[id^='block-panel-']");
       await expect(panel).toBeVisible();
-      await expect(panel.locator(`img[src="/media/${path}"]`).first()).toBeAttached();
+      await expect(panel.locator(`img[src="${MEDIA}/media/${path}"]`).first()).toBeAttached();
       expect(await expectOnlyMediaImages(panel, label), label).toBeGreaterThan(0);
       await toggle.click();
       await expect(page.locator("[id^='block-panel-']")).toHaveCount(0);
@@ -116,7 +116,7 @@ test.describe("M7-15 the Edit tab's own controls draw from /media", () => {
     await page.goto(url("app", "/editor"));
     await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
     // The photo's own address, the one the dialog must read: not the Storage origin (no CORS).
-    const own = new URL(`/media/${s.photo.path}`, url("app")).toString();
+    const own = `${MEDIA}/media/${s.photo.path}`;
     requests.length = 0;
     await page.getByRole("button", { name: "Adjust photo", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Position your photo" })).toBeVisible();
@@ -138,7 +138,7 @@ test.describe("M7-15 the Share tab and the version preview draw from /media", ()
     const w = watch(page);
     await page.goto(url("app", "/share"));
     const image = page.getByTestId("share-preview-image");
-    await expect(image).toHaveAttribute("src", `/media/${s.share.path}`);
+    await expect(image).toHaveAttribute("src", `${MEDIA}/media/${s.share.path}`);
     await expect
       .poll(() => image.evaluate((el) => (el as HTMLImageElement).naturalWidth))
       .toBeGreaterThan(0);
@@ -167,8 +167,8 @@ test.describe("M7-15 the Share tab and the version preview draw from /media", ()
     await expect(version.locator("img").first()).toBeAttached({ timeout: 20_000 });
     const loaded = await allLoaded(page, "[data-testid='version-page']");
     expect(loaded.srcs.length).toBeGreaterThan(0);
-    for (const src of loaded.srcs) expect(src).toMatch(/^\/media\//);
-    expect(loaded.srcs).toContain(`/media/${s.image.path}`);
+    for (const src of loaded.srcs) expect(src.startsWith(`${MEDIA}/media/`)).toBe(true);
+    expect(loaded.srcs).toContain(`${MEDIA}/media/${s.image.path}`);
     expect(noStorageRequests(w.requests)).toEqual([]);
     expect(w.violations).toEqual([]);
     await context.close();
