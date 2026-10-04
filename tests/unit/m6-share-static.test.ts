@@ -17,7 +17,8 @@ const filesIn = (dir: string): string[] =>
     return statSync(path).isDirectory() ? filesIn(path) : [path];
   });
 
-const QR_FILES = ["src/components/editor/qr-dialog.tsx", ...filesIn("src/lib/qr")];
+const QR_CARD = "src/components/workspace/share/qr-card.tsx";
+const QR_FILES = [QR_CARD, ...filesIn("src/lib/qr")];
 const SHARE_UI_FILES = [
   "src/components/editor/share-card.tsx",
   "src/components/editor/share-card-preview.tsx",
@@ -71,8 +72,8 @@ describe("M6-31 / M6-33 the two token systems stay apart", () => {
     }
   });
 
-  it("the QR dialog sets the colors on the drawing, never from a class or a theme", () => {
-    const source = code("src/components/editor/qr-dialog.tsx");
+  it("the QR card sets the colors on the drawing, never from a class or a theme", () => {
+    const source = code(QR_CARD);
     expect(source).toContain('fill="#ffffff"');
     expect(source).toContain('fill="#000000"');
   });
@@ -97,8 +98,8 @@ describe("M6-31 the QR code makes no request and takes no input", () => {
     }
   });
 
-  it("the dialog has no field: nothing can change what is encoded", () => {
-    const source = code("src/components/editor/qr-dialog.tsx");
+  it("the card has no field: nothing can change what is encoded", () => {
+    const source = code(QR_CARD);
     expect(source).not.toMatch(/<(input|textarea|select|form)\b/);
     expect(source).not.toMatch(/contentEditable/i);
     // The address is a prop, never state.
@@ -107,13 +108,14 @@ describe("M6-31 the QR code makes no request and takes no input", () => {
   });
 
   it("the encoded address is decided on the server and passed in", () => {
-    const route = read("src/app/(editor)/app/(screens)/editor/page.tsx");
+    const route = read("src/app/(editor)/app/(screens)/(workspace)/layout.tsx");
     expect(route).toContain("publicPageAddress(");
     expect(route).toContain("loadPrimaryDomain(");
-    const screen = read("src/components/editor/editor-screen.tsx");
-    expect(screen).toMatch(
-      /qr=\{\{\s*handle: props\.handle,\s*address: props\.publicAddress\s*\}\}/,
-    );
+    expect(route).toMatch(/publicAddress=\{publicPageAddress\(/);
+    // The card encodes the workspace's `publicAddress` prop and nothing else.
+    const card = read(QR_CARD);
+    expect(card).toMatch(/const \{ publicAddress, handle, hasPublished \} = useWorkspace\(\)/);
+    expect(card).toMatch(/makeQr\(publicAddress\)/);
     const address = read("src/lib/qr/address.ts");
     expect(address).not.toMatch(/searchParams|location|window|document/);
   });
@@ -219,7 +221,7 @@ describe("M6-31 to M6-33 copy: plain words", () => {
     return out.filter((text) => /[a-zA-Z]{3}/.test(text) && !/\$\{|[;(){}=]/.test(text));
   }
 
-  it.each([...QR_FILES.filter((file) => file.endsWith("qr-dialog.tsx")), ...SHARE_UI_FILES])(
+  it.each([...QR_FILES.filter((file) => file === QR_CARD), ...SHARE_UI_FILES])(
     "%s has no please, no exclamation mark and no successfully",
     (file) => {
       for (const text of words(file)) {
@@ -233,7 +235,7 @@ describe("M6-31 to M6-33 copy: plain words", () => {
   );
 
   it("the exported sentences are the specified ones", async () => {
-    const qr = read("src/components/editor/qr-dialog.tsx");
+    const qr = read(QR_CARD);
     expect(qr).toContain("This page isn’t available right now.");
     expect(qr).toContain("Publish your page first. Then you can download its QR code.");
     expect(qr).toContain("Scan it to open your page.");

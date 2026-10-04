@@ -3,7 +3,7 @@ import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { openEditor, pageRow, seededUser, setDraft, statusChip } from "../m2/editor-helpers";
-import { padTo } from "../m2/publish-helpers";
+import { SERVER_PORT, padTo } from "../m2/publish-helpers";
 import { makeJpeg } from "../m5/images-fixtures";
 import {
   expectOverrides,
@@ -12,7 +12,12 @@ import {
   previewRoot,
   reloadDesign,
   saveStatus,
+  showPreview,
+  showTokens,
 } from "./design-helpers";
+
+/** The canonical media origin: every uploaded image loads from the root host (M7-15). */
+const MEDIA_ORIGIN = `http://localhost:${SERVER_PORT}`;
 
 /**
  * M3-11 .. M3-16: the shape, spacing and background sections of the Design screen, one flow per
@@ -51,6 +56,26 @@ async function choose(page: Page, groupName: string, name: string): Promise<void
 const computed = (locator: Locator, property: string) =>
   locator.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property);
 
+/**
+ * Runs `read` against the preview. On a phone the preview is the mini phone's full-size sheet
+ * (M7-09): it is opened for the read and closed again, so the controls behind it can be used.
+ */
+async function inPreview<T>(page: Page, read: () => Promise<T>): Promise<T> {
+  await showPreview(page);
+  try {
+    return await read();
+  } finally {
+    await showTokens(page);
+  }
+}
+
+/**
+ * What a browser computes for a background image served from `/media` on the canonical root origin (M7-15):
+ * the stored form is the Storage URL, the address drawn is `/media/{path}`.
+ */
+const mediaCss = (_page: Page, stored: string): string =>
+  `url("${MEDIA_ORIGIN}/media/${stored.split("/page-media/")[1]}")`;
+
 /** Every option of the named groups is at least 44px tall on a phone and nothing scrolls sideways. */
 async function expectPhoneFit(page: Page, ...groups: string[]): Promise<void> {
   await expectNoHorizontalScroll(page);
@@ -65,7 +90,10 @@ async function expectPhoneFit(page: Page, ...groups: string[]): Promise<void> {
 /** Publishes from the editor and waits for the "Published" chip. */
 async function publish(page: Page): Promise<void> {
   await openEditor(page);
-  await page.locator("main > header").getByRole("button", { name: "Publish", exact: true }).click();
+  await page
+    .getByTestId("workspace-toolbar")
+    .getByRole("button", { name: "Publish", exact: true })
+    .click();
   await expect(statusChip(page)).toHaveText("Published");
 }
 
@@ -110,17 +138,19 @@ test.describe("M3-11 / M3-12 shape section", () => {
     await expect(pressedIn(page, "Button style")).toHaveCount(1);
 
     // The preview follows at once.
-    const previewLink = previewRoot(page).locator(`[data-block-id="${LINK}"]`);
-    await expect(previewLink).toHaveAttribute("data-button-style", "soft");
-    expect(await computed(previewLink, "border-top-left-radius")).toBe("20px");
-    expect(
-      await computed(previewRoot(page).locator("[data-block-type=card]"), "border-top-width"),
-    ).toBe("2px");
-    // A link with its own style keeps it.
-    await expect(previewRoot(page).locator('[data-block-id="Bt5rJ1fGz6Os"]')).toHaveAttribute(
-      "data-button-style",
-      "fill",
-    );
+    await inPreview(page, async () => {
+      const previewLink = previewRoot(page).locator(`[data-block-id="${LINK}"]`);
+      await expect(previewLink).toHaveAttribute("data-button-style", "soft");
+      expect(await computed(previewLink, "border-top-left-radius")).toBe("20px");
+      expect(
+        await computed(previewRoot(page).locator("[data-block-type=card]"), "border-top-width"),
+      ).toBe("2px");
+      // A link with its own style keeps it.
+      await expect(previewRoot(page).locator('[data-block-id="Bt5rJ1fGz6Os"]')).toHaveAttribute(
+        "data-button-style",
+        "fill",
+      );
+    });
 
     // Autosaved as page-level overrides, and still there after a reload.
     await expectOverrides(
@@ -175,8 +205,10 @@ test.describe("M3-13 spacing section", () => {
     await choose(page, "Text alignment", "Left");
 
     // The preview: 18px between blocks, left-aligned headings.
-    expect(await gap(previewRoot(page))).toBe("18px");
-    expect(await computed(previewRoot(page).locator("h2").first(), "text-align")).toBe("left");
+    await inPreview(page, async () => {
+      expect(await gap(previewRoot(page))).toBe("18px");
+      expect(await computed(previewRoot(page).locator("h2").first(), "text-align")).toBe("left");
+    });
 
     await expectOverrides(
       user.pageId,
@@ -219,8 +251,10 @@ test.describe("M3-14 solid and gradient", () => {
       "Image…",
     ]);
     await expect(pressedIn(page, "Background")).toHaveText("Gradient");
-    await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "gradient");
-    expect(await computed(previewRoot(page), "background-image")).toMatch(/^linear-gradient\(/);
+    await inPreview(page, async () => {
+      await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "gradient");
+      expect(await computed(previewRoot(page), "background-image")).toMatch(/^linear-gradient\(/);
+    });
     await expectPhoneFit(page, "Background");
 
     await publish(page);
@@ -229,8 +263,10 @@ test.describe("M3-14 solid and gradient", () => {
 
     await openDesign(page);
     await choose(page, "Background", "Solid");
-    await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "solid");
-    expect(await computed(previewRoot(page), "background-image")).toBe("none");
+    await inPreview(page, async () => {
+      await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "solid");
+      expect(await computed(previewRoot(page), "background-image")).toBe("none");
+    });
     await expectOverrides(user.pageId, (o) => o.bgType === "solid");
 
     // The live page keeps the gradient until Publish.
@@ -346,10 +382,12 @@ test.describe("M3-15 / M3-16 background image", () => {
     await expect(page.getByRole("progressbar")).toHaveCount(0);
 
     // The preview draws it on its own layer; Image… is marked as the active type.
-    await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "image");
-    expect(
-      await computed(previewRoot(page).locator("[data-bg-layer=image]"), "background-image"),
-    ).toBe(`url("${imageA}")`);
+    await inPreview(page, async () => {
+      await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "image");
+      expect(
+        await computed(previewRoot(page).locator("[data-bg-layer=image]"), "background-image"),
+      ).toBe(mediaCss(page, imageA));
+    });
     await expect(option(page, "Background", "Image…")).toHaveAttribute("data-active", "true");
     await expect(pressedIn(page, "Background")).toHaveCount(0);
     const removeButton = page.getByRole("button", { name: "Remove image" });
@@ -374,10 +412,12 @@ test.describe("M3-15 / M3-16 background image", () => {
     await expect(blur).toHaveAttribute("aria-valuetext", "12px");
     await expect(page.getByText("60%", { exact: true })).toBeVisible();
     await expect(page.getByText("12px", { exact: true }).last()).toBeVisible();
-    const root = previewRoot(page);
-    expect(await computed(root.locator("[data-bg-layer=overlay]"), "opacity")).toBe("0.6");
-    expect(await computed(root.locator("[data-bg-layer=image]"), "filter")).toBe("blur(12px)");
-    expect(await computed(root.locator(`[data-block-id="${LINK}"]`), "filter")).toBe("none");
+    await inPreview(page, async () => {
+      const root = previewRoot(page);
+      expect(await computed(root.locator("[data-bg-layer=overlay]"), "opacity")).toBe("0.6");
+      expect(await computed(root.locator("[data-bg-layer=image]"), "filter")).toBe("blur(12px)");
+      expect(await computed(root.locator(`[data-block-id="${LINK}"]`), "filter")).toBe("none");
+    });
     await expectOverrides(user.pageId, (o) => o.overlayOpacity === 0.6 && o.blur === 12);
     await expectNoHorizontalScroll(page);
 
@@ -385,12 +425,12 @@ test.describe("M3-15 / M3-16 background image", () => {
     await reloadDesign(page);
     await expect(page.getByRole("slider", { name: "Image overlay" })).toHaveValue("60");
     await expect(page.getByRole("slider", { name: "Image blur" })).toHaveValue("12");
-    await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "image");
+    await inPreview(page, () => expect(previewRoot(page)).toHaveAttribute("data-bg-type", "image"));
 
     // Remove image: Solid, bgImage cleared, sliders gone. The object stays in Storage.
     await page.getByRole("button", { name: "Remove image" }).click();
     await expectOverrides(user.pageId, (o) => o.bgType === "solid" && o.bgImage === null);
-    await expect(previewRoot(page)).toHaveAttribute("data-bg-type", "solid");
+    await inPreview(page, () => expect(previewRoot(page)).toHaveAttribute("data-bg-type", "solid"));
     await expect(page.getByRole("button", { name: "Remove image" })).toHaveCount(0);
     await expect(page.getByRole("slider")).toHaveCount(0);
     expect(await status(imageA)).toBe(200);
@@ -417,7 +457,7 @@ test.describe("M3-15 / M3-16 background image", () => {
     const live = await livePage(page, user.handle);
     const liveImage = live.locator("[data-bg-layer=image]");
     await expect(liveImage).toHaveCount(1);
-    expect(await computed(liveImage, "background-image")).toBe(`url("${imageA}")`);
+    expect(await computed(liveImage, "background-image")).toBe(mediaCss(live, imageA));
     expect(await computed(liveImage, "filter")).toBe("blur(12px)");
     expect(await computed(live.locator("[data-bg-layer=overlay]"), "opacity")).toBe("0.6");
     await expectNoHorizontalScroll(live);
@@ -429,21 +469,21 @@ test.describe("M3-15 / M3-16 background image", () => {
     expect(await status(imageA)).toBe(200);
     expect(await status(imageB)).toBe(200);
     await live.reload();
-    expect(await computed(liveImage, "background-image")).toBe(`url("${imageA}")`);
+    expect(await computed(liveImage, "background-image")).toBe(mediaCss(live, imageA));
 
     // Remove in the draft: A is still served and still live.
     await page.getByRole("button", { name: "Remove image" }).click();
     await expectOverrides(user.pageId, (o) => o.bgImage === null && o.bgType === "solid");
     expect(await status(imageA)).toBe(200);
     await live.reload();
-    expect(await computed(liveImage, "background-image")).toBe(`url("${imageA}")`);
+    expect(await computed(liveImage, "background-image")).toBe(mediaCss(live, imageA));
 
     // Upload again and Publish: now the live page shows the new image.
     await openDesign(page);
     const imageC = await uploadBackground(page, user, "c.jpg", imageB);
     await publish(page);
     await live.reload();
-    expect(await computed(liveImage, "background-image")).toBe(`url("${imageC}")`);
+    expect(await computed(liveImage, "background-image")).toBe(mediaCss(live, imageC));
     // M5-14: A (what the live page showed until this Publish) and B (dropped from the draft, never
     // live) are referenced by nothing now, and the Publish action's cleanup deleted them. C is live.
     await expect.poll(() => status(imageA), { timeout: 15_000 }).not.toBe(200);

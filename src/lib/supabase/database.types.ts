@@ -83,16 +83,19 @@ export type Database = {
       }
       blocked_domains: {
         Row: {
+          added_by: string | null
           created_at: string
           domain: string
           reason: string | null
         }
         Insert: {
+          added_by?: string | null
           created_at?: string
           domain: string
           reason?: string | null
         }
         Update: {
+          added_by?: string | null
           created_at?: string
           domain?: string
           reason?: string | null
@@ -582,6 +585,7 @@ export type Database = {
           page_id: string
           reviewed_at: string | null
           views: number
+          views_previous_month: number | null
           window_end: string
           window_start: string
         }
@@ -591,6 +595,7 @@ export type Database = {
           page_id: string
           reviewed_at?: string | null
           views: number
+          views_previous_month?: number | null
           window_end: string
           window_start: string
         }
@@ -600,6 +605,7 @@ export type Database = {
           page_id?: string
           reviewed_at?: string | null
           views?: number
+          views_previous_month?: number | null
           window_end?: string
           window_start?: string
         }
@@ -635,6 +641,17 @@ export type Database = {
           id: string
         }[]
       }
+      admin_blocked_domain_impact: {
+        Args: { p_domain: string; p_limit?: number }
+        Returns: {
+          draft_pages: number
+          handle: string
+          hosts: string[]
+          link_count: number
+          page_id: string
+          total_pages: number
+        }[]
+      }
       admin_search_pages: {
         Args: { p_limit?: number; p_offset?: number; p_query?: string }
         Returns: {
@@ -662,6 +679,7 @@ export type Database = {
           reviewed_at: string
           total_count: number
           views: number
+          views_previous_month: number
           window_end: string
           window_start: string
         }[]

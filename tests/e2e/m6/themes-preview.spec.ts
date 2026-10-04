@@ -4,18 +4,21 @@ import { accessTokenFor, cleanupUsers, desktopOnly, makeUser, phoneOnly } from "
 import { restAs } from "../fixtures/http";
 import { setOverrides } from "../m3/design-helpers";
 import { openEditor, statusChip } from "../m2/editor-helpers";
+import { inPreviewSheet } from "../m7/phone-preview";
 import {
   NOIR,
   PLAIN_LINK,
   FILL_LINK,
   expectNoHorizontalScroll,
   expectTapTargets,
-  headerStatus,
+  expectAppliedTheme,
   isPhone,
   messageOf,
   openDesignWithCard,
+  openThemeMenu,
   pageRow,
   previewButton,
+  startPreview,
   applyPreviewButton,
   previewFontFamilies,
   previewLook,
@@ -50,8 +53,8 @@ async function box(locator: ReturnType<Page["locator"]>) {
   return rect;
 }
 
-test.describe("M6-44 the Preview button on every card", () => {
-  test("M6-44 every card, system and saved, has a 44px Preview button on its own row; the card still applies; no Pro chip", async ({
+test.describe("M6-44 the Preview item on every card", () => {
+  test("M6-44 every card, system and saved, has a More button whose menu starts with a 44px Preview; the card still applies; no Pro chip", async ({
     page,
     context,
   }) => {
@@ -64,35 +67,23 @@ test.describe("M6-44 the Preview button on every card", () => {
       await expect(previewButton(page, name)).toBeVisible();
     }
     await expect(previewButton(page, "Night shift")).toBeVisible();
-    await expect(page.locator("[data-testid=theme-preview]")).toHaveCount(17);
+    await expect(page.locator("[data-testid=theme-more]")).toHaveCount(17);
 
-    // White, a 1px --hl-line-3 border, 44px tall, as wide as the card, on its own row.
+    // M7-06: a 44px More button on the name row opens a menu whose first item is Preview.
     for (const name of ["Noir", "Paper", "Sunset", "Night shift"]) {
-      const button = previewButton(page, name);
-      const card = themeCard(page, name);
-      const b = await box(button);
-      const c = await box(card);
-      expect(b.height, `${name} Preview height`).toBeGreaterThanOrEqual(44);
-      expect(
-        Math.abs(b.width - c.width),
-        `${name} Preview is as wide as its card`,
-      ).toBeLessThanOrEqual(1);
-      expect(b.y, `${name} Preview sits under its card`).toBeGreaterThan(c.y + c.height - 1);
-      const style = await button.evaluate((el) => {
-        const css = getComputedStyle(el);
-        return { bg: css.backgroundColor, border: css.borderTopWidth, color: css.borderTopColor };
-      });
-      expect(style.bg).toBe("rgb(255, 255, 255)");
-      expect(style.border).toBe("1px");
-      expect(style.color).not.toBe("rgba(0, 0, 0, 0)");
+      const more = previewButton(page, name);
+      expect((await box(more)).height, `${name} More height`).toBeGreaterThanOrEqual(44);
+      const menu = await openThemeMenu(page, name);
+      const item = menu.getByRole("menuitem").first();
+      await expect(item).toHaveAccessibleName(`Preview ${name}`);
+      expect((await box(item)).height, `${name} Preview height`).toBeGreaterThanOrEqual(44);
+      await page.keyboard.press("Escape");
+      await expect(menu).toHaveCount(0);
     }
-    // On a saved theme the Preview row is above Rename and Delete.
-    const preview = await box(previewButton(page, "Night shift"));
-    const rename = await box(page.getByRole("button", { name: "Rename Night shift" }));
-    const remove = await box(page.getByRole("button", { name: "Delete Night shift" }));
-    expect(rename.y).toBeGreaterThanOrEqual(preview.y + preview.height - 1);
-    expect(remove.y).toBeGreaterThanOrEqual(preview.y + preview.height - 1);
-    expect(Math.abs(preview.x - rename.x)).toBeLessThanOrEqual(1);
+    // On a saved theme the menu has Preview, then Rename and Delete.
+    const menu = await openThemeMenu(page, "Night shift");
+    await expect(menu.getByRole("menuitem")).toHaveText(["Preview", "Rename", "Delete"]);
+    await page.keyboard.press("Escape");
 
     // The same on a Free account: no Pro chip anywhere in the card.
     await expect(savedThemesCard(page)).not.toContainText(/\bPro\b/);
@@ -116,19 +107,25 @@ test.describe("M6-44 previewing a theme", () => {
     await setOverrides(user.pageId, { accent: "#C46A4F", radius: 20 });
     const before = await pageRow(user.pageId);
     await openDesignWithCard(page);
-    await expect(headerStatus(page)).toHaveText("Theme · Noir · edited");
+    await expectAppliedTheme(page, "Noir", "Edited");
 
-    const own = await previewLook(page);
+    // (A phone draws the preview in the mini phone's sheet, M7-09: opened for the read.)
+    const { own, ownBlocks } = await inPreviewSheet(page, async () => {
+      const look = await previewLook(page);
+      expect(await previewFontFamilies(page)).toEqual(NOIR_FONTS);
+      return { own: look, ownBlocks: await previewRootOf(page).locator("a").count() };
+    });
     expect(own.vars.accent).toBe("#C46A4F");
-    expect(await previewFontFamilies(page)).toEqual(NOIR_FONTS);
-    const ownBlocks = await previewRootOf(page).locator("a").count();
 
     const writes = trackWrites(page);
-    await previewButton(page, "Paper").click();
+    await startPreview(page, "Paper");
 
     // The page as it would look with Paper applied: Paper's tokens, no page-level overrides. (On a
     // phone pressing Preview has already opened the Preview tab.)
-    await expect(page.getByTestId("theme-preview-status")).toHaveText("Previewing Paper.");
+    // The polite status is the desktop column's; the phone's sheet carries the bar instead (M7-09).
+    if (!isPhone(page)) {
+      await expect(page.getByTestId("theme-preview-status")).toHaveText("Previewing Paper.");
+    }
     await expect.poll(async () => (await previewLook(page)).vars.bg).toBe("#FBFAF7");
     const paper = await previewLook(page);
     expect(paper.vars.accent).toBe("#2F4B9A");
@@ -142,9 +139,12 @@ test.describe("M6-44 previewing a theme", () => {
     expect(await previewFontFamilies(page)).toEqual(PAPER_FONTS);
 
     if (isPhone(page)) {
+      // M7-09: Preview opened the sheet at once, with the bar at the bottom of it (focus is on
+      // 'Close preview', where every sheet puts it).
+      await expect(page.getByRole("dialog", { name: "Live preview" })).toBeVisible();
       const bar = page.getByTestId("theme-preview-bar");
       await expect(bar).toContainText("Previewing Paper");
-      await expect(applyPreviewButton(page, "Paper")).toBeFocused();
+      await expect(bar.getByRole("button", { name: "Apply Paper" })).toBeVisible();
       await expect(bar.getByRole("button", { name: "Back to my style" })).toBeVisible();
     } else {
       await expect(page.getByTestId("theme-preview-header")).toContainText("Previewing Paper");
@@ -153,7 +153,7 @@ test.describe("M6-44 previewing a theme", () => {
       await expect(page.getByRole("button", { name: "Stop previewing" })).toBeVisible();
     }
     // The card tags and the Design header still describe the applied theme.
-    await expect(headerStatus(page)).toHaveText("Theme · Noir · edited");
+    await expectAppliedTheme(page, "Noir", "Edited");
     await expect(themeCard(page, "Noir").locator("[data-theme-tag]")).toHaveText("Edited");
 
     // Nothing was written: no draft or theme request, the stored draft and rev are as they were.
@@ -166,15 +166,12 @@ test.describe("M6-44 previewing a theme", () => {
     // Stop previewing / Back to my style puts the page back.
     if (isPhone(page)) {
       await page.getByRole("button", { name: "Back to my style" }).click();
-      await expect(page.getByRole("tab", { name: "Style" })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
+      await expect(page.getByRole("dialog", { name: "Live preview" })).toBeHidden();
     } else {
       await page.getByRole("button", { name: "Stop previewing" }).click();
     }
     await expect(previewButton(page, "Paper")).toBeFocused();
-    await expect(page.getByTestId("theme-preview-status")).toHaveText("");
+    if (!isPhone(page)) await expect(page.getByTestId("theme-preview-status")).toHaveText("");
     await showPreview(page);
     await expect.poll(async () => (await previewLook(page)).vars.bg).toBe("#16120E");
     expect((await previewLook(page)).vars.accent).toBe("#C46A4F");
@@ -212,7 +209,7 @@ test.describe("M6-44 previewing a theme", () => {
     await themeUser(context, "p44c", "free");
     await openDesignWithCard(page);
 
-    await previewButton(page, "Smoke").click();
+    await startPreview(page, "Smoke");
     await expect.poll(async () => (await previewLook(page)).vars.bg).toBe("#1C2023");
     // The block with its own Fill style keeps it; the plain link follows Smoke's Pill.
     const styles = await previewRootOf(page).evaluate(
@@ -230,7 +227,7 @@ test.describe("M6-44 previewing a theme", () => {
     expect(styles[0]).toBe("fill");
     expect(styles[1]).toBe("pill");
 
-    await previewButton(page, "Ember").click();
+    await startPreview(page, "Ember");
     await expect(page.getByTestId("theme-preview-header")).toContainText("Previewing Ember");
     await expect(page.getByTestId("theme-preview-status")).toHaveText("Previewing Ember.");
     await expect.poll(async () => (await previewLook(page)).vars.bg).toBe("#1B1412");
@@ -240,7 +237,7 @@ test.describe("M6-44 previewing a theme", () => {
 });
 
 test.describe("M6-44 ending a preview", () => {
-  test("M6-44 a control, Save as theme and Done end the preview first, then do their normal job", async ({
+  test("M6-44 a control and Save as theme end the preview first, then do their normal job", async ({
     page,
     context,
   }, info) => {
@@ -249,7 +246,7 @@ test.describe("M6-44 ending a preview", () => {
     await openDesignWithCard(page);
 
     // A color change.
-    await previewButton(page, "Paper").click();
+    await startPreview(page, "Paper");
     await expect(page.getByTestId("theme-preview-header")).toBeVisible();
     await page.getByRole("button", { name: "Accent Brass" }).click();
     await expect(page.getByTestId("theme-preview-header")).toHaveCount(0);
@@ -262,7 +259,7 @@ test.describe("M6-44 ending a preview", () => {
     expect((await storedTheme(user.pageId)).ref).toBe(NOIR);
 
     // Save as theme: it saves the page's own look, not the previewed theme.
-    await previewButton(page, "Paper").click();
+    await startPreview(page, "Paper");
     await expect(page.getByTestId("theme-preview-header")).toBeVisible();
     await page.getByTestId("save-as-theme").click();
     await expect(page.getByTestId("theme-preview-header")).toHaveCount(0);
@@ -274,13 +271,9 @@ test.describe("M6-44 ending a preview", () => {
       .single();
     expect((data!.tokens as { bg: string }).bg).toBe("#16120E");
 
-    // Done: the editor opens, the draft is the page's own.
-    await previewButton(page, "Ember").click();
-    await expect(page.getByTestId("theme-preview-header")).toBeVisible();
-    await page.getByRole("link", { name: "Done" }).click();
-    await expect(page).toHaveURL(/\/editor$/);
-    const stored = await storedTheme(user.pageId);
-    expect(stored.ref).not.toBe(SYSTEM_IDS.Ember);
+    // (The 'Done' link ended a preview before going to the Editor; it is gone with the Design
+    // header, M7-05, so there is nothing more to press here.)
+    expect((await storedTheme(user.pageId)).ref).not.toBe(SYSTEM_IDS.Ember);
   });
 
   test("M6-44 Apply Paper applies exactly like the card: one PATCH, Applied with Undo, the card tagged, Undo restores", async ({
@@ -293,7 +286,7 @@ test.describe("M6-44 ending a preview", () => {
     const before = await storedTheme(user.pageId);
     await openDesignWithCard(page);
 
-    await previewButton(page, "Paper").click();
+    await startPreview(page, "Paper");
     await expect(applyPreviewButton(page, "Paper")).toBeFocused();
     const patches: { body: Record<string, unknown> }[] = [];
     page.on("request", (request) => {
@@ -309,7 +302,7 @@ test.describe("M6-44 ending a preview", () => {
     await expect(page.getByText("Live preview", { exact: true })).toBeVisible();
     await expect(themeCard(page, "Paper")).toHaveAttribute("aria-pressed", "true");
     await expect(themeCard(page, "Paper").locator("[data-theme-tag]")).toHaveText("Applied");
-    await expect(headerStatus(page)).toHaveText("Theme · Paper");
+    await expectAppliedTheme(page, "Paper");
     await expect(previewButton(page, "Paper")).toBeFocused();
     await expectStoredTheme(user.pageId, (theme) => theme.ref === SYSTEM_IDS.Paper);
     expect((await storedTheme(user.pageId)).overrides).toEqual({});
@@ -344,7 +337,7 @@ test.describe("M6-44 saved themes and other people's themes", () => {
     await expect(page.getByRole("button", { name: /Preview Someone/ })).toHaveCount(0);
 
     const writes = trackWrites(page);
-    await previewButton(page, "Night shift").click();
+    await startPreview(page, "Night shift");
     await expect(page.getByTestId("theme-preview-status")).toHaveText("Previewing Night shift.");
     await expect.poll(async () => (await previewLook(page)).vars.bg).toBe("#101820");
     expect((await previewLook(page)).vars.accent).toBe("#33FFAA");
@@ -362,7 +355,7 @@ test.describe("M6-44 saved themes and other people's themes", () => {
 });
 
 test.describe("M6-44 on a phone", () => {
-  test("M6-44 Preview opens the Preview tab with a bar above the tab bar; Apply returns to Style with Applied and Undo; Back to my style leaves the page as it was", async ({
+  test("M6-44 Preview opens the full-size sheet with a bar at its bottom; Apply closes it with Applied and Undo; Back to my style leaves the page as it was (M7-09)", async ({
     page,
     context,
   }, info) => {
@@ -372,17 +365,15 @@ test.describe("M6-44 on a phone", () => {
     const before = await pageRow(user.pageId);
     const writes = trackWrites(page);
 
-    // Every Preview button is at least 44px tall; the grid and the bar do not scroll sideways.
+    // Every More button is at least 44px tall; the rows and the bar do not scroll sideways.
     for (const name of ["Noir", "Paper", "Sunset"]) {
       expect((await box(previewButton(page, name))).height).toBeGreaterThanOrEqual(44);
     }
     await expectNoHorizontalScroll(page);
 
-    await previewButton(page, "Paper").click();
-    await expect(page.getByRole("tab", { name: "Preview" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    await startPreview(page, "Paper");
+    const sheet = page.getByRole("dialog", { name: "Live preview" });
+    await expect(sheet).toBeVisible();
     const bar = page.getByTestId("theme-preview-bar");
     await expect(bar).toBeVisible();
     await expect(bar).toContainText("Previewing Paper");
@@ -390,35 +381,35 @@ test.describe("M6-44 on a phone", () => {
     // The page fills the width.
     const screen = await box(page.getByTestId("preview-screen"));
     expect(screen.width).toBeGreaterThanOrEqual(340);
-    // 44px buttons, wrapping onto rows, above the bottom tab bar.
+    // 44px buttons, wrapping onto rows, at the bottom of the sheet.
     for (const name of ["Apply Paper", "Back to my style"]) {
       expect((await box(bar.getByRole("button", { name }))).height).toBeGreaterThanOrEqual(44);
     }
     const barBox = await box(bar);
     const viewportHeight = page.viewportSize()!.height;
-    expect(barBox.y + barBox.height).toBeLessThanOrEqual(viewportHeight - 60);
+    expect(barBox.y + barBox.height).toBeLessThanOrEqual(viewportHeight + 1);
     await expectNoHorizontalScroll(page);
     expect(writes.requests).toEqual([]);
 
     // The bar never covers the end of the page: scrolled to the bottom, the last content ends above it.
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.getByTestId("preview-screen").evaluate((el) => (el.scrollTop = el.scrollHeight));
     const last = await box(previewRootOf(page).locator(".pg-column"));
     expect(last.y + last.height).toBeLessThanOrEqual(barBox.y + 1);
 
-    // Back to my style: the Style tab, the page unchanged, focus on the card's Preview.
+    // Back to my style: the sheet closes, the page unchanged, focus on the card's More button.
     await bar.getByRole("button", { name: "Back to my style" }).click();
-    await expect(page.getByRole("tab", { name: "Style" })).toHaveAttribute("aria-selected", "true");
+    await expect(sheet).toBeHidden();
     await expect(page.getByTestId("theme-preview-bar")).toHaveCount(0);
     await expect(previewButton(page, "Paper")).toBeFocused();
     expect((await pageRow(user.pageId)).draft).toEqual(before.draft);
 
-    // Apply Paper: back on the Style tab with Applied and Undo above the tab bar.
-    await previewButton(page, "Paper").click();
+    // Apply Paper: the sheet closes with Applied and Undo above the tab bar.
+    await startPreview(page, "Paper");
     await page
       .getByTestId("theme-preview-bar")
       .getByRole("button", { name: "Apply Paper" })
       .click();
-    await expect(page.getByRole("tab", { name: "Style" })).toHaveAttribute("aria-selected", "true");
+    await expect(sheet).toBeHidden();
     await expect(messageOf(page)).toContainText("Applied Paper.");
     await expect(messageOf(page).getByRole("button", { name: "Undo" })).toBeVisible();
     const message = await box(messageOf(page));
@@ -438,13 +429,13 @@ test.describe("M6-44 on a desktop", () => {
     test.skip(!desktopOnly(info), "desktop only");
     await themeUser(context, "p44h", "free");
     await openDesignWithCard(page);
-    const column = page.locator("#design-panel-preview");
-    const gridBefore = await box(page.getByTestId("theme-grid"));
+    const column = page.getByTestId("workspace-preview");
+    const gridBefore = await box(savedThemesCard(page));
     const bezelBefore = await box(page.getByTestId("preview-bezel"));
     expect(Math.round(bezelBefore.width)).toBe(310);
     expect(Math.round(bezelBefore.height)).toBe(660);
 
-    await previewButton(page, "Paper").click();
+    await startPreview(page, "Paper");
     const header = page.getByTestId("theme-preview-header");
     await expect(header).toBeVisible();
     const col = await box(column);
@@ -460,7 +451,7 @@ test.describe("M6-44 on a desktop", () => {
     const bezelAfter = await box(page.getByTestId("preview-bezel"));
     expect(Math.round(bezelAfter.width)).toBe(310);
     expect(Math.round(bezelAfter.height)).toBe(660);
-    const gridAfter = await box(page.getByTestId("theme-grid"));
+    const gridAfter = await box(savedThemesCard(page));
     expect(Math.round(gridAfter.width)).toBe(Math.round(gridBefore.width));
     expect(Math.round(gridAfter.height)).toBe(Math.round(gridBefore.height));
     await expectNoHorizontalScroll(page);
@@ -468,6 +459,6 @@ test.describe("M6-44 on a desktop", () => {
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     const stuck = await box(column);
     expect(stuck.y).toBeGreaterThanOrEqual(0);
-    expect(stuck.y).toBeLessThan(40);
+    expect(stuck.y).toBeLessThanOrEqual(56 + 16 + 1); // pinned 16px under the 56px toolbar (M7-05)
   });
 });

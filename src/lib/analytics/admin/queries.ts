@@ -14,7 +14,9 @@ export * from "./view";
 /**
  * The /admin/traffic read (M5-10), with the secret key (the screen sits behind `requireAdmin`).
  * `admin_traffic_flags()` joins the flag to its page, its owner's account and the owner's email
- * (auth.users is not reachable through PostgREST), newest first.
+ * (auth.users is not reachable through PostgREST), newest first. A flag means a Free page was over
+ * the threshold, strictly, in each of the last two complete UTC calendar months (M7-10); the list
+ * shows both months, and a flag made by the old 30-day rule shows only one.
  *
  * One more row than a page is requested, to know whether a next page exists.
  */

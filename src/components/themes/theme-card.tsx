@@ -1,26 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { resolveTokens } from "@/lib/theme";
 import type { ThemeRow } from "@/lib/themes";
 import { swatchBackground } from "@/lib/themes/swatch";
-import type { RenameResult } from "./use-theme-library";
-
-/** Buttons under a saved theme's card: 44px tall, the way every editor control is. */
-const ACTION_BUTTON =
-  "inline-flex min-h-11 min-w-0 flex-1 cursor-pointer items-center justify-center rounded-md border border-line-3 bg-surface px-2 text-[13px] font-medium text-ink disabled:cursor-not-allowed disabled:opacity-50";
-
-/** The Preview button (M6-44): the same 44px, full-width row on every card, white with a 1px border. */
-const PREVIEW_BUTTON =
-  "inline-flex min-h-11 w-full min-w-0 cursor-pointer items-center justify-center rounded-md border border-line-3 bg-surface px-2 text-[13px] font-medium text-ink disabled:cursor-not-allowed disabled:opacity-50";
+import { CardMenu, type CardMenuItem } from "./card-menu";
 
 /**
- * One theme in the saved-themes grid (M3-19): a button that applies it, with a 56px swatch (the
- * theme's background, or its gradient (M6-43), with a filled and an outlined accent bar), its name
- * and, on the applied one only, a tag. `aria-pressed` is the applied state. Every card also has a
- * "Preview" button on its own row (M6-44, only when the screen gives it `onPreview`), and saved
- * themes (not system ones) carry Rename and Delete under it, outside the apply button: a button
- * never holds another button.
+ * One theme in a theme row (M7-06): a compact card, 152px wide and always 94px tall (a 48px swatch
+ * over a 44px name row, and a 1px border), so every card in every row is the same height whatever
+ * its name. The card is a button that applies the theme; `aria-pressed` is the applied state and the
+ * applied card has a 2px brass outline. The swatch is the theme's background (or its gradient,
+ * M6-43) with a filled and an outlined accent bar. The tag ("Applied", or "Edited" once the page's
+ * own style changes it) is an 11px mono label drawn on the swatch, so the name row keeps its room.
+ * A long name is cut with an ellipsis and carries the full name in `title`.
+ *
+ * The "More" button sits on the name row, outside the apply button (a button never holds another
+ * button), and opens a menu: Preview for every theme (only when the screen gives it `onPreview`),
+ * and Rename and Delete for the user's own.
  *
  * Only validated colors reach the swatch's inline style: `theme.tokens` came through the token
  * schema, and `resolveTokens` fills the gaps from the system default.
@@ -41,184 +37,87 @@ export function ThemeCard({
   onPreview?: ((button: HTMLElement) => void) | undefined;
   /** This card is the one on show in the preview. */
   previewing?: boolean;
-  onRename: (input: string) => Promise<RenameResult>;
+  /** Rename opens the screen's dialog; the button is the focus to return to. */
+  onRename: (trigger: HTMLElement) => void;
   onDelete: (trigger: HTMLElement) => void;
 }) {
   const tokens = resolveTokens(theme.tokens, {});
   const applied = tag !== null;
-  const [renaming, setRenaming] = useState(false);
-  const renameTrigger = useRef<HTMLButtonElement>(null);
   const barRadius = `${Math.min(tokens.radius, 4)}px`;
 
+  const items: CardMenuItem[] = [];
+  if (onPreview) {
+    items.push({
+      id: "theme-preview",
+      label: "Preview",
+      ariaLabel: `Preview ${theme.name}`,
+      onSelect: onPreview,
+    });
+  }
+  if (!theme.system) {
+    items.push({ id: "theme-rename", label: "Rename", onSelect: onRename });
+    items.push({ id: "theme-delete", label: "Delete", danger: true, onSelect: onDelete });
+  }
+
   return (
-    <li data-theme-id={theme.id} className="flex min-w-0 flex-col gap-1.5">
+    <li
+      data-theme-id={theme.id}
+      data-previewing={previewing ? "" : undefined}
+      className="relative h-[94px] w-[152px] shrink-0 snap-start"
+    >
       <button
         type="button"
         aria-pressed={applied}
         onClick={onApply}
         data-testid="theme-card"
-        className={`min-h-11 w-full min-w-0 cursor-pointer overflow-hidden rounded-md border bg-surface p-0 text-left text-ink ${
-          applied ? "border-ink ring-1 ring-ink" : "border-line-2"
-        }`}
+        className={`relative box-border block h-full w-full min-w-0 cursor-pointer overflow-hidden rounded-md border bg-surface p-0 text-left text-ink ${
+          applied
+            ? "border-line-2 outline-2 outline-offset-0 outline-brass"
+            : previewing
+              ? "border-ink ring-1 ring-ink"
+              : "border-line-2 hover:border-line-3"
+        } focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-brass`}
       >
         <span
           aria-hidden="true"
           data-swatch=""
-          className="flex h-14 flex-col justify-center gap-1.5 px-3"
+          className="flex h-12 flex-col justify-center gap-1.5 px-3"
           style={{ background: swatchBackground(tokens) }}
         >
           <span
-            className="block h-[7px] w-3/5"
+            className="block h-[7px] w-1/2"
             style={{ background: tokens.accent, borderRadius: barRadius }}
           />
           <span
-            className="block h-[7px] w-4/5 box-border"
+            className="box-border block h-[7px] w-7/10"
             style={{ border: `1px solid ${tokens.accent}`, borderRadius: barRadius }}
           />
         </span>
-        <span className="flex justify-between gap-1.5 border-t border-line px-2.5 py-2 text-[13px] font-semibold">
-          <span className="min-w-0 truncate" data-theme-name="">
+        <span
+          data-name-row=""
+          className="box-border flex h-11 items-center border-t border-line pr-11 pl-2.5 text-[13px] font-semibold"
+        >
+          <span className="min-w-0 truncate" data-theme-name="" title={theme.name}>
             {theme.name}
           </span>
-          {tag ? (
-            <span data-theme-tag="" className="shrink-0 text-xs font-medium text-brass-text">
-              {tag}
-            </span>
-          ) : null}
         </span>
+        {tag ? (
+          <span
+            data-theme-tag=""
+            className="absolute top-[5px] right-[5px] rounded-sm bg-brass-soft px-1.5 py-[3px] font-mono text-[11px] leading-none font-medium text-brass-soft-text"
+          >
+            {tag}
+          </span>
+        ) : null}
       </button>
 
-      {onPreview ? (
-        <button
-          type="button"
-          aria-label={`Preview ${theme.name}`}
-          data-testid="theme-preview"
-          data-previewing={previewing ? "" : undefined}
-          onClick={(event) => onPreview(event.currentTarget)}
-          className={`${PREVIEW_BUTTON} ${previewing ? "border-ink ring-1 ring-ink" : ""}`}
-        >
-          Preview
-        </button>
-      ) : null}
-
-      {theme.system ? null : renaming ? (
-        <RenameForm
-          initial={theme.name}
-          onSubmit={onRename}
-          onDone={() => {
-            setRenaming(false);
-            // Back to the trigger once it is rendered again.
-            setTimeout(() => renameTrigger.current?.focus(), 0);
-          }}
+      {items.length > 0 ? (
+        <CardMenu
+          themeName={theme.name}
+          items={items}
+          className="absolute right-px bottom-px inline-flex size-11 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-ink-2"
         />
-      ) : (
-        <div className="flex gap-1.5">
-          <button
-            ref={renameTrigger}
-            type="button"
-            aria-label={`Rename ${theme.name}`}
-            data-testid="theme-rename"
-            onClick={() => setRenaming(true)}
-            className={ACTION_BUTTON}
-          >
-            Rename
-          </button>
-          <button
-            type="button"
-            aria-label={`Delete ${theme.name}`}
-            data-testid="theme-delete"
-            onClick={(event) => onDelete(event.currentTarget)}
-            className={`${ACTION_BUTTON} text-bad`}
-          >
-            Delete
-          </button>
-        </div>
-      )}
-    </li>
-  );
-}
-
-/**
- * The inline rename (M3-23): a 16px input prefilled with the name. Enter saves, Escape cancels,
- * whitespace is trimmed, and an empty name says "Give the theme a name." Nothing is written until
- * the name checks out; the rule is `checkThemeName`, run again by the hook.
- */
-function RenameForm({
-  initial,
-  onSubmit,
-  onDone,
-}: {
-  initial: string;
-  onSubmit: (input: string) => Promise<RenameResult>;
-  onDone: () => void;
-}) {
-  const [value, setValue] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
-  const mounted = useRef(true);
-
-  useEffect(() => {
-    mounted.current = true;
-    input.current?.focus();
-    input.current?.select();
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-
-  async function submit(event?: FormEvent) {
-    event?.preventDefault();
-    if (saving) return;
-    setSaving(true);
-    const result = await onSubmit(value);
-    if (!mounted.current) return;
-    setSaving(false);
-    if (result.ok) onDone();
-    else setError(result.message);
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      onDone();
-    }
-  }
-
-  return (
-    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-1.5">
-      <input
-        ref={input}
-        type="text"
-        value={value}
-        aria-label="Theme name"
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? "theme-rename-error" : undefined}
-        autoComplete="off"
-        data-testid="theme-rename-input"
-        onChange={(event) => {
-          setValue(event.target.value);
-          setError(null);
-        }}
-        onKeyDown={onKeyDown}
-        className={`min-h-11 w-full min-w-0 rounded-md border bg-surface px-3 text-base font-normal text-ink ${
-          error ? "border-bad" : "border-line-3"
-        }`}
-      />
-      {error ? (
-        <p id="theme-rename-error" role="alert" className="text-[13px] text-bad">
-          {error}
-        </p>
       ) : null}
-      <div className="flex gap-1.5">
-        <button type="submit" disabled={saving} className={ACTION_BUTTON}>
-          Save
-        </button>
-        <button type="button" onClick={onDone} className={ACTION_BUTTON}>
-          Cancel
-        </button>
-      </div>
-    </form>
+    </li>
   );
 }

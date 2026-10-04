@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { cleanupUsers, phoneOnly } from "../fixtures/data";
+import { showPreviewSheet } from "../m7/phone-preview";
 import { openEditor, rowOf, seededUser } from "./editor-helpers";
 
 /** The editor as a whole: no console errors or hydration warnings, and no serious axe violations. */
@@ -30,7 +31,7 @@ test("M2-03 the editor loads and works with no console errors or hydration warni
   await openEditor(page);
   await rowOf(page, "Bt5rJ1fGz6Os").locator("button[aria-expanded]").first().click();
   await page.getByRole("button", { name: "Card", exact: true }).click();
-  if (phoneOnly(info)) await page.getByRole("tab", { name: "Preview" }).click();
+  if (phoneOnly(info)) await showPreviewSheet(page); // M7-09: the sheet, not a Preview tab
   await page.waitForTimeout(1500);
   expect(problems).toEqual([]);
 });
@@ -44,7 +45,7 @@ test("M2-03 axe finds no serious or critical violations in the editor (blocks an
   await rowOf(page, "Bt5rJ1fGz6Os").locator("button[aria-expanded]").first().click();
   const found = await violations(page);
   if (phoneOnly(info)) {
-    await page.getByRole("tab", { name: "Preview" }).click();
+    await showPreviewSheet(page);
     found.push(...(await violations(page)));
   }
   expect(found).toEqual([]);

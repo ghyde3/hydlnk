@@ -4,6 +4,7 @@ import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { waitForClicks } from "../m4/analytics-ingest-helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 import {
   makePngImage,
   objectExists,
@@ -106,8 +107,10 @@ test.describe("M6-05 duplicate a block", () => {
     expect((await focused(page)).tag).toBe("INPUT");
     await expect(page.getByRole("heading", { level: 2, name: "Blocks · 4" })).toBeVisible();
     await expect(status(page, "Block duplicated.")).toHaveCount(1);
-    // The preview shows both.
+    // The preview shows both (a phone shows it in the sheet, M7-09).
+    await showPreviewSheet(page);
     await expect(previewScreen(page).getByText("Book a session")).toHaveCount(2);
+    await hidePreviewSheet(page);
 
     // Autosaved, with every setting copied and nothing shared but the values.
     await expect(saveIndicator(page)).toHaveText("Saved");
@@ -193,7 +196,7 @@ test.describe("M6-05 duplicate a block", () => {
 
     // Publish refuses the empty address and marks the original.
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(rowOf(page, incomplete.id)).toHaveAttribute("data-invalid", "");
@@ -325,7 +328,7 @@ test.describe("M6-05 analytics of a copy", () => {
     const [original, copy] = await rowIds(page);
     await expect(saveIndicator(page)).toHaveText("Saved");
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published", {
@@ -372,7 +375,7 @@ test.describe("M6-05 layout of the panel buttons", () => {
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true);
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "#editor-panel-blocks");
+    await expectTapTargets(page, "[role='tabpanel']");
   });
 
   test("M6-05 desktop: the four buttons sit in one row of the expanded panel", async ({
@@ -404,7 +407,7 @@ test.describe("M6-05 abuse: repeated ids written straight to the database", () =
     const user = await userWithBlocks(context, label, textBlocks(2));
     await openEditor(page);
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published", {
@@ -436,7 +439,7 @@ test.describe("M6-05 abuse: repeated ids written straight to the database", () =
     opts: { names?: boolean } = {},
   ) {
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     const alert = page.getByRole("alert").filter({ hasText: "before publishing" });

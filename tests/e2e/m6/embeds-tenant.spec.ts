@@ -28,7 +28,7 @@ test.describe("M6-26 and M6-27 live embeds", () => {
     const res = await tenantGet(fx.handle);
     expect(res.status).toBe(200);
     expect(res.headers["content-security-policy"]).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     );
     expect(res.headers["content-security-policy"]).not.toMatch(/script-src|nonce/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");

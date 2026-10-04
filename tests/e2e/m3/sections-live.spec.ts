@@ -2,9 +2,13 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, insertPage, makeUser, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
+import { SERVER_PORT } from "../m2/publish-helpers";
 import { box, css, publishDocOf, publishedPage, uploadImage } from "../m2/blocks-helpers";
 import type { Block } from "@/lib/document";
 import type { TokenOverrides } from "@/lib/theme";
+
+/** The canonical media origin: every uploaded image loads from the root host (M7-15). */
+const MEDIA_ORIGIN = `http://localhost:${SERVER_PORT}`;
 
 /**
  * M3-11 .. M3-16, the page side: how the shared renderer draws button style, corner radius, border
@@ -360,12 +364,14 @@ test.describe("M3-15 / M3-16 image background on the live page", () => {
     const user = await makeUser("bgi");
     const handle = `zq-bgi-${rand(5)}`;
     const image = await uploadImage(user.id, 1200, 800);
-    const imageUrl = `${supabaseUrl()}/storage/v1/object/public/page-media/${image.path}`;
+    // The token stores the Storage URL; the page draws it from the root origin's /media route (M7-15).
+    const storedUrl = `${supabaseUrl()}/storage/v1/object/public/page-media/${image.path}`;
+    const imageUrl = `${MEDIA_ORIGIN}/media/${image.path}`;
     const doc = publishDocOf(blocksFor(), {
       tokens: {
         ...COLORS,
         bgType: "image",
-        bgImage: imageUrl,
+        bgImage: storedUrl,
         overlayOpacity: 0.6,
         blur: 12,
       },

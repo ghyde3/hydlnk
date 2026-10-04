@@ -20,6 +20,15 @@
  * and m6-pages-share-proxy.test.ts. The shared-draft policy (previews/share-headers.ts) inherits
  * this list unchanged.
  */
+import { clientEnv } from "@/lib/env/client";
+import { rootOrigin } from "@/lib/routing/urls";
+
+/**
+ * Images load only from the page's own host and from the canonical media origin (the root host,
+ * where `/media/...` is served: src/lib/media/url.ts). Exact origin, no wildcard, no `data:`.
+ */
+export const MEDIA_IMG_SRC = `img-src 'self' ${rootOrigin(clientEnv.NEXT_PUBLIC_ROOT_DOMAIN)}`;
+
 export const TENANT_CONTENT_SECURITY_POLICY = [
   [
     "frame-src https://www.youtube-nocookie.com",
@@ -32,6 +41,7 @@ export const TENANT_CONTENT_SECURITY_POLICY = [
     "https://player.twitch.tv",
     "https://clips.twitch.tv",
   ].join(" "),
+  MEDIA_IMG_SRC,
   "object-src 'none'",
   "base-uri 'none'",
   "frame-ancestors 'none'",

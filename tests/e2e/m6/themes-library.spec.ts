@@ -3,7 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import type { TokenSet } from "@/lib/theme";
 import { url } from "../helpers";
-import { publishFromEditor } from "../m3/themes-helpers";
+import { ownThemesRow, publishFromEditor, systemThemesRow } from "../m3/themes-helpers";
 import {
   NEW_THEME_NAMES,
   NOIR,
@@ -12,7 +12,7 @@ import {
   expectNoHorizontalScroll,
   expectStoredTheme,
   expectTapTargets,
-  headerStatus,
+  expectAppliedTheme,
   messageOf,
   openDesignWithCard,
   previewFontFamilies,
@@ -89,13 +89,14 @@ test.describe("M6-43 the grid of sixteen", () => {
     const cards = themeCards(page);
     await expect(cards).toHaveCount(18);
     const names = await savedThemesCard(page).locator("[data-theme-name]").allTextContents();
-    expect(names).toEqual([...SYSTEM_NAMES, "Night shift", "Day shift"]);
+    // M7-06: the user's own row comes first, then the sixteen.
+    expect(names).toEqual(["Night shift", "Day shift", ...SYSTEM_NAMES]);
 
-    // Every card has its 56px swatch with a filled and an outlined accent bar over it.
+    // Every card has its 48px swatch with a filled and an outlined accent bar over it.
     for (const row of rows) {
       const card = themeCard(page, row.name);
       const swatch = swatchOf(card);
-      expect((await box(swatch)).height).toBe(56);
+      expect((await box(swatch)).height).toBe(48);
       await expect(swatch.locator("> span")).toHaveCount(2);
       const css = await swatch.evaluate((el) => {
         const style = getComputedStyle(el);
@@ -141,7 +142,7 @@ test.describe("M6-43 the grid of sixteen", () => {
     await themeCard(page, "Sunset").click();
     await expect(messageOf(page)).toContainText("Applied Sunset.");
     await expect(messageOf(page).getByRole("button", { name: "Undo" })).toBeVisible();
-    await expect(headerStatus(page)).toHaveText("Theme · Sunset");
+    await expectAppliedTheme(page, "Sunset");
     await expect(themeCard(page, "Sunset")).toHaveAttribute("aria-pressed", "true");
     await expectStoredTheme(user.pageId, (theme) => theme.ref === SYSTEM_IDS.Sunset);
     expect((await storedTheme(user.pageId)).overrides).toEqual({});
@@ -174,7 +175,7 @@ test.describe("M6-43 each new theme on the page", () => {
       await showTokens(page);
       await themeCard(page, name).click();
       await expect(messageOf(page)).toContainText(`Applied ${name}.`);
-      await expect(headerStatus(page)).toHaveText(`Theme · ${name}`);
+      await expectAppliedTheme(page, name);
       await expectStoredTheme(user.pageId, (theme) => theme.ref === row.id);
 
       await showPreview(page);
@@ -218,7 +219,7 @@ test.describe("M6-43 each new theme on the page", () => {
 });
 
 test.describe("M6-43 layout", () => {
-  test("M6-43 on a phone the grid keeps two columns, every card and every Rename and Delete is 44px, nothing scrolls sideways", async ({
+  test("M6-43 on a phone the rows show two cards and a part of a third, every card and every More button is 44px, nothing scrolls sideways", async ({
     page,
     context,
   }, info) => {
@@ -228,24 +229,24 @@ test.describe("M6-43 layout", () => {
     await seedTheme(user.userId, "Day shift");
     await openDesignWithCard(page);
 
-    const grid = page.getByTestId("theme-grid");
-    const columns = await grid.evaluate(
-      (el) => getComputedStyle(el).gridTemplateColumns.split(" ").length,
-    );
-    expect(columns).toBe(2);
+    // M7-06: each row is a horizontal scroll container; the two cards of a row and a sliver of the next.
+    const row = systemThemesRow(page).getByRole("region");
+    const rowBox = await box(row);
     const cards = themeCards(page);
     await expect(cards).toHaveCount(18);
-    const lastSystem = await box(themeCard(page, "Sunset"));
+    const third = await box(systemThemesRow(page).getByTestId("theme-card").nth(2));
+    expect(third.x).toBeLessThan(rowBox.x + rowBox.width);
+    expect(third.x + third.width).toBeGreaterThan(rowBox.x + rowBox.width);
+    const firstSystem = await box(themeCard(page, "Noir"));
     const firstOwn = await box(themeCard(page, "Night shift"));
-    expect(firstOwn.y, "the user's own cards sit below the sixteen").toBeGreaterThan(lastSystem.y);
-    for (const index of [0, 1, 15, 16, 17]) {
+    expect(firstOwn.y, "the user's own row sits above the sixteen").toBeLessThan(firstSystem.y);
+    for (const index of [0, 1, 2, 3, 17]) {
       expect((await box(cards.nth(index))).height).toBeGreaterThanOrEqual(44);
     }
     for (const name of ["Night shift", "Day shift"]) {
-      for (const action of ["Rename", "Delete"]) {
-        const b = await box(page.getByRole("button", { name: `${action} ${name}` }));
-        expect(b.height, `${action} ${name}`).toBeGreaterThanOrEqual(44);
-      }
+      const b = await box(page.getByRole("button", { name: `More for ${name}`, exact: true }));
+      expect(b.height, `More for ${name}`).toBeGreaterThanOrEqual(44);
+      expect(b.width, `More for ${name}`).toBeGreaterThanOrEqual(44);
     }
     await expectTapTargets(page, "[data-testid=saved-themes-card]");
     await expectNoHorizontalScroll(page);
@@ -254,7 +255,7 @@ test.describe("M6-43 layout", () => {
     ).toBe(true);
   });
 
-  test("M6-43 on a desktop the cards fill the 720px column in auto-fill columns of at least 130px and the preview column stays put", async ({
+  test("M6-43 on a desktop the rows fill the 720px column, the card keeps its height as saved themes are added and the preview column stays put", async ({
     page,
     context,
   }, info) => {
@@ -262,33 +263,28 @@ test.describe("M6-43 layout", () => {
     const user = await themeUser(context, "p43e", "pro");
     await openDesignWithCard(page);
 
-    const grid = page.getByTestId("theme-grid");
     const card = savedThemesCard(page);
     const cardBox = await box(card);
     expect(Math.round(cardBox.width)).toBeLessThanOrEqual(720);
-    const columns = await grid.evaluate((el) =>
-      getComputedStyle(el).gridTemplateColumns.split(" ").map(parseFloat),
-    );
-    expect(columns.length).toBeGreaterThanOrEqual(4);
-    for (const width of columns) expect(width).toBeGreaterThanOrEqual(130);
-    const gridBox = await box(grid);
-    for (const name of ["Noir", "Sunset"]) {
-      const b = await box(themeCard(page, name));
-      expect(b.x).toBeGreaterThanOrEqual(gridBox.x - 1);
-      expect(b.x + b.width).toBeLessThanOrEqual(gridBox.x + gridBox.width + 1);
+    for (const row of [ownThemesRow(page), systemThemesRow(page)]) {
+      const r = await box(row.getByRole("region"));
+      expect(r.x).toBeGreaterThanOrEqual(cardBox.x - 1);
+      expect(r.x + r.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
+      expect(r.width).toBeGreaterThanOrEqual(cardBox.width - 4);
     }
 
-    // The grid grows taller as saved themes are added; the preview column does not move.
-    const column = page.locator("#design-panel-preview");
+    // The Themes card is the same height whatever the number of saved themes (M7-06); the preview
+    // column does not move.
+    const column = page.getByTestId("workspace-preview");
     const columnBefore = await box(column);
-    const gridBefore = gridBox.height;
+    const heightBefore = cardBox.height;
     for (const n of [1, 2, 3, 4, 5]) await seedTheme(user.userId, `Extra ${n}`);
     await page.reload();
     await expect(savedThemesCard(page)).toBeVisible();
     await expect(themeCards(page)).toHaveCount(21);
     const columnAfter = await box(column);
-    const gridAfter = (await box(grid)).height;
-    expect(gridAfter).toBeGreaterThan(gridBefore);
+    const heightAfter = (await box(card)).height;
+    expect(Math.abs(heightAfter - heightBefore)).toBeLessThanOrEqual(1);
     expect(Math.round(columnAfter.x)).toBe(Math.round(columnBefore.x));
     expect(Math.round(columnAfter.y)).toBe(Math.round(columnBefore.y));
     expect(Math.round(columnAfter.width)).toBe(330);

@@ -21,6 +21,7 @@ import {
   setDraft,
 } from "./editor-helpers";
 import { makePng } from "./editor-images";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /** M2-10 (add), M2-11 (rows and panels), M2-12 (visibility), M2-13 (delete with undo). */
 
@@ -56,10 +57,10 @@ const previewIds = (page: Page) =>
     .evaluateAll((els) => els.map((el) => el.getAttribute("data-block-id")));
 
 async function openPreviewTab(page: Page, info: { project: { name: string } }) {
-  if (info.project.name === "phone") await page.getByRole("tab", { name: "Preview" }).click();
+  if (info.project.name === "phone") await showPreviewSheet(page);
 }
 async function openBlocksTab(page: Page, info: { project: { name: string } }) {
-  if (info.project.name === "phone") await page.getByRole("tab", { name: "Blocks" }).click();
+  if (info.project.name === "phone") await hidePreviewSheet(page);
 }
 
 function dividers(n: number) {
@@ -388,7 +389,8 @@ test.describe("M2-11 block rows", () => {
     test.skip(!desktopOnly(info), "desktop layout");
     await seededUser(context, "rw6");
     await openEditor(page);
-    const column = (await page.getByRole("region", { name: "Blocks", exact: true }).boundingBox())!;
+    // M7-02: the block column is the workspace's one tab panel.
+    const column = (await page.getByRole("tabpanel").boundingBox())!;
     const row = (await rowOf(page, IDS.link).boundingBox())!;
     expect(row.width).toBeLessThanOrEqual(720);
     expect(Math.abs(row.width - column.width)).toBeLessThanOrEqual(1);
@@ -397,7 +399,7 @@ test.describe("M2-11 block rows", () => {
 
 async function seededPageId(page: Page): Promise<string | undefined> {
   // The handle is in the breadcrumb: `{handle}.hydlnk.com`.
-  const crumb = await page.locator("main > header p").innerText();
+  const crumb = await page.locator("[data-toolbar-name] p").first().innerText();
   const handle = crumb.split(".hydlnk.com")[0]!;
   const { data } = await adminClient().from("pages").select("id").eq("handle", handle).single();
   return data?.id as string | undefined;
@@ -495,7 +497,7 @@ test.describe("M2-12 visibility toggle", () => {
     expect(live0.body).toContain("Studio rental by the hour");
     await toggle(page, IDS.link2).click();
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
@@ -526,7 +528,7 @@ test.describe("M2-12 visibility toggle", () => {
     expect(res.status).toBe(200);
     await openEditor(page);
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
@@ -633,7 +635,7 @@ test.describe("M2-13 delete with undo", () => {
   test("M2-13 deleting the last block shows the empty state; reload keeps it gone; the live page still has it; no Storage call", async ({
     page,
     context,
-  }) => {
+  }, info) => {
     const user = await emptyUser(context, "de3");
     const id = newBlockId();
     await setDraft(
@@ -662,7 +664,9 @@ test.describe("M2-13 delete with undo", () => {
     await rowButton(page, id).click();
     await panel(page, id).getByRole("button", { name: "Delete block" }).click();
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
+    await openPreviewTab(page, info);
     await expect(previewScreen(page)).not.toContainText("Only block here");
+    await openBlocksTab(page, info);
     await expect(saveIndicator(page)).toHaveText("Saved");
     await reloadEditor(page);
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
@@ -720,7 +724,7 @@ test.describe("M2-13 delete with undo", () => {
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(390);
     const publish = (await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish" })
       .boundingBox())!;
     expect(box.y).toBeGreaterThan(publish.y + publish.height);

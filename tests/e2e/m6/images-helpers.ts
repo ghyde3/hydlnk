@@ -168,4 +168,4 @@ export async function openPanel(page: Page, blockId: string): Promise<Locator> {
 }
 
 export const publishButton = (page: Page): Locator =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });

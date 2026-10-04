@@ -43,7 +43,7 @@ async function listDomain(domain: string) {
 const newDomain = () => `tl-${rand(8)}.example`;
 
 const publishButton = (page: Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 const rowOfBlock = (page: Page) => page.locator(`li[data-block-id="${TEXT_ID}"]`);
 const linkRow = (page: Page) => rowOfBlock(page).locator(`li[data-item-id="${L1}"]`);
 const addressField = (page: Page) =>

@@ -33,7 +33,7 @@ import {
 import type { UploadRateLimit } from "./rate-limit";
 import { serializeUploads } from "./serialize";
 import { sniffImage } from "./sniff";
-import { mediaUrl } from "./url";
+import { storageUrl } from "./url";
 
 export type UploadErrorCode =
   | "invalid_kind"
@@ -276,7 +276,7 @@ export async function processUpload(
     console.error("[media] built an invalid image reference", image.error?.issues ?? path);
     return fail(500, "storage_failed", "We couldn’t save that image. Try again.");
   }
-  const stored: UploadResult = { ok: true, image: { ...image.data, url: mediaUrl(path) } };
+  const stored: UploadResult = { ok: true, image: { ...image.data, url: storageUrl(path) } };
 
   /** True when this exact image is already in the bucket (and takes it off the cleanup queue). */
   const alreadyStored = async (): Promise<boolean> => {

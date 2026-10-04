@@ -1,6 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers } from "../fixtures/data";
-import { IVORY, expectStoredTheme, themeCard, themeRowsOf } from "../m3/themes-helpers";
+import {
+  IVORY,
+  expectAppliedTheme,
+  expectStoredTheme,
+  themeCard,
+  themeRowsOf,
+} from "../m3/themes-helpers";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pageRow, seededUser, statusChip } from "../m2/editor-helpers";
 import {
@@ -275,7 +281,10 @@ test.describe("M6-42 the gradient panel", () => {
     await expectOverrides(user.pageId, (o) => o.gradientTo === "#FFFFFF");
     await hexField(page, "To").fill("#101010");
     await expect(page.getByText(hint)).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Done" })).toBeVisible();
+    // (M7-05: Publish is in the workspace toolbar and 'Done' is gone.)
+    await expect(
+      page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true }),
+    ).toBeEnabled();
   });
 
   test("M6-42 persistence: 'Theme · Noir · edited', the draft holds the settings, published and the live page change only after Publish, a reload shows the same values", async ({
@@ -289,7 +298,7 @@ test.describe("M6-42 the gradient panel", () => {
     await preset(page, "Berry").click();
     await expectOverrides(user.pageId, (o) => o.gradientFrom === "#7B1E5C");
 
-    await expect(page.locator("main > header p").first()).toHaveText("Theme · Noir · edited");
+    await expectAppliedTheme(page, "Noir", "Edited");
     const after = await pageRow(user.pageId);
     expect(after.published).toEqual(before.published);
     expect(after.published_at).toBe(before.published_at);
@@ -318,7 +327,7 @@ test.describe("M6-42 the gradient panel", () => {
     await live.goto(`http://${user.handle}.localhost:3000/`);
     await expect(live.locator("[data-page-root]")).toHaveAttribute("data-bg-type", "solid");
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published", { timeout: 20_000 });
@@ -503,15 +512,12 @@ test.describe("M6-42 the layout", () => {
       true,
     );
 
-    // The Preview tab shows the gradient at full width.
+    // The full-size preview sheet (M7-09) shows the gradient at full width, with no bezel.
     await preset(page, "Ocean").click();
     await showPreview(page);
-    // Full width of the content column: the viewport less the 16px gutters, no bezel.
     const screen = (await previewScreen(page).boundingBox())!;
-    expect(screen.width).toBeGreaterThanOrEqual(390 - 2 * 16 - 1);
-    expect(
-      await page.getByTestId("preview-bezel").evaluate((el) => getComputedStyle(el).borderTopWidth),
-    ).toBe("0px");
+    expect(screen.width).toBeGreaterThanOrEqual(390 - 1);
+    await expect(page.getByTestId("preview-bezel")).toHaveCount(0);
     expect(await previewBackground(page)).toContain("linear-gradient(135deg");
     await showTokens(page);
     await expectNoHorizontalScroll(page);
@@ -532,9 +538,7 @@ test.describe("M6-42 the layout", () => {
     expect(panel.x).toBeGreaterThanOrEqual(bg.x);
     expect(panel.x + panel.width).toBeLessThanOrEqual(bg.x + bg.width + 1);
     expect(bg.width).toBeLessThanOrEqual(720);
-    expect((await page.locator("#design-panel-tokens").boundingBox())!.width).toBeLessThanOrEqual(
-      720,
-    );
+    expect((await page.getByRole("tabpanel").boundingBox())!.width).toBeLessThanOrEqual(720);
     const bezel = (await page.getByTestId("preview-bezel").boundingBox())!;
     expect(bezel.width).toBe(310);
 

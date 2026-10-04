@@ -56,7 +56,8 @@ test.describe("M3-07 design autosave", () => {
     // Reload: the control, the preview and the header remember it; the live page does not.
     await reloadDesign(page);
     await expect(radius(page, 20)).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator("header p").first()).toHaveText("Theme · Noir · edited");
+    // The chip (M7-05) says the page has changes the live page does not.
+    await expect(statusChip(page)).toHaveText("Unpublished changes");
     await showPreview(page);
     expect(await computed(previewRoot(page), "--t-radius")).toBe("20px");
     const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
@@ -119,7 +120,7 @@ test.describe("M3-07 design autosave", () => {
     await expectOverrides(user.pageId, (o) => o.radius === 0);
   });
 
-  test("M3-07 desktop: the status sits in the header next to the buttons, no horizontal scroll", async ({
+  test("M3-07 desktop: the status sits in the workspace toolbar next to Publish, no horizontal scroll", async ({
     page,
     context,
   }, info) => {
@@ -129,17 +130,17 @@ test.describe("M3-07 design autosave", () => {
     await radius(page, 20).click();
     const status = saveStatus(page);
     await expect(status).toHaveText("Saved");
-    const header = page.locator("main > header");
-    const [s, done, h] = await Promise.all([
+    // M7-05: the one save indicator is in the pinned toolbar, on every tab, left of Publish.
+    await expect(status).toHaveCount(1);
+    const toolbar = page.getByTestId("workspace-toolbar");
+    const [s, publish, bar] = await Promise.all([
       status.boundingBox(),
-      page.getByRole("link", { name: "Done" }).boundingBox(),
-      header.boundingBox(),
+      page.getByRole("button", { name: "Publish", exact: true }).boundingBox(),
+      toolbar.boundingBox(),
     ]);
-    // Same row as the buttons, inside the header, left of them.
-    expect(s!.y).toBeGreaterThanOrEqual(h!.y);
-    expect(s!.y + s!.height).toBeLessThanOrEqual(h!.y + h!.height);
-    expect(Math.abs(s!.y + s!.height / 2 - (done!.y + done!.height / 2))).toBeLessThan(24);
-    expect(s!.x).toBeLessThan(done!.x);
+    expect(s!.y).toBeGreaterThanOrEqual(bar!.y);
+    expect(s!.y + s!.height).toBeLessThanOrEqual(bar!.y + bar!.height);
+    expect(s!.x).toBeLessThan(publish!.x);
     await expectNoHorizontalScroll(page);
   });
 

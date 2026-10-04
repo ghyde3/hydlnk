@@ -22,6 +22,7 @@ vi.mock("@/lib/routing/custom-domain", () => ({ resolveCustomDomain: vi.fn(async
 const { proxy } = await import("@/proxy");
 const {
   SHARE_TOKEN_HEADER,
+  isShareInternalPath,
   isSharePath,
   rateLimitedHtml,
   setShareHeaders,
@@ -59,14 +60,22 @@ beforeEach(() => {
 });
 
 describe("M6-10 share paths", () => {
-  it("isSharePath matches /share and /share/..., not look-alikes", () => {
-    expect(isSharePath("/share")).toBe(true);
+  it("isSharePath matches /share/<token>, not the Share tab (M7-02) or look-alikes", () => {
+    // Exactly /share (and /share/) is the workspace's Share tab, a signed-in screen.
+    expect(isSharePath("/share")).toBe(false);
+    expect(isSharePath("/share/")).toBe(false);
+    expect(isSharePath("/share/abc")).toBe(true);
     expect(isSharePath(`/share/${TOKEN}`)).toBe(true);
     expect(isSharePath(`/share/${TOKEN}/extra/path`)).toBe(true);
     expect(isSharePath("/shared")).toBe(false);
     expect(isSharePath("/sharex/abc")).toBe(false);
     expect(isSharePath("/editor")).toBe(false);
     expect(isSharePath("/app/share")).toBe(false);
+    expect(isSharePath("/shared-draft")).toBe(false);
+    expect(isShareInternalPath("/shared-draft")).toBe(true);
+    expect(isShareInternalPath("/shared-draft/x")).toBe(true);
+    expect(isShareInternalPath("/shared-drafts")).toBe(false);
+    expect(isShareInternalPath("/share")).toBe(false);
   });
 
   it("shareSegment is the first segment after /share/, kept short and plain", () => {
@@ -85,7 +94,7 @@ describe("M6-10 share paths", () => {
 
 /** The four directives the tenant policy has, in order: every share policy starts with them. */
 const TENANT_DIRECTIVES =
-  "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+  "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 const NONCE_SHAPE = /^[A-Za-z0-9+/]{22}==$/;
 /** The nonce a policy names in its script-src (null when it names none). */
 const nonceOf = (policy: string | null): string | null =>
@@ -161,7 +170,7 @@ describe("M6-10 the proxy branch for /share/*", () => {
     );
     expect(rewriteWithSession).not.toHaveBeenCalled();
     expect(response.headers.get("x-middleware-rewrite")).toBe(
-      "http://app.localhost:3000/app/share",
+      "http://app.localhost:3000/app/shared-draft",
     );
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(response.headers.get("cache-control")).toBe("private, no-store");
@@ -190,7 +199,7 @@ describe("M6-10 the proxy branch for /share/*", () => {
         "content-security-policy": "script-src 'nonce-attacker'",
         "content-security-policy-report-only": "script-src 'nonce-attacker'",
       }),
-      new URL("http://app.localhost:3000/app/share"),
+      new URL("http://app.localhost:3000/app/shared-draft"),
       async () => ({ allowed: true, retryAfter: 0 }),
     );
     const forwarded = response.headers.get("x-middleware-request-content-security-policy");
@@ -209,7 +218,7 @@ describe("M6-10 the proxy branch for /share/*", () => {
         cookie: "sb-127-auth-token=secret",
         [SHARE_TOKEN_HEADER]: "forged-by-the-client",
       }),
-      new URL("http://app.localhost:3000/app/share"),
+      new URL("http://app.localhost:3000/app/shared-draft"),
       async () => ({ allowed: true, retryAfter: 0 }),
     );
     expect(response.headers.get(`x-middleware-request-${SHARE_TOKEN_HEADER}`)).toBe(TOKEN);
@@ -221,10 +230,32 @@ describe("M6-10 the proxy branch for /share/*", () => {
   it("ignores everything else in the URL: an extra path, a query string and a ?page= parameter", async () => {
     const response = await shareProxy(
       request(`/share/${TOKEN}/other/path?page=00000000-0000-4000-8000-000000000001&x=1`),
-      new URL("http://app.localhost:3000/app/share"),
+      new URL("http://app.localhost:3000/app/shared-draft"),
       async () => ({ allowed: true, retryAfter: 0 }),
     );
     expect(response.headers.get(`x-middleware-request-${SHARE_TOKEN_HEADER}`)).toBe(TOKEN);
+  });
+
+  it("the internal route is a rewrite target only: asked for directly it is the app's 404, with a forged token header ignored", async () => {
+    for (const path of ["/shared-draft", "/shared-draft/", "/shared-draft/x"]) {
+      rewriteWithSession.mockClear();
+      const response = await proxy(request(path, { [SHARE_TOKEN_HEADER]: TOKEN }));
+      expect(shareRateLimit).not.toHaveBeenCalled();
+      expect(rewriteWithSession).toHaveBeenCalledTimes(1);
+      // (a trailing slash on the request is carried over by the URL clone; the path is the same)
+      expect(response.headers.get("x-middleware-rewrite")).toMatch(
+        /^http:\/\/app\.localhost:3000\/app\/404-not-found\/?$/,
+      );
+      // Not the share route's treatment: no share headers, no forwarded token.
+      expect(response.headers.get(`x-middleware-request-${SHARE_TOKEN_HEADER}`)).toBeNull();
+      expect(response.headers.get("referrer-policy")).toBeNull();
+    }
+    // Look-alikes are ordinary app paths.
+    rewriteWithSession.mockClear();
+    const other = await proxy(request("/shared-drafts"));
+    expect(other.headers.get("x-middleware-rewrite")).toBe(
+      "http://app.localhost:3000/app/shared-drafts",
+    );
   });
 
   it("other app-host paths still go through the session helper", async () => {
@@ -289,10 +320,15 @@ describe("M6-10 the rate limit: share:{ip}, 60 a minute, a real 429", () => {
     ]);
   });
 
-  it("every request counts, a malformed token too (nothing is looked up before the limit)", async () => {
+  it("every private-link request counts, a malformed token too (nothing is looked up before the limit)", async () => {
     await proxy(request("/share/abc"));
-    await proxy(request("/share"));
+    await proxy(request("/share/a b"));
     expect(shareRateLimit).toHaveBeenCalledTimes(2);
+  });
+
+  it("exactly /share is the Share tab (M7-02): no share limit, and the session is read", async () => {
+    for (let i = 0; i < 70; i++) await proxy(request("/share"));
+    expect(shareRateLimit).not.toHaveBeenCalled();
   });
 });
 

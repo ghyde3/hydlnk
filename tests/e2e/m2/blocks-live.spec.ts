@@ -565,7 +565,9 @@ test.describe("M2-19 embeds", () => {
     const fontHosts = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
     const third = requests.filter((u) => {
       const host = new URL(u).host;
-      return !fontHosts.has(host) && /youtube|youtu\.be|google|ytimg|gstatic|doubleclick/i.test(host);
+      return (
+        !fontHosts.has(host) && /youtube|youtu\.be|google|ytimg|gstatic|doubleclick/i.test(host)
+      );
     });
     expect(third).toEqual([]);
     await expect(page.locator("iframe")).toHaveCount(0);
@@ -668,7 +670,7 @@ test.describe("M2-20 image block", () => {
     await expect(img).toHaveAttribute("loading", "lazy");
     await expect(img).toHaveAttribute(
       "src",
-      new RegExp(`/storage/v1/object/public/page-media/${image.path}$`),
+      new RegExp(`^http://localhost:\\d+/media/${image.path}$`),
     );
     const anchor = linked!.locator("a");
     await expect(anchor).toHaveAttribute(

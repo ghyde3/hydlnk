@@ -334,7 +334,7 @@ test.describe("M2-23 publish gate (through the editor)", () => {
     await expectTapTargets(page, "main");
   });
 
-  test("M2-23 desktop: the Publish button is right-aligned in the header, after the Preview link", async ({
+  test("M2-23 desktop: the Publish button is right-aligned in the toolbar, after the Preview menu", async ({
     page,
     context,
   }, info) => {
@@ -342,11 +342,13 @@ test.describe("M2-23 publish gate (through the editor)", () => {
     const user = await emptyUser(context, "pk");
     await setDraft(user.pageId, draftFor(user.handle));
     await openEditor(page);
-    const header = (await page.locator("main > header").first().boundingBox())!;
-    const preview = (await page.getByRole("link", { name: "Preview", exact: true }).boundingBox())!;
+    const header = (await page.getByTestId("workspace-toolbar").boundingBox())!;
+    const preview = (await page
+      .getByRole("button", { name: "Preview", exact: true })
+      .boundingBox())!;
     const publish = (await publishButton(page).boundingBox())!;
     expect(publish.x).toBeGreaterThan(preview.x + preview.width - 1);
-    // The right end of the button is the right end of the header's content box.
+    // The right end of the button is the right end of the toolbar's content box (32px padding).
     expect(header.x + header.width - (publish.x + publish.width)).toBeLessThanOrEqual(40);
   });
 });

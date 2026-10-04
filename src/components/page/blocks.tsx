@@ -40,7 +40,7 @@ import { SocialGlyph } from "./social-icons";
  * Rules every renderer follows (tenant content is untrusted):
  *   - text is React text, so it is escaped; there is no raw HTML anywhere;
  *   - every href comes from `outboundHref` / `mailtoLink`, every embed `src` from `parseEmbed`,
- *     every image URL from `mediaUrl(path)` of a validated image reference;
+ *     every image address from `mediaUrl(path)` (this host's `/media/...`) of a validated image reference;
  *   - styling reads `--t-*` variables only; a block's own overrides are applied as inline `--t-*`
  *     variables on the block, so everything inside it follows.
  */

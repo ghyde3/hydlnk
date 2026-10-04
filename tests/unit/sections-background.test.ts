@@ -218,9 +218,9 @@ describe("M3-15 image upload", () => {
     expect(button(host, "Image…")!.disabled).toBe(false);
     // The draft value is a token the schema accepts.
     expect(tokenSetSchema.shape.bgImage.safeParse(OWN).success).toBe(true);
-    // The thumbnail is the stored object.
+    // The thumbnail is the stored object, loaded from this host's /media route (M7-15).
     const thumb = host.querySelector('[role="img"][aria-label="Current background image"] img');
-    expect(thumb?.getAttribute("src")).toBe(OWN);
+    expect(thumb?.getAttribute("src")).toBe(`http://localhost:3000/media/${stored.path}`);
     expect(pressed(host)).toEqual([]);
     expect(button(host, "Image…")!.getAttribute("data-active")).toBe("true");
   });

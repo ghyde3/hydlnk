@@ -18,7 +18,7 @@ import {
   isShareEmpty,
   roundFocus,
 } from "@/lib/document";
-import { applyTemplate, templateById } from "@/lib/templates";
+import { applyTemplate, isTemplateStyle, templateById, type TemplateStyle } from "@/lib/templates";
 import { collectIds, duplicateBlock } from "./duplicate";
 import {
   blockEditGroup,
@@ -141,11 +141,13 @@ export type EditorAction = (
   | { type: "publish/errors"; errors: PublishError[] }
   | { type: "publish/clear-errors" }
   /**
-   * M6-40: replaces the blocks, the theme reference, the page-level overrides and (when it is
-   * empty) the bio with a starter template's, in one edit and one undo step. An id that is not in
-   * the catalog changes nothing.
+   * M6-40, M7-08: replaces the blocks and (when it is empty) the bio with a starter template's, in
+   * one edit and one undo step. `style` is the choice the picker asks: `"template"` also takes the
+   * template's theme (the reference, with no page-level overrides), `"keep"` leaves the page's own
+   * theme and overrides alone. An id that is not in the catalog, or a `style` that is neither,
+   * changes nothing (the same state object comes back).
    */
-  | { type: "template/apply"; templateId: string }
+  | { type: "template/apply"; templateId: string; style: TemplateStyle }
   | { type: "template/dismiss"; token: number }
   /**
    * One step back or forward in the history (M6-07). `expect` is the draft the caller decided on:
@@ -602,9 +604,10 @@ function reduceEditor(state: EditorState, action: EditorAction): EditorState {
     }
 
     case "template/apply": {
+      if (!isTemplateStyle(action.style)) return state;
       const template = templateById(action.templateId);
       if (!template) return state;
-      const next = applyTemplate(draft, template);
+      const next = applyTemplate(draft, template, action.style);
       return {
         ...withDraft(state, next),
         // The old rows are gone: nothing is open, and a "Block deleted." toast is for a page that

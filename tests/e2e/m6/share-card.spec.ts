@@ -2,14 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, makeUser, phoneOnly, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
-import {
-  expectDraft,
-  openEditor,
-  pageRow,
-  seededUser,
-  setDraft,
-  statusChip,
-} from "../m2/editor-helpers";
+import { expectDraft, pageRow, seededUser, setDraft, statusChip } from "../m2/editor-helpers";
 import { pngSizeOf } from "../m2/publish-helpers";
 import {
   BLUE,
@@ -26,6 +19,7 @@ import {
   solidImage,
   splitImage,
   storeImage,
+  openShare,
 } from "./share-helpers";
 
 /**
@@ -44,22 +38,23 @@ test.afterAll(async () => {
 });
 
 test.describe("M6-33 the card and its fields", () => {
-  test("M6-33 sits directly below the Profile card with the title, description and image controls", async ({
+  test("M6-33 sits on the Share tab, under the address card, with the title, description and image controls", async ({
     page,
     context,
   }) => {
-    await seededUser(context, "sc1");
-    await openEditor(page);
+    const user = await seededUser(context, "sc1");
+    await openShare(page);
 
     const card = shareCard(page);
     await expect(card).toBeVisible();
-    // Directly below the Profile card: the next card in the block column.
+    // M7-04: the card moved from the Edit tab to the Share tab, right under "Your page address".
     const order = await page.evaluate(() => {
-      const profile = document.querySelector('[data-testid="profile-card"]');
+      const address = document.querySelector('[data-testid="address-card"]');
       const share = document.querySelector('[data-testid="share-card"]');
-      return profile?.nextElementSibling === share;
+      return address?.nextElementSibling === share;
     });
     expect(order).toBe(true);
+    await expect(page.getByTestId("profile-card")).toHaveCount(0);
 
     await expect(card.getByRole("heading", { name: "Share card", level: 2 })).toBeVisible();
     await expect(card.getByText("How your page looks when you send its link")).toBeVisible();
@@ -77,8 +72,7 @@ test.describe("M6-33 the card and its fields", () => {
     await expect(card.getByText("Pro", { exact: true })).toHaveCount(0);
 
     // The placeholders are what the published tags fall back to.
-    const name = await page.getByLabel("Display name", { exact: true }).inputValue();
-    const bio = await page.getByLabel("Bio", { exact: true }).inputValue();
+    const { name, bio } = (await pageRow(user.pageId)).draft.profile;
     await expect(shareTitle(page)).toHaveAttribute("placeholder", name);
     await expect(shareDescription(page)).toHaveAttribute("placeholder", bio);
   });
@@ -88,7 +82,7 @@ test.describe("M6-33 the card and its fields", () => {
     context,
   }) => {
     await seededUser(context, "sc2");
-    await openEditor(page);
+    await openShare(page);
 
     await shareTitle(page).fill("x".repeat(90));
     await expect(shareTitle(page)).toHaveValue("x".repeat(70));
@@ -109,11 +103,10 @@ test.describe("M6-33 the card and its fields", () => {
     page,
     context,
   }) => {
-    await seededUser(context, "sc3");
-    await openEditor(page);
+    const user = await seededUser(context, "sc3");
+    await openShare(page);
     const preview = sharePreview(page);
-    const name = await page.getByLabel("Display name", { exact: true }).inputValue();
-    const bio = await page.getByLabel("Bio", { exact: true }).inputValue();
+    const { name, bio } = (await pageRow(user.pageId)).draft.profile;
 
     await expect(preview.getByTestId("share-preview-title")).toHaveText(name);
     await expect(preview.getByTestId("share-preview-description")).toHaveText(bio);
@@ -129,8 +122,11 @@ test.describe("M6-33 the card and its fields", () => {
     await expect(preview.getByTestId("share-preview-title")).toHaveText(name);
     await expect(preview.getByTestId("share-preview-description")).toHaveText(bio);
 
-    // A display name change shows at once when the share title is empty.
+    // A display name change (made on the Edit tab) shows at once when the share title is empty: the
+    // draft is the workspace's, shared by the tabs.
+    await page.getByRole("tab", { name: "Edit" }).click();
     await page.getByLabel("Display name", { exact: true }).fill("Brand New Name");
+    await page.getByRole("tab", { name: "Share" }).click();
     await expect(preview.getByTestId("share-preview-title")).toHaveText("Brand New Name");
 
     await expect(
@@ -152,7 +148,7 @@ test.describe("M6-33 the card and its fields", () => {
     context,
   }) => {
     const user = await seededUser(context, "sc4");
-    await openEditor(page);
+    await openShare(page);
     await expect(statusChip(page)).toHaveAttribute("data-publish-status", "published");
 
     await shareTitle(page).fill("Hear the new album");
@@ -182,7 +178,7 @@ test.describe("M6-33 the card and its fields", () => {
     context,
   }) => {
     await seededUser(context, "sc5");
-    await openEditor(page);
+    await openShare(page);
     const dialogs: string[] = [];
     page.on("dialog", async (dialog) => {
       dialogs.push(dialog.message());
@@ -208,7 +204,7 @@ test.describe("M6-33 the card and its fields", () => {
     context,
   }) => {
     await seededUser(context, "sc6");
-    await openEditor(page);
+    await openShare(page);
     const box = sharePreview(page).locator("> div").first();
     const style = await box.evaluate((el) => {
       const css = getComputedStyle(el);
@@ -233,7 +229,7 @@ test.describe("M6-33 phone and desktop layout", () => {
   }, info) => {
     test.skip(!phoneOnly(info), "the phone layout is checked on the phone project");
     await seededUser(context, "sc7");
-    await openEditor(page);
+    await openShare(page);
     await shareTitle(page).scrollIntoViewIfNeeded();
 
     const boxes = await page.evaluate(() => {
@@ -276,7 +272,7 @@ test.describe("M6-33 phone and desktop layout", () => {
   }, info) => {
     test.skip(!desktopOnly(info), "the desktop layout is checked on the desktop project");
     await seededUser(context, "sc8");
-    await openEditor(page);
+    await openShare(page);
     const geometry = await page.evaluate(() => {
       const card = document.querySelector('[data-testid="share-card"]')!.getBoundingClientRect();
       const column = document
@@ -309,7 +305,7 @@ test.describe("M6-33 phone and desktop layout", () => {
 test.describe("M6-33 after Publish", () => {
   test("M6-33 the live tags match what the preview card showed", async ({ page, context }) => {
     const user = await seededUser(context, "sc9");
-    await openEditor(page);
+    await openShare(page);
     await shareTitle(page).fill("A title for the card");
     await shareDescription(page).fill("A description for the card.");
     const shownTitle = await sharePreview(page).getByTestId("share-preview-title").innerText();
@@ -342,7 +338,7 @@ test.describe("M6-33 the image and its focus", () => {
     context,
   }) => {
     const user = await seededUser(context, "si1");
-    await openEditor(page);
+    await openShare(page);
     const posts: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "POST" && request.url().includes("/api/media")) {
@@ -421,7 +417,7 @@ test.describe("M6-33 the image and its focus", () => {
     context,
   }) => {
     const user = await seededUser(context, "si2");
-    await openEditor(page);
+    await openShare(page);
     await pick(page, "good.png", "image/png", await splitImage(1600, 800, "png"));
     const first = await expectDraft(user.pageId, (d) => d.share?.image?.path);
     stored.push(first.share!.image!.path);
@@ -443,7 +439,7 @@ test.describe("M6-33 the image and its focus", () => {
       "the quota arithmetic is the same on both projects: one is enough",
     );
     const user = await seededUser(context, "si3");
-    await openEditor(page);
+    await openShare(page);
     await pick(page, "good.png", "image/png", await splitImage(1600, 800, "png"));
     const first = await expectDraft(user.pageId, (d) => d.share?.image?.path);
     stored.push(first.share!.image!.path);
@@ -475,7 +471,7 @@ test.describe("M6-33 the image and its focus", () => {
       .select("published_at")
       .eq("id", user.pageId)
       .single();
-    await openEditor(page);
+    await openShare(page);
 
     // No picture chosen and the page is published: the page's current social image, versioned.
     const live = sharePreview(page).getByTestId("share-preview-image");
@@ -511,7 +507,7 @@ test.describe("M6-33 the image and its focus", () => {
   }) => {
     const { emptyUser } = await import("../m2/editor-helpers");
     await emptyUser(context, "si5");
-    await openEditor(page);
+    await openShare(page);
     const tile = sharePreview(page).getByTestId("share-preview-tile");
     await expect(tile).toHaveText("We make this image from your name and colors when you publish.");
     await expect(sharePreview(page).getByTestId("share-preview-image")).toHaveCount(0);
@@ -538,7 +534,7 @@ test.describe("M6-33 Publish errors show under the field they belong to", () => 
     context,
   }) => {
     const user = await seededUser(context, "se1");
-    await openEditor(page);
+    await openShare(page);
     const before = (await pageRow(user.pageId)).published;
     await publishWith(page, user.userId, user.pageId, {
       title: "bad\u0001title",
@@ -561,7 +557,7 @@ test.describe("M6-33 Publish errors show under the field they belong to", () => 
     context,
   }) => {
     const user = await seededUser(context, "se2");
-    await openEditor(page);
+    await openShare(page);
     const ref = await storeImage(user.userId, await solidImage(400, 300), {
       width: 400,
       height: 300,
@@ -580,7 +576,7 @@ test.describe("M6-33 Publish errors show under the field they belong to", () => 
   }) => {
     const user = await seededUser(context, "se3");
     const other = await makeUser("se3b");
-    await openEditor(page);
+    await openShare(page);
     const foreign = await storeImage(other.id, await solidImage(1200, 630), {
       width: 1200,
       height: 630,
@@ -612,7 +608,7 @@ test.describe("M6-33 safety", () => {
     context,
   }) => {
     const user = await seededUser(context, "sn1");
-    await openEditor(page);
+    await openShare(page);
     await page.waitForTimeout(800);
     const seen: { method: string; url: string }[] = [];
     page.on("request", (request) => {
@@ -632,6 +628,8 @@ test.describe("M6-33 safety", () => {
       /\/storage\/v1\/object\/public\/page-media\//, // the uploaded picture, shown
       /\.localhost:\d+\/og(\?|$)/, // the live social image, shown in the preview
       /\/_next\/|\/__nextjs_font\//, // the framework (and its dev-mode font)
+      /[?&]_rsc=/, // the router's prefetch of another workspace tab (M7-02)
+      /\/media\/[^/]+\/img-/, // the uploaded picture through our own address (M7-14)
     ];
     const stray = seen.filter(
       (request) =>
@@ -658,7 +656,7 @@ test.describe("M6-33 after Publish with a picture", () => {
     context,
   }) => {
     const user = await seededUser(context, "sp1");
-    await openEditor(page);
+    await openShare(page);
     // A wide picture (2400x630): the 1200x630 frame crops it sideways, so the focus decides what shows.
     const ref = await storeImage(user.userId, await splitImage(2400, 630), {
       width: 2400,

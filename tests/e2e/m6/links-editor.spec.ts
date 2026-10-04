@@ -14,6 +14,8 @@ import {
   statusChip,
 } from "../m2/editor-helpers";
 import { padTo } from "../m2/publish-helpers";
+import { markupOf } from "../m7/markup";
+import { inPreviewSheet } from "../m7/phone-preview";
 import { signInAsUser } from "../m5/admin-helpers";
 import { LINK_ICONS, LINK_ICON_LABELS } from "@/lib/document";
 
@@ -216,9 +218,11 @@ test.describe("M6-21 the Icon field", () => {
     await expect(field.getByTestId("link-icon-tile").locator("svg")).toBeVisible();
     // The live preview: the glyph is the first child of the link and the label is unchanged.
     const preview = previewLink(page, IDS.a);
-    await expect(preview.locator("> svg.pg-link-icon")).toHaveCount(1);
-    await expect(preview).toHaveAttribute("data-icon", "builtin");
-    await expect(preview).toHaveText("Link 01");
+    await inPreviewSheet(page, async () => {
+      await expect(preview.locator("> svg.pg-link-icon")).toHaveCount(1);
+      await expect(preview).toHaveAttribute("data-icon", "builtin");
+      await expect(preview).toHaveText("Link 01");
+    });
     await expect
       .poll(
         async () =>
@@ -246,7 +250,7 @@ test.describe("M6-21 the Icon field", () => {
       iconPanel(field).getByRole("button", { name: "No icon", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     await expect(field.getByTestId("link-icon-tile")).toHaveAttribute("data-icon", "none");
-    await expect(preview).not.toHaveAttribute("data-icon", /.+/);
+    await inPreviewSheet(page, () => expect(preview).not.toHaveAttribute("data-icon", /.+/));
     await expectDraft(user.pageId, (d) => !("icon" in draftBlock(d, IDS.a)!));
     await expect(saveIndicator(page)).toHaveAttribute("data-save-status", "saved");
   });
@@ -395,12 +399,17 @@ test.describe("M6-21 Your image", () => {
     // The tile and the preview show the thumbnail; the button says Replace image; Remove shows.
     await expect(field.getByTestId("link-icon-tile")).toHaveAttribute("data-icon", "image");
     const tileImg = field.getByTestId("link-icon-tile").locator("img");
-    await expect(tileImg).toHaveAttribute("src", new RegExp(`/page-media/${user.userId}/avatar-`));
+    await expect(tileImg).toHaveAttribute(
+      "src",
+      new RegExp(`^http://localhost:\\d+/media/${user.userId}/avatar-`),
+    );
     expect(await tileImg.evaluate((img: HTMLImageElement) => [img.width, img.height])).toEqual([
       40, 40,
     ]);
     const preview = previewLink(page, IDS.a);
-    await expect(preview.locator("> img.pg-link-thumb")).toHaveAttribute("width", "40");
+    await inPreviewSheet(page, () =>
+      expect(preview.locator("> img.pg-link-thumb")).toHaveAttribute("width", "40"),
+    );
     await expect(box.getByRole("button", { name: "Replace image", exact: true })).toBeVisible();
 
     // Choosing a built-in icon replaces the uploaded one: never both.
@@ -410,7 +419,7 @@ test.describe("M6-21 Your image", () => {
       const i = draftBlock(d, IDS.a)!.icon as { type: string; name?: string; image?: unknown };
       return i.type === "builtin" && i.name === "heart" && i.image === undefined;
     });
-    await expect(preview.locator("> img.pg-link-thumb")).toHaveCount(0);
+    await inPreviewSheet(page, () => expect(preview.locator("> img.pg-link-thumb")).toHaveCount(0));
     // ...and uploading replaces a built-in one.
     await tab(field, "Your image").click();
     await pickAndUse(page, box, {
@@ -557,7 +566,9 @@ test.describe("M6-21 Your image", () => {
 
     // The icon is exactly what it was, in the tile, the preview and the draft.
     await expect(field.getByTestId("link-icon-tile")).toHaveAttribute("data-icon", "builtin");
-    await expect(previewLink(page, IDS.a)).toHaveAttribute("data-icon", "builtin");
+    await inPreviewSheet(page, () =>
+      expect(previewLink(page, IDS.a)).toHaveAttribute("data-icon", "builtin"),
+    );
     const saved = await expectDraft(user.pageId, () => true);
     expect(draftBlock(saved, IDS.a)!.icon).toEqual({ type: "builtin", name: "star" });
   });
@@ -720,7 +731,9 @@ test.describe("M6-22 the Feature switch and Motion", () => {
       panel.getByText("Motion turns off for people who ask their device for less motion."),
     ).toBeVisible();
     await expectDraft(user.pageId, (d) => draftBlock(d, IDS.a)!.featured === "bold");
-    await expect(previewLink(page, IDS.a)).toHaveAttribute("data-featured", "bold");
+    await inPreviewSheet(page, () =>
+      expect(previewLink(page, IDS.a)).toHaveAttribute("data-featured", "bold"),
+    );
 
     // The chip: shown from 760px, hidden on a phone.
     const chip = row.getByTestId("featured-chip");
@@ -742,7 +755,9 @@ test.describe("M6-22 the Feature switch and Motion", () => {
 
     await motion.selectOption("pulse");
     await expectDraft(user.pageId, (d) => draftBlock(d, IDS.a)!.featured === "pulse");
-    await expect(previewLink(page, IDS.a)).toHaveAttribute("data-featured", "pulse");
+    await inPreviewSheet(page, () =>
+      expect(previewLink(page, IDS.a)).toHaveAttribute("data-featured", "pulse"),
+    );
     await motion.selectOption("shine");
     await expectDraft(user.pageId, (d) => draftBlock(d, IDS.a)!.featured === "shine");
     await motion.selectOption("bold");
@@ -756,7 +771,9 @@ test.describe("M6-22 the Feature switch and Motion", () => {
     await expect(feature).toHaveAttribute("aria-pressed", "false");
     await expect(panel.getByLabel("Motion", { exact: true })).toHaveCount(0);
     await expectDraft(user.pageId, (d) => !("featured" in draftBlock(d, IDS.a)!));
-    await expect(previewLink(page, IDS.a)).not.toHaveAttribute("data-featured", /.+/);
+    await inPreviewSheet(page, () =>
+      expect(previewLink(page, IDS.a)).not.toHaveAttribute("data-featured", /.+/),
+    );
     await expect(chip).toHaveCount(0);
     await page.screenshot({ path: `tmp/screens/m6-link-feature-${info.project.name}.png` });
   });
@@ -881,17 +898,15 @@ test.describe("M6-20 and M6-22 parity after Publish", () => {
     });
 
     const inEditor: Record<string, string> = {};
-    for (const id of Object.values(IDS)) {
-      inEditor[id] = await previewLink(page, id).evaluate((el) => el.outerHTML);
-    }
+    await inPreviewSheet(page, async () => {
+      for (const id of Object.values(IDS)) inEditor[id] = await markupOf(previewLink(page, id));
+    });
 
     const live = await context.newPage();
     await live.goto(url(user.handle));
     await expect(live.locator(".pg-link")).toHaveCount(5);
     for (const id of Object.values(IDS)) {
-      const html = await live
-        .locator(`.pg-link[data-block-id="${id}"]`)
-        .evaluate((el) => el.outerHTML);
+      const html = await markupOf(live.locator(`.pg-link[data-block-id="${id}"]`));
       expect(html, id).toBe(inEditor[id]);
       // The link still goes through /r/<pageId>/<blockId>.
       expect(html).toContain(`href="/r/${user.pageId}/${id}"`);

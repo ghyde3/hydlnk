@@ -41,7 +41,7 @@ export function TemplateToast({
       role="status"
       aria-live="polite"
       data-testid="template-toast-region"
-      className="pointer-events-none fixed inset-x-4 bottom-[calc(68px+env(safe-area-inset-bottom))] z-30 hl:inset-x-auto hl:bottom-6 hl:left-[272px]"
+      className="pointer-events-none fixed left-4 right-[72px] bottom-[calc(68px+env(safe-area-inset-bottom))] z-30 hl:right-auto hl:bottom-6 hl:left-[272px]"
     >
       {toast ? (
         <div

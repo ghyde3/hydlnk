@@ -13,7 +13,7 @@ import {
   type EditorAction,
   type EditorState,
 } from "@/lib/editor/state";
-import { TEMPLATES, templateById } from "@/lib/templates";
+import { TEMPLATES, templateById, type TemplateStyle } from "@/lib/templates";
 import { blocks as fixtureBlocks, fullDraft } from "./fixtures/page-document";
 
 /**
@@ -25,7 +25,12 @@ import { blocks as fixtureBlocks, fullDraft } from "./fixtures/page-document";
 const run = (state: EditorState, ...actions: EditorAction[]) =>
   actions.reduce(editorReducer, state);
 
-const apply = (id: string): EditorAction => ({ type: "template/apply", templateId: id });
+// M7-08: the action carries the style choice; the M6-40 cases are the "template" style.
+const apply = (id: string, style: TemplateStyle = "template"): EditorAction => ({
+  type: "template/apply",
+  templateId: id,
+  style,
+});
 
 const page = (): DraftDoc => ({
   ...fullDraft,

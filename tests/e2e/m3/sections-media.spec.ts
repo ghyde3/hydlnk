@@ -252,7 +252,10 @@ test.describe("M3-15 a published background cannot be swapped or removed through
 
 const publish = async (page: Page) => {
   await openEditor(page);
-  await page.locator("main > header").getByRole("button", { name: "Publish", exact: true }).click();
+  await page
+    .getByTestId("workspace-toolbar")
+    .getByRole("button", { name: "Publish", exact: true })
+    .click();
 };
 
 test.describe("M3-15 the publish gate on the background image", () => {

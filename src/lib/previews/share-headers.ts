@@ -6,7 +6,7 @@ import { INACTIVE_LINK_MESSAGE } from "./messages";
  * import, no Node-only module, nothing that reads a session.
  *
  * A page component cannot set response headers or a 429, so the proxy does it by path: it rewrites
- * `/share/<anything>` to the one internal route `/app/share` and hands the first path segment over in
+ * `/share/<anything>` to the one internal route `/app/shared-draft` and hands the first path segment over in
  * a request header. The token is therefore not a route parameter, which keeps the bodies of every
  * "not active" answer byte-identical (a dynamic segment would put the token into the page's own
  * payload).
@@ -18,9 +18,29 @@ export const SHARE_TOKEN_HEADER = "x-hl-share-token";
 /** The longest segment passed on: longer ones are malformed anyway (a token has 43 characters). */
 const MAX_SEGMENT = 64;
 
-/** True for "/share" and "/share/...": false for "/shared" and "/sharex". */
+/**
+ * The internal route a private link is rewritten to. It is NOT `/app/share`: exactly `/share` is the
+ * workspace's Share tab (M7-02), a signed-in screen, so the token page lives at a path no tab uses.
+ */
+export const SHARE_INTERNAL_PATH = "/shared-draft";
+
+/**
+ * True for the internal route itself ("/shared-draft" and anything below it). It is a rewrite target
+ * only: the proxy refuses a direct request for it (a client could send its own `x-hl-share-token`
+ * header with no rate limit, no share headers and no nonce policy), so the page is reached through
+ * `/share/<token>` and nothing else.
+ */
+export function isShareInternalPath(pathname: string): boolean {
+  return pathname === SHARE_INTERNAL_PATH || pathname.startsWith(`${SHARE_INTERNAL_PATH}/`);
+}
+
+/**
+ * True for "/share/<something>": a private link. False for exactly "/share" and "/share/" (the
+ * workspace's Share tab, which is a signed-in screen and must never get this route's no-session,
+ * rate-limited treatment) and for "/shared" and "/sharex".
+ */
 export function isSharePath(pathname: string): boolean {
-  return pathname === "/share" || pathname.startsWith("/share/");
+  return pathname.startsWith("/share/") && pathname.length > "/share/".length;
 }
 
 /**

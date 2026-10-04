@@ -2,15 +2,17 @@ import { axeViolations } from "../fixtures/a11y";
 import { expect, test, type Locator, type Page, type Request } from "@playwright/test";
 import { adminClient, signInAs, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { expectNoHorizontalScroll } from "../helpers";
 import { makePngImage } from "../m5/images-fixtures";
 import { removeFolders } from "../m5/images-helpers";
 import { isDraftPatch, pageRow } from "./history-helpers";
 import {
+  chooseThemeMenuItem,
   IVORY,
   NOIR,
   expectStoredTheme,
-  headerStatus,
+  expectAppliedTheme,
+  expectNoThemeApplied,
   openDesignWithCard,
   setTheme,
   storedTheme,
@@ -34,13 +36,13 @@ test.afterAll(async () => {
 });
 const owners: string[] = [];
 
-const header = (page: Page): Locator => page.locator("main > header");
+// M7-05: Undo and Redo are the workspace toolbar's, the same two buttons on every tab (the Design
+// header and its 'Done' link are gone).
+const toolbar = (page: Page): Locator => page.getByTestId("workspace-toolbar");
 const undoButton = (page: Page): Locator =>
-  header(page).getByRole("button", { name: "Undo", exact: true });
+  toolbar(page).getByRole("button", { name: "Undo", exact: true });
 const redoButton = (page: Page): Locator =>
-  header(page).getByRole("button", { name: "Redo", exact: true });
-const doneLink = (page: Page): Locator =>
-  header(page).getByRole("link", { name: "Done", exact: true });
+  toolbar(page).getByRole("button", { name: "Redo", exact: true });
 
 const UNDO_KEY = "Control+z";
 const REDO_KEY = "Control+Shift+z";
@@ -86,10 +88,10 @@ const patchesOf = (page: Page) => {
 };
 
 test.describe("M6-08 the buttons", () => {
-  test("M6-08 Undo and Redo sit in the header: 44x44, disabled until there is something to do, left of the save status (desktop) or wrapped with Save as theme and Done (phone)", async ({
+  test("M6-08 Undo and Redo are 44x44 in the workspace toolbar, disabled until there is something to do (M7-05 places them)", async ({
     page,
     context,
-  }, info) => {
+  }) => {
     await themeUser(context, "dh1");
     await openDesignWithCard(page);
     for (const button of [undoButton(page), redoButton(page)]) {
@@ -102,40 +104,12 @@ test.describe("M6-08 the buttons", () => {
     expect(await axeViolations(page)).toEqual([]);
     const undoBox = (await undoButton(page).boundingBox())!;
     const redoBox = (await redoButton(page).boundingBox())!;
-    const save = (await page.getByTestId("save-as-theme").boundingBox())!;
-    const done = (await doneLink(page).boundingBox())!;
-    if (desktopOnly(info)) {
-      // One row: Undo, Redo, the save status, Save as theme, Done.
-      const status = (await saveStatus(page).boundingBox())!;
-      expect(undoBox.x).toBeLessThan(redoBox.x);
-      expect(redoBox.x + redoBox.width).toBeLessThanOrEqual(status.x + 0.5);
-      expect(status.x).toBeLessThan(save.x);
-      expect(save.x).toBeLessThan(done.x);
-      for (const box of [save, done]) {
-        expect(Math.abs(box.y + box.height / 2 - (undoBox.y + undoBox.height / 2))).toBeLessThan(4);
-      }
-    }
-    if (phoneOnly(info)) {
-      // The tabs are unchanged and nothing overlaps or scrolls sideways.
-      await expect(page.getByRole("tablist")).toBeVisible();
-      await expect(page.getByRole("tab", { name: "Style" })).toBeVisible();
-      await expect(page.getByRole("tab", { name: "Preview" })).toBeVisible();
-      const boxes = [undoBox, redoBox, save, done];
-      for (let i = 0; i < boxes.length; i++) {
-        for (let j = i + 1; j < boxes.length; j++) {
-          const a = boxes[i]!;
-          const b = boxes[j]!;
-          const overlap =
-            a.x < b.x + b.width &&
-            b.x < a.x + a.width &&
-            a.y < b.y + b.height &&
-            b.y < a.y + a.height;
-          expect(overlap, `buttons ${i} and ${j} overlap`).toBe(false);
-        }
-      }
-      await expectNoHorizontalScroll(page);
-      await expectTapTargets(page, "main > header");
-    }
+    expect(undoBox.x).toBeLessThan(redoBox.x);
+    // Nothing overlaps or scrolls sideways; there is no 'Done' and no header 'Save as theme' left.
+    expect(undoBox.x + undoBox.width).toBeLessThanOrEqual(redoBox.x + 0.5);
+    await expect(page.getByRole("link", { name: "Done" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Done" })).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
   });
 });
 
@@ -150,7 +124,7 @@ test.describe("M6-08 every Design change is a step", () => {
     const user = await themeUser(context, "dt1");
     owners.push(user.userId);
     await openDesignWithCard(page);
-    await expect(headerStatus(page)).toHaveText("Theme · Noir");
+    await expectAppliedTheme(page, "Noir");
     const png = await makePngImage({ width: 240, height: 180, color: [40, 80, 160] });
 
     const settled = async () => {
@@ -301,7 +275,12 @@ test.describe("M6-08 every Design change is a step", () => {
       const now = await settled();
       const lookNow = await previewLook();
 
-      for (let i = 0; i < steps; i++) await undoButton(page).click();
+      // One press at a time: a step that checks a background image in Storage first ignores a
+      // second press while it waits (M6-06), so each press gets a moment to land.
+      for (let i = 0; i < steps; i++) {
+        await undoButton(page).click();
+        await page.waitForTimeout(250);
+      }
       await expectOverridesEqual(
         user.pageId,
         was,
@@ -310,7 +289,10 @@ test.describe("M6-08 every Design change is a step", () => {
       await expect
         .poll(previewLook, { message: `${label}: Undo restores the preview`, timeout: 10_000 })
         .toBe(lookBefore);
-      for (let i = 0; i < steps; i++) await redoButton(page).click();
+      for (let i = 0; i < steps; i++) {
+        await redoButton(page).click();
+        await page.waitForTimeout(250);
+      }
       await expectOverridesEqual(
         user.pageId,
         now,
@@ -323,13 +305,13 @@ test.describe("M6-08 every Design change is a step", () => {
     }
 
     // The preview follows the history: undo everything back to the start.
-    await expect(headerStatus(page)).toHaveText("Theme · Noir · edited");
+    await expectAppliedTheme(page, "Noir", "Edited");
     while ((await undoButton(page).getAttribute("aria-disabled")) !== "true") {
       await undoButton(page).click();
     }
     await expect.poll(accent).toBe(accentAtStart);
     // Back to the theme as it was loaded: the header no longer says it was edited.
-    await expect(headerStatus(page)).toHaveText("Theme · Noir");
+    await expectAppliedTheme(page, "Noir");
     await expectOverridesEqual(user.pageId, {}, "all the way back");
   });
 
@@ -339,14 +321,14 @@ test.describe("M6-08 every Design change is a step", () => {
   }) => {
     const user = await themeUser(context, "dt2");
     await openDesignWithCard(page);
-    await expect(headerStatus(page)).toHaveText("Theme · Noir");
+    await expectAppliedTheme(page, "Noir");
 
     await option(page, "Accent", "Accent Terracotta").click();
-    await expect(headerStatus(page)).toHaveText("Theme · Noir · edited");
+    await expectAppliedTheme(page, "Noir", "Edited");
     // The swatch sets the accent and the button colors; one Undo takes all of it back.
     await expect.poll(async () => (await overridesOf(user.pageId)).accent).toBe("#C46A4F");
     await page.keyboard.press(UNDO_KEY);
-    await expect(headerStatus(page)).toHaveText("Theme · Noir");
+    await expectAppliedTheme(page, "Noir");
     await expectOverridesEqual(user.pageId, {}, "the swatch undone in one step");
     await expect(undoButton(page)).toBeDisabled();
 
@@ -424,7 +406,7 @@ test.describe("M6-08 themes", () => {
     await expectStoredTheme(user.pageId, isIvory);
     await page.keyboard.press(UNDO_KEY);
     await expectStoredTheme(user.pageId, isPrevious);
-    await expect(headerStatus(page)).toHaveText("Theme · Noir · edited");
+    await expectAppliedTheme(page, "Noir", "Edited");
     // Applying was one step: nothing is left to undo from here.
     await expect(undoButton(page)).toBeDisabled();
     await page.keyboard.press(REDO_KEY);
@@ -459,7 +441,7 @@ test.describe("M6-08 themes", () => {
     expect(data?.id).toBe(saved);
 
     // The theme is deleted in the grid while the draft points elsewhere: that is not a step.
-    await page.getByRole("button", { name: /^Delete My theme 1$/ }).click();
+    await chooseThemeMenuItem(page, "My theme 1", "Delete");
     await page
       .getByTestId("delete-theme-dialog")
       .getByRole("button", { name: "Delete theme" })
@@ -473,7 +455,7 @@ test.describe("M6-08 themes", () => {
     await expect(page.getByTestId("theme-deleted-notice")).toHaveText(
       "The theme this page used was deleted. It now uses the default theme.",
     );
-    await expect(headerStatus(page)).toHaveText("Theme · Default");
+    await expectNoThemeApplied(page);
     await page.keyboard.press(UNDO_KEY);
     await expect(page.getByTestId("theme-deleted-notice")).toHaveCount(0);
   });
@@ -493,10 +475,13 @@ test.describe("M6-08 themes", () => {
     await page.keyboard.press(REDO_KEY);
     await expectStoredTheme(user.pageId, (t) => t.ref === saved);
     await expect(undoButton(page)).toBeEnabled();
-    await expect(page.getByRole("heading", { level: 1, name: "Design" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Design", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await page.reload();
     await expect(page.getByTestId("theme-deleted-notice")).toBeVisible();
-    await expect(headerStatus(page)).toHaveText("Theme · Default");
+    await expectNoThemeApplied(page);
   });
 });
 
@@ -597,23 +582,31 @@ test.describe("M6-08 saves, tabs and leaving", () => {
     }
   });
 
-  test("M6-08 Done leaves the history behind: the Editor opens on the saved draft with Undo disabled", async ({
+  test("M6-08 leaving the workspace leaves the history behind: the Editor opens on the saved draft with Undo disabled (M7-02 replaces 'Done')", async ({
     page,
     context,
-  }) => {
+  }, info) => {
     const user = await themeUser(context, "ddn");
     await openDesignWithCard(page);
     await showTokens(page);
     await option(page, "Corner radius", "20px").click();
     await expect(undoButton(page)).toBeEnabled();
-    await doneLink(page).click();
+    await expect.poll(async () => (await overridesOf(user.pageId)).radius).toBe(20);
+    // Leave the workspace (Analytics, or Stats on a phone) and come back with the Editor link.
+    const nav = phoneOnly(info)
+      ? page.getByRole("navigation", { name: "App sections" })
+      : page.getByRole("navigation", { name: "App", exact: true });
+    await nav.getByRole("link", { name: /^(Analytics|Stats)$/ }).click();
+    await page.waitForURL(/\/analytics$/);
+    const editor = nav.getByRole("link", { name: "Editor" });
+    const box = (await editor.boundingBox())!;
+    // Away from the left edge, where Next's dev indicator sits over the first item on a phone.
+    await editor.click({ position: { x: box.width - 8, y: box.height / 2 } });
     await page.waitForURL(/\/editor$/);
     await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
-    await expect(
-      page.locator("main > header").getByRole("button", { name: "Undo", exact: true }),
-    ).toBeDisabled();
+    await expect(undoButton(page)).toBeDisabled();
     expect((await overridesOf(user.pageId)).radius).toBe(20);
-    // Coming back, the Design screen starts empty too.
+    // Coming back to Design, the history starts empty too.
     await openDesignWithCard(page);
     await expect(undoButton(page)).toBeDisabled();
   });

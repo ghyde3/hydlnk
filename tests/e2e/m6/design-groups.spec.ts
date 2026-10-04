@@ -17,6 +17,7 @@ import {
   spokenText,
 } from "./design-helpers";
 import { TOKEN_LABELS, type TokenKey } from "@/lib/theme";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /**
  * M6-47: the Design screen is five plain-worded cards (Colors, Fonts, Buttons, Layout and
@@ -99,11 +100,11 @@ test.describe("M6-47 five groups with plain labels", () => {
       expect(level - previous, `heading levels ${levels.join(",")}`).toBeLessThanOrEqual(1);
       previous = level;
     }
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Design", exact: true }),
-    ).toBeVisible();
+    // M7-02: the one h1 is the page's name in the toolbar; 'Save as theme' is in the Themes card and
+    // 'Done' is gone (M7-05).
+    await expect(page.locator("[data-toolbar-name] h1")).toBeVisible();
     await expect(page.getByRole("button", { name: "Save as theme" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Done" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Done" })).toHaveCount(0);
     const themes = (await page.getByTestId("saved-themes-card").boundingBox())!;
     const first = (await card(page, "color").boundingBox())!;
     expect(first.y, "the five cards sit below the saved themes card").toBeGreaterThanOrEqual(
@@ -358,7 +359,7 @@ test.describe("M6-47 five groups with plain labels", () => {
       expect(preview.x, "the preview is beside the cards").toBeGreaterThanOrEqual(
         boxes[0]!.x + boxes[0]!.width - 1,
       );
-      const column = (await page.locator("#design-panel-tokens").boundingBox())!;
+      const column = (await page.getByRole("tabpanel").boundingBox())!;
       expect(column.width).toBeLessThanOrEqual(720);
       const live = page.getByText("Live preview", { exact: true });
       await expect(live).toBeVisible();
@@ -370,8 +371,8 @@ test.describe("M6-47 five groups with plain labels", () => {
 /** The preview root's `data-bg-type`, whichever tab shows it. */
 async function previewRootAttr(page: Page): Promise<string | null> {
   const phone = isPhone(page);
-  if (phone) await page.getByRole("tab", { name: "Preview" }).click();
+  if (phone) await showPreviewSheet(page);
   const value = await previewRoot(page).getAttribute("data-bg-type");
-  if (phone) await page.getByRole("tab", { name: "Style" }).click();
+  if (phone) await hidePreviewSheet(page);
   return value;
 }

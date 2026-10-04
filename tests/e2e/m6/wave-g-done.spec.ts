@@ -15,7 +15,6 @@ import { addBlock, showView } from "../m2/blocks-helpers";
 import { accessToken, emptyUser, openEditor, pageRow } from "../m2/editor-helpers";
 import { pngSizeOf, rawBuffer } from "../m2/publish-helpers";
 import { collectPublishErrors } from "@/lib/document";
-import { TENANT_CONTENT_SECURITY_POLICY } from "@/lib/routing/tenant-headers";
 import { embedOf, stubThirdParties, tapAndGetSrc, watchCsp } from "./embeds-helpers";
 import { css } from "./links-helpers";
 import { expectQrOf, readDownload } from "./qr-helpers";
@@ -34,6 +33,10 @@ import {
   splitImage,
   waitDraft,
 } from "./share-helpers";
+
+/** The tenant CSP as the proxy sends it (src/lib/routing/tenant-headers.ts; not imported: it reads the env). */
+const TENANT_CONTENT_SECURITY_POLICY =
+  "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 
 /**
  * M6-34, "Done when" for Wave G: a page that uses every Wave G feature, built from nothing but the
@@ -128,6 +131,8 @@ async function buildPage(page: Page, user: SignedInUser): Promise<Built> {
   });
 
   await test.step("share card: title, description and an image with a focus", async () => {
+    // The share card is on the Share tab (M7-04); the draft is the workspace's, shared by the tabs.
+    await page.getByRole("tab", { name: "Share", exact: true }).click();
     await shareTitle(page).fill("Everything in Wave G");
     await shareDescription(page).fill(
       "One page with an icon, a thumbnail, a pulse, a Vimeo reel and a text link.",
@@ -141,6 +146,7 @@ async function buildPage(page: Page, user: SignedInUser): Promise<Built> {
     stored.push(draft.share!.image!.path);
     await pressFocus(shareCard(page), 0.8, 0.5);
     await draftHas((d) => d.share?.image?.focus !== undefined);
+    await page.getByRole("tab", { name: "Edit", exact: true }).click();
   });
 
   await test.step("a link with a built-in icon", async () => {
@@ -338,8 +344,9 @@ async function markupOf(
 const HOSTS_ALLOWED_TO_BE_REQUESTED = (own: string) =>
   new Set([
     own,
-    // The Supabase Storage origin that serves the uploaded images.
-    new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321").hostname,
+    // (M7-15 supersedes M6-34 step 3: the uploaded images load from /media on the root origin, not
+    // from the Supabase Storage origin and not same-origin, to keep one CDN cache key per image.)
+    "localhost",
     // Google Fonts for the page's font token: an existing request (see PROGRESS.md), not a Wave G one.
     "fonts.googleapis.com",
     "fonts.gstatic.com",
@@ -389,7 +396,8 @@ test.describe("M6-34 a page using every Wave G feature", () => {
     // Step 1: publish and wait for "Published".
     await publishNow(page);
 
-    // The Share preview card's words, read before they could change.
+    // The Share preview card's words, read before they could change (it is on the Share tab).
+    await page.getByRole("tab", { name: "Share", exact: true }).click();
     const shownTitle = await sharePreview(page).getByTestId("share-preview-title").innerText();
     const shownDescription = await sharePreview(page)
       .getByTestId("share-preview-description")
@@ -432,7 +440,7 @@ test.describe("M6-34 a page using every Wave G feature", () => {
       fullPage: true,
     });
 
-    // Step 3: what the live page does. Nothing leaves its own host but the uploaded images.
+    // Step 3: what the live page does. Nothing leaves its own host but the fonts (the uploaded images come from /media).
     const allowed = HOSTS_ALLOWED_TO_BE_REQUESTED(`${owner.handle}.localhost`);
     for (const host of requested) expect(allowed.has(host), `a request to ${host}`).toBe(true);
     expect(reached.filter((host) => !/^fonts\./.test(host))).toEqual([]);
@@ -486,7 +494,7 @@ test.describe("M6-34 a page using every Wave G feature", () => {
     // The tenant CSP is exactly the M6-26 string, on the response itself.
     expect(response!.headers()["content-security-policy"]).toBe(TENANT_CONTENT_SECURITY_POLICY);
     expect(TENANT_CONTENT_SECURITY_POLICY).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     );
 
     // Clicking the featured link and the text link follows /r/ to their destinations and writes events.
@@ -547,12 +555,11 @@ test.describe("M6-34 a page using every Wave G feature", () => {
     expect(near(await pixelAt(ogPng, 600, 315), BLUE)).toBe(true);
 
     // The QR code downloaded from the editor decodes to exactly the live address, which answers 200 with the h1.
-    await page.goto(url("app", "/editor"));
-    await page.getByRole("button", { name: "QR code", exact: true }).click();
+    await page.goto(url("app", "/share"));
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page
-        .getByRole("dialog", { name: "QR code for your page" })
+        .getByTestId("qr-card")
         .getByRole("button", { name: "Download PNG", exact: true })
         .click(),
     ]);

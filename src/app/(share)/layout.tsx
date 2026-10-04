@@ -12,7 +12,7 @@ import { HydlnkDocument } from "@/components/hydlnk-document";
  * of which reads a session, and its tree has nothing of the signed-in app in it.
  *
  * The URL is unchanged: route groups add no path segment, so the proxy still rewrites /share/* to
- * /app/share (src/lib/previews/share-proxy.ts).
+ * /app/shared-draft (src/lib/previews/share-proxy.ts).
  */
 export const metadata: Metadata = {
   title: "HYDLNK",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   EMBED_ERROR_MESSAGE,
   EMBED_HEIGHTS,
@@ -19,6 +19,14 @@ import {
 } from "@/lib/document";
 import { TENANT_CONTENT_SECURITY_POLICY } from "@/lib/routing/tenant-headers";
 import { blocks, draftWith } from "./fixtures/page-document";
+
+vi.mock("@/lib/env/client", () => ({
+  clientEnv: {
+    NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000",
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
+  },
+}));
 
 /**
  * M6-26: six more embed providers. Parsing rebuilds `src` from validated parts only, every
@@ -554,7 +562,7 @@ describe("M6-26 the embed block at Publish", () => {
 describe("M6-26 the tenant Content Security Policy", () => {
   it("is exactly the nine frame origins plus the unchanged directives", () => {
     expect(TENANT_CONTENT_SECURITY_POLICY).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
     );
     expect(TENANT_CONTENT_SECURITY_POLICY).not.toMatch(/script-src|nonce|default-src/);
   });

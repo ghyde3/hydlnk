@@ -382,7 +382,7 @@ test.describe("M6-46 setting a style changes only that block, in the preview", (
     await expect(colorField(panel)).toHaveValue("#AA0000");
   });
 
-  test("M6-46 at 390x844 the Preview tab shows the styled block at full width", async ({
+  test("M6-46 at 390x844 the preview sheet shows the styled block at full width", async ({
     page,
     context,
   }, info) => {
@@ -393,19 +393,15 @@ test.describe("M6-46 setting a style changes only that block, in the preview", (
     await expectStored(user.pageId, ID.header.a, { text: COLOR });
     const el = await previewOf(page, ID.header.a);
     await expect.poll(() => computed(el, "color")).toBe(RGB);
-    // The preview is the page itself at the width of the screen (no phone bezel): the editor's 16px
-    // gutters on each side, and the block spans the page column (24px of padding on each side).
+    // The preview is the page itself at the width of the screen (no phone bezel): the sheet is the
+    // whole screen, and the block spans the page column (24px of padding on each side).
     const screen = (await previewScreen(page).boundingBox())!;
     const box = (await el.boundingBox())!;
     expect(screen.width).toBeGreaterThanOrEqual(350);
     expect(box.width).toBeGreaterThanOrEqual(screen.width - 52);
     expect(box.x + box.width).toBeLessThanOrEqual(screen.x + screen.width);
-    // The frame has no bezel on a phone: no border, no padding, no fill, as wide as the screen.
-    const bezel = page.getByTestId("preview-bezel");
-    expect(await computed(bezel, "border-top-width")).toBe("0px");
-    expect(await computed(bezel, "padding-left")).toBe("0px");
-    expect(await computed(bezel, "background-color")).toBe("rgba(0, 0, 0, 0)");
-    expect((await bezel.boundingBox())!.width).toBeGreaterThanOrEqual(350);
+    // The sheet has no bezel on a phone (M7-09): the page is drawn straight in it.
+    await expect(page.getByTestId("preview-bezel")).toHaveCount(0);
     await expectNoHorizontalScroll(page);
   });
 });

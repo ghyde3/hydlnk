@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { reviewTrafficFlagAction } from "@/lib/analytics/admin/review-flag-action";
+import { blockDomainAction, unblockDomainAction } from "@/lib/blocklist/admin-actions";
 import type { Json } from "@/lib/supabase/database.types";
 import { fail, type ActionResult, type AdminAction, type AdminActionContext } from "./types";
 
@@ -266,6 +267,8 @@ export const dismissReportAction = defineAction("dismiss_report", async (context
 });
 
 export { reviewTrafficFlagAction };
+/** Block and remove a domain at /admin/blocked-links (M7-12): defined beside the blocklist, listed here. */
+export { blockDomainAction, unblockDomainAction };
 
 /** Every admin mutation. Adding an action here is what makes the guard test cover it. */
 export const ADMIN_ACTIONS: readonly AdminAction[] = [
@@ -273,4 +276,6 @@ export const ADMIN_ACTIONS: readonly AdminAction[] = [
   unsuspendAccountAction,
   dismissReportAction,
   reviewTrafficFlagAction,
+  blockDomainAction,
+  unblockDomainAction,
 ];

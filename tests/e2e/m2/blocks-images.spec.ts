@@ -119,7 +119,7 @@ test.describe("M2-20 image block with alt text", () => {
     await expect(img).toHaveAttribute("loading", "lazy");
     await expect(img).toHaveAttribute(
       "src",
-      new RegExp(`/storage/v1/object/public/page-media/${user.userId}/`),
+      new RegExp(`^http://localhost:\\d+/media/${user.userId}/`),
     );
     const link = root.locator("a");
     // The link goes through the click redirect (M4-22): the destination is not in the markup.

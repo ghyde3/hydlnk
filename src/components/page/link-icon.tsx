@@ -13,7 +13,7 @@ import { SOCIAL_GLYPHS } from "./social-icons";
  * The link block's icon (M6-20): a bundled inline SVG glyph or a small square thumbnail, drawn as
  * the first child of the link's anchor. Nothing here reads a URL from the document: a glyph is
  * looked up by name in the table below (a name that is not in it draws nothing) and a thumbnail is
- * an uploaded image reference turned into a `page-media` URL by `mediaUrl`.
+ * an uploaded image reference turned into a `/media/...` address by `mediaUrl`.
  *
  * The glyphs are 24x24 line drawings, stroke `currentColor`, so an icon takes the button's text
  * color and follows the button style and any color override. The eight brand glyphs, Email (`mail`)

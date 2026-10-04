@@ -1,6 +1,15 @@
 "use client";
 
-import { useEffect, useId, useRef, type CSSProperties, type Dispatch, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type ReactNode,
+} from "react";
+import { ChevronDownIcon } from "@/components/app/icons";
 import {
   LIMITS,
   PHOTO_BORDERS,
@@ -16,6 +25,7 @@ import {
 import { profileInitials } from "@/lib/editor/initials";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
 import { ImageUploadControl } from "./image-upload-control";
+import { hiddenParts } from "./profile-hidden";
 
 const INPUT = "min-h-11 w-full rounded-md border bg-surface px-3 text-base font-normal text-ink";
 
@@ -52,12 +62,18 @@ export const BIO_HIDDEN_HINT =
   "Hidden on the page. It can still show in search results and link previews.";
 
 /**
- * The Profile card (M2-07, M2-09, M6-16, M6-18): the photo (upload, replace, remove) with its
- * shape, size, border and show switch, the display name and the bio, each with a show switch. The
- * inputs keep exactly what is typed; the reducer clamps it to 60 and 160 code points on one line,
- * so a paste that is too long is cut, not refused. Every option is one `profile/option` action,
- * so each is its own undo step. The name and bio inputs stay editable while their switch is off:
- * they still set the page title and the description.
+ * The Profile card (M2-07, M2-09, M6-16, M6-18, M7-03): the photo (upload, replace, remove), the
+ * display name and the bio stay in view; the photo's shape, size and border and the three "show on
+ * page" switches live under one collapsed disclosure, "Photo and header options", so the card is
+ * short. The inputs keep exactly what is typed; the reducer clamps it to 60 and 160 code points on
+ * one line, so a paste that is too long is cut, not refused. Every option is one `profile/option`
+ * action, so each is its own undo step. The name and bio inputs stay editable while their switch is
+ * off: they still set the page title and the description.
+ *
+ * The section is collapsed on every load; open or closed is view state only (not remembered, not
+ * part of the draft, no request, no undo step). Nothing is hidden without saying so: while it is
+ * collapsed and a switch is off, the button carries a second line, "Hidden on your page: photo,
+ * name", which is part of its accessible name.
  */
 export function ProfileCard({
   name,
@@ -87,6 +103,10 @@ export function ProfileCard({
   const bioHintId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
   const shown = resolveProfileOptions(options ?? PROFILE_OPTION_DEFAULTS);
+  // Collapsed on every load: not remembered, not part of the draft.
+  const [open, setOpen] = useState(false);
+  const optionsTriggerId = useId();
+  const optionsRegionId = useId();
 
   const set = <K extends ProfileOptionKey>(key: K, value: ProfileOptions[K]): void =>
     dispatch({ type: "profile/option", key, value } as EditorAction);
@@ -100,6 +120,7 @@ export function ProfileCard({
   }, [focusNonce, dispatch]);
 
   const photoOff = !shown.showPhoto;
+  const hidden = hiddenParts(shown);
   const nameDescribedBy =
     [nameError ? nameErrorId : null, shown.showName ? null : nameHintId]
       .filter((id) => id !== null)
@@ -134,56 +155,10 @@ export function ProfileCard({
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <Switch
-          label="Show photo on page"
-          pressed={shown.showPhoto}
-          describedBy={photoOff ? photoHintId : undefined}
-          onToggle={() => set("showPhoto", !shown.showPhoto)}
-        />
-        {photoOff ? (
-          <p id={photoHintId} className="m-0 text-xs text-text-2">
-            {PHOTO_HIDDEN_HINT}
-          </p>
-        ) : null}
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <ChoiceGroup
-          label="Photo shape"
-          disabled={photoOff}
-          choices={PHOTO_SHAPES.map((value) => ({ value, label: PHOTO_SHAPE_LABELS[value] }))}
-          current={shown.photoShape}
-          onPick={(value) => set("photoShape", value)}
-        />
-        <ChoiceGroup
-          label="Photo size"
-          disabled={photoOff}
-          choices={PHOTO_SIZES.map((value) => ({ value, label: PHOTO_SIZE_LABELS[value] }))}
-          current={shown.photoSize}
-          onPick={(value) => set("photoSize", value)}
-        />
-        <ChoiceGroup
-          label="Photo border"
-          disabled={photoOff}
-          choices={PHOTO_BORDERS.map((value) => ({ value, label: PHOTO_BORDER_LABELS[value] }))}
-          current={shown.photoBorder}
-          onPick={(value) => set("photoBorder", value)}
-        />
-      </div>
-
       <div className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-x-3">
-          <label htmlFor={nameId} className="text-[13px] font-semibold text-ink-2">
-            Display name
-          </label>
-          <Switch
-            label="Show display name on page"
-            pressed={shown.showName}
-            describedBy={shown.showName ? undefined : nameHintId}
-            onToggle={() => set("showName", !shown.showName)}
-          />
-        </div>
+        <label htmlFor={nameId} className="text-[13px] font-semibold text-ink-2">
+          Display name
+        </label>
         <input
           ref={nameRef}
           id={nameId}
@@ -200,25 +175,12 @@ export function ProfileCard({
             {nameError}
           </span>
         ) : null}
-        {shown.showName ? null : (
-          <p id={nameHintId} className="m-0 text-xs text-text-2">
-            {NAME_HIDDEN_HINT}
-          </p>
-        )}
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-x-3">
-          <label htmlFor={bioId} className="text-[13px] font-semibold text-ink-2">
-            Bio
-          </label>
-          <Switch
-            label="Show bio on page"
-            pressed={shown.showBio}
-            describedBy={shown.showBio ? undefined : bioHintId}
-            onToggle={() => set("showBio", !shown.showBio)}
-          />
-        </div>
+        <label htmlFor={bioId} className="text-[13px] font-semibold text-ink-2">
+          Bio
+        </label>
         <textarea
           id={bioId}
           rows={2}
@@ -230,11 +192,109 @@ export function ProfileCard({
         <span id={bioCountId} className="self-end font-mono text-[11px] text-text-2">
           {codePointLength(bio)} / {LIMITS.bio}
         </span>
-        {shown.showBio ? null : (
-          <p id={bioHintId} className="m-0 text-xs text-text-2">
-            {BIO_HIDDEN_HINT}
-          </p>
-        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          id={optionsTriggerId}
+          aria-expanded={open}
+          aria-controls={optionsRegionId}
+          data-testid="profile-options-toggle"
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 rounded-md border border-line-3 bg-surface px-3 py-1.5 text-left text-sm font-semibold text-ink"
+        >
+          <span className="flex min-w-0 flex-col">
+            <span>Photo and header options</span>
+            {hidden.length > 0 && !open ? (
+              <span className="text-xs font-normal text-text-2">
+                Hidden on your page: {hidden.join(", ")}
+              </span>
+            ) : null}
+          </span>
+          <span aria-hidden="true" className={`shrink-0 ${open ? "rotate-180" : ""}`}>
+            <ChevronDownIcon size={16} />
+          </span>
+        </button>
+
+        <div
+          id={optionsRegionId}
+          role="region"
+          aria-label="Photo and header options"
+          hidden={!open}
+          data-testid="profile-options"
+        >
+          <div className="flex flex-col gap-3.5 pt-1">
+            <div className="flex flex-col gap-1">
+              <Switch
+                label="Show photo on page"
+                pressed={shown.showPhoto}
+                describedBy={photoOff ? photoHintId : undefined}
+                onToggle={() => set("showPhoto", !shown.showPhoto)}
+              />
+              {photoOff ? (
+                <p id={photoHintId} className="m-0 text-xs text-text-2">
+                  {PHOTO_HIDDEN_HINT}
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <ChoiceGroup
+                label="Photo shape"
+                disabled={photoOff}
+                choices={PHOTO_SHAPES.map((value) => ({ value, label: PHOTO_SHAPE_LABELS[value] }))}
+                current={shown.photoShape}
+                onPick={(value) => set("photoShape", value)}
+              />
+              <ChoiceGroup
+                label="Photo size"
+                disabled={photoOff}
+                choices={PHOTO_SIZES.map((value) => ({ value, label: PHOTO_SIZE_LABELS[value] }))}
+                current={shown.photoSize}
+                onPick={(value) => set("photoSize", value)}
+              />
+              <ChoiceGroup
+                label="Photo border"
+                disabled={photoOff}
+                choices={PHOTO_BORDERS.map((value) => ({
+                  value,
+                  label: PHOTO_BORDER_LABELS[value],
+                }))}
+                current={shown.photoBorder}
+                onPick={(value) => set("photoBorder", value)}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Switch
+                label="Show display name on page"
+                pressed={shown.showName}
+                describedBy={shown.showName ? undefined : nameHintId}
+                onToggle={() => set("showName", !shown.showName)}
+              />
+              {shown.showName ? null : (
+                <p id={nameHintId} className="m-0 text-xs text-text-2">
+                  {NAME_HIDDEN_HINT}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Switch
+                label="Show bio on page"
+                pressed={shown.showBio}
+                describedBy={shown.showBio ? undefined : bioHintId}
+                onToggle={() => set("showBio", !shown.showBio)}
+              />
+              {shown.showBio ? null : (
+                <p id={bioHintId} className="m-0 text-xs text-text-2">
+                  {BIO_HIDDEN_HINT}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );

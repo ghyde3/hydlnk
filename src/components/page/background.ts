@@ -1,6 +1,6 @@
 import { IMAGE_PATH_PATTERN } from "@/lib/document";
 import type { TokenSet } from "@/lib/theme";
-import { mediaUrl } from "@/lib/media/url";
+import { mediaUrl, storageUrl } from "@/lib/media/url";
 
 /**
  * The page background image (M3-15). A tenant background is always one of the owner's own uploads
@@ -20,7 +20,7 @@ import { mediaUrl } from "@/lib/media/url";
  */
 export function backgroundImagePath(value: string | null | undefined): string | null {
   if (typeof value !== "string" || value === "") return null;
-  const prefix = mediaUrl("");
+  const prefix = storageUrl("");
   if (!value.startsWith(prefix)) return null;
   const path = value.slice(prefix.length);
   return IMAGE_PATH_PATTERN.test(path) ? path : null;

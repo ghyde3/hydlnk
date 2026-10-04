@@ -35,7 +35,7 @@ export function PublishedToast({
     <div
       role="status"
       aria-live="polite"
-      className={`pointer-events-none fixed inset-x-4 z-30 hl:inset-x-auto hl:left-[272px] ${
+      className={`pointer-events-none fixed left-4 right-[72px] z-30 hl:right-auto hl:left-[272px] ${
         lifted
           ? "bottom-[calc(132px+env(safe-area-inset-bottom))] hl:bottom-[88px]"
           : "bottom-[calc(68px+env(safe-area-inset-bottom))] hl:bottom-6"

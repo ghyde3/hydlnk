@@ -1,7 +1,7 @@
 import "server-only";
 import sharp from "sharp";
 import { IMAGE_PATH_PATTERN, SHARE_IMAGE_MIN_WIDTH, focusOf, imageRefSchema } from "@/lib/document";
-import { mediaOrigin, mediaUrl } from "@/lib/media/url";
+import { mediaOrigin, storageUrl } from "@/lib/media/url";
 
 /**
  * The share image (M6-32): when a page's share card has a picture, `/og` serves that picture,
@@ -81,7 +81,7 @@ export async function shareImagePng(image: unknown): Promise<Buffer | null> {
   try {
     const ref = imageRefSchema.safeParse(image);
     if (!ref.success || !IMAGE_PATH_PATTERN.test(ref.data.path)) return null;
-    const url = mediaUrl(ref.data.path);
+    const url = storageUrl(ref.data.path);
     if (new URL(url).origin !== mediaOrigin()) return null;
 
     const response = await fetch(url, {

@@ -35,7 +35,13 @@ import {
 test.describe.configure({ timeout: 120_000 });
 test.afterAll(cleanupUsers);
 
-const ADMIN_PATHS = ["/admin", "/admin/reports", "/admin/pages", "/admin/traffic"] as const;
+const ADMIN_PATHS = [
+  "/admin",
+  "/admin/reports",
+  "/admin/pages",
+  "/admin/traffic",
+  "/admin/blocked-links",
+] as const;
 
 test.describe("M5-04 admin access", () => {
   test("M5-04 signed out: every admin path redirects to sign-in", async ({}, info) => {
@@ -240,7 +246,12 @@ test.describe("M5-04 admin shell layout", () => {
     await page.goto(url("app", "/admin"));
     const nav = page.getByRole("navigation", { name: "Admin sections" });
     await expect(nav).toBeVisible();
-    await expect(nav.getByRole("link")).toHaveText(["Reports", "Pages", "Traffic"]);
+    await expect(nav.getByRole("link")).toHaveText([
+      "Reports",
+      "Pages",
+      "Traffic",
+      "Blocked links",
+    ]);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
     expect(
@@ -273,7 +284,12 @@ test.describe("M5-04 admin shell layout", () => {
       "rgb(28, 27, 26)",
     );
     const nav = sidebar.getByRole("navigation", { name: "Admin" });
-    await expect(nav.getByRole("link")).toHaveText(["Reports", "Pages", "Traffic"]);
+    await expect(nav.getByRole("link")).toHaveText([
+      "Reports",
+      "Pages",
+      "Traffic",
+      "Blocked links",
+    ]);
     await expect(nav.getByRole("link", { name: "Reports" })).toHaveAttribute(
       "aria-current",
       "page",

@@ -204,7 +204,7 @@ test.describe("M6-50 restoring", () => {
     const live = await page.request.get(url(user.handle)).catch(() => null);
     void live;
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(statusChip(page)).toHaveText("Published");

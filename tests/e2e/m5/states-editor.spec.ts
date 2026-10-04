@@ -14,6 +14,7 @@ import {
   setDraft,
   statusChip,
 } from "../m2/editor-helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /**
  * M5-15: the Editor's empty, load-failure, signed-out and publish-failure states. Phone project =
@@ -31,7 +32,7 @@ test.afterAll(cleanupUsers);
 const PROD_BUILD = process.env.E2E_PROD_BUILD === "1" || Boolean(process.env.HL_PROD_PORT);
 const NAME = (page: Page) => page.getByLabel("Display name", { exact: true });
 const publishButton = (page: Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 
 const LOAD_FAILED = "We couldn’t load your page. Try again.";
 const SIGNED_OUT = "You’ve been signed out. Sign in to keep editing.";
@@ -79,11 +80,11 @@ test.describe("M5-15 a page with nothing to show", () => {
 
     // The preview shows the profile and none of the hidden blocks.
     const phone = phoneOnly(test.info());
-    if (phone) await page.getByRole("tab", { name: "Preview" }).click();
+    if (phone) await showPreviewSheet(page);
     const preview = page.getByTestId("preview-screen");
     await expect(preview).toContainText(user.handle);
     await expect(preview).not.toContainText(label);
-    if (phone) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phone) await hidePreviewSheet(page);
 
     await publishButton(page).click();
     await expect(statusChip(page)).toHaveAttribute("data-publish-status", "published", {
@@ -266,9 +267,9 @@ test.describe("M5-15 the session ends while editing (the autosave PATCH is refus
       );
       expect(covered).toContain("Publish");
       // The Blocks | Preview control still works with the banner up.
-      await page.getByRole("tab", { name: "Preview" }).click();
+      await showPreviewSheet(page);
       await expect(page.getByTestId("preview-screen")).toBeVisible();
-      await page.getByRole("tab", { name: "Blocks" }).click();
+      await hidePreviewSheet(page);
       await expect(NAME(page)).toBeVisible();
     }
   });
@@ -399,7 +400,7 @@ test.describe("M5-15 Publish fails on the way (the Server Action answers 500 or 
     const notice = page.locator('[data-inline-notice="publish"]');
     await expect(notice).toBeVisible({ timeout: 20_000 });
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "[data-inline-notice], main > header");
+    await expectTapTargets(page, "[data-inline-notice], [data-testid='workspace-toolbar']");
     expect(await notice.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(178, 58, 43)");
     expect(await notice.evaluate((el) => getComputedStyle(el).borderTopColor)).toBe(
       "rgb(232, 196, 189)",
@@ -414,9 +415,9 @@ test.describe("M5-15 Publish fails on the way (the Server Action answers 500 or 
         { x: publish.x + publish.width / 2, y: publish.y + publish.height / 2 },
       );
       expect(top).toContain("Publish");
-      await page.getByRole("tab", { name: "Preview" }).click();
+      await showPreviewSheet(page);
       await expect(page.getByTestId("preview-screen")).toBeVisible();
-      await page.getByRole("tab", { name: "Blocks" }).click();
+      await hidePreviewSheet(page);
     }
     if (desktopOnly(test.info())) {
       // Desktop: the banner is a column no wider than the editing column (720px), left aligned with it.

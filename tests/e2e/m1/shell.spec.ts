@@ -22,17 +22,29 @@ import { sessionOf } from "../fixtures/http";
 
 test.afterAll(cleanupUsers);
 
+// M7-01: the sidebar holds Editor (which covers the Design and Share tabs), Analytics and Domains;
+// Settings & billing is in the account menu. The phone bar has Editor, Stats, Domains and Account.
 const ROUTES = [
   { path: "/editor", label: "Editor", tab: "Editor", title: "Editor — HYDLNK" },
-  { path: "/design", label: "Design", tab: "Design", title: "Design — HYDLNK" },
   { path: "/analytics", label: "Analytics", tab: "Stats", title: "Analytics — HYDLNK" },
   { path: "/domains", label: "Domains", tab: "Domains", title: "Domains — HYDLNK" },
-  {
-    path: "/settings",
-    label: "Settings & billing",
-    tab: "Account",
-    title: "Settings & billing — HYDLNK",
-  },
+] as const;
+
+/** Every screen of the shell and the tab-bar item that is current on it (the sidebar's differs only on /settings). */
+const SCREENS = [
+  { path: "/editor", tab: "Editor" },
+  { path: "/design", tab: "Editor" },
+  { path: "/share", tab: "Editor" },
+  { path: "/analytics", tab: "Stats" },
+  { path: "/domains", tab: "Domains" },
+  { path: "/settings", tab: "Account" },
+] as const;
+
+const TAB_LINKS = [
+  { path: "/editor", tab: "Editor" },
+  { path: "/analytics", tab: "Stats" },
+  { path: "/domains", tab: "Domains" },
+  { path: "/settings", tab: "Account" },
 ] as const;
 
 /**
@@ -119,7 +131,8 @@ test.describe("M1-16 app shell: desktop sidebar and screen frame", () => {
   }, info) => {
     test.skip(!desktopOnly(info), "desktop layout");
     await signedInUser(context, { label: "sh" });
-    await page.goto(url("app", "/editor"));
+    // The workspace's toolbar (M7-05) replaced the editor's header bar; Analytics keeps the screen header.
+    await page.goto(url("app", "/analytics"));
 
     const header = page.locator("main > header");
     expect(await css(header, "background-color")).toBe("rgb(255, 255, 255)");
@@ -148,6 +161,15 @@ test.describe("M1-16 app shell: desktop sidebar and screen frame", () => {
       await expect(nav.locator("a[aria-current='page']")).toHaveText(route.label);
       await expect(nav.locator("a[aria-current='page']")).toHaveCount(1);
     }
+
+    // M7-01: Editor is current on every workspace tab and on version history; nothing is on /settings.
+    for (const path of ["/design", "/share", "/editor/history"]) {
+      await page.goto(url("app", path));
+      await expect(nav.locator("a[aria-current='page']")).toHaveText("Editor");
+      await expect(nav.locator("a[aria-current='page']")).toHaveCount(1);
+    }
+    await page.goto(url("app", "/settings"));
+    await expect(nav.locator("a[aria-current='page']")).toHaveCount(0);
   });
 
   test("M1-16 breakpoint: sidebar at 760px, phone shell at 759px", async ({
@@ -229,11 +251,11 @@ test.describe("M1-16 app shell: desktop sidebar and screen frame", () => {
 });
 
 test.describe("M1-17 app shell: phone top bar and bottom tab bar", () => {
-  test("M1-17 top bar and tab bar on all five screens", async ({ page, context }, info) => {
+  test("M1-17 top bar and tab bar on every screen", async ({ page, context }, info) => {
     test.skip(!phoneOnly(info), "phone layout");
     await signedInUser(context, { label: "sh" });
 
-    for (const route of ROUTES) {
+    for (const route of SCREENS) {
       await page.goto(url("app", route.path));
       await expect(page.getByRole("complementary")).toBeHidden();
 
@@ -264,8 +286,8 @@ test.describe("M1-17 app shell: phone top bar and bottom tab bar", () => {
       expect(await css(tabs, "border-top-width")).toBe("1px");
       expect(await css(tabs, "border-top-color")).toBe(LINE);
       const links = tabs.getByRole("link");
-      await expect(links).toHaveText(ROUTES.map((r) => r.tab));
-      for (const [index, r] of ROUTES.entries()) {
+      await expect(links).toHaveText(TAB_LINKS.map((r) => r.tab));
+      for (const [index, r] of TAB_LINKS.entries()) {
         const link = links.nth(index);
         await expect(link).toHaveAttribute("href", r.path);
         const box = (await link.boundingBox())!;
@@ -343,7 +365,7 @@ test.describe("M1-17 app shell: phone top bar and bottom tab bar", () => {
     await signedInUser(context, { label: "sh" });
     await page.goto(url("app", "/editor"));
     const tabs = page.getByRole("navigation", { name: "App sections" });
-    for (const route of ROUTES) {
+    for (const route of TAB_LINKS) {
       await tap(tabs.getByRole("link", { name: route.tab }));
       await expect(page).toHaveURL(url("app", route.path));
       await expect(tabs.locator("a[aria-current='page']")).toHaveText(route.tab);
@@ -351,13 +373,13 @@ test.describe("M1-17 app shell: phone top bar and bottom tab bar", () => {
     }
   });
 
-  test("M1-17 phone: no horizontal scroll and 44px targets on all five routes", async ({
+  test("M1-17 phone: no horizontal scroll and 44px targets on every screen", async ({
     page,
     context,
   }, info) => {
     test.skip(!phoneOnly(info), "phone layout");
     await signedInUser(context, { label: "sh" });
-    for (const route of ROUTES) {
+    for (const route of SCREENS) {
       await page.goto(url("app", route.path));
       await expectNoHorizontalScroll(page);
       await expectTapTargets(page);
@@ -518,7 +540,13 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     const secondHandle = `zq-cp2-${rand()}`;
     const secondId = await addPage(user.userId, secondHandle);
     await page.goto(url("app", "/editor"));
-    await expect(page.locator("main > header p")).toHaveText(`${user.handle}.hydlnk.com`);
+    // The workspace's toolbar (M7-05) shows the page's address above its name.
+    const shown = (handle: string) =>
+      page
+        .locator("main")
+        .getByText(`${handle}.hydlnk.com`, { exact: true })
+        .filter({ visible: true });
+    await expect(shown(user.handle).first()).toBeVisible();
 
     const button = switcher(page);
     await button.click();
@@ -527,7 +555,8 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
       "aria-label",
       `Switch page, current: ${secondHandle}.hydlnk.com`,
     );
-    await expect(page.locator("main > header p")).toHaveText(`${secondHandle}.hydlnk.com`);
+    await expect(shown(secondHandle).first()).toBeVisible();
+    await expect(shown(user.handle)).toHaveCount(0);
 
     const cookie = (await context.cookies(url("app"))).find((c) => c.name === "hl-page")!;
     expect(cookie.value).toBe(secondId);

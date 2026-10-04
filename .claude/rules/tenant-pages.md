@@ -18,7 +18,7 @@ Tenant pages are a separate design system from the HYDLNK UI. Tenant content is 
 
 **Published only**
 
-- A public page renders `published` and nothing else, through a server-only query with the secret key (`createAdminSupabase`, `import "server-only"`). Never read `draft` on a public path. There is no public select on `pages`. The one exception is not a tenant path: the private share link `/share/{token}` on the app host (`src/app/(editor)/app/share`, M6-10) reads the saved draft with the secret key through `src/lib/previews/shared.ts`, by an unguessable, expiring, revocable link (docs/PLAN.md, Decided). Nothing under `(tenant)`, `(marketing)` or `src/components/tenant` ever selects `draft`; tests/unit/m6-pages-static.test.ts enforces it.
+- A public page renders `published` and nothing else, through a server-only query with the secret key (`createAdminSupabase`, `import "server-only"`). Never read `draft` on a public path. There is no public select on `pages`. The one exception is not a tenant path: the private share link `/share/{token}` on the app host (`src/app/(share)/app/shared-draft`, M6-10) reads the saved draft with the secret key through `src/lib/previews/shared.ts`, by an unguessable, expiring, revocable link (docs/PLAN.md, Decided). Nothing under `(tenant)`, `(marketing)` or `src/components/tenant` ever selects `draft`; tests/unit/m6-pages-static.test.ts enforces it.
 - Render the frozen `published.tokens` (the fully resolved token set `toPublishForm` wrote at Publish). Do not re-resolve against the live theme row, so editing a theme never changes a live page until it is republished.
 - Pages are static and cached with a per-page cache tag. Publish invalidates it with `updateTag`.
 
@@ -28,6 +28,7 @@ Tenant pages are a separate design system from the HYDLNK UI. Tenant content is 
 - Render all text as React text. Never `dangerouslySetInnerHTML`, never a tenant string in an `href` without validation.
 - Embeds only from the allowlist (YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music, Twitch; M6-26). Build the iframe `src` from `parseEmbed(url).src` (rebuilt from the parsed id), never from the raw URL. Twitch's `parent` comes from `location.hostname` at tap time.
 - Fonts only from `FONT_ALLOWLIST`. Background and image URLs are validated and escaped before use in CSS.
+- Tenant images are served from the page's own address at `/media/{uid}/{file}` (`mediaUrl`; cached by the CDN and fetched from Storage once per host and region), with Storage as the origin: documents and themes keep the Storage URL (`storageUrl`), and the server's own fetches (OG images, the Undo check) go to Storage directly.
 - Outbound links go through `/r/[pageId]/[blockId]` and carry `rel="noopener noreferrer"`.
 - Tenant pages never read or set cookies and never import editor code from `src/app/(editor)/**`.
 - Every public page has the report link; Free pages show the "Made with HYDLNK" badge.

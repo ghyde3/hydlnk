@@ -272,7 +272,7 @@ describe("M6-47 the five groups", () => {
 
   it("the preview says a block's own style still wins", () => {
     const source = readFileSync(
-      resolve(process.cwd(), "src/components/design/design-preview.tsx"),
+      resolve(process.cwd(), "src/components/workspace/workspace-preview.tsx"),
       "utf8",
     );
     expect(source).toContain("A block’s own style still wins");

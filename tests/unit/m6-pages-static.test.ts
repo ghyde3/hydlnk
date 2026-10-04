@@ -68,7 +68,7 @@ describe("M6-10 isolation: nothing public reads a draft", () => {
     const importsLoader = [...ungated, ...walk("src/app/(share)")].filter((file) =>
       read(file).includes("@/lib/previews/shared"),
     );
-    expect(importsLoader).toEqual(["src/app/(share)/app/share/page.tsx"]);
+    expect(importsLoader).toEqual(["src/app/(share)/app/shared-draft/page.tsx"]);
 
     const previewLibs = walk("src/lib/previews").filter((file) =>
       selectArguments(read(file)).some((argument) => /\bdraft\b/.test(argument)),
@@ -129,8 +129,10 @@ describe("M6-09 the share feature's server code", () => {
         /@\/lib\/supabase\/admin|@\/lib\/env\/server|SUPABASE_SECRET_KEY/,
       );
     }
-    // The dialog reaches the server only through the actions module.
-    expect(read("src/components/previews/share-preview.tsx")).toContain("@/lib/previews/actions");
+    // The Share tab's card (M7-04, which replaced the dialog) reaches the server only through the actions module.
+    expect(read("src/components/workspace/share/preview-links-card.tsx")).toContain(
+      "@/lib/previews/actions",
+    );
   });
 
   it("the proxy half has no server-only import and no secret-key client (the proxy bundle cannot load them)", () => {
@@ -178,7 +180,7 @@ describe("M6-09 the share feature's server code", () => {
 
 describe("M6-10 the share route", () => {
   it("is dynamic, has no OG or Twitter tags and is not indexed", () => {
-    const source = read("src/app/(share)/app/share/page.tsx");
+    const source = read("src/app/(share)/app/shared-draft/page.tsx");
     expect(source).toContain('export const dynamic = "force-dynamic"');
     expect(source).toMatch(/robots = \{ index: false, follow: false \}/);
     expect(source).not.toMatch(/openGraph|twitter/);
@@ -186,7 +188,7 @@ describe("M6-10 the share route", () => {
 
   it("renders no view beacon and no tenant page wrapper", () => {
     for (const file of [
-      "src/app/(share)/app/share/page.tsx",
+      "src/app/(share)/app/shared-draft/page.tsx",
       "src/app/(editor)/app/preview/[pageId]/page.tsx",
     ]) {
       const source = read(file);
@@ -256,7 +258,7 @@ describe("M6-10 the share route ships nothing of the signed-in app", () => {
     "src/app/(share)/layout.tsx",
     "src/app/(share)/not-found.tsx",
     "src/app/(share)/error.tsx",
-    "src/app/(share)/app/share/page.tsx",
+    "src/app/(share)/app/shared-draft/page.tsx",
   ];
   const graph = [...reachable(entries)];
 
@@ -285,8 +287,10 @@ describe("M6-10 the share route ships nothing of the signed-in app", () => {
     expect(code("src/components/editor/status-chip.tsx")).not.toMatch(
       /components\/editor|supabase/,
     );
-    // The header uses the same chip.
-    expect(code("src/components/editor/editor-header.tsx")).toContain('from "./status-chip"');
+    // The workspace toolbar (M7-05, which replaced the editor header) uses the same chip.
+    expect(code("src/components/workspace/toolbar/workspace-toolbar.tsx")).toContain(
+      "@/components/editor/status-chip",
+    );
   });
 
   it("is a route group of its own, with its own root layout, 404 and error page; none reads a session", () => {

@@ -23,7 +23,7 @@ test.afterAll(cleanupUsers);
 test.describe.configure({ timeout: 150_000 });
 
 const publish = (page: import("@playwright/test").Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 
 /**
  * A different bio in the draft, then one real Publish click. The draft is written the way autosave

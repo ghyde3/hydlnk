@@ -11,4 +11,15 @@ export {
   type TemplateBlock,
   type TemplateId,
 } from "./catalog";
-export { applyTemplate, buildTemplateBlocks, templateNeedsConfirmation } from "./build";
+export {
+  TEMPLATE_STYLES,
+  applyTemplate,
+  buildTemplateBlocks,
+  defaultTemplateStyle,
+  isTemplateStyle,
+  templateNeedsConfirmation,
+  type TemplateStyle,
+} from "./build";
+export { describeTemplate } from "./describe";
+export { templateFontStylesheetUrl } from "./fonts";
+export { templatePreviewDoc } from "./preview";

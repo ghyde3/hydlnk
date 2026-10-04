@@ -29,7 +29,8 @@ const get = (host: string, path = "/", opts: Parameters<typeof rawRequest>[2] = 
  * markers and the metadata that `next dev` may stream into the body differ by timing, not content.
  */
 const markup = (html: string): string =>
-  /<div class="pg-root"[\s\S]*?<\/footer><\/div><\/div>/.exec(html)?.[0] ?? `NO PAGE MARKUP: ${html.slice(0, 200)}`;
+  /<div class="pg-root"[\s\S]*?<\/footer><\/div><\/div>/.exec(html)?.[0] ??
+  `NO PAGE MARKUP: ${html.slice(0, 200)}`;
 
 let site: Site;
 let live: string; // a verified domain of the published page
@@ -50,7 +51,10 @@ test.beforeAll(async ({}, info) => {
   // A verified domain whose page has nothing published: a draft never leaks.
   draftSite = await makeSite("rtd");
   const admin = adminClient();
-  await admin.from("pages").update({ published: null, published_at: null }).eq("id", draftSite.pageId);
+  await admin
+    .from("pages")
+    .update({ published: null, published_at: null })
+    .eq("id", draftSite.pageId);
   await addDomainRow({ pageId: draftSite.pageId, hostname: draftHost, status: "verified" });
   // A verified row for a *.vercel.app hostname (the validator refuses to add one; a direct insert shows the proxy never honours it).
   await addDomainRow({ pageId: site.pageId, hostname: vercelAppHost, status: "verified" });
@@ -90,7 +94,13 @@ test.describe("M4-09 a verified domain serves its published page", () => {
 
   test("M4-09 host matching ignores case, port and a trailing dot", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
-    const spellings = [live.toUpperCase(), `${live}:3000`, `${live.toUpperCase()}:3000`, `${live}.`, `${live}.:3000`];
+    const spellings = [
+      live.toUpperCase(),
+      `${live}:3000`,
+      `${live.toUpperCase()}:3000`,
+      `${live}.`,
+      `${live}.:3000`,
+    ];
     for (const host of spellings) {
       const res = await get(host);
       expect(res.status, host).toBe(200);
@@ -143,7 +153,13 @@ test.describe("M4-09 everything else is the generic 404 with no tenant data", ()
 
   test("M4-09 other hosts that are not domains: IPs, garbage and the bare name", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
-    for (const host of ["203.0.113.5", "203.0.113.5:3000", "localhost.example", "a_b.example.test", "xn--bcher-kva.example"]) {
+    for (const host of [
+      "203.0.113.5",
+      "203.0.113.5:3000",
+      "localhost.example",
+      "a_b.example.test",
+      "xn--bcher-kva.example",
+    ]) {
       const res = await get(host);
       expect(res.status, host).toBe(404);
       expect(res.body, host).not.toContain(site.name);
@@ -155,8 +171,23 @@ test.describe("M4-09 the internal route is unreachable directly", () => {
   test("M4-09 GET /sites/<page id> is a 404 on every host, in every spelling", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const id = site.pageId;
-    const hosts = ["localhost:3000", "app.localhost:3000", `${site.handle}.localhost:3000`, "mara.localhost:3000", live, hostnameFor("none")];
-    const paths = [`/sites/${id}`, `/sites/${id}/og`, `/sites/${id}.txt`, `/%73ites/${id}`, `/sites/${id.toUpperCase()}`, `/sites/${id}/x`, `/sites/${draftSite.pageId}`];
+    const hosts = [
+      "localhost:3000",
+      "app.localhost:3000",
+      `${site.handle}.localhost:3000`,
+      "mara.localhost:3000",
+      live,
+      hostnameFor("none"),
+    ];
+    const paths = [
+      `/sites/${id}`,
+      `/sites/${id}/og`,
+      `/sites/${id}.txt`,
+      `/%73ites/${id}`,
+      `/sites/${id.toUpperCase()}`,
+      `/sites/${id}/x`,
+      `/sites/${draftSite.pageId}`,
+    ];
     for (const host of hosts) {
       for (const path of paths) {
         const res = await get(host, path);
@@ -171,10 +202,31 @@ test.describe("M4-09 a custom host serves the page, its OG image, /r/*, /api/e a
   test("M4-09 /login /signup /settings /domains /analytics /auth/callback /api/stripe/webhook and /anything-else are 404 with no Set-Cookie, even with an sb-* cookie", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const cookie = "sb-127-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJ4In0; sb-127-auth-token.0=x";
-    const paths = ["/login", "/signup", "/settings", "/domains", "/analytics", "/auth/callback", "/api/stripe/webhook", "/api/cron/verify-domains", `/api/domains/${site.pageId}`, "/editor", "/admin", "/anything-else", "/app", "/t/mara"];
+    const paths = [
+      "/login",
+      "/signup",
+      "/settings",
+      "/domains",
+      "/analytics",
+      "/auth/callback",
+      "/api/stripe/webhook",
+      "/api/cron/verify-domains",
+      `/api/domains/${site.pageId}`,
+      "/editor",
+      "/admin",
+      "/anything-else",
+      "/app",
+      "/t/mara",
+    ];
     for (const method of ["GET", "POST"]) {
       for (const path of paths) {
-        const res = await get(live, path, { cookie, method, ...(method === "POST" ? { body: "{}", headers: { "content-type": "application/json" } } : {}) });
+        const res = await get(live, path, {
+          cookie,
+          method,
+          ...(method === "POST"
+            ? { body: "{}", headers: { "content-type": "application/json" } }
+            : {}),
+        });
         expect(res.status, `${method} ${path}`).toBe(404);
         expect(res.setCookies, `${method} ${path}`).toEqual([]);
         expect(res.body, `${method} ${path}`).not.toContain(site.name);
@@ -218,7 +270,13 @@ test.describe("M4-09 a static-looking path cannot slip past the proxy's host che
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const id = "0b0e1f2a-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
     const cookie = "sb-127-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJ4In0";
-    const hosts = ["localhost:3000", `${site.handle}.localhost:3000`, "mara.localhost:3000", live, hostnameFor("none")];
+    const hosts = [
+      "localhost:3000",
+      `${site.handle}.localhost:3000`,
+      "mara.localhost:3000",
+      live,
+      hostnameFor("none"),
+    ];
     for (const host of hosts) {
       for (const ext of ["png", "css", "js", "svg", "json.png"]) {
         for (const method of ["GET", "POST", "DELETE"]) {
@@ -227,7 +285,11 @@ test.describe("M4-09 a static-looking path cannot slip past the proxy's host che
           expect(res.setCookies, `${host} .${ext}`).toEqual([]);
         }
       }
-      for (const path of [`/app/x.png`, `/t/${site.handle}/x.webp`, `/sites/${site.pageId}/x.png`]) {
+      for (const path of [
+        `/app/x.png`,
+        `/t/${site.handle}/x.webp`,
+        `/sites/${site.pageId}/x.png`,
+      ]) {
         expect((await get(host, path, { cookie })).status, `${host} ${path}`).toBe(404);
       }
     }
@@ -235,13 +297,19 @@ test.describe("M4-09 a static-looking path cannot slip past the proxy's host che
     const asset = await get("localhost:3000", "/marketing/demo/fennmoor-image.webp");
     expect(asset.status).toBe(200);
     expect(String(asset.headers["content-type"])).toMatch(/image\/webp/);
-    const onTenant = await get(`${site.handle}.localhost:3000`, "/marketing/demo/fennmoor-image.webp");
+    const onTenant = await get(
+      `${site.handle}.localhost:3000`,
+      "/marketing/demo/fennmoor-image.webp",
+    );
     expect(onTenant.status).toBe(200);
   });
 });
 
 test.describe("M4-09 changes show at the next request", () => {
-  test("M4-09 publishing a new display name shows on the custom host and the handle host at the same time", async ({ page, context }, info) => {
+  test("M4-09 publishing a new display name shows on the custom host and the handle host at the same time", async ({
+    page,
+    context,
+  }, info) => {
     test.skip(!desktopOnly(info), "one editor flow: one project is enough");
     const owner = await signedInUser(context, { label: "rtp", plan: "studio" });
     const host = hostnameFor("pub");
@@ -252,7 +320,10 @@ test.describe("M4-09 changes show at the next request", () => {
     const nameField = page.getByLabel("Display name", { exact: true });
     await expect(nameField).toBeVisible();
     await nameField.fill(newName);
-    await page.locator("main > header").getByRole("button", { name: "Publish", exact: true }).click();
+    await page
+      .getByTestId("workspace-toolbar")
+      .getByRole("button", { name: "Publish", exact: true })
+      .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
 
     // The very next requests: no deploy, no wait.
@@ -271,14 +342,18 @@ test.describe("M4-09 changes show at the next request", () => {
     expect((await get(host)).status).toBe(404);
 
     const admin = adminClient();
-    await admin.from("domains").update({ status: "verified", verified_at: new Date().toISOString() }).eq("id", id);
+    await admin
+      .from("domains")
+      .update({ status: "verified", verified_at: new Date().toISOString() })
+      .eq("id", id);
     const live1 = await get(host);
     expect(live1.status).toBe(200);
     expect(live1.body).toContain(site.name);
 
     // Re-pointed at another page of the same account.
     await admin.from("domains").update({ page_id: other }).eq("id", id);
-    const otherName = (await admin.from("pages").select("published").eq("id", other).single()).data!.published as { profile: { name: string } };
+    const otherName = (await admin.from("pages").select("published").eq("id", other).single()).data!
+      .published as { profile: { name: string } };
     const live2 = await get(host);
     expect(live2.body).toContain(otherName.profile.name);
     expect(live2.body).not.toContain(site.name);
@@ -299,7 +374,10 @@ test.describe("M4-09 changes show at the next request", () => {
     expect((await get(host)).status).toBe(200);
 
     const admin = adminClient();
-    await admin.from("accounts").update({ suspended_at: new Date().toISOString() }).eq("id", s.user.id);
+    await admin
+      .from("accounts")
+      .update({ suspended_at: new Date().toISOString() })
+      .eq("id", s.user.id);
     const suspended = await get(host);
     expect(suspended.status).toBe(404);
     expect(suspended.body).not.toContain(s.name);
@@ -308,13 +386,17 @@ test.describe("M4-09 changes show at the next request", () => {
   });
 });
 
-test("M4-09 sanity: the sign-in session of an owner never reaches a custom host", async ({ context }, info) => {
+test("M4-09 sanity: the sign-in session of an owner never reaches a custom host", async ({
+  context,
+}, info) => {
   test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
   void makeUser;
   const owner = await signedInUser(context, { label: "rtc", plan: "studio" });
   const host = hostnameFor("ck");
   await addDomainRow({ pageId: owner.pageId, hostname: host, status: "verified" });
-  const cookies = (await context.cookies("http://app.localhost:3000")).map((c) => `${c.name}=${c.value}`).join("; ");
+  const cookies = (await context.cookies("http://app.localhost:3000"))
+    .map((c) => `${c.name}=${c.value}`)
+    .join("; ");
   expect(cookies).toMatch(/sb-/);
   const res = await get(host, "/", { cookie: cookies });
   expect(res.status).toBe(200);

@@ -3,18 +3,11 @@
 import Link from "next/link";
 import { useSelectedLayoutSegment } from "next/navigation";
 import type { ReactNode } from "react";
-import {
-  AccountIcon,
-  AnalyticsIcon,
-  BillingIcon,
-  DesignIcon,
-  DomainsIcon,
-  EditorIcon,
-} from "./icons";
+import { AccountIcon, AnalyticsIcon, DomainsIcon, EditorIcon } from "./icons";
+import { navKeyForSegment, type NavKey } from "./nav-items";
 
 interface NavItem {
-  /** First path segment under the app host: /editor -> "editor". */
-  segment: string;
+  key: NavKey;
   href: string;
   label: string;
   tabLabel: string;
@@ -22,62 +15,59 @@ interface NavItem {
   tabIcon: ReactNode;
 }
 
-const ITEMS: readonly NavItem[] = [
-  {
-    segment: "editor",
-    href: "/editor",
-    label: "Editor",
-    tabLabel: "Editor",
-    sidebarIcon: <EditorIcon size={16} />,
-    tabIcon: <EditorIcon size={20} />,
-  },
-  {
-    segment: "design",
-    href: "/design",
-    label: "Design",
-    tabLabel: "Design",
-    sidebarIcon: <DesignIcon size={16} />,
-    tabIcon: <DesignIcon size={20} />,
-  },
-  {
-    segment: "analytics",
-    href: "/analytics",
-    label: "Analytics",
-    tabLabel: "Stats",
-    sidebarIcon: <AnalyticsIcon size={16} />,
-    tabIcon: <AnalyticsIcon size={20} />,
-  },
-  {
-    segment: "domains",
-    href: "/domains",
-    label: "Domains",
-    tabLabel: "Domains",
-    sidebarIcon: <DomainsIcon size={16} />,
-    tabIcon: <DomainsIcon size={20} />,
-  },
-  {
-    segment: "settings",
-    href: "/settings",
-    label: "Settings & billing",
-    tabLabel: "Account",
-    sidebarIcon: <BillingIcon size={16} />,
-    tabIcon: <AccountIcon size={20} />,
-  },
-];
+const EDITOR: NavItem = {
+  key: "editor",
+  href: "/editor",
+  label: "Editor",
+  tabLabel: "Editor",
+  sidebarIcon: <EditorIcon size={16} />,
+  tabIcon: <EditorIcon size={20} />,
+};
+const ANALYTICS: NavItem = {
+  key: "analytics",
+  href: "/analytics",
+  label: "Analytics",
+  tabLabel: "Stats",
+  sidebarIcon: <AnalyticsIcon size={16} />,
+  tabIcon: <AnalyticsIcon size={20} />,
+};
+const DOMAINS: NavItem = {
+  key: "domains",
+  href: "/domains",
+  label: "Domains",
+  tabLabel: "Domains",
+  sidebarIcon: <DomainsIcon size={16} />,
+  tabIcon: <DomainsIcon size={20} />,
+};
+/** Phone only: "Settings & billing" is in the account menu on desktop (M7-01). */
+const ACCOUNT: NavItem = {
+  key: "settings",
+  href: "/settings",
+  label: "Settings & billing",
+  tabLabel: "Account",
+  sidebarIcon: <AccountIcon size={16} />,
+  tabIcon: <AccountIcon size={20} />,
+};
+
+/** The sidebar: Editor (one item for Edit, Design and Share), Analytics and Domains. */
+const SIDEBAR_ITEMS: readonly NavItem[] = [EDITOR, ANALYTICS, DOMAINS];
+/** The phone tab bar: Editor, Stats, Domains and Account (settings). */
+const TAB_ITEMS: readonly NavItem[] = [EDITOR, ANALYTICS, DOMAINS, ACCOUNT];
 
 /*
  * The current screen comes from the route segment below the (screens) layout, not from the URL
  * text: it is the same on the app host (where the proxy rewrites /editor to /app/editor), after a
- * redirect, and for any sub-route a screen grows later (/editor/anything is still "editor").
+ * redirect, and for any sub-route a screen grows later. See ./nav-items.ts for the mapping (the
+ * workspace's route group reports its own name).
  */
 
 /** Desktop sidebar navigation (>= 760px). */
 export function SidebarNav() {
-  const current = useSelectedLayoutSegment();
+  const current = navKeyForSegment(useSelectedLayoutSegment());
   return (
     <nav aria-label="App" className="flex flex-col gap-0.5">
-      {ITEMS.map((item) => {
-        const active = item.segment === current;
+      {SIDEBAR_ITEMS.map((item) => {
+        const active = item.key === current;
         return (
           <Link
             key={item.href}
@@ -98,16 +88,16 @@ export function SidebarNav() {
   );
 }
 
-/** Phone bottom tab bar (< 760px): fixed, five tabs, current one marked with a brass top edge. */
+/** Phone bottom tab bar (< 760px): fixed, four tabs, current one marked with a brass top edge. */
 export function TabBar() {
-  const current = useSelectedLayoutSegment();
+  const current = navKeyForSegment(useSelectedLayoutSegment());
   return (
     <nav
       aria-label="App sections"
       className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-surface px-1 pb-[env(safe-area-inset-bottom)] hl:hidden"
     >
-      {ITEMS.map((item) => {
-        const active = item.segment === current;
+      {TAB_ITEMS.map((item) => {
+        const active = item.key === current;
         return (
           <Link
             key={item.href}

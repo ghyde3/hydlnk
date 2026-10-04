@@ -6,22 +6,23 @@ import { draftOf, userWithDraft, type TestPage } from "../m2/blocks-helpers";
 import { openEditor, previewScreen } from "../m2/editor-helpers";
 
 /**
- * Shared setup for the preview specs (M6-01 .. M6-03): the dock, the Back to blocks bar, the tab
- * bar, the thumbnail, and users whose draft holds blocks of our choosing. Every test makes its own
- * user (the phone and desktop projects run at once).
+ * Shared setup for the preview specs (M6-03, M7-09): the tab bar, the mini phone and its sheet, and
+ * users whose draft holds blocks of our choosing. Every test makes its own user (the phone and
+ * desktop projects run at once). The 96px dock, the Back to blocks bar and the phone's
+ * Blocks | Preview tabs of M6-01 and M6-02 are gone (M7-09): the mini phone opens a full-size sheet.
  */
 
 export { openEditor, previewScreen };
 
-export const dock = (page: Page): Locator =>
-  page.getByRole("button", { name: "Open full-size preview" });
-export const backBar = (page: Page): Locator =>
-  page.getByRole("button", { name: "Back to blocks" });
+/** The mini phone (M7-09), the phone's one way to the full-size preview. */
+export const miniPhone = (page: Page): Locator => page.getByTestId("mini-phone");
+/** The full-size preview sheet it opens. */
+export const sheet = (page: Page): Locator => page.getByRole("dialog", { name: "Live preview" });
+export const closeSheet = (page: Page): Locator =>
+  page.getByRole("button", { name: "Close preview" });
 export const tabBar = (page: Page): Locator =>
   page.getByRole("navigation", { name: "App sections" });
 export const thumbnail = (page: Page): Locator => page.getByTestId("mini-preview");
-export const blocksTab = (page: Page): Locator => page.getByRole("tab", { name: "Blocks" });
-export const previewTab = (page: Page): Locator => page.getByRole("tab", { name: "Preview" });
 export const nameInput = (page: Page): Locator => page.getByLabel("Display name", { exact: true });
 export const rowOf = (page: Page, blockId: string): Locator =>
   page.locator(`li[data-block-id="${blockId}"]`);

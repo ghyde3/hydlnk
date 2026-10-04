@@ -52,13 +52,26 @@ function untouchedDeps() {
   return { makeDeps, touched };
 }
 
+/**
+ * An input each action accepts as valid (it reaches the database): the id of the thing acted on, or
+ * for the blocked-links actions (M7-12) the domain, and the reason when there is one.
+ */
+const validInput = (action: AdminAction): unknown =>
+  action.name === "block_domain"
+    ? { domain: "example.test", reason: "spam" }
+    : action.name === "unblock_domain"
+      ? { domain: "example.test" }
+      : { id: TARGET };
+
 describe("M5-04 the registry", () => {
-  it("lists the four admin mutations, with unique names", () => {
+  it("lists the six admin mutations, with unique names", () => {
     const names = ADMIN_ACTIONS.map((action) => action.name);
     expect(names.sort()).toEqual([
+      "block_domain",
       "dismiss_report",
       "review_traffic_flag",
       "suspend_account",
+      "unblock_domain",
       "unsuspend_account",
     ]);
     expect(new Set(names).size).toBe(names.length);
@@ -68,7 +81,15 @@ describe("M5-04 the registry", () => {
     "%s: nobody signed in gets 401 and no database is built or touched",
     async (_name, action) => {
       const { makeDeps, touched } = untouchedDeps();
-      for (const input of [{ id: TARGET }, {}, null, "x", { id: ["a"] }]) {
+      for (const input of [
+        { id: TARGET },
+        validInput(action),
+        { domain: "example.test", reason: "spam" },
+        {},
+        null,
+        "x",
+        { id: ["a"] },
+      ]) {
         const result = await executeAdminAction(action, ANONYMOUS, input, makeDeps);
         expect(result).toMatchObject({ ok: false, status: 401, error: "unauthenticated" });
       }
@@ -84,6 +105,8 @@ describe("M5-04 the registry", () => {
       for (const input of [
         { id: TARGET },
         { id: NON_ADMIN.id },
+        validInput(action),
+        { domain: "example.test", reason: "spam" },
         {},
         null,
         "x",
@@ -98,16 +121,16 @@ describe("M5-04 the registry", () => {
   );
 
   it.each(ADMIN_ACTIONS.map((action) => [action.name, action] as const))(
-    "%s: an admin gets past the guard (the database is built) and a bad id is a 400, not a crash",
+    "%s: an admin gets past the guard (the database is built) and a bad input is a 400, not a crash",
     async (_name, action) => {
       const { makeDeps } = untouchedDeps();
       for (const input of [{}, null, "x", { id: "not-a-uuid" }, { id: 5 }, { id: ["a"] }]) {
         const result = await executeAdminAction(action, ADMIN, input, makeDeps);
         expect(result).toMatchObject({ ok: false, status: 400, error: "invalid_input" });
       }
-      // A valid id reaches the database, which here throws: the guard answers 500 and leaks nothing.
+      // A valid input reaches the database, which here throws: the guard answers 500 and leaks nothing.
       const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-      const result = await executeAdminAction(action, ADMIN, { id: TARGET }, makeDeps);
+      const result = await executeAdminAction(action, ADMIN, validInput(action), makeDeps);
       spy.mockRestore();
       expect(makeDeps).toHaveBeenCalled();
       expect(result).toMatchObject({ ok: false, status: 500, error: "action_failed" });

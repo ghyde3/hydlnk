@@ -30,7 +30,7 @@ test.describe.configure({ timeout: 180_000 });
 
 const HOSTILE = "#FFF;}</style><script>window.__x=1</script>";
 const publishButton = (page: Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 
 const header = (id: string, text: string, overrides?: Record<string, unknown>) => ({
   id,

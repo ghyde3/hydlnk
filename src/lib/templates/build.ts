@@ -81,26 +81,57 @@ export function buildTemplateBlocks(template: Template, taken: Set<string> = new
 }
 
 /**
- * The draft with the template applied: its blocks replace the page's blocks, its theme becomes the
- * page's theme with no page-level overrides, and its sample bio is set when the page's bio is
- * empty. Nothing else changes: not the display name, not the photo or any profile option, not the
- * share settings, not `rev`. Never adds to the blocks, so the page can never go past 50.
+ * The one choice an apply asks for (M7-08): `"template"` takes the template's blocks and its theme
+ * (the theme becomes the page's, with no page-level overrides); `"keep"` takes the blocks only and
+ * leaves the page's own style (the theme reference and the overrides) exactly as it was.
  */
-export function applyTemplate(draft: DraftDoc, template: Template): DraftDoc {
+export type TemplateStyle = "template" | "keep";
+
+export const TEMPLATE_STYLES: readonly TemplateStyle[] = ["template", "keep"];
+
+/** Whether a value is one of the two styles. The reducer refuses anything else. */
+export function isTemplateStyle(value: unknown): value is TemplateStyle {
+  return value === "template" || value === "keep";
+}
+
+/**
+ * The draft with the template applied: its blocks replace the page's blocks, and its sample bio is
+ * set when the page's bio is empty. With `style` `"template"` (the default) its theme also becomes
+ * the page's theme with no page-level overrides; with `"keep"` the page's `theme` is left alone.
+ * Nothing else changes: not the display name, not the photo or any profile option, not the share
+ * settings, not `rev`. Never adds to the blocks, so the page can never go past 50.
+ */
+export function applyTemplate(
+  draft: DraftDoc,
+  template: Template,
+  style: TemplateStyle = "template",
+): DraftDoc {
   const blocks = buildTemplateBlocks(template, collectIds(draft));
   const writeBio = draft.profile.bio.trim() === "";
   return {
     ...draft,
     profile: writeBio ? { ...draft.profile, bio: template.bio } : draft.profile,
-    theme: { ref: template.theme.id, overrides: {} },
+    theme: style === "keep" ? draft.theme : { ref: template.theme.id, overrides: {} },
     blocks,
   };
 }
 
 /**
+ * Which style is selected when the choice opens (M7-08): the template's own for a page that has no
+ * style of its own (no theme applied and no page-level overrides), and "keep my current style" for
+ * a page that has one (any theme, page-level overrides only, or both). Blocks do not matter: this
+ * is only a default, and the person can pick the other one.
+ */
+export function defaultTemplateStyle(draft: DraftDoc): TemplateStyle {
+  return draft.theme.ref === null && Object.keys(draft.theme.overrides).length === 0
+    ? "template"
+    : "keep";
+}
+
+/**
  * Whether applying a template would throw away something the person set: any block, a theme, or
- * page-level style. An empty page with no theme and no overrides applies at once; anything else
- * asks first ("Replace your blocks and style ..."). The answer does not depend on which template.
+ * page-level style. M6-40's inline confirmation used it; since M7-08 every apply asks the style
+ * question instead (`defaultTemplateStyle`), so the dialog no longer calls it.
  */
 export function templateNeedsConfirmation(draft: DraftDoc): boolean {
   return (

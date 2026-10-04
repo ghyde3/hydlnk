@@ -9,8 +9,9 @@ import { TemplateDialog } from "./template-dialog";
 /**
  * The "Start from a template" button of the "Add a block" card (M6-40) and the dialog it opens. A
  * secondary button, white with a 1px border, 44px tall, full width on a phone. The same on every
- * plan: nothing here reads the plan. Applying is one editor action (`template/apply`), which the
- * reducer records as one undo step; the dialog closes and focus returns to this button.
+ * plan: nothing here reads the plan. Applying is one editor action (`template/apply`, with the
+ * style the person chose in the dialog), which the reducer records as one undo step; the dialog
+ * closes and focus returns to this button.
  */
 export function StartFromTemplate({
   draft,
@@ -48,8 +49,8 @@ export function StartFromTemplate({
           draft={draft}
           themes={themes}
           onClose={close}
-          onUse={(id) => {
-            dispatch({ type: "template/apply", templateId: id });
+          onUse={(id, style) => {
+            dispatch({ type: "template/apply", templateId: id, style });
             close();
           }}
         />

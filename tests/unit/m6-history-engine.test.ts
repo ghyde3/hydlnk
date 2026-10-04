@@ -406,7 +406,7 @@ describe("M6-06 history engine: memory only", () => {
     const files = [
       "src/lib/editor/history.ts",
       "src/components/editor/use-undo-redo.ts",
-      "src/components/design/use-draft-history.ts",
+      "src/components/workspace/workspace-reducer.ts",
     ];
     for (const file of files) {
       const source = readFileSync(file, "utf8");

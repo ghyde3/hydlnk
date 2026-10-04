@@ -23,9 +23,10 @@ const FILTERS: { value: TrafficFilter; label: string }[] = [
 
 /**
  * /admin/traffic (M5-10): the review list for the nightly high-traffic job. Free pages with more
- * than 100,000 views over the last 30 days land here; they keep serving, an admin only decides what
- * to do. "Mark reviewed" moves a row to the Reviewed filter (and keeps the job quiet about that
- * page for 30 days). A non-admin gets the app's 404 from `requireAdmin`.
+ * than 100,000 views (strictly) in each of the last two complete UTC calendar months land here
+ * (M7-10); they keep serving, an admin only decides what to do. "Mark reviewed" moves a row to the
+ * Reviewed filter (and keeps the job quiet about that page for 30 days). A non-admin gets the app's
+ * 404 from `requireAdmin`.
  */
 export default async function AdminTraffic({
   searchParams,
@@ -50,7 +51,8 @@ export default async function AdminTraffic({
       <ScreenHeader breadcrumb="admin / traffic" title="Traffic" />
       <ScreenBody maxWidth="max-w-[1200px]">
         <p className="text-sm leading-relaxed text-text-2">
-          Free pages with more than 100,000 views in the last 30 days. They keep serving.
+          Free pages with more than 100,000 views in each of the last two full months. They keep
+          serving.
         </p>
         <nav
           aria-label="Flag status"

@@ -28,6 +28,8 @@ import {
   type DraftDoc,
 } from "./history-helpers";
 import { draftDocSchema } from "@/lib/document";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
+import { clickTab } from "../m7/workspace-helpers";
 
 /**
  * M6-06 and M6-07: undo and redo in the Editor. The engine itself is covered by the unit tests
@@ -48,7 +50,8 @@ const domains: string[] = [];
 
 const NAME = (page: Page) => page.getByLabel("Display name", { exact: true });
 const BIO = (page: Page) => page.getByLabel("Bio", { exact: true });
-const header = (page: Page) => page.locator("main > header");
+// M7-05: the header is the workspace toolbar (the name, the rename pencil, Undo, Redo and Publish).
+const header = (page: Page) => page.getByTestId("workspace-toolbar");
 const undoButton = (page: Page) => header(page).getByRole("button", { name: "Undo", exact: true });
 const redoButton = (page: Page) => header(page).getByRole("button", { name: "Redo", exact: true });
 const publishButton = (page: Page) =>
@@ -93,7 +96,7 @@ const patchesOf = (page: Page) => {
 };
 
 test.describe("M6-07 the buttons", () => {
-  test("M6-07 Undo and Redo: two 44x44 icon buttons left of the status chip, disabled after load, with the shortcut in the tooltip", async ({
+  test("M6-07 Undo and Redo: two 44x44 icon buttons in the toolbar after the status chip, disabled after load, with the shortcut in the tooltip", async ({
     page,
     context,
   }, info) => {
@@ -127,18 +130,21 @@ test.describe("M6-07 the buttons", () => {
     const redoBox = (await redoButton(page).boundingBox())!;
     expect(undoBox.x).toBeLessThan(redoBox.x);
     if (desktopOnly(info)) {
-      // One row with the chip, Preview and Publish; the buttons sit left of the chip.
-      expect(redoBox.x + redoBox.width).toBeLessThanOrEqual(chip.x + 0.5);
+      // M7-05: one toolbar row with the chip, the buttons, the Preview menu and Publish; the buttons
+      // sit right of the chip.
+      expect(chip.x + chip.width).toBeLessThanOrEqual(undoBox.x + 0.5);
       const publish = (await publishButton(page).boundingBox())!;
-      const preview = (await header(page)
-        .getByRole("link", { name: "Preview", exact: true })
+      const preview = (await page
+        .getByTestId("workspace-toolbar")
+        .getByRole("button", { name: "Preview", exact: true })
         .boundingBox())!;
       for (const box of [chip, preview, publish]) {
         expect(Math.abs(box.y + box.height / 2 - (undoBox.y + undoBox.height / 2))).toBeLessThan(4);
       }
     }
     if (phoneOnly(info)) {
-      // The cluster wraps under the title; nothing covers Publish and nothing scrolls sideways.
+      // M7-05: the pinned row holds Undo, Redo, the chip and Publish; nothing covers Publish and
+      // nothing scrolls sideways.
       const publish = (await publishButton(page).boundingBox())!;
       const overlaps = (a: typeof publish, b: typeof publish) =>
         a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
@@ -146,7 +152,7 @@ test.describe("M6-07 the buttons", () => {
       expect(overlaps(redoBox, publish)).toBe(false);
       expect(overlaps(chip, publish)).toBe(false);
       await expectNoHorizontalScroll(page);
-      await expectTapTargets(page, "main > header");
+      await expectTapTargets(page, "[data-testid='workspace-toolbar']");
     }
   });
 });
@@ -389,19 +395,16 @@ test.describe("M6-06 the toast, Publish and what is not a step", () => {
       header(page).getByRole("heading", { level: 1, name: "Summer tour" }),
     ).toBeVisible();
 
-    // Create a share link, then turn it off (M6-12).
-    const share = header(page).getByRole("button", { name: "Share preview" });
-    const dialog = page.getByRole("dialog");
-    await share.click();
-    await dialog.getByRole("button", { name: "Create link", exact: true }).click();
-    await expect(dialog.getByLabel("Preview link")).toBeVisible();
-    await dialog.getByRole("button", { name: "Close" }).click();
-    await expect(dialog).toBeHidden();
-    await share.click();
-    await dialog.getByRole("button", { name: "Turn off" }).click();
-    await expect(dialog.getByRole("status").filter({ hasText: "Turned off." })).toBeVisible();
-    await dialog.getByRole("button", { name: "Close" }).click();
-    await expect(dialog).toBeHidden();
+    // Create a share link, then turn it off (M6-12): since M7-04 that is the Share tab's card, not a
+    // dialog, and going there and back is a soft navigation that keeps the history.
+    await clickTab(page, "Share");
+    const links = page.getByTestId("preview-links-card");
+    await links.getByRole("button", { name: "Create link", exact: true }).click();
+    await expect(links.locator("input[readonly]")).toBeVisible();
+    await expect(links.getByRole("button", { name: "Turn off" })).toBeVisible();
+    await links.getByRole("button", { name: "Turn off" }).click();
+    await expect(links.getByText("Turned off.")).toBeVisible();
+    await clickTab(page, "Edit");
 
     // The history still holds exactly the one edit.
     await expect(undoButton(page)).toBeEnabled();
@@ -415,12 +418,12 @@ test.describe("M6-06 the toast, Publish and what is not a step", () => {
     // Neither the name nor the link moved with the Undo.
     const row = await adminClient().from("pages").select("name").eq("id", user.pageId).single();
     expect(row.data?.name).toBe("Summer tour");
-    const links = await adminClient()
+    const linkRows = await adminClient()
       .from("preview_links")
       .select("revoked_at")
       .eq("page_id", user.pageId);
-    expect(links.data).toHaveLength(1);
-    expect(links.data![0]!.revoked_at).not.toBeNull();
+    expect(linkRows.data).toHaveLength(1);
+    expect(linkRows.data![0]!.revoked_at).not.toBeNull();
     await expect(
       header(page).getByRole("heading", { level: 1, name: "Summer tour" }),
     ).toBeVisible();
@@ -435,9 +438,9 @@ test.describe("M6-06 the toast, Publish and what is not a step", () => {
     await NAME(page).fill("Tab test");
     await expect(undoButton(page)).toBeEnabled();
     if (phoneOnly(info)) {
-      await page.getByRole("tab", { name: "Preview" }).click();
+      await showPreviewSheet(page);
       await expect(previewScreen(page)).toBeVisible();
-      await page.getByRole("tab", { name: "Blocks" }).click();
+      await hidePreviewSheet(page);
       await expect(undoButton(page)).toBeEnabled();
     }
     await expect(saveIndicator(page)).toHaveText("Saved", { timeout: 15_000 });
@@ -858,7 +861,7 @@ test.describe("M6-06 a long history on a full page", () => {
     await expectNoHorizontalScroll(page);
     // The saves follow the steps: the database ends at the original draft.
     await expectStored(user.pageId, original, "the stored draft is the original one again");
-    await expectTapTargets(page, "main > header");
+    await expectTapTargets(page, "[data-testid='workspace-toolbar']");
 
     // And Redo replays them all.
     for (let i = 0; i < 100; i++) await page.keyboard.press(REDO_KEY);

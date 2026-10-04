@@ -5,20 +5,19 @@ import { adminClient } from "../fixtures/auth";
 import { newBlockId, type Block } from "@/lib/document";
 import { draftOf } from "../m2/blocks-helpers";
 import {
-  backBar,
   blockSet,
-  blocksTab,
   box,
+  closeSheet,
   css,
-  dock,
   inPreview,
+  miniPhone,
   nameInput,
   openEditor,
   panelOf,
   previewScreen,
-  previewTab,
   rowOf,
   rowToggle,
+  sheet,
   textBlocks,
   trackingRequests,
   userWithBlocks,
@@ -315,7 +314,7 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
 });
 
 test.describe("M6-03 phone: tap on the full-size preview", () => {
-  test("M6-03 a tap switches to Blocks, opens the block's panel, scrolls its row into the middle and focuses its first input", async ({
+  test("M6-03 a tap in the sheet closes it, opens the block's panel, scrolls its row into the middle and focuses its first input", async ({
     page,
     context,
   }, info) => {
@@ -323,21 +322,20 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
     const user = await userWithBlocks(context, "tq1", (userId) => blockSet(userId).blocks);
     const grid = user.blocks.find((b) => b.type === "grid")!;
     await openEditor(page);
-    await dock(page).click();
-    await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");
+    await miniPhone(page).click();
+    await expect(sheet(page)).toBeVisible();
     await inPreview(page, grid.id).click({ position: { x: 1, y: 1 } });
-    await expect(blocksTab(page)).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator("#editor-panel-blocks")).toBeVisible();
+    await expect(sheet(page)).toHaveCount(0);
     await expectOpened(page, grid.id);
     const field = await box(panelOf(page, grid.id).locator(FIRST_FIELD).first());
-    // The focused field is within the middle band of the screen, clear of the dock.
+    // The focused field is within the middle band of the screen, clear of the mini phone.
     expect(field.y).toBeGreaterThan(844 * 0.15);
-    expect(field.y + field.height).toBeLessThan((await box(dock(page))).y);
+    expect(field.y + field.height).toBeLessThan((await box(miniPhone(page))).y + 1);
     const row = await box(rowOf(page, grid.id));
     expect(row.y).toBeLessThan(844);
     expect(row.y + row.height).toBeGreaterThan(0);
     await expectNoHorizontalScroll(page);
-    await expectTapTargets(page, "main > header, [role='tablist'], #editor-panel-blocks");
+    await expectTapTargets(page, "[data-testid='workspace-toolbar'], #workspace-panel");
   });
 
   test("M6-03 profile taps from the full-size preview land on the right field", async ({
@@ -352,9 +350,9 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
       ["name", nameInput(page)],
       ["avatar", page.getByRole("button", { name: /^(Upload|Replace) photo/ })],
     ] as const) {
-      await dock(page).click();
+      await miniPhone(page).click();
       await previewScreen(page).locator(`[data-profile-part="${part}"]`).click();
-      await expect(blocksTab(page)).toHaveAttribute("aria-selected", "true");
+      await expect(sheet(page)).toHaveCount(0);
       await expect(focused).toBeFocused();
     }
     await expectNoHorizontalScroll(page);
@@ -362,24 +360,28 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
 
   test("M6-03 a swipe that scrolls the preview opens nothing", async ({ page, context }, info) => {
     test.skip(!phoneOnly(info), "phone layout");
-    const user = await userWithBlocks(context, "tq3", () => textBlocks(14));
+    const user = await userWithBlocks(context, "tq3", () => textBlocks(30));
     await openEditor(page);
-    await dock(page).click();
-    await expect(backBar(page)).toBeVisible();
-    await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");
+    await miniPhone(page).click();
+    await expect(closeSheet(page)).toBeVisible();
     // The gesture only scrolls what is there: wait until the last block is drawn and the page is
     // clearly taller than the viewport (on a loaded CI machine the first paint can still be short).
     await expect(
       previewScreen(page).locator(`[data-block-id="${user.blocks.at(-1)!.id}"]`),
     ).toBeVisible();
     await expect
-      .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), {
-        timeout: 15_000,
-      })
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const screen = document.querySelector('[data-testid="preview-screen"]')!;
+            return screen.scrollHeight - screen.clientHeight;
+          }),
+        { timeout: 15_000 },
+      )
       .toBeGreaterThan(300);
     const cdp = await context.newCDPSession(page);
-    // What scrolls on the phone Preview tab is the window (the preview is `h-auto` there); read the
-    // document's scroller and, in case a container ever takes over, the preview's own scrollTop too.
+    // What scrolls in the sheet is its own screen (the document behind it is locked); read it, and
+    // the window too in case that ever changes.
     const scrolled = () =>
       page.evaluate(() => {
         const screen = document.querySelector('[data-testid="preview-screen"]');
@@ -430,7 +432,7 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
         { timeout: 20_000, intervals: [0, 250, 250] },
       )
       .toBeGreaterThan(100);
-    await expect(previewTab(page)).toHaveAttribute("aria-selected", "true");
+    await expect(sheet(page)).toBeVisible();
     await expect(page.locator("li[data-block-id] button[aria-expanded=true]")).toHaveCount(0);
   });
 
@@ -442,11 +444,10 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
     const user = await userWithBlocks(context, "tq4", (userId) => blockSet(userId).blocks);
     const link = user.blocks[0]!.id;
     await openEditor(page);
-    await dock(page).click();
-    await expect(backBar(page)).toBeFocused();
+    await miniPhone(page).click();
+    await expect(closeSheet(page)).toBeFocused();
     const start = page.url();
-    // Tab from the Back button forward... then reach the preview's first link by Tab.
-    await previewTab(page).focus();
+    // Tab from Close preview forward until the preview's first link has focus.
     let onLink = false;
     for (let i = 0; i < 12 && !onLink; i += 1) {
       await page.keyboard.press("Tab");
@@ -457,7 +458,7 @@ test.describe("M6-03 phone: tap on the full-size preview", () => {
     }
     expect(onLink).toBe(true);
     await page.keyboard.press("Enter");
-    await expect(blocksTab(page)).toHaveAttribute("aria-selected", "true");
+    await expect(sheet(page)).toHaveCount(0);
     await expectOpened(page, link);
     expect(page.url()).toBe(start);
   });

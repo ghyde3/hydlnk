@@ -1,26 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { DraftDoc } from "@/lib/document";
-import { resolveTokens, type TokenSet } from "@/lib/theme";
+import type { TokenSet } from "@/lib/theme";
 import {
   TEMPLATES,
+  defaultTemplateStyle,
+  describeTemplate,
   templateById,
-  templateNeedsConfirmation,
+  templateFontStylesheetUrl,
   type Template,
   type TemplateId,
+  type TemplateStyle,
 } from "@/lib/templates";
+import { TemplateChoice } from "./template-choice";
+import { TemplatePreview } from "./template-preview";
 
-const FOCUSABLE = "button:not(:disabled), [href], input:not(:disabled), select, textarea";
+// `a[href]`, not `[href]`: the dialog holds a <link href> for the fonts, which can never take focus.
+const FOCUSABLE = "button:not(:disabled), a[href], input:not(:disabled), select, textarea";
 
 const SECONDARY =
   "inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-line-3 bg-surface px-4 py-2 text-center text-sm font-semibold text-ink";
-const DANGER =
-  "inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-bad bg-surface px-4 py-2 text-center text-sm font-semibold text-bad";
-
-/** The confirmation's question: said once, here, so the card and a test read the same words. */
-export const replaceQuestion = (name: string): string =>
-  `Replace your blocks and style with the ${name} template? Your name, photo and saved themes stay. You can undo this.`;
 
 /**
  * Keeps the page behind a modal dialog from scrolling (M6-40): `showModal` makes it inert, but a
@@ -39,15 +39,18 @@ function useScrollLock(): void {
 }
 
 /**
- * "Start from a template" (M6-40): a native modal `<dialog>` with the six cards of the catalog in
- * their order. On a phone it is a full-screen sheet that scrolls inside itself, the cards in one
- * column; from 760px up it is centered, at most 720px wide, the cards in two columns. Focus starts
- * on the first card's "Use this template", Tab and Shift+Tab wrap inside the dialog, and Escape (or
- * Close) closes it without touching the draft.
+ * "Start from a template" (M6-40, M7-07, M7-08): a native modal `<dialog>` with the six cards of the
+ * catalog in their order. Each card shows its name, its one-line description, a small live picture
+ * of the page it would give (`TemplatePreview`), what is inside it and the style it applies. On a
+ * phone the dialog is a full-screen sheet that scrolls inside itself, the cards in one column; from
+ * 760px up it is centered, at most 720px wide, the cards in two columns. Focus starts on the first
+ * card's "Use this template", Tab and Shift+Tab wrap inside the dialog, and Escape (or Close)
+ * closes it without touching the draft.
  *
- * It is the same for every plan: no Pro chip, no upgrade prompt, no plan check. A page that has
- * content, a theme or page-level style asks first, inline in the card that was pressed; an empty
- * page applies at once. `onUse` is told which template; the caller writes the draft.
+ * It is the same for every plan: no Pro chip, no upgrade prompt, no plan check. "Use this template"
+ * never applies at once: it opens, in place in that card, the one choice (the template's blocks
+ * and style, or its blocks only and the page's own style), with the default that fits the page.
+ * `onUse` is told which template and which style; the caller writes the draft.
  */
 export function TemplateDialog({
   draft,
@@ -55,17 +58,23 @@ export function TemplateDialog({
   onUse,
   onClose,
 }: {
-  /** The draft on screen: what applying would replace decides whether to ask first. */
+  /** The draft on screen: its profile is drawn in every preview, and it decides the default style. */
   draft: DraftDoc;
-  /** The token sets of the themes the templates use, by theme id: the cards' color strips. */
+  /** The token sets of the themes the templates use, by theme id: what each preview is drawn in. */
   themes: Readonly<Record<string, Partial<TokenSet>>>;
-  onUse: (id: TemplateId) => void;
+  onUse: (id: TemplateId, style: TemplateStyle) => void;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [confirming, setConfirming] = useState<TemplateId | null>(null);
-  const keep = useRef<HTMLButtonElement>(null);
+  // The card whose choice is open, and the style selected in it.
+  const [asking, setAsking] = useState<TemplateId | null>(null);
+  const [style, setStyle] = useState<TemplateStyle>("template");
+  // Cancel puts focus back on the button of the card it was opened from, once that button is back.
+  const refocus = useRef<TemplateId | null>(null);
   useScrollLock();
+
+  // One stylesheet for the six themes' fonts, requested while the dialog is open and not before.
+  const fontsUrl = useMemo(() => templateFontStylesheetUrl(themes), [themes]);
 
   useEffect(() => {
     const element = dialog.current;
@@ -79,14 +88,21 @@ export function TemplateDialog({
     };
   }, []);
 
-  // The confirmation takes focus on its safe button, so Enter twice never replaces the page.
   useEffect(() => {
-    if (confirming !== null) keep.current?.focus();
-  }, [confirming]);
+    const id = refocus.current;
+    if (asking !== null || id === null) return;
+    refocus.current = null;
+    dialog.current
+      ?.querySelector<HTMLElement>(`[data-template-id="${id}"] [data-use-template]`)
+      ?.focus();
+  }, [asking]);
 
   function onKeyDown(event: KeyboardEvent<HTMLDialogElement>) {
     if (event.key !== "Tab") return;
-    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE));
+    // The previews are inert; nothing in them can take focus, but they are not part of the loop.
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+      (item) => !item.closest("[inert]"),
+    );
     if (items.length === 0) return;
     const first = items[0]!;
     const last = items[items.length - 1]!;
@@ -101,8 +117,14 @@ export function TemplateDialog({
   }
 
   function press(template: Template) {
-    if (templateNeedsConfirmation(draft)) setConfirming(template.id);
-    else onUse(template.id);
+    // The default is the page's, every time the choice opens: an earlier pick does not stick.
+    setStyle(defaultTemplateStyle(draft));
+    setAsking(template.id);
+  }
+
+  function cancel(template: Template) {
+    refocus.current = template.id;
+    setAsking(null);
   }
 
   return (
@@ -119,6 +141,14 @@ export function TemplateDialog({
       onKeyDown={onKeyDown}
       className="m-0 h-dvh max-h-dvh w-screen max-w-none overflow-y-auto overscroll-contain rounded-none border-0 bg-surface p-0 text-ink backdrop:bg-ink/60 hl:m-auto hl:h-auto hl:max-h-[calc(100dvh-64px)] hl:w-[720px] hl:max-w-[calc(100vw-64px)] hl:rounded-md hl:border hl:border-line"
     >
+      {fontsUrl ? (
+        <link
+          rel="stylesheet"
+          href={fontsUrl}
+          data-template-fonts=""
+          referrerPolicy="no-referrer"
+        />
+      ) : null}
       <div className="flex flex-col gap-4 p-4 hl:p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -141,73 +171,56 @@ export function TemplateDialog({
 
         <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 hl:grid-cols-2">
           {TEMPLATES.map((template) => {
-            const colors = resolveTokens(themes[template.theme.id] ?? null, {});
-            const asking = confirming === template.id;
+            const asked = asking === template.id;
+            const nameId = `template-${template.id}-name`;
+            const descriptionId = `template-${template.id}-description`;
             return (
               <li
                 key={template.id}
                 data-template-id={template.id}
+                aria-labelledby={`${nameId} ${descriptionId}`}
                 className="flex min-w-0 flex-col gap-2.5 rounded-md border border-line bg-surface p-3.5"
               >
-                <h3 className="m-0 text-base font-semibold">{template.name}</h3>
-                <p className="m-0 text-sm text-text-2">{template.description}</p>
-                <div
-                  aria-hidden="true"
-                  data-testid="template-colors"
-                  className="flex h-8 w-full overflow-hidden rounded-sm border border-line-2"
-                >
-                  <span
-                    data-color="bg"
-                    className="block flex-[3]"
-                    style={{ background: colors.bg }}
-                  />
-                  <span
-                    data-color="accent"
-                    className="block flex-1"
-                    style={{ background: colors.accent }}
-                  />
+                <h3 id={nameId} className="m-0 text-base font-semibold">
+                  {template.name}
+                </h3>
+                <p id={descriptionId} className="m-0 text-sm text-text-2">
+                  {template.description}
+                </p>
+                <TemplatePreview
+                  template={template}
+                  profile={draft.profile}
+                  themeTokens={themes[template.theme.id] ?? null}
+                />
+                <p data-testid="template-inside" className="m-0 text-sm text-text-2">
+                  <span className="font-semibold text-ink">Inside:</span>{" "}
+                  {describeTemplate(template)}
+                </p>
+                <p data-testid="template-style" className="m-0 text-sm text-text-2">
+                  <span className="font-semibold text-ink">Style:</span> {template.theme.name}
+                </p>
+                <div aria-live="polite" data-testid="template-action">
+                  {asked ? (
+                    <TemplateChoice
+                      template={template}
+                      hasBlocks={draft.blocks.length > 0}
+                      style={style}
+                      onStyle={setStyle}
+                      onApply={() => onUse(template.id, style)}
+                      onCancel={() => cancel(template)}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      data-use-template=""
+                      aria-label={`Use the ${template.name} template`}
+                      onClick={() => press(template)}
+                      className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md bg-ink px-4 text-sm font-semibold text-surface"
+                    >
+                      Use this template
+                    </button>
+                  )}
                 </div>
-                {asking ? (
-                  <div
-                    role="group"
-                    aria-label={`Replace your page with the ${template.name} template`}
-                    data-testid="template-confirm"
-                    className="flex flex-col gap-2.5"
-                  >
-                    <p role="alert" className="m-0 text-sm text-ink">
-                      {replaceQuestion(template.name)}
-                    </p>
-                    <div className="flex flex-col gap-2 hl:flex-row">
-                      <button
-                        type="button"
-                        data-testid="template-replace"
-                        onClick={() => onUse(template.id)}
-                        className={`${DANGER} hl:flex-1`}
-                      >
-                        Replace my page
-                      </button>
-                      <button
-                        ref={keep}
-                        type="button"
-                        data-testid="template-keep"
-                        onClick={onClose}
-                        className={`${SECONDARY} hl:flex-1`}
-                      >
-                        Keep my page
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    data-use-template=""
-                    aria-label={`Use the ${template.name} template`}
-                    onClick={() => press(template)}
-                    className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md bg-ink px-4 text-sm font-semibold text-surface"
-                  >
-                    Use this template
-                  </button>
-                )}
               </li>
             );
           })}

@@ -3,18 +3,18 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
-import { emptyUser, openEditor } from "../m2/editor-helpers";
+import { emptyUser } from "../m2/editor-helpers";
 import { addVerifiedDomains } from "../m4/lifecycle-helpers";
 import { signInAsUser } from "../m5/admin-helpers";
 import { PNG_SIGNATURE, expectQrOf, ihdrOf, rasterizeSvg, readDownload } from "./qr-helpers";
-import { publishNow } from "./share-helpers";
+import { openShare, publishNow } from "./share-helpers";
 
 /**
- * M6-31: the QR code dialog in the editor header, on the phone (390x844) and desktop (1440x900)
- * projects. The code is made in the browser; these specs open the dialog, download both files and
- * read them back (the module grid of the PNG and of the SVG drawn into a canvas, and jsQR
- * decoding both), and check the states, the focus handling, the network log and the
- * layout. The generator itself is tests/unit/m6-share-qr.test.ts.
+ * M6-31: the QR code, on the phone (390x844) and desktop (1440x900) projects. M7-04 moved it from a
+ * dialog in the editor header to an inline card on the Share tab (/share). The code is made in the
+ * browser; these specs open the tab, download both files and read them back (the module grid of
+ * the PNG and of the SVG drawn into a canvas, and jsQR decoding both), and check the states, the
+ * network log and the layout. The generator itself is tests/unit/m6-share-qr.test.ts.
  */
 
 // Publish runs a Server Action on a dev server other suites share: allow it time.
@@ -22,81 +22,30 @@ test.describe.configure({ timeout: 120_000 });
 
 test.afterAll(cleanupUsers);
 
-const qrButton = (page: Page): Locator =>
-  page.getByRole("button", { name: "QR code", exact: true });
-const dialog = (page: Page): Locator => page.getByRole("dialog", { name: "QR code for your page" });
+const qrCard = (page: Page): Locator => page.getByTestId("qr-card");
 
+/** Opens the Share tab and returns the QR card. */
 async function openDialog(page: Page): Promise<Locator> {
-  await qrButton(page).click();
-  const box = dialog(page);
-  await expect(box).toBeVisible();
-  return box;
+  await openShare(page);
+  await expect(qrCard(page)).toBeVisible();
+  return qrCard(page);
 }
 
-test.describe("M6-31 the button and the dialog", () => {
-  test("M6-31 the QR code button sits next to View live page, 44px tall, with no Pro chip", async ({
+test.describe("M6-31 the card", () => {
+  test("M6-31 the QR code is an inline card on the Share tab: a heading, no dialog and no header button", async ({
     page,
     context,
   }) => {
     await signedInUser(context, { label: "qb1" });
-    await openEditor(page);
-
-    const button = qrButton(page);
-    await expect(button).toBeVisible();
-    const box = (await button.boundingBox())!;
-    expect(box.height).toBeGreaterThanOrEqual(44);
-    // Next to View live page: the very next element of the header's action cluster.
-    const adjacent = await page.evaluate(
-      () =>
-        Array.from(document.querySelectorAll("header a"))
-          .find((a) => a.textContent?.trim() === "View live page")
-          ?.nextElementSibling?.textContent?.trim() ?? null,
-    );
-    expect(adjacent).toBe("QR code");
-    // On every plan: nothing in the button or the dialog says Pro.
-    await expect(button.getByText("Pro")).toHaveCount(0);
-    // The button's own box holds nothing but its label (the header's other controls may say Pro).
-    expect((await button.innerText()).trim()).toBe("QR code");
-    expect(await button.locator("*").count()).toBe(0);
-    // The dialog sits inside the header: it adds no paragraph (the breadcrumb is the header's only <p>, M2-03).
-    expect(await page.locator("main > header p").count()).toBe(1);
-    await expectTapTargets(page, "header");
-  });
-
-  test("M6-31 opens a modal dialog with focus trapped; Escape and Close return focus to the button", async ({
-    page,
-    context,
-  }) => {
-    await signedInUser(context, { label: "qb2" });
-    await openEditor(page);
-
-    const box = await openDialog(page);
-    await expect(box).toHaveAttribute("aria-modal", "true");
-    await expect(box).toHaveAttribute("role", "dialog");
-    await expect(box.getByRole("heading", { name: "QR code for your page" })).toBeVisible();
-
-    // Tab and Shift+Tab never leave the dialog.
-    const insideDialog = () => page.evaluate(() => !!document.activeElement?.closest("dialog"));
-    const stops: string[] = [];
-    for (let i = 0; i < 6; i += 1) {
-      await page.keyboard.press("Tab");
-      expect(await insideDialog()).toBe(true);
-      stops.push(await page.evaluate(() => document.activeElement?.textContent?.trim() ?? ""));
-    }
-    expect(new Set(stops)).toEqual(new Set(["Download PNG", "Download SVG", "Close"]));
-    for (let i = 0; i < 4; i += 1) {
-      await page.keyboard.press("Shift+Tab");
-      expect(await insideDialog()).toBe(true);
-    }
-
-    await page.keyboard.press("Escape");
-    await expect(box).toBeHidden();
-    await expect(qrButton(page)).toBeFocused();
-
-    await openDialog(page);
-    await dialog(page).getByRole("button", { name: "Close", exact: true }).click();
-    await expect(dialog(page)).toBeHidden();
-    await expect(qrButton(page)).toBeFocused();
+    const card = await openDialog(page);
+    await expect(card.getByRole("heading", { level: 2, name: "QR code" })).toBeVisible();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(card.locator("dialog")).toHaveCount(0);
+    // On every plan: nothing in the card says Pro.
+    await expect(card.getByText("Pro")).toHaveCount(0);
+    // The Edit tab has no QR code button any more (M7-04): the toolbar's menu leads here.
+    await page.getByRole("tab", { name: "Edit" }).click();
+    await expect(page.getByRole("button", { name: "QR code", exact: true })).toHaveCount(0);
   });
 
   test("M6-31 a published page shows the code, its address and the two downloads", async ({
@@ -104,7 +53,6 @@ test.describe("M6-31 the button and the dialog", () => {
     context,
   }) => {
     const user = await signedInUser(context, { label: "qb3" });
-    await openEditor(page);
     const box = await openDialog(page);
 
     await expect(box.getByTestId("qr-code")).toBeVisible();
@@ -124,7 +72,7 @@ test.describe("M6-31 the button and the dialog", () => {
       .getByRole("button", { name: "Download SVG", exact: true })
       .evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(secondary).toBe("rgb(255, 255, 255)");
-    // No input of any kind: nothing in the dialog can change what is encoded.
+    // No input of any kind: nothing in the card can change what is encoded.
     await expect(box.locator("input, textarea, select, form")).toHaveCount(0);
     // Copy rules: no please, no exclamation mark, no successfully.
     const text = await box.innerText();
@@ -133,29 +81,23 @@ test.describe("M6-31 the button and the dialog", () => {
 });
 
 test.describe("M6-31 the states", () => {
-  test("M6-31 a page never published says to publish first, with only Close; after the first Publish the same session shows the code", async ({
+  test("M6-31 a page never published says to publish first, with no button; after the first Publish the same session shows the code", async ({
     page,
     context,
   }) => {
     await emptyUser(context, "qs1");
-    await openEditor(page);
     const box = await openDialog(page);
     await expect(
       box.getByText("Publish your page first. Then you can download its QR code."),
     ).toBeVisible();
     await expect(box.getByTestId("qr-code")).toHaveCount(0);
-    await expect(box.getByRole("button", { name: /Download/ })).toHaveCount(0);
-    await expect(box.getByRole("button")).toHaveCount(1);
-    await expect(box.getByRole("button", { name: "Close", exact: true })).toBeVisible();
-    await box.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(box).toBeHidden();
+    await expect(box.getByRole("button")).toHaveCount(0);
 
-    // No reload: Publish, then open it again.
+    // No reload: Publish (from the toolbar), and the card shows the code.
     await publishNow(page);
-    const again = await openDialog(page);
-    await expect(again.getByTestId("qr-code")).toBeVisible();
-    await expect(again.getByRole("button", { name: "Download PNG", exact: true })).toBeVisible();
-    await expect(again.getByText("Publish your page first")).toHaveCount(0);
+    await expect(box.getByTestId("qr-code")).toBeVisible();
+    await expect(box.getByRole("button", { name: "Download PNG", exact: true })).toBeVisible();
+    await expect(box.getByText("Publish your page first")).toHaveCount(0);
   });
 
   test("M6-31 a suspended owner sees that the page isn't available, with no code and no downloads", async ({
@@ -163,12 +105,10 @@ test.describe("M6-31 the states", () => {
     context,
   }) => {
     await signInAsUser(context, "qs2", { suspended: true });
-    await openEditor(page);
     const box = await openDialog(page);
     await expect(box.getByText("This page isn’t available right now.")).toBeVisible();
     await expect(box.getByTestId("qr-code")).toHaveCount(0);
     await expect(box.getByRole("button", { name: /Download/ })).toHaveCount(0);
-    await expect(box.getByRole("button", { name: "Close", exact: true })).toBeVisible();
   });
 });
 
@@ -178,7 +118,6 @@ test.describe("M6-31 what the files hold", () => {
     context,
   }) => {
     const user = await signedInUser(context, { label: "qf1" });
-    await openEditor(page);
     const box = await openDialog(page);
 
     const [download] = await Promise.all([
@@ -197,7 +136,6 @@ test.describe("M6-31 what the files hold", () => {
     context,
   }) => {
     const user = await signedInUser(context, { label: "qf2" });
-    await openEditor(page);
     const box = await openDialog(page);
 
     const [download] = await Promise.all([
@@ -222,7 +160,6 @@ test.describe("M6-31 what the files hold", () => {
   }) => {
     // mara's seed page is dark; so is the copy a signed-in user gets.
     const user = await signedInUser(context, { label: "qf3" });
-    await openEditor(page);
     const box = await openDialog(page);
     const colors = await box.getByTestId("qr-code").evaluate((svg) => ({
       rect: svg.querySelector("rect")!.getAttribute("fill"),
@@ -232,20 +169,20 @@ test.describe("M6-31 what the files hold", () => {
     expect(user.handle).toBeTruthy();
   });
 
-  test("M6-31 opening the dialog and downloading both files makes no network request", async ({
+  test("M6-31 drawing the card and downloading both files makes no network request", async ({
     page,
     context,
   }) => {
     await signedInUser(context, { label: "qn1" });
-    await openEditor(page);
-    // Let the editor settle (autosave, previews) before counting.
+    const box = await openDialog(page);
+    // Let the tab settle (its own list of preview links, autosave, previews) before counting.
+    await page.waitForLoadState("networkidle");
     await page.waitForTimeout(800);
 
     const seen: string[] = [];
     page.on("request", (request) => {
       if (!/^(blob|data):/.test(request.url())) seen.push(`${request.method()} ${request.url()}`);
     });
-    const box = await openDialog(page);
     await Promise.all([
       page.waitForEvent("download"),
       box.getByRole("button", { name: "Download PNG", exact: true }).click(),
@@ -281,14 +218,11 @@ test.describe("M6-31 a verified custom domain", () => {
   }) => {
     const user = await signedInUser(context, { label: "qd1", plan: "pro" });
     const host = `zq-qd1-${Math.random().toString(36).slice(2, 8)}.example.test`;
-    await openEditor(page);
     const before = await openDialog(page);
     await expect(before.getByTestId("qr-address")).toHaveText(url(user.handle));
-    await page.keyboard.press("Escape");
 
     await addVerifiedDomains(user.pageId, [host]);
     await page.reload();
-    await openEditor(page);
     const box = await openDialog(page);
     await expect(box.getByTestId("qr-address")).toHaveText(`https://${host}/`);
     const [download] = await Promise.all([
@@ -302,7 +236,7 @@ test.describe("M6-31 a verified custom domain", () => {
 });
 
 test.describe("M6-31 phone and desktop layout", () => {
-  test("M6-31 at 390x844 the sheet fits, the code is 240px, the buttons stack at 44px and a long domain wraps", async ({
+  test("M6-31 at 390x844 the card fits, the code is 240px, the buttons stack at 44px and a long domain wraps", async ({
     page,
     context,
   }, info) => {
@@ -310,24 +244,20 @@ test.describe("M6-31 phone and desktop layout", () => {
     const user = await signedInUser(context, { label: "ql1", plan: "pro" });
     const host = `zq-ql1-${"a".repeat(48)}.example-long-domain-name.example.test`;
     await addVerifiedDomains(user.pageId, [host]);
-    await openEditor(page);
-
-    // The header row wraps and the button keeps 44px.
-    expect((await qrButton(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    const box = await openDialog(page);
     await expectNoHorizontalScroll(page);
 
-    const box = await openDialog(page);
     const geometry = await page.evaluate(() => {
-      const dialog = document.querySelector("dialog[open]")!;
-      const rect = dialog.getBoundingClientRect();
-      const svg = dialog.querySelector('[data-testid="qr-code"]')!.getBoundingClientRect();
-      const buttons = Array.from(dialog.querySelectorAll("button")).map((button) => {
+      const card = document.querySelector('[data-testid="qr-card"]')!;
+      const rect = card.getBoundingClientRect();
+      const svg = card.querySelector('[data-testid="qr-code"]')!.getBoundingClientRect();
+      const buttons = Array.from(card.querySelectorAll("button")).map((button) => {
         const r = button.getBoundingClientRect();
         return { text: button.textContent?.trim(), top: r.top, width: r.width, height: r.height };
       });
-      const address = dialog.querySelector('[data-testid="qr-address"]')!;
+      const address = card.querySelector('[data-testid="qr-address"]')!;
       return {
-        dialog: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+        card: { left: rect.left, right: rect.right },
         svg: { width: svg.width, height: svg.height },
         buttons,
         address: {
@@ -335,18 +265,12 @@ test.describe("M6-31 phone and desktop layout", () => {
           right: address.getBoundingClientRect().right,
           height: address.getBoundingClientRect().height,
         },
-        view: { width: window.innerWidth, height: window.innerHeight },
+        view: { width: window.innerWidth },
         scrollWidth: document.documentElement.scrollWidth,
       };
     });
-    expect(geometry.dialog.left).toBeGreaterThanOrEqual(0);
-    expect(geometry.dialog.right).toBeLessThanOrEqual(geometry.view.width);
-    expect(geometry.dialog.top).toBeGreaterThanOrEqual(0);
-    expect(geometry.dialog.bottom).toBeLessThanOrEqual(geometry.view.height);
-    // Centered sheet.
-    expect(
-      Math.abs(geometry.dialog.left + geometry.dialog.right - geometry.view.width),
-    ).toBeLessThanOrEqual(2);
+    expect(geometry.card.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.card.right).toBeLessThanOrEqual(geometry.view.width);
     expect([geometry.svg.width, geometry.svg.height]).toEqual([240, 240]);
     const png = geometry.buttons.find((b) => b.text === "Download PNG")!;
     const svg = geometry.buttons.find((b) => b.text === "Download SVG")!;
@@ -354,46 +278,40 @@ test.describe("M6-31 phone and desktop layout", () => {
     expect(png.width).toBeGreaterThan(260);
     expect(Math.abs(png.width - svg.width)).toBeLessThanOrEqual(1);
     for (const b of geometry.buttons) expect(b.height).toBeGreaterThanOrEqual(44);
-    // The long domain wraps instead of widening the sheet.
+    // The long domain wraps instead of widening the card.
     expect(geometry.address.wrap).toBe("anywhere");
     expect(geometry.address.height).toBeGreaterThan(30);
-    expect(geometry.address.right).toBeLessThanOrEqual(geometry.dialog.right);
+    expect(geometry.address.right).toBeLessThanOrEqual(geometry.card.right);
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.view.width);
     await expect(box.getByTestId("qr-address")).toHaveText(`https://${host}/`);
-    await expectTapTargets(page, "dialog");
+    await expectTapTargets(page, '[data-testid="qr-card"]');
   });
 
-  test("M6-31 at 1440x900 the dialog is centered at about 420px, the code is 280px and the downloads sit side by side", async ({
+  test("M6-31 at 1440x900 the card sits in the 720px column, the code is 280px and the downloads sit side by side", async ({
     page,
     context,
   }, info) => {
     test.skip(!desktopOnly(info), "the desktop layout is checked on the desktop project");
     await signedInUser(context, { label: "ql2" });
-    await openEditor(page);
     await openDialog(page);
     const geometry = await page.evaluate(() => {
-      const dialog = document.querySelector("dialog[open]")!;
-      const rect = dialog.getBoundingClientRect();
-      const svg = dialog.querySelector('[data-testid="qr-code"]')!.getBoundingClientRect();
+      const card = document.querySelector('[data-testid="qr-card"]')!;
+      const rect = card.getBoundingClientRect();
+      const svg = card.querySelector('[data-testid="qr-code"]')!.getBoundingClientRect();
       const find = (text: string) =>
-        Array.from(dialog.querySelectorAll("button"))
+        Array.from(card.querySelectorAll("button"))
           .find((b) => b.textContent?.trim() === text)!
           .getBoundingClientRect();
       const png = find("Download PNG");
       const svgButton = find("Download SVG");
       return {
         width: rect.width,
-        center: [rect.left + rect.width / 2, rect.top + rect.height / 2],
-        view: [window.innerWidth, window.innerHeight],
         svg: [svg.width, svg.height],
         png: { top: png.top, right: png.right, height: png.height },
         svgButton: { top: svgButton.top, left: svgButton.left, height: svgButton.height },
       };
     });
-    expect(geometry.width).toBeGreaterThanOrEqual(410);
-    expect(geometry.width).toBeLessThanOrEqual(430);
-    expect(Math.abs(geometry.center[0]! - geometry.view[0]! / 2)).toBeLessThanOrEqual(2);
-    expect(Math.abs(geometry.center[1]! - geometry.view[1]! / 2)).toBeLessThanOrEqual(2);
+    expect(geometry.width).toBeLessThanOrEqual(720);
     expect(geometry.svg).toEqual([280, 280]);
     expect(Math.abs(geometry.png.top - geometry.svgButton.top)).toBeLessThanOrEqual(1);
     expect(geometry.svgButton.left).toBeGreaterThan(geometry.png.right);
