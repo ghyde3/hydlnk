@@ -66,9 +66,12 @@ test.describe("M7-13 who sees the screen", () => {
 
     await signInAsUser(context, "blsna");
     await page.goto(url("app", "/no-such-route-m713"));
+    // Dev compiles the 404 on first use: wait for it to draw before reading its text.
+    await expect(page.getByText("That page doesn’t exist.")).toBeVisible({ timeout: 30_000 });
     const unknownText = (await page.locator("body").innerText()).trim();
     const response = await page.goto(SCREEN);
     expect(response?.status()).toBe(404);
+    await expect(page.getByText("That page doesn’t exist.")).toBeVisible({ timeout: 30_000 });
     expect((await page.locator("body").innerText()).trim()).toBe(unknownText);
     expect(unknownText.length).toBeGreaterThan(0);
     expect((await tenantRaw("mara", "/admin/blocked-links")).status).toBe(404);

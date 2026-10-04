@@ -193,7 +193,7 @@ test.describe("M6-12 the dialog", () => {
     await signedInUser(context, { label: "mem" });
     await openDialog(page);
     await dialog(page).getByRole("button", { name: "Create link", exact: true }).click();
-    await expect(field(page)).toBeVisible();
+    await expect(field(page)).toBeVisible({ timeout: 30_000 }); // the first POST /share compiles in dev
     const token = (await field(page).inputValue()).slice(-43);
 
     const leaks = async () =>

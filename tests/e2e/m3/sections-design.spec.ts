@@ -3,7 +3,7 @@ import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { openEditor, pageRow, seededUser, setDraft, statusChip } from "../m2/editor-helpers";
-import { padTo } from "../m2/publish-helpers";
+import { SERVER_PORT, padTo } from "../m2/publish-helpers";
 import { makeJpeg } from "../m5/images-fixtures";
 import {
   expectOverrides,
@@ -15,6 +15,9 @@ import {
   showPreview,
   showTokens,
 } from "./design-helpers";
+
+/** The canonical media origin: every uploaded image loads from the root host (M7-15). */
+const MEDIA_ORIGIN = `http://localhost:${SERVER_PORT}`;
 
 /**
  * M3-11 .. M3-16: the shape, spacing and background sections of the Design screen, one flow per
@@ -67,11 +70,11 @@ async function inPreview<T>(page: Page, read: () => Promise<T>): Promise<T> {
 }
 
 /**
- * What a browser computes for a background image served from `/media` on `page`'s own host (M7-15):
+ * What a browser computes for a background image served from `/media` on the canonical root origin (M7-15):
  * the stored form is the Storage URL, the address drawn is `/media/{path}`.
  */
-const mediaCss = (page: Page, stored: string): string =>
-  `url("${new URL(page.url()).origin}/media/${stored.split("/page-media/")[1]}")`;
+const mediaCss = (_page: Page, stored: string): string =>
+  `url("${MEDIA_ORIGIN}/media/${stored.split("/page-media/")[1]}")`;
 
 /** Every option of the named groups is at least 44px tall on a phone and nothing scrolls sideways. */
 async function expectPhoneFit(page: Page, ...groups: string[]): Promise<void> {

@@ -668,7 +668,10 @@ test.describe("M2-20 image block", () => {
     await expect(img).toHaveAttribute("width", "600");
     await expect(img).toHaveAttribute("height", "300");
     await expect(img).toHaveAttribute("loading", "lazy");
-    await expect(img).toHaveAttribute("src", new RegExp(`^/media/${image.path}$`));
+    await expect(img).toHaveAttribute(
+      "src",
+      new RegExp(`^http://localhost:\\d+/media/${image.path}$`),
+    );
     const anchor = linked!.locator("a");
     await expect(anchor).toHaveAttribute(
       "href",
