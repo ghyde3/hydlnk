@@ -235,7 +235,8 @@ test.describe("M5-10 the traffic review list", () => {
       "Page",
       "Owner",
       "Plan",
-      "Views, 30 days",
+      "Views, last month",
+      "Views, month before",
       "Flagged",
       "Actions",
     ]);

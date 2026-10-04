@@ -1,16 +1,20 @@
 -- Wave E high-traffic flag (M5-10): traffic_flags is server only, flag_high_traffic_pages() flags Free pages
 -- over the line once (and again 30 days after a review), never touches how a page serves, and nobody but the
 -- server can call it; admin_traffic_flags() feeds /admin/traffic.
+--
+-- Wave I (M7-10) changed the rule from one trailing 30-day window to TWO complete UTC calendar months in a
+-- row (each strictly over the threshold). The fixtures below are built from the month boundaries, so the
+-- test is right on any day of the month; the rule's own table of cases is 140-traffic-two-months.
 
 begin;
 select plan(52);
 
-select tests.create_supabase_user('hot', 'hot-tf113@example.test');       -- free, 100,001 views in the window
-select tests.create_supabase_user('warm', 'warm-tf113@example.test');     -- free, 99,999
-select tests.create_supabase_user('edge', 'edge-tf113@example.test');     -- free, exactly 100,000
-select tests.create_supabase_user('pro', 'pro-tf113@example.test');       -- pro, 500,000
-select tests.create_supabase_user('studio', 'studio-tf113@example.test'); -- studio, 500,000
-select tests.create_supabase_user('out', 'out-tf113@example.test');       -- free, a lot of views, all outside the window
+select tests.create_supabase_user('hot', 'hot-tf113@example.test');       -- free, 100,001 views in each of the two months
+select tests.create_supabase_user('warm', 'warm-tf113@example.test');     -- free, 99,999 in each
+select tests.create_supabase_user('edge', 'edge-tf113@example.test');     -- free, exactly 100,000 in each
+select tests.create_supabase_user('pro', 'pro-tf113@example.test');       -- pro, 500,000 in each
+select tests.create_supabase_user('studio', 'studio-tf113@example.test'); -- studio, 500,000 in each
+select tests.create_supabase_user('out', 'out-tf113@example.test');       -- free, a lot of views, all outside the two months
 
 update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('pro');
 update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('studio');
@@ -23,29 +27,45 @@ insert into public.pages (id, owner_id, handle, draft, published, published_at) 
   ('00000000-0000-4000-8000-0000000113a5', tests.get_supabase_uid('studio'), 'tf113-studio', '{"version":1}', null, null),
   ('00000000-0000-4000-8000-0000000113a6', tests.get_supabase_uid('out'),    'tf113-out',    '{"version":1}', null, null);
 
+-- Month boundaries, UTC: the later month is the one before this month, the earlier one the month before that.
 create function pg_temp.day(p_ago integer) returns date language sql as
 $$ select (now() at time zone 'utc')::date - p_ago $$;
+create function pg_temp.current_start() returns date language sql as
+$$ select date_trunc('month', now() at time zone 'utc')::date $$;
+create function pg_temp.later_start() returns date language sql as
+$$ select (date_trunc('month', now() at time zone 'utc') - interval '1 month')::date $$;
+create function pg_temp.earlier_start() returns date language sql as
+$$ select (date_trunc('month', now() at time zone 'utc') - interval '2 months')::date $$;
+create function pg_temp.three_start() returns date language sql as
+$$ select (date_trunc('month', now() at time zone 'utc') - interval '3 months')::date $$;
 
--- The window is the 30 UTC days ending yesterday: today - 30 through today - 1.
 insert into public.daily_stats (page_id, block_id, day, views, clicks, uniques) values
-  -- hot: 50,000 + 50,000 + 1 inside the window; today and day -31 must not count
-  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.day(1),  50000, 0, 1),
-  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.day(15), 50000, 0, 1),
-  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.day(30), 1,     0, 1),
-  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.day(0),  1000,  0, 1),
-  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.day(31), 1000,  0, 1),
+  -- hot: 50,000 + 50,000 + 1 in each of the two complete months; the current month's first day and the day
+  -- before the earlier month must not count
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.earlier_start() + 1,  50000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.earlier_start() + 14, 50000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.later_start() - 1,    1,     0, 1),
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.later_start(),        50000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.later_start() + 14,   50000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.current_start() - 1,  1,     0, 1),
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.current_start(),      1000,  0, 1),
+  ('00000000-0000-4000-8000-0000000113a1', '', pg_temp.earlier_start() - 1,  1000,  0, 1),
   -- block rows never count as views
-  ('00000000-0000-4000-8000-0000000113a1', 'Bt5rJ1fGz6Os', pg_temp.day(2), 0, 70000, 3),
-  -- warm: 99,999
-  ('00000000-0000-4000-8000-0000000113a2', '', pg_temp.day(3),  99999, 0, 1),
-  -- edge: exactly 100,000 (not above the line)
-  ('00000000-0000-4000-8000-0000000113a3', '', pg_temp.day(3),  100000, 0, 1),
-  -- pro and studio: 500,000
-  ('00000000-0000-4000-8000-0000000113a4', '', pg_temp.day(3),  500000, 0, 1),
-  ('00000000-0000-4000-8000-0000000113a5', '', pg_temp.day(3),  500000, 0, 1),
-  -- out: huge, but only today and 31 days ago
-  ('00000000-0000-4000-8000-0000000113a6', '', pg_temp.day(0),  300000, 0, 1),
-  ('00000000-0000-4000-8000-0000000113a6', '', pg_temp.day(31), 300000, 0, 1);
+  ('00000000-0000-4000-8000-0000000113a1', 'Bt5rJ1fGz6Os', pg_temp.later_start() + 1, 0, 70000, 3),
+  -- warm: 99,999 in each month
+  ('00000000-0000-4000-8000-0000000113a2', '', pg_temp.earlier_start() + 3,  99999, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a2', '', pg_temp.later_start() + 3,    99999, 0, 1),
+  -- edge: exactly 100,000 in each month (not above the line)
+  ('00000000-0000-4000-8000-0000000113a3', '', pg_temp.earlier_start() + 3,  100000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a3', '', pg_temp.later_start() + 3,    100000, 0, 1),
+  -- pro and studio: 500,000 in each month
+  ('00000000-0000-4000-8000-0000000113a4', '', pg_temp.earlier_start() + 3,  500000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a4', '', pg_temp.later_start() + 3,    500000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a5', '', pg_temp.earlier_start() + 3,  500000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a5', '', pg_temp.later_start() + 3,    500000, 0, 1),
+  -- out: huge, but only in the current month and in the month before the two
+  ('00000000-0000-4000-8000-0000000113a6', '', pg_temp.current_start(),      300000, 0, 1),
+  ('00000000-0000-4000-8000-0000000113a6', '', pg_temp.three_start() + 3,    300000, 0, 1);
 
 -- ---------------------------------------------------------------------------
 -- traffic_flags: server only
@@ -91,10 +111,11 @@ select cmp_ok(public.flag_high_traffic_pages(), '>=', 1, 'the server runs the fl
 
 reset role;
 select results_eq(
-  $$ select page_id, views, window_start - pg_temp.day(0), window_end - pg_temp.day(0), reviewed_at is null
+  $$ select page_id, views, views_previous_month, window_start - pg_temp.earlier_start(),
+            window_end - (pg_temp.current_start() - 1), reviewed_at is null
      from public.traffic_flags where page_id in (select id from public.pages where handle like 'tf113-%') $$,
-  $$ values ('00000000-0000-4000-8000-0000000113a1'::uuid, 100001, -30, -1, true) $$,
-  'a Free page with 100,001 views in the 30 days ending yesterday gets exactly one flag with views = 100001'
+  $$ values ('00000000-0000-4000-8000-0000000113a1'::uuid, 100001, 100001, 0, 0, true) $$,
+  'a Free page with 100,001 views in each of the last two complete months gets exactly one flag with views = 100001'
 );
 select is_empty(
   $$ select 1 from public.traffic_flags where page_id in (
@@ -108,7 +129,7 @@ select is_empty(
 );
 select is_empty(
   $$ select 1 from public.traffic_flags where page_id = '00000000-0000-4000-8000-0000000113a6' $$,
-  'views outside the window (today and 31 days ago) do not count'
+  'views outside the two complete months (the current month and the month before them) do not count'
 );
 select is(
   (select published from public.pages where id = '00000000-0000-4000-8000-0000000113a1'),
@@ -126,7 +147,7 @@ select is(
   (select count(*)::int from public.traffic_flags where page_id = '00000000-0000-4000-8000-0000000113a1'),
   1, 'and adds no row'
 );
-update public.daily_stats set views = 90000 where page_id = '00000000-0000-4000-8000-0000000113a1' and day = pg_temp.day(1);
+update public.daily_stats set views = 90000 where page_id = '00000000-0000-4000-8000-0000000113a1' and block_id = '' and day = pg_temp.later_start();
 select lives_ok($$ select public.flag_high_traffic_pages() $$, 'a run after the page grew');
 select is(
   (select count(*)::int from public.traffic_flags where page_id = '00000000-0000-4000-8000-0000000113a1'),
@@ -151,7 +172,7 @@ select results_eq(
   $$ select (reviewed_at is null)::text, views from public.traffic_flags
      where page_id = '00000000-0000-4000-8000-0000000113a1' order by (reviewed_at is null) $$,
   $$ values ('false', 100001), ('true', 140001) $$,
-  'a page still over the line is flagged again, with the current sum'
+  'a page still over the line in both months is flagged again, with the current sum'
 );
 
 -- A page that moved to Pro is no longer flagged
@@ -165,7 +186,7 @@ select is(
 update public.accounts set plan = 'free' where id = tests.get_supabase_uid('hot');
 
 -- The threshold is a parameter, strictly greater than
-select cmp_ok(public.flag_high_traffic_pages(99998), '>=', 2, 'a lower threshold flags the 99,999 and 100,000 pages');
+select cmp_ok(public.flag_high_traffic_pages(99998), '>=', 2, 'a lower threshold flags the 99,999 and 100,000 pages (over it in both months)');
 select is(
   (select count(*)::int from public.traffic_flags where page_id in (
      '00000000-0000-4000-8000-0000000113a2', '00000000-0000-4000-8000-0000000113a3')),
@@ -213,10 +234,11 @@ select throws_ok(
 select throws_ok($$ delete from public.traffic_flags $$, '42501', null, 'and cannot delete flags');
 
 select results_eq(
-  $$ select handle, owner_email, plan, views, reviewed_at is null from public.admin_traffic_flags(false, 200, 0)
+  $$ select handle, owner_email, plan, views, views_previous_month, reviewed_at is null
+     from public.admin_traffic_flags(false, 200, 0)
      where page_id = '00000000-0000-4000-8000-0000000113a3' $$,
-  $$ values ('tf113-edge', 'edge-tf113@example.test', 'free', 100000, true) $$,
-  'admin_traffic_flags lists unreviewed flags with handle, owner email, plan and views'
+  $$ values ('tf113-edge', 'edge-tf113@example.test', 'free', 100000, 100000, true) $$,
+  'admin_traffic_flags lists unreviewed flags with handle, owner email, plan and the views of both months'
 );
 select is_empty(
   $$ select 1 from public.admin_traffic_flags(false, 200, 0) where page_id = '00000000-0000-4000-8000-0000000113a2' $$,

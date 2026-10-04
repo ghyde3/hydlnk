@@ -1,14 +1,28 @@
 import type { Browser } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { addViews, rollupDay, utcDay } from "../m4/analytics-db-helpers";
+import { addViews, rollupDay } from "../m4/analytics-db-helpers";
 import { signInAsUser } from "./admin-helpers";
 
 /**
  * Helpers for the high-traffic flag specs (M5-10). A flag comes from the real pipeline, with the
- * secret key only: events, the rollup of their day, then flag_high_traffic_pages. The job's default
+ * secret key only: events, the rollup of their days, then flag_high_traffic_pages. The job's default
  * line is 100,000 views; the specs pass a threshold of 1,000 and seed 1,234 views instead, which is
- * the same code path without 100,000 rows. (pgTAP 113 proves the default line.)
+ * the same code path without 100,000 rows. (pgTAP 113 and 140 prove the default line.)
+ *
+ * Since M7-10 a Free page is flagged only when it is over the line in BOTH of the two complete UTC
+ * calendar months before the current one, so the seed puts the same views in each: one day at the end
+ * of the earlier month and one at the start of the later month (both always inside the 90 days the raw
+ * events are kept). The flag's `views` is then the later month's 1,234.
  */
+
+/** The two seed days, UTC, "2026-08-31" and "2026-09-01" in October: the earlier month's last day, the later month's first. */
+export function twoMonthSeedDays(now = new Date()): { earlier: string; later: string } {
+  const laterStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
+  return {
+    earlier: new Date(laterStart - 86_400_000).toISOString().slice(0, 10),
+    later: new Date(laterStart).toISOString().slice(0, 10),
+  };
+}
 
 export const SEED_VIEWS = 1234;
 export const SEED_THRESHOLD = 1000;
@@ -44,16 +58,19 @@ export async function flagOf(
 }
 
 /**
- * A fresh Free user with a published page, SEED_VIEWS views yesterday, rolled up and flagged.
- * The owner signs in on a context of their own (the caller's context stays free for the admin).
+ * A fresh Free user with a published page, SEED_VIEWS views in each of the two complete months,
+ * rolled up and flagged. The owner signs in on a context of their own (the caller's context stays free
+ * for the admin).
  */
 export async function seedFlaggedPage(browser: Browser, label: string): Promise<FlaggedPage> {
   const ownerContext = await browser.newContext();
   try {
     const owner = await signInAsUser(ownerContext, label);
-    const day = utcDay(1);
-    await addViews(owner.pageId!, day, SEED_VIEWS);
-    await rollupDay(day);
+    const days = twoMonthSeedDays();
+    for (const day of [days.earlier, days.later]) {
+      await addViews(owner.pageId!, day, SEED_VIEWS);
+      await rollupDay(day);
+    }
     await runFlagJob();
     const flag = await flagOf(owner.pageId!);
     if (!flag) throw new Error(`seedFlaggedPage: ${owner.handle} was not flagged`);

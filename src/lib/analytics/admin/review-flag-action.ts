@@ -6,7 +6,9 @@ import { fail, type ActionResult, type AdminAction } from "@/lib/admin/types";
  * "Mark reviewed" for a high-traffic flag (M5-10): `traffic_flags.reviewed_at = now()` with the
  * secret key, only while it is still null, so a double click keeps the first timestamp and answers
  * 200 with `changed: false`. The page itself is never touched: a flagged page keeps serving, and a
- * reviewed flag only silences the nightly job for 30 days (flag_high_traffic_pages).
+ * reviewed flag only silences the nightly job for 30 days. That job (flag_high_traffic_pages) flags a
+ * Free page only when it is strictly over the threshold in each of the last
+ * two complete UTC calendar months.
  *
  * This is an `AdminAction` like the ones in `@/lib/admin/actions`, so it reaches the database only
  * through `executeAdminAction` (403 for a signed-in non-admin, 401 for nobody, before anything is

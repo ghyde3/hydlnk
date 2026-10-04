@@ -7,9 +7,10 @@ export const ADMIN_SECTIONS = [
   { segment: "reports", href: "/admin/reports", label: "Reports" },
   { segment: "pages", href: "/admin/pages", label: "Pages" },
   { segment: "traffic", href: "/admin/traffic", label: "Traffic" },
+  { segment: "blocked-links", href: "/admin/blocked-links", label: "Blocked links" },
 ] as const;
 
-/** Desktop sidebar navigation (>= 760px): Reports, Pages, Traffic. */
+/** Desktop sidebar navigation (>= 760px): Reports, Pages, Traffic, Blocked links. */
 export function AdminSidebarNav() {
   const current = useSelectedLayoutSegment();
   return (

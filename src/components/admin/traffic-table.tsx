@@ -16,6 +16,10 @@ const LABEL = "mr-2 font-mono text-[11px] tracking-[0.06em] text-text-3 uppercas
  * The high-traffic review queue (M5-10): a data table (mono numbers, a mono uppercase header row on
  * --hl-page, like Analytics.dc.html) at 760px and up, stacked cards below it. A handle, an email and
  * every other string is React text, so nothing in it can run.
+ *
+ * A flag means the page was over the line in each of the last two complete UTC calendar months
+ * (M7-10): "Views, last month" is the later one, "Views, month before" the earlier one. A flag made
+ * by the old 30-day rule has no second month and shows a dash.
  */
 export function TrafficTable({ flags, reviewed }: { flags: TrafficFlagRow[]; reviewed: boolean }) {
   return (
@@ -33,7 +37,10 @@ export function TrafficTable({ flags, reviewed }: { flags: TrafficFlagRow[]; rev
               Plan
             </th>
             <th scope="col" className={`${TH} text-right`}>
-              Views, 30 days
+              Views, last month
+            </th>
+            <th scope="col" className={`${TH} text-right`}>
+              Views, month before
             </th>
             <th scope="col" className={TH}>
               Flagged
@@ -76,10 +83,20 @@ export function TrafficTable({ flags, reviewed }: { flags: TrafficFlagRow[]; rev
                 </span>
               </td>
               <td className={`${TD} font-mono text-[13px] tabular-nums hl:text-right`}>
-                <span className={LABEL}>Views, 30 days</span>
+                <span className={LABEL}>Views, last month</span>
                 <span data-views={flag.views}>{formatViews(flag.views)}</span>
               </td>
-              <td className={`${TD} font-mono text-[13px]`}>
+              <td className={`${TD} font-mono text-[13px] tabular-nums hl:text-right`}>
+                <span className={LABEL}>Views, month before</span>
+                {flag.viewsPreviousMonth === null ? (
+                  <span data-views-previous="">—</span>
+                ) : (
+                  <span data-views-previous={flag.viewsPreviousMonth}>
+                    {formatViews(flag.viewsPreviousMonth)}
+                  </span>
+                )}
+              </td>
+              <td className={`${TD} font-mono text-[13px] hl:whitespace-nowrap`}>
                 <span className={LABEL}>Flagged</span>
                 {formatFlagDate(flag.flaggedAt)}
               </td>

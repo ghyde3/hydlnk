@@ -2,6 +2,12 @@
  * The pure half of the /admin/traffic screen (M5-10): types, query-string parsing and number and
  * date formatting. No `server-only` and no database, so components and unit tests import it freely;
  * `queries.ts` has the read.
+ *
+ * The rule behind a flag (M7-10): a Free page is flagged only when its page-level views are strictly
+ * above the threshold (100,000) in BOTH of the last two complete UTC calendar months, so one big
+ * month, let alone one big week, never triggers a review. `views` is the later month (the last
+ * complete one) and `viewsPreviousMonth` the earlier one. A flag made by the old 30-day rule has a
+ * null `viewsPreviousMonth` and shows a dash.
  */
 
 export const TRAFFIC_PAGE_SIZE = 100;
@@ -29,6 +35,8 @@ export interface RawTrafficFlag {
   owner_email: string | null;
   plan: string;
   views: number;
+  /** Null on a flag made by the old 30-day rule (and before the migration is applied). */
+  views_previous_month?: number | null;
   window_start: string;
   window_end: string;
   flagged_at: string;
@@ -43,9 +51,13 @@ export interface TrafficFlagRow {
   /** Null when the auth user row is gone (never expected: the account row cascades with it). */
   ownerEmail: string | null;
   plan: string;
-  /** Page views over the 30 UTC days ending the day before the flag. */
+  /** Page views in the later of the two complete UTC months (the last complete month). */
   views: number;
+  /** Page views in the month before that, or null for a flag made by the old 30-day rule. */
+  viewsPreviousMonth: number | null;
+  /** The first day of the earlier month (an old-rule flag: today - 30). */
   windowStart: string;
+  /** The last day of the later month (an old-rule flag: yesterday). */
   windowEnd: string;
   flaggedAt: string;
   reviewedAt: string | null;
@@ -60,6 +72,10 @@ export function toTrafficFlagRow(raw: RawTrafficFlag): TrafficFlagRow {
     ownerEmail: raw.owner_email,
     plan: raw.plan,
     views: Number(raw.views),
+    viewsPreviousMonth:
+      raw.views_previous_month === null || raw.views_previous_month === undefined
+        ? null
+        : Number(raw.views_previous_month),
     windowStart: raw.window_start,
     windowEnd: raw.window_end,
     flaggedAt: raw.flagged_at,

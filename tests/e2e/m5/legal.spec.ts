@@ -206,7 +206,8 @@ test.describe("M5-24 what each page covers", () => {
       /report link/i,
       /suspend/i,
       /Free plan traffic/i,
-      /review Free pages/i,
+      /more than about 100,000 views a month for two months in a row/i,
+      /never triggers a review/i,
     ]) {
       expect(text, String(phrase)).toMatch(phrase);
     }

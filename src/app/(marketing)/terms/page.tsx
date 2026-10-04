@@ -125,9 +125,28 @@ export default function TermsPage() {
 
       <h2 id="traffic">Free plan traffic</h2>
       <p>
-        Pages on every plan keep serving when traffic spikes. We review Free pages with unusually
-        high traffic, roughly 100,000 views a month or more, to make sure they’re within these
-        terms, and we may contact you about your plan. Your page keeps serving while we do.
+        Your page keeps serving when traffic spikes, on every plan. A post that takes off is the
+        whole point of a link in bio, and we will never switch off your page for being popular.
+      </p>
+      <p>
+        HYDLNK is a small company running on modest infrastructure, and the Free plan is generous by
+        choice. We ask for the same good faith in return.
+      </p>
+      <p>
+        If a Free page gets more than about 100,000 views a month for two months in a row, we’ll
+        take a look. A view is one page load by a person. We don’t count bots, crawlers, link
+        previews or our own checks. One big week never triggers a review.
+      </p>
+      <p>
+        When we review a page, we check that it fits these terms. If it does and the traffic is here
+        to stay, we’ll email you about a paid plan and give you at least 30 days to decide. Your
+        page keeps serving the whole time.
+      </p>
+      <p>
+        We may limit or suspend a page, sometimes without notice, if it’s used for automated or fake
+        traffic, scraping, load testing, hosting files or media for other sites, or anything else
+        that slows HYDLNK down for everyone. If you’re planning something big, write to us first.
+        We’d rather help.
       </p>
 
       <h2 id="payments">Plans, billing and refunds</h2>

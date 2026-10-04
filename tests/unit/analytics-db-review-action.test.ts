@@ -139,23 +139,32 @@ describe.skipIf(!run)("M5-10 mark reviewed (local Supabase)", () => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     owner = await makeOwner(admin, "tfrev");
-    // 1,234 views yesterday, rolled up, then flagged with a 1,000 threshold: the real pipeline
-    // (events -> rollup -> flag) without 100,000 rows.
-    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-    const rows = Array.from({ length: 1234 }, (_, i) => ({
-      page_id: owner.pageId,
-      block_id: "",
-      type: "view",
-      ts: `${yesterday}T12:00:00Z`,
-      referrer: "example.com",
-      device: "mobile",
-      country: "US",
-      visitor_hash: `v${i % 200}`,
-    }));
-    const insert = await admin.from("events").insert(rows);
-    expect(insert.error).toBeNull();
-    const rolled = await admin.rpc("rollup_daily_stats", { p_day: yesterday });
-    expect(rolled.error).toBeNull();
+    // 1,234 views in each of the two complete UTC months (M7-10: the flag needs both), rolled up,
+    // then flagged with a 1,000 threshold: the real pipeline (events -> rollup -> flag) without
+    // 100,000 rows. The days are the earlier month's last day and the later month's first day, both
+    // always inside the 90 days the raw events are kept.
+    const now = new Date();
+    const laterStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
+    const days = [
+      new Date(laterStart - 86_400_000).toISOString().slice(0, 10),
+      new Date(laterStart).toISOString().slice(0, 10),
+    ];
+    for (const day of days) {
+      const rows = Array.from({ length: 1234 }, (_, i) => ({
+        page_id: owner.pageId,
+        block_id: "",
+        type: "view",
+        ts: `${day}T12:00:00Z`,
+        referrer: "example.com",
+        device: "mobile",
+        country: "US",
+        visitor_hash: `v${i % 200}`,
+      }));
+      const insert = await admin.from("events").insert(rows);
+      expect(insert.error).toBeNull();
+      const rolled = await admin.rpc("rollup_daily_stats", { p_day: day });
+      expect(rolled.error).toBeNull();
+    }
     const flagged = await admin.rpc("flag_high_traffic_pages", { threshold: 1000 });
     expect(flagged.error).toBeNull();
     const flag = await admin
@@ -185,6 +194,7 @@ describe.skipIf(!run)("M5-10 mark reviewed (local Supabase)", () => {
       ownerEmail: owner.email,
       plan: "free",
       views: 1234,
+      viewsPreviousMonth: 1234,
       reviewedAt: null,
     });
   });

@@ -7,7 +7,7 @@ import { AdminSegmentedNav, AdminSidebarNav } from "./admin-nav";
 /**
  * The admin chrome (DESIGN.md -> Layout and responsive rules), the same shape as the app shell but
  * with its own sections and no page switcher or plan card:
- *   >= 760px  a 240px charcoal sidebar (logo, Reports / Pages / Traffic, a link back to the app, the
+ *   >= 760px  a 240px charcoal sidebar (logo, Reports / Pages / Traffic / Blocked links, a link back to the app, the
  *             signed-in admin) beside <main>
  *   <  760px  a charcoal top bar (logo and "Admin") with the sections as a segmented control under it
  * Screens render their own header and content inside <main>.
