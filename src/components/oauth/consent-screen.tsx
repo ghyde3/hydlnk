@@ -21,7 +21,8 @@ import {
 
 /**
  * The consent screen (M10-13): who is asking, where the person goes afterwards, who is signed in,
- * what the app gets, what can be unticked, and Allow or Deny. Every value shown is text and is escaped
+ * what the app gets, what can be unticked, and Allow or Deny. Edit your drafts starts ticked; Publish
+ * your pages starts unticked unless the person already allowed it for this app (`startsTicked`). Every value shown is text and is escaped
  * by React: an app named `<img src=x onerror=alert(1)>` renders as those characters.
  *
  * The form posts the request id, the form secret, the decision and the scope ticks to
@@ -30,7 +31,26 @@ import {
  * Allow, then Deny; on a wide screen the two buttons sit side by side with Deny on the left.
  */
 
-function ScopeRow({ scope, fixed }: { scope: OauthScope; fixed?: boolean }) {
+/**
+ * Whether an optional scope starts ticked (Gary, 2026-10-04, M10-37). Edit your drafts always does;
+ * Publish your pages starts unticked, unless this person already holds an active grant to the same
+ * app that includes it, so a reconnect does not quietly take publish away. The server still grants
+ * only what the posted ticks name.
+ */
+export function startsTicked(scope: OauthScope, previous: readonly OauthScope[] | null): boolean {
+  if (scope === SCOPE_PUBLISH) return previous?.includes(SCOPE_PUBLISH) ?? false;
+  return true;
+}
+
+function ScopeRow({
+  scope,
+  fixed,
+  ticked = true,
+}: {
+  scope: OauthScope;
+  fixed?: boolean;
+  ticked?: boolean;
+}) {
   const label = SCOPE_LABELS[scope];
   return (
     <label className={fixed ? "scope fixed" : "scope"}>
@@ -38,7 +58,7 @@ function ScopeRow({ scope, fixed }: { scope: OauthScope; fixed?: boolean }) {
         type="checkbox"
         {...(fixed
           ? { disabled: true, defaultChecked: true }
-          : { name: "scope", value: scope, defaultChecked: true })}
+          : { name: "scope", value: scope, defaultChecked: ticked })}
       />
       <span className="box" aria-hidden="true" />
       <span className="text">
@@ -113,7 +133,7 @@ export function ConsentScreen({ view }: { view: ConsentView }) {
           <legend>What it can do</legend>
           <ScopeRow scope={SCOPE_READ} fixed />
           {optional.includes(SCOPE_WRITE) ? <ScopeRow scope={SCOPE_WRITE} /> : null}
-          {optional.includes(SCOPE_PUBLISH) ? <ScopeRow scope={SCOPE_PUBLISH} /> : null}
+          {optional.includes(SCOPE_PUBLISH) ? <ScopeRow scope={SCOPE_PUBLISH} ticked={startsTicked(SCOPE_PUBLISH, view.previous)} /> : null}
         </fieldset>
         <p className="after">{STAYS_CONNECTED}</p>
         <div className="actions">

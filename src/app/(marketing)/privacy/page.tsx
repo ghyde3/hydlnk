@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ACCESS_LIFETIME_WORDS, CONNECTION_IDLE_DAYS } from "@/components/marketing/connect-facts";
-import { LegalPage } from "@/components/marketing/legal-page";
+import { LegalPage, PRIVACY_UPDATED } from "@/components/marketing/legal-page";
 import { marketingMetadata } from "@/components/marketing/metadata";
 import { POSTAL_ADDRESS, PRIVACY_EMAIL, SUPPORT_EMAIL } from "@/components/marketing/site-map";
 import { RAW_EVENT_RETENTION_DAYS } from "@/lib/analytics/retention";
@@ -44,6 +44,7 @@ export default function PrivacyPage() {
       current="privacy"
       title="Privacy policy"
       toc={TOC}
+      updated={PRIVACY_UPDATED}
       intro={
         <p>
           This policy explains what information HYDLNK collects when you use hydlnk.com, the editor

@@ -184,7 +184,7 @@ test.describe("M10-13 and M10-15 Allow, the code, and the tokens", () => {
     expect(first.body).toMatchObject({
       token_type: "Bearer",
       expires_in: 3600,
-      scope: "hydlnk.read hydlnk.write hydlnk.publish",
+      scope: "hydlnk.read hydlnk.write",
     });
     const access = String(first.body.access_token);
     const refresh = String(first.body.refresh_token);
@@ -228,7 +228,7 @@ test.describe("M10-13 and M10-15 Allow, the code, and the tokens", () => {
     expect(wider.body.error).toBe("invalid_scope");
     const third = await refreshTokens(client.client_id, String(second.body.refresh_token));
     expect(third.status).toBe(200);
-    expect(third.body.scope).toBe("hydlnk.read hydlnk.write hydlnk.publish");
+    expect(third.body.scope).toBe("hydlnk.read hydlnk.write");
 
     // Presenting a rotated token again ends the family: the newest refresh token is dead as well.
     const reuse = await refreshTokens(client.client_id, String(first.body.refresh_token));
@@ -313,13 +313,18 @@ test.describe("M10-13 what the person decides", () => {
     expect(await rows("oauth_grants", { client_id: client.client_id })).toHaveLength(0);
   });
 
-  for (const [label, untick, expected] of [
-    ["both ticked", [] as string[], "hydlnk.read hydlnk.write hydlnk.publish"],
-    ["Publish unticked", ["Publish your pages"], "hydlnk.read hydlnk.write"],
-    ["both unticked", ["Edit your drafts", "Publish your pages"], "hydlnk.read"],
-    ["Write unticked, Publish ticked", ["Edit your drafts"], "hydlnk.read hydlnk.publish"],
+  // Edit your drafts starts ticked and Publish your pages starts unticked (M10-37, Gary 2026-10-04).
+  for (const [label, toggle, expected] of [
+    ["defaults, nothing touched", [] as string[], "hydlnk.read hydlnk.write"],
+    ["Publish ticked", ["Publish your pages"], "hydlnk.read hydlnk.write hydlnk.publish"],
+    ["Write unticked", ["Edit your drafts"], "hydlnk.read"],
+    [
+      "Write unticked, Publish ticked",
+      ["Edit your drafts", "Publish your pages"],
+      "hydlnk.read hydlnk.publish",
+    ],
   ] as const) {
-    test(`M10-13 scope downgrade through the real UI: ${label} gives '${expected}'`, async ({
+    test(`M10-13 M10-37 scope choice through the real UI: ${label} gives '${expected}'`, async ({
       page,
       context,
     }) => {
@@ -327,8 +332,12 @@ test.describe("M10-13 what the person decides", () => {
       const client = await registerClient();
       const pair = pkcePair();
       await page.goto(authorizeUrl(client.client_id, pair.challenge));
-      for (const name of untick) {
-        await page.getByRole("checkbox", { name: new RegExp(name) }).uncheck();
+      await expect(page.getByRole("checkbox", { name: /Edit your drafts/ })).toBeChecked();
+      await expect(page.getByRole("checkbox", { name: /Publish your pages/ })).not.toBeChecked();
+      for (const name of toggle) {
+        const box = page.getByRole("checkbox", { name: new RegExp(name) });
+        if (await box.isChecked()) await box.uncheck();
+        else await box.check();
       }
       const decision = await answer(page, "Allow");
       const tokens = await exchangeCode(
@@ -364,6 +373,7 @@ test.describe("M10-13 what the person decides", () => {
     const client = await registerClient();
     const first = pkcePair();
     await page.goto(authorizeUrl(client.client_id, first.challenge));
+    await page.getByRole("checkbox", { name: /Publish your pages/ }).check();
     const one = await exchangeCode(
       client.client_id,
       (await answer(page, "Allow")).location.searchParams.get("code")!,
@@ -379,6 +389,8 @@ test.describe("M10-13 what the person decides", () => {
     await expect(page.locator("body")).toContainText(
       "Allowed now: see your pages and analytics, edit your drafts, publish your pages.",
     );
+    // Publish is held, so it starts ticked again: a reconnect does not take it away unasked.
+    await expect(page.getByRole("checkbox", { name: /Publish your pages/ })).toBeChecked();
     await page.getByRole("checkbox", { name: /Publish your pages/ }).uncheck();
     const two = await exchangeCode(
       client.client_id,

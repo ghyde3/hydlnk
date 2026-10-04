@@ -77,12 +77,12 @@ interface Connection {
 /**
  * One whole connection, the way a desktop app makes it: register, open the authorization URL in a
  * signed-out browser, land on /login (no query), sign in, see the consent screen of the same request,
- * untick what the test wants unticked, answer, and read the redirect on the loopback listener.
+ * check that Publish your pages starts unticked (M10-37), tick it unless the test leaves it, answer, and read the redirect on the loopback listener.
  */
 async function connect(
   browser: Browser,
   user: { email: string },
-  options: { untick?: string[]; decision?: "Allow" | "Deny"; state?: string; name?: string } = {},
+  options: { leavePublish?: boolean; decision?: "Allow" | "Deny"; state?: string; name?: string } = {},
 ): Promise<Connection> {
   const name = options.name ?? `Zq desktop app ${rand(5)}`;
   const loopback = await startLoopback();
@@ -120,9 +120,11 @@ async function connect(
     ]) {
       await expect(page.getByRole("checkbox", { name: new RegExp(label) })).toBeVisible();
     }
-    for (const label of options.untick ?? []) {
-      await page.getByRole("checkbox", { name: new RegExp(label) }).uncheck();
-    }
+    // Gary, 2026-10-04: Edit your drafts starts ticked, Publish your pages starts unticked.
+    await expect(page.getByRole("checkbox", { name: /Edit your drafts/ })).toBeChecked();
+    const publishBox = page.getByRole("checkbox", { name: /Publish your pages/ });
+    await expect(publishBox).not.toBeChecked();
+    if (!options.leavePublish) await publishBox.check();
     await page.getByRole("button", { name: options.decision ?? "Allow" }).click();
     const arrived = await loopback.next();
     expect(arrived.pathname).toBe("/callback");
@@ -214,7 +216,7 @@ test("M10-33 the whole dance on registration, then every tool with the token it 
     grantId: grant.id,
   });
 
-  // A second protocol generation with the same token: server/discover and a tools/list with the envelope.
+  // A second protocol generation with the same token : server/discover and a tools/list with the envelope.
   const modern = new McpClient(connection.access, { era: "2026" });
   expect((await modern.rpc("server/discover")).status).toBe(200);
   expect(await modern.listTools()).toHaveLength(12);
@@ -225,12 +227,12 @@ test("M10-33 the whole dance on registration, then every tool with the token it 
   expect(used[0]!.last_used_at).not.toBeNull();
 });
 
-test("M10-33 (a) Publish unticked at consent: the token has read and write, publish_page is insufficient_scope with the step-up challenge, and the live page does not change", async ({
+test("M10-33 (a) / M10-37 Publish left unticked at consent (the default): the token has read and write, publish_page is insufficient_scope with the step-up challenge, and the live page does not change", async ({
   browser,
   context,
 }) => {
   const user = await prepareFlowUser(context, "flow-down");
-  const connection = await connect(browser, user, { untick: ["Publish your pages"] });
+  const connection = await connect(browser, user, { leavePublish: true });
   expect(connection.tokens.body.scope).toBe("hydlnk.read hydlnk.write");
   const mcp = new McpClient(connection.access);
   await mcp.initialize();

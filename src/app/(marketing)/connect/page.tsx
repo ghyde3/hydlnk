@@ -154,7 +154,7 @@ export default function ConnectPage() {
                 </li>
                 <li>
                   <strong>Sign in and allow.</strong> Sign in to HYDLNK, choose what to allow, and
-                  choose Allow. You can leave Publish your pages unticked.
+                  choose Allow. Tick Publish your pages only if you want the AI to publish for you.
                 </li>
               </ol>
               <p>

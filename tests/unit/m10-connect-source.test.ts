@@ -250,11 +250,18 @@ describe("M10-35 the privacy policy", () => {
     expect(privacy).toContain("only what you ask it to read, through the permissions you allowed.");
   });
 
-  it("does not touch the shared 'Last updated' date (Gary decides; PROGRESS.md lists it)", () => {
-    expect(privacy).not.toMatch(/updated=/);
+  it("Privacy has its own 'Last updated' date, October 4, 2026; Terms and the shared default are untouched", () => {
+    expect(privacy).toMatch(/updated=\{PRIVACY_UPDATED\}/);
     // Read as source: the legal-page module pulls in the page chrome, which needs the client env.
-    expect(read("src/components/marketing/legal-page.tsx")).toContain(
+    const legal = read("src/components/marketing/legal-page.tsx");
+    expect(legal).toContain(
+      'export const PRIVACY_UPDATED = { iso: "2026-10-04", label: "October 4, 2026" }',
+    );
+    expect(legal).toContain(
       'export const LEGAL_UPDATED = { iso: "2026-10-02", label: "October 2, 2026" }',
+    );
+    expect(legal).toContain(
+      'export const TERMS_UPDATED = { iso: "2026-10-03", label: "October 3, 2026" }',
     );
   });
 });

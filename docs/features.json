@@ -5026,6 +5026,22 @@
       ],
       "mockup": "",
       "passes": false
+    },
+    {
+      "id": "M10-37",
+      "milestone": 10,
+      "area": "auth",
+      "title": "Publish your pages starts unticked on the consent screen (Gary, 2026-10-04)",
+      "acceptance": [
+        "Supersedes M10-13 in this respect only: M10-13's step that both optional scopes are 'ticked by default when requested' no longer holds for Publish your pages (Gary, 2026-10-04); every other step of M10-13 stands.",
+        "Consent screen (`src/components/oauth/consent-screen.tsx`, `startsTicked`): Edit your drafts (`hydlnk.write`) starts ticked. Publish your pages (`hydlnk.publish`) starts unticked, unless this person already holds an active grant to this same client that includes `hydlnk.publish` (`view.previous`), in which case it starts ticked so a reconnect does not take publish away unasked. Read stays always on. The server still grants only the scopes posted, plus read.",
+        "A Vitest (`tests/unit/m10-oauth-consent-default.test.tsx`) renders the screen from the real consent view for each case: first connect (write ticked, publish unticked), reconnect with publish held (both ticked), reconnect without publish (publish unticked); and proves a post without the publish tick gives a grant of read and write only.",
+        "The `/connect` steps say to tick Publish your pages only if you want the AI to publish for you, and the Privacy policy 'Last updated' reads October 4, 2026 (its own `PRIVACY_UPDATED`; Terms keep October 3, 2026).",
+        "A Playwright row at 390 and 1440 (`tests/e2e/m10/oauth-dance.spec.ts`, `flow.spec.ts`): the Publish your pages box is unticked on a first connect; pressing Allow without ticking it gives a token and grant of `hydlnk.read hydlnk.write`; a call to `publish_page` with that token is refused as `insufficient_scope` with the step-up challenge and the live page does not change; ticking the box gives all three scopes and `publish_page` then works.",
+        "`pnpm typecheck`, `pnpm lint` and `pnpm test` pass, and `tests/e2e/m10/` passes at 390 and 1440 with `--workers=2`."
+      ],
+      "mockup": "",
+      "passes": false
     }
   ]
 }

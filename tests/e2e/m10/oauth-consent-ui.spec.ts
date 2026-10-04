@@ -163,7 +163,8 @@ test.describe("M10-13 what the screen says", () => {
     await expect(boxes.nth(1)).toBeChecked();
     await expect(boxes.nth(1)).toBeEnabled();
     await expect(boxes.nth(2)).toHaveAccessibleName(/Publish your pages/);
-    await expect(boxes.nth(2)).toBeChecked();
+    // M10-37 (Gary, 2026-10-04): Publish your pages starts unticked.
+    await expect(boxes.nth(2)).not.toBeChecked();
     await expect(boxes.nth(2)).toBeEnabled();
     await expect(page.locator("body")).toContainText("Always included");
     await expect(page.locator("body")).toContainText(

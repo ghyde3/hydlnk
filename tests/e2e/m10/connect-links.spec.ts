@@ -293,8 +293,8 @@ test.describe("M10-35 the privacy policy", () => {
       .evaluateAll((els) => els.map((el) => el.getAttribute("href")))) {
       await expect(page.locator(href!), href!).toHaveCount(1);
     }
-    // The shared date is not touched by this feature.
-    await expect(page.getByText("Last updated October 2, 2026", { exact: true })).toBeVisible();
+    // The section moved Privacy to its own date (Gary, 2026-10-04); Terms and the shared default stay.
+    await expect(page.getByText("Last updated October 4, 2026", { exact: true })).toBeVisible();
   });
 
   test("M10-35 the section says what is stored, what an app can do, who handles it, the lifetimes, removal and cookies", async ({
