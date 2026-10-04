@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { TenantFonts } from "@/components/design/tenant-fonts";
-import { PageRenderer } from "@/components/page/page-renderer";
+import { InteractivePageRenderer } from "@/components/previews/interactive-page";
 import { DraftPreviewBar } from "@/components/previews/preview-bars";
 import { PreviewFrame } from "@/components/previews/preview-frame";
 import { requireUser } from "@/lib/auth/session";
@@ -64,7 +64,7 @@ export default async function DraftPreviewPage({ params }: PageProps<"/app/previ
       <TenantFonts tokens={doc.tokens} />
       <DraftPreviewBar status={status} />
       <PreviewFrame>
-        <PageRenderer
+        <InteractivePageRenderer
           doc={doc}
           pageId={owned.data.id}
           mode="preview"

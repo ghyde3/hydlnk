@@ -1,14 +1,15 @@
 # Analytics storage: final shapes (Wave E, analytics-db)
 
 Owner: analytics-db. Migrations `supabase/migrations/20261004000002_analytics.sql` (rollup, retention,
-plan gating), `20261004000004_traffic_flags.sql` (high-traffic flag) and `20261007000001_traffic_two_months.sql`
-(the flag needs two complete months, M7-10). Everything is UTC.
+plan gating), `20261004000004_traffic_flags.sql` (high-traffic flag), `20261007000001_traffic_two_months.sql`
+(the flag needs two complete months, M7-10) and `20261008000001_events_60_days.sql` (raw events kept 60 days instead
+of 90, M8-12). Everything is UTC.
 
-## Retention: the 90 days is raw events only
+## Retention: the 60 days is raw events only
 
 | Data                                               | Kept                                                    | Read by                                    |
 | -------------------------------------------------- | ------------------------------------------------------- | ------------------------------------------ |
-| `events` (raw, one row per view or click)          | **90 days** (UTC day -90 stays, day -91 goes)           | today's numbers; any day not yet rolled up |
+| `events` (raw, one row per view or click)          | **60 days** (UTC day -60 stays, day -61 goes)           | today's numbers; any day not yet rolled up |
 | `daily_stats`, `daily_dim_stats` (nightly rollups) | **forever, never deleted** (only cascade with the page) | every completed day                        |
 
 Pro and Studio get a 1-year range (and more) because that range reads the rollups, not the raw rows. The purge
@@ -58,7 +59,7 @@ A page with no events on a day gets no rows for that day (no zero rows).
 | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `rollup_daily_stats(p_day date)`                                             | Recomputes one UTC day for every page that has events that day: deletes that page's rows for the day (both tables) and inserts them again. Idempotent. A page with no events that day is left untouched, so re-running a day whose raw rows were already purged destroys nothing. | number of `daily_stats` rows written |
 | `rollup_recent_days(n integer)`                                              | Rolls up the last `n` completed UTC days (today excluded), oldest first. `n` must be 1 to 400.                                                                                                                                                                                    | total `daily_stats` rows written     |
-| `purge_old_events()`                                                         | Rolls up every UTC day older than 90 days that still has raw events, then deletes those events, in one transaction.                                                                                                                                                               | number of events deleted             |
+| `purge_old_events()`                                                         | Rolls up every UTC day older than 60 days that still has raw events, then deletes those events, in one transaction.                                                                                                                                                               | number of events deleted             |
 | `run_nightly_maintenance()`                                                  | Kept for compatibility: `rollup_recent_days(3)` then `purge_old_events()`.                                                                                                                                                                                                        | void                                 |
 | `flag_high_traffic_pages(threshold integer default 100000)`                  | See "High-traffic flag": a Free page over the threshold in each of the last two complete UTC calendar months.                                                                                                                                                                     | number of flags created              |
 | `admin_traffic_flags(p_reviewed boolean, p_limit integer, p_offset integer)` | `/admin/traffic` list: flag + handle + owner email + plan + the views of both months.                                                                                                                                                                                             | rows                                 |
@@ -73,7 +74,7 @@ A page with no events on a day gets no rows for that day (no zero rows).
 
 The old `hydlnk-nightly-maintenance` job (03:10) is unscheduled by the migration. Until 00:10 UTC yesterday may
 not be rolled up yet: a reader that wants exact numbers can fall back to raw events for any completed day inside
-the last 90 days that has no page-level `daily_stats` row.
+the last 60 days that has no page-level `daily_stats` row.
 
 ## Row level security (reads only; nobody writes these tables through the API)
 

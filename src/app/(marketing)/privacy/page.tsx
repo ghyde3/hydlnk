@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LegalPage } from "@/components/marketing/legal-page";
 import { marketingMetadata } from "@/components/marketing/metadata";
 import { POSTAL_ADDRESS, PRIVACY_EMAIL, SUPPORT_EMAIL } from "@/components/marketing/site-map";
+import { RAW_EVENT_RETENTION_DAYS } from "@/lib/analytics/retention";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/privacy",
@@ -146,7 +147,7 @@ export default function PrivacyPage() {
           the country, which our hosting provider derives from the connection.
         </li>
         <li>
-          <strong>Retention.</strong> These individual events are kept for 90 days, then combined
+          <strong>Retention.</strong> These individual events are kept for {RAW_EVENT_RETENTION_DAYS} days, then combined
           into daily totals that contain no visitor-level information.
         </li>
         <li>
@@ -259,7 +260,7 @@ export default function PrivacyPage() {
       <h2 id="retention">How long we keep data</h2>
       <ul>
         <li><strong>Account information and page content</strong>: until you delete them or your account.</li>
-        <li><strong>Individual visitor events</strong>: 90 days, then only daily totals remain, for as long as the page exists.</li>
+        <li><strong>Individual visitor events</strong>: {RAW_EVENT_RETENTION_DAYS} days, then only daily totals remain, for as long as the page exists.</li>
         <li><strong>Billing records</strong>: as long as tax and accounting law requires.</li>
         <li><strong>Server logs</strong>: kept by our hosting provider for a short period for security and debugging.</li>
         <li><strong>Support emails and reports</strong>: as long as needed to deal with them and any follow-up.</li>

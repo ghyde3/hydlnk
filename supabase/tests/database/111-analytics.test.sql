@@ -1,7 +1,7 @@
 -- Wave E analytics storage (M4-24, M4-25, M4-30 database side):
 --   * the nightly rollup fills daily_stats and daily_dim_stats per UTC day, idempotently, and never touches a
 --     day whose raw events are gone;
---   * raw events are kept 90 UTC days and rolled up before they are deleted; rollups are never deleted;
+--   * raw events are kept 60 UTC days and rolled up before they are deleted; rollups are never deleted;
 --   * the rollup, purge and cron jobs exist and are not callable through the API;
 --   * owners read their own rollups under RLS, a Free owner only the last 30 UTC days of daily_stats and no
 --     daily_dim_stats, Pro and Studio everything, and a plan flip applies on the next query.
@@ -272,16 +272,16 @@ select is_empty(
 );
 
 -- ---------------------------------------------------------------------------
--- purge_old_events(): 90 UTC days, rolled up first, rollups never deleted
+-- purge_old_events(): 60 UTC days (M8-12, was 90), rolled up first, rollups never deleted
 -- ---------------------------------------------------------------------------
 
 insert into public.events (page_id, block_id, type, ts, visitor_hash) values
-  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(89, '12:00'),    'p89'),
-  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(90, '12:00'),    'p90'),
-  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(90, '00:00:00'), 'p90s'),
-  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(91, '23:59:59'), 'p91'),
-  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(91, '10:00'),    'p91'),
-  ('00000000-0000-4000-8000-0000000001a1', 'Bt5rJ1fGz6Os', 'click', pg_temp.at(91, '11:00'),    'p91'),
+  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(59, '12:00'),    'p59'),
+  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(60, '12:00'),    'p60'),
+  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(60, '00:00:00'), 'p60s'),
+  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(61, '23:59:59'), 'p61'),
+  ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(61, '10:00'),    'p61'),
+  ('00000000-0000-4000-8000-0000000001a1', 'Bt5rJ1fGz6Os', 'click', pg_temp.at(61, '11:00'),    'p61'),
   ('00000000-0000-4000-8000-0000000001a1', '',             'view',  pg_temp.at(120, '09:00'),   'p120');
 -- A rollup row far older than anything raw, which the purge must leave alone.
 insert into public.daily_stats (page_id, block_id, day, views, clicks, uniques)
@@ -290,20 +290,20 @@ insert into public.daily_dim_stats (page_id, day, dim, value, views, clicks)
   values ('00000000-0000-4000-8000-0000000001a1', pg_temp.day(200), 'device', 'mobile', 7, 0);
 
 select is_empty(
-  $$ select 1 from public.daily_stats where page_id = '00000000-0000-4000-8000-0000000001a1' and day in (pg_temp.day(91), pg_temp.day(120)) $$,
-  'before the purge, days -91 and -120 have no rollup'
+  $$ select 1 from public.daily_stats where page_id = '00000000-0000-4000-8000-0000000001a1' and day in (pg_temp.day(61), pg_temp.day(120)) $$,
+  'before the purge, days -61 and -120 have no rollup'
 );
-select cmp_ok(public.purge_old_events(), '>=', 4, 'the purge deletes the events of day -91 (three) and day -120 (one)');
+select cmp_ok(public.purge_old_events(), '>=', 4, 'the purge deletes the events of day -61 (three) and day -120 (one)');
 select results_eq(
-  $$ select visitor_hash from public.events where visitor_hash in ('p89', 'p90', 'p90s', 'p91', 'p120') order by 1 $$,
-  $$ values ('p89'), ('p90'), ('p90s') $$,
-  'day -89 and day -90 (even at 00:00:00) stay; day -91 and -120 are gone'
+  $$ select visitor_hash from public.events where visitor_hash in ('p59', 'p60', 'p60s', 'p61', 'p120') order by 1 $$,
+  $$ values ('p59'), ('p60'), ('p60s') $$,
+  'day -59 and day -60 (even at 00:00:00) stay; day -61 and -120 are gone'
 );
 select results_eq(
   $$ select block_id, views, clicks, uniques from public.daily_stats
-     where page_id = '00000000-0000-4000-8000-0000000001a1' and day = pg_temp.day(91) order by block_id $$,
+     where page_id = '00000000-0000-4000-8000-0000000001a1' and day = pg_temp.day(61) order by block_id $$,
   $$ values ('', 2, 1, 1), ('Bt5rJ1fGz6Os', 0, 1, 1) $$,
-  'day -91 was rolled up before it was deleted, with the right totals'
+  'day -61 was rolled up before it was deleted, with the right totals'
 );
 select results_eq(
   $$ select block_id, views, clicks, uniques from public.daily_stats
@@ -313,7 +313,7 @@ select results_eq(
 );
 select is(
   (select views from public.daily_dim_stats
-   where page_id = '00000000-0000-4000-8000-0000000001a1' and day = pg_temp.day(91) and dim = 'referrer' and value = 'direct'),
+   where page_id = '00000000-0000-4000-8000-0000000001a1' and day = pg_temp.day(61) and dim = 'referrer' and value = 'direct'),
   2,
   'and its breakdowns'
 );
@@ -329,14 +329,14 @@ select is(
 );
 select is_empty(
   $$ select 1 from public.events
-     where ts < (((now() at time zone 'utc')::date - 90)::timestamp at time zone 'utc') $$,
-  'no event older than 90 UTC days is left'
+     where ts < (((now() at time zone 'utc')::date - 60)::timestamp at time zone 'utc') $$,
+  'no event older than 60 UTC days is left'
 );
 select lives_ok($$ select public.purge_old_events() $$, 'a second purge finds nothing of ours to delete');
 select is(
-  (select count(*)::int from public.daily_stats where page_id = '00000000-0000-4000-8000-0000000001a1' and day = pg_temp.day(91)),
+  (select count(*)::int from public.daily_stats where page_id = '00000000-0000-4000-8000-0000000001a1' and day = pg_temp.day(61)),
   2,
-  'and leaves the day -91 rollup as it was'
+  'and leaves the day -61 rollup as it was'
 );
 select lives_ok($$ select public.run_nightly_maintenance() $$, 'the compatibility wrapper still runs');
 
@@ -358,7 +358,7 @@ select throws_ok($$ select public.purge_old_events() $$, '42501', null, 'authent
 
 reset role;
 select is(
-  (select count(*)::int from public.events where visitor_hash in ('p89', 'p90', 'p90s')),
+  (select count(*)::int from public.events where visitor_hash in ('p59', 'p60', 'p60s')),
   3,
   'no event was deleted by the refused purge attempts'
 );

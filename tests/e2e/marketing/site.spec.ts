@@ -157,7 +157,7 @@ test("privacy names the processors and the cookieless analytics; terms cover acc
     "Resend",
     "Google",
     "daily",
-    "90 days",
+    "60 days",
     "privacy@hydlnk.com",
     POSTAL,
   ]) {

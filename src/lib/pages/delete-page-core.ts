@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { expireDomainHost } from "@/lib/domains/expire-host";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -120,6 +121,9 @@ export async function deletePageWithClient(
     return failure("delete_failed");
   }
   if (!deleted.data || deleted.data.length === 0) return failure("not_found");
+
+  // The page and its domains are gone: the proxy must stop answering for those hostnames (M8-11).
+  for (const { hostname } of domains.data ?? []) expireDomainHost(hostname);
 
   const remaining = await admin
     .from("pages")

@@ -257,9 +257,10 @@ test.describe("M4-09 a custom host serves the page, its OG image, /r/*, /api/e a
 
   test("M4-09 static assets are served on the custom host", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
+    // M8-02: the page links no framework asset any more; its one static file is the hashed tenant script.
     const page = await get(live);
-    const asset = /\/_next\/static\/[^"'\s)]+\.(?:js|css)/.exec(page.body)?.[0];
-    expect(asset, "the page links a framework asset").toBeTruthy();
+    const asset = /<script src="(\/_t\/p\.[0-9a-f]{12}\.js)"/.exec(page.body)?.[1];
+    expect(asset, "the page links the tenant script").toBeTruthy();
     const res = await get(live, asset!);
     expect(res.status).toBe(200);
   });

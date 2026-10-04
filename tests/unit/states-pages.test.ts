@@ -117,16 +117,20 @@ describe("M5-20 the error panel", () => {
     expect(host.querySelector("[data-testid=error-message]")!.textContent).toBe(copy.ERROR_MESSAGE);
   });
 
-  it("the tenant panel says the same thing with no HYDLNK CSS (inline styles) and none of the page's content", () => {
-    const onRetry = vi.fn();
-    render(createElement(TenantErrorPanel, { error: failure({ digest: "777" }), onRetry }));
+  it("the tenant panel (M8-03: plain markup built by the live builder) says the same thing with no HYDLNK CSS (inline styles) and none of the page's content; Retry is a link, not a button", () => {
+    const html = renderToStaticMarkup(createElement(TenantErrorPanel, { reference: "777" }));
+    host.innerHTML = html;
     expect(host.querySelector("[data-testid=error-message]")!.textContent).toBe(copy.ERROR_MESSAGE);
+    expect(host.querySelector("[data-testid=error-message]")!.getAttribute("role")).toBe("alert");
     expect(host.querySelector("[data-testid=error-reference]")!.textContent).toBe("Reference: 777");
     const main = host.querySelector("main")!;
     expect(main.getAttribute("style")).toContain("background");
     expect(main.className).not.toMatch(/\bbg-|\btext-/);
-    act(() => host.querySelector("button")!.click());
-    expect(onRetry).toHaveBeenCalledTimes(1);
+    // No script and no callback: Retry is a plain link to the current address and works with scripts blocked.
+    expect(host.querySelector("button")).toBeNull();
+    const retry = host.querySelector("a")!;
+    expect(retry.textContent).toBe("Retry");
+    expect(retry.getAttribute("href")).toBe("");
     expect(host.textContent).not.toMatch(/password|secret/i);
   });
 });
@@ -138,7 +142,6 @@ describe("M5-20 every error boundary and global-error render the same message", 
     ["the app screens", "@/app/(editor)/app/(screens)/error"],
     ["the app host", "@/app/(editor)/error"],
     ["the marketing site", "@/app/(marketing)/error"],
-    ["a tenant page", "@/app/(tenant)/error"],
   ])(
     "%s: Something went wrong. Try again., Retry calls retry(), reference shown",
     async (_name, path) => {

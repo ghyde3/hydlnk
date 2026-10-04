@@ -5,20 +5,25 @@ import {
   embedAllow,
   embedAllowsFullscreen,
   embedHeight,
-  embedPlayLabel,
   embedPlayerSrc,
   embedPlayerTitle,
   type EmbedKind,
   type EmbedProvider,
 } from "@/lib/document";
-import { PlayDisc, posterFit } from "./embed-poster";
+import { EmbedFacadeMarkup } from "./embed-facade-markup";
 
 /**
- * The tap-to-play facade for every embed provider except Spotify, the renderer's one client island
- * (M2-19, M6-27). Until the visitor presses Play there is no iframe, no thumbnail and no request to
- * the provider: just a dark poster and a button. A tap mounts the provider's player, with `src`
- * built from `parseEmbed(...).src` (the parsed parts, never the tenant's URL) plus the provider's
- * autoplay flag, and moves focus into it.
+ * The tap-to-play facade for every embed provider, as the EDITOR PREVIEW draws it (M2-19, M6-27,
+ * M8-05). The live page does not run React in the browser: it ships `EmbedFacadeMarkup` as plain
+ * HTML and one small script mounts the same iframe on a tap (src/lib/tenant-assets/script). This
+ * client component is the editor's twin of that script, and the table-driven Playwright test
+ * compares the two iframes' `outerHTML`.
+ *
+ * Until the visitor presses Play there is no iframe, no thumbnail and no request to the provider:
+ * just a dark poster and a button (the shared `EmbedFacadeMarkup`, so the first paint is the live
+ * page's markup byte for byte). A tap mounts the provider's player, with `src` built from
+ * `parseEmbed(...).src` (the parsed parts, never the tenant's URL) plus the provider's autoplay
+ * flag, and moves focus into it.
  *
  * Twitch plays only inside a site it knows: the tap adds `parent={hostname}`, read from
  * `window.location.hostname` at tap time and nowhere else (never from the document). A hostname
@@ -42,8 +47,6 @@ export function EmbedFacade({
     if (playing) frame.current?.focus();
   }, [playing]);
 
-  const embed = { provider, kind };
-
   if (playing) {
     // Read only after a tap, so the first render is the same on the server and in the browser.
     const parent = provider === "twitch" ? window.location.hostname : undefined;
@@ -55,7 +58,7 @@ export function EmbedFacade({
         </p>
       );
     }
-    const height = embedHeight(embed);
+    const height = embedHeight({ provider, kind });
     return (
       <iframe
         ref={frame}
@@ -70,17 +73,13 @@ export function EmbedFacade({
     );
   }
 
-  const { fit, style } = posterFit(embed);
   return (
-    <button
-      type="button"
-      className="pg-embed-play"
-      onClick={() => setPlaying(true)}
-      aria-label={embedPlayLabel(embed, caption)}
-      data-embed-fit={fit}
-      style={style}
-    >
-      <PlayDisc />
-    </button>
+    <EmbedFacadeMarkup
+      provider={provider}
+      kind={kind}
+      src={src}
+      caption={caption}
+      onPlay={() => setPlaying(true)}
+    />
   );
 }

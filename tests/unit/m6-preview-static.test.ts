@@ -32,7 +32,7 @@ describe("M6-03 the page renderer is independent of the editor", () => {
     }
   });
 
-  it("M6-03 no click handler in src/components/page/ other than the YouTube facade's Play button", () => {
+  it("M6-03 no click handler in src/components/page/ other than the one facade wrapper's Play button (M8-05)", () => {
     const handlers = files.filter(
       (name) =>
         /\bon(?:Click|ClickCapture|DoubleClick|PointerDown|PointerUp|MouseDown|MouseUp|Tap|Touch\w*)\s*=/.test(
@@ -40,12 +40,13 @@ describe("M6-03 the page renderer is independent of the editor", () => {
         ) ||
         /addEventListener\(\s*["'](?:click|pointer\w+|mouse\w+|touch\w+)["']/.test(source(name)),
     );
-    expect(handlers).toEqual(["embed-facade.tsx"]);
-    const facade = source("embed-facade.tsx");
-    expect(facade.match(/\bonClick\s*=/g)).toHaveLength(1);
-    expect(facade).toMatch(
-      /className="pg-embed-play"[\s\S]{0,200}onClick=\{\(\) => setPlaying\(true\)\}/,
-    );
+    // The facade's markup is the one place a Play button is drawn, for the live page (where the tenant
+    // script handles the tap) and for the editor's React facade, which hands it `onPlay`.
+    expect(handlers).toEqual(["embed-facade-markup.tsx"]);
+    const markup = source("embed-facade-markup.tsx");
+    expect(markup.match(/\bonClick\s*=/g)).toHaveLength(1);
+    expect(markup).toMatch(/className="pg-embed-play"[\s\S]{0,200}onClick=\{onPlay\}/);
+    expect(source("embed-facade.tsx")).toMatch(/onPlay=\{\(\) => setPlaying\(true\)\}/);
   });
 
   it("M6-03 the renderer itself does not output tap handling: the attributes only", () => {

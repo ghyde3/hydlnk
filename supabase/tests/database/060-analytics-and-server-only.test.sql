@@ -1,5 +1,5 @@
 -- events and reserved_handles are server-only, daily_stats is read-only for owners,
--- and the nightly rollup + 90-day retention do what PLAN.md says.
+-- and the nightly rollup + 60-day retention do what PLAN.md says.
 
 begin;
 select plan(46);
@@ -120,7 +120,7 @@ select throws_ok(
 );
 
 -- ---------------------------------------------------------------------------
--- Rollup: yesterday (UTC) into daily_stats, then 90-day retention
+-- Rollup: yesterday (UTC) into daily_stats, then 60-day retention (M8-12, was 90)
 -- ---------------------------------------------------------------------------
 
 delete from public.events;
@@ -149,10 +149,10 @@ select '00000000-0000-4000-8000-0000000000f2', 'view', y.ts, 'v9' from _yday y;
 insert into public.events (page_id, type, visitor_hash)
 values ('00000000-0000-4000-8000-0000000000f1', 'view', 'today');
 
--- one event 91 days old and one 89 days old
+-- one event 61 days old and one 59 days old
 insert into public.events (page_id, type, ts, visitor_hash) values
-  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '91 days', 'old'),
-  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '89 days', 'recent');
+  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '61 days', 'old'),
+  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '59 days', 'recent');
 
 select lives_ok($$ select public.run_nightly_maintenance() $$, 'the nightly maintenance runs');
 
@@ -176,7 +176,7 @@ select is(
 select is(
   (select count(*)::int from public.events where visitor_hash = 'old'),
   0,
-  'raw events older than 90 days are deleted'
+  'raw events older than 60 days are deleted'
 );
 select is(
   (select count(*)::int from public.events where visitor_hash in ('recent', 'today', 'v1', 'v2', 'v9')),

@@ -359,7 +359,8 @@ test.describe("M2-23 publish gate (through the editor)", () => {
 
 const cssVars = async (handle: string) => {
   const { text } = await tenantGet(handle);
-  const style = /data-page-root[^>]*style="([^"]*)"/.exec(text)?.[1] ?? "";
+  // The root's own style attribute, in the body: the page's inline <style> in the head names data-page-root too.
+  const style = /data-page-root[^>]*style="([^"]*)"/.exec(text.slice(text.indexOf("<body>")))?.[1] ?? "";
   return Object.fromEntries(
     decode(style)
       .split(";")

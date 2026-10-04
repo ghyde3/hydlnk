@@ -34,9 +34,9 @@ import {
   waitDraft,
 } from "./share-helpers";
 
-/** The tenant CSP as the proxy sends it (src/lib/routing/tenant-headers.ts; not imported: it reads the env). */
+/** The live tenant page's CSP as the proxy sends it (`TENANT_PAGE_CSP`, M8-07; src/lib/routing/tenant-headers.ts; not imported: it reads the env). */
 const TENANT_CONTENT_SECURITY_POLICY =
-  "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+  "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
 /**
  * M6-34, "Done when" for Wave G: a page that uses every Wave G feature, built from nothing but the
@@ -491,10 +491,10 @@ test.describe("M6-34 a page using every Wave G feature", () => {
       await expectNoHorizontalScroll(livePage);
     }
 
-    // The tenant CSP is exactly the M6-26 string, on the response itself.
+    // The tenant CSP is exactly the M8-07 closed policy (it was the M6-26 string), on the response itself.
     expect(response!.headers()["content-security-policy"]).toBe(TENANT_CONTENT_SECURITY_POLICY);
     expect(TENANT_CONTENT_SECURITY_POLICY).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     );
 
     // Clicking the featured link and the text link follows /r/ to their destinations and writes events.

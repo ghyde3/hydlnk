@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "./fixtures/react-facade";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createElement } from "react";
@@ -201,13 +202,13 @@ describe("M6-01 the thumbnail mode of the renderer", () => {
     expect(html).toContain("height:152px");
   });
 
-  it("M6-01 without the flag the markup is what it was: the Play button and the Spotify iframe", () => {
+  it("M6-01 without the flag the markup is what it was: the Play button, Spotify's included since M8-05", () => {
     expect(render(embedDoc("https://www.youtube.com/watch?v=jNQXAC9IVRw"), false)).toContain(
       "<button",
     );
-    expect(
-      render(embedDoc("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"), false),
-    ).toContain("<iframe");
+    const spotify = render(embedDoc("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"), false);
+    expect(spotify).toContain("<button");
+    expect(spotify).not.toContain("<iframe");
   });
 
   it("M6-01 a thumbnail holds nothing to activate: no anchor, button, iframe or input, no href", () => {
@@ -274,7 +275,7 @@ describe("M6-10 the inert-embeds mode of the renderer (the shared preview)", () 
     expect(render(youtube, false)).toContain("<button");
     expect(
       render(embedDoc("https://open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQC"), false),
-    ).toContain("<iframe");
+    ).toContain("<button");
     const withLink: PublishDoc = { ...fullPublished, blocks: [blocks.link, blocks.social] };
     const strip = (html: string) => html.replace(/\s+/g, " ");
     expect(strip(render(withLink, true))).toBe(strip(render(withLink, false)));

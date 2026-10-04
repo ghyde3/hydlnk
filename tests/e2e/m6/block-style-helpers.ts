@@ -242,7 +242,8 @@ export async function looksOf(scope: Locator, which: "a" | "b"): Promise<Look> {
         text: { color: cs(el(block(ids.text))).color },
         image: border(el(`${block(ids.image)} img`)),
         embed: border(el(`${block(ids.embed)} .pg-embed-play`)),
-        spotify: border(el(`${block(ids.spotify)} .pg-embed-spotify`)),
+        // M8-05: Spotify is a facade like the others (its player is drawn on a tap).
+        spotify: border(el(`${block(ids.spotify)} .pg-embed-play`)),
         cell: {
           ...border(cell),
           textColor: cs(cell).color,

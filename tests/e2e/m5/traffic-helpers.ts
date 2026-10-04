@@ -11,8 +11,9 @@ import { signInAsUser } from "./admin-helpers";
  *
  * Since M7-10 a Free page is flagged only when it is over the line in BOTH of the two complete UTC
  * calendar months before the current one, so the seed puts the same views in each: one day at the end
- * of the earlier month and one at the start of the later month (both always inside the 90 days the raw
- * events are kept). The flag's `views` is then the later month's 1,234.
+ * of the earlier month and one at the start of the later month (both at most 32 days back, so inside the 60
+ * days raw events are kept, M8-12, and each is rolled up right after it is inserted: the flag reads
+ * daily_stats, never raw rows). The flag's `views` is then the later month's 1,234.
  */
 
 /** The two seed days, UTC, "2026-08-31" and "2026-09-01" in October: the earlier month's last day, the later month's first. */

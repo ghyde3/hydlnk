@@ -59,8 +59,10 @@ const cancelAccountBilling = vi.fn<(id: string) => Promise<number>>(async () => 
   order.push("billing");
   return 1;
 });
-const removeAccountDomains = vi.fn<(ids: readonly string[]) => Promise<void>>(async () => {
+// It returns the hostnames it took off the project (M8-11: the caller expires the proxy's lookup of each).
+const removeAccountDomains = vi.fn<(ids: readonly string[]) => Promise<string[]>>(async () => {
   order.push("domains");
+  return [];
 });
 const removeAccountMedia = vi.fn<(id: string) => Promise<void>>(async () => {
   order.push("media");

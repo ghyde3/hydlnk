@@ -47,12 +47,12 @@ describe("a static-looking path under an internal prefix reaches the host checks
     expect(rewriteOf(await proxy(request("localhost:3000", path)))).toBe("/404-not-found");
   });
 
-  it("on a tenant host it is rewritten under /t/<handle>, never to the app route", async () => {
-    expect(rewriteOf(await proxy(request("mara.localhost:3000", path)))).toBe(`/t/mara${path}`);
+  it("on a tenant host it is the one plain tenant 404 (/sites/unknown), never the app route and never a path of its own", async () => {
+    expect(rewriteOf(await proxy(request("mara.localhost:3000", path)))).toBe("/sites/unknown");
   });
 
   it("on an unknown custom host it is the unknown-site 404", async () => {
     resolveCustomDomain.mockResolvedValue(null);
-    expect(rewriteOf(await proxy(request("links.example.test", path)))).toBe(`/sites/unknown${path}`);
+    expect(rewriteOf(await proxy(request("links.example.test", path)))).toBe("/sites/unknown");
   });
 });

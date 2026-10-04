@@ -2,6 +2,197 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Wave J security review fixes
+
+Five findings from the Wave J security review, on `m9-cost-levers` (draft PR #20). No feature flips; no `features.json` change. No acceptance step reads contrary to the new rewrite rule: M8-03's mention of the two `[...rest]` pages is now literally true (they are removed), and M4-09 step 4 (`/sites/<id>` typed directly is 404) still holds.
+
+- **Medium, fixed: every sub-path made its own cache entry.** The two `[...rest]` route handlers were static with `dynamicParams`, so each invented path on a handle host or a custom host was generated once and stored for 24 hours (a function call and a file under `.next/server/route-cache/APP_ROUTE/` per path on `next start`). The proxy now rewrites every path that is not `/`, `/og`, a tracking route or (flag on) a test hook to ONE internal path, `PLAIN_404_PATH` = `/sites/unknown` (the plain 404 an unknown custom host already got), with no query string and no trailing slash on that URL; an unresolved custom host goes there on every path. Both `[...rest]` routes are deleted and a Vitest scan forbids any catch-all under `src/app/(tenant)`. Proof: dozens of random paths on a handle host, a custom host, an invented handle and an unknown host make at most one `x-nextjs-cache: MISS`, and no file named after any of them appears in the route cache (`tests/e2e/m8/render-cache.spec.ts`, production build).
+- **Low, fixed: test hooks on a production deployment.** `testHooksEnabled()` (`src/lib/env/test-hooks.ts`, the one place `HYDLNK_QUERY_COUNTER` is read) now also requires `VERCEL_ENV !== "production"`; the query counter, the one-shot failure, `GET /hl-query-count`, `GET /hl-fail-next-read` and the `x-hl-domain-cache` header all follow it. With the flag set and `VERCEL_ENV=production` the two hook paths answer the same plain 404 document as any unknown path (checked with `next start`), so they no longer reveal that they exist. CI (`next start`, no `VERCEL_ENV`) and a preview deployment (`VERCEL_ENV=preview`) keep working.
+- **Low, fixed: unicode-range and font file names reach the page by shape only.** `UNICODE_RANGE_PATTERN` and `FONT_FILE_PATTERN` (`src/lib/tenant-assets/fonts.ts`) are checked where the vendoring script reads Google's CSS (it throws), where the page builds its rules and preloads (a malformed row is dropped, never written to the style), and in a unit gate over the committed manifest (green on the pending stub, and on the real one once `pnpm tenant-fonts` has run). Not done: `redirect: "error"` on the vendoring fetches. It was optional, the URLs are fixed to Google, every response is already checked (gstatic URL pattern, `wOF2` magic, name table), and it could only be exercised by the download Gary has not approved yet, where a surprise redirect would fail his one run.
+- **Low, accepted with a note: a stored 404 per invented handle label.** `/t/<label>` is static, so each distinct subdomain label leaves one entry with a 5-second revalidate plus one tiny data-cache key. Only the claimable panel shows the label; every other state is label-free, but a flood of valid-shaped labels is unbounded whatever we route, so a fixed path for the invalid ones would not bound it. No code change. If the release cost check shows cache writes growing, rate-limit unknown labels in the proxy, or move reserved/invalid/unknown to a fixed static path so only labels that resolve to a page create entries.
+- **Low, accepted with a note: a failed background regeneration can replace a good page with the 500 for about one visitor.** The failure panel is returned, not thrown, so a time-based regeneration that fails stores it (1-second revalidate and the `after()` expiry at 40 ms and 400 ms bound it). Proven on `next start`, untested on Vercel. Added to the release smoke below.
+
+**Evidence (this tree, 2026-10-04).**
+- Red first: the new and updated unit tests failed against the old proxy (64 failures), then passed.
+- `pnpm typecheck` and `pnpm lint` clean. `pnpm test` (with CI's `--retry 2`): 254 files, 6,341 tests, 6,336 passed; the 5 failures are the font gates that stay red until `pnpm tenant-fonts` is run, as before. Without the retry, three local-Supabase tests (admin-suspension, analytics-stats-db, m6-block-style-publish) failed once under full parallel load and pass alone and with the retry.
+- `pnpm db:reset` then `pnpm test:db`: 32 files, 1,416 tests, PASS (before the reset, 060-analytics-and-server-only failed on events the e2e runs had left in the local database).
+- Playwright, 2 workers, dev server: `tests/e2e/m8/` 112 passed, 98 skipped; routing group (smoke, m1 tenant-placeholder, m4 domains-core-routing, m2 public-page, m6 share-meta, m7 media-route, m5 suspend-cache) 120 passed, 44 skipped.
+- Production build as CI runs it (`NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build`, `next start -p 3100`): `tests/e2e/m8/` 159 passed, 51 skipped; m2/publish-cache, m4/billing-badge, m5/suspend-cache 35 passed, 3 skipped; the closed-plans server (`billing-plans-closed`) 7 passed, 3 skipped; the flag-off server (`HYDLNK_QUERY_COUNTER=0`, `HL_COUNTER_OFF=1`) 1 passed.
+
+**Release smoke additions (Vercel).** (a) On a preview deployment with `HYDLNK_QUERY_COUNTER=1`, arm `GET /hl-fail-next-read` on a page that is already cached, wait past the 1-second revalidate and confirm the next request serves the page, not the 500. If it serves the 500 once more, rethrow from the cached public read when there is a previous good entry and keep the panel for a first generation only. (b) Confirm that on the production deployment `/hl-query-count` and `/hl-fail-next-read` answer the plain 404 page even if the variable is set (it still must not be set). (c) After a burst of random sub-paths on a handle host, `x-vercel-cache` is `HIT` for all of them after the first.
+
+## 2026-10-04 — Wave J: lighter public pages and cost levers
+
+Wave J on branch `m9-cost-levers` (draft PR #20), approved by Gary on 2026-10-03 after the hosting cost model. Three builders (render, assets, levers) and one integration agent. Features M8-01 to M8-12.
+
+**Built.** The live page is finished HTML built by a route handler (M8-02): inline CSS, one hashed script (tap to play for all eight providers, Spotify now a facade, plus the view beacon), no framework runtime in the visitor's browser. Placeholder, 404s and the 500 panel come from the same path (M8-03); the page keeps its cache (M8-04); tenant pages carry a closed CSP (M8-07); the editor preview, shared draft and demos keep the React renderer (M8-08); the custom-domain lookup is cached with every domain change expiring it (M8-10, M8-11); raw events are kept 60 days (M8-12). Self-hosted theme fonts (M8-01): built, and the files are now vendored (see "Fonts vendored" below).
+
+**Flipped to `passes: true` (every step seen proven): M8-02, M8-03, M8-05, M8-06, M8-10, M8-11, M8-12.**
+
+**Built but held at `passes: false`:**
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-01: `src/lib/tenant-assets/font-manifest.json` is the "pending" stub; `pnpm tenant-fonts` downloads about 150 woff2 files (about 4 MB) from fonts.googleapis.com and fonts.gstatic.com and needs Gary's explicit approval, so no agent ran it. The five font gates in tests/unit/m8-assets-fonts.test.ts stay red on purpose, so a release cannot ship every theme in system fonts.
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-09: the byte budget and the exactly-two-fonts shape cannot be proven without the font files. Everything else in the spec passes (see the numbers below). The document-size line is measured as gzip, see Deviations.
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-07: steps 1 to 5 pass; the font files' `Cache-Control`, `nosniff` and no-cookie clause (step 2) has no files to exercise.
+- (Superseded: the files are vendored, see "Fonts vendored" below; M8-01, M8-07, M8-08 flipped, M8-09 held for its release step only.) M8-08: steps 1, 2, 4, 5 pass; step 3's 1 px parity "with the preview's fonts fulfilled from the self-hosted files, so both sides use the same font bytes" needs the vendored files.
+- M8-04: steps 1 to 3 and 5 to 7 pass on the production build, and so do the claim, delete-page, delete-account, plan-change, suspend/unsuspend, first-publish and custom-domain (og:url follows `getPrimaryDomain`) rows of step 4. Held for two reasons: the step 4 row "unpublish (page to placeholder)" has no product flow to test (nothing in the app sets `published` to null; the column is server-only), and step 6 is qualified (a client that retries within about 40 ms of a failure can be handed the 500 panel once more; the mechanism is proven on `next start`, 30 of 30 repeats, and untested on Vercel's cache handler).
+
+**Evidence (all on this tree, 2026-10-04).**
+- `pnpm typecheck` clean, `pnpm lint` clean.
+- `pnpm test`: 251 files, 6,267 tests, 6,262 passed; the 5 failures are the font gates above and nothing else.
+- `pnpm db:reset` then `pnpm test:db`: 32 files, 1,416 tests, PASS. `supabase migration up` applied 20261008000001; `pnpm db:types` leaves `database.types.ts` unchanged (M8-12 step 1).
+- Playwright on the dev server, `--workers=2`: tests/e2e/m8/ 112 passed, 94 skipped (production-only and font-only rows, desktop-only rows on the phone project); the public-page, renderer, analytics-ingest, domains-core, lifecycle, suspend, states, design-tenant, m3-done, m2-done group 407 passed, 125 skipped; the m6 (embeds, links, images, share, text, wave-g-done, block-style-public, profile-public, preview-tap, pages-preview), m7 (media-*, mini-phone, workspace-share) and marketing (try-builder, site, link-in-bio) group 570 passed, 98 skipped. No failures.
+- Production build exactly as CI runs it (`NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build`, `next start -p 3100`): m2/publish-cache, m4/billing-badge, m5/suspend-cache 35 passed, 3 skipped; closed-plans server 7 passed, 3 skipped; tests/e2e/m8/ on the production build 141 passed, 49 skipped, 5 failed (4 were assets-budget on the missing font files and one a stale `"404"` literal in levers-domain-cache that I fixed to "Page not found"); after the fixes assets-budget 10 of 10 (font lines wait for the files), levers-domain-cache 13 passed with the new og:url test, and the flag-off run (server without the test flag, `HL_COUNTER_OFF=1`) 1 passed. m4/domains-core-routing 15 of 15 when run with `HL_PROD_PORT=3100`.
+- Full-suite follow-up (run 37180185137), test-only: M3-09 (`design-fonts.spec.ts`) read the `family=` params of the `fonts.googleapis.com/css2` link, the superseded literal; `fontParams` now reads the families from the inline `@font-face` rules (heading then body, each once) and asserts the page names no `fonts.googleapis.com`. M6-15 (`profile-editor.spec.ts`) looked for "999" in the whole HTML, which the inline renderer CSS holds as `border-radius:999px`; it now looks at the markup outside `<style>` and `<script>`. M5-07 and M6-12 were first-attempt timing flakes on a cold dev server (retry passed): the Share tab's Create link was clicked before React attached its handler, and the admin list was measured before its stylesheet applied; both specs now wait for that. A phone spec for a 30-character handle and a 200-character email was added; the list never overflowed with it.
+- Security review: run in-session on the Wave J diff (the `security-reviewer` agent cannot be spawned from an integration agent): proxy method gate, `TENANT_PAGE_CSP`, the custom-host cache and expiry hooks, the tenant script, the head serializer, the 500 path and test hooks, and the purge migration. No finding at confidence 8 or higher. Judgement calls for Gary below. Still worth running `security-reviewer` once in an interactive session before `/release`, as CLAUDE.md asks for routing and data waves.
+
+**Before and after, first visit, same fixture, production builds** (the M8-09 fixture: avatar and card image, header, three links with one icon, text with marks, four social icons, card, YouTube and Spotify embeds, divider, badge and report link, Fraunces 700 over Inter; fresh browser context at 390 and 1440; one CDP session; load plus 1 s of network idle; "before" is commit 1e6e600 built in a throwaway worktree on :3101, "after" is this tree on :3100; both against the local database; the measurement script is tmp/measure/first-visit.spec.ts, not committed).
+
+| | before (1e6e600) | after (Wave J, fonts not yet vendored) |
+|---|---|---|
+| requests to the page's own host | 19 | 3 (document, script, beacon) |
+| bytes to the page's own host (Free, 390) | 322,717 B | 23,631 B (Pro: 23,537 B) |
+| document on the wire | 7,553 B (gzip, 29,355 B raw) | 21,992 B (`next start` sends it uncompressed; body 20,993 B, gzip 5,057 B, brotli 4,301 B) |
+| JavaScript files / bytes | 12 / 245,874 B (Next, React, turbopack runtime, router) | 1 / 1,416 B (the tenant script; 2,304 B raw) |
+| CSS files | 3 (18,723 B) | 0 (inlined) |
+| HYDLNK UI font files the page never uses | 2 (50,344 B) | 0 |
+| framework JS | 245,874 B | 0 |
+| third-party requests | 36 to 9 hosts, 887,733 B (Google Fonts, plus Spotify's player iframe loaded on every visit and what it pulls in) | 0 |
+| layout shift | 0 to 0.0004 | 0 |
+| Fraunces plus Inter font bytes | from fonts.gstatic.com (not counted above) | not yet: Google serves the two latin files at 36.5 KB + 23.8 KB, the spec allows 64 KB |
+
+Images (two PNGs from `/media`, 2,978 B) are the same before and after. With the fonts vendored the page makes at most 2 more requests and about 60 KB more, so about 84 KB with the document uncompressed and about 72 KB with the edge's compression, under the 90 KB budget; the release-time measurement on Vercel (M8-09 step 8) is the proof. Reload: the second visit made the document and the beacon only, no script request (assets-budget, 10 of 10). Tapping the YouTube and Spotify posters added exactly the two iframe navigations and nothing to the page's own host.
+
+
+**Fonts vendored (2026-10-04, same wave; M8-01, M8-07, M8-08 flipped).** Gary approved vendoring the tenant fonts and approved the domain-cache staleness bounds (a removed or re-pointed domain can serve its old page for up to 60 s, a newly verified one can 404 for up to 10 s, on an instance the action did not run on), both on 2026-10-04. `pnpm tenant-fonts` was run once: 254 woff2 files (3.2 MB) and NOTICE.txt in `public/_t/f`, and `src/lib/tenant-assets/font-manifest.json`. The script is now `scripts/vendor-tenant-fonts.mts` (tsx refused top-level await in a .ts file; references in three source comments updated). Two changes to the script, both found when the gates ran:
+- One Google stylesheet request per weight. Google serves a single-weight request a file cut to that weight (Inter 400 latin 23,804 B) and a multi-weight request the whole variable file (Inter latin 48,432 B), so the first run (all weights in one request) made the Fraunces 700 plus Inter pair 85.0 KB against the 64 KB step. Per weight, the pair is 18,288 + 23,804 = 42,092 B. The cost is more files (254 against 81); files with identical bytes are saved once.
+- A subset a family has no glyphs for is left out for every weight of that family. Plus Jakarta Sans cyrillic-ext is a 1,016 to 1,044 byte stub at Google; the step's 1 KB floor (which exists to catch a truncated download) rejects it, and the browser falls back for those characters either way.
+
+Measurements on this tree's production build (`tests/e2e/m8/assets-budget.spec.ts`, the M8-09 fixture, fresh context, CDP, `next start -p 3100`): 5 requests to the page's own host at both 390x844 and 1440x900 (1 document, 2 woff2, 1 script, 1 beacon), 0 to any third party, no `/_next/` JS or CSS. Bytes to the page's own host, with the document counted as the edge would send it (gzip):
+| Free or Pro, viewport | total | document | script | beacon | fonts |
+|---|---|---|---|---|---|
+| Free, 390 | 51,112 B | 6,715 B | 1,416 B | 223 B | 42,758 B |
+| Pro, 390 | 51,081 B | 6,684 B | 1,416 B | 223 B | 42,758 B |
+| Free, 1440 | 51,103 B | 6,706 B | 1,416 B | 223 B | 42,758 B |
+| Pro, 1440 | 51,081 B | 6,684 B | 1,416 B | 223 B | 42,758 B |
+
+Against the budget: 5 of 6 requests, 51.1 KB of 90 KB, fonts 41.8 KB of 64 KB (the files are 42,092 B; 42,758 B on the wire with headers). Before (1e6e600): 19 requests, 322,717 B, 36 third-party requests. The first-visit line "fonts not yet vendored" in the table above is now this row.
+
+Size table, latin file of every family at every heading weight, ours next to the bytes Google serves for the same single-weight request (identical, the files are unmodified; last column is the number of subsets). Output of `pnpm tenant-fonts --dry`:
+
+| Family | Weight | Latin file, ours (bytes) | Latin file, Google (bytes) | Subsets |
+|---|---|---|---|---|
+| Inter | 400 | 23804 | 23804 | 7 |
+| Inter | 500 | 24356 | 24356 | 7 |
+| Inter | 600 | 24420 | 24420 | 7 |
+| Inter | 700 | 24456 | 24456 | 7 |
+| DM Sans | 400 | 14124 | 14124 | 2 |
+| DM Sans | 500 | 14288 | 14288 | 2 |
+| DM Sans | 600 | 14176 | 14176 | 2 |
+| DM Sans | 700 | 14256 | 14256 | 2 |
+| Manrope | 400 | 14196 | 14196 | 6 |
+| Manrope | 500 | 14048 | 14048 | 6 |
+| Manrope | 600 | 14148 | 14148 | 6 |
+| Manrope | 700 | 14260 | 14260 | 6 |
+| Geist | 400 | 13088 | 13088 | 5 |
+| Geist | 500 | 13336 | 13336 | 5 |
+| Geist | 600 | 13456 | 13456 | 5 |
+| Geist | 700 | 13452 | 13452 | 5 |
+| Space Grotesk | 400 | 13428 | 13428 | 3 |
+| Space Grotesk | 500 | 13372 | 13372 | 3 |
+| Space Grotesk | 600 | 13276 | 13276 | 3 |
+| Space Grotesk | 700 | 12848 | 12848 | 3 |
+| Outfit | 400 | 14096 | 14096 | 2 |
+| Outfit | 500 | 13400 | 13400 | 2 |
+| Outfit | 600 | 14196 | 14196 | 2 |
+| Outfit | 700 | 14064 | 14064 | 2 |
+| Sora | 400 | 14752 | 14752 | 2 |
+| Sora | 500 | 15024 | 15024 | 2 |
+| Sora | 600 | 15048 | 15048 | 2 |
+| Sora | 700 | 15140 | 15140 | 2 |
+| Poppins | 400 | 7900 | 7900 | 3 |
+| Poppins | 500 | 7740 | 7740 | 3 |
+| Poppins | 600 | 7992 | 7992 | 3 |
+| Poppins | 700 | 7848 | 7848 | 3 |
+| Plus Jakarta Sans | 400 | 11868 | 11868 | 3 |
+| Plus Jakarta Sans | 500 | 12300 | 12300 | 3 |
+| Plus Jakarta Sans | 600 | 12168 | 12168 | 3 |
+| Plus Jakarta Sans | 700 | 12280 | 12280 | 3 |
+| Bricolage Grotesque | 400 | 22396 | 22396 | 3 |
+| Bricolage Grotesque | 500 | 22400 | 22400 | 3 |
+| Bricolage Grotesque | 600 | 22296 | 22296 | 3 |
+| Bricolage Grotesque | 700 | 22400 | 22400 | 3 |
+| Instrument Serif | 400 | 15040 | 15040 | 2 |
+| Fraunces | 400 | 18016 | 18016 | 3 |
+| Fraunces | 500 | 17988 | 17988 | 3 |
+| Fraunces | 600 | 18120 | 18120 | 3 |
+| Fraunces | 700 | 18288 | 18288 | 3 |
+| Playfair Display | 400 | 21880 | 21880 | 4 |
+| Playfair Display | 500 | 23132 | 23132 | 4 |
+| Playfair Display | 600 | 23204 | 23204 | 4 |
+| Playfair Display | 700 | 23316 | 23316 | 4 |
+| DM Serif Display | 400 | 17844 | 17844 | 2 |
+| Lora | 400 | 21188 | 21188 | 7 |
+| Lora | 500 | 21928 | 21928 | 7 |
+| Lora | 600 | 21804 | 21804 | 7 |
+| Lora | 700 | 21212 | 21212 | 7 |
+| Cormorant Garamond | 400 | 22896 | 22896 | 5 |
+| Cormorant Garamond | 500 | 23260 | 23260 | 5 |
+| Cormorant Garamond | 600 | 23384 | 23384 | 5 |
+| Cormorant Garamond | 700 | 22388 | 22388 | 5 |
+| Space Mono | 400 | 9464 | 9464 | 3 |
+| Space Mono | 700 | 9552 | 9552 | 3 |
+| Geist Mono | 400 | 9872 | 9872 | 6 |
+| Geist Mono | 500 | 10088 | 10088 | 6 |
+| Geist Mono | 600 | 10164 | 10164 | 6 |
+| Geist Mono | 700 | 10128 | 10128 | 6 |
+
+Tests on this tree after the vendoring: `pnpm typecheck` and `pnpm lint` clean; `pnpm test` 254 files, 6,341 tests, all passed (the five font gates now pass); `pnpm db:reset` then `pnpm test:db` 32 files, 1,416 tests, PASS; `tests/unit/publish-bundle.test.ts` 4 passed against the build. Production build as CI runs it: m2/publish-cache, m4/billing-badge, m5/suspend-cache 35 passed, 3 skipped; tests/e2e/m8/ render-cache, assets-budget, assets-served, assets-fonts-live, levers-domain-cache 75 passed, 15 skipped (project-specific rows); closed-plans server 7 passed, 3 skipped; flag-off server 1 passed, 13 skipped. Dev server, `tests/e2e/m8/` plus `tests/e2e/m6/wave-g-done.spec.ts`: 138 passed, 82 skipped, 0 failed; render-parity 3 passed, 1 skipped (phone-only skip). No servers left running.
+
+**Flips from this run:** M8-01, M8-07 and M8-08 to `passes: true`. **Still held:** M8-09 (steps 1 to 7 and 9 are proven; step 8 is the release proof against links.hyde-co.com, recorded after `/release`, like M7-14) and M8-04 (as above: no unpublish flow to test, and step 6 is qualified).
+
+**Decisions and mechanisms (recorded as the specs ask).**
+- Technique (M8-02 step 1): `renderToStaticMarkup` imported from `next/dist/compiled/react-dom/server.node`, because Next refuses `react-dom/server` inside a route handler. It works in `next dev` and `next build` (Turbopack), and a parity test shows its output equals `react-dom/server`'s byte for byte.
+- Module graph (M8-02 step 1(a)): `blocks.tsx` no longer imports `embed-facade.tsx`. It draws an embed through `EmbedFacadeSlot` (`src/components/page/embed-slot.ts`): the plain markup by default, the React `EmbedFacade` only where a client module called `provideEmbedFacade` (the editor seam and the Preview page's wrapper). So the graph test passes with no carve-out; the assets agent's options (a) and (b) were both unnecessary. Of its shared patch I applied only the CSS (`.pg-embed-spotify` removed), `m6-block-style-render`, `next.config.ts` (`headers()` for the hashed files) and `package.json` (`tenant-assets`, `tenant-fonts`, `predev`, `prebuild`, `pretest`) hunks; the rest was already in the tree through the render agent's edits.
+- Custom-domain cache (M8-10 step 3): a bounded per-process Map on `globalThis`, 1,000 entries, oldest evicted, a hit never extends an entry, concurrent reads of one hostname share one query, on in production builds only. Probes in a production build (isolated clone, throwaway): `unstable_cache` called from the proxy runs but does not cache (three consecutive proxy requests returned three values, also after `revalidateTag`); `globalThis` is shared between the proxy bundle and a route handler inside one `next start` process; the test header went MISS then HIT. So a shared tagged cache was not available. Largest staleness on Vercel, assuming the proxy is its own function instance: a removed or re-pointed domain can serve its old page for up to 60 s, a newly verified one can 404 for up to 10 s, on an instance the action did not run on; in one process expiry is immediate. This also covers changes made by SQL.
+- No join on `pages.published_at` in the hostname lookup (M8-10 step 2): the page route decides draft, suspended and unknown ids, so Publish needs no hostname expiry. Proven: a draft-only page's host 404s warm and cold, and serves on the first request after a real Publish.
+- Purge cost (M8-12 step 7), measured by me in a rolled-back local transaction: 200,000 events over 120 days for 50 pages, `purge_old_events()` deleted 99,566 events and rolled up 60 days (22,969 `daily_stats` and 18,000 `daily_dim_stats` rows) in 1.66 s; the plans are a Seq Scan on `events` (about half the rows qualify; distinct-days select 30 ms, delete 47 ms). The nightly steady state is one day per night. The levers agent measured 1.53 s on its own run.
+
+**Superseded steps and deviations.**
+- M2-22 step 2: a request with `RSC: 1` now gets a 307 to `?_rsc` and then the same HTML, no flight payload.
+- Non-GET on `/` of a tenant or custom host: 405 with `Allow: GET, HEAD` (OPTIONS included); on every other path except the tracking routes: the plain 404 inside the proxy, no lookup.
+- M2-22 step 7, M6-26 step 6, M6-34 step 5: the live-page CSP is `TENANT_PAGE_CSP`; `TENANT_CONTENT_SECURITY_POLICY` is untouched for the share link.
+- M6-32 step 3: `generateMetadata` is gone from the two routes; `m6-share-meta` compares the written head with the old literal output.
+- M1-15 step 5: `no-store` on an unclaimed handle now appears in dev only; production serves it with a 5 s `s-maxage`.
+- M3-04 step 1 and M5-21 step 3 for the live page: no Google stylesheet, no preconnect, no first-load JavaScript budget (none at all).
+- M2-19 step 3 and M8-05: Spotify is a facade with the same heights; a visitor taps Play on our poster, then play in Spotify's player (two taps instead of one); with the script blocked or JavaScript off the Play buttons do nothing.
+- M6-27 step 1: the facade markup now holds the player URL in `data-embed-src` (nothing loads it before a tap); M6-03 step 6: the one click handler file is `embed-facade-markup.tsx`.
+- M8-05 step 1: no `fetch` fallback for the beacon (M8-05 forbids `fetch`; M8-06 swallows a missing `sendBeacon`).
+- M8-01 step 5 and M8-05: asset headers are one `next.config.ts` rule per exact file path, so an unknown hash gets a 404 and never an immutable year.
+- `*.vercel.app` hosts: still the marketing site (never a tenant page), as M4-09's accepted evidence shows; M8-02 step 6 inherits that.
+- M4-09 step 3's "published = null" and the "very next request" tests: the page route now decides draft and suspended pages; tests that change rows by SQL hold on the dev server (no cache), and on production builds are bounded by 60 s and 10 s.
+- M4-16 step 2 and M4-17 step 2 on production: at once on the server that ran the action, within 60 s elsewhere (M8-11 step 7).
+- M4-25 steps 1 and 2: 90, -89d, -90d, -91d became 60, -59d, -60d, -61d and the title "60 days"; M4-28 step 4 seeds 70 and 120 days; M6-29 step 5: "the 60-day purge".
+- M8-03 step 6: "Postgres unreachable for one request" is done with a test hook (`GET /hl-fail-next-read` on a tenant host arms a one-shot failure of the next database read; it answers only when `HYDLNK_QUERY_COUNTER=1`, like `/hl-query-count`), plus unit tests with an injected failing reader.
+- M8-09 step 3 document size: `next start` does not compress the route handler's document behind the proxy (the Vercel edge compresses text responses). tests/e2e/m8/assets-budget.spec.ts measures the gzip of the body plus the headers sent when the server sent no `content-encoding`, and expects exactly two font files only once the manifest is no longer a "pending" stub. The release-time run on Vercel is the real measurement.
+- CI: the first production-build block now also runs m8/render-cache, assets-budget, assets-served, assets-fonts-live and levers-domain-cache, and a third server without the test flag runs the levers flag-off test. `assets-budget` passes with the stub (its two-font lines wait for the vendored manifest) and asserts both fonts once the files exist.
+
+**Open for Gary.**
+1. Approve and run `pnpm tenant-fonts` (downloads about 150 woff2 files, about 4 MB, from Google Fonts into `public/_t/f/`, writes NOTICE.txt and `font-manifest.json`, prints the Google-versus-ours size table for the 18 families that M8-01 step 2 wants pasted here). Then re-run `pnpm test`, the m8 specs on a production build and `assets-budget`, and the held features M8-01, M8-07, M8-08 and M8-09 can be flipped. Until then CI's unit job is red by design.
+2. Accept or change the production bounds for the hostname cache: 60 s stale for a removed or re-pointed domain, 10 s for a new one, on a Vercel instance the action did not run on. The release smoke should time a test-domain removal to confirm the 60 s bound.
+3. Before releasing, count production raw events older than 60 days (the 00:30 UTC run after the release deletes days 61 to 90 once, after rolling them up), and spot-check your Pro page's 90-day and 1-year views before and after the first purge.
+4. M8-04: decide whether the "unpublish" row can be dropped (there is no unpublish flow), and whether the 40 ms retry window on a 500 is acceptable; confirm on Vercel that a failed render is not served from its cache (second request after a failure).
+5. Release smoke on Vercel (M8-09 step 8): compressed document size, `x-vercel-cache: HIT` on the second request, script and font headers, no `/_next/` JavaScript, and that `HYDLNK_QUERY_COUNTER` is not set in the production environment (it turns on `/hl-query-count`, `/hl-fail-next-read` and the `x-hl-domain-cache` header).
+6. `rm -rf /Volumes/dev/dev/hydlnk-proof` (the levers agent's clone with node_modules, a production build and a symlink to `.env.local`); my cleanup of the other throwaway clone (`hydlnk-before`) worked through `git worktree remove`.
+7. The live path depends on two Next internals: `next/dist/compiled/react-dom/server.node` and `globalThis.__incrementalCache` (the 500 panel's cache eviction). Both fail loudly in the build or the unit tests if a Next release moves them, but they are worth a line in the next Next upgrade checklist.
+
+## 2026-10-04 — Release: Wave I (one Editor workspace and visual-pass fixes)
+
+- PR #19 merged, merge commit 4826c14. Migrations applied through release-migrations.yml (run 37170415708): 20261007000001_traffic_two_months (flag_high_traffic_pages and admin_traffic_flags recreated with the two-month rule, grants restated), 20261007000002_blocked_links_admin (admin_audit action check widened with block_domain and unblock_domain). Deployment https://vercel.com/ghyde3s-projects/hydlnk/2TDr1NXd6xdUskk9PxzTAbqRWCBU (success).
+- Checks: full browser suite green (run 37168878730, all four shards); `pnpm verify` PASS (5834 unit, pgTAP PASS after db:reset); `pnpm test:e2e:prod` 12/12.
+- M7-14 step 6 proven on production and flipped: an image on links.hyde-co.com loads from https://hydlnk.com/media/...; requests 1, 2, 3 returned `x-vercel-cache: MISS`, `HIT`, `HIT` with `cache-control: public, max-age=31536000, immutable`; the same path on links.hyde-co.com returns 404; the page HTML contains no supabase.co/storage URLs.
+- CI: the integration-test step retries twice (`vitest --retry 2`) for the local Supabase gateway's transient "invalid response from the upstream server".
+- Still held: M7-06 (deleted-applied-theme notice), M7-07 (preview window starts under the color band), M7-13 (two states unit-proven only).
+
 ## 2026-10-03 — One canonical image origin
 
 - **Asked by Gary (2026-10-03, to avoid surprise hosting bills):** the previous host rule still let anyone force a CDN miss, a function call and a Storage fetch per invented subdomain. Now `/media` is served from ONE origin, the root host (`NEXT_PUBLIC_ROOT_DOMAIN`: `https://hydlnk.com`, `http://localhost:3000`). `mediaUrl()` is absolute on it; `mediaHostAllowed` is true only for the router's "marketing" kind (root, `*.vercel.app`, local loopback); app, handles, custom domains, `www` and anything else get the short 404 and no Storage request. Path validation, immutable caching, HEAD handling and the cache tag are unchanged; 200s add `Access-Control-Allow-Origin: *` (public images, no `Vary`) so the editor's "Adjust" `fetch()` from the app host can read the picture.

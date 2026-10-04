@@ -127,12 +127,16 @@ test.describe("M6-45 the live page", () => {
     for (const id of plainIds) {
       expect(await blockIn(p, id).getAttribute("style"), id).toBeNull();
     }
-    // Only the block roots carry an inline style: not a cell, an icon, a picture or a frame.
-    const inline = await p.evaluate(() =>
-      Array.from(document.querySelectorAll("[data-page-root] [style]")).map(
-        (el) => el.getAttribute("data-block-id") ?? el.className,
-      ),
-    );
+    // Only the block roots carry an inline style: not a cell, an icon, a picture or a frame. (A facade of a
+    // player with a height of its own, Spotify included since M8-05, carries that height inline: the
+    // player's size, not an override.)
+    const inline = (
+      await p.evaluate(() =>
+        Array.from(document.querySelectorAll("[data-page-root] [style]")).map(
+          (el) => el.getAttribute("data-block-id") ?? el.className,
+        ),
+      )
+    ).filter((name) => name !== "pg-embed-play");
     expect([...inline].sort()).toEqual([...styledIds].sort());
     // The page root's own variables are the page's: no override reached it.
     const rootStyle = (await p.locator("[data-page-root]").getAttribute("style")) ?? "";

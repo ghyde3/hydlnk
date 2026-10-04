@@ -1,5 +1,4 @@
 import "server-only";
-import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { publishedDocSchema, type PublishDoc } from "@/lib/document";
@@ -12,6 +11,7 @@ import {
   pageTag,
 } from "@/lib/publish/tags";
 import { handleSchema } from "@/lib/schemas";
+import { failIfArmed } from "@/lib/tenant-render/fault";
 
 export interface PublishedPage {
   pageId: string;
@@ -51,6 +51,7 @@ type PublicRead =
  * (and the tag `invalidateAccountPages` expires drops it at suspend and unsuspend).
  */
 async function readPublic(pageId: string): Promise<PublicRead> {
+  failIfArmed({ pageId });
   countPublicQuery(pageId);
   const { data, error } = await createAdminSupabase()
     .from("pages")
@@ -127,6 +128,7 @@ interface PageLookup {
  * visitor sees "This page isn't available." and never the "Claim it" panel.
  */
 async function lookupPage(handle: string): Promise<PageLookup | null> {
+  failIfArmed({ handle });
   const { data, error } = await createAdminSupabase()
     .from("pages")
     .select("id, accounts!inner(suspended_at)")
@@ -145,10 +147,10 @@ export async function lookupPageId(handle: string): Promise<string | null> {
 
 /**
  * Public read of a tenant page by handle: the published document and nothing else (never `draft`),
- * for accounts that are not suspended, through the page's cache tag. Wrapped in React `cache()` so
- * generateMetadata and the page share one read per request.
+ * for accounts that are not suspended, through the page's cache tag. The route handler
+ * (src/app/(tenant)/t/[handle]/route.ts) is the one caller on the live path, once per generation.
  */
-export const getTenantPageState = cache(async (handle: string): Promise<TenantPageState> => {
+export async function getTenantPageState(handle: string): Promise<TenantPageState> {
   // Cheap shape check first: garbage hosts and paths never reach the database.
   if (!handleSchema.safeParse(handle).success) return missing(handle);
 
@@ -171,7 +173,7 @@ export const getTenantPageState = cache(async (handle: string): Promise<TenantPa
     kind: "published",
     page: { pageId, document: parsed.data, publishedAt: read.publishedAt, plan: read.plan },
   };
-});
+}
 
 /** The published page for a handle, or null when there is nothing published to show. */
 export async function getPublishedPageByHandle(handle: string): Promise<PublishedPage | null> {
@@ -193,7 +195,7 @@ const PAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * not a published page of an active account is `missing` or `suspended`: the route answers 404.
  * A malformed id (`/sites/<uuid>.txt` is a path the proxy does not see) never reaches the database.
  */
-export const getTenantPageStateById = cache(async (pageId: string): Promise<TenantPageState> => {
+export async function getTenantPageStateById(pageId: string): Promise<TenantPageState> {
   if (!PAGE_ID.test(pageId)) return { kind: "missing" };
   const read = await readPublicCached(pageId);
   if (read.state === "missing") return { kind: "missing" };
@@ -209,4 +211,4 @@ export const getTenantPageStateById = cache(async (pageId: string): Promise<Tena
     kind: "published",
     page: { pageId, document: parsed.data, publishedAt: read.publishedAt, plan: read.plan },
   };
-});
+}

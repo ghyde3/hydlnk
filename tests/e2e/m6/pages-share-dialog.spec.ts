@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, makeUser, signedInUser } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { openEditor, saveIndicator } from "../m2/editor-helpers";
 import { insertPage } from "../fixtures/data";
 import {
@@ -27,7 +27,7 @@ test.afterAll(cleanupUsers);
 /** The 'Private preview links' card (it was a dialog before M7-04; the name is kept for the diff's sake). */
 const dialog = (page: Page) => page.getByTestId("preview-links-card");
 const field = (page: Page) => dialog(page).getByLabel("Preview link");
-const ADDRESS = /^http:\/\/app\.localhost:3000\/share\/[A-Za-z0-9_-]{43}$/;
+const ADDRESS = new RegExp(`^http://app\\.localhost:${DEV_PORT}/share/[A-Za-z0-9_-]{43}$`);
 
 /** Goes to the Share tab (by its tab when the workspace is open, so a typed edit stays) and waits for the card. */
 async function openDialog(page: Page): Promise<void> {
@@ -37,9 +37,19 @@ async function openDialog(page: Page): Promise<void> {
     await page.goto(url("app", "/share"));
   }
   await expect(dialog(page)).toBeVisible();
-  await expect(
-    dialog(page).getByRole("button", { name: "Create link", exact: true }),
-  ).toBeVisible();
+  const create = dialog(page).getByRole("button", { name: "Create link", exact: true });
+  await expect(create).toBeVisible();
+  // The card shows server-rendered before React attaches its handlers, and a click in that gap is
+  // dropped (the full run's first attempts lost the Create link click on a cold dev server): wait
+  // until the button has them, as waitForEditorHydrated does for the editor's inputs.
+  await create.evaluate(
+    (el) =>
+      new Promise<void>((resolve) => {
+        const hydrated = () => Object.keys(el).some((key) => key.startsWith("__reactProps$"));
+        const tick = () => (hydrated() ? resolve() : setTimeout(tick, 25));
+        tick();
+      }),
+  );
 }
 
 test.describe("M6-12 the dialog", () => {
@@ -510,7 +520,7 @@ test.describe("M6-11 the Preview link", () => {
     await expect(link).toHaveAttribute("href", `/preview/${owner.pageId}`);
     await expect(page.getByRole("menuitem", { name: "View live page" })).toHaveAttribute(
       "href",
-      `http://${owner.handle}.localhost:3000`,
+      `http://${owner.handle}.localhost:${DEV_PORT}`,
     );
     await page.keyboard.press("Escape");
 

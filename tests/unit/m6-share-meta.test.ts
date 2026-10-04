@@ -1,14 +1,10 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublishDoc } from "@/lib/document";
 import { publishedDocSchema, toPublishForm, emptyDraft, type DraftDoc } from "@/lib/document";
 import { blocks } from "./fixtures/page-document";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next/navigation", () => ({
-  notFound: () => {
-    throw new Error("NEXT_NOT_FOUND");
-  },
-}));
 vi.mock("@/lib/env/client", () => ({
   clientEnv: {
     NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000",
@@ -16,11 +12,11 @@ vi.mock("@/lib/env/client", () => ({
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
   },
 }));
-// The pages' components are not under test here, only generateMetadata.
-vi.mock("@/components/design/tenant-fonts", () => ({ TenantFonts: () => null }));
-vi.mock("@/components/tenant/tenant-page", () => ({ TenantPage: () => null }));
-vi.mock("@/components/tenant/unpublished-placeholder", () => ({
-  UnpublishedPlaceholder: () => null,
+vi.mock("@/lib/media/url", () => ({
+  mediaUrl: (path: string) => `https://media.test/page-media/${path}`,
+}));
+vi.mock("@/lib/handles/availability", () => ({
+  checkHandle: async () => ({ handle: "mara", status: "taken" }),
 }));
 
 const state = vi.hoisted(() => ({
@@ -34,15 +30,62 @@ vi.mock("@/app/(tenant)/published-page", () => ({
 }));
 vi.mock("@/lib/domains/primary", () => ({ getPrimaryDomain: async () => state.primary }));
 
-const handlePage = await import("@/app/(tenant)/t/[handle]/(home)/page");
-const sitesPage = await import("@/app/(tenant)/sites/[pageId]/page");
+const { handleResponse, siteResponse } = await import("@/lib/tenant-render/respond");
 const { pageMetadata } = await import("@/lib/publish/share-meta");
 
 /**
  * M6-32: the metadata of both tenant routes. A page with no share card must give exactly what it
  * gave before (the literal objects below are the old code's output), the share fields change
  * og:title, og:description and their twitter twins and nothing else, and no plan is consulted.
+ *
+ * M8-02: the two routes no longer have `generateMetadata`; the live builder writes the head tags
+ * itself. So the comparison is between the tags this builder writes into the document (read back
+ * from the response's HTML into the shape `pageMetadata` returns) and the old code's literal output
+ * below: the same assertions as before, one level further out.
  */
+
+type Tags = Record<string, string>;
+
+/** Reads the title, description and the og:/twitter: tags of a document back into `Metadata`'s shape. */
+function metadataFromHtml(html: string) {
+  const head = new DOMParser().parseFromString(html, "text/html").head;
+  const og: Tags = {};
+  const twitter: Tags = {};
+  for (const meta of head.querySelectorAll("meta[property^='og:']")) {
+    og[meta.getAttribute("property")!.slice(3)] = meta.getAttribute("content")!;
+  }
+  for (const meta of head.querySelectorAll("meta[name^='twitter:']")) {
+    twitter[meta.getAttribute("name")!.slice(8)] = meta.getAttribute("content")!;
+  }
+  const description = head.querySelector("meta[name='description']")?.getAttribute("content");
+  return {
+    title: head.querySelector("title")?.textContent ?? undefined,
+    description: description ?? undefined,
+    ...(Object.keys(og).length === 0
+      ? {}
+      : {
+          openGraph: {
+            type: og.type,
+            title: og.title,
+            description: og.description,
+            url: og.url,
+            images: [
+              { url: og.image, width: Number(og["image:width"]), height: Number(og["image:height"]), alt: og["image:alt"] },
+            ],
+          },
+        }),
+    ...(Object.keys(twitter).length === 0
+      ? {}
+      : {
+          twitter: {
+            card: twitter.card,
+            title: twitter.title,
+            description: twitter.description,
+            images: [twitter.image],
+          },
+        }),
+  };
+}
 
 const PUBLISHED_AT = "2026-10-03T12:00:00.000Z";
 const MS = Date.parse(PUBLISHED_AT);
@@ -74,12 +117,9 @@ const published = (document: PublishDoc, plan = "free") => ({
   },
 });
 
-const handleMeta = () =>
-  handlePage.generateMetadata({ params: Promise.resolve({ handle: "mara" }) } as never);
-const sitesMeta = () =>
-  sitesPage.generateMetadata({
-    params: Promise.resolve({ pageId: "00000000-0000-4000-8000-0000000000b1" }),
-  } as never);
+const handleMeta = async () => metadataFromHtml(await (await handleResponse("mara")).text());
+const sitesMeta = async () =>
+  metadataFromHtml(await (await siteResponse("00000000-0000-4000-8000-0000000000b1")).text());
 
 /** What the handle route returned before M6-32, written out. */
 const legacyHandle = (name: string, bio: string) => ({

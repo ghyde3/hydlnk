@@ -275,11 +275,6 @@ describe("M6-45 what the stylesheet reads", () => {
       "[data-page-root] .pg-embed-iframe",
       /border:\s*var\(--t-border-width\) solid var\(--t-border\)/,
     ],
-    [
-      "[data-page-root] .pg-embed-spotify",
-      /border:\s*var\(--t-border-width\) solid var\(--t-border\)/,
-    ],
-    ["[data-page-root] .pg-embed-spotify", /border-radius:\s*var\(--t-radius\)/],
     ["[data-page-root] .pg-image-img", /border-radius:\s*var\(--t-radius\)/],
   ])("%s reads its variable explicitly: %s", (selector, expected) => {
     expect(ruleBody(selector)).toMatch(expected);

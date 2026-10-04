@@ -193,7 +193,8 @@ test.describe("M7-09 the mini phone, below 760px", () => {
     await openTab(page, "Edit");
     const thumb = miniPhone(page).getByTestId("mini-preview");
     await expect(thumb.locator("[data-block-id]")).toHaveCount(3);
-    await expect(thumb.locator(".pg-embed-play")).toHaveCount(1);
+    // Both complete embeds are the same inert poster: Spotify's is no longer a box of its own (M8-05).
+    await expect(thumb.locator(".pg-embed-play")).toHaveCount(2);
     // An incomplete block shows the dashed placeholder.
     await expect(thumb.locator(".pg-placeholder")).toHaveText("Embed");
     expect(await thumb.locator("button, iframe, a").count()).toBe(0);

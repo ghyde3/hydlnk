@@ -583,7 +583,9 @@ test.describe("M6-15 / M6-17 stored values outside the lists", () => {
     expect((await pageRow(user.pageId)).published).toEqual(before.published);
     const html = await (await page.request.get(url(user.handle))).text();
     expect(html).not.toMatch(/blob|url\(x\)/);
-    expect(html).not.toContain("999");
+    // The inline renderer CSS legitimately holds "border-radius:999px", so look at the markup only.
+    const markup = html.replace(/<style\b[\s\S]*?<\/style>/g, "").replace(/<script\b[\s\S]*?<\/script>/g, "");
+    expect(markup).not.toContain("999");
   });
 
   test("M6-17 a draft with a string for a switch opens with both on and the notice, and Publish names both", async ({
