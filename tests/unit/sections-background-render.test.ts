@@ -27,6 +27,8 @@ vi.mock("@/lib/env/client", () => ({
 const BASE = "http://127.0.0.1:54321/storage/v1/object/public/page-media";
 const FILE = "0b8f2f7a-1e01-4c0b-9d57-6f1c2a523a1e.jpg";
 const OWN = `${BASE}/${OWNER_UID}/${FILE}`;
+/** What is drawn (M7-15): the stored Storage URL is rebuilt as this host's /media address. */
+const DRAWN = `/media/${OWNER_UID}/${FILE}`;
 const PAGE_ID = "00000000-0000-4000-8000-0000000000b1";
 
 function render(patch: Partial<TokenSet>): Document {
@@ -97,7 +99,7 @@ describe("M3-15 backgroundImagePath: only this deployment's page-media objects",
 
 describe("M3-15 backgroundImageUrl: only for the image type, rebuilt from the path", () => {
   it("is the page-media URL when the type is image and the image is the owner's", () => {
-    expect(backgroundImageUrl({ bgType: "image", bgImage: OWN })).toBe(OWN);
+    expect(backgroundImageUrl({ bgType: "image", bgImage: OWN })).toBe(DRAWN);
   });
 
   it("is null for solid and gradient, even when an image is still stored", () => {
@@ -138,7 +140,7 @@ describe("M3-15 / M3-16 the image layer", () => {
   it("draws an image layer and an overlay layer, behind the content, with the image URL variable", () => {
     const dom = render({ bgType: "image", bgImage: OWN, overlayOpacity: 0.6, blur: 12 });
     expect(root(dom).getAttribute("data-bg-type")).toBe("image");
-    expect(root(dom).style.getPropertyValue("--t-bg-image")).toBe(`url("${OWN}")`);
+    expect(root(dom).style.getPropertyValue("--t-bg-image")).toBe(`url("${DRAWN}")`);
     expect(root(dom).style.getPropertyValue("--t-overlay-opacity")).toBe("0.6");
     expect(root(dom).style.getPropertyValue("--t-blur")).toBe("12px");
 

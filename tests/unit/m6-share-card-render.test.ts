@@ -187,7 +187,7 @@ describe("M6-33 the preview card", () => {
 
   it("with an image shows it from the owner's folder, at 1.91:1 with the chosen focus", () => {
     const html = preview({ image: { ...IMAGE, focus: { x: 0.2, y: 0.4 } } }, "http://x/og");
-    expect(html).toContain(`/storage/v1/object/public/page-media/${UID}/img-0123456789ab.webp`);
+    expect(html).toContain(`/media/${UID}/img-0123456789ab.webp`);
     expect(html).toContain("object-position:20% 40%");
     expect(html).toContain("aspect-ratio:1.91 / 1");
     // The share image wins over the live one.

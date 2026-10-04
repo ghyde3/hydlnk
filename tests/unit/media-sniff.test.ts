@@ -123,14 +123,18 @@ describe("M2-08 limits and public URLs", () => {
   });
 
   it("builds the public page-media URL and encodes each segment", async () => {
-    const { mediaOrigin, mediaUrl } = await import("@/lib/media/url");
+    // M7-15: `storageUrl` is the old absolute Storage address (the stored form); `mediaUrl` is the
+    // browser's `/media/...` address. tests/unit/m7-media-url.test.ts checks both on a table.
+    const { mediaOrigin, mediaUrl, storageUrl } = await import("@/lib/media/url");
     const path = "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01/0b8f2f7a-1e01-4c0b-9d57-6f1c2a523a1e.png";
-    expect(mediaUrl(path)).toBe(
+    expect(storageUrl(path)).toBe(
       `http://127.0.0.1:54321/storage/v1/object/public/page-media/${path}`,
     );
-    expect(mediaUrl("a b/c#d?.png")).toBe(
+    expect(storageUrl("a b/c#d?.png")).toBe(
       "http://127.0.0.1:54321/storage/v1/object/public/page-media/a%20b/c%23d%3F.png",
     );
+    expect(mediaUrl(path)).toBe(`/media/${path}`);
+    expect(mediaUrl("a b/c#d?.png")).toBe("/media/a%20b/c%23d%3F.png");
     expect(mediaOrigin()).toBe("http://127.0.0.1:54321");
   });
 });

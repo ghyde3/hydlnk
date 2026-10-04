@@ -12,7 +12,7 @@ import { imageRefSchema, type ImageRef } from "@/lib/document";
 import { sniffImageType } from "@/lib/editor/sniff";
 import { UPLOAD_FAILED_MESSAGE, uploadErrorMessage } from "@/lib/media/messages";
 import { prepareImageForUpload } from "@/lib/media/upload-client";
-import { mediaUrl } from "@/lib/media/url";
+import { mediaUrl, storageUrl } from "@/lib/media/url";
 import { tokenSetSchema } from "@/lib/theme";
 import { GradientPanel } from "./gradient-panel";
 import { OptionButton, OptionGroup } from "./shape-section";
@@ -23,7 +23,7 @@ import { OptionButton, OptionGroup } from "./shape-section";
  * image blur that go with an image (M3-16). Named in plain words (M6-47).
  *
  * The image goes through the same route as every tenant image, POST /api/media with kind
- * `background`, and the draft stores that object's public page-media URL (`mediaUrl(path)`),
+ * `background`, and the draft stores that object's public page-media URL (`storageUrl(path)`, the stored form),
  * never anything typed. Replacing or removing only changes the draft: the object the published
  * page still uses stays in Storage, so the live page cannot break before the next Publish.
  */
@@ -128,7 +128,7 @@ export function BackgroundSection(props: DesignSectionProps) {
       }
       const image = await postBackground(file, setProgress);
       // The URL is rebuilt from the stored path, so what the draft holds is always the bucket's.
-      setTokenRef.current("bgImage", mediaUrl(image.path));
+      setTokenRef.current("bgImage", storageUrl(image.path));
       setTokenRef.current("bgType", "image");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : FAILED_MESSAGE);
@@ -223,7 +223,7 @@ export function BackgroundSection(props: DesignSectionProps) {
               aria-label="Current background image"
               className="block h-[72px] w-[108px] shrink-0 overflow-hidden rounded-md border border-line-2 bg-track"
             >
-              {/* A plain <img>: the path is an image reference into the public page-media bucket. */}
+              {/* A plain <img>: the path is an image reference, loaded from this host's /media route. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={mediaUrl(imagePath)}

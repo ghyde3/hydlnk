@@ -44,6 +44,7 @@ tenant  ──▶ │ host proxy: hydlnk.com | app.* | {handle}.*      │      
 - **Rendering.** Public pages are static and cached with a per-page cache tag. Publish calls `updateTag` in its Server Action, so Postgres is hit on publish, not on every view.
 - **Custom domains.** The editor calls the Vercel Domains API to add the host, shows the DNS records Vercel returns for this project (each project gets its own CNAME target, and the apex A-record IP can differ, so never hard-code them), polls verification; Vercel issues SSL. Hobby allows 50 custom domains per project.
 - **Data access.** The editor reads and edits drafts with the user's Supabase session under RLS. Anything that needs validation, a plan limit or billing state is written by server-only code. Public rendering and tracking use server-only queries against published data.
+- **Images.** Tenant images are served from the page's own address at `/media/{uid}/{file}` (cached by Vercel's CDN, so Storage is fetched once per host and region per cache period, M7-14), with Supabase Storage as the origin; documents and themes still store the Storage URL.
 - **Previews.** Preview deployments are off for non-`main` branches while there is one Supabase project: they would share production data, and `*.vercel.app` hosts would fall into the custom-domain lookup.
 
 ## Data model

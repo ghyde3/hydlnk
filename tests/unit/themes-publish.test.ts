@@ -39,7 +39,7 @@ const link = (overrides?: unknown): Block =>
 describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrides", () => {
   let admin: SupabaseClient;
   let core: typeof import("@/lib/publish/core");
-  let mediaUrl: (path: string) => string;
+  let storageUrl: (path: string) => string;
   const owners: TestOwner[] = [];
 
   beforeAll(async () => {
@@ -48,7 +48,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       auth: { persistSession: false },
     });
     core = await import("@/lib/publish/core");
-    ({ mediaUrl } = await import("@/lib/media/url"));
+    ({ storageUrl } = await import("@/lib/media/url"));
   });
 
   afterAll(async () => {
@@ -182,7 +182,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       const bFile = `${b.userId}/abcdef12-0001.png`;
       await writeDraft(
         a,
-        doc("A", { ref: null, overrides: { bgType: "image", bgImage: mediaUrl(bFile) } }),
+        doc("A", { ref: null, overrides: { bgType: "image", bgImage: storageUrl(bFile) } }),
       );
       await expectStopped(a, {
         field: "theme.overrides.bgImage",
@@ -192,7 +192,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       const aFile = `${a.userId}/abcdef12-0002.png`;
       await writeDraft(
         a,
-        doc("A", { ref: null, overrides: { bgType: "image", bgImage: mediaUrl(aFile) } }),
+        doc("A", { ref: null, overrides: { bgType: "image", bgImage: storageUrl(aFile) } }),
       );
       const before = await publishedOf(admin, a.pageId);
       const missing = await publish(a, async () => false);
@@ -209,7 +209,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       const ok = await publish(a, async (path) => path === aFile);
       expect(ok.ok).toBe(true);
       expect(((await publishedOf(admin, a.pageId)).published as PublishDoc).tokens.bgImage).toBe(
-        mediaUrl(aFile),
+        storageUrl(aFile),
       );
     });
 
@@ -218,7 +218,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
       const b = await owner("tp9");
       const themeId = await saveTheme(a, "Sneaky", {
         bgType: "image",
-        bgImage: mediaUrl(`${b.userId}/abcdef12-0003.png`),
+        bgImage: storageUrl(`${b.userId}/abcdef12-0003.png`),
       });
       await writeDraft(a, doc("A", { ref: themeId, overrides: {} }));
       await expectStopped(a, {
@@ -229,7 +229,7 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
 
     it("a URL with a query, an encoded slash or the wrong bucket fails", async () => {
       const a = await owner("tp10");
-      const own = mediaUrl(`${a.userId}/abcdef12-0004.png`);
+      const own = storageUrl(`${a.userId}/abcdef12-0004.png`);
       for (const bgImage of [
         `${own}?x=1`,
         own.replace("page-media", "other"),

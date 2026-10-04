@@ -10,7 +10,7 @@ import {
 } from "@/lib/document";
 import { initialsOf } from "@/components/page/initials";
 import type { ImageRef, PublishDoc } from "@/lib/document";
-import { mediaOrigin, mediaUrl } from "@/lib/media/url";
+import { mediaOrigin, storageUrl } from "@/lib/media/url";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
 import { loadOgFont, type OgFont } from "./og-font";
 import { shareImagePng } from "./share-og";
@@ -74,7 +74,7 @@ export async function avatarDataUri(photo: ImageRef | null): Promise<string | nu
   const ref = imageRefSchema.safeParse(photo);
   if (!ref.success || !IMAGE_PATH_PATTERN.test(ref.data.path)) return null;
   try {
-    const url = mediaUrl(ref.data.path);
+    const url = storageUrl(ref.data.path);
     if (new URL(url).origin !== mediaOrigin()) return null;
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(4000) });
     if (!response.ok) return null;

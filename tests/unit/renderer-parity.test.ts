@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { PreviewPanel } from "@/components/editor/preview-panel";
+import { PreviewBezel } from "@/components/workspace/preview-bezel";
 import { TenantPage } from "@/components/tenant/tenant-page";
 import { pageChrome } from "@/lib/publish/chrome";
 import { fullPublished } from "./fixtures/page-document";
@@ -39,15 +39,13 @@ function rootHtml(html: string): string {
 
 describe("M2-31 the editor preview and the public page draw the same markup", () => {
   it.each(["free", "pro", "studio", "gibberish"])(
-    "plan %s: [data-page-root] is identical through PreviewPanel and TenantPage",
+    "plan %s: [data-page-root] is identical through PreviewBezel and TenantPage",
     (plan) => {
       const preview = renderToStaticMarkup(
-        createElement(PreviewPanel, {
+        createElement(PreviewBezel, {
           doc: fullPublished,
           pageId: PAGE_ID,
           chrome: pageChrome(plan, PAGE_ID),
-          view: "preview",
-          isDesktop: true,
         }),
       );
       const live = renderToStaticMarkup(
@@ -62,7 +60,7 @@ describe("M2-31 the editor preview and the public page draw the same markup", ()
 
   it("the preview wrapper and the public page both reach the one renderer module", () => {
     const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
-    expect(read("src/components/editor/preview-panel.tsx")).toMatch(
+    expect(read("src/components/workspace/preview-bezel.tsx")).toMatch(
       /import\s*\{[^}]*\bPageRenderer\b[^}]*\}\s*from\s*"@\/lib\/editor\/contracts"/,
     );
     expect(read("src/lib/editor/contracts.ts")).toMatch(
