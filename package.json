@@ -65,6 +65,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
+    "@modelcontextprotocol/client": "2.3.0",
     "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "24.19.0",

@@ -4,6 +4,7 @@ import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, rand, signedInUser, trackUser } from "../fixtures/data";
 import { CIMD_CLIENT_ID, startCimdStub, stopCimdStub } from "../fixtures/cimd-stub-server";
 import { McpClient, discover, startLoopback } from "../fixtures/mcp-client";
+import { OfficialMcpClient } from "../fixtures/official-mcp-client";
 import {
   APP_ORIGIN,
   ISSUER,
@@ -206,17 +207,22 @@ test("M10-33 the whole dance on registration, then every tool with the token it 
   expect(connection.refresh).toMatch(/^hl_rt_[A-Za-z0-9_-]{43}$/);
 
   const grant = await grantOf(user.userId, connection.clientId);
-  const mcp = new McpClient(connection.access);
-  await runEveryTool({
-    context,
-    page,
-    user,
-    mcp,
-    clientId: connection.clientId,
-    grantId: grant.id,
-  });
+  // The twelve tools through the official MCP client (Streamable HTTP transport, bearer token).
+  const mcp = new OfficialMcpClient(connection.access);
+  try {
+    await runEveryTool({
+      context,
+      page,
+      user,
+      mcp,
+      clientId: connection.clientId,
+      grantId: grant.id,
+    });
+  } finally {
+    await mcp.close();
+  }
 
-  // A second protocol generation with the same token : server/discover and a tools/list with the envelope.
+  // A second protocol generation with the same token (hand-rolled: the wire envelope is the point): server/discover and a tools/list with the envelope.
   const modern = new McpClient(connection.access, { era: "2026" });
   expect((await modern.rpc("server/discover")).status).toBe(200);
   expect(await modern.listTools()).toHaveLength(12);
@@ -234,7 +240,7 @@ test("M10-33 (a) / M10-37 Publish left unticked at consent (the default): the to
   const user = await prepareFlowUser(context, "flow-down");
   const connection = await connect(browser, user, { leavePublish: true });
   expect(connection.tokens.body.scope).toBe("hydlnk.read hydlnk.write");
-  const mcp = new McpClient(connection.access);
+  const mcp = new OfficialMcpClient(connection.access);
   await mcp.initialize();
   const liveBefore = await tenantHtml(user.handle);
   const refused = await mcp.callTool("publish_page", { pageId: user.pageId });
@@ -259,6 +265,7 @@ test("M10-33 (a) / M10-37 Publish left unticked at consent (the default): the to
   expect(await tenantHtml(user.handle)).toBe(liveBefore);
   expect((await pageRow(user.pageId)).published_at).toBe((await pageRow(user.pageId)).published_at);
   expect(await tenantHtml(user.handle)).not.toContain("Written with a narrower grant");
+  await mcp.close();
 });
 
 test("M10-33 (b) a refresh gives a new pair, and the first refresh token presented again is invalid_grant and kills the newer access token", async ({

@@ -2,7 +2,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { rand, signedInUser } from "../fixtures/data";
-import type { McpClient } from "../fixtures/mcp-client";
+import type { ToolSession } from "../fixtures/official-mcp-client";
 import { openEditor, pageRow, statusChip } from "../m2/editor-helpers";
 import { url } from "../helpers";
 
@@ -82,7 +82,8 @@ export interface FlowEnv {
   /** A page of the signed-in context, for the editor checks. */
   page: Page;
   user: FlowUser;
-  mcp: McpClient;
+  /** The hand-rolled client or the official one: both give the same four calls. */
+  mcp: ToolSession;
   /** The client and grant the token belongs to: every activity row must carry them. */
   clientId: string;
   grantId: string;

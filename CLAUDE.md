@@ -78,7 +78,7 @@ Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds thes
 - `stripe` 23.0.0: billing (sandbox only)
 - `tailwind-merge` 3.7.0: class name merging (with clsx, in `cn`)
 - `zod` 4.6.5: schemas for documents, env and inputs
-Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@playwright/test` 1.63.0, `@tailwindcss/postcss` 4.3.3, `@types/node` 24.19.0, `@types/nodemailer` 8.0.2, `@types/react` 19.3.0, `@types/react-dom` 19.3.0, `eslint` 9.39.5, `eslint-config-next` 16.3.8, `eslint-config-prettier` 10.1.8, `jsdom` 30.1.1, `jsqr` 1.4.0, `prettier` 3.9.9, `tailwindcss` 4.3.3, `tsx` 4.23.15, `typescript` 6.0.3, `vitest` 5.0.3
+Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@modelcontextprotocol/client` 2.3.0, `@playwright/test` 1.63.0, `@tailwindcss/postcss` 4.3.3, `@types/node` 24.19.0, `@types/nodemailer` 8.0.2, `@types/react` 19.3.0, `@types/react-dom` 19.3.0, `eslint` 9.39.5, `eslint-config-next` 16.3.8, `eslint-config-prettier` 10.1.8, `jsdom` 30.1.1, `jsqr` 1.4.0, `prettier` 3.9.9, `tailwindcss` 4.3.3, `tsx` 4.23.15, `typescript` 6.0.3, `vitest` 5.0.3
 
 ## Definition of done (every feature)
 - Acceptance steps pass in Playwright at 390 and 1440.

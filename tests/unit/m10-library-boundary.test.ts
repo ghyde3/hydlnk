@@ -76,6 +76,24 @@ describe("M10-01 the MCP libraries are imported only where the rule says, and ea
   });
 });
 
+describe("M10-33 the official MCP client is a dev dependency used by the end-to-end tests only", () => {
+  it("is named by no file under src/", () => {
+    const users = listFiles("src").filter((file) =>
+      /["']@modelcontextprotocol\/client(?:\/[^"']*)?["']/.test(stripComments(read(file))),
+    );
+    expect(users).toEqual([]);
+  });
+
+  it("is in devDependencies, not dependencies", () => {
+    const pkg = JSON.parse(read("package.json")) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    expect(pkg.devDependencies["@modelcontextprotocol/client"]).toBe("2.3.0");
+    expect(pkg.dependencies["@modelcontextprotocol/client"]).toBeUndefined();
+  });
+});
+
 describe("M10-01 none of the three libraries is reachable from the browser, the tenant renderer, marketing or components", () => {
   const clientFiles = listFiles("src").filter((file) => isClientModule(read(file)));
   const entries = [
