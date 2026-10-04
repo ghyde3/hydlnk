@@ -3725,7 +3725,7 @@
         "Supersedes: M5-21 step 3's budget lines for the public page ('first-load JavaScript <= 100 KB gzipped' becomes one script of at most 3 KB and no framework JavaScript; 'fonts load with display=swap and preconnect' becomes preloaded self-hosted faces with no preconnect; 'no request to ... the app host on load except the /api/e beacon' stays) and its thresholds in step 2 stay as the floor for a Lighthouse run when one exists; M6-34 step 3 and M7-15 step 7's lists of hosts the page may talk to (now: only `/media` images on the root origin); M3-04 step 1 and M2-22 step 7 as listed in M8-01 and M8-07. M2-22 steps 8 and 9, M2-31 steps 5 and 6 and M6-34 steps 7 and 8 hold unchanged and are re-run on the new build."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M8-10",

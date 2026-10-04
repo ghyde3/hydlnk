@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Release: Wave J (lighter public pages and cost levers)
+
+- PR #20 merged, merge commit cb6e7fa. Migration applied through release-migrations.yml (run 37184018383): 20261008000001_events_60_days (purge_old_events keeps 60 days of raw events; rollups first, kept forever; nothing deleted at apply time since production events start 2026-10-01). Deployment https://vercel.com/ghyde3s-projects/hydlnk/hHxuAZ7jD6tjH6DjJ3tjkPessWrL (success).
+- Checks: full browser suite green (run 37182342186, all four shards); `pnpm verify` PASS (6341 unit, pgTAP PASS after db:reset); `pnpm test:e2e:prod` 12/12.
+- M8-09 step 8 proven on production and flipped: first visit to links.hyde-co.com at 390x844 made 5 requests to the page host (document 5,530 B on the wire, Fraunces 18,588 B, Inter 24,104 B, script 1,330 B, beacon 300 B; about 49.9 KB), images from the root origin https://hydlnk.com/media (Wave I), 0 third-party requests, no `_next/static` and no fonts.googleapis.com in the HTML. The document is served brotli-compressed with `x-vercel-cache: HIT` on repeat requests. Before Wave J: 18 requests, about 325 KB, plus Google Fonts.
+- Still held: M8-04 (no unpublish flow to test; failure-cache step qualified).
+
 ## 2026-10-04 — Wave J security review fixes
 
 Five findings from the Wave J security review, on `m9-cost-levers` (draft PR #20). No feature flips; no `features.json` change. No acceptance step reads contrary to the new rewrite rule: M8-03's mention of the two `[...rest]` pages is now literally true (they are removed), and M4-09 step 4 (`/sites/<id>` typed directly is 404) still holds.
