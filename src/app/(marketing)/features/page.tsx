@@ -355,7 +355,19 @@ export default function FeaturesPage() {
         </ArrowLink>
       </Section>
 
-      <Section id="safety" tone="page" labelledBy="safety-title">
+      <Section id="ai-apps" tone="page" labelledBy="ai-apps-title">
+        <SectionIntro
+          eyebrow="AI apps"
+          titleId="ai-apps-title"
+          title="Use it from Claude or ChatGPT"
+          lead="Connect HYDLNK to Claude or ChatGPT and ask for changes in plain words: add a link, reword your bio, switch your theme or check last week’s numbers. The AI works on your draft, so you can look it over in the editor, and it publishes only if you allowed that when you connected. It works on every plan, free included, and you can disconnect it at any time."
+        />
+        <ArrowLink href="/connect" className="mt-6">
+          See how to connect
+        </ArrowLink>
+      </Section>
+
+      <Section id="safety" labelledBy="safety-title">
         <SectionIntro
           eyebrow="Safe by default"
           titleId="safety-title"

@@ -104,6 +104,8 @@ export const FOOTER_COLUMNS: readonly {
       { href: "/custom-domains", label: "Custom domains" },
       { href: "/link-analytics", label: "Analytics" },
       { href: "/pricing", label: "Pricing" },
+      // The AI connector's setup page (M10-34); the header's six links stay as they are.
+      { href: "/connect", label: "Use with Claude or ChatGPT" },
     ],
   },
   {
@@ -145,6 +147,7 @@ export const SITEMAP_PATHS: readonly string[] = [
   ...AUDIENCES.map((audience) => audienceHref(audience.slug)),
   ...GUIDES.map((guide) => guideHref(guide.slug)),
   "/faq",
+  "/connect",
   "/privacy",
   "/terms",
 ];

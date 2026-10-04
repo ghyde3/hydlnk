@@ -52,6 +52,7 @@ const PAGES: { path: string; title: RegExp; current: string | null }[] = [
     current: "Learn",
   },
   { path: "/faq", title: /^FAQ \| HYDLNK$/, current: null },
+  { path: "/connect", title: /^Use HYDLNK from Claude or ChatGPT \| HYDLNK$/, current: null },
   { path: "/privacy", title: /^Privacy policy \| HYDLNK$/, current: null },
   { path: "/terms", title: /^Terms of service \| HYDLNK$/, current: null },
 ];

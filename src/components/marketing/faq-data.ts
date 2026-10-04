@@ -180,6 +180,37 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       },
     ],
   },
+  {
+    id: "ai-apps",
+    title: "Claude and ChatGPT",
+    items: [
+      {
+        question: "Can I use HYDLNK from Claude or ChatGPT?",
+        answer:
+          "Yes. Connect HYDLNK to Claude or ChatGPT, then ask the AI to add a link, reword your bio, switch your theme or check your numbers. It works on your draft, and the connect page has the steps for each app.",
+      },
+      {
+        question: "Is it on every plan?",
+        answer:
+          "Yes. Connecting an AI app works on Free, Pro and Studio. What it can read of your analytics follows your plan, the same as in the editor.",
+      },
+      {
+        question: "Can the AI publish my page without asking?",
+        answer:
+          "Only if you allow it. When you connect an app you choose what it may do, and publishing is a separate choice you can leave off. Even when it is on, the AI app may ask you first. Without it, the AI can still edit your draft, and you publish yourself.",
+      },
+      {
+        question: "What can the AI see?",
+        answer:
+          "What you allow and ask for: your page drafts, your numbers and your list of custom domains. It can’t see other people’s pages, and HYDLNK never sees your chats with the AI.",
+      },
+      {
+        question: "How do I turn it off?",
+        answer:
+          "Open Settings & billing, find Connected apps and choose Revoke next to the app. It stops working at once. You can also remove HYDLNK inside Claude or ChatGPT.",
+      },
+    ],
+  },
 ];
 
 /** The home page's short list, in its own order. */

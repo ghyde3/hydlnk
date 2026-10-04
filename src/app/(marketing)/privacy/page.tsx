@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ACCESS_LIFETIME_WORDS, CONNECTION_IDLE_DAYS } from "@/components/marketing/connect-facts";
 import { LegalPage } from "@/components/marketing/legal-page";
 import { marketingMetadata } from "@/components/marketing/metadata";
 import { POSTAL_ADDRESS, PRIVACY_EMAIL, SUPPORT_EMAIL } from "@/components/marketing/site-map";
 import { RAW_EVENT_RETENTION_DAYS } from "@/lib/analytics/retention";
+import { MCP_ACTIVITY_RETENTION_DAYS } from "@/lib/mcp/constants";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/privacy",
@@ -19,6 +21,7 @@ const TOC = [
   ["collect", "What we collect"],
   ["visitors", "Visitors to HYDLNK pages"],
   ["use", "How we use information"],
+  ["connected-apps", "Connected AI apps"],
   ["legal-bases", "Legal bases"],
   ["cookies", "Cookies"],
   ["processors", "Service providers"],
@@ -56,6 +59,7 @@ export default function PrivacyPage() {
         <li>The only cookies we use are the essential ones that keep you signed in to the editor at app.hydlnk.com.</li>
         <li>We don’t sell personal information, and we don’t share it for advertising.</li>
         <li>Payments go through Stripe. We never see your full card number.</li>
+        <li>If you connect an AI app, it can only do what you allow, and you can remove it at any time.</li>
         <li>You can see, correct, export or delete your information. Deleting your account deletes your pages and their analytics.</li>
       </ul>
 
@@ -179,6 +183,56 @@ export default function PrivacyPage() {
       </ul>
       <p>We don’t sell personal information, use it for advertising or let advertisers track people on HYDLNK pages.</p>
 
+      <h2 id="connected-apps">Connected AI apps</h2>
+      <p>
+        You can connect an AI app, such as Claude or ChatGPT, so it can work on your pages for you.
+        This section covers what we store when you do, what the app can do, how long a connection
+        lasts and how to remove it.
+      </p>
+      <h3>What we store</h3>
+      <ul>
+        <li>
+          The app’s name and web address, which permissions you allowed, when you connected it and
+          when it was last used.
+        </li>
+        <li>
+          The sign-in secrets for the connection. We store them only as one-way hashes, so we can’t
+          read them back.
+        </li>
+        <li>
+          A record of each request the app makes. It names the action, the page, the time and
+          whether it worked, and it never holds your content. We keep it for{" "}
+          {MCP_ACTIVITY_RETENTION_DAYS} days.
+        </li>
+      </ul>
+      <h3>What an app can do</h3>
+      <p>
+        Only what you allowed when you connected it: read your drafts, your analytics and your
+        domain list, edit your drafts and publish your pages. Publishing is a separate permission
+        that you can leave off.
+      </p>
+      <h3>What the AI company does with it</h3>
+      <p>
+        The company that runs the app, such as Anthropic for Claude or OpenAI for ChatGPT, handles
+        what the app reads under its own privacy policy. HYDLNK doesn’t send your data to an AI
+        company on its own, and we never see your chats.
+      </p>
+      <h3>How long a connection lasts</h3>
+      <p>
+        An app’s access ends after {ACCESS_LIFETIME_WORDS} and is renewed while the app is in use. A
+        connection that goes unused for {CONNECTION_IDLE_DAYS} days ends.
+      </p>
+      <h3>Removing an app</h3>
+      <p>
+        Open Settings &amp; billing in the editor, find Connected apps and choose Revoke. Access ends
+        at once. Deleting your account also removes every connection.
+      </p>
+      <h3>Cookies</h3>
+      <p>
+        The addresses an AI app calls set no cookies. Approving a connection uses the same sign-in
+        cookie as the rest of the editor, described under Cookies below.
+      </p>
+
       <h2 id="legal-bases">Legal bases</h2>
       <p>If you’re in the European Economic Area or the UK, we rely on these legal bases:</p>
       <ul>
@@ -243,6 +297,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>With the public</strong>, when you publish: published pages, including your profile, links and images, are visible to anyone.</li>
         <li><strong>With service providers</strong>, as listed above.</li>
+        <li><strong>With an AI app you connect</strong>: only what you ask it to read, through the permissions you allowed.</li>
         <li><strong>When the law requires it</strong>, for example in response to a valid legal order, or to protect people from harm or fraud.</li>
         <li><strong>In a business transfer</strong>, if HYDLNK is acquired or merged, in which case this policy continues to apply to your information.</li>
         <li><strong>With your permission</strong>, in any other case.</li>
@@ -261,6 +316,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>Account information and page content</strong>: until you delete them or your account.</li>
         <li><strong>Individual visitor events</strong>: {RAW_EVENT_RETENTION_DAYS} days, then only daily totals remain, for as long as the page exists.</li>
+        <li><strong>Connected app activity</strong>: {MCP_ACTIVITY_RETENTION_DAYS} days. This is the record of what a connected AI app did: the action, the page, the time and whether it worked, never the content.</li>
         <li><strong>Billing records</strong>: as long as tax and accounting law requires.</li>
         <li><strong>Server logs</strong>: kept by our hosting provider for a short period for security and debugging.</li>
         <li><strong>Support emails and reports</strong>: as long as needed to deal with them and any follow-up.</li>
