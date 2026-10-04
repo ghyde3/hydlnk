@@ -24,9 +24,16 @@ import {
  */
 
 const created: string[] = [];
+// The cached Claude row is shared by name, so only the worker that made it removes it: the phone
+// project skips this file's rows and must not delete it under the desktop worker.
+let madeKnownClient = false;
+const known = async () => {
+  madeKnownClient = true;
+  return knownClient();
+};
 test.afterAll(async () => {
   await removeClients(created);
-  await removeClients([KNOWN_CLIENT_ID]);
+  if (madeKnownClient) await removeClients([KNOWN_CLIENT_ID]);
 });
 
 async function register(body: unknown, headers: Record<string, string> = {}, raw?: string) {
@@ -264,11 +271,11 @@ test.describe("M10-11 authorize over HTTP", () => {
       ["prompt=none", { extra: { prompt: "none" } }, "consent_required"],
       ["a request object", { extra: { request: "abc" } }, "request_not_supported"],
     ];
-    const known = await knownClient();
+    const claude = await known();
     for (const [name, options, error] of cases) {
-      const res = await authorizeRaw(known.client_id, pair.challenge, {
+      const res = await authorizeRaw(claude.client_id, pair.challenge, {
         state: "keep",
-        redirectUri: known.redirect_uri,
+        redirectUri: claude.redirect_uri,
         ...options,
       });
       expect(res.status, name).toBe(303);
@@ -330,7 +337,7 @@ test.describe("M10-11 authorize over HTTP", () => {
 
   test("a state with line breaks, ampersands and non-ASCII text round-trips encoded once and adds nothing", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
-    const client = await knownClient();
+    const client = await known();
     const state = "a b&c=d#e %0d%0a\r\nSet-Cookie: x=1 café";
     const res = await authorizeRaw(client.client_id, pkcePair().challenge, {
       state,
