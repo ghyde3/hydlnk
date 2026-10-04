@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Release: Wave L (the HYDLNK connector for Claude and ChatGPT)
+
+- PR #22 merged, merge commit 8c5c2cd. Migrations applied through release-migrations.yml (dry run 37234963035, apply 37235002274): 20261010000010_oauth, 20261010000021_mcp_activity, 20261010000031_oauth_review_fixes, 20261010000032_oauth_token_families, 20261010000033_oauth_strict_reuse (new tables, functions and purge jobs only; no existing data changed). The CLI's optional pg-delta catalog cache warned about a missing CA file after the push; the push itself finished. Deployment https://vercel.com/ghyde3s-projects/hydlnk/ExWmL4eEGNKbiHHrU1zgoMe11HYh (success).
+- Checks: full browser suite green on the production build (run 37232867890, head b9a23e5); the final release commit (features flips and this log) ran Verify only. `pnpm test:e2e:prod` 12/12. Live probes: `app.hydlnk.com/.well-known/oauth-authorization-server` and `oauth-protected-resource` 200, `hydlnk.com/connect` 200, an anonymous `POST app.hydlnk.com/mcp` 401 with `WWW-Authenticate: Bearer resource_metadata="https://app.hydlnk.com/.well-known/oauth-protected-resource/mcp"`.
+- Also shipped in this release: Wave K on the marketing site (fifteen blocks, the links and analytics features, pricing and FAQ; commit 7a0ad2e).
+- No new environment variables. Next: Gary connects HYDLNK in Claude (Customize, Connectors, Add custom connector, `https://app.hydlnk.com/mcp`); `scripts/check-client-docs.ts` re-run and ChatGPT's `securitySchemes` placement checked against the real ChatGPT client; then Wave M1 (sites with pages) on `m12-sites`.
+
 ## 2026-10-04 — Wave L ready to release: held features flipped
 
 - Flipped to `passes: true`: M10-33 (its step 6, a `security-reviewer` run, is done three times over: the wave review, the review of 55dd199, and the focused review of b72c9b4, ab1095a and cb0f5de), M10-36, M10-37, M10-38, M10-39, M10-40. Features: 263 of 294 pass.
