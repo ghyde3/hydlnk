@@ -1,5 +1,5 @@
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import sharp from "sharp";
@@ -99,25 +99,29 @@ export function viewBoxOf(svg: string): { width: number; height: number } {
 
 let legacyBundle: string | null = null;
 
+/**
+ * esbuild, found the way pnpm lays it out: it is not a direct dependency (so there is no
+ * node_modules/.bin/esbuild on a clean install, as on CI), but tsx, a direct one, depends on it.
+ */
+function loadEsbuild(): { buildSync: (options: Record<string, unknown>) => unknown } {
+  return createRequire(require.resolve("tsx/package.json"))("esbuild");
+}
+
 /** The generator's own files (`src/lib/qr/generate.ts`, `png.ts`) bundled for a browser, once. */
 function bundleLegacy(): string {
   if (legacyBundle) return legacyBundle;
   const root = resolve(__dirname, "../../..");
   const out = join(mkdtempSync(join(tmpdir(), "qr-legacy-")), "legacy.js");
-  execFileSync(
-    join(root, "node_modules/.bin/esbuild"),
-    [
-      join(root, "tests/e2e/m9/qr-legacy-entry.ts"),
-      "--bundle",
-      "--format=iife",
-      "--global-name=QrLegacy",
-      "--platform=browser",
-      `--tsconfig=${join(root, "tsconfig.json")}`,
-      `--outfile=${out}`,
-      "--log-level=error",
-    ],
-    { cwd: root },
-  );
+  loadEsbuild().buildSync({
+    entryPoints: [join(root, "tests/e2e/m9/qr-legacy-entry.ts")],
+    bundle: true,
+    format: "iife",
+    globalName: "QrLegacy",
+    platform: "browser",
+    tsconfig: join(root, "tsconfig.json"),
+    outfile: out,
+    logLevel: "error",
+  });
   legacyBundle = readFileSync(out, "utf8");
   return legacyBundle;
 }
