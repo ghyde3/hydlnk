@@ -153,6 +153,25 @@ export function createMcpEndpoint(options: McpEndpointOptions) {
     }
   };
 
+  /**
+   * The SDK answers a tool call as a stream and runs the tool as the stream is read, which is after
+   * this handler's promise would have resolved. Next.js expires the cache tags a route handler queued
+   * (`revalidateTag`, which publish_page uses) right after that promise resolves, so a tool still
+   * running behind a returned stream queued its tags too late and they never expired (the old page
+   * stayed live on a production build, M10-31). Reading the answer to its end here makes every tool
+   * finish, and queue its tags, before the handler returns: the expiry is then started before the
+   * first byte of the answer is sent. Every answer is one JSON-RPC message (no event stream is ever
+   * held open: `maxSubscriptions: 0`), and a tool is cut off after 25 seconds, so this is bounded.
+   */
+  const settled = async (response: Response): Promise<Response> => {
+    const body = await response.arrayBuffer();
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    });
+  };
+
   /** What runs after the bearer check passed (`req.auth` is set). */
   const authenticated = async (req: Request): Promise<Response> => {
     const spent = await overBudget(req);
@@ -175,7 +194,7 @@ export function createMcpEndpoint(options: McpEndpointOptions) {
       body: body as unknown as BodyInit,
     });
     rebuilt.auth = req.auth;
-    return options.serve(rebuilt);
+    return settled(await options.serve(rebuilt));
   };
 
   const guarded = withMcpAuth(authenticated, options.verifyToken, {

@@ -808,3 +808,37 @@ describe("a malformed credential is counted before the bearer wrapper runs", () 
     expect(order).toEqual(["mcp-401", "verify"]);
   });
 });
+
+describe("the answer is only returned once the tool has finished (M10-31)", () => {
+  it("a streamed answer is read to its end inside the handler, so work a tool queues for the cache lands while the request is still being served", async () => {
+    // The SDK answers a tool call as a stream and runs the tool as the stream is read. Next.js runs
+    // the cache expiry a route handler queued (`revalidateTag`) right after the handler's promise
+    // resolves: a tool still running behind a returned stream would queue it too late, and it would
+    // never run (found on a production build: publish_page left the old page live).
+    const events: string[] = [];
+    const { endpoint } = setup({
+      serve: async () => {
+        const encoder = new TextEncoder();
+        return new Response(
+          new ReadableStream({
+            async pull(controller) {
+              await new Promise((resolve) => setTimeout(resolve, 20));
+              events.push("tool done");
+              controller.enqueue(
+                encoder.encode('event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{}}\n\n'),
+              );
+              controller.close();
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        );
+      },
+    });
+    const response = await endpoint(request({ headers: bearer(GOOD) }));
+    events.push("handler resolved");
+    expect(events).toEqual(["tool done", "handler resolved"]);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+    expect(await response.text()).toContain('"result":{}');
+  });
+});
