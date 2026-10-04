@@ -461,11 +461,12 @@ test.describe("M10-15 the token endpoint's request rules", () => {
     expect(named.body.error).toBe("invalid_grant");
   });
 
-  test("120 requests a minute per address, then a 429 temporarily_unavailable with Retry-After", async ({}, info) => {
+  test("600 requests a minute per address, then a 429 temporarily_unavailable with Retry-After", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
+    test.slow();
     const ip = ownIp();
     const send = () => tokenRequest({ grant_type: "password" }, { "x-forwarded-for": ip });
-    for (let i = 0; i < 120; i += 1) expect((await send()).status).toBe(400);
+    for (let i = 0; i < 600; i += 1) expect((await send()).status).toBe(400);
     const limited = await send();
     expect(limited.status).toBe(429);
     expect(limited.body.error).toBe("temporarily_unavailable");

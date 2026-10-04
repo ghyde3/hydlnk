@@ -479,7 +479,7 @@ describe("M10-12 / M10-13 suspended accounts, the 20-app limit, the rate limit",
     });
   });
 
-  it("a person who has connected the app before sees what is allowed now, and a new consent ends the earlier tokens", async () => {
+  it("a person who has connected the app before sees what is allowed now, and a new consent ends the earlier tokens that hold more than it allows", async () => {
     const h = harness();
     const first = await allow(h, { scopes: ["hydlnk.write", "hydlnk.publish"] });
     expect(first.view.previous).toBeNull();
@@ -491,7 +491,7 @@ describe("M10-12 / M10-13 suspended accounts, the 20-app limit, the rate limit",
       userId: USER.id,
       kind: "access",
       hash: "h".repeat(64),
-      scopes: ["hydlnk.read"],
+      scopes: ["hydlnk.read", "hydlnk.write", "hydlnk.publish"],
       resource: "r",
       expiresAt: h.store.clock + 3600_000,
       createdAt: h.store.clock,

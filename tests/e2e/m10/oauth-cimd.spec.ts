@@ -6,6 +6,7 @@ import { rawRequest } from "../fixtures/http";
 import {
   authorizeUrl,
   authorizeRaw,
+  dcrHeading,
   ownAddress,
   pkcePair,
   removeClients,
@@ -104,9 +105,7 @@ test("M10-08 a valid document is fetched once with the headers of the policy, sh
   await setStub({ path, json, headers: { "cache-control": "max-age=600" } });
 
   await page.goto(authorizeUrl(clientId, pkcePair().challenge));
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Zq Stub App wants to connect to your HYDLNK",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(dcrHeading("Zq Stub App"));
   await expect(page.locator("ul.facts li").first()).toHaveText("Address: 127.0.0.1:12113");
 
   const first = await hits(path);
@@ -260,7 +259,5 @@ test("M10-08 a document that drops a redirect address stops accepting it once it
   expect(refused.status).toBe(400);
   expect(refused.body).toContain("This app’s return address isn’t allowed.");
   await page.goto(authorizeUrl(clientId, pkcePair().challenge));
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Zq Renamed wants to connect to your HYDLNK",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(dcrHeading("Zq Renamed"));
 });

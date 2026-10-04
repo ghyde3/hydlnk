@@ -87,12 +87,11 @@ export async function resolveClient(
   const loaded = await deps.loadCimdClient(clientId);
   if (loaded.ok) return loaded;
 
-  // A client the person has connected before is not locked out because its host is slow, down or
-  // being asked for too much for a minute (Wave L review): the expired copy stands in until a refetch
-  // succeeds, and for a week at most after it was fetched. A document that is now invalid is not
-  // "the host is down": it is refused, whatever the copy says.
-  const unavailable =
-    loaded.reason === "too_many" || (loaded.reason === "cannot_verify" && loaded.transient === true);
+  // A client the person has connected before is not locked out because its host is slow or down (Wave
+  // L review): the expired copy stands in until a refetch succeeds, and for a week at most after it
+  // was fetched. A document that is now invalid is not "the host is down": it is refused, whatever the
+  // copy says. A caller that is rate limited (`too_many`) is told to wait, copy or not (second review).
+  const unavailable = loaded.reason === "cannot_verify" && loaded.transient === true;
   if (unavailable && cached && cached.kind === "cimd" && usableAsStale(cached, deps.now())) {
     logOauthEvent("client_document_stale");
     await deps.store.touchClient(clientId).catch(() => undefined);

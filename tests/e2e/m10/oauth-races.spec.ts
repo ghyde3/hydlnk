@@ -2,8 +2,6 @@ import { expect, test } from "@playwright/test";
 import { cleanupUsers, desktopOnly, signedInUser } from "../fixtures/data";
 import {
   exchangeCode,
-  mcpAnswers,
-  mcpStatus,
   mintGrant,
   pkcePair,
   refreshTokens,
@@ -72,7 +70,7 @@ test("M10-15 two simultaneous exchanges of one code give one 200 and one invalid
   expect(grants[0]!.revoked_at).not.toBeNull();
 });
 
-test("M10-16 two simultaneous refreshes with one token give one success and one invalid_grant, and the success is ended too", async ({
+test("M10-16 two simultaneous refreshes with one token both answer (the 60 second grace window), and only the later pair stays live", async ({
   context,
 }, info) => {
   test.skip(!desktopOnly(info), "raw HTTP, no UI");
@@ -85,12 +83,16 @@ test("M10-16 two simultaneous refreshes with one token give one success and one 
     refreshTokens(client.client_id, minted.refreshToken),
     refreshTokens(client.client_id, minted.refreshToken),
   ]);
-  expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
-  expect(results.find((r) => r.status === 400)!.body.error).toBe("invalid_grant");
-  const winner = results.find((r) => r.status === 200)!;
-  // Because that was a reuse, the success is dead: its refresh token and its access token.
-  expect(
-    (await refreshTokens(client.client_id, String(winner.body.refresh_token))).body.error,
-  ).toBe("invalid_grant");
-  if (await mcpAnswers()) expect(await mcpStatus(String(winner.body.access_token))).toBe(401);
+  expect(results.map((r) => r.status)).toEqual([200, 200]);
+  // One of the two pairs was revoked by the other: exactly one refresh token still works, and the
+  // grant is not ended.
+  const next = [] as number[];
+  for (const result of results) {
+    next.push((await refreshTokens(client.client_id, String(result.body.refresh_token))).status);
+  }
+  expect(next.sort()).toEqual([200, 400]);
+  const grants = await rows<{ revoked_at: string | null }>("oauth_grants", {
+    client_id: client.client_id,
+  });
+  expect(grants[0]!.revoked_at).toBeNull();
 });

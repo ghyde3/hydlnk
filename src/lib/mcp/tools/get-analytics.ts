@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { truncateToCodePoints } from "@/lib/document/limits";
 import { loadStatsResponse } from "@/lib/analytics/dashboard/load";
 import { RANGE_VALUES, type RangeDays } from "@/lib/analytics/dashboard/range";
 import { MCP_SCOPES } from "../constants";
@@ -33,6 +34,9 @@ const PHRASES: Record<RangeDays, string> = {
 };
 
 const number = (value: number) => value.toLocaleString("en-US");
+
+/** A referrer name longer than this is cut (Wave L second review): it is text a visitor chose. */
+const REFERRER_LABEL_MAX = 60;
 
 /** Said next to the referrer names: anyone who can open the page chooses them (Wave L review). */
 const REFERRERS_UNTRUSTED =
@@ -81,11 +85,14 @@ export const getAnalytics: ToolDefinition<typeof input> = {
       };
     }
 
-    const rows = (list: { label: string; pct: number }[]) =>
-      list.slice(0, 10).map((row) => ({ label: row.label, percent: row.pct }));
+    const rows = (list: { label: string; pct: number }[], maxLabel = Infinity) =>
+      list.slice(0, 10).map((row) => ({
+        label: Number.isFinite(maxLabel) ? truncateToCodePoints(row.label, maxLabel) : row.label,
+        percent: row.pct,
+      }));
     const breakdowns = stats.breakdowns
       ? {
-          referrers: rows(stats.breakdowns.referrers),
+          referrers: rows(stats.breakdowns.referrers, REFERRER_LABEL_MAX),
           devices: rows(stats.breakdowns.devices),
           countries: rows(stats.breakdowns.countries),
         }

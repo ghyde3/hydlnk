@@ -119,10 +119,52 @@ function refusalFor(reason: AddressRefusal): FetchRefusal {
   }
 }
 
-/** Both families, as the platform resolver answers them. */
+/**
+ * The resolver's own limits: one try and 1.5 seconds per query, inside the 3 second deadline of the
+ * whole fetch. A c-ares Resolver answers on its own sockets; `dns.lookup` runs `getaddrinfo` in libuv's
+ * four-thread pool, where a few slow names would stall every file and crypto call of the instance
+ * (Wave L second review).
+ */
+export const DNS_RESOLVER_OPTIONS = { timeout: 1500, tries: 1 } as const;
+
+/** The two queries `resolveBothFamilies` needs (a `dns.promises.Resolver` has both). */
+export interface FamilyResolver {
+  resolve4(hostname: string): Promise<string[]>;
+  resolve6(hostname: string): Promise<string[]>;
+}
+
+/** The answers that mean "this name has no records of this family", which is normal for most names. */
+const NO_RECORDS = new Set(["ENODATA", "ENOTFOUND"]);
+
+/**
+ * Both families, asked at once. A family with no records is empty; any other failure of either
+ * family is an error (a half answer could hide an address that was never judged), and so is a name
+ * with no records at all.
+ */
+export async function resolveBothFamilies(
+  resolver: FamilyResolver,
+  hostname: string,
+): Promise<string[]> {
+  const ask = async (query: Promise<string[]>): Promise<string[]> => {
+    try {
+      return await query;
+    } catch (error) {
+      if (NO_RECORDS.has((error as { code?: string } | null)?.code ?? "")) return [];
+      throw error;
+    }
+  };
+  const [v4, v6] = await Promise.all([
+    ask(resolver.resolve4(hostname)),
+    ask(resolver.resolve6(hostname)),
+  ]);
+  const all = [...v4, ...v6];
+  if (all.length === 0) throw Object.assign(new Error("no records"), { code: "ENOTFOUND" });
+  return all;
+}
+
+/** Both families, from the system's name servers (c-ares), never from the libuv pool. */
 async function defaultResolve(hostname: string): Promise<string[]> {
-  const found = await dns.promises.lookup(hostname, { all: true, verbatim: true });
-  return found.map((entry) => entry.address);
+  return resolveBothFamilies(new dns.promises.Resolver(DNS_RESOLVER_OPTIONS), hostname);
 }
 
 /** A DNS lookup that answers with the one address that was validated, whatever name it is asked for. */

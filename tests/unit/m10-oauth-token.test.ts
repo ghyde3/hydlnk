@@ -6,7 +6,7 @@ import {
   REFRESH_FAMILY_MAX_SECONDS,
   REFRESH_IDLE_SECONDS,
 } from "@/lib/oauth/constants";
-import { basicNamesClient, TOKEN_MAX_BODY_BYTES } from "@/lib/oauth/token";
+import { basicNamesClient, TOKEN_MAX_BODY_BYTES, TOKEN_PER_IP_PER_MINUTE } from "@/lib/oauth/token";
 import { generateToken, sha256Hex } from "@/lib/oauth/tokens";
 import {
   DCR_ID,
@@ -336,6 +336,20 @@ describe("M10-15 single use and reuse", () => {
     ).toBe("invalid_grant");
   });
 
+  // Wave L second review, finding 8: a used code presented under another app's client_id must not
+  // end the connection it started: anyone who sees a code could otherwise end someone's grant.
+  it("a used code presented by another app is invalid_grant and ends nothing", async () => {
+    const h = harness();
+    h.store.addClient(`hlc_${"c".repeat(32)}`, [REDIRECT]);
+    const { code, verifier } = await issueCode(h);
+    const first = await exchange(h, code, verifier);
+    expect(first.status).toBe(200);
+    const other = await exchange(h, code, verifier, { client_id: `hlc_${"c".repeat(32)}` });
+    expect(body(other).error).toBe("invalid_grant");
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
+    expect(h.store.tokens.every((t) => t.revokedAt === null)).toBe(true);
+  });
+
   it("a user suspended between consent and exchange is invalid_grant and nothing is issued", async () => {
     const h = harness();
     const { code, verifier } = await issueCode(h);
@@ -360,6 +374,24 @@ describe("M10-15 grants", () => {
     expect(
       await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE),
     ).not.toBeNull();
+  });
+
+  // Wave L second review, finding 6: two installs of one app (two machines) share one grant; the
+  // second consent ends only what holds more than the person allowed this time.
+  it("a second consent ends only the tokens that hold more than the new set allows", async () => {
+    const h = harness();
+    const first = await connect(h, { scopes: ["hydlnk.write"] });
+    const second = await connect(h, { scopes: ["hydlnk.write", "hydlnk.publish"] });
+    expect(second.scope).toBe("hydlnk.read hydlnk.write hydlnk.publish");
+    // The first install's access token holds read and write: inside the new set, so it still works.
+    expect(await h.store.verifyAccessToken(sha256Hex(first.access_token), RESOURCE)).not.toBeNull();
+    expect(await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE)).not.toBeNull();
+    // A narrower second consent ends what exceeds it.
+    const third = await connect(h, { scopes: [] });
+    expect(third.scope).toBe("hydlnk.read");
+    expect(await h.store.verifyAccessToken(sha256Hex(first.access_token), RESOURCE)).toBeNull();
+    expect(await h.store.verifyAccessToken(sha256Hex(second.access_token), RESOURCE)).toBeNull();
+    expect(await h.store.verifyAccessToken(sha256Hex(third.access_token), RESOURCE)).not.toBeNull();
   });
 
   it("makes at most 6 database round trips and calls no external URL", async () => {
@@ -452,8 +484,13 @@ describe("M10-15 the request itself", () => {
   it("limits per address: 429 temporarily_unavailable with Retry-After", async () => {
     const base = harness();
     const h = harness({ limit: memoryLimiter(() => base.store.clock) });
-    for (let i = 0; i < 120; i += 1)
-      await h.token({ grant_type: "authorization_code", client_id: DCR_ID });
+    // Claude's and ChatGPT's servers call it for many people from a few addresses: 600 a minute
+    // (Wave L second review).
+    expect(TOKEN_PER_IP_PER_MINUTE).toBe(600);
+    for (let i = 0; i < 600; i += 1) {
+      const answered = await h.token({ grant_type: "authorization_code", client_id: DCR_ID });
+      expect(answered.status, `request ${i + 1}`).toBe(400);
+    }
     const limited = await h.token({ grant_type: "authorization_code", client_id: DCR_ID });
     expect(limited.status).toBe(429);
     expect(body(limited).error).toBe("temporarily_unavailable");
@@ -554,6 +591,7 @@ describe("M10-16 refresh tokens", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const a = await connect(h);
     const b = body(await refresh(h, a.refresh_token));
+    h.store.advance(61);
     const reuse = await refresh(h, a.refresh_token);
     expect(reuse.status).toBe(400);
     expect(body(reuse).error).toBe("invalid_grant");
@@ -573,19 +611,15 @@ describe("M10-16 refresh tokens", () => {
     expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
   });
 
-  it("two simultaneous requests with the same token give one success and one invalid_grant, and the success is ended too", async () => {
+  it("two simultaneous requests with the same token both answer: the later one re-rotates and the earlier pair is revoked", async () => {
     const h = harness();
-    vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const a = await connect(h);
     const results = await Promise.all([refresh(h, a.refresh_token), refresh(h, a.refresh_token)]);
-    expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
-    const success = results.find((r) => r.status === 200)!;
-    expect(
-      await h.store.verifyAccessToken(sha256Hex(String(body(success).access_token)), RESOURCE),
-    ).toBeNull();
+    expect(results.map((r) => r.status)).toEqual([200, 200]);
     expect(
       h.store.tokens.filter((t) => t.kind === "refresh" && !t.rotatedAt && !t.revokedAt),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
+    expect(h.store.grants[0]!.revokedAt).toBeNull();
   });
 
   it("every dead refresh token is the same invalid_grant", async () => {
@@ -655,8 +689,10 @@ describe("M10-16 refresh tokens", () => {
     const narrowed = await refresh(h, a.refresh_token, { scope: "hydlnk.read" });
     expect(narrowed.status).toBe(200);
     expect(body(narrowed).scope).toBe("hydlnk.read");
+    // Narrowing is sticky (Wave L second review): the next pair is never wider than this one.
     const back = await refresh(h, String(body(narrowed).refresh_token));
-    expect(body(back).scope).toBe("hydlnk.read hydlnk.write");
+    expect(body(back).scope).toBe("hydlnk.read");
+    expect((await refresh(h, String(body(back).refresh_token), { scope: "hydlnk.write" })).status).toBe(400);
     expect(h.store.grants[0]!.scopes).toEqual(["hydlnk.read", "hydlnk.write"]);
     const unknown = await refresh(h, String(body(back).refresh_token), { scope: "hydlnk.nope" });
     expect(body(unknown).error).toBe("invalid_scope");
@@ -710,11 +746,80 @@ describe("M10-16 refresh tokens", () => {
     // Another request rotates the token between the read and the write.
     h.store.rotateRace = () => {
       const old = h.store.tokens.find((t) => t.hash === sha256Hex(a.refresh_token))!;
-      old.rotatedAt = h.store.clock;
+      old.rotatedAt = h.store.clock - 61_000;
       h.store.rotateRace = null;
     };
     const result = await refresh(h, a.refresh_token);
     expect(body(result).error).toBe("invalid_grant");
+  });
+
+  // Wave L second review, finding 11: a refresh whose answer was lost is retried by the same app.
+  describe("the 60 second grace window", () => {
+    it("a token rotated 59 seconds ago, presented by the same app, re-rotates: a fresh pair, the first pair revoked, the grant kept", async () => {
+      const h = harness();
+      const a = await connect(h);
+      h.store.advance(1);
+      const first = body(await refresh(h, a.refresh_token));
+      h.store.advance(59);
+      const retry = await refresh(h, a.refresh_token);
+      expect(retry.status).toBe(200);
+      const second = body(retry);
+      expect(second.refresh_token).not.toBe(first.refresh_token);
+      // What the first answer carried is dead, the retry's pair lives.
+      expect(await h.store.verifyAccessToken(sha256Hex(String(first.access_token)), RESOURCE)).toBeNull();
+      expect(await h.store.verifyAccessToken(sha256Hex(String(second.access_token)), RESOURCE)).not.toBeNull();
+      expect(body(await refresh(h, String(first.refresh_token))).error).toBe("invalid_grant");
+      expect(h.store.grants[0]!.revokedAt).toBeNull();
+      // One live refresh token, and the new one works.
+      expect(
+        h.store.tokens.filter((t) => t.kind === "refresh" && !t.rotatedAt && !t.revokedAt),
+      ).toHaveLength(1);
+      expect((await refresh(h, String(second.refresh_token))).status).toBe(200);
+    });
+
+    it("the window does not slide: presented again 61 seconds after the first rotation it ends the grant", async () => {
+      const h = harness();
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const a = await connect(h);
+      h.store.advance(1);
+      await refresh(h, a.refresh_token);
+      h.store.advance(30);
+      expect((await refresh(h, a.refresh_token)).status).toBe(200);
+      h.store.advance(31);
+      expect(body(await refresh(h, a.refresh_token)).error).toBe("invalid_grant");
+      expect(h.store.grants[0]!.revokedAt).not.toBeNull();
+      expect(h.store.tokens.every((t) => t.revokedAt !== null)).toBe(true);
+    });
+
+    it("after 61 seconds a reuse ends the grant, as before", async () => {
+      const h = harness();
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const a = await connect(h);
+      h.store.advance(1);
+      await refresh(h, a.refresh_token);
+      h.store.advance(61);
+      expect(body(await refresh(h, a.refresh_token)).error).toBe("invalid_grant");
+      expect(h.store.grants[0]!.revokedAt).not.toBeNull();
+    });
+
+    it("another app presenting the token inside the window ends the grant", async () => {
+      const h = harness();
+      vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      h.store.addClient(`hlc_${"f".repeat(32)}`, [REDIRECT]);
+      const a = await connect(h);
+      await refresh(h, a.refresh_token);
+      const result = await refresh(h, a.refresh_token, { client_id: `hlc_${"f".repeat(32)}` });
+      expect(body(result).error).toBe("invalid_grant");
+      expect(h.store.grants[0]!.revokedAt).not.toBeNull();
+    });
+
+    it("a narrower retry stays narrower, and the retry never mints wider than the token", async () => {
+      const h = harness();
+      const a = await connect(h, { scopes: ["hydlnk.write"] });
+      await refresh(h, a.refresh_token, { scope: "hydlnk.read" });
+      const retry = await refresh(h, a.refresh_token, { scope: "hydlnk.read" });
+      expect(body(retry).scope).toBe("hydlnk.read");
+    });
   });
 
   it("a refresh response needs no external call and carries no-store", async () => {

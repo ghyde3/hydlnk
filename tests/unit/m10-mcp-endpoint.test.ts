@@ -766,3 +766,45 @@ describe("the protocol, through the real SDK handler (stateless, both generation
     expect(fakes.calls).toEqual([]);
   });
 });
+
+// Wave L second review, finding 10: a request that carries no bearer, or one that cannot be a token,
+// is counted against the address's failure budget BEFORE the bearer wrapper runs, so a flood of them
+// costs one limiter write each and nothing more.
+describe("a malformed credential is counted before the bearer wrapper runs", () => {
+  function counting(allowed: boolean) {
+    const order: string[] = [];
+    const endpoint = createMcpEndpoint({
+      appOrigin: APP,
+      verifyToken: async () => {
+        order.push("verify");
+        return undefined;
+      },
+      serve: async () => new Response("{}", { status: 200 }),
+      limit: async (key) => {
+        order.push(key.split(":")[0]!);
+        return allowed ? { allowed: true, retryAfter: 0 } : { allowed: false, retryAfter: 9 };
+      },
+      log: () => undefined,
+    });
+    return { endpoint, order };
+  }
+
+  it.each([
+    ["Bearer with nothing after it", { authorization: "Bearer" }],
+    ["the Basic scheme", { authorization: "Basic x" }],
+    ["a value longer than 256 characters", { authorization: `Bearer ${"a".repeat(257)}` }],
+  ])("%s: a spent budget is a 429 and the wrapper never runs", async (_n, headers) => {
+    const { endpoint, order } = counting(false);
+    const response = await endpoint(request({ headers }));
+    expect(response.status).toBe(429);
+    expect(order).toEqual(["mcp-401"]);
+  });
+
+  it("with budget left it is still the same 401, counted once", async () => {
+    const { endpoint, order } = counting(true);
+    const response = await endpoint(request({ headers: { authorization: "Basic x" } }));
+    expect(response.status).toBe(401);
+    // Counted first, then the wrapper; the 401 it answers is not counted a second time.
+    expect(order).toEqual(["mcp-401", "verify"]);
+  });
+});

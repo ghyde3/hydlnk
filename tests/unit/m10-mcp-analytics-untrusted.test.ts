@@ -68,6 +68,25 @@ describe("get_analytics: referrer names are not trusted", () => {
     expect(Object.keys(out.data.breakdowns).sort()).toEqual(["countries", "devices", "referrers"]);
   });
 
+  // Wave L second review, finding 9: a referrer label is cut at 60 characters, at a whole character.
+  it("a referrer label is cut at 60 characters, never in the middle of a character, and the other lists are not", async () => {
+    const long = `${"a".repeat(59)}😀${"b".repeat(200)}`;
+    next = stats({
+      referrers: [
+        { label: long, pct: 50 },
+        { label: "short.example", pct: 50 },
+      ],
+      devices: [{ label: "d".repeat(100), pct: 100 }],
+      countries: [{ label: "France", pct: 100 }],
+    });
+    const out = (await call()) as { data: Record<string, any> };
+    const [first, second] = out.data.breakdowns.referrers;
+    expect(Array.from(first.label)).toHaveLength(60);
+    expect(first.label).toBe(`${"a".repeat(59)}😀`);
+    expect(second.label).toBe("short.example");
+    expect(out.data.breakdowns.devices[0].label).toBe("d".repeat(100));
+  });
+
   it("a Free account has no referrers, so there is nothing to warn about", async () => {
     next = stats(null);
     const out = (await call()) as { data: Record<string, any> };

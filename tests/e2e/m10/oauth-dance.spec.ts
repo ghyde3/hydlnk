@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers, rand, signedInUser, trackUser } from "../fixtures/data";
@@ -228,9 +229,16 @@ test.describe("M10-13 and M10-15 Allow, the code, and the tokens", () => {
     expect(wider.body.error).toBe("invalid_scope");
     const third = await refreshTokens(client.client_id, String(second.body.refresh_token));
     expect(third.status).toBe(200);
-    expect(third.body.scope).toBe("hydlnk.read hydlnk.write");
+    // Narrowing is sticky (Wave L second review): the new pair is never wider than the token it came from.
+    expect(third.body.scope).toBe("hydlnk.read");
 
-    // Presenting a rotated token again ends the family: the newest refresh token is dead as well.
+    // A rotated token presented again within 60 seconds by the same app is a retry (the grace window):
+    // it is exchanged again and ends nothing. After 60 seconds it is a copy, and it ends the family.
+    // The rotation is moved back in the table rather than waiting a minute.
+    await adminClient()
+      .from("oauth_tokens")
+      .update({ rotated_at: new Date(Date.now() - 120_000).toISOString() })
+      .eq("token_hash", createHash("sha256").update(String(first.body.refresh_token)).digest("hex"));
     const reuse = await refreshTokens(client.client_id, String(first.body.refresh_token));
     expect(reuse.body.error).toBe("invalid_grant");
     const dead = await refreshTokens(client.client_id, String(third.body.refresh_token));

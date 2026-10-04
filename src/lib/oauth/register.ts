@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { OAUTH_SCOPES, UNUSED_DCR_CAP } from "./constants";
-import { HYDLNK_NAME_REFUSAL, UNNAMED_APP, namesHydlnk, sanitizeClientName } from "./client-name";
+import { HYDLNK_NAME_REFUSAL, UNNAMED_APP, namesHydlnkWithoutRight, sanitizeClientName } from "./client-name";
 import { VENDOR_NAME_REFUSAL, namesVendorWithoutRight } from "./known-clients";
 import { logOauthEvent, logOauthFailure } from "./log";
 import { validateRedirectUriList } from "./redirect-uri";
@@ -139,7 +139,7 @@ export async function registerClient(
     return failure(400, "invalid_client_metadata", "The name must be text.");
   }
   const name = sanitizeClientName(rawName, UNNAMED_APP);
-  if (namesHydlnk(name)) {
+  if (namesHydlnkWithoutRight(name, redirects.uris)) {
     return failure(400, "invalid_client_metadata", HYDLNK_NAME_REFUSAL);
   }
   if (namesVendorWithoutRight(name, redirects.uris)) {

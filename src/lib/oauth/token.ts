@@ -36,7 +36,16 @@ import type { OauthStore, RequestRow, TokenLookup } from "./store";
  */
 
 export const TOKEN_MAX_BODY_BYTES = 16 * 1024;
-export const TOKEN_PER_IP_PER_MINUTE = 120;
+/**
+ * Per caller address. Claude's and ChatGPT's servers call this endpoint for many people from a few
+ * addresses, so the budget is high; a wrong code or refresh token is still refused on every request.
+ */
+export const TOKEN_PER_IP_PER_MINUTE = 600;
+/**
+ * A refresh token that was rotated this recently, presented again by the same app, is a retry whose
+ * answer was lost, not a copy (Wave L second review): it re-rotates. Measured from the first rotation.
+ */
+export const REFRESH_GRACE_SECONDS = 60;
 
 const NO_STORE = { "Cache-Control": "no-store", Pragma: "no-cache" } as const;
 
@@ -238,7 +247,10 @@ async function exchangeCode(
   if (!row || !row.user_id) return invalidGrant();
 
   // A code that was used before comes back: someone copied it. The connection it started ends.
+  // It ends the connection only when the same app presents it: another app (anyone who has seen the
+  // code) is refused and ends nothing.
   if (row.status === "used") {
+    if (row.client_id !== clientId) return invalidGrant();
     const grant = await deps.store.getActiveGrant(row.user_id, row.client_id);
     await endFamily(deps, "code_reuse", row.client_id, grant?.id ?? null);
     return invalidGrant();
@@ -263,12 +275,17 @@ async function exchangeCode(
   if (result.outcome === "not_redeemable") {
     // Used between the read and the write (two exchanges at once) is a copy; expired is just late.
     const again = await deps.store.getRequestByCodeHash(sha256Hex(code));
-    if (again?.status === "used" && again.user_id) {
+    if (again?.status === "used" && again.user_id && again.client_id === clientId) {
       const grant = await deps.store.getActiveGrant(again.user_id, again.client_id);
       await endFamily(deps, "code_reuse", again.client_id, grant?.id ?? null);
     }
   }
   return invalidGrant();
+}
+
+function withinGrace(rotatedAt: string, nowMs: number): boolean {
+  const at = Date.parse(rotatedAt);
+  return Number.isFinite(at) && nowMs - at < REFRESH_GRACE_SECONDS * 1000;
 }
 
 async function refreshTokens(
@@ -289,15 +306,20 @@ async function refreshTokens(
   const found: TokenLookup | null = await deps.store.getTokenByHash(sha256Hex(presented));
   if (!found || found.kind !== "refresh") return invalidGrant();
 
-  // Another app's refresh token, or one that was already exchanged: it was copied.
-  if (found.clientId !== clientId || found.rotatedAt !== null) {
+  // Another app's refresh token, or one that was exchanged more than a minute ago: it was copied. One
+  // exchanged within the last minute and presented again by the same app is a retry (the grace window).
+  if (
+    found.clientId !== clientId ||
+    (found.rotatedAt !== null && !withinGrace(found.rotatedAt, now()))
+  ) {
     await endFamily(deps, "refresh_reuse", found.clientId, found.grantId);
     return invalidGrant();
   }
   if (found.revokedAt !== null || found.grantRevokedAt !== null) return invalidGrant();
   if (Date.parse(found.expiresAt) <= now()) return invalidGrant();
 
-  // A scope may only narrow what the grant holds today.
+  // A scope may only narrow what the grant holds today. The new pair is never wider than the presented
+  // token either (the store intersects with its scopes), so a narrowed chain stays narrow.
   const requested = scopeParam.scopes;
   if (requested.length > 0 && !isSubset(requested, found.grantScopes)) {
     return oauthError(400, "invalid_scope", "That scope is wider than the app was allowed.");
@@ -318,10 +340,12 @@ async function refreshTokens(
     case "invalid_scope":
       return oauthError(400, "invalid_scope", "That scope is wider than the app was allowed.");
     case "lost": {
-      // Exchanged by a request that arrived a moment earlier is a copy, and the success ends too;
-      // expired or revoked in the meantime is just late.
+      // Exchanged more than a minute ago by the time the write ran is a copy; expired or revoked in
+      // the meantime is just late.
       const again = await deps.store.getTokenByHash(sha256Hex(presented));
-      if (again?.rotatedAt) await endFamily(deps, "refresh_reuse", found.clientId, found.grantId);
+      if (again?.rotatedAt && !withinGrace(again.rotatedAt, now())) {
+        await endFamily(deps, "refresh_reuse", found.clientId, found.grantId);
+      }
       return invalidGrant();
     }
     default:

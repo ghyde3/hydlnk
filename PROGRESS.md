@@ -2,6 +2,19 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Wave L second security review fixes
+
+Twelve items of the second review (no critical or high), on `m11-mcp`, each with a failing test first (the TS rows failed against the old `token.ts`, the SQL rows against a database without the new migration), feature row M10-38 appended (`passes: false`; it supersedes steps of M10-07, M10-10, M10-13, M10-15, M10-16, M10-29 and M10-36 in these respects only). New migration `20261010000031_oauth_review_fixes.sql`, `database.types.ts` regenerated (one new function).
+
+- **1 storage.** `oauth_trim_unused_cimd(cap, keep)` (5,000, oldest first, never `KNOWN_CLIENT_IDS`, never a row with a grant or a request) called from `cimd.ts` before the upsert; hourly `purge-oauth-cimd-unused` deletes never-granted rows over 4 hours old; the nightly job is registered clients only.
+- **2 heading.** `ConsentView.clientKnown`; every client outside `KNOWN_CLIENT_IDS` gets the unverified heading. New `m10-oauth-consent-heading.test.ts`. E2E rows moved to `dcrHeading` (`oauth-consent-ui`, `oauth-cimd`).
+- **3 DNS.** `new dns.promises.Resolver({ timeout: 1500, tries: 1 })` with `resolve4` + `resolve6` (`resolveBothFamilies`); ENODATA/ENOTFOUND is an empty family, anything else a refusal; SSRF judging and the pinned socket unchanged.
+- **4, 5, 8, 9, 10, 12.** Token limit 600 a minute; no stale copy on `too_many`; a used code from another client ends nothing; referrer labels cut at 60 code points; a malformed `/mcp` bearer is counted before the wrapper and once; `namesHydlnkWithoutRight` (loopback-only clients may carry "hydlnk").
+- **6 re-consent.** `oauth_decide_request` revokes only tokens whose scopes exceed the new set. Open: the one-live-refresh index is per grant, so the second install's code exchange (`oauth_redeem_code`) retires the first install's refresh token (its access token lives on); without that the exchange would hit 23505. Two installs keeping independent refresh tokens needs the index relaxed to one per install (a lineage column): Gary decides.
+- **7 sticky, 11 grace.** `oauth_rotate_refresh`: scopes = token's ∩ grant's ∩ requested; a token rotated under 60 s ago is exchanged again by the same client (refresh and access tokens of the first exchange revoked, original `rotated_at` kept); `token.ts` ends the grant for another client or a rotation over 60 s old.
+
+Evidence: `pnpm typecheck`, `pnpm lint` clean. `pnpm db:reset`, `pnpm test:db`: 41 files, 1,825 tests PASS (new `172-oauth-review-fixes.test.sql`, 43 rows; 170 updated where the old rule is superseded: sticky narrowing, the grace window, the purge jobs). `REQUIRE_SUPABASE=1 pnpm test --retry 2`: 353 files, 9,544 tests pass. Playwright was not run (port 3000 is shared with the marketing worker); e2e assertions were updated by hand (consent headings, the 600 a minute row, the refresh row now ages `rotated_at` and expects a sticky scope) and CI's full browser suite checks them. Note: `tests/unit/m10-oauth-consent-default.test.tsx` is not picked up by Vitest (`include` is `*.test.ts` only), so it has never run; not changed here.
+
 ## 2026-10-04 — Wave L security review fixes
 
 Fixes for the nine findings of the Wave L security review (one high, three medium, five low), on `m11-mcp`, test first. Feature rows are untouched (`docs/features.json` is append-only); the acceptance steps below were written before the review and are superseded where this entry says so. M10-33 stays `false`: it waits for the `security-reviewer` agent run, which should now run over this tree.

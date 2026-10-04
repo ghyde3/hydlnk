@@ -4,7 +4,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { cacheLifetimeSeconds, validateClientDocument } from "./client-document";
 import type { ClientResolution } from "./clients";
 import { oauthConfig } from "./config";
-import { isKnownClientId } from "./known-clients";
+import { KNOWN_CLIENT_IDS, isKnownClientId } from "./known-clients";
 import { loadLogo } from "./logo";
 import { logOauthEvent, logOauthFailure } from "./log";
 import type { LimitFn } from "./register";
@@ -45,9 +45,15 @@ import { defaultOauthStore } from "./store-supabase";
 export const CIMD_PER_IP_PER_MINUTE = 30;
 export const CIMD_PER_HOST_PER_MINUTE = 20;
 export const CIMD_ALL_PER_MINUTE = 300;
+/**
+ * Metadata-client rows that no grant and no request refers to are capped, oldest first (Wave L second
+ * review): anyone can make this server store a row, with a logo of up to 20 KB, for each valid document
+ * they host. The known clients are never trimmed.
+ */
+export const CIMD_UNUSED_CAP = 5000;
 
 export interface CimdDeps {
-  store: Pick<OauthStore, "upsertCimdClient">;
+  store: Pick<OauthStore, "upsertCimdClient" | "trimUnusedCimd">;
   limit: LimitFn;
   now: () => number;
   fetchDeps: SafeFetchDeps;
@@ -163,6 +169,7 @@ export async function loadCimdClientWith(
       last_seen_at: new Date(fetchedAt).toISOString(),
     };
     try {
+      if (!known) await deps.store.trimUnusedCimd(CIMD_UNUSED_CAP, KNOWN_CLIENT_IDS);
       await deps.store.upsertCimdClient({
         client_id: clientId,
         kind: "cimd",

@@ -816,10 +816,12 @@ select is(
   1,
   'exactly one live refresh token remains'
 );
+-- a transaction has one clock, so the rotation is moved back past the 60 second grace window (M10-38)
+update public.oauth_tokens set rotated_at = now() - interval '61 seconds' where token_hash = repeat('a', 63) || '2';
 select is(
   (select outcome from public.oauth_rotate_refresh((select id from public.oauth_tokens where token_hash = repeat('a', 63) || '2'), repeat('6', 63) || '1', repeat('6', 63) || '2', null)),
   'lost',
-  'a rotated refresh token never works twice'
+  'a rotated refresh token never works twice (after the grace window)'
 );
 select is(
   (select outcome from public.oauth_rotate_refresh((select id from public.oauth_tokens where token_hash = repeat('7', 63) || '2'), repeat('6', 63) || '1', repeat('6', 63) || '2', array['hydlnk.read', 'hydlnk.publish'])),
@@ -843,8 +845,8 @@ select is(
 );
 select is(
   (select scopes from public.oauth_rotate_refresh((select id from public.oauth_tokens where token_hash = repeat('5', 63) || '2'), repeat('4', 63) || '1', repeat('4', 63) || '2', null)),
-  array['hydlnk.read', 'hydlnk.write'],
-  'a later refresh without a scope returns to the grant''s scopes'
+  array['hydlnk.read'],
+  'a later refresh without a scope stays narrow: a narrowed chain never gets wider (M10-38)'
 );
 
 -- the 365-day ceiling: a refresh on day 364 gets a token that expires on day 365
@@ -1076,7 +1078,7 @@ insert into public.oauth_clients (client_id, kind, client_name, redirect_uris, c
   ('hlc_' || repeat('3', 32), 'dcr', 'Old with grant', array['https://p.example.test/cb'], now() - interval '30 days', null, null),
   ('hlc_' || repeat('4', 32), 'dcr', 'Old with code', array['https://p.example.test/cb'], now() - interval '30 days', null, null),
   ('https://old.example.test/c', 'cimd', 'Old cache', array['https://p.example.test/cb'], now() - interval '30 days', now() - interval '8 days', now() - interval '8 days'),
-  ('https://young.example.test/c', 'cimd', 'Young cache', array['https://p.example.test/cb'], now() - interval '30 days', now() - interval '6 days', now() - interval '6 days'),
+  ('https://young.example.test/c', 'cimd', 'Young cache', array['https://p.example.test/cb'], now() - interval '30 days', now() - interval '2 hours', now() - interval '2 hours'),
   ('https://oldgrant.example.test/c', 'cimd', 'Old cache with grant', array['https://p.example.test/cb'], now() - interval '30 days', now() - interval '9 days', now() - interval '9 days');
 insert into public.oauth_grants (id, user_id, client_id, scopes) values
   ('00000000-0000-4000-8000-0000000170a3', (select c from ids2), 'hlc_' || repeat('3', 32), array['hydlnk.read']),
@@ -1084,13 +1086,13 @@ insert into public.oauth_grants (id, user_id, client_id, scopes) values
 insert into public.oauth_authorization_codes (client_id, redirect_uri, scopes_requested, code_challenge, resource) values
   ('hlc_' || repeat('4', 32), 'https://p.example.test/cb', array['hydlnk.read'], repeat('A', 43), 'https://app.example.test/mcp');
 select lives_ok(
-  $$ do $run$ begin execute (select command from cron.job where jobname = 'purge-oauth-clients'); end $run$ $$,
-  'the client purge job''s command runs'
+  $$ do $run$ begin execute (select command from cron.job where jobname = 'purge-oauth-clients'); execute (select command from cron.job where jobname = 'purge-oauth-cimd-unused'); end $run$ $$,
+  'the client purge jobs'' commands run'
 );
 select set_eq(
   $$ select client_id from public.oauth_clients $$,
   $$ values ('hlc_' || repeat('2', 32)), ('hlc_' || repeat('3', 32)), ('hlc_' || repeat('4', 32)), ('https://young.example.test/c'), ('https://oldgrant.example.test/c') $$,
-  'it deletes an unused registration over 7 days old and a stale cache row with no grant, and keeps younger ones, ones with a grant and ones with a code'
+  'they delete an unused registration over 7 days old and a cache row with no grant over 4 hours old (M10-38), and keep younger ones, ones with a grant and ones with a code'
 );
 
 -- requests: pending and denied after an hour, issued and used after a day

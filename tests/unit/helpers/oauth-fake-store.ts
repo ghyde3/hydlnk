@@ -145,6 +145,13 @@ export class FakeOauthStore implements OauthStore {
     return 0;
   }
 
+  trimmedCimd: Array<{ cap: number; keep: readonly string[] }> = [];
+  async trimUnusedCimd(cap: number, keep: readonly string[]) {
+    this.count("trimUnusedCimd");
+    this.trimmedCimd.push({ cap, keep });
+    return 0;
+  }
+
   // requests
   async insertRequest(request: NewRequest) {
     this.count("insertRequest");
@@ -239,8 +246,15 @@ export class FakeOauthStore implements OauthStore {
       };
       this.grants.push(grant);
     }
+    // Only the tokens that hold more than the person allowed this time end (Wave L second review).
     for (const token of this.tokens) {
-      if (token.grantId === grant.id && token.revokedAt === null) token.revokedAt = this.clock;
+      if (
+        token.grantId === grant.id &&
+        token.revokedAt === null &&
+        !token.scopes.every((scope) => granted.includes(scope))
+      ) {
+        token.revokedAt = this.clock;
+      }
     }
     row.status = "issued";
     row.scopes_granted = granted;
@@ -285,6 +299,17 @@ export class FakeOauthStore implements OauthStore {
     const scopes = inOrder(grant.scopes.filter((s) => (row.scopes_granted ?? []).includes(s)));
     const accessExp = this.clock + 3600_000;
     const refreshExp = Math.min(this.clock + 60 * 86400_000, grant.authorizedAt + 365 * 86400_000);
+    // One live refresh token per grant: a refresh token that survived a re-consent gives way.
+    for (const token of this.tokens) {
+      if (
+        token.grantId === grant.id &&
+        token.kind === "refresh" &&
+        token.rotatedAt === null &&
+        token.revokedAt === null
+      ) {
+        token.revokedAt = this.clock;
+      }
+    }
     this.addToken(grant, "access", args.accessHash, scopes, row.resource, accessExp);
     this.addToken(grant, "refresh", args.refreshHash, scopes, row.resource, refreshExp);
     return {
@@ -362,7 +387,8 @@ export class FakeOauthStore implements OauthStore {
     if (
       !old ||
       old.kind !== "refresh" ||
-      old.rotatedAt !== null ||
+      // Rotated more than 60 seconds ago: no longer a retry, a copy.
+      (old.rotatedAt !== null && old.rotatedAt <= this.clock - 60_000) ||
       old.revokedAt !== null ||
       old.expiresAt <= this.clock
     ) {
@@ -370,12 +396,31 @@ export class FakeOauthStore implements OauthStore {
     }
     const grant = this.grants.find((g) => g.id === old.grantId && g.revokedAt === null);
     if (!grant) return { outcome: "no_grant" };
-    const wanted = args.scopes ?? grant.scopes;
-    if (wanted.length === 0 || !wanted.every((scope) => grant.scopes.includes(scope))) {
+    // Never wider than the presented token (sticky narrowing) or the grant; a request may narrow more.
+    const base = old.scopes.filter((scope) => grant.scopes.includes(scope));
+    if (args.scopes !== null && !args.scopes.every((scope) => grant.scopes.includes(scope))) {
       return { outcome: "invalid_scope" };
     }
+    const wanted = args.scopes === null ? base : base.filter((scope) => args.scopes!.includes(scope));
+    if (wanted.length === 0) return { outcome: "invalid_scope" };
     const scopes = inOrder(wanted);
-    old.rotatedAt = this.clock;
+    if (old.rotatedAt === null) {
+      old.rotatedAt = this.clock;
+    } else {
+      // The grace window: what the first exchange issued is revoked (its refresh token whatever its
+      // age, its access tokens by the time of the rotation); the original rotation time is kept.
+      for (const token of this.tokens) {
+        if (
+          token.id !== old.id &&
+          token.grantId === grant.id &&
+          token.revokedAt === null &&
+          ((token.kind === "refresh" && token.rotatedAt === null) ||
+            (token.kind === "access" && token.createdAt >= old.rotatedAt))
+        ) {
+          token.revokedAt = this.clock;
+        }
+      }
+    }
     const accessExp = this.clock + 3600_000;
     const refreshExp = Math.min(this.clock + 60 * 86400_000, grant.authorizedAt + 365 * 86400_000);
     this.addToken(grant, "access", args.accessHash, scopes, old.resource, accessExp);

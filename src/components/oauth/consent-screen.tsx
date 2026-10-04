@@ -90,9 +90,9 @@ export function ConsentScreen({ view }: { view: ConsentView }) {
       <div className="who">
         <Avatar name={view.clientName} logo={view.logoDataUri} />
         <h1>
-          {view.clientKind === "dcr"
-            ? unverifiedConsentHeading(view.clientName, view.returnLabel, view.returnIsLoopback)
-            : consentHeading(view.clientName)}
+          {view.clientKnown
+            ? consentHeading(view.clientName)
+            : unverifiedConsentHeading(view.clientName, view.returnLabel, view.returnIsLoopback)}
         </h1>
       </div>
 

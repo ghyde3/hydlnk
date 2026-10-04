@@ -114,6 +114,15 @@ export function createSupabaseOauthStore(admin: Admin = createAdminSupabase()): 
       return typeof data === "number" ? data : 0;
     },
 
+    async trimUnusedCimd(cap, keep) {
+      const { data, error } = await admin.rpc("oauth_trim_unused_cimd", {
+        p_cap: cap,
+        p_keep: [...keep],
+      });
+      if (error) fail("trimUnusedCimd", error);
+      return typeof data === "number" ? data : 0;
+    },
+
     async insertRequest(request: NewRequest) {
       const { error } = await admin.from("oauth_authorization_codes").insert({
         id: request.id,

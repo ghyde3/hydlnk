@@ -1,4 +1,4 @@
-import { HYDLNK_NAME_REFUSAL, namesHydlnk, sanitizeClientName } from "./client-name";
+import { HYDLNK_NAME_REFUSAL, namesHydlnkWithoutRight, sanitizeClientName } from "./client-name";
 import { VENDOR_NAME_REFUSAL, namesVendorWithoutRight } from "./known-clients";
 import { validateRedirectUriList } from "./redirect-uri";
 
@@ -86,7 +86,7 @@ export function validateClientDocument(
   }
 
   const name = sanitizeClientName(rawName, host);
-  if (namesHydlnk(name)) {
+  if (namesHydlnkWithoutRight(name, redirects.uris)) {
     return { ok: false, reason: "name_impersonates", description: HYDLNK_NAME_REFUSAL };
   }
   // 'Claude' or 'ChatGPT' only for a client that returns to that company (or to this computer).

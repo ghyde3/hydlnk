@@ -193,6 +193,19 @@ describe("M10-10 registration", () => {
     expect(body(out)).toEqual({ error, error_description: expect.any(String) });
   });
 
+  it("Claude Code's fallback name registers when it returns only to this computer, and not for https", async () => {
+    const ok = await register({
+      redirect_uris: ["http://localhost:8080/callback", "http://127.0.0.1:8080/callback"],
+      client_name: "Claude Code (hydlnk)",
+    }).result;
+    expect(ok.status).toBe(201);
+    const refused = await register({
+      redirect_uris: ["https://a.example/cb"],
+      client_name: "Claude Code (hydlnk)",
+    }).result;
+    expect(refused.status).toBe(400);
+  });
+
   it("the HYDLNK name refusal says why", async () => {
     const out = await register({
       redirect_uris: ["https://a.example/cb"],

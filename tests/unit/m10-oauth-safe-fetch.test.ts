@@ -1,10 +1,14 @@
+import { readFileSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CIMD_MAX_BYTES,
   CIMD_TIMEOUT_MS,
+  DNS_RESOLVER_OPTIONS,
   LOGO_MAX_BYTES,
   fetchClientDocument,
   isJsonType,
+  resolveBothFamilies,
   type FetchTarget,
   type SafeFetchOptions,
   type Transport,
@@ -396,5 +400,112 @@ describe("M10-07 the test seam", () => {
       path: "/client.json",
       hostname: "127.0.0.1",
     });
+  });
+});
+
+/**
+ * M10-38 (Wave L second review, finding 3): names are resolved with a c-ares Resolver (1.5 seconds, one
+ * try), not `dns.lookup`, which runs in libuv's four-thread pool and lets a few slow names stall every
+ * file and crypto call of the instance. Both families are still asked and every address still judged.
+ */
+describe("M10-38 the DNS resolver", () => {
+  const enodata = () => Object.assign(new Error("queryA ENODATA x"), { code: "ENODATA" });
+  const enotfound = () => Object.assign(new Error("queryAaaa ENOTFOUND x"), { code: "ENOTFOUND" });
+  const servfail = () => Object.assign(new Error("queryA ESERVFAIL x"), { code: "ESERVFAIL" });
+
+  it("merges the A and AAAA answers, so one private address among public ones refuses the fetch", async () => {
+    expect(
+      await resolveBothFamilies({
+        resolve4: async () => [PUBLIC_V4],
+        resolve6: async () => [PUBLIC_V6],
+      }, "app.example.com"),
+    ).toEqual([PUBLIC_V4, PUBLIC_V6]);
+
+    const rec: Recorder = { targets: [], resolved: [], destroyed: 0, consumed: 0 };
+    const result = await fetchClientDocument(
+      DOC,
+      {
+        rootDomain: ROOT,
+        allowTestStub: false,
+        transport: transportFor(rec),
+        resolve: (host) =>
+          resolveBothFamilies(
+            { resolve4: async () => [PUBLIC_V4], resolve6: async () => ["fd00::1"] },
+            host,
+          ),
+      },
+      OPTIONS,
+    );
+    expect(result).toMatchObject({ ok: false, reason: "ssrf_blocked" });
+    expect(rec.targets).toHaveLength(0);
+  });
+
+  it("a family with no records is empty, not a failure", async () => {
+    expect(
+      await resolveBothFamilies({
+        resolve4: async () => [PUBLIC_V4],
+        resolve6: async () => {
+          throw enodata();
+        },
+      }, "app.example.com"),
+    ).toEqual([PUBLIC_V4]);
+    expect(
+      await resolveBothFamilies({
+        resolve4: async () => {
+          throw enotfound();
+        },
+        resolve6: async () => [PUBLIC_V6],
+      }, "app.example.com"),
+    ).toEqual([PUBLIC_V6]);
+  });
+
+  it("a name with no records at all, and any other failure of either family, is an error (never a half answer)", async () => {
+    await expect(
+      resolveBothFamilies({
+        resolve4: async () => {
+          throw enotfound();
+        },
+        resolve6: async () => {
+          throw enodata();
+        },
+      }, "gone.example.com"),
+    ).rejects.toThrow();
+    // The IPv6 side failing for a real reason must not let an unchecked IPv6 address through.
+    await expect(
+      resolveBothFamilies({
+        resolve4: async () => [PUBLIC_V4],
+        resolve6: async () => {
+          throw servfail();
+        },
+      }, "app.example.com"),
+    ).rejects.toThrow();
+    const result = await fetchClientDocument(
+      DOC,
+      {
+        rootDomain: ROOT,
+        allowTestStub: false,
+        resolve: () =>
+          resolveBothFamilies(
+            {
+              resolve4: async () => [PUBLIC_V4],
+              resolve6: async () => {
+                throw servfail();
+              },
+            },
+            "app.example.com",
+          ),
+      },
+      OPTIONS,
+    );
+    expect(result).toMatchObject({ ok: false, reason: "network" });
+  });
+
+  it("the resolver is a c-ares Resolver with a 1.5 second timeout and one try; dns.lookup is not used", () => {
+    expect(DNS_RESOLVER_OPTIONS).toEqual({ timeout: 1500, tries: 1 });
+    const source = readFileSync(resolvePath(process.cwd(), "src/lib/oauth/safe-fetch.ts"), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/(^|[^:"'`\\])\/\/.*$/gm, "$1");
+    expect(source).toMatch(/new dns\.promises\.Resolver\(DNS_RESOLVER_OPTIONS\)/);
+    expect(source).not.toMatch(/\blookup\(\s*hostname|dns\.promises\.lookup|dns\.lookup/);
   });
 });

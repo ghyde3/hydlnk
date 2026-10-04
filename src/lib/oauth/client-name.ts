@@ -1,5 +1,6 @@
 import { truncateToCodePoints } from "@/lib/document/limits";
 import { stripHiddenCharacters } from "@/lib/document/schema";
+import { parseRedirectUri } from "./redirect-uri";
 
 /**
  * What an app calls itself, made safe to show (M10-09). The name comes from a document or a
@@ -41,6 +42,23 @@ export function sanitizeClientName(raw: unknown, fallback: string): string {
  */
 export function namesHydlnk(name: string): boolean {
   return foldName(name).includes("hydlnk");
+}
+
+/**
+ * Is 'hydlnk' in the name by someone who has no business using it? A client whose every return
+ * address is on this computer (a program on the person's own machine, like Claude Code's fallback name
+ * "Claude Code (hydlnk)") may use it: its code goes nowhere else, the same reasoning as the vendor-name
+ * rule. Any https return address, or none, keeps the refusal.
+ */
+export function namesHydlnkWithoutRight(name: string, redirectUris: readonly string[]): boolean {
+  if (!namesHydlnk(name)) return false;
+  const allOnThisComputer =
+    redirectUris.length > 0 &&
+    redirectUris.every((uri) => {
+      const parsed = parseRedirectUri(uri);
+      return parsed.ok && parsed.loopback;
+    });
+  return !allOnThisComputer;
 }
 
 /**

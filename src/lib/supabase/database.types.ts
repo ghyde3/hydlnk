@@ -1113,6 +1113,10 @@ export type Database = {
         }[]
       }
       oauth_touch_token: { Args: { p_token: string }; Returns: boolean }
+      oauth_trim_unused_cimd: {
+        Args: { p_cap: number; p_keep: string[] }
+        Returns: number
+      }
       oauth_trim_unused_dcr: { Args: { p_cap: number }; Returns: number }
       oauth_uris_ok: { Args: { p_uris: string[] }; Returns: boolean }
       oauth_verify_access_token: {

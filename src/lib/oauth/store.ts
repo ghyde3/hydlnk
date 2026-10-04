@@ -134,6 +134,11 @@ export interface OauthStore {
   touchClient(clientId: string): Promise<void>;
   /** Deletes the oldest unused registrations past the cap; returns how many went. */
   trimUnusedDcr(cap: number): Promise<number>;
+  /**
+   * Deletes the oldest client-metadata rows that no grant and no request refers to, past the cap,
+   * never one of `keep` (the known clients); returns how many went.
+   */
+  trimUnusedCimd(cap: number, keep: readonly string[]): Promise<number>;
 
   // authorize requests
   insertRequest(request: NewRequest): Promise<void>;

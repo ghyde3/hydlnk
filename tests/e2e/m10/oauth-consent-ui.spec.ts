@@ -79,7 +79,8 @@ test.describe("M10-13 what the screen says", () => {
     const client = await cachedClient({ name: "Claude" });
     await page.goto(authorizeUrl(client.clientId, pkcePair().challenge));
     await expect(page).toHaveTitle("Connect an app");
-    await expect(heading(page)).toHaveText("Claude wants to connect to your HYDLNK");
+    // A metadata client that is not one of the three known documents is unverified, whatever its name.
+    await expect(heading(page)).toHaveText(dcrHeading("Claude"));
     await expect(page.getByRole("heading")).toHaveCount(1);
     const facts = page.locator("ul.facts li");
     await expect(facts.nth(0)).toHaveText(`Address: ${client.host}`);
@@ -199,9 +200,7 @@ test.describe("M10-13 and M10-09 everything shown is text", () => {
     });
     const client = await cachedClient({ name: "<img src=x onerror=alert(1)>" });
     await page.goto(authorizeUrl(client.clientId, pkcePair().challenge));
-    await expect(heading(page)).toHaveText(
-      "<img src=x onerror=alert(1)> wants to connect to your HYDLNK",
-    );
+    await expect(heading(page)).toHaveText(dcrHeading("<img src=x onerror=alert(1)>"));
     await page.waitForTimeout(300);
     expect(dialogs).toEqual([]);
     await expect(page.locator("img")).toHaveCount(0);

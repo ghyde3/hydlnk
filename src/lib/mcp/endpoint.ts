@@ -8,6 +8,7 @@ import {
   MCP_REQUESTS_PER_MINUTE,
   MCP_RESOURCE_METADATA_PATH,
 } from "./constants";
+import { parseBearerHeader } from "./auth";
 import { MCP_ALLOWED_HEADERS, MCP_EXPOSED_HEADERS, isAllowedMcpOrigin } from "./origin";
 import { MCP_INSTRUCTIONS } from "./instructions";
 import { registerTools } from "./server";
@@ -224,6 +225,15 @@ export function createMcpEndpoint(options: McpEndpointOptions) {
         );
       }
 
+      // A credential that cannot be a token is counted before the bearer wrapper runs, so it costs a
+      // limiter write and nothing else; a well-formed one is counted if its lookup fails (below).
+      let counted = false;
+      if (parseBearerHeader(req.headers.get("authorization")).kind === "bad") {
+        const blocked = await limited(req);
+        if (blocked) return decorate(blocked, origin);
+        counted = true;
+      }
+
       const response = await guarded(req);
       if (response.status === 401 && options.wasUnavailable?.(req)) {
         return decorate(
@@ -231,7 +241,7 @@ export function createMcpEndpoint(options: McpEndpointOptions) {
           origin,
         );
       }
-      if (response.status === 401) {
+      if (response.status === 401 && !counted) {
         const blocked = await limited(req);
         if (blocked) return decorate(blocked, origin);
       }

@@ -1,7 +1,7 @@
 import { allScopes, parseScopeParam } from "./scopes";
 import { OAUTH_REQUEST_SECONDS, orderedScopes, type OauthScope } from "./constants";
 import type { AuthorizeErrorClass, RedirectErrorCode } from "./messages";
-import { isKnownClientId } from "./known-clients";
+import { KNOWN_CLIENT_IDS, isKnownClientId } from "./known-clients";
 import { logOauthFailure } from "./log";
 import { matchesAnyRedirectUri, parseRedirectUri, redirectHostLabel } from "./redirect-uri";
 import { buildClientRedirect, errorParams } from "./redirect";
@@ -59,6 +59,8 @@ export interface ConsentView {
   csrf: string;
   clientName: string;
   clientKind: "cimd" | "dcr";
+  /** One of the three real client documents (known-clients.ts): the only clients not introduced as unverified. */
+  clientKnown: boolean;
   /** The host of a metadata client's address; null for a registered client. */
   clientHost: string | null;
   /** The re-encoded logo as `data:image/png;base64,...`, or null (initials are drawn). */
@@ -353,6 +355,7 @@ async function consentFor(
       csrf,
       clientName: client.client_name,
       clientKind: client.kind === "cimd" ? "cimd" : "dcr",
+      clientKnown: KNOWN_CLIENT_IDS.includes(client.client_id),
       clientHost,
       logoDataUri: logoDataUri(withLogo.logo_png),
       returnLabel,

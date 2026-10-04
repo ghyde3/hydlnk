@@ -5,6 +5,7 @@ import {
   UNNAMED_APP,
   clientInitials,
   namesHydlnk,
+  namesHydlnkWithoutRight,
   sanitizeClientName,
 } from "@/lib/oauth/client-name";
 
@@ -102,6 +103,25 @@ describe("M10-09 impersonation of this product", () => {
       expect(namesHydlnk(name)).toBe(false);
     },
   );
+
+  // Wave L second review, finding 12: Claude Code's fallback registration name is "Claude Code (hydlnk)"
+  // and it returns only to this computer. The name rule keeps the refusal for everyone else.
+  describe("namesHydlnkWithoutRight", () => {
+    const loopback = ["http://localhost:8080/cb", "http://127.0.0.1:9000/cb"];
+    it("a name that does not say hydlnk is never refused", () => {
+      expect(namesHydlnkWithoutRight("Claude Code", ["https://a.example/cb"])).toBe(false);
+    });
+    it("hydlnk in the name is allowed when every return address is on this computer", () => {
+      expect(namesHydlnkWithoutRight("Claude Code (hydlnk)", loopback)).toBe(false);
+      expect(namesHydlnkWithoutRight("H-Y-D-L-N-K", ["http://[::1]:4000/cb"])).toBe(false);
+    });
+    it("hydlnk in the name is refused when any return address is https, or there is none", () => {
+      expect(namesHydlnkWithoutRight("Claude Code (hydlnk)", ["https://a.example/cb"])).toBe(true);
+      expect(namesHydlnkWithoutRight("HYDLNK Support", [...loopback, "https://a.example/cb"])).toBe(true);
+      expect(namesHydlnkWithoutRight("HYDLNK Support", [])).toBe(true);
+      expect(namesHydlnkWithoutRight("HYDLNK Support", ["not a url"])).toBe(true);
+    });
+  });
 
   it("names the refusal in plain words", () => {
     expect(HYDLNK_NAME_REFUSAL).toBe("The name can’t include HYDLNK.");

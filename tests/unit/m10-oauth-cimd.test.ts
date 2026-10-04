@@ -17,6 +17,7 @@ import {
   loadCimdClientWith,
   type CimdDeps,
 } from "@/lib/oauth/cimd";
+import { KNOWN_CLIENT_IDS } from "@/lib/oauth/known-clients";
 import { LOGO_HOST_ALLOWLIST, isSafeLogoHost, loadLogo, reencodeLogo } from "@/lib/oauth/logo";
 import { FakeOauthStore, memoryLimiter, openLimiter } from "./helpers/oauth-fake-store";
 import type { FetchTarget, SafeFetchResult } from "@/lib/oauth/safe-fetch";
@@ -438,8 +439,9 @@ describe("M10-08 the loader and the cache", () => {
     expect(await t.resolveWith(URL_)).toEqual({ ok: false, reason: "cannot_verify" });
   });
 
-  it("a refetch that is rate limited uses the expired document, and a client with no cached row is told to wait", async () => {
-    const base = loaderSetup();
+  // Wave L second review, finding 5: the expired copy stands in only for a host that cannot answer
+  // (timeout, network, bad status). A caller that is rate limited is told to wait, copy or not.
+  it("a refetch that is rate limited is told to wait, even when an expired copy is cached", async () => {
     const t = loaderSetup();
     // Everything but the address limit is spent.
     t.deps.limit = async (key) =>
@@ -448,14 +450,12 @@ describe("M10-08 the loader and the cache", () => {
       fetched_at: new Date(t.store.clock - 2 * 86400_000).toISOString(),
       expires_at: new Date(t.store.clock - 60_000).toISOString(),
     });
-    expect(await t.resolveWith(URL_)).toMatchObject({ ok: true, client: { client_id: URL_ } });
+    expect(await t.resolveWith(URL_)).toMatchObject({ ok: false, reason: "too_many", retryAfter: 30 });
     expect(t.calls.fetch).toBe(0);
-    // No row at all: still too_many.
     expect(await t.resolveWith("https://other.example.com/oauth/client.json")).toMatchObject({
       ok: false,
       reason: "too_many",
     });
-    void base;
   });
 
   it("an expired row that was fetched more than a week ago is not used even when the host cannot answer", async () => {
@@ -575,6 +575,15 @@ describe("M10-08 the loader and the cache", () => {
     t.queue.push(t.doc(good({ client_name: "HYDLNK Support" })));
     expect(await t.resolveWith(URL_)).toEqual({ ok: false, reason: "cannot_verify" });
     expect(t.store.clients.has(URL_)).toBe(false);
+  });
+
+  it("hydlnk in a metadata client's name is allowed only when every return address is on this computer", async () => {
+    const t = loaderSetup();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    t.queue.push(
+      t.doc(good({ client_name: "Claude Code (hydlnk)", redirect_uris: ["http://localhost:8080/cb"] })),
+    );
+    expect(await t.resolveWith(URL_)).toMatchObject({ ok: true, client: { client_name: "Claude Code (hydlnk)" } });
   });
 
   it("an address that fails the policy makes no fetch and no count", async () => {
@@ -712,6 +721,32 @@ async function png(width: number, height: number, extra: (image: Sharp) => Sharp
   });
   return new Uint8Array(await extra(image).png().toBuffer());
 }
+
+describe("M10-38 unused metadata clients are capped", () => {
+  it("trims the unused client rows to 5,000 (never the known clients) before storing a new one", async () => {
+    const t = loaderSetup();
+    expect((await t.resolveWith(URL_)).ok).toBe(true);
+    expect(t.store.trimmedCimd).toEqual([{ cap: 5000, keep: KNOWN_CLIENT_IDS }]);
+    expect(t.calls.upserts).toBe(1);
+  });
+
+  it("a known client is stored without a trim: it can never be one of the rows that goes", async () => {
+    const t = loaderSetup();
+    t.queue.push(
+      t.doc(good({ client_id: CLAUDE, client_name: "Claude", redirect_uris: ["https://claude.ai/api/mcp/auth_callback"] })),
+    );
+    expect((await t.resolveWith(CLAUDE)).ok).toBe(true);
+    expect(t.store.trimmedCimd).toEqual([]);
+  });
+
+  it("a trim that fails stores nothing and is a transient refusal", async () => {
+    const t = loaderSetup();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    t.store.failNext = "trimUnusedCimd";
+    expect(await t.resolveWith(URL_)).toEqual({ ok: false, reason: "cannot_verify", transient: true });
+    expect(t.calls.upserts).toBe(0);
+  });
+});
 
 describe("M10-09 logo hosts", () => {
   it.each([

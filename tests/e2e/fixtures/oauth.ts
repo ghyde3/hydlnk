@@ -22,8 +22,9 @@ export const ISSUER = APP_ORIGIN;
 export const CLIENT_REDIRECT = "https://a.example/cb";
 
 /**
- * The heading of the consent screen for a registered ("hlc_") app (Wave L review): it leads with that
- * the app is unverified and with where you go back to. `where` is the return host, or "this computer".
+ * The heading of the consent screen for every client that is not one of the three known documents, a
+ * registered ("hlc_") app or a metadata client (Wave L review, second review): it leads with that the
+ * app is unverified and with where you go back to. `where` is the return host, or "this computer".
  */
 export const dcrHeading = (name: string, where = "a.example", loopback = false): string =>
   `“${name}” (unverified) ${loopback ? "on this computer" : `at ${where}`} wants to connect to your HYDLNK`;
