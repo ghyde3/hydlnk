@@ -52,8 +52,9 @@ function tenantMethodRejected(pathname: string): NextResponse {
  *   www.hydlnk.com            308 to the root host
  *   app.hydlnk.com            rewrite to /app/..., refreshing the Supabase session (only here)
  *   <handle>.hydlnk.com       rewrite to /t/<handle>/...
- *   anything else             custom-domain lookup: a verified domain with a published page is rewritten
- *                             to /sites/<pageId>; everything else is the plain 404 (M4-09)
+ *   anything else             custom-domain lookup: a verified domain is rewritten to /sites/<pageId>,
+ *                             which answers the plain 404 unless that page is published; an unknown host
+ *                             is the plain 404 as well (M4-09, M8-10)
  *
  * The internal prefixes (/app, /t, /sites) exist only as rewrite targets: a visitor asking for one
  * directly on the root host gets a 404. Consequences for later milestones:
@@ -142,20 +143,33 @@ export async function proxy(request: NextRequest) {
       if (!isReadMethod(request.method) && !isTrackingPath(pathname)) {
         return tenantMethodRejected(pathname);
       }
-      // The real Host header only. A verified domain whose page is published rewrites to its page;
-      // an unknown host, a pending or draft-only domain and a lookup error all rewrite to the
-      // plain tenant 404 (/sites/unknown), with no tenant data in it.
+      // The real Host header only. A verified domain rewrites to its page, and the page route answers
+      // the plain 404 for a draft-only page or a suspended owner; an unknown host, a pending domain
+      // and a lookup error all rewrite to the plain tenant 404 (/sites/unknown), with no tenant data in it.
       // The lookup answers null on every failure; the catch is the second wall: never a 500 here.
+      // M8-10: the lookup is remembered for a short while (src/lib/routing/custom-domain.ts). The
+      // test flag HYDLNK_QUERY_COUNTER=1 (never set in production) adds `x-hl-domain-cache: HIT|MISS`
+      // to the response so a spec can tell a remembered answer from a database read.
       let pageId: string | null = null;
+      let domainCache = null as string | null; // assigned from the callback below
       try {
-        pageId = await resolveCustomDomain(host);
+        pageId =
+          process.env.HYDLNK_QUERY_COUNTER === "1"
+            ? await resolveCustomDomain(host, {
+                report: (state) => {
+                  if (state === "HIT" || state === "MISS") domainCache = state;
+                },
+              })
+            : await resolveCustomDomain(host);
       } catch {
         pageId = null;
       }
       const headers = new Headers(request.headers);
       headers.delete("cookie");
       if (pageId && isTrackingPath(pathname)) {
-        return NextResponse.next({ request: { headers } });
+        const passed = NextResponse.next({ request: { headers } });
+        if (domainCache) passed.headers.set("x-hl-domain-cache", domainCache);
+        return passed;
       }
       const response = NextResponse.rewrite(
         rewriteTo(siteRewritePath(pageId ?? UNKNOWN_SITE_ID, pathname)),
@@ -163,6 +177,7 @@ export async function proxy(request: NextRequest) {
       );
       setTenantHeaders(response.headers);
       response.headers.delete("set-cookie");
+      if (domainCache) response.headers.set("x-hl-domain-cache", domainCache);
       return response;
     }
   }

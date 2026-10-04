@@ -235,13 +235,13 @@ describe("what calls the Vercel API fails closed without the token", () => {
 
 describe("deleting an account with no domain rows never needs the token", () => {
   it("removeAccountDomains with no pages makes no query and no request", async () => {
-    await expect(removeAccountDomains([])).resolves.toBeUndefined();
+    await expect(removeAccountDomains([])).resolves.toEqual([]);
     expect(domainQueries).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("removeAccountDomains with pages that have no domain rows resolves without touching Vercel", async () => {
-    await expect(removeAccountDomains([PAGE.id])).resolves.toBeUndefined();
+    await expect(removeAccountDomains([PAGE.id])).resolves.toEqual([]);
     expect(domainQueries).toHaveBeenCalledTimes(1);
     expect(fetchSpy).not.toHaveBeenCalled();
   });

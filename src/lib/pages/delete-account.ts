@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { isAccountSuspended } from "@/lib/admin/suspension";
 import { getSessionUser } from "@/lib/auth/session";
 import { cancelAccountBilling } from "@/lib/billing/cancel";
+import { expireDomainHost } from "@/lib/domains/expire-host";
 import { expireDeletedPages } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -54,7 +55,8 @@ const ACCOUNT_DELETED_PATH = "/login?deleted=1";
  *   1. every live Stripe subscription of the account's customer is canceled (the customer id is
  *      the session user's own account row, never request input), so a failed deletion can never
  *      leave a paying account behind;
- *   2. each custom domain of the user's pages is removed from the Vercel project;
+ *   2. each custom domain of the user's pages is removed from the Vercel project (and, once the user is
+ *      deleted, the proxy's remembered lookup of each hostname is expired, M8-11);
  *   3. the user's objects under `{uid}/` in the `page-media` bucket are removed.
  * Every step is safe to run again, so a retry after a failure picks up where it stopped.
  *
@@ -103,8 +105,9 @@ export async function deleteAccount(
     return { error: BILLING_ERROR };
   }
 
+  let hostnames: string[] = [];
   try {
-    await removeAccountDomains(pages.map((page) => page.id));
+    hostnames = await removeAccountDomains(pages.map((page) => page.id));
   } catch (error) {
     console.error("[account] removing a custom domain failed", errorText(error));
     return { error: DOMAIN_ERROR };
@@ -122,6 +125,10 @@ export async function deleteAccount(
     console.error("[account] delete failed", deleteError.message);
     return { error: "We couldn’t delete your account. Try again in a moment." };
   }
+
+  // The user is gone and so are their domain rows: the proxy stops answering for those hostnames (M8-11;
+  // it never throws, a failure is logged and the lookup's own lifetime is the backstop).
+  for (const hostname of hostnames) expireDomainHost(hostname);
 
   // The user is gone: expire what the cache holds for each of their pages. A failure here must not
   // turn a completed deletion into an error message, so it is logged and the flow carries on.

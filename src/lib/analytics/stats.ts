@@ -38,8 +38,8 @@ export type * from "./dashboard/types";
  * rollup at 00:10 UTC, which re-rolls the last three completed days), today's from the raw `events`
  * of the current UTC day. Between midnight and the rollup yesterday has no page-level row yet; and
  * a missed night leaves a gap for up to two more days. Any of the last three completed days
- * without a page-level row is therefore read from its raw events instead (events are kept 90
- * days), and a day that has its row is never also read from raw: no day is counted from two places.
+ * without a page-level row is therefore read from its raw events instead (events are kept 60
+ * days, `RAW_EVENT_RETENTION_DAYS`), and a day that has its row is never also read from raw: no day is counted from two places.
  */
 
 /** How many completed days the nightly rollup recomputes (`rollup_recent_days(3)`). */

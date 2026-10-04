@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RAW_EVENT_RETENTION_DAYS } from "@/lib/analytics/retention";
 import type { GuideBody } from "./types";
 
 export const understandingAnalytics: GuideBody = {
@@ -104,7 +105,7 @@ export const understandingAnalytics: GuideBody = {
         HYDLNK sets no cookies on your page and loads no tracking scripts. Visitor IP addresses
         are never stored: unique visitors come from a scrambled, one-way code made from the IP
         address and browser, mixed with a value that changes every day. Individual views and
-        clicks are kept for 90 days and then combined into daily totals. The details are in the{" "}
+        clicks are kept for {RAW_EVENT_RETENTION_DAYS} days and then combined into daily totals. The details are in the{" "}
         <Link href="/privacy">privacy policy</Link>.
       </p>
     </>

@@ -142,7 +142,8 @@ describe.skipIf(!run)("M5-10 mark reviewed (local Supabase)", () => {
     // 1,234 views in each of the two complete UTC months (M7-10: the flag needs both), rolled up,
     // then flagged with a 1,000 threshold: the real pipeline (events -> rollup -> flag) without
     // 100,000 rows. The days are the earlier month's last day and the later month's first day, both
-    // always inside the 90 days the raw events are kept.
+    // at most 32 days back (inside the 60 days raw events are kept, M8-12) and rolled up right here, so the
+    // test never depends on raw rows still existing.
     const now = new Date();
     const laterStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
     const days = [

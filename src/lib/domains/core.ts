@@ -1,6 +1,7 @@
 import { PLAN_LIMITS } from "@/lib/limits";
 import { toPlan } from "@/lib/pages/plans";
 import type { DomainDeps } from "./deps";
+import { expireDomainHost } from "./expire-host";
 import { normalizeHostname } from "./hostname";
 import { DOMAIN_MESSAGES, DOMAIN_STATUS, domainLimitMessage } from "./messages";
 import type { DomainActionResult, DomainErrorCode, DomainView } from "./types";
@@ -226,6 +227,8 @@ export async function addDomain(
       return unexpected(deps, "inserting the domain", inserted.error ?? new Error("no row"));
     }
 
+    // The row exists now: a hostname remembered as "no domain" stops being remembered, then the page.
+    expireDomainHost(hostname);
     expire(deps, pageId);
     const row: DomainRow = inserted.data;
     let loaded;
@@ -300,6 +303,8 @@ export async function setDomainPage(
     if (updated.error || !updated.data) {
       return unexpected(deps, "pointing a domain at a page", updated.error ?? new Error("no row"));
     }
+    // Re-pointed: the hostname must answer with the new page from the next request on.
+    expireDomainHost(owned.hostname);
     expire(deps, owned.page_id, pageId);
     return { ok: true, domain: baseView(updated.data) };
   } catch (error) {
@@ -313,8 +318,10 @@ export async function setDomainPage(
 
 /**
  * Remove a domain: off the Vercel project first (a 404 there, already gone, counts as removed;
- * anything else keeps the row and says so), then the row. The next request to the hostname finds no
- * row and answers 404: the proxy reads the table on every request, nothing is cached in between.
+ * anything else keeps the row and says so), then the row, then the proxy's remembered answer for the
+ * hostname (M8-11: `expireDomainHost`). The next request to the hostname finds no row and answers
+ * 404 wherever that expiry reaches (at once in one server process, within the lookup's 60 seconds
+ * on another instance).
  */
 export async function removeDomain(
   deps: DomainDeps,
@@ -340,6 +347,7 @@ export async function removeDomain(
 
     const deleted = await deps.admin.from("domains").delete().eq("id", owned.id);
     if (deleted.error) return unexpected(deps, "deleting the domain row", deleted.error);
+    expireDomainHost(owned.hostname);
     expire(deps, owned.page_id);
     return { ok: true };
   } catch (error) {

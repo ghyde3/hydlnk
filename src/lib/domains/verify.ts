@@ -1,4 +1,5 @@
 import type { DomainDeps } from "./deps";
+import { expireDomainHost } from "./expire-host";
 import { DOMAIN_MESSAGES } from "./messages";
 import type { DomainView } from "./types";
 import {
@@ -24,7 +25,8 @@ import {
  *   3. ask Vercel to verify and read the domain's DNS config. Verified AND not misconfigured flips
  *      the row (`mark_domain_verified`, true only for the caller that made the change); anything
  *      else leaves it pending;
- *   4. the caller that flipped it expires the page's cache and claims the one email
+ *   4. the caller that flipped it expires the hostname's remembered lookup (M8-11) and the page's
+ *      cache, and claims the one email
  *      (`claim_domain_live_email`) BEFORE sending it. A send failure is logged (without the
  *      address) and never undoes or blocks the verification.
  *
@@ -128,6 +130,7 @@ async function releaseExpired(deps: DomainDeps, row: DomainRow): Promise<"releas
     deps.log?.(`[domains] deleting expired domain ${row.id} failed: ${deleted.error.message}`);
     return "failed";
   }
+  expireDomainHost(row.hostname);
   try {
     deps.expirePage(row.page_id);
   } catch (error) {
@@ -241,6 +244,8 @@ export async function verifyDomain(
   const after = await freshRow(deps, row);
 
   if (flipped) {
+    // Verified: a hostname remembered as "no domain" (M8-10) must serve the page from the next request.
+    expireDomainHost(row.hostname);
     try {
       deps.expirePage(row.page_id);
     } catch (error) {

@@ -22,8 +22,9 @@ import {
  *      DE 9, CA 8, GB 6, FR 6.
  *   T  three views yesterday, one per device.
  *   U  one view 20 days ago with no referrer, device or country.
- *   Y  views 120 days ago, rolled up and then purged from `events` (the 90 day retention), and one
- *      recent view: the one-year range must still show the old breakdowns.
+ *   Y  views 120 and 70 days ago, rolled up and then purged from `events` (the 60 day retention,
+ *      M8-12), and one recent view: the 90 day range must still show the 70 day old breakdowns and
+ *      the one-year range both old ones.
  */
 
 test.afterAll(cleanupUsers);
@@ -110,6 +111,15 @@ test.beforeAll(async () => {
       country: "FR",
       device: "desktop",
     })),
+    // Older than the 60 days of raw events, younger than the 90 day range.
+    ...Array.from({ length: 9 }, (_, i): SeedEvent => ({
+      type: "view",
+      day: dayAt(-70),
+      visitor: `m${i}`,
+      referrer: "mid.example",
+      country: "DE",
+      device: "tablet",
+    })),
     {
       type: "view",
       day: dayAt(-3),
@@ -119,7 +129,7 @@ test.beforeAll(async () => {
       device: "mobile",
     },
   ]);
-  // The 90 day retention: the raw rows go (after being rolled up), the rollups stay.
+  // The 60 day retention: the raw rows go (after being rolled up), the rollups stay.
   const purged = await adminClient().rpc("purge_old_events");
   if (purged.error) throw new Error(`purge_old_events failed: ${purged.error.message}`);
 });
@@ -211,7 +221,7 @@ test.describe("M4-28 breakdown cards", () => {
     }
   });
 
-  test("M4-28 one year reads daily_dim_stats rows older than 90 days even though the raw events are gone", async ({
+  test("M4-28 90 days and one year read daily_dim_stats rows older than 60 days even though the raw events are gone", async ({
     page,
     context,
   }) => {
@@ -219,33 +229,43 @@ test.describe("M4-28 breakdown cards", () => {
       .from("events")
       .select("id", { count: "exact", head: true })
       .eq("page_id", y.pageId)
-      .lt("ts", `${dayAt(-90)}T00:00:00Z`);
-    expect(raw.count).toBe(0); // purged by the 90 day retention
-    const rolled = await adminClient()
-      .from("daily_dim_stats")
-      .select("day")
-      .eq("page_id", y.pageId)
-      .eq("day", dayAt(-120));
-    expect((rolled.data ?? []).length).toBeGreaterThan(0);
+      .lt("ts", `${dayAt(-60)}T00:00:00Z`);
+    expect(raw.count).toBe(0); // purged by the 60 day retention
+    for (const old of [-70, -120]) {
+      const rolled = await adminClient()
+        .from("daily_dim_stats")
+        .select("day")
+        .eq("page_id", y.pageId)
+        .eq("day", dayAt(old));
+      expect((rolled.data ?? []).length, `rollup of day ${old}`).toBeGreaterThan(0);
+    }
 
     await signInOwner(context, y);
     await page.goto(`${ANALYTICS()}?range=365`);
-    expect(await kpi(page, "Views")).toBe("21");
+    expect(await kpi(page, "Views")).toBe("30");
     await expect(card(page, "referrers").getByTestId("breakdown-row")).toHaveText([
-      "old.example 57%",
-      "Direct 38%",
-      "new.example 5%",
+      "old.example 40%",
+      "mid.example 30%",
+      "Direct 27%",
+      "new.example 3%",
     ]);
     await expect(card(page, "countries").getByTestId("breakdown-row")).toHaveText([
-      "France 95%",
-      "United States 5%",
+      "France 67%",
+      "Germany 30%",
+      "United States 3%",
     ]);
 
-    // 90 days sees only the recent view.
+    // 90 days sees the views of 70 days ago (rolled up, their raw events purged) and the recent one,
+    // with their referrers and countries, but not the ones of 120 days ago.
     await page.goto(`${ANALYTICS()}?range=90`);
-    expect(await kpi(page, "Views")).toBe("1");
+    expect(await kpi(page, "Views")).toBe("10");
     await expect(card(page, "referrers").getByTestId("breakdown-row")).toHaveText([
-      "new.example 100%",
+      "mid.example 90%",
+      "new.example 10%",
+    ]);
+    await expect(card(page, "countries").getByTestId("breakdown-row")).toHaveText([
+      "Germany 90%",
+      "United States 10%",
     ]);
   });
 

@@ -166,11 +166,12 @@ test.describe("M4-24 the rollup and its tables", () => {
   });
 });
 
-test.describe("M4-25 raw events are kept 90 days", () => {
+test.describe("M4-25 raw events are kept 60 days (M8-12, was 90)", () => {
   test("M4-25 rpc/purge_old_events is rejected for anon and authenticated and no events row is deleted", async ({}, info) => {
     test.skip(!desktopOnly(info), "API only");
-    const marker = `old120-${Date.now().toString(36)}`;
-    await addEvents(a.pageId, [{ day: utcDay(120), visitor: marker }]);
+    // 70 days old: past the 60 days of raw events, so the nightly purge would take it.
+    const marker = `old70-${Date.now().toString(36)}`;
+    await addEvents(a.pageId, [{ day: utcDay(70), visitor: marker }]);
     const present = async () =>
       (await adminClient().from("events").select("id").eq("visitor_hash", marker)).data?.length;
     expect(await present()).toBe(1);

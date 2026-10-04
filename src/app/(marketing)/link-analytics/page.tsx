@@ -11,6 +11,7 @@ import {
   SectionIntro,
 } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
+import { RAW_EVENT_RETENTION_DAYS } from "@/lib/analytics/retention";
 import { guideHref } from "@/components/marketing/site-map";
 
 export const metadata: Metadata = marketingMetadata({
@@ -35,7 +36,7 @@ const PRIVACY = [
   "No cookies, no saved data in the browser and no tracking scripts on your page.",
   "IP addresses are never stored. Unique visitors come from a scrambled, one-way code made from the IP address and browser, mixed with a value that changes every day, so a visitor can’t be followed from one day to the next.",
   "Known bots and crawlers are filtered out before anything is counted.",
-  "Individual views and clicks are kept for 90 days, then combined into daily totals.",
+  `Individual views and clicks are kept for ${RAW_EVENT_RETENTION_DAYS} days, then combined into daily totals.`,
   "Your visitors’ data is used for your analytics only. HYDLNK doesn’t sell it or use it for advertising.",
 ] as const;
 

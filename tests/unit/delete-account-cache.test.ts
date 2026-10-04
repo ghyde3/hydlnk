@@ -47,7 +47,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 // own tests (billing-delete-account.test.ts); here they are no-ops.
 const cancelBilling_ = vi.fn(async () => 0);
 vi.mock("@/lib/billing/cancel", () => ({ cancelAccountBilling: cancelBilling_ }));
-vi.mock("@/lib/pages/delete-domains", () => ({ removeAccountDomains: async () => undefined }));
+vi.mock("@/lib/pages/delete-domains", () => ({ removeAccountDomains: async () => [] }));
 vi.mock("@/lib/pages/delete-media", () => ({ removeAccountMedia: async () => undefined }));
 
 const { deleteAccount } = await import("@/lib/pages/delete-account");

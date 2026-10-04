@@ -13,7 +13,10 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
  */
 const { run } = await stackIsUp();
 
-/** The earlier month's last day and the later month's first day, UTC: both inside the 90 days of raw events. */
+/**
+ * The earlier month's last day and the later month's first day, UTC: at most 32 days back, so inside the 60 days
+ * raw events are kept (M8-12), and rolled up in the same test: the flag reads daily_stats, never raw rows.
+ */
 function seedDays(now = new Date()): { earlier: string; later: string; current: string } {
   const laterStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
   return {

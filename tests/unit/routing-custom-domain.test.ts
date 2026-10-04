@@ -53,7 +53,7 @@ function fakeClient(result: () => Promise<{ data: unknown; error: unknown }>) {
   return { client: client as unknown as SupabaseClient<Database>, seen };
 }
 
-const hit = () => Promise.resolve({ data: [{ page_id: PAGE, pages: { published_at: "2026-10-04T00:00:00Z" } }], error: null });
+const hit = () => Promise.resolve({ data: [{ page_id: PAGE }], error: null });
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -100,17 +100,16 @@ describe("M4-09 lookupKey: what a Host header may become", () => {
 });
 
 describe("M4-09 resolveCustomDomain", () => {
-  it("asks for a verified row of that hostname whose page is published, one row, with a timeout", async () => {
+  it("asks for a verified row of that hostname, one row, with a timeout (M8-10: no join on the page)", async () => {
     const { client, seen } = fakeClient(hit);
     expect(await resolveCustomDomain("LINKS.Example.Test:3000", { client })).toBe(PAGE);
     expect(seen).toHaveLength(1);
     expect(seen[0]).toEqual({
       table: "domains",
-      select: "page_id, pages!inner(published_at)",
+      select: "page_id",
       filters: [
         ["eq", "hostname", "links.example.test"],
         ["eq", "status", "verified"],
-        ["not", "pages.published_at", "is", null],
       ],
       limit: 1,
       abortSignal: true,
@@ -123,23 +122,24 @@ describe("M4-09 resolveCustomDomain", () => {
     expect(seen[0]!.select).not.toMatch(/draft|\*|\bpublished\b(?!_at)/);
   });
 
-  it("no row (unknown host, pending or errored domain, draft-only page) answers null", async () => {
+  it("no row (unknown host, pending or errored domain) answers null", async () => {
     const { client } = fakeClient(() => Promise.resolve({ data: [], error: null }));
     expect(await resolveCustomDomain("links.example.test", { client })).toBeNull();
     const none = fakeClient(() => Promise.resolve({ data: null, error: null }));
     expect(await resolveCustomDomain("links.example.test", { client: none.client })).toBeNull();
   });
 
-  it("a row whose page has nothing published answers null even if the filter were bypassed", async () => {
-    const { client } = fakeClient(() =>
+  it("nothing about the page is part of the answer: a draft-only page is decided by /sites/<pageId> (M8-10, was M4-09 step 3)", async () => {
+    const { client, seen } = fakeClient(() =>
       Promise.resolve({ data: [{ page_id: PAGE, pages: { published_at: null } }], error: null }),
     );
-    expect(await resolveCustomDomain("links.example.test", { client })).toBeNull();
+    expect(await resolveCustomDomain("links.example.test", { client })).toBe(PAGE);
+    expect(seen[0]!.select).not.toMatch(/pages|published/);
   });
 
   it("a row with a malformed page id answers null", async () => {
     const { client } = fakeClient(() =>
-      Promise.resolve({ data: [{ page_id: "../../etc/passwd", pages: { published_at: "x" } }], error: null }),
+      Promise.resolve({ data: [{ page_id: "../../etc/passwd" }], error: null }),
     );
     expect(await resolveCustomDomain("links.example.test", { client })).toBeNull();
   });
@@ -169,7 +169,7 @@ describe("M4-09 resolveCustomDomain", () => {
     expect(seen).toEqual([]);
   });
 
-  it("uses no cache: two requests are two queries (a removed domain 404s at the very next request)", async () => {
+  it("outside a production build nothing is cached: two requests are two queries (M8-10: `next dev` and this harness read every time)", async () => {
     const { client, seen } = fakeClient(hit);
     await resolveCustomDomain("links.example.test", { client });
     await resolveCustomDomain("links.example.test", { client });
