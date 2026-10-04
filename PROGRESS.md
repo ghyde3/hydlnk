@@ -2,6 +2,14 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-04 — Release: Wave K (libraries, rich text and quick wins)
+
+- PR #21 merged, merge commit ed60802. Migrations applied through release-migrations.yml (run 37212574737): 20261009000023_banner_blocklist (blocked_links_in also reads the banner, book and app-store links; replaced in place), 20261009000031_redirect_mode (plan_limits recreated with redirect_mode; the page_versions select policy dropped and recreated unchanged in the same migration). Deployment https://vercel.com/ghyde3s-projects/hydlnk/6mjgswkHV2ucob3JTzNNYuAygFa2 (success).
+- Checks: full browser suite green on the new CI (production build, 8 shards; run 37211219466). The first 8-shard run (37208932737) took 18 m 47 s end to end (Verify 4 m 41 s, shards 8 to 13 min), against about 25 to 30 min on 4 dev-server shards: M9-13 flipped. `pnpm verify` PASS (8433 unit, pgTAP PASS after db:reset); `pnpm test:e2e:prod` 12/12.
+- Production spot checks: links.hyde-co.com loads only from its own host and the root /media origin, no `_next/static` and no Sentry in the HTML, social icons render the Simple Icons brand marks; Sentry is initialized on app.hydlnk.com and absent from hydlnk.com.
+- Orchestrator decisions (Gary delegated): link-lock codes stay 4 to 32 characters with the 6+ hint and the two-tier limiter; Simple Icons path data in the marketing try-builder bundle is allowed (marketing, CC0, a few KB); isbot (Unlicense), nodemailer (MIT-0), @axe-core/playwright (MPL-2.0, dev) and Sentry's build-time CLI (FSL) are accepted.
+- Still held: M9-02, M9-05 to M9-08 (screenshot-comparison steps), M9-10 (Sentry steps unit-proven), M9-14 (step d names Google Fonts hosts). Follow-up to watch: M9-11's e2e now re-selects text before alignment clicks after a lost selection under heavy load.
+
 ## 2026-10-04 — Wave K security review fixes
 
 The security review of Wave K (branch `m10-quick-wins`, draft PR #21) found one medium and five lows. Four are fixed with tests written first, one is documented as accepted, one is Gary's call. No migration, no feature flipped (M9-10 stays `passes: false`).

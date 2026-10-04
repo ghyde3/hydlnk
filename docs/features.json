@@ -4043,7 +4043,7 @@
         "Supersedes: nothing in the features; M2-26's note that the suite starts `pnpm dev` and the CI comment 'Both projects (390 and 1440). playwright.config.ts starts `pnpm dev` as the webServer' (now `next start` in CI)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M9-14",
