@@ -74,12 +74,18 @@ export function normalizeDim(dim: DimName, raw: string | null | undefined): stri
  * total of the day, and the distinct visitors among the views; a link's row counts its clicks and
  * its distinct clickers. A dim row counts the views and the clicks that had that value.
  */
-export function rollupRawEvents(events: readonly RawEvent[]): {
+export function rollupRawEvents(
+  events: readonly RawEvent[],
+  /** M12-07: count a visitor once a day across every page (the "All pages" view), not once per page. */
+  siteWide = false,
+): {
   daily: DailyRow[];
   dims: DimRow[];
 } {
+  const siteHashes = new Map<string, Set<string>>();
   // One row per day, page of the site and block, as the rollup writes them; unique visitors are
-  // counted per page (a visitor on two pages is one unique on each), then the pages are summed.
+  // counted per page (a visitor on two pages is one unique on each), then the pages are summed,
+  // unless `siteWide` asks for the exact count across pages (M12-07).
   const daily = new Map<string, DailyRow & { hashes: Set<string>; sub: string }>();
   const dims = new Map<string, DimRow>();
   const rowFor = (day: string, sub: string, blockId: string) => {
@@ -101,6 +107,11 @@ export function rollupRawEvents(events: readonly RawEvent[]): {
       const page = rowFor(day, sub, "");
       page.views += 1;
       page.hashes.add(event.visitor_hash);
+      if (siteWide) {
+        const set = siteHashes.get(day) ?? new Set<string>();
+        set.add(event.visitor_hash);
+        siteHashes.set(day, set);
+      }
     } else {
       rowFor(day, sub, "").clicks += 1; // the page-level row carries every click of the day
       const block = rowFor(day, sub, event.block_id);
@@ -130,6 +141,13 @@ export function rollupRawEvents(events: readonly RawEvent[]): {
       into.uniques += hashes.size;
     } else {
       merged.set(key, { ...row, uniques: hashes.size });
+    }
+  }
+  if (siteWide) {
+    // The page-level row of a day carries the exact site-wide visitors, not the sum over pages.
+    for (const [day, hashes] of siteHashes) {
+      const row = merged.get(`${day}|`);
+      if (row) row.uniques = hashes.size;
     }
   }
   return { daily: [...merged.values()], dims: [...dims.values()] };

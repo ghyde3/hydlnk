@@ -93,6 +93,12 @@ export interface StatsSource {
   dailyDims(pageId: string, fromDay: string, toDay: string, filter?: PageFilter): Promise<DimRow[]>;
   /** Raw events with `ts >= fromIso`. */
   rawEvents(pageId: string, fromIso: string, filter?: PageFilter): Promise<RawEvent[]>;
+  /**
+   * M12-07: exact distinct visitors per UTC day across every page of the site (`daily_site_stats`),
+   * for the days `fromDay`..`toDay`. A day without a row is absent. Optional: without it "All pages"
+   * sums the per-page uniques.
+   */
+  dailySiteUniques?(pageId: string, fromDay: string, toDay: string): Promise<Map<string, number>>;
   /** Sub-page ids that have history (rollup or raw rows), whether or not the page still exists. */
   historicPageIds?(pageId: string): Promise<string[]>;
 }
@@ -126,6 +132,22 @@ type Gathered =
       filter: PageFilter;
       options: PageOption[];
     };
+
+/**
+ * Under "All pages" a rolled-up day's unique visitors are the site-wide count (M12-07), once: the
+ * day's page-level rows (one per page) are summed for views and clicks as before, and the first
+ * carries the exact uniques while the others carry none. A day without a site row keeps the sum.
+ */
+function withSiteUniques(rows: DailyRow[], site: Map<string, number> | null): DailyRow[] {
+  if (!site) return rows;
+  const placed = new Set<string>();
+  return rows.map((row) => {
+    if (row.block_id !== "" || !site.has(row.day)) return row;
+    if (placed.has(row.day)) return { ...row, uniques: 0 };
+    placed.add(row.day);
+    return { ...row, uniques: site.get(row.day)! };
+  });
+}
 
 /**
  * The shared middle of every read of a page's numbers: ownership, the plan's window, then the
@@ -162,12 +184,17 @@ async function gather(
   const readDims = withDims && limits.analyticsBreakdowns;
   const today = window.end;
   const yesterday = addDays(today, -1);
-  const [dailyRows, dimRows] = await Promise.all([
+  const siteWide = filter === PAGE_FILTER_ALL;
+  const [dailyRowsRaw, dimRows, siteUniques] = await Promise.all([
     source.dailyStats(input.pageId, window.start, yesterday, filter),
     readDims
       ? source.dailyDims(input.pageId, window.start, yesterday, filter)
       : Promise.resolve<DimRow[]>([]),
+    siteWide && source.dailySiteUniques
+      ? source.dailySiteUniques(input.pageId, window.start, yesterday)
+      : Promise.resolve<Map<string, number> | null>(null),
   ]);
+  const dailyRows = withSiteUniques(dailyRowsRaw, siteUniques);
 
   // The nightly job re-rolls the last ROLLUP_DAYS completed days; a day among them with no
   // page-level row is not rolled up yet (or had no views), so its raw events stand in for it.
@@ -178,7 +205,10 @@ async function gather(
     if (day >= window.start && !rolledUp.has(day)) rawDays.add(day);
   }
   const rawFrom = [...rawDays].sort()[0]!;
-  const raw = rollupRawEvents(await source.rawEvents(input.pageId, dayStartIso(rawFrom), filter));
+  const raw = rollupRawEvents(
+    await source.rawEvents(input.pageId, dayStartIso(rawFrom), filter),
+    siteWide,
+  );
   const rawDaily = raw.daily.filter((row) => rawDays.has(row.day));
   const rawDims = raw.dims.filter((row) => rawDays.has(row.day));
 
