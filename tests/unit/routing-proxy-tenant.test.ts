@@ -83,12 +83,18 @@ describe("M8-07 the CSP of a live tenant page", () => {
 });
 
 describe("M2-22 the proxy puts those headers on tenant and custom-domain responses only", () => {
-  it("a handle host is rewritten to /t/<handle> (the page and /og) or to the one plain 404 (every other path), with the headers", async () => {
-    for (const path of ["/", "/x", "/og"]) {
+  it("a handle host is rewritten to /t/<handle> (the page and /og), to the dynamic sub-page route (one lowercase segment) or to the one plain 404, with the headers", async () => {
+    for (const path of ["/", "/x", "/X", "/og"]) {
       const response = await proxy(request("mara.localhost:3000", path));
       const rewrite = response.headers.get("x-middleware-rewrite") ?? "";
       expect(new URL(rewrite).pathname).toBe(
-        path === "/" ? "/t/mara" : path === "/og" ? "/t/mara/og" : "/sites/unknown",
+        path === "/"
+          ? "/t/mara"
+          : path === "/og"
+            ? "/t/mara/og"
+            : path === "/x"
+              ? "/t/mara/p/x" // one lowercase segment: a sub-page (M11-06), a dynamic route
+              : "/sites/unknown",
       );
       for (const name of TENANT_HEADERS)
         expect(response.headers.get(name), `${path} ${name}`).toBeTruthy();

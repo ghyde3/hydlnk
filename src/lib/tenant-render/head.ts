@@ -9,6 +9,7 @@ import { escapeHtml } from "./escape";
  *   <title>, description      `pageMetadata` (src/lib/publish/share-meta.ts) for a published page
  *   og:*, twitter:*           the same function: it stays the one place both hosts get them from
  *   robots                    `noindex` for the placeholder, every 404 and the error page
+ *   canonical                 a sub-page's address on the site's primary host (M11-10)
  *   the favicon link          `/icon.svg`, the app's own icon (src/app/icon.svg)
  *   preloads                  the theme fonts (latin faces) and the avatar picture
  *   <style>                   the page's one inline stylesheet, already minified by the caller
@@ -18,8 +19,7 @@ import { escapeHtml } from "./escape";
  */
 
 export type HeadPreload =
-  | { as: "font"; href: string; type: "font/woff2" }
-  | { as: "image"; href: string };
+  { as: "font"; href: string; type: "font/woff2" } | { as: "image"; href: string };
 
 export interface HeadInput {
   metadata: Metadata;
@@ -48,7 +48,12 @@ function only(object: object, allowed: readonly string[], where: string): void {
   }
 }
 
-type ImageDescriptor = { url: string | URL; width?: string | number; height?: string | number; alt?: string };
+type ImageDescriptor = {
+  url: string | URL;
+  width?: string | number;
+  height?: string | number;
+  alt?: string;
+};
 
 function images(list: unknown): ImageDescriptor[] {
   if (list === undefined) return [];
@@ -95,7 +100,11 @@ function twitter(card: NonNullable<Metadata["twitter"]>): string {
 
 /** The title, description, robots, Open Graph and Twitter tags of a `Metadata` object. */
 export function metadataTags(metadata: Metadata): string {
-  only(metadata, ["title", "description", "robots", "openGraph", "twitter"], "metadata");
+  only(
+    metadata,
+    ["title", "description", "robots", "alternates", "openGraph", "twitter"],
+    "metadata",
+  );
   if (typeof metadata.title !== "string") throw new Error("The head needs a string title");
   let out = `<title>${escapeHtml(metadata.title)}</title>`;
   out += meta("name", "description", metadata.description ?? undefined);
@@ -105,6 +114,16 @@ export function metadataTags(metadata: Metadata): string {
       throw new Error("Unsupported robots value in the head");
     }
     if ((robots as { index?: boolean }).index === false) out += meta("name", "robots", "noindex");
+  }
+  if (metadata.alternates) {
+    // A sub-page names its canonical address (M11-10): the site's primary host, an absolute URL.
+    only(metadata.alternates, ["canonical"], "alternates");
+    const canonical = metadata.alternates.canonical;
+    if (typeof canonical === "string" && canonical !== "") {
+      out += `<link rel="canonical" href="${escapeHtml(canonical)}">`;
+    } else if (canonical !== undefined && canonical !== null) {
+      throw new Error("The head needs a string canonical URL");
+    }
   }
   if (metadata.openGraph) out += openGraph(metadata.openGraph);
   if (metadata.twitter) out += twitter(metadata.twitter);

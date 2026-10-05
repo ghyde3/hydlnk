@@ -12,8 +12,10 @@
  *    Nothing is requested before a tap.
  *
  * 2. The view beacon (M4-21): once per page load, after `load`, one
- *    navigator.sendBeacon('/api/e', {pageId, referrer}) to the host that served the page. The page
- *    id comes from this script element's own data-page-id attribute and must be a UUID. Nothing is
+ *    navigator.sendBeacon('/api/e', {pageId, subPageId?, referrer}) to the host that served the page.
+ *    The page id comes from this script element's own data-page-id attribute and must be a UUID; on
+ *    a sub-page of a site (M11-09) the script element also has data-sub-page-id, a UUID too, which
+ *    the beacon sends as subPageId (Home sends none). Nothing is
  *    stored and nothing identifies the visitor: the server derives an anonymous daily hash from the request.
  *
  * 3. Copy a discount code (M9-19). The same click listener: a click inside an element with
@@ -152,10 +154,13 @@
   for (var i = 0; i < blocks.length; i++) blocks[i].setAttribute("data-js", "");
 
   var pageId = doc.currentScript && doc.currentScript.getAttribute("data-page-id");
+  var subPageId = doc.currentScript && doc.currentScript.getAttribute("data-sub-page-id");
 
   function beacon() {
     try {
-      navigator.sendBeacon("/api/e", JSON.stringify({ pageId: pageId, referrer: doc.referrer }));
+      var body = { pageId: pageId, referrer: doc.referrer };
+      if (subPageId && UUID.test(subPageId)) body.subPageId = subPageId;
+      navigator.sendBeacon("/api/e", JSON.stringify(body));
     } catch {
       // Absent or refused: a view that is not counted. Nothing else depends on it.
     }

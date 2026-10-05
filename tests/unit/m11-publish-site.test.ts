@@ -210,9 +210,7 @@ describe.skipIf(!run)("M11-05 publishPageCore publishes the whole site (local Su
   it("an invalid sub-page publishes nothing and the error names that page", async () => {
     const o = await owner("ws3");
     const good = await addSub(o, "Items", "items", [link("a-link-00001")]);
-    const bad = await addSub(o, "Directions", "directions", [
-      { ...link("b-link-00001"), label: "" },
-    ]);
+    const bad = await addSub(o, "Directions", "directions", [link("b-link-00001", "")]);
     const result = await publish(o);
     expect(result).toMatchObject({ ok: false, reason: "invalid" });
     if (result.ok) return;

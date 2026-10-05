@@ -1,7 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { toPublishForm, type PublishDoc } from "@/lib/document";
+import { stripHiddenCharacters, toPublishForm, type PublishDoc } from "@/lib/document";
 import { loadDraft } from "@/lib/editor/load";
 import type { Database } from "@/lib/supabase/database.types";
+import { homeUsesSiteIndex } from "@/lib/site/live";
+import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
 import { sanitizeSharedDoc } from "./sanitize";
 import { hashPreviewToken, isPreviewTokenShape } from "./token";
@@ -32,6 +34,12 @@ export type SharedPreview =
       doc: PublishDoc;
       /** The owner's plan: the "Made with HYDLNK" badge follows it. */
       plan: string;
+      /**
+       * The rest of the site as the draft has it (M11-07): the menu as plain text (the preview never
+       * leaves the draft) and the hrefs of its page links. Absent when Home uses neither. Previews
+       * of the sub-pages themselves are M2.
+       */
+      site?: SiteContext;
       /** When the link stops working (ISO, UTC). */
       expiresAt: string;
     };
@@ -77,13 +85,32 @@ export async function loadSharedPreview(
     themeTokens = parsed.success ? parsed.data : null;
   }
 
+  // A draft never met the Publish gate: what the gate refuses in text (control and bidi
+  // characters) is taken out of what is shown. The stored draft is not touched.
+  const doc = sanitizeSharedDoc(toPublishForm(draft, themeTokens));
+
+  // The menu of the draft, as plain text (M11-07). The sub-pages' drafts are read only when Home
+  // draws a menu or a page link, with the named columns of the link's own page.
+  let site: SiteContext | undefined;
+  if (homeUsesSiteIndex(doc)) {
+    const rows = await admin.from("site_pages").select("id, draft").eq("page_id", page.id);
+    if (rows.error)
+      throw new Error(`Loading the pages of a shared preview failed: ${rows.error.message}`);
+    const summaries = (rows.data ?? []).flatMap((row): SitePageSummary[] => {
+      const body = row.draft as { path?: unknown; title?: unknown } | null;
+      if (typeof body?.path !== "string" || typeof body.title !== "string") return [];
+      const title = stripHiddenCharacters(body.title).trim();
+      return title === "" ? [] : [{ id: row.id, path: body.path, title }];
+    });
+    site = { hrefs: hrefsOf(summaries), menu: buildMenu(doc.nav, summaries, "home", "text") };
+  }
+
   return {
     kind: "active",
     pageId: page.id,
-    // A draft never met the Publish gate: what the gate refuses in text (control and bidi
-    // characters) is taken out of what is shown. The stored draft is not touched.
-    doc: sanitizeSharedDoc(toPublishForm(draft, themeTokens)),
+    doc,
     plan: page.accounts.plan,
     expiresAt: data.expires_at,
+    ...(site ? { site } : {}),
   };
 }

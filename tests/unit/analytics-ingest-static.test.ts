@@ -42,7 +42,10 @@ describe("M4-21 the view beacon (the shared tenant script, M8-06)", () => {
   it("calls navigator.sendBeacon once, with a relative URL, a JSON string of {pageId, referrer}, after load", () => {
     expect((SCRIPT.match(/sendBeacon\(/g) ?? []).length).toBe(1);
     expect(SCRIPT).toContain('"/api/e"');
-    expect(SCRIPT).toContain("JSON.stringify({ pageId: pageId, referrer: doc.referrer })");
+    // M11-09: a sub-page's script element also carries data-sub-page-id, sent as subPageId (a UUID only).
+    expect(SCRIPT).toContain("var body = { pageId: pageId, referrer: doc.referrer };");
+    expect(SCRIPT).toContain("if (subPageId && UUID.test(subPageId)) body.subPageId = subPageId;");
+    expect(SCRIPT).toContain("JSON.stringify(body)");
     // After load: now if the document is already complete, else on the load event, and only once.
     expect(SCRIPT).toContain('doc.readyState === "complete"');
     expect(SCRIPT).toContain('window.addEventListener("load", beacon, { once: true })');

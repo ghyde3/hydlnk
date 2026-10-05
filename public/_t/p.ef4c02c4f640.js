@@ -107,9 +107,12 @@ if (copyButton) copy(copyButton);
 var blocks = doc.querySelectorAll(".pg-discount");
 for (var i = 0; i < blocks.length; i++) blocks[i].setAttribute("data-js", "");
 var pageId = doc.currentScript && doc.currentScript.getAttribute("data-page-id");
+var subPageId = doc.currentScript && doc.currentScript.getAttribute("data-sub-page-id");
 function beacon() {
 try {
-navigator.sendBeacon("/api/e", JSON.stringify({ pageId: pageId, referrer: doc.referrer }));
+var body = { pageId: pageId, referrer: doc.referrer };
+if (subPageId && UUID.test(subPageId)) body.subPageId = subPageId;
+navigator.sendBeacon("/api/e", JSON.stringify(body));
 } catch {
 }
 }
