@@ -24,3 +24,17 @@ export function countPublicQuery(pageId: string): void {
 export function publicQueryCount(pageId: string): number {
   return store[KEY]?.get(pageId) ?? 0;
 }
+
+const INDEX_KEY = "__hydlnkSiteIndexQueryCounts";
+const indexStore = globalThis as typeof globalThis & { [INDEX_KEY]?: Counts };
+
+/** The same count for the site index read (M11-06), kept apart so the page read's count means what it did. */
+export function countSiteIndexQuery(pageId: string): void {
+  if (!queryCounterEnabled()) return;
+  const counts = (indexStore[INDEX_KEY] ??= new Map());
+  counts.set(pageId, (counts.get(pageId) ?? 0) + 1);
+}
+
+export function siteIndexQueryCount(pageId: string): number {
+  return indexStore[INDEX_KEY]?.get(pageId) ?? 0;
+}

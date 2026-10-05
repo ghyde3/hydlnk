@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { publishedSubPageSchema, type SubPagePublish } from "@/lib/document";
+import { countSiteIndexQuery } from "@/lib/publish/query-counter";
 import { PAGE_REVALIDATE_SECONDS, PUBLIC_READ_CACHE_VERSION, pageTag } from "@/lib/publish/tags";
 import type { SitePageSummary } from "./menu";
 
@@ -30,6 +31,7 @@ async function adminClient() {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function readIndex(pageId: string): Promise<SitePageSummary[]> {
+  countSiteIndexQuery(pageId);
   const { data, error } = await (
     await adminClient()
   )

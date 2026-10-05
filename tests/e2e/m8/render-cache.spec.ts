@@ -8,6 +8,7 @@ import {
   customHostOf,
   getCustom,
   getTenant,
+  indexQueryCount,
   link,
   liveUser,
   queryCount,
@@ -237,40 +238,66 @@ test.describe("M8-04 abuse and cost", () => {
     expect(await queryCount(user.handle)).toBe(before);
   });
 
-  test("M8-04 invented sub-paths cost ONE cache entry in total: dozens of distinct paths on a handle host and a custom host make at most one MISS", async ({
+  // M11-06 step 2: a single valid lowercase segment on a live site goes to the force-dynamic sub-page route
+  // (a 404 after one cached index read, nothing stored, so no cache HIT); the rest still share /sites/unknown.
+  test("M8-04 invented sub-paths store nothing: single segments read the site index once in total, the rest share one cached 404", async ({
     context,
   }) => {
     const user = await liveUser(context, "ca4", { plan: "studio" });
     const host = await customHostOf(user.pageId, "subp");
     expect(cacheState(await getTenant(user.handle))).toBe("MISS");
-    const states: string[] = [];
+    const pageReads = await queryCount(user.handle);
+    expect(pageReads).toBe(1);
     const tokens: string[] = [];
     const expect404 = (res: Awaited<ReturnType<typeof getTenant>>, path: string) => {
       expect(res.status, path).toBe(404);
       expect(res.text, path).toContain("Page not found");
       expect(res.text, path).not.toContain(user.draft.profile.name);
-      states.push(cacheState(res));
     };
+    // Single lowercase segments on the handle host and the custom host: dynamic route, no cache state.
     for (let i = 0; i < 30; i++) {
-      const token = rand(10);
+      const token = rand(10).toLowerCase();
       tokens.push(token);
-      const path = `/${token}${i % 2 ? `/${rand(6)}` : ""}${i % 5 === 0 ? `?q=${rand(6)}` : ""}`;
-      expect404(await getTenant(user.handle, path), `handle ${path}`);
-      expect404(await getCustom(host, path), `custom ${path}`);
+      expect404(await getTenant(user.handle, `/${token}`), `handle /${token}`);
+      expect404(await getCustom(host, `/${token}`), `custom /${token}`);
     }
-    // Another handle's host and a host nobody owns land on the very same entry.
-    const lastToken = rand(8);
+    // The index is cached under the page tag: dozens of invented paths add no read per path. Home's
+    // render may have read it once; nothing after that.
+    expect(await queryCount(user.handle), "the page read").toBe(pageReads);
+    expect(await indexQueryCount(user.handle), "the site index read").toBeLessThanOrEqual(1);
+
+    // Two segments, another handle's host and a host nobody owns still land on the one shared cached 404.
+    const states: string[] = [];
+    for (let i = 0; i < 30; i++) {
+      const token = rand(10).toLowerCase();
+      tokens.push(token);
+      const path = `/${token}/${rand(6).toLowerCase()}${i % 5 === 0 ? `?q=${rand(6)}` : ""}`;
+      for (const [label, res] of [
+        ["handle", await getTenant(user.handle, path)],
+        ["custom", await getCustom(host, path)],
+      ] as const) {
+        expect404(res, `${label} ${path}`);
+        states.push(cacheState(res));
+      }
+    }
+    const lastToken = rand(8).toLowerCase();
     tokens.push(lastToken);
     expect404(await getTenant(`zq-sub-${rand(8)}`, `/${lastToken}`), "invented handle");
-    expect404(await getCustom(`nobody-${rand(8)}.example.test`, `/${rand(8)}`), "unknown host");
-    const misses = states.filter((state) => state === "MISS");
-    expect(misses.length, states.join(",")).toBeLessThanOrEqual(1);
+    states.push(cacheState(await getTenant(`zq-sub-${rand(8)}`, `/${lastToken}`)));
+    const unknownHost = await getCustom(`nobody-${rand(8)}.example.test`, `/${rand(8)}`);
+    expect404(unknownHost, "unknown host");
+    states.push(cacheState(unknownHost));
+    expect(states.filter((state) => state === "MISS").length, states.join(",")).toBeLessThanOrEqual(
+      1,
+    );
     expect(states.filter((state) => state === "HIT").length).toBeGreaterThanOrEqual(
       states.length - 1,
     );
-    // The page itself was read once and is still a HIT.
+
+    // The page itself was read once and is still a HIT; the index count did not move either.
     expect(cacheState(await getTenant(user.handle))).toBe("HIT");
-    expect(await queryCount(user.handle)).toBe(1);
+    expect(await queryCount(user.handle)).toBe(pageReads);
+    expect(await indexQueryCount(user.handle)).toBeLessThanOrEqual(1);
 
     // On disk, where `next start` keeps what it stores: the shared 404 is there, and no entry is named
     // after any of the invented paths (the entries are written a moment after the response).
