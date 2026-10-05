@@ -129,7 +129,11 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     test.skip(({ isMobile }) => !isMobile, "phone project only");
     test("M1-10 at 390x844: no scroll, 44px targets, slim logo-only bar, form directly beneath with 20px padding", async ({
       page,
+      context,
     }) => {
+      // Google's real script draws its own 40px button when it loads in time (CI); the stub keeps
+      // the page's own 44px cover the thing under test, as the other tests in this file do.
+      await routeGoogleScript(context);
       await page.goto(SIGNUP);
       await expect(page.getByRole("heading", { level: 1, name: "Create your site" })).toBeVisible();
       await expectNoHorizontalScroll(page);
