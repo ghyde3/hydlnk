@@ -1,6 +1,6 @@
 /**
  * The plan limits, in one table (M4-02). Postgres holds the same numbers in `public.plan_limits(p_plan)`
- * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
+ * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql and 20261011000001_site_pages.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
  * tests/unit/limits-parity.test.ts calls that function for every plan and column and fails when the
  * two differ. Change a number here and in the migration (a new one) together.
  *
@@ -32,6 +32,8 @@ export interface PlanLimits {
   versionsKept: number;
   /** Redirect mode (M9-31): the live page may answer with a redirect to one link. */
   redirectMode: boolean;
+  /** Pages in one site, Home included (M11-04): Free 3 is Home and two sub-pages. */
+  pagesPerSite: number;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -46,6 +48,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     analyticsBreakdowns: false,
     versionsKept: 0,
     redirectMode: false,
+    pagesPerSite: 3,
   },
   pro: {
     pages: 3,
@@ -56,6 +59,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     analyticsBreakdowns: true,
     versionsKept: 25,
     redirectMode: true,
+    pagesPerSite: 10,
   },
   studio: {
     pages: 15,
@@ -66,6 +70,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     analyticsBreakdowns: true,
     versionsKept: 25,
     redirectMode: true,
+    pagesPerSite: 500,
   },
 };
 
@@ -79,6 +84,7 @@ export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
   analyticsBreakdowns: "analytics_breakdowns",
   versionsKept: "versions_kept",
   redirectMode: "redirect_mode",
+  pagesPerSite: "pages_per_site",
 };
 
 export const PLAN_LABELS: Readonly<Record<PlanId, string>> = {

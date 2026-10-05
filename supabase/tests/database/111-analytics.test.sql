@@ -38,7 +38,7 @@ $$ select (now() at time zone 'utc')::date - p_ago $$;
 
 select has_table('public', 'daily_dim_stats', 'daily_dim_stats exists');
 select tests.rls_enabled('public', 'daily_dim_stats');
-select col_is_pk('public', 'daily_dim_stats', array['page_id', 'day', 'dim', 'value'], 'primary key is (page_id, day, dim, value)');
+select col_is_pk('public', 'daily_dim_stats', array['page_id', 'sub_page_id', 'day', 'dim', 'value'], 'primary key is (page_id, sub_page_id, day, dim, value)');
 select throws_ok(
   $$ insert into public.daily_dim_stats (page_id, day, dim, value, views)
      values ('00000000-0000-4000-8000-0000000001a1', current_date, 'browser', 'x', 1) $$,

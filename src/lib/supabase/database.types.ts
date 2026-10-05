@@ -108,6 +108,7 @@ export type Database = {
           day: string
           dim: string
           page_id: string
+          sub_page_id: string
           value: string
           views: number
         }
@@ -116,6 +117,7 @@ export type Database = {
           day: string
           dim: string
           page_id: string
+          sub_page_id?: string
           value: string
           views?: number
         }
@@ -124,6 +126,7 @@ export type Database = {
           day?: string
           dim?: string
           page_id?: string
+          sub_page_id?: string
           value?: string
           views?: number
         }
@@ -143,6 +146,7 @@ export type Database = {
           clicks: number
           day: string
           page_id: string
+          sub_page_id: string
           uniques: number
           views: number
         }
@@ -151,6 +155,7 @@ export type Database = {
           clicks?: number
           day: string
           page_id: string
+          sub_page_id?: string
           uniques?: number
           views?: number
         }
@@ -159,6 +164,7 @@ export type Database = {
           clicks?: number
           day?: string
           page_id?: string
+          sub_page_id?: string
           uniques?: number
           views?: number
         }
@@ -224,6 +230,7 @@ export type Database = {
           id: number
           page_id: string
           referrer: string | null
+          sub_page_id: string | null
           ts: string
           type: string
           visitor_hash: string
@@ -235,6 +242,7 @@ export type Database = {
           id?: never
           page_id: string
           referrer?: string | null
+          sub_page_id?: string | null
           ts?: string
           type: string
           visitor_hash: string
@@ -246,6 +254,7 @@ export type Database = {
           id?: never
           page_id?: string
           referrer?: string | null
+          sub_page_id?: string | null
           ts?: string
           type?: string
           visitor_hash?: string
@@ -805,6 +814,47 @@ export type Database = {
         }
         Relationships: []
       }
+      site_pages: {
+        Row: {
+          created_at: string
+          draft: Json
+          id: string
+          live_path: string | null
+          page_id: string
+          published: Json | null
+          published_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          draft: Json
+          id?: string
+          live_path?: string | null
+          page_id: string
+          published?: Json | null
+          published_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          draft?: Json
+          id?: string
+          live_path?: string | null
+          page_id?: string
+          published?: Json | null
+          published_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_pages_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stripe_events: {
         Row: {
           id: string
@@ -1149,9 +1199,20 @@ export type Database = {
           max_pages: number
           max_saved_themes: number
           max_upload_bytes: number
+          pages_per_site: number
           redirect_mode: boolean
           versions_kept: number
         }[]
+      }
+      publish_site: {
+        Args: {
+          p_home: Json
+          p_owner_id: string
+          p_page_id: string
+          p_published_at?: string
+          p_sub_pages: Json
+        }
+        Returns: string
       }
       purge_old_events: { Args: never; Returns: number }
       rate_limit_hit: {

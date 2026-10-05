@@ -53,7 +53,9 @@ select tables_are(
     -- Wave L: the log of MCP tool calls, server only (171)
     'mcp_activity',
     -- Wave G: published versions, Pro and Studio (131)
-    'page_versions'
+    'page_versions',
+    -- Wave M1: sub-pages of a site (175)
+    'site_pages'
   ],
   'public holds exactly the contract tables'
 );
@@ -183,7 +185,14 @@ select set_eq(
       -- Wave G: page_versions, read only. The owner reads while the plan keeps versions (policy);
       -- the secret key reads for the preview and restore actions; only the trigger writes.
       ('page_versions|authenticated|SELECT|*'),
-      ('page_versions|service_role|SELECT|*')
+      ('page_versions|service_role|SELECT|*'),
+      -- Wave M1: sub-pages. The owner reads and writes the draft column only; the server does the rest.
+      ('site_pages|authenticated|SELECT|*'),
+      ('site_pages|authenticated|UPDATE|draft'),
+      ('site_pages|service_role|SELECT|*'),
+      ('site_pages|service_role|INSERT|*'),
+      ('site_pages|service_role|UPDATE|*'),
+      ('site_pages|service_role|DELETE|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );
@@ -224,17 +233,17 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10) $$,
   'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500) $$,
   'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns, 25 versions'
 );
 select throws_ok(
