@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-05 — Release: Wave M1 (sites with pages), the home page redesign and the search pages
+
+- PR #23 merged, merge commit 40981c9 (Gary's go in chat). Migrations applied through release-migrations.yml (dry run 37309731301, apply 37309810969): 20261011000001_site_pages, 20261011000002_site_analytics_keys, 20261011000003_publish_site (new tables and functions, `plan_limits` and two existing functions replaced in place, a `sub_page_id` column with the primary keys of `daily_stats` and `daily_dim_stats` rebuilt; no data removed, nothing in auth). Deployment https://vercel.com/ghyde3s-projects/hydlnk/FcqC3Uzf5KDXsorxFXRySytUgLSy (success).
+- Checks: full browser suite green on the production build (run 37300049623, head 73bd429); the release head 66c1032 (flips and log) ran Verify only, green; locally after `pnpm db:reset`: typecheck and lint clean, `pnpm test --retry 2` 381 files and 9,863 tests, `pnpm test:db` 46 files and 2,040 tests. `pnpm test:e2e:prod` 12/12. Live probes: hydlnk.com, /vs/linktree, /vs/beacons, /linktree-custom-domain, /remove-linktree-badge, /link-in-bio/shopify and /sitemap.xml answer 200, the sitemap lists all five new pages, and the home page shows `you.hydlnk.com`.
+- Known issues: M11-12 stays `passes: false` until Gary decides on a Vercel WAF rate rule for invented-path floods on tenant hosts; under "All pages" analytics a visitor seen on two pages the same day counts twice until M12-07.
+- Next: Wave M2 (M12-01 to M12-10) on `m13-sites-m2`, draft PR #24.
+
 ## 2026-10-05 — Wave M1: sites with pages, the home page redesign and the search pages
 
 On `m12-sites` (PR #23). Features M11-01 to M11-12 added; flipped to `passes: true`: M11-01 to M11-11. M11-12 stays false until Gary decides the one open item (a Vercel WAF rate rule for invented-path floods on tenant hosts; see PLAN Decided, "Sites with pages security review").
