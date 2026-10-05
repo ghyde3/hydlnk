@@ -34,7 +34,7 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
   }
   const create = (
     o: TestOwner,
-    body: { title?: unknown; path?: unknown } = {},
+    body: { title?: unknown; path?: unknown; description?: unknown; blocks?: unknown } = {},
     siteId = o.pageId,
   ) => core.createSubPageWithClient(admin as never, { userId: o.userId, siteId, ...body });
   const count = async (siteId: string) => {
@@ -54,6 +54,26 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     });
     const second = await create(o);
     expect(second).toMatchObject({ ok: true, draft: { path: "new-page-2", title: "New page" } });
+    expect(await count(o.pageId)).toBe(2);
+  });
+
+  it("starts with the given description and blocks, and refuses content the draft schema refuses (M12-03)", async () => {
+    const o = await owner("c1b");
+    const blocks = [{ id: "tplblock01", type: "header", visible: true, text: "Sample" }];
+    const made = await create(o, { title: "Items", description: "Sample text", blocks });
+    expect(made).toMatchObject({
+      ok: true,
+      draft: { path: "items", title: "Items", description: "Sample text", blocks },
+    });
+    const stored = await admin.from("site_pages").select("draft").eq("page_id", o.pageId);
+    expect(stored.data?.[0]?.draft).toMatchObject({ blocks });
+    // The path is still the suggestion: a second "Items" gets the next free one.
+    expect(await create(o, { title: "Items", blocks })).toMatchObject({
+      ok: true,
+      draft: { path: "items-2" },
+    });
+    const bad = await create(o, { title: "Bad", blocks: [{ type: "nope" }] });
+    expect(bad).toMatchObject({ ok: false, status: 422, error: "doc_invalid" });
     expect(await count(o.pageId)).toBe(2);
   });
 

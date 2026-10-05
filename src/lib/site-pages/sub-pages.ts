@@ -14,7 +14,7 @@ export { SUB_PAGE_MESSAGES } from "./sub-pages-core";
 export function createSubPage(
   userId: string,
   siteId: string,
-  body: { title?: unknown; path?: unknown },
+  body: { title?: unknown; path?: unknown; description?: unknown; blocks?: unknown },
 ): Promise<CreateSubPageResult> {
   return createSubPageWithClient(createAdminSupabase(), { userId, siteId, ...body });
 }
