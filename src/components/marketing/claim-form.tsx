@@ -57,7 +57,8 @@ export function ClaimForm({
 
   const hint = claimHint(typed, idleHint);
   // The input is as wide as its text (one monospace character is one ch), so the suffix follows
-  // the last letter. min-w-0 and max-w-full let it stop growing and scroll once the row is full.
+  // the last letter. min-w-11 keeps a short word a 44px target; max-w-full lets it stop growing
+  // and scroll once the row is full.
   const width = `calc(${Math.max(typed.length, PLACEHOLDER.length)}ch + 2px)`;
 
   return (
@@ -96,7 +97,7 @@ export function ClaimForm({
             aria-invalid={hint.invalid || undefined}
             onChange={(event) => setTyped(event.currentTarget.value)}
             style={{ width }}
-            className="h-14 max-w-full min-w-0 bg-transparent p-0 font-mono text-[18px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-text-3"
+            className="h-14 max-w-full min-w-11 bg-transparent p-0 font-mono text-[18px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-text-3"
           />
           <span className="shrink-0 font-mono text-[18px] text-text-2">{HANDLE_SUFFIX}</span>
         </div>
