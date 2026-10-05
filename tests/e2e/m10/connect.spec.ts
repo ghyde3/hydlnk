@@ -293,19 +293,28 @@ test.describe("M10-34 Connect ChatGPT", () => {
     const text = await sectionText(page, "chatgpt");
     for (const phrase of [
       /as of October 2026/,
-      /Settings, then Security and login, and turn on Developer mode/,
-      /Plugins page and select the plus button/,
-      /name, such as HYDLNK, and a short description/,
-      /Under Connection, choose a public endpoint/,
-      /tools menu/,
-      /ChatGPT’s menus change often\. If a label differs, look for developer mode or custom connectors in your settings\./,
-      /depends on your account and your workspace/,
+      /Add HYDLNK to ChatGPT as a plugin/,
+      /Use ChatGPT on the web/,
+      /open the Plugins page/,
+      /Select the plus button, then choose Create custom MCP server/,
+      /Enter HYDLNK as the name/,
+      /Under Connection, enter/,
+      /Choose OAuth for authentication/,
+      /I understand and want to continue/,
+      /Create as a plugin/,
+      /sign in on HYDLNK/,
+      /Tick Publish your pages only if you want ChatGPT to publish for you/,
+      /choose Install if it is not already installed/,
+      /type @ in the prompt box and select HYDLNK/,
+      /You do not need to enable Developer mode/,
+      /ChatGPT’s menus may change/,
+      /depends on your account and your workspace permissions/,
     ]) {
       expect(text, String(phrase)).toMatch(phrase);
     }
     // No plan names: availability is the account's and the workspace's.
     expect(text).not.toMatch(/\b(Plus|Pro|Business|Enterprise|Edu|Team|Studio|Free)\b/);
-    expect(await page.locator("#chatgpt ~ ol").first().locator("> li").count()).toBe(5);
+    expect(await page.locator("#chatgpt ~ ol").first().locator("> li").count()).toBe(8);
   });
 });
 
@@ -344,7 +353,8 @@ test.describe("M10-34 privacy, turning it off, good to know", () => {
   }) => {
     await page.goto(url(null, PATH));
     const text = await sectionText(page, "good-to-know");
-    expect(text).toMatch(/every plan, Free included/);
+    expect(text).toMatch(/every HYDLNK plan, Free included/);
+    expect(text).toMatch(/ChatGPT account and workspace permissions/);
     expect(text).toMatch(/about 60 requests a minute/);
     expect(text).toMatch(/up to 10 times an hour/);
     expect(text).toMatch(/Free covers the last 30 days/);
