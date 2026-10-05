@@ -5116,7 +5116,7 @@
         "Every demo handle passes the real handle rule and reserved list (tests/unit/marketing-demo-handles.test.ts).",
         "At 390x844 and 1440x900 on http://localhost:3000/: no horizontal scroll, every button, input and standalone link at least 44px tall, and the look tabs, carousel buttons and claim form work."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-02",
@@ -5130,7 +5130,7 @@
         "Each page links to at least one existing guide (/design-control, /custom-domains or /link-in-bio/instagram) and ends with the shared claim form, which hands off to app signup like the home page form.",
         "At 390x844 and 1440x900: no horizontal scroll and every link and button at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-03",
@@ -5144,7 +5144,7 @@
         "Each page ends with the shared claim form, which hands off to app signup like the home page form.",
         "At 390x844 and 1440x900: no horizontal scroll and every link and button at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-04",
@@ -5161,7 +5161,7 @@
         "Server routes create a sub-page (title 'New page' and a free path) and delete one, checking ownership with the secret key and refusing a suspended owner and another user's site; `pnpm db:types` is regenerated.",
         "`supabase/seed.sql` gives the local demo site `mara` two published sub-pages (paths `items` and `directions`) listed in its nav, so every e2e test has a fixture."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-05",
@@ -5175,7 +5175,7 @@
         "Version history keeps recording Home on each publish exactly as before; whole-site versions are M2.",
         "Unit tests for the validation and the block-id rule; an e2e test publishes a site with two sub-pages and opens both at 390x844 and 1440x900."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-06",
@@ -5189,7 +5189,7 @@
         "Redirect mode and a suspended owner apply to every page of the site, as they do to Home.",
         "At 390x844 and 1440x900 on a sub-page: no horizontal scroll and every link and button at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-07",
@@ -5202,7 +5202,7 @@
         "The `page_link` block renders like a link button with a relative href, is not routed through `/r`, and renders nothing if its target is deleted after publish. It follows the add-block-type steps (schema, limits, defaults, toPublishForm, renderer, editor form).",
         "Unit tests for the menu and the block; an e2e test moves between Home and a sub-page by the menu and by a page link at 390x844 and 1440x900."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-08",
@@ -5216,7 +5216,7 @@
         "A sub-page's blocks use the same builder, autosave and draft rules as Home.",
         "At 390x844 and 1440x900: the page list and every control work, no horizontal scroll, every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-09",
@@ -5229,7 +5229,7 @@
         "The analytics screen filters by page (All pages, Home, each page; a deleted page shows as 'Deleted page') and the CSV export has a page column.",
         "Unit tests for the beacon check and the per-page rollup; an e2e test at 390x844 and 1440x900 that the page filter renders and switches."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-10",
@@ -5241,7 +5241,7 @@
         "`/sitemap.xml` on a handle host or custom domain lists Home and each live sub-page on the primary host, and robots.txt on tenant hosts names it; the marketing sitemap is unchanged.",
         "Unit tests for the head and the sitemap."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-11",
@@ -5253,7 +5253,7 @@
         "Pricing on the marketing site and in the app shows sites per plan (1, 3, 15) and pages per site (Home and 2, 10, Unlimited), read from the limits table, and PLAN.md's monetization table matches.",
         "Copy tests (American spelling, no stale 'pages per plan' wording) pass, and at 390x844 and 1440x900 the pricing section has no horizontal scroll."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M11-12",

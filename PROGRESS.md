@@ -2,6 +2,24 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-05 — Wave M1: sites with pages, the home page redesign and the search pages
+
+On `m12-sites` (PR #23). Features M11-01 to M11-12 added; flipped to `passes: true`: M11-01 to M11-11. M11-12 stays false until Gary decides the one open item (a Vercel WAF rate rule for invented-path floods on tenant hosts; see PLAN Decided, "Sites with pages security review").
+
+- **Home page (M11-01):** the home-frame redesign squashed in (31a80e8; the 112 MB of image sources never left the worktree), `you.hydlnk.com` as the example address, short demo handles, the speed line and How it works time cues, the look cycle fixed (Play resumes, phones play, clicking the checked tab stops it).
+- **Search pages (M11-02, M11-03):** /vs/linktree, /vs/beacons, /linktree-custom-domain, /remove-linktree-badge, /link-in-bio/shopify; every competitor claim carries its source and "Checked October 2026" (researched 2026-10-05).
+- **Sites with pages (M11-04 to M11-11):** `site_pages` with RLS, pages per site (Free 3, Pro 10, Studio 500 shown as Unlimited, HL008), whole-site `publish_site`, sub-page routes (`force-dynamic`, finished HTML cached by sub-page id), the site menu (at most 20 pages) and `page_link` block, the editor's pages panel, per-page analytics (`sub_page_id`, page filter, CSV page column), per-site sitemap and robots, "site" wording. Migrations 20261011000001_site_pages, 20261011000002_site_analytics_keys, 20261011000003_publish_site.
+- **Reviews (M11-12):** `security-reviewer` twice (no critical or high; every finding fixed: per-account 64 MiB sub-page byte cap HL009, Publish 60/h and cleanup 20/min rate limits, lock order, reserved paths in SQL, inert share links, slim click index, atomic requeue, q.sh limited to pnpm and init.sh), `reviewer` once (menu cap, saver stall, oversized click cache, look cycle, unsourced claims, stale wording, test gaps: all fixed).
+- **Orchestration:** `scripts/q.sh` prints only failures (full logs in tmp/logs/); workers ran only their own tests; one shared dev server.
+
+Evidence: `pnpm typecheck`, `pnpm lint` clean; `pnpm test --retry 2` 380 files, 9,851 tests pass (the retries cover the known local "Database error creating new user" flake under parallel sign-ups); `pnpm test:db` 46 files, 2,029 tests PASS; full browser suite on the production build green on 8 shards (run 37300049623, head 73bd429); new specs tests/e2e/m11/ (tenant-subpages, editor-pages, analytics-page-ingest, analytics-page-filter, share-preview-menu, home-looks), tests/e2e/marketing/compare.spec.ts, and 25 new tests/unit/m11-* files.
+
+Known issues: under "All pages" analytics a visitor seen on two pages the same day counts twice (exact per page; M2). Sub-page views cost a function call (Home stays static). CI shards can fail at the production build when Google Fonts rate-limits parallel `next/font` fetches; rerun the shard.
+
+Also fixed on the way to green: the status chip compared an unpruned menu after publish; CI no longer restores the runtime data cache (`.next/cache/fetch-cache` is dropped before the build); the M2-30 og test uses its own page; Google's script is stubbed in the phone layout checks; the M8-04 invented sub-paths test follows M11-06 (single segments store nothing and read the site index once in total; the rest share one cached 404).
+
+Next: release Wave M1 (Gary's go for PR #23 out of draft), then Wave M2 on a new branch.
+
 ## 2026-10-04 — Release: Wave L (the HYDLNK connector for Claude and ChatGPT)
 
 - PR #22 merged, merge commit 8c5c2cd. Migrations applied through release-migrations.yml (dry run 37234963035, apply 37235002274): 20261010000010_oauth, 20261010000021_mcp_activity, 20261010000031_oauth_review_fixes, 20261010000032_oauth_token_families, 20261010000033_oauth_strict_reuse (new tables, functions and purge jobs only; no existing data changed). The CLI's optional pg-delta catalog cache warned about a missing CA file after the push; the push itself finished. Deployment https://vercel.com/ghyde3s-projects/hydlnk/ExWmL4eEGNKbiHHrU1zgoMe11HYh (success).
