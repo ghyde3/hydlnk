@@ -216,7 +216,14 @@ describe("M2-05 outbound links", () => {
     );
     const anchors = Array.from(parsed.querySelectorAll("main a"));
     expect(anchors.length).toBeGreaterThan(5);
-    for (const a of anchors) expect(a.getAttribute("rel")).toBe("nofollow noopener");
+    // M11-07: an anchor to another page of the same site (a menu entry or a page link) is a plain
+    // relative path ("/" or "/segment", never "//host"): it is followed and has no rel. Every other
+    // anchor keeps the rule.
+    const sameSite = (href: string | null) => href !== null && /^\/(?!\/)/.test(href);
+    for (const a of anchors) {
+      if (sameSite(a.getAttribute("href"))) continue;
+      expect(a.getAttribute("rel")).toBe("nofollow noopener");
+    }
   });
 });
 
@@ -501,20 +508,23 @@ describe("M2-19 embed block", () => {
     ["playlist", 352],
     ["show", 352],
     ["artist", 352],
-  ])("renders a Spotify %s facade %ipx tall that carries the rebuilt embed url (M8-05)", (kind, height) => {
-    const parsed = dom(render(doc({}, [sp(kind)])));
-    expect(parsed.querySelector("iframe")).toBeNull();
-    const button = parsed.querySelector("[data-block-type=embed] button")!;
-    expect(button.getAttribute("data-embed-src")).toBe(
-      `https://open.spotify.com/embed/${kind}/37i9dQZF1DXcBWIGoYBM5M`,
-    );
-    expect(button.getAttribute("data-embed-height")).toBe(String(height));
-    expect(button.getAttribute("style")).toContain(`height:${height}px`);
-    expect(button.getAttribute("data-embed-fit")).toBe("player");
-    expect(button.getAttribute("data-embed-title")).toBe("Studio playlist (Spotify player)");
-    expect(button.getAttribute("data-embed-allow")).toContain("encrypted-media");
-    expect(button.getAttribute("aria-label")).toBe("Play music: Studio playlist");
-  });
+  ])(
+    "renders a Spotify %s facade %ipx tall that carries the rebuilt embed url (M8-05)",
+    (kind, height) => {
+      const parsed = dom(render(doc({}, [sp(kind)])));
+      expect(parsed.querySelector("iframe")).toBeNull();
+      const button = parsed.querySelector("[data-block-type=embed] button")!;
+      expect(button.getAttribute("data-embed-src")).toBe(
+        `https://open.spotify.com/embed/${kind}/37i9dQZF1DXcBWIGoYBM5M`,
+      );
+      expect(button.getAttribute("data-embed-height")).toBe(String(height));
+      expect(button.getAttribute("style")).toContain(`height:${height}px`);
+      expect(button.getAttribute("data-embed-fit")).toBe("player");
+      expect(button.getAttribute("data-embed-title")).toBe("Studio playlist (Spotify player)");
+      expect(button.getAttribute("data-embed-allow")).toContain("encrypted-media");
+      expect(button.getAttribute("aria-label")).toBe("Play music: Studio playlist");
+    },
+  );
 
   it("builds the player url from the parsed id, never from the typed url", () => {
     const tricky = {

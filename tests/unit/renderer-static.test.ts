@@ -139,7 +139,10 @@ describe("M2-05 renderer code: untrusted content", () => {
 
   it("takes every block href from outboundHref or mailtoLink, never from a raw string", () => {
     const blocks = read(join(RENDERER_DIR, "blocks.tsx"));
-    expect(blocks).not.toMatch(/\bhref\s*=/);
+    // M11-07: the one other href is a same-site page link, made by `internalHref` (menu.ts: "/" or
+    // "/" plus a valid sub-page path, else null) and nothing else.
+    expect([...blocks.matchAll(/\bhref=[^\s>]*/g)].map((m) => m[0])).toEqual(["href={href}"]);
+    expect(blocks).toMatch(/const href = internalHref\(/);
     expect((blocks.match(/outboundHref\(/g) ?? []).length).toBeGreaterThanOrEqual(5);
     expect(blocks).toMatch(/mailtoLink\(/);
     const outbound = read(join(RENDERER_DIR, "outbound.ts"));
@@ -172,6 +175,8 @@ describe("M2-05 renderer code: untrusted content", () => {
       /^@\/lib\/media\/url$/,
       /^@\/lib\/env\/client$/,
       /^@\/lib\/routing\/urls$/,
+      // M11-07: the site menu and page-link helpers: pure functions of the document, no database.
+      /^@\/lib\/site\/menu$/,
       // M9-04: the brand marks' path data (plain data, CC0), imported by name in brand-marks.ts only.
       /^simple-icons$/,
     ];

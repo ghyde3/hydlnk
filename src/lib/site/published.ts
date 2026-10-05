@@ -2,7 +2,6 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { publishedSubPageSchema, type SubPagePublish } from "@/lib/document";
 import { PAGE_REVALIDATE_SECONDS, PUBLIC_READ_CACHE_VERSION, pageTag } from "@/lib/publish/tags";
-import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { SitePageSummary } from "./menu";
 
 /**
@@ -23,10 +22,17 @@ import type { SitePageSummary } from "./menu";
  * `next dev` reads Postgres every time, like Home's read.
  */
 
+/** Loaded on first read, not at import: modules that only need the shapes load without the server env. */
+async function adminClient() {
+  return (await import("@/lib/supabase/admin")).createAdminSupabase();
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function readIndex(pageId: string): Promise<SitePageSummary[]> {
-  const { data, error } = await createAdminSupabase()
+  const { data, error } = await (
+    await adminClient()
+  )
     .from("site_pages")
     .select("id, live_path, title:published->>title")
     .eq("page_id", pageId)
@@ -58,7 +64,9 @@ export function getSiteIndex(pageId: string): Promise<SitePageSummary[]> {
 type SubPageRead = { published: unknown; publishedAt: string | null } | null;
 
 async function readSubPage(pageId: string, subPageId: string): Promise<SubPageRead> {
-  const { data, error } = await createAdminSupabase()
+  const { data, error } = await (
+    await adminClient()
+  )
     .from("site_pages")
     .select("published, published_at")
     .eq("id", subPageId)

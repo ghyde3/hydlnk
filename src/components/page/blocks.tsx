@@ -32,7 +32,7 @@ import {
   type BlockOverrides,
   type TokenSet,
 } from "@/lib/theme";
-import { pageLinkHref, type SiteContext } from "@/lib/site/menu";
+import { internalHref, pageLinkHref, type SiteContext } from "@/lib/site/menu";
 import { EmbedFacadeSlot } from "./embed-slot";
 import { EmbedPoster } from "./embed-poster";
 import { ImagePicture, focusStyle } from "./image-frame";
@@ -190,7 +190,7 @@ function LinkView({ block, ctx }: { block: LinkBlock; ctx: BlockContext }) {
  * page leaves no dead button behind.
  */
 function PageLinkView({ block, ctx }: { block: PageLinkBlock; ctx: BlockContext }) {
-  const href = pageLinkHref(block.target, ctx.site?.hrefs);
+  const href = internalHref(pageLinkHref(block.target, ctx.site?.hrefs));
   if (href === null) return null;
   const { resolved, style } = blockTokens(ctx.tokens, block.overrides);
   const props = {

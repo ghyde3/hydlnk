@@ -1,4 +1,10 @@
-import { HOME_TARGET, isPathFormat, resolveNav, type Nav } from "@/lib/document";
+import {
+  HOME_TARGET,
+  isPathFormat,
+  isValidSubPagePath,
+  resolveNav,
+  type Nav,
+} from "@/lib/document";
 
 /**
  * The site menu and the page-link hrefs of a site (M11-07), as plain data both the live renderer and
@@ -38,6 +44,16 @@ export interface SiteContext {
 }
 
 export const MENU_HOME_LABEL = "Home";
+
+/**
+ * The one vetted way a same-site anchor gets its href: "/" (Home) or "/" plus a valid, non-reserved
+ * sub-page path, else null. Anything else (a scheme, "//host", a query, a nested path) is refused.
+ */
+export function internalHref(href: string | null | undefined): string | null {
+  if (href === "/") return href;
+  if (typeof href !== "string" || !href.startsWith("/")) return null;
+  return isValidSubPagePath(href.slice(1)) ? href : null;
+}
 
 /** `/path` for a valid path segment, else null: the one way a sub-page href is made. */
 export function subPageHref(path: string): string | null {
