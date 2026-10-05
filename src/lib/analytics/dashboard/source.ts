@@ -53,13 +53,6 @@ function rollupPage<Q>(query: Q, filter: PageFilter): Q {
   return (query as unknown as { eq(column: string, value: string): Q }).eq("sub_page_id", page);
 }
 
-/** The title a sub-page document carries ("" when it has none), read defensively from JSON. */
-function titleOf(doc: unknown): string {
-  if (typeof doc !== "object" || doc === null) return "";
-  const title = (doc as { title?: unknown }).title;
-  return typeof title === "string" ? title.trim() : "";
-}
-
 export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
   // The generated types do not know daily_dim_stats until they are regenerated; one untyped client
   // serves every read here, and the row shapes are declared where they are used.
@@ -69,7 +62,10 @@ export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
     async resolvePage(ownerId, pageId) {
       const { data, error } = await db
         .from("pages")
-        .select("published, accounts!inner(plan), site_pages(id, draft, published, created_at)")
+        // Sub-pages: only the titles and the published blocks (the link names), never whole drafts.
+        .select(
+          "published, accounts!inner(plan), site_pages(id, draft_title:draft->>title, published_title:published->>title, published_blocks:published->blocks, live_path, created_at)",
+        )
         .eq("id", pageId)
         .eq("owner_id", ownerId)
         .maybeSingle();
@@ -79,16 +75,19 @@ export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
       const plan = Array.isArray(account) ? account[0]?.plan : account?.plan;
       const rows = (data.site_pages ?? []) as {
         id: string;
-        draft: unknown;
-        published: unknown;
+        draft_title: string | null;
+        published_title: string | null;
+        published_blocks: unknown;
+        live_path: string | null;
         created_at: string;
       }[];
       const subPages = rows
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((row) => ({
           id: row.id.toLowerCase(),
-          title: titleOf(row.published) || titleOf(row.draft) || "Untitled page",
-          published: row.published ?? null,
+          title: row.published_title?.trim() || row.draft_title?.trim() || "Untitled page",
+          // A live page has a live_path (the RPC requires a published path); its link names are read from the blocks alone.
+          published: row.live_path !== null ? { blocks: row.published_blocks ?? [] } : null,
         }));
       return { plan: toPlanId(plan), published: data.published ?? null, subPages };
     },

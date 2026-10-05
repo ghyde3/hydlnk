@@ -14,11 +14,12 @@ import {
   type PublishedPage,
 } from "@/app/(tenant)/published-page";
 import { homeUsesSiteIndex, siteContextFrom } from "@/lib/site/live";
-import { getPublishedSubPage, getSiteIndex } from "@/lib/site/published";
+import { getSiteIndex } from "@/lib/site/published";
 import { failureResponse } from "./failure";
 import { htmlResponse } from "./html-response";
-import { renderLivePage, renderLiveSubPage } from "./live-page";
+import { renderLivePage } from "./live-page";
 import { redirectModeResponse } from "./redirect";
+import { getSubPageHtml } from "./sub-page-html";
 import {
   missingDocument,
   placeholderDocument,
@@ -154,31 +155,10 @@ async function subPageOf(
 
   const redirected = redirectModeResponse(page);
   if (redirected) return redirected;
-  const sub = await getPublishedSubPage(page.pageId, entry.id);
-  if (!sub) return plainNotFoundResponse();
-
-  const hostname = await getPrimaryDomain(page.pageId);
-  const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
-  let urls: { page: string; image: string } | null = null;
-  if (hostname) {
-    urls = {
-      page: `${customOrigin(hostname, rootDomain)}/${path}`,
-      image: customOgImageUrl(hostname, page.publishedAt, rootDomain),
-    };
-  } else if (handle) {
-    urls = { page: `${tenantOrigin(handle)}/${path}`, image: ogImageUrl(handle, page.publishedAt) };
-  }
-  return htmlResponse(
-    renderLiveSubPage({
-      pageId: page.pageId,
-      subPageId: sub.id,
-      document: page.document,
-      subPage: sub.document,
-      plan: page.plan,
-      site: siteContextFrom(index, page.document, sub.id),
-      urls,
-    }),
-  );
+  // The finished HTML of this real page (the index lookup above proved `entry.id` is one), cached.
+  const html = await getSubPageHtml(page.pageId, entry.id, entry.path, handle);
+  if (html === null) return plainNotFoundResponse();
+  return htmlResponse(html);
 }
 
 /** `{handle}.hydlnk.com/{path}`: a live sub-page, or the plain 404 (a suspended owner: "isn't available"). */

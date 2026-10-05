@@ -9,6 +9,29 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      account_site_bytes: {
+        Row: {
+          bytes: number
+          owner_id: string
+        }
+        Insert: {
+          bytes?: number
+          owner_id: string
+        }
+        Update: {
+          bytes?: number
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_site_bytes_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       accounts: {
         Row: {
           billing_interval: string | null
@@ -1230,6 +1253,10 @@ export type Database = {
       rollup_recent_days: { Args: { n: number }; Returns: number }
       run_domain_verification_sweep: { Args: never; Returns: undefined }
       run_nightly_maintenance: { Args: never; Returns: undefined }
+      site_page_doc_bytes: {
+        Args: { p_draft: Json; p_published: Json }
+        Returns: number
+      }
       submit_report: {
         Args: {
           p_details: string

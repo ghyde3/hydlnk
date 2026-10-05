@@ -25,6 +25,7 @@ import {
   BLOCKED_PUBLISH_DISABLED_REASON,
   BLOCKED_PUBLISH_NOTE,
   PUBLISH_FAILED_MESSAGE,
+  PUBLISH_RATE_LIMITED_MESSAGE,
 } from "@/lib/editor/messages";
 import { initialEditorState } from "@/lib/editor/state";
 import { computePublishStatus } from "@/lib/editor/status";
@@ -309,7 +310,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
             ? { message: "Couldn’t publish. Sign in again, then try again.", retry: false }
             : result.reason === "account_suspended"
               ? { message: "Couldn’t publish. Your account is suspended.", retry: false }
-              : { message: PUBLISH_FAILED_MESSAGE, retry: true },
+              : result.reason === "rate_limited"
+                ? { message: PUBLISH_RATE_LIMITED_MESSAGE, retry: false }
+                : { message: PUBLISH_FAILED_MESSAGE, retry: true },
         );
       }
     } catch {

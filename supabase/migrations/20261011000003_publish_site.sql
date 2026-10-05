@@ -6,7 +6,9 @@
 -- the atomic write and the structural gate:
 --
 --   * the site row is locked first (and must belong to p_owner_id, as core.ts's update does:
---     `.eq("id").eq("owner_id")`), then the site's sub-page rows, so two publishes of one site queue;
+--     `.eq("id").eq("owner_id")`) with FOR NO KEY UPDATE, not FOR UPDATE, so the FK checks of events
+--     and daily_stats inserts (KEY SHARE) keep running during a publish; then the site's sub-page
+--     rows, so two publishes of one site queue;
 --   * p_sub_pages is an array of {id, published}; the ids must be EXACTLY the site's current
 --     sub-pages (none missing, none extra, none repeated, none of another site or owner), so a
 --     sub-page created or deleted meanwhile refuses the publish instead of being half-published. A
@@ -49,7 +51,7 @@ begin
 
   perform 1 from public.pages p
     where p.id = p_page_id and p.owner_id = p_owner_id
-    for update;
+    for no key update;
   if not found then
     raise exception 'site_not_found' using errcode = 'P0002';
   end if;

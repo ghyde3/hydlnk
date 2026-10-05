@@ -30,6 +30,8 @@ export interface PageRendererProps {
   thumbnail?: boolean;
   /** Embeds as still posters, not players: nothing is requested from YouTube or Spotify (the shared preview, M6-10). See `BlockContext.inertEmbeds`. */
   inertEmbeds?: boolean;
+  /** `page_link` blocks as plain text, not anchors (the shared preview, M11-12). See `BlockContext.inertLinks`. */
+  inertLinks?: boolean;
   /**
    * The rest of the site (M11-07): the href of each sub-page for `page_link` blocks, and the menu to
    * draw (built by `buildMenu`: null for none). Absent for a page drawn on its own.
@@ -63,6 +65,7 @@ export function PageRenderer({
   footer,
   thumbnail,
   inertEmbeds,
+  inertLinks,
   site,
   subPage,
 }: PageRendererProps) {
@@ -73,6 +76,7 @@ export function PageRenderer({
     mode,
     ...(thumbnail ? { thumbnail } : {}),
     ...(inertEmbeds ? { inertEmbeds } : {}),
+    ...(inertLinks ? { inertLinks } : {}),
     ...(site ? { site: { hrefs: site.hrefs } } : {}),
   };
   // The background image is drawn only from the owner's page-media bucket: the URL is rebuilt from

@@ -25,6 +25,9 @@ export const BLOCKED_PUBLISH_NOTE =
 export const LOAD_FAILED_MESSAGE = "We couldn’t load your page. Try again.";
 /** Publish failed on the way (a 5xx or no network): the draft is stored, the live page is as it was (M5-15). */
 export const PUBLISH_FAILED_MESSAGE = "Couldn’t publish. Your draft is safe. Try again.";
+/** Publish refused by the rate limit (60 an hour per account, M11-12): the draft is safe. */
+export const PUBLISH_RATE_LIMITED_MESSAGE =
+  "Couldn’t publish. You’ve published a lot in the last hour. Wait a few minutes, then try again.";
 /** The Design screen's saved-themes row could not be read; the token controls and preview still work (M5-16). */
 export const THEMES_LOAD_FAILED_MESSAGE = "We couldn’t load your themes. Try again.";
 /** The Saved themes row of an account with no saved theme yet (M5-16). */

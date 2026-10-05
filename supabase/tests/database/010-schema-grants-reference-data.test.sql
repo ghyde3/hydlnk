@@ -54,7 +54,8 @@ select tables_are(
     'mcp_activity',
     -- Wave G: published versions, Pro and Studio (131)
     'page_versions',
-    -- Wave M1: sub-pages of a site (175)
+    -- Wave M1: sub-pages of a site and the owner byte total (175, 178)
+    'account_site_bytes',
     'site_pages'
   ],
   'public holds exactly the contract tables'

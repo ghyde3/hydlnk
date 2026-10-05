@@ -195,6 +195,29 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     );
   });
 
+  it("delete takes the menu entry out whatever the case of the id it was given (M11-12)", async () => {
+    const o = await owner("del-case");
+    const a = await create(o, { title: "Alpha" });
+    const b = await create(o, { title: "Beta" });
+    if (!a.ok || !b.ok) throw new Error("setup");
+    const home = await admin.from("pages").select("draft").eq("id", o.pageId).single();
+    await admin
+      .from("pages")
+      .update({
+        draft: { ...(home.data!.draft as object), nav: { show: true, items: [a.id, b.id] } },
+      })
+      .eq("id", o.pageId);
+
+    const del = await core.deleteSubPageWithClient(admin as never, {
+      userId: o.userId,
+      siteId: o.pageId,
+      subPageId: a.id.toUpperCase(),
+    });
+    expect(del).toMatchObject({ ok: true });
+    const after = await admin.from("pages").select("draft").eq("id", o.pageId).single();
+    expect(after.data!.draft).toMatchObject({ nav: { show: true, items: [b.id] } });
+  });
+
   it("delete leaves a Home draft with no menu untouched", async () => {
     const o = await owner("del2");
     const a = await create(o);

@@ -35,7 +35,9 @@ export type PublishFailureReason =
   /** The owner's account is suspended (M5-09): nothing is published until an admin unsuspends it. */
   | "account_suspended"
   /** A link in the saved draft points to a blocked site (M5-03); `errors` name each link and its host. */
-  | "blocked_link";
+  | "blocked_link"
+  /** Too many publishes in the last hour (M11-12): nothing was read or written; try again later. */
+  | "rate_limited";
 
 export type PublishResult =
   | { ok: true; publishedAt: string }

@@ -24,8 +24,20 @@
 --   * media_paths_in_use also counts sub-page drafts and published documents, so an image used only
 --     on a sub-page survives a publish and the cleanup.
 --
--- Error code added to the HL series:
+--   * Byte cap: an account's sub-page drafts and published documents together may not pass 64 MiB
+--     (67108864 bytes, measured as octet_length(doc::text), the way the per-row checks measure). A
+--     running total per owner lives in `account_site_bytes`, kept by one BEFORE trigger on site_pages
+--     (insert, update of draft or published, delete); a write that would pass the cap is refused with
+--     HL009 before the row is written. Lock order everywhere is pages row, then site_pages rows, then
+--     the owner's total row last (the trigger is named so it fires after enforce_site_page_limit),
+--     so it cannot deadlock with publish_site or the page-limit trigger.
+--   * admin_blocked_domain_impact also reads sub-pages (end of this file).
+--   * live_path cannot be a reserved path (the list mirrors RESERVED_PATHS in src/lib/document/path.ts;
+--     a unit test keeps the two equal) or start with hl-.
+--
+-- Error codes added to the HL series:
 --   HL008  the site is at its plan's pages-per-site limit (a new sub-page was refused).
+--   HL009  the account's sub-pages would pass the 64 MiB byte cap (the write was refused).
 
 -- ---------------------------------------------------------------------------
 -- plan_limits gains pages_per_site (drop and recreate, as M9-31 did)
@@ -110,6 +122,17 @@ create table public.site_pages (
   constraint site_pages_published_pair check ((published is null) = (published_at is null)),
   constraint site_pages_live_path_format check (
     live_path is null or live_path ~ '^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$'
+  ),
+  -- Mirrors RESERVED_PATHS and RESERVED_PATH_PREFIX in src/lib/document/path.ts (tests keep them equal).
+  constraint site_pages_live_path_not_reserved check (
+    live_path is null
+    or (
+      live_path not in (
+        'og', 'r', 'c', 'api', 'media', 'share', 'auth', 'app', 't', 'sites', '_t', 'sitemap',
+        'robots', '404-not-found'
+      )
+      and live_path not like 'hl-%'
+    )
   )
 );
 
@@ -213,6 +236,117 @@ revoke all on function public.enforce_site_page_limit() from public, anon, authe
 
 create trigger enforce_site_page_limit before insert on public.site_pages
   for each row execute function public.enforce_site_page_limit();
+
+-- ---------------------------------------------------------------------------
+-- Byte cap per account (HL009)
+-- ---------------------------------------------------------------------------
+
+-- One row per owner: the summed size of their sub-page drafts and published documents. Server only:
+-- RLS on, no policy, no grant; only the security definer trigger functions below touch it.
+create table public.account_site_bytes (
+  owner_id uuid primary key references public.accounts (id) on delete cascade,
+  bytes bigint not null default 0 check (bytes >= 0)
+);
+
+alter table public.account_site_bytes enable row level security;
+revoke all on table public.account_site_bytes from anon, authenticated, service_role;
+
+comment on table public.account_site_bytes is
+  'Running total of octet_length(doc::text) over an account''s sub-page drafts and published documents (the HL009 cap, 64 MiB). Maintained by triggers on site_pages; no client or server role reads or writes it directly.';
+
+create function public.site_page_doc_bytes(p_draft jsonb, p_published jsonb)
+returns bigint
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(octet_length(p_draft::text), 0)::bigint
+       + coalesce(octet_length(p_published::text), 0)::bigint
+$$;
+
+revoke all on function public.site_page_doc_bytes(jsonb, jsonb) from public, anon, authenticated;
+
+-- BEFORE insert, update of draft or published, delete. The total row is upserted (which locks it) and
+-- the new total tested before the row is written; a refusal rolls the upsert back with the statement.
+-- It fires after enforce_site_page_limit and set_updated_at (trigger names sort alphabetically), so
+-- the total row is the last lock taken, the order publish_site and the limit trigger also follow.
+-- A delete of a whole site reaches this trigger after the site row (and the owner) is gone, so the
+-- BEFORE DELETE trigger on pages (further down) frees those bytes instead and this one finds no owner.
+create function public.enforce_site_page_bytes()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  c_cap constant bigint := 67108864; -- 64 MiB
+  v_owner uuid;
+  v_delta bigint;
+  v_total bigint;
+begin
+  select p.owner_id into v_owner
+    from public.pages p
+    where p.id = coalesce(new.page_id, old.page_id);
+  if v_owner is null then
+    -- Only a cascade from a deleted site gets here; there is nothing to count against.
+    return coalesce(new, old);
+  end if;
+
+  if tg_op = 'DELETE' then
+    update public.account_site_bytes
+      set bytes = greatest(bytes - public.site_page_doc_bytes(old.draft, old.published), 0)
+      where owner_id = v_owner;
+    return old;
+  end if;
+
+  v_delta := public.site_page_doc_bytes(new.draft, new.published)
+    - case when tg_op = 'UPDATE' then public.site_page_doc_bytes(old.draft, old.published) else 0 end;
+
+  insert into public.account_site_bytes as t (owner_id, bytes)
+    values (v_owner, greatest(v_delta, 0))
+    on conflict (owner_id) do update set bytes = greatest(t.bytes + v_delta, 0)
+    returning t.bytes into v_total;
+
+  if v_delta > 0 and v_total > c_cap then
+    raise exception 'site storage limit reached: an account''s sub-pages may hold at most 64 MiB'
+      using errcode = 'HL009';
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.enforce_site_page_bytes() from public, anon, authenticated;
+
+create trigger site_pages_byte_cap
+  before insert or update of draft, published or delete on public.site_pages
+  for each row execute function public.enforce_site_page_bytes();
+
+-- Deleting a site (or its account) frees what its sub-pages held, before the cascade removes them.
+create function public.release_site_page_bytes_on_page_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  update public.account_site_bytes t
+    set bytes = greatest(
+      t.bytes - coalesce((
+        select sum(public.site_page_doc_bytes(s.draft, s.published))
+        from public.site_pages s
+        where s.page_id = old.id
+      ), 0),
+      0)
+    where t.owner_id = old.owner_id;
+  return old;
+end;
+$$;
+
+revoke all on function public.release_site_page_bytes_on_page_delete() from public, anon, authenticated;
+
+create trigger pages_release_site_page_bytes
+  before delete on public.pages
+  for each row execute function public.release_site_page_bytes_on_page_delete();
 
 -- ---------------------------------------------------------------------------
 -- Media cleanup queue
@@ -334,28 +468,119 @@ stable
 security definer
 set search_path = ''
 as $$
+  -- Each document is cast to text once (the cast, not the substring test, is the expensive part), then
+  -- every path is tested against that one copy.
+  with docs as materialized (
+    select g.draft::text as t from public.pages g where g.owner_id = p_uid
+    union all
+    select g.published::text from public.pages g where g.owner_id = p_uid and g.published is not null
+    union all
+    select s.draft::text
+      from public.site_pages s join public.pages g on g.id = s.page_id
+      where g.owner_id = p_uid
+    union all
+    select s.published::text
+      from public.site_pages s join public.pages g on g.id = s.page_id
+      where g.owner_id = p_uid and s.published is not null
+    union all
+    select th.tokens::text from public.themes th where th.owner_id = p_uid
+  )
   select coalesce(array_agg(p), '{}'::text[])
   from unnest(p_paths) as p
-  where exists (
-      select 1
-      from public.pages g
-      where g.owner_id = p_uid
-        and (strpos(g.draft::text, p) > 0 or strpos(coalesce(g.published::text, ''), p) > 0)
-    )
-    or exists (
-      select 1
-      from public.site_pages s
-      join public.pages g on g.id = s.page_id
-      where g.owner_id = p_uid
-        and (strpos(s.draft::text, p) > 0 or strpos(coalesce(s.published::text, ''), p) > 0)
-    )
-    or exists (
-      select 1
-      from public.themes t
-      where t.owner_id = p_uid
-        and strpos(t.tokens::text, p) > 0
-    )
+  where exists (select 1 from docs d where strpos(d.t, p) > 0)
 $$;
 
 comment on function public.media_paths_in_use(uuid, text[]) is
   'The subset of p_paths that a draft, a published document (Home or sub-page) or a saved theme of p_uid still names. The cleanup deletes a queued object only when it is not in this set. Server only (service_role).';
+
+-- ---------------------------------------------------------------------------
+-- admin_blocked_domain_impact reads sub-pages too (create or replace, same signature)
+-- ---------------------------------------------------------------------------
+
+-- A site is one row of the result, as before: its link_count and hosts now add the links in its
+-- published sub-pages, total_pages counts sites with a live match, and draft_pages counts sites whose
+-- Home draft or any sub-page draft links to the domain. Suspended owners stay out of the live rows.
+create or replace function public.admin_blocked_domain_impact(p_domain text, p_limit integer default 100)
+returns table (
+  page_id uuid,
+  handle text,
+  hosts text[],
+  link_count integer,
+  total_pages bigint,
+  draft_pages bigint
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_column
+declare
+  v_domain text := lower(btrim(coalesce(p_domain, '')));
+  v_limit integer := greatest(least(coalesce(p_limit, 100), 500), 1);
+  v_drafts bigint;
+begin
+  if v_domain = '' then
+    raise exception 'admin_blocked_domain_impact: a domain is required' using errcode = '22023';
+  end if;
+
+  select count(*) into v_drafts
+  from public.pages p
+  where exists (
+    select 1
+    from public.blocked_links_in(p.draft) l
+    where l.reason = 'blocked_domain'
+      and (l.host = v_domain or right(l.host, char_length(v_domain) + 1) = '.' || v_domain)
+  )
+  or exists (
+    select 1
+    from public.site_pages s
+    cross join lateral public.blocked_links_in(s.draft) l
+    where s.page_id = p.id
+      and l.reason = 'blocked_domain'
+      and (l.host = v_domain or right(l.host, char_length(v_domain) + 1) = '.' || v_domain)
+  );
+
+  return query
+  with hits as (
+    select p.id as pid, p.handle as phandle, l.host as lhost
+    from public.pages p
+    join public.accounts a on a.id = p.owner_id
+    cross join lateral public.blocked_links_in(p.published) l
+    where p.published is not null
+      and a.suspended_at is null
+      and l.reason = 'blocked_domain'
+      and (l.host = v_domain or right(l.host, char_length(v_domain) + 1) = '.' || v_domain)
+    union all
+    select p.id, p.handle, l.host
+    from public.site_pages s
+    join public.pages p on p.id = s.page_id
+    join public.accounts a on a.id = p.owner_id
+    cross join lateral public.blocked_links_in(s.published) l
+    where s.published is not null
+      and a.suspended_at is null
+      and l.reason = 'blocked_domain'
+      and (l.host = v_domain or right(l.host, char_length(v_domain) + 1) = '.' || v_domain)
+  ),
+  live as (
+    select
+      h.pid,
+      h.phandle,
+      array_agg(distinct h.lhost order by h.lhost) as lhosts,
+      count(*)::integer as links
+    from hits h
+    group by h.pid, h.phandle
+  )
+  select live.pid, live.phandle, live.lhosts, live.links, count(*) over (), v_drafts
+  from live
+  order by live.links desc, live.phandle
+  limit v_limit;
+
+  if not found then
+    return query select null::uuid, null::text, null::text[], 0, 0::bigint, v_drafts;
+  end if;
+end;
+$$;
+
+comment on function public.admin_blocked_domain_impact(text, integer) is
+  'The live sites (Home and published sub-pages) that link to a listed blocked domain or a subdomain of it (one row per site, with total_pages and draft_pages), read with blocked_links_in. A null page_id row means no live site matches. Server only.';

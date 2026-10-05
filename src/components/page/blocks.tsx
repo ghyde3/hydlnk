@@ -79,6 +79,12 @@ export interface BlockContext {
    */
   inertEmbeds?: boolean;
   /**
+   * Page links (`page_link`) are drawn as plain text, never as anchors (the private share preview,
+   * M11-12): a link in a draft shown to a stranger must not lead anywhere, the same rule as the
+   * menu's text mode. Only `PageLinkView` reads this.
+   */
+  inertLinks?: boolean;
+  /**
    * The rest of the site (M11-07): the relative href of each sub-page, for `page_link` blocks. Absent
    * on a page that is not drawn as part of a site (a demo): a page link to a sub-page then draws
    * nothing, while one to Home still resolves.
@@ -200,7 +206,7 @@ function PageLinkView({ block, ctx }: { block: PageLinkBlock; ctx: BlockContext 
     "data-button-style": resolved.buttonStyle,
     style,
   };
-  if (ctx.thumbnail) return <div {...props}>{block.label}</div>;
+  if (ctx.thumbnail || ctx.inertLinks) return <div {...props}>{block.label}</div>;
   return (
     <a {...props} href={href}>
       {block.label}

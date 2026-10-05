@@ -1,11 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-  draftSubPageSchema,
-  emptySubPageDraft,
-  resolveNav,
-  suggestPath,
-  type SubPageDraft,
-} from "@/lib/document";
+import { emptySubPageDraft, resolveNav, suggestPath, type SubPageDraft } from "@/lib/document";
 import { pagesPerSiteMessage, toPlanId } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -113,15 +107,16 @@ export async function createSubPageWithClient(
   const named = typeof input.title === "string" ? normalizePageName(input.title) : null;
   const title = named?.ok ? named.name : "New page";
 
-  const existing = await admin.from("site_pages").select("draft, live_path").eq("page_id", site.id);
+  // Paths only (draft->>path), never whole drafts.
+  const existing = await admin
+    .from("site_pages")
+    .select("path:draft->>path, live_path")
+    .eq("page_id", site.id);
   if (existing.error) throw new Error(`Sub-page lookup failed: ${existing.error.message}`);
   const taken: string[] = [];
   for (const row of existing.data ?? []) {
-    const parsed = draftSubPageSchema.safeParse(row.draft);
-    if (parsed.success) taken.push(parsed.data.path);
-    else if (typeof (row.draft as { path?: unknown } | null)?.path === "string") {
-      taken.push((row.draft as { path: string }).path);
-    }
+    const { path: draftPath } = row as unknown as { path: string | null };
+    if (typeof draftPath === "string") taken.push(draftPath);
     if (row.live_path !== null) taken.push(row.live_path);
   }
 
@@ -174,10 +169,15 @@ async function removeFromHomeNav(admin: Admin, siteId: string, subPageId: string
     const draft = read.data.draft as Record<string, unknown> | null;
     if (!draft || typeof draft !== "object" || !("nav" in draft) || draft.nav === undefined) return;
     const nav = resolveNav(draft.nav as { show?: boolean; items?: string[] });
-    if (!nav.items.includes(subPageId)) return;
+    // Menu ids are lowercase uuids in Home's draft; the id given here may be spelled in upper case.
+    const wanted = subPageId.toLowerCase();
+    if (!nav.items.some((id) => typeof id === "string" && id.toLowerCase() === wanted)) return;
     const next = {
       ...draft,
-      nav: { show: nav.show, items: nav.items.filter((id) => id !== subPageId) },
+      nav: {
+        show: nav.show,
+        items: nav.items.filter((id) => typeof id !== "string" || id.toLowerCase() !== wanted),
+      },
     };
     const update = admin
       .from("pages")

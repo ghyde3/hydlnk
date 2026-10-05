@@ -93,14 +93,21 @@ export async function loadSharedPreview(
   // draws a menu or a page link, with the named columns of the link's own page.
   let site: SiteContext | undefined;
   if (homeUsesSiteIndex(doc)) {
-    const rows = await admin.from("site_pages").select("id, draft").eq("page_id", page.id);
+    // Only the path and title of each draft, never the whole documents.
+    const rows = await admin
+      .from("site_pages")
+      .select("id, path:draft->>path, title:draft->>title")
+      .eq("page_id", page.id);
     if (rows.error)
       throw new Error(`Loading the pages of a shared preview failed: ${rows.error.message}`);
     const summaries = (rows.data ?? []).flatMap((row): SitePageSummary[] => {
-      const body = row.draft as { path?: unknown; title?: unknown } | null;
-      if (typeof body?.path !== "string" || typeof body.title !== "string") return [];
-      const title = stripHiddenCharacters(body.title).trim();
-      return title === "" ? [] : [{ id: row.id, path: body.path, title }];
+      const { path, title: rawTitle } = row as unknown as {
+        path: string | null;
+        title: string | null;
+      };
+      if (typeof path !== "string" || typeof rawTitle !== "string") return [];
+      const title = stripHiddenCharacters(rawTitle).trim();
+      return title === "" ? [] : [{ id: row.id, path, title }];
     });
     site = { hrefs: hrefsOf(summaries), menu: buildMenu(doc.nav, summaries, "home", "text") };
   }
