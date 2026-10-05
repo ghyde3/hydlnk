@@ -72,6 +72,7 @@ export function MiniThumbnail({
           pageId={pageId}
           mode="preview"
           thumbnail
+          {...(view?.site ? { site: { hrefs: view.site.hrefs } } : {})}
           {...(view?.subPage ? { subPage: view.subPage } : {})}
         />
       </div>

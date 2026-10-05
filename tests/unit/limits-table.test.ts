@@ -152,7 +152,7 @@ describe("M4-31 / M4-32 formatting", () => {
 
   it("M4-05 the plan blurbs come from the table and promise nothing deferred", () => {
     expect(planBlurb("free")).toBe(
-      "1 site with 3 pages, hydlnk.com address, 30 days of per-link clicks.",
+      "1 site with 3 pages (Home and 2), hydlnk.com address, 30 days of per-link clicks.",
     );
     expect(planBlurb("pro")).toBe(
       "3 sites with 10 pages each, 1 custom domain, a year of analytics, no badge.",

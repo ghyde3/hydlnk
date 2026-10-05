@@ -64,7 +64,10 @@ export function planBlurb(plan: PlanId): string {
   const limits = PLAN_LIMITS[plan];
   const sites = `${limits.pages} ${siteNoun(limits.pages)}`;
   const count = formatPagesPerSite(plan).toLowerCase();
-  const perSite = plan === "free" ? `${count} pages` : `${count} pages each`;
+  const perSite =
+    plan === "free"
+      ? `${count} pages (Home and ${limits.pagesPerSite - 1})`
+      : `${count} pages each`;
   switch (plan) {
     case "free":
       return `${sites} with ${perSite}, hydlnk.com address, ${limits.analyticsHistoryDays} days of per-link clicks.`;

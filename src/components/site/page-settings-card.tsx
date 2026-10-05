@@ -46,6 +46,8 @@ export function PageSettingsCard() {
     <section
       aria-labelledby={headingId}
       data-testid="page-settings"
+      // Its fields are not steps of the draft history: Ctrl+Z in them is the browser's own.
+      data-native-undo=""
       className="flex flex-col gap-3 rounded-md border border-line bg-surface p-3.5"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">

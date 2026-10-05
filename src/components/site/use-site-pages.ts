@@ -178,6 +178,17 @@ export function useSitePages(args: {
     };
   }, []);
 
+  // Edits not stored yet: the browser asks before the tab closes, as it does for Home's.
+  useEffect(() => {
+    if (saveStatus === "idle" || saveStatus === "saved") return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveStatus]);
+
   const seen = useRef(new Map<string, { settings: SubPageSettings; blocks: unknown }>());
   useEffect(() => {
     const saver = saverRef.current;

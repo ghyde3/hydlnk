@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Field, FORM_BUTTON, controlClass } from "@/components/blocks/field";
 import { TextField } from "@/components/blocks/text-field";
+import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { SUB_PAGE_LIMITS, suggestPath } from "@/lib/document";
 import { PLAN_LIMITS } from "@/lib/limits/table";
@@ -22,6 +23,7 @@ import { ToggleRow } from "./toggle-row";
  */
 export function PagesCard() {
   const { site, plan } = useWorkspace();
+  const suspended = useAccountSuspended();
   const headingId = useId();
   const [adding, setAdding] = useState(false);
   const addButton = useRef<HTMLButtonElement>(null);
@@ -144,6 +146,8 @@ export function PagesCard() {
           ref={addButton}
           type="button"
           data-testid="add-page"
+          disabled={suspended}
+          title={suspended ? SUSPENDED_REASON : undefined}
           onClick={() => setAdding(true)}
           className={`${FORM_BUTTON} self-start`}
         >
@@ -187,6 +191,7 @@ function AddPageForm({ onDone, onCancel }: { onDone: () => void; onCancel: () =>
     <form
       onSubmit={submit}
       data-testid="add-page-form"
+      data-native-undo=""
       aria-label="Add page"
       className="flex flex-col gap-3 rounded-md border border-line bg-page p-3"
     >
