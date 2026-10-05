@@ -7,6 +7,16 @@
 # the command's. Built so agents read failures, not thousands of passing lines.
 set -u
 
+# Only what the project allow list already permits on its own: pnpm and init.sh. Anything else
+# would let `scripts/q.sh <command>` slip past the deny rules, which match the command string.
+case "${1:-}" in
+  pnpm | ./scripts/init.sh | scripts/init.sh) ;;
+  *)
+    echo "q.sh runs pnpm commands and scripts/init.sh only" >&2
+    exit 64
+    ;;
+esac
+
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 mkdir -p "$ROOT/tmp/logs"
 LABEL=$(printf '%s' "$*" | tr -cs 'A-Za-z0-9' '-' | cut -c1-60 | sed 's/-*$//')
