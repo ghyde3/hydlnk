@@ -186,9 +186,14 @@ test.describe("M11-06 mara's seeded sub-pages", () => {
     );
     expect((await get("mara.localhost:3000", "/")).status).toBe(200);
     // The routes that used to be (and still are) the plain 404 on a tenant host.
-    for (const path of ["/api", "/r", "/app", "/sitemap", "/robots", "/hl-query-count"]) {
+    for (const path of ["/api", "/r", "/app", "/sitemap", "/robots"]) {
       expect((await get("mara.localhost:3000", path)).status, path).toBe(404);
     }
+    // `/hl-query-count` is the test hook: the plain 404 on a server without HYDLNK_QUERY_COUNTER=1, the
+    // hook's own answer (200) on the production-build harness that runs with it. Never a sub-page.
+    const hook = await get("mara.localhost:3000", "/hl-query-count");
+    if (hook.status === 200) expect(JSON.parse(hook.body)).toHaveProperty("count");
+    else expect(hook.status).toBe(404);
     // The internal route is never reachable by typing it.
     expect((await get("mara.localhost:3000", "/t/mara/p/items")).status).toBe(404);
     // Only GET and HEAD.
@@ -197,7 +202,9 @@ test.describe("M11-06 mara's seeded sub-pages", () => {
 });
 
 test.describe("M11-06 a path that is not a live page answers the branded 404", () => {
-  test("M11-06 invented, unpublished, uppercase, two-segment and deleted paths", async ({}, info) => {
+  test("M11-06 invented, unpublished, uppercase, two-segment and deleted paths", async ({
+    context,
+  }, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("nf", { plan: "pro" });
     const draftOnly = await adminClient()
@@ -235,8 +242,15 @@ test.describe("M11-06 a path that is not a live page answers the branded 404", (
     const slash = await get(tenantHost(site), `/${ITEMS.path}/`);
     expect([slash.status, slash.location]).toEqual([308, `/${ITEMS.path}`]);
 
-    // Deleting a live page makes it a 404 at once (the server route clears the cache; here the row).
-    await adminClient().from("site_pages").delete().eq("id", site.itemsId);
+    // Deleting a live page makes it a 404 at once: through the real route, which expires the site's
+    // cache tag. (Deleting the row behind the server's back leaves a production build serving its cached
+    // copy, as it should: nothing else would purge it.)
+    const { signInAs } = await import("../fixtures/auth");
+    await signInAs(context, site.user.email);
+    const deleted = await context.request.delete(
+      url("app", `/api/pages/${site.pageId}/sub-pages/${site.itemsId}`),
+    );
+    expect(deleted.status()).toBe(200);
     expect((await get(tenantHost(site), `/${ITEMS.path}`)).status).toBe(404);
     // Home no longer draws it in the menu, and its page link draws nothing.
     const home = await get(tenantHost(site), "/");

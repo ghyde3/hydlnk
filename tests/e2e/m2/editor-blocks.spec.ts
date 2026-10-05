@@ -254,7 +254,9 @@ test.describe("M2-10 add a block", () => {
       await expectTapTargets(page);
       for (const box of boxes) expect(box.right).toBeLessThanOrEqual(390);
     } else {
-      expect(rowCount).toBeLessThanOrEqual(2);
+      // M9-15 superseded "two rows" (docs/features.json): the chooser holds every type of `BLOCK_TYPES`
+      // (sixteen with the page link of Wave M1), at most three rows at 1440x900.
+      expect(rowCount).toBeLessThanOrEqual(3);
     }
   });
 });
