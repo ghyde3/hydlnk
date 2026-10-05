@@ -1,3 +1,4 @@
+import { pagesPerSiteSentence, sitesPerPlanSentence, sitesText } from "@/lib/marketing/plan-limits";
 import { priceSentence } from "@/lib/marketing/prices";
 
 /**
@@ -26,8 +27,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
     items: [
       {
         question: "Is the free plan actually free?",
-        answer:
-          "Yes. One page, every block, every theme and design option and per-link analytics, with no time limit and no card on file.",
+        answer: `Yes. ${sitesText("free")}, every block, every theme and design option and per-link analytics, with no time limit and no card on file.`,
         home: 1,
       },
       {
@@ -38,7 +38,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "What is a handle?",
         answer:
-          "The name in your page’s address: choose “fennmoor” and your page lives at fennmoor.hydlnk.com. Handles are 3 to 30 characters of lowercase letters, numbers and hyphens, and each one belongs to one page.",
+          "The name in your page’s address: choose “fennmoor” and your page lives at fennmoor.hydlnk.com. Handles are 3 to 30 characters of lowercase letters, numbers and hyphens, and each one belongs to one site.",
         home: 2,
       },
       {
@@ -178,6 +178,10 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
         question: "How do I upgrade, change my card or cancel?",
         answer:
           "Upgrade from your account settings through Stripe Checkout. Change your card, download invoices or cancel at any time in the Stripe billing portal, under Manage billing.",
+      },
+      {
+        question: "How many sites and pages do I get?",
+        answer: `A site is what has its own handle, domain, theme and analytics, and its pages are Home plus the pages you add at addresses like you.hydlnk.com/menu. ${sitesPerPlanSentence()}. ${pagesPerSiteSentence()}.`,
       },
       {
         question: "How much do Pro and Studio cost, and is there a yearly price?",

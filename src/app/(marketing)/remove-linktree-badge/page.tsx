@@ -58,7 +58,7 @@ export default function RemoveLinktreeBadgePage() {
         <div className="mt-10 grid gap-3 min-[760px]:grid-cols-3">
           <InfoCard title="Free">Small “Made with HYDLNK” badge. Every block and theme option is still open.</InfoCard>
           <InfoCard title="Pro">{`No badge. Pro is ${priceSentence("pro")}.`}</InfoCard>
-          <InfoCard title="Studio">No badge, with more pages and domains.</InfoCard>
+          <InfoCard title="Studio">No badge, with more sites and domains.</InfoCard>
         </div>
         <div className="mt-6 flex flex-wrap gap-x-6">
           <ArrowLink href="/design-control">What you can design on every plan</ArrowLink>

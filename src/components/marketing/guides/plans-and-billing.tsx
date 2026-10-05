@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { pagesPerSiteText, sitesText } from "@/lib/marketing/plan-limits";
 import { priceSentence, usd } from "@/lib/marketing/prices";
 import { SUPPORT_EMAIL } from "../site-map";
 import type { GuideBody } from "./types";
@@ -15,8 +16,8 @@ export const plansAndBilling: GuideBody = {
   content: (
     <>
       <p>
-        HYDLNK is free for one page with every block, theme and design option. You pay when you
-        want your own domain, more pages or more history, never to make your page look good.
+        HYDLNK is free for one site with every block, theme and design option. You pay when you want
+        your own domain, more sites, more pages or more history, never to make your page look good.
       </p>
 
       <h2 id="plans">The three plans</h2>
@@ -32,17 +33,27 @@ export const plansAndBilling: GuideBody = {
           <tr>
             <td>Free</td>
             <td>{usd(0)}</td>
-            <td>1 page, 3 saved themes, per-link clicks for 30 days, 10 MB of uploads, a small “Made with HYDLNK” badge</td>
+            <td>
+              {sitesText("free")}, {pagesPerSiteText("free")}, 3 saved themes, per-link clicks for
+              30 days, 10 MB of uploads, a small “Made with HYDLNK” badge
+            </td>
           </tr>
           <tr>
             <td>Pro</td>
             <td>{priceSentence("pro")}</td>
-            <td>1 custom domain you own, 3 pages, no badge, unlimited saved themes, a year of analytics with referrers, devices and countries, redirect mode, 100 MB of uploads</td>
+            <td>
+              1 custom domain you own, {sitesText("pro")}, {pagesPerSiteText("pro")}, no badge,
+              unlimited saved themes, a year of analytics with referrers, devices and countries,
+              redirect mode, 100 MB of uploads
+            </td>
           </tr>
           <tr>
             <td>Studio</td>
             <td>{priceSentence("studio")}</td>
-            <td>15 pages and 15 custom domains you own, themes shared across pages, 1 GB of uploads</td>
+            <td>
+              {sitesText("studio")} and 15 custom domains you own, {pagesPerSiteText("studio")},
+              themes shared across sites, 1 GB of uploads
+            </td>
           </tr>
         </tbody>
       </table>
@@ -82,16 +93,16 @@ export const plansAndBilling: GuideBody = {
 
       <h2 id="limits">How limits work</h2>
       <p>
-        Plan limits (pages, saved themes, custom domains and upload storage) are checked on our
-        side whenever you create or upload something. If you reach one, you’ll see a message when
-        you try to add more.
+        Plan limits (sites, pages per site, saved themes, custom domains and upload storage) are checked on our side
+        whenever you create or upload something. If you reach one, you’ll see a message when you try
+        to add more.
       </p>
 
       <h2 id="delete">Deleting your account</h2>
       <p>
         You can delete your account from your account settings. To confirm, you type your handle.
-        Deleting your account deletes your pages, themes, domains and analytics, frees your
-        handles and signs you out on every device. It can’t be undone.
+        Deleting your account deletes your pages, themes, domains and analytics, frees your handles
+        and signs you out on every device. It can’t be undone.
       </p>
       <p>
         If you’re on a paid plan, cancel it in the billing portal first. Questions about a charge?

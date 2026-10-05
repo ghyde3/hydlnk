@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { pagesPerSiteItem, sitesText } from "@/lib/marketing/plan-limits";
 import { axeViolations } from "../fixtures/a11y";
 import { SHOWN_PRICES } from "../fixtures/prices";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
@@ -675,7 +676,8 @@ test.describe("M1-26 pricing", () => {
     );
 
     expect(await lists("Free")).toEqual([
-      "1 page",
+      sitesText("free"),
+      pagesPerSiteItem("free"),
       "Every block, theme and design option",
       "3 saved themes",
       "you.hydlnk.com",
@@ -688,7 +690,8 @@ test.describe("M1-26 pricing", () => {
     expect(await lists("Pro")).toEqual([
       "Everything in Free, plus",
       "1 custom domain you own, with automatic SSL",
-      "3 pages",
+      sitesText("pro"),
+      pagesPerSiteItem("pro"),
       "No badge",
       "Unlimited saved themes",
       "1 year of analytics with referrers, devices and countries",
@@ -698,8 +701,9 @@ test.describe("M1-26 pricing", () => {
     ]);
     expect(await lists("Studio")).toEqual([
       "Everything in Pro, plus",
-      "15 pages and 15 custom domains you own",
-      "Themes shared across pages",
+      `${sitesText("studio")} and 15 custom domains you own`,
+      pagesPerSiteItem("studio"),
+      "Themes shared across sites",
       "1 GB of uploads",
     ]);
 

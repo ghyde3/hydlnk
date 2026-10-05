@@ -140,9 +140,10 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 
 | | Free | Pro, $9/mo ($60/yr, $5/mo billed yearly) | Studio, $20/mo ($180/yr, $15/mo billed yearly) |
 | --- | --- | --- | --- |
-| Pages | 1 | 3 | 15 |
+| Sites | 1 | 3 | 15 |
+| Pages per site (Home counted) | Home and 2 | 10 | Unlimited (fair-use cap of 500) |
 | Blocks and design tokens | All | All | All |
-| Saved themes | 3 | Unlimited | Unlimited, shared across pages |
+| Saved themes | 3 | Unlimited | Unlimited, shared across sites |
 | URL | `you.hydlnk.com` | + 1 custom domain | 15 custom domains |
 | Footer badge | "Made with HYDLNK" | Removable | Removable |
 | Uploads | 10 MB | 100 MB | 1 GB |
@@ -170,7 +171,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 
 ## Decided
 
-- Free plan is free forever, capped at 1 page; Pro 3, Studio 15.
+- Free plan is free forever, capped at 1 site; Pro 3, Studio 15.
 - Custom domains start at Pro.
 - Prices (2026-10-02): Pro $9/mo or $60/yr ($5/mo billed yearly); Studio $20/mo or $180/yr ($15/mo billed yearly). Custom domains = connecting a domain the customer already owns (HYDLNK doesn't sell domains).
 - Billing through Stripe Checkout and Stripe's hosted customer portal.

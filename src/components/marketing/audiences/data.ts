@@ -1,3 +1,4 @@
+import { siteCount, sitesPerPlanSentence, sitesText } from "@/lib/marketing/plan-limits";
 import type { FaqItem } from "../faq-data";
 import type { TryPreset } from "../try/try-builder";
 
@@ -437,8 +438,7 @@ export const AUDIENCES: readonly Audience[] = [
       },
       {
         question: "Is the free plan enough for a channel?",
-        answer:
-          "For most channels, yes. Free gives you one page with every block and the full set of design choices. Pro adds your own domain, three pages and the removal of the “Made with HYDLNK” badge.",
+        answer: `For most channels, yes. Free gives you ${sitesText("free")} with every block and the full set of design choices. Pro adds your own domain, ${siteCount("pro")} sites and the removal of the “Made with HYDLNK” badge.`,
       },
     ],
     related: ["twitch", "podcasters", "tiktok"],
@@ -671,8 +671,7 @@ export const AUDIENCES: readonly Audience[] = [
       },
       {
         question: "Does it cost anything?",
-        answer:
-          "Free gives you one page with every block and the full design options, with no time limit and no card. Pro adds your own domain and removes the small “Made with HYDLNK” badge.",
+        answer: `Free gives you ${sitesText("free")} with every block and the full design options, with no time limit and no card. Pro adds your own domain and removes the small “Made with HYDLNK” badge.`,
       },
     ],
     related: ["instagram", "youtube", "coaches"],
@@ -792,12 +791,11 @@ export const AUDIENCES: readonly Audience[] = [
       {
         question: "Do I have to pay to make it look good?",
         answer:
-          "No. Every block and every design choice is on the free plan. Pro is for your own domain, more pages, no badge and a year of analytics.",
+          "No. Every block and every design choice is on the free plan. Pro is for your own domain, more sites and pages, no badge and a year of analytics.",
       },
       {
         question: "Can my band and my label each have a page?",
-        answer:
-          "Free includes one page, Pro includes three and Studio includes 15, so an artist page, a release page and a tour page can each have their own address.",
+        answer: `${sitesPerPlanSentence()}, so an artist page, a release page and a tour page can each have their own address.`,
       },
     ],
     related: ["podcasters", "youtube", "instagram"],
@@ -871,7 +869,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         icon: "domain",
         title: "A page for each show",
-        body: "Free includes one page, Pro includes three and Studio includes 15. On Pro you can use a domain you own, like links.yourshow.com.",
+        body: `${sitesPerPlanSentence()}. On Pro you can use a domain you own, like links.yourshow.com.`,
       },
     ],
     starterTitle: "A first podcast page, block by block",
@@ -921,8 +919,7 @@ export const AUDIENCES: readonly Audience[] = [
       },
       {
         question: "Can I make a page for each show?",
-        answer:
-          "Free includes one page, Pro includes three and Studio includes 15, so a network or a studio with several shows can give each its own address.",
+        answer: `${sitesPerPlanSentence()}, so a network or a studio with several shows can give each its own address.`,
       },
     ],
     related: ["musicians", "youtube", "coaches"],
@@ -1287,8 +1284,7 @@ export const AUDIENCES: readonly Audience[] = [
       },
       {
         question: "Can I keep a separate page for a program or workshop?",
-        answer:
-          "Free includes one page, Pro includes three and Studio includes 15, so each program can have its own address.",
+        answer: `${sitesPerPlanSentence()}, so each program can have its own address.`,
       },
     ],
     related: ["small-business", "podcasters", "x"],
@@ -1335,8 +1331,7 @@ export const HUB_FAQ: readonly FaqItem[] = [
   },
   {
     question: "Is a HYDLNK link in bio page free?",
-    answer:
-      "Yes. The free plan has one page with every block and the full set of design choices, with no time limit and no card on file. Pro adds your own domain, more pages and a year of analytics.",
+    answer: `Yes. The free plan has ${sitesText("free")} with every block and the full set of design choices, with no time limit and no card on file. Pro adds your own domain, more sites and pages and a year of analytics.`,
   },
   {
     question: "Can I use the same page on more than one app?",

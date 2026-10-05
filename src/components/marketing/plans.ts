@@ -1,4 +1,5 @@
 import { PLAN_LIMITS } from "@/lib/limits";
+import { pagesPerSiteCell, pagesPerSiteItem, sitesText } from "@/lib/marketing/plan-limits";
 import { versionHistoryCell, versionHistoryItem } from "@/lib/versions/messages";
 import {
   PRICES,
@@ -47,10 +48,11 @@ export const PLANS: readonly Plan[] = [
     id: "free",
     name: "Free",
     price: { monthly: FREE_PRICE, yearly: FREE_PRICE },
-    blurb: "One page that looks the way you want.",
+    blurb: "One site that looks the way you want.",
     cta: "Start free",
     items: [
-      "1 page",
+      sitesText("free"),
+      pagesPerSiteItem("free"),
       "Every block, theme and design option",
       "3 saved themes",
       "you.hydlnk.com",
@@ -76,7 +78,8 @@ export const PLANS: readonly Plan[] = [
     lead: "Everything in Free, plus",
     items: [
       "1 custom domain you own, with automatic SSL",
-      "3 pages",
+      sitesText("pro"),
+      pagesPerSiteItem("pro"),
       "No badge",
       "Unlimited saved themes",
       "1 year of analytics with referrers, devices and countries",
@@ -96,12 +99,13 @@ export const PLANS: readonly Plan[] = [
         note: `${yearlyText("studio")}, save ${usd(yearlySavings("studio"))}`,
       },
     },
-    blurb: "For agencies and teams running pages for others.",
+    blurb: "For agencies and teams running sites for others.",
     cta: "Start Studio",
     lead: "Everything in Pro, plus",
     items: [
-      "15 pages and 15 custom domains you own",
-      "Themes shared across pages",
+      `${sitesText("studio")} and 15 custom domains you own`,
+      pagesPerSiteItem("studio"),
+      "Themes shared across sites",
       "1 GB of uploads",
     ],
   },
@@ -121,9 +125,20 @@ export const COMPARISON: readonly { label: string; values: [string, string, stri
       `${yearlyText("studio")} (${perMonthBilledYearlyText("studio")})`,
     ],
   },
-  { label: "Pages", values: ["1", "3", "15"] },
+  {
+    label: "Sites",
+    values: [
+      String(PLAN_LIMITS.free.pages),
+      String(PLAN_LIMITS.pro.pages),
+      String(PLAN_LIMITS.studio.pages),
+    ],
+  },
+  {
+    label: "Pages per site",
+    values: [pagesPerSiteCell("free"), pagesPerSiteCell("pro"), pagesPerSiteCell("studio")],
+  },
   { label: "Blocks, themes and design options", values: ["All", "All", "All"] },
-  { label: "Saved themes", values: ["3", "Unlimited", "Unlimited, shared across pages"] },
+  { label: "Saved themes", values: ["3", "Unlimited", "Unlimited, shared across sites"] },
   {
     label: "Address",
     values: ["you.hydlnk.com", "+ 1 custom domain you own", "+ 15 custom domains you own"],

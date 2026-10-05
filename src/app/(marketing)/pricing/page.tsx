@@ -67,7 +67,7 @@ export default function PricingPage() {
       <PageHero
         eyebrow="Pricing"
         title="Design is never the paywall."
-        lead="Every plan gets every block and every design option. Upgrade when you want to connect a domain you own, more pages or a year of analytics. We never take a cut of your sales."
+        lead="Every plan gets every block and every design option. Upgrade when you want to connect a domain you own, more sites and pages or a year of analytics. We never take a cut of your sales."
         secondary={{ href: "#compare", label: "Compare plans" }}
       />
 
