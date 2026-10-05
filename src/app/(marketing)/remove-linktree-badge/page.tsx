@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SEARCH_CLAIMS } from "@/components/marketing/compare/data";
+import { LINKTREE_LOGO_BY_PLAN, SEARCH_CLAIMS } from "@/components/marketing/compare/data";
 import { InfoCard, SourcesSection } from "@/components/marketing/compare/parts";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { marketingMetadata } from "@/components/marketing/metadata";
@@ -36,10 +36,11 @@ export default function RemoveLinktreeBadgePage() {
         <div className="mt-10 grid gap-3 min-[760px]:grid-cols-2">
           <InfoCard title="Which plans hide the logo">
             <ul className="grid gap-2">
-              <li>Free: logo shown</li>
-              <li>Starter: logo shown</li>
-              <li>Pro: logo can be hidden</li>
-              <li>Premium: logo can be hidden</li>
+              {LINKTREE_LOGO_BY_PLAN.map((item) => (
+                <li key={item.plan}>
+                  {item.plan}: {item.hidden ? "logo can be hidden" : "logo shown"}
+                </li>
+              ))}
             </ul>
           </InfoCard>
           <InfoCard title="What those plans cost">
@@ -68,7 +69,11 @@ export default function RemoveLinktreeBadgePage() {
       </Section>
 
       <SourcesSection
-        claims={[SEARCH_CLAIMS.linktreeBadge, SEARCH_CLAIMS.linktreeProPrice]}
+        claims={[
+          SEARCH_CLAIMS.linktreeBadge,
+          SEARCH_CLAIMS.linktreeLogoByPlan,
+          SEARCH_CLAIMS.linktreeProPrice,
+        ]}
         trademarks="Linktree is a trademark of its owner. HYDLNK is not affiliated with Linktree."
       />
 

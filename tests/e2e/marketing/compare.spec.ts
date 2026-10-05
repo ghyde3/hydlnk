@@ -31,8 +31,6 @@ async function stubAppHost(page: Page) {
   );
 }
 
-const titles = new Set<string>();
-
 for (const { path, h1, guide } of PAGES) {
   test(`${path} is a complete page`, async ({ page, isMobile }) => {
     const response = await page.goto(url(null, path));
@@ -41,9 +39,8 @@ for (const { path, h1, guide } of PAGES) {
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(h1);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", url(null, path));
     await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /.{70,}/);
-    const title = await page.title();
-    expect(titles.has(title), `duplicate title ${title}`).toBe(false);
-    titles.add(title);
+    // The shared claim form (the handoff itself is tested below).
+    await expect(page.locator("form").filter({ has: page.locator("#cta-handle") })).toHaveCount(1);
 
     const main = page.locator("main");
     await expect(main.locator(`a[href="${guide}"]`).first()).toBeVisible();
@@ -67,6 +64,20 @@ for (const { path, h1, guide } of PAGES) {
   });
 }
 
+test("the five pages have distinct titles and descriptions", async ({ request }) => {
+  const titles: string[] = [];
+  const descriptions: string[] = [];
+  for (const { path } of PAGES) {
+    const html = await (await request.get(url(null, path))).text();
+    titles.push(/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? "");
+    descriptions.push(/<meta name="description" content="([^"]*)"/.exec(html)?.[1] ?? "");
+  }
+  expect(titles.every((value) => value.length > 0)).toBe(true);
+  expect(descriptions.every((value) => value.length > 0)).toBe(true);
+  expect(new Set(titles).size).toBe(PAGES.length);
+  expect(new Set(descriptions).size).toBe(PAGES.length);
+});
+
 test("the claim form on a comparison page hands off to sign-up", async ({ page }) => {
   await page.goto(url(null, "/vs/linktree"));
   await stubAppHost(page);
@@ -80,6 +91,22 @@ test("the claim form on a comparison page hands off to sign-up", async ({ page }
 test("the comparison table lists HYDLNK's Free badge and Pro removal", async ({ page }) => {
   await page.goto(url(null, "/vs/beacons"));
   await expect(page.getByRole("table")).toContainText("Made with HYDLNK");
+});
+
+test("/remove-linktree-badge states the HYDLNK Free badge and that Pro removes it", async ({ page }) => {
+  await page.goto(url(null, "/remove-linktree-badge"));
+  const main = page.locator("main");
+  await expect(main.getByText(/HYDLNK Free shows a small .Made with HYDLNK. badge/)).toBeVisible();
+  await expect(main.getByText(/Pro and Studio remove it/)).toBeVisible();
+  await expect(main.getByText(/^No badge\. Pro is /)).toBeVisible();
+});
+
+test("/link-in-bio/shopify mentions linking a store and the discount block", async ({ page }) => {
+  await page.goto(url(null, "/link-in-bio/shopify"));
+  const main = page.locator("main");
+  await expect(main.getByText(/store/i).first()).toBeVisible();
+  await expect(main.getByRole("heading", { name: /^Link block: your store$/ })).toBeVisible();
+  await expect(main.getByRole("heading", { name: /^Discount code block/ })).toBeVisible();
 });
 
 test("an unknown comparison is the branded 404", async ({ page }) => {

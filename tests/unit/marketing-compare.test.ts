@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CHECKED_ON,
   COMPETITORS,
+  SEARCH_CLAIMS,
   SOURCES,
   allClaims,
   claimFor,
@@ -22,6 +23,17 @@ describe("comparison page data (M11-02, M11-03)", () => {
       expect(item.checked).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(item.checked).toBe(CHECKED_ON);
     }
+  });
+
+  it("keeps the search pages' competitor statements in the claim data, with sources", () => {
+    const claims = allClaims();
+    for (const id of ["linktreeLogoByPlan", "linktreeRedirect"] as const) {
+      const item = SEARCH_CLAIMS[id];
+      expect(claims, id).toContain(item);
+      expect(item.sources.length).toBeGreaterThan(0);
+    }
+    expect(SEARCH_CLAIMS.linktreeLogoByPlan.text).toContain("Pro can hide it");
+    expect(SEARCH_CLAIMS.linktreeLogoByPlan.text).toContain("Free shows it");
   });
 
   it("covers the five table topics for every competitor", () => {

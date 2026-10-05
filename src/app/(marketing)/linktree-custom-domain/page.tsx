@@ -42,9 +42,8 @@ export default function LinktreeCustomDomainPage() {
         />
         <p className={`mt-6 max-w-[720px] ${BODY}`}>{SEARCH_CLAIMS.linktreeDomain.text}</p>
         <p className={`mt-4 max-w-[720px] ${BODY}`}>
-          A redirect link sends visitors from an address you own to your Linktree page, but the
-          page they land on is still on linktr.ee. If the address people see and share should be
-          your own, you need a service that serves the page from your domain.
+          {SEARCH_CLAIMS.linktreeRedirect.text} If the address people see and share should be your
+          own, you need a service that serves the page from your domain.
         </p>
       </Section>
 
@@ -80,7 +79,7 @@ export default function LinktreeCustomDomainPage() {
       </Section>
 
       <SourcesSection
-        claims={[SEARCH_CLAIMS.linktreeDomain]}
+        claims={[SEARCH_CLAIMS.linktreeDomain, SEARCH_CLAIMS.linktreeRedirect]}
         trademarks="Linktree is a trademark of its owner. HYDLNK is not affiliated with Linktree."
       />
 

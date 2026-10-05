@@ -109,6 +109,14 @@ const linktreeBadge = claim(
   ["linktreePricing"],
 );
 
+/** Which Linktree plans keep the Linktree logo on the page, as the pricing page lists them. */
+export const LINKTREE_LOGO_BY_PLAN = [
+  { plan: "Free", hidden: false },
+  { plan: "Starter", hidden: false },
+  { plan: "Pro", hidden: true },
+  { plan: "Premium", hidden: true },
+] as const;
+
 const linktreePrice = claim(
   "price",
   `Free is ${usd(0)}. ${LINKTREE_PLANS.map(
@@ -242,6 +250,16 @@ export const SEARCH_CLAIMS = {
   linktreeBadge,
   linktreePrice,
   linktreeFees,
+  linktreeLogoByPlan: claim(
+    "badge",
+    `Linktree logo by plan: ${LINKTREE_LOGO_BY_PLAN.map((item) => `${item.plan} ${item.hidden ? "can hide it" : "shows it"}`).join(", ")}.`,
+    ["linktreePricing"],
+  ),
+  linktreeRedirect: claim(
+    "domain",
+    "A Linktree Redirect link sends visitors from an address you own to your Linktree page, which stays on linktr.ee.",
+    ["linktreeDomain"],
+  ),
   linktreeProPrice: claim(
     "price",
     `Linktree Pro is ${usd(LINKTREE_PLANS[1].yearly)} a month billed yearly or ${usd(LINKTREE_PLANS[1].monthly)} billed monthly. Premium is ${usd(LINKTREE_PLANS[2].yearly)} billed yearly or ${usd(LINKTREE_PLANS[2].monthly)} billed monthly.`,

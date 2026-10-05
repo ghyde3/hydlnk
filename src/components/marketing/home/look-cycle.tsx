@@ -16,9 +16,9 @@ type Mode = "off" | "playing" | "paused";
  * the next look is checked. Because the bar is the clock, every pause simply freezes it.
  *
  * It pauses while the pointer is over the hero, while anything in it has focus (typing in the claim
- * field included), while the hero is mostly off screen and while the tab is hidden. The visitor's
- * own pick (click, tap or arrow keys fire a real change event; the advance sets `checked`, which
- * fires none) stops it for good; the control then offers Play. Under reduced motion it never
+ * field included), while the tab row is mostly off screen and while the tab is hidden. The visitor's
+ * own pick (a click or tap on any tab, even the checked one, or the arrow keys; the advance sets
+ * `checked`, which fires neither) stops it for good; the control then offers Play. Under reduced motion it never
  * starts and the control stays hidden, and without JavaScript the control is never shown, so the
  * tabs are plain radio buttons and nothing moves.
  */
@@ -62,6 +62,10 @@ export function LookCycle() {
       if (stopped || userPaused) {
         stopped = false;
         userPaused = false;
+        // The pointer is still over the hero and focus is on this button, so neither may hold
+        // the cycle the visitor just asked for; they hold again from the next enter or focus-in.
+        hovered = false;
+        focused = false;
       } else {
         userPaused = true;
       }
@@ -75,6 +79,13 @@ export function LookCycle() {
       if (!next) return;
       next.checked = true;
       hero.dispatchEvent(new Event(ADVANCED));
+    };
+    // A click on an already checked tab fires no change event, so it is caught here as well.
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (!event.isTrusted || !(target instanceof Element) || !target.closest(".sp-tab")) return;
+      stopped = true;
+      apply();
     };
     const onChange = (event: Event) => {
       const target = event.target;
@@ -107,18 +118,21 @@ export function LookCycle() {
       apply();
     };
 
+    // Watch the tab row (the look stage's controls), not the tall hero: a hero taller than a phone
+    // viewport never reaches a given share on screen, while the tabs are small and either seen or not.
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry) return;
-        offscreen = entry.intersectionRatio < 0.35;
+        offscreen = entry.intersectionRatio < 0.5;
         apply();
       },
-      { threshold: [0, 0.35, 0.7] },
+      { threshold: [0, 0.5, 1] },
     );
-    observer.observe(hero);
+    observer.observe(hero.querySelector(".sp-tabs-row") ?? hero);
 
     hero.addEventListener("animationend", onEnd);
     hero.addEventListener("change", onChange);
+    hero.addEventListener("click", onClick);
     hero.addEventListener("pointerenter", onEnter);
     hero.addEventListener("pointerleave", onLeave);
     hero.addEventListener("focusin", onFocus);
@@ -131,6 +145,7 @@ export function LookCycle() {
       observer.disconnect();
       hero.removeEventListener("animationend", onEnd);
       hero.removeEventListener("change", onChange);
+      hero.removeEventListener("click", onClick);
       hero.removeEventListener("pointerenter", onEnter);
       hero.removeEventListener("pointerleave", onLeave);
       hero.removeEventListener("focusin", onFocus);
