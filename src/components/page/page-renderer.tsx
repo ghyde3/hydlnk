@@ -1,11 +1,14 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { PublishDoc } from "@/lib/document";
+import type { Block, PublishDoc } from "@/lib/document";
+import type { SiteContext } from "@/lib/site/menu";
 import { tokensToCssVars } from "@/lib/theme";
 import { backgroundImageUrl, gradientIsCustom } from "./background";
 import { Banner, bannerOf } from "./banner";
 import { BlockView, type BlockContext } from "./blocks";
 import { PageFooter, type PageChrome } from "./footer";
 import { Profile } from "./profile";
+import { SiteHeader } from "./site-header";
+import { SiteMenu } from "./site-menu";
 import "./page-renderer.css";
 
 export type { PageChrome } from "./footer";
@@ -27,6 +30,17 @@ export interface PageRendererProps {
   thumbnail?: boolean;
   /** Embeds as still posters, not players: nothing is requested from YouTube or Spotify (the shared preview, M6-10). See `BlockContext.inertEmbeds`. */
   inertEmbeds?: boolean;
+  /**
+   * The rest of the site (M11-07): the href of each sub-page for `page_link` blocks, and the menu to
+   * draw (built by `buildMenu`: null for none). Absent for a page drawn on its own.
+   */
+  site?: SiteContext;
+  /**
+   * Draw a sub-page (M11-06) instead of Home's own content: the site's small header (avatar and name,
+   * linking to Home) replaces the profile, the title is the page's one `<h1>`, and `blocks` replace
+   * Home's. `doc` still supplies the site's theme, fonts, banner and profile.
+   */
+  subPage?: { title: string; blocks: readonly Block[] };
 }
 
 /**
@@ -49,6 +63,8 @@ export function PageRenderer({
   footer,
   thumbnail,
   inertEmbeds,
+  site,
+  subPage,
 }: PageRendererProps) {
   const { tokens } = doc;
   const ctx: BlockContext = {
@@ -57,6 +73,7 @@ export function PageRenderer({
     mode,
     ...(thumbnail ? { thumbnail } : {}),
     ...(inertEmbeds ? { inertEmbeds } : {}),
+    ...(site ? { site: { hrefs: site.hrefs } } : {}),
   };
   // The background image is drawn only from the owner's page-media bucket: the URL is rebuilt from
   // a validated path, and anything else (a third-party address, a bad row) draws no image.
@@ -92,9 +109,15 @@ export function PageRenderer({
       )}
       {banner ? <Banner banner={banner} pageId={pageId} thumbnail={thumbnail === true} /> : null}
       <div className="pg-column">
-        <Profile profile={doc.profile} />
+        {subPage ? (
+          <SiteHeader profile={doc.profile} link={thumbnail !== true} />
+        ) : (
+          <Profile profile={doc.profile} />
+        )}
+        {site?.menu ? <SiteMenu items={site.menu.items} mode={site.menu.mode} /> : null}
+        {subPage ? <h1 className="pg-pagetitle">{subPage.title}</h1> : null}
         <main className="pg-blocks">
-          {doc.blocks.map((block) => (
+          {(subPage ? subPage.blocks : doc.blocks).map((block) => (
             <BlockView key={block.id} block={block} ctx={ctx} />
           ))}
         </main>

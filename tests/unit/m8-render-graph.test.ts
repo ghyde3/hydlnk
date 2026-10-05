@@ -225,7 +225,7 @@ describe("M8-03 the tenant group has no page, layout or boundary file any more",
 });
 
 describe("M8-02 one renderer, one module that outputs block markup", () => {
-  it("PageRenderer's props are the seven it had: doc, pageId, mode, chrome, footer, thumbnail, inertEmbeds", () => {
+  it("PageRenderer's props are the seven it had plus the two of Wave M: site and subPage", () => {
     const text = code(read("src/components/page/page-renderer.tsx"));
     const body = /export interface PageRendererProps \{([\s\S]*?)\n\}/.exec(text)![1]!;
     const props = [...body.matchAll(/^\s{2}(\w+)\??:/gm)].map((match) => match[1]);
@@ -237,6 +237,8 @@ describe("M8-02 one renderer, one module that outputs block markup", () => {
       "footer",
       "thumbnail",
       "inertEmbeds",
+      "site",
+      "subPage",
     ]);
   });
 

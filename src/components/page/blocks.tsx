@@ -18,6 +18,7 @@ import {
   type HeaderBlock,
   type ImageBlock,
   type LinkBlock,
+  type PageLinkBlock,
   type SocialBlock,
   type TextBlock,
 } from "@/lib/document";
@@ -31,6 +32,7 @@ import {
   type BlockOverrides,
   type TokenSet,
 } from "@/lib/theme";
+import { pageLinkHref, type SiteContext } from "@/lib/site/menu";
 import { EmbedFacadeSlot } from "./embed-slot";
 import { EmbedPoster } from "./embed-poster";
 import { ImagePicture, focusStyle } from "./image-frame";
@@ -76,6 +78,12 @@ export interface BlockContext {
    * else stay as they are; only `EmbedView` reads this.
    */
   inertEmbeds?: boolean;
+  /**
+   * The rest of the site (M11-07): the relative href of each sub-page, for `page_link` blocks. Absent
+   * on a page that is not drawn as part of a site (a demo): a page link to a sub-page then draws
+   * nothing, while one to Home still resolves.
+   */
+  site?: Pick<SiteContext, "hrefs">;
 }
 
 /**
@@ -172,6 +180,31 @@ function LinkView({ block, ctx }: { block: LinkBlock; ctx: BlockContext }) {
       )}
       {lock === null ? null : <LockMark kind={lock} />}
     </LinkBox>
+  );
+}
+
+/**
+ * A link to Home or another page of the site (M11-07): the link button's look, a relative href
+ * ("/" or "/{path}") built by `pageLinkHref` from the site's live pages, never routed through `/r`
+ * and not counted as a click (the page view is). A target that is gone draws nothing, so a deleted
+ * page leaves no dead button behind.
+ */
+function PageLinkView({ block, ctx }: { block: PageLinkBlock; ctx: BlockContext }) {
+  const href = pageLinkHref(block.target, ctx.site?.hrefs);
+  if (href === null) return null;
+  const { resolved, style } = blockTokens(ctx.tokens, block.overrides);
+  const props = {
+    className: "pg-link",
+    "data-block-id": block.id,
+    "data-block-type": "page_link",
+    "data-button-style": resolved.buttonStyle,
+    style,
+  };
+  if (ctx.thumbnail) return <div {...props}>{block.label}</div>;
+  return (
+    <a {...props} href={href}>
+      {block.label}
+    </a>
   );
 }
 
@@ -628,8 +661,7 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockContext }) {
     case "map":
       return <MapView block={block} ctx={ctx} />;
     case "page_link":
-      // M11-07: the renderer worker replaces this (a link button with a relative href, no /r).
-      return null;
+      return <PageLinkView block={block} ctx={ctx} />;
     default:
       return null;
   }
