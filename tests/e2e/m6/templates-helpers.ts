@@ -135,6 +135,10 @@ export function describeBlocks(blocks: DraftDoc["blocks"]): string[] {
         return `map:${block.name}`;
       case "page_link":
         return `page_link:${block.label}`;
+      case "items":
+        return `items:${block.items.length}`;
+      case "hours":
+        return `hours:${block.timezone}`;
     }
   });
 }

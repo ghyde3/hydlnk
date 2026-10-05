@@ -1,6 +1,7 @@
 import {
   BLOCK_TYPES,
   BLOCK_TYPE_LABELS,
+  blockDefaults,
   SOCIAL_PLATFORM_LABELS,
   type Block,
   type BlockType,
@@ -123,6 +124,17 @@ export function makeBlock(
     case "page_link":
       // M11-07: not a block the try-it page offers; a harmless link to Home keeps the switch total.
       return { ...common, type: "page_link", label: "Home", target: "home" };
+    case "items":
+      // M12-01: not a block the try-it page offers; the default keeps the switch total.
+      return {
+        ...common,
+        type: "items",
+        layout: "list",
+        items: [{ id: `${id}-0`, name: "Print", price: "$20", description: "", sold: false }],
+      };
+    case "hours":
+      // M12-02: not a block the try-it page offers; the default keeps the switch total.
+      return { ...blockDefaults.hours(), id };
     case "card":
       return {
         ...common,
@@ -325,5 +337,11 @@ export function blockSummary(block: Block): string {
     case "page_link":
       // M11-07: not offered by the try-it page; the renderer worker may refine this.
       return clip(block.label);
+    case "items":
+      // M12-01: not offered by the try-it page.
+      return clip(block.heading || "Items");
+    case "hours":
+      // M12-02: not offered by the try-it page.
+      return "Opening hours";
   }
 }

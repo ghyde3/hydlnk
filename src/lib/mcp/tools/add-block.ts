@@ -12,8 +12,11 @@ import { DRAFT_ONLY, WRITE_NOT_IDEMPOTENT, ifRevField, pageIdField } from "./com
 const input = z.strictObject({
   pageId: pageIdField,
   ifRev: ifRevField,
-  // M11-07: page_link is excluded until MCP sub-page support (M2).
-  type: z.enum(BLOCK_TYPES).exclude(["page_link"]).describe("The kind of block to add."),
+  // M11-07, M12-05: page_link, items and hours are excluded until MCP supports them (M12-05).
+  type: z
+    .enum(BLOCK_TYPES)
+    .exclude(["page_link", "items", "hours"])
+    .describe("The kind of block to add."),
   fields: z
     .looseObject({})
     .optional()

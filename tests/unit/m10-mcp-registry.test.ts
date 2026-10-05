@@ -278,7 +278,7 @@ describe("add_block's description matches the field schemas", () => {
   );
 
   // M11-07: page_link is not an MCP block type until sub-page support (M2).
-  const MCP_TYPES = BLOCK_TYPES.filter((type) => type !== "page_link");
+  const MCP_TYPES = BLOCK_TYPES.filter((type) => type !== "page_link" && type !== "items" && type !== "hours");
 
   it("names every block type once", () => {
     expect(Object.keys(segments).sort()).toEqual([...MCP_TYPES].sort());

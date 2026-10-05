@@ -42,6 +42,9 @@ export {
   type Profile,
   type Share,
   type PageLinkBlock,
+  type ItemsBlock,
+  type HoursBlock,
+  type ListItem,
   type PublishDoc,
   type SocialBlock,
   type SocialIcon,
@@ -175,6 +178,7 @@ export {
   newAppLink,
   newBookLink,
   newFaqItem,
+  newListItem,
   newGridCell,
   newSocialIcon,
 } from "./defaults";
@@ -345,3 +349,18 @@ export {
   type PathClash,
   type SitePageRef,
 } from "./site";
+
+// Items and hours blocks (Wave M, M12-01, M12-02).
+export {
+  DAY_KEYS,
+  DAY_LABELS,
+  HOURS_TIMEZONES,
+  HOURS_TIMEZONE_MESSAGE,
+  TIME_PATTERN,
+  hoursStatusAt,
+  isHoursTimezone,
+  timeToMinutes,
+  type DayKey,
+  type HoursStatus,
+  type HoursTimezone,
+} from "./hours";

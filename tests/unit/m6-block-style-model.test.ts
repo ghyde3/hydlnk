@@ -55,6 +55,8 @@ const CONTROLS: Record<BlockType, string[]> = {
   apps: ["color", "radius"],
   map: ["radius", "borderWidth", "color"],
   page_link: ["buttonStyle", "color", "radius"],
+  items: ["color", "radius"],
+  hours: ["color"],
 };
 
 const LABELS: Record<BlockType, string> = {
@@ -74,6 +76,8 @@ const LABELS: Record<BlockType, string> = {
   apps: "Color",
   map: "Border color",
   page_link: "Color",
+  items: "Color",
+  hours: "Color",
 };
 
 /** The keys the Color control writes for a color, per block type. */
@@ -94,6 +98,8 @@ const WRITTEN: Record<BlockType, Record<string, string>> = {
   apps: { text: COLOR, border: COLOR },
   map: { border: COLOR },
   page_link: { buttonBg: COLOR, accent: COLOR, buttonText: "#F7F3EC" },
+  items: { accent: COLOR, text: COLOR, border: COLOR },
+  hours: { accent: COLOR, text: COLOR, border: COLOR },
 };
 
 describe("M6-46 each block type's controls", () => {

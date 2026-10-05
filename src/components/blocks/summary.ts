@@ -130,6 +130,16 @@ export function blockRowSummary(block: Block): BlockRowSummary {
     case "page_link":
       // M11-07: the editor worker may add the target's page title as `sub`.
       return { typeLabel, title: line(block.label, untitled), sub: "" };
+    case "items":
+      // M12-01: the renderer worker may refine this.
+      return {
+        typeLabel,
+        title: line(block.heading ?? "", "Items"),
+        sub: count(block.items.length, "item", "items"),
+      };
+    case "hours":
+      // M12-02: the renderer worker may refine this.
+      return { typeLabel, title: "Opening hours", sub: block.timezone };
     default:
       return { typeLabel: "Block", title: "Unknown block", sub: "" };
   }

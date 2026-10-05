@@ -44,6 +44,9 @@ const BLOCK_CLASS_FAMILIES: Record<string, readonly string[]> = {
   map: ["map"],
   // A page link is drawn with the link button's classes (M11-07); the family has no rules of its own.
   page_link: ["pagelink"],
+  // M12-01, M12-02: the renderer worker writes these blocks' rules; until then the families are empty of rules.
+  items: ["items", "item"],
+  hours: ["hours"],
 };
 
 /** Every block type with rules of its own, in the order of the table above. */

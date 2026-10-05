@@ -26,6 +26,14 @@ import {
   LINK_ICON_ERROR_MESSAGE,
   featuredOverLimit,
 } from "./link-icons";
+import {
+  DAY_KEYS,
+  HOURS_TIMEZONE_MESSAGE,
+  HOURS_TIMEZONES,
+  TIME_MESSAGE,
+  TIME_PATTERN,
+  timeToMinutes,
+} from "./hours";
 import { navSchema, pageLinkTarget } from "./nav";
 import { LOGO_PLACEMENTS, NAME_SIZES, PROFILE_STYLE_MESSAGES, bannerIssues } from "./page-extras";
 import { SHARE_IMAGE_MIN_WIDTH, SHARE_IMAGE_WIDTH_MESSAGE } from "./share";
@@ -89,6 +97,8 @@ export const BLOCK_TYPES = [
   "apps",
   "map",
   "page_link",
+  "items",
+  "hours",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -109,6 +119,8 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   apps: "App store",
   map: "Map",
   page_link: "Page link",
+  items: "Items",
+  hours: "Hours",
 };
 
 /** Social platforms, in the order of the platform select. `email` stores an address, not a URL. */
@@ -663,6 +675,77 @@ function buildBlocks(mode: Mode) {
     overrides: blockOverrides.optional(),
   });
 
+  // Items (M12-01): a price list or menu. Prices are display text, shown as typed. A draft keeps any
+  // number of items (Publish names more than 100 on the block); each item has its own id, which keys
+  // its click and shares the site-wide id namespace.
+  const item = z.object({
+    id: idSchema,
+    name: text(mode, { max: LIMITS.itemName, required: "Add a name." }),
+    price: text(mode, { max: LIMITS.itemPrice }),
+    description: text(mode, { max: LIMITS.itemDescription }),
+    image: imageRefSchema.omit({ focus: true }).optional(),
+    url: url(mode, { optional: true }).optional(),
+    sold: z.boolean(),
+  });
+  const items = z.object({
+    ...common,
+    type: z.literal("items"),
+    heading: text(mode, { max: LIMITS.itemsHeading }).optional(),
+    layout: z.enum(["list", "grid"]),
+    items: publish
+      ? z
+          .array(item)
+          .min(1, { error: "Add at least one item." })
+          .max(LIMITS.itemsMax, { error: `Use up to ${LIMITS.itemsMax} items.` })
+      : z.array(item),
+    overrides: blockOverrides.optional(),
+  });
+
+  // Opening hours (M12-02): seven days, each closed or with up to two ranges. A draft keeps any
+  // short time text and time zone (the editor offers valid ones); Publish wants "HH:MM", a time
+  // zone of the fixed list, and at least one range on every day that is not closed.
+  const hoursRange = z
+    .object({
+      open: publish ? z.string().regex(TIME_PATTERN, { error: TIME_MESSAGE }) : z.string().max(16),
+      close: publish ? z.string().regex(TIME_PATTERN, { error: TIME_MESSAGE }) : z.string().max(16),
+    })
+    .superRefine((range, ctx) => {
+      if (publish && range.open === range.close) {
+        ctx.addIssue({ code: "custom", path: ["close"], message: "Close must differ from open." });
+      }
+    });
+  const hoursDay = z
+    .object({
+      closed: z.boolean(),
+      ranges: z.array(hoursRange).max(LIMITS.hoursRanges, {
+        error: `Use up to ${LIMITS.hoursRanges} time ranges a day.`,
+      }),
+    })
+    .superRefine((day, ctx) => {
+      if (publish && !day.closed && day.ranges.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["ranges"],
+          message: "Add opening times, or mark the day closed.",
+        });
+      }
+    });
+  const hours = z.object({
+    ...common,
+    type: z.literal("hours"),
+    timezone: publish
+      ? z.enum(HOURS_TIMEZONES, { error: HOURS_TIMEZONE_MESSAGE })
+      : z.string().max(64),
+    days: z.object(
+      Object.fromEntries(DAY_KEYS.map((key) => [key, hoursDay])) as Record<
+        (typeof DAY_KEYS)[number],
+        typeof hoursDay
+      >,
+    ),
+    note: text(mode, { max: LIMITS.hoursNote }).optional(),
+    overrides: blockOverrides.optional(),
+  });
+
   const block = z.discriminatedUnion("type", [
     link,
     card,
@@ -680,6 +763,8 @@ function buildBlocks(mode: Mode) {
     apps,
     map,
     pageLink,
+    items,
+    hours,
   ]);
 
   // The display options (M6-15, M6-17) are the same in both modes: a bad value fails the draft
@@ -785,6 +870,9 @@ export type BookBlock = Extract<Block, { type: "book" }>;
 export type AppsBlock = Extract<Block, { type: "apps" }>;
 export type MapBlock = Extract<Block, { type: "map" }>;
 export type PageLinkBlock = Extract<Block, { type: "page_link" }>;
+export type ItemsBlock = Extract<Block, { type: "items" }>;
+export type HoursBlock = Extract<Block, { type: "hours" }>;
+export type ListItem = ItemsBlock["items"][number];
 export type BookLink = BookBlock["links"][number];
 export type AppLink = AppsBlock["links"][number];
 export type SocialIcon = SocialBlock["icons"][number];
@@ -846,6 +934,9 @@ export function requireUniqueIds(
     } else if (block.type === "book" || block.type === "apps") {
       // Each store button is clicked and counted by its own id (M9-20, M9-21).
       block.links.forEach((link, i) => check(link.id, ["blocks", index, "links", i, "id"]));
+    } else if (block.type === "items") {
+      // An item's link is clicked and counted by the item's own id (M12-01).
+      block.items.forEach((item, i) => check(item.id, ["blocks", index, "items", i, "id"]));
     } else if (block.type === "map") {
       // The map's two buttons, Google Maps and Apple Maps, each have an id (M9-22).
       check(block.googleId, ["blocks", index, "googleId"]);

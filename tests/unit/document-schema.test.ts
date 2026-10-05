@@ -48,13 +48,18 @@ describe("block types (M2-01)", () => {
       "apps",
       "map",
       "page_link",
+      "items",
+      "hours",
     ];
     expect(BLOCK_TYPES.length).toBeGreaterThanOrEqual(12);
     expect([...BLOCK_TYPES]).toEqual(order.slice(0, BLOCK_TYPES.length));
   });
 
   it("the full fixture covers every type and passes both schemas", () => {
-    expect(new Set(fullDraft.blocks.map((b) => b.type))).toEqual(new Set(BLOCK_TYPES));
+    // M12-01, M12-02: items and hours join the full fixture once their renderer lands.
+    expect(new Set(fullDraft.blocks.map((b) => b.type))).toEqual(
+      new Set(BLOCK_TYPES.filter((t) => t !== "items" && t !== "hours")),
+    );
     expect(both(fullDraft)).toEqual([true, true]);
   });
 

@@ -124,10 +124,12 @@ const EXPECTED: Record<BlockType, string[]> = {
   apps: ["Color", "Corner radius"],
   map: ["Corner radius", "Border thickness", "Border color"],
   page_link: ["Button style", "Color", "Corner radius"],
+  items: ["Color", "Corner radius"],
+  hours: ["Color"],
 };
 
 // M11-07: page_link has no editor form or renderer yet; those workers drop this filter with theirs.
-const FORM_TYPES = BLOCK_TYPES.filter((type) => type !== "page_link");
+const FORM_TYPES = BLOCK_TYPES.filter((type) => type !== "page_link" && type !== "items" && type !== "hours");
 
 describe("M6-46 every block type has a 'Style this block' group", () => {
   it.each(FORM_TYPES.map((t) => [t]))("%s: the group, its line and its controls", (blockType) => {
