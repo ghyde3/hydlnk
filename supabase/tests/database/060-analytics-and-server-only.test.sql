@@ -81,7 +81,7 @@ select lives_ok(
   'the server can insert a click'
 );
 select is(
-  (select count(*)::int from public.events),
+  (select count(*)::int from public.events where page_id = '00000000-0000-4000-8000-0000000000f1'),
   2,
   'and read events back'
 );
