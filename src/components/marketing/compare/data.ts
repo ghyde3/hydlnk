@@ -41,20 +41,16 @@ export const SOURCES = {
     url: "https://help.beacons.ai/en/articles/4697153",
     label: "Beacons help: Customizing your page",
   },
-  shopifyLinkpop: { url: "https://apps.shopify.com/linkpop", label: "Linkpop in the Shopify App Store" },
+  shopifyLinkpop: {
+    url: "https://apps.shopify.com/linkpop",
+    label: "Linkpop in the Shopify App Store",
+  },
 } as const satisfies Record<string, Source>;
 
 export type SourceId = keyof typeof SOURCES;
 
 export type Topic =
-  | "price"
-  | "domain"
-  | "badge"
-  | "design"
-  | "fees"
-  | "analytics"
-  | "shopify"
-  | "app";
+  "price" | "domain" | "badge" | "design" | "fees" | "analytics" | "shopify" | "app";
 
 export interface Claim {
   topic: Topic;
@@ -120,7 +116,8 @@ export const LINKTREE_LOGO_BY_PLAN = [
 const linktreePrice = claim(
   "price",
   `Free is ${usd(0)}. ${LINKTREE_PLANS.map(
-    (plan) => `${plan.name} is ${usd(plan.yearly)} a month billed yearly or ${usd(plan.monthly)} billed monthly`,
+    (plan) =>
+      `${plan.name} is ${usd(plan.yearly)} a month billed yearly or ${usd(plan.monthly)} billed monthly`,
   ).join("; ")}.`,
   ["linktreePricing"],
 );
@@ -141,8 +138,7 @@ export const COMPETITORS: readonly Competitor[] = [
   {
     slug: "linktree",
     name: "Linktree",
-    trademarkLine:
-      "Linktree is a trademark of its owner. HYDLNK is not affiliated with Linktree.",
+    trademarkLine: "Linktree is a trademark of its owner. HYDLNK is not affiliated with Linktree.",
     title: "HYDLNK vs Linktree",
     description:
       "HYDLNK and Linktree side by side on price, custom domains, removing the logo, design control and fees on sales, with a source and a date for every Linktree claim.",
@@ -200,11 +196,9 @@ export const COMPETITORS: readonly Competitor[] = [
         ["beaconsPricing"],
       ),
       beaconsDomain,
-      claim(
-        "badge",
-        "Beacons branding can be removed on Creator Plus and Creator Max only.",
-        ["beaconsPricing"],
-      ),
+      claim("badge", "Beacons branding can be removed on Creator Plus and Creator Max only.", [
+        "beaconsPricing",
+      ]),
       claim(
         "design",
         "Beacons gives every plan colors, fonts, styles, layouts and image or video backgrounds.",

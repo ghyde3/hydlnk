@@ -57,7 +57,9 @@ export default function RemoveLinktreeBadgePage() {
           lead="We are plain about it: HYDLNK Free shows a small “Made with HYDLNK” badge at the bottom of your page. Pro and Studio remove it."
         />
         <div className="mt-10 grid gap-3 min-[760px]:grid-cols-3">
-          <InfoCard title="Free">Small “Made with HYDLNK” badge. Every block and theme option is still open.</InfoCard>
+          <InfoCard title="Free">
+            Small “Made with HYDLNK” badge. Every block and theme option is still open.
+          </InfoCard>
           <InfoCard title="Pro">{`No badge. Pro is ${priceSentence("pro")}.`}</InfoCard>
           <InfoCard title="Studio">No badge, with more sites and domains.</InfoCard>
         </div>

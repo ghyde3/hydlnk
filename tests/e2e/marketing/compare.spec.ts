@@ -20,7 +20,11 @@ const PAGES = [
     h1: "How to remove the Linktree logo from your page",
     guide: "/pricing",
   },
-  { path: "/link-in-bio/shopify", h1: "Link in bio for Shopify stores", guide: "/link-in-bio/instagram" },
+  {
+    path: "/link-in-bio/shopify",
+    h1: "Link in bio for Shopify stores",
+    guide: "/link-in-bio/instagram",
+  },
 ];
 
 const APP = url("app");
@@ -49,7 +53,9 @@ for (const { path, h1, guide } of PAGES) {
     await expect(main.getByRole("heading", { level: 2, name: "Sources" })).toBeVisible();
     const external = main.locator("#sources a[href^='https://']");
     expect(await external.count()).toBeGreaterThan(0);
-    for (const rel of await external.evaluateAll((els) => els.map((el) => el.getAttribute("rel")))) {
+    for (const rel of await external.evaluateAll((els) =>
+      els.map((el) => el.getAttribute("rel")),
+    )) {
       expect(rel).toContain("nofollow");
     }
     await expect(main.locator("img")).toHaveCount(0);
@@ -93,7 +99,9 @@ test("the comparison table lists HYDLNK's Free badge and Pro removal", async ({ 
   await expect(page.getByRole("table")).toContainText("Made with HYDLNK");
 });
 
-test("/remove-linktree-badge states the HYDLNK Free badge and that Pro removes it", async ({ page }) => {
+test("/remove-linktree-badge states the HYDLNK Free badge and that Pro removes it", async ({
+  page,
+}) => {
   await page.goto(url(null, "/remove-linktree-badge"));
   const main = page.locator("main");
   await expect(main.getByText(/HYDLNK Free shows a small .Made with HYDLNK. badge/)).toBeVisible();

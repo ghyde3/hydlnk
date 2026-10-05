@@ -64,8 +64,7 @@ export default function LinktreeCustomDomainPage() {
         </ol>
         <div className="mt-3 grid gap-3 min-[760px]:grid-cols-2">
           <InfoCard title="What you need">
-            A domain you already own, from any registrar. HYDLNK does not sell or register
-            domains.
+            A domain you already own, from any registrar. HYDLNK does not sell or register domains.
           </InfoCard>
           <InfoCard title="What stays the same">
             Your hydlnk.com address keeps working, and click tracking stays on your own domain too.
@@ -73,7 +72,9 @@ export default function LinktreeCustomDomainPage() {
         </div>
         <div className="mt-6 flex flex-wrap gap-x-6">
           <ArrowLink href="/custom-domains">Custom domains on HYDLNK</ArrowLink>
-          <ArrowLink href={guideHref("connecting-a-domain")}>Connecting a domain, step by step</ArrowLink>
+          <ArrowLink href={guideHref("connecting-a-domain")}>
+            Connecting a domain, step by step
+          </ArrowLink>
           <ArrowLink href="/vs/linktree">HYDLNK vs Linktree</ArrowLink>
         </div>
       </Section>
