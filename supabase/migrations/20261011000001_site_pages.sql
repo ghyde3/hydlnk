@@ -26,11 +26,15 @@
 --
 --   * Byte cap: an account's sub-page drafts and published documents together may not pass 64 MiB
 --     (67108864 bytes, measured as octet_length(doc::text), the way the per-row checks measure). A
---     running total per owner lives in `account_site_bytes`, kept by one BEFORE trigger on site_pages
---     (insert, update of draft or published, delete); a write that would pass the cap is refused with
---     HL009 before the row is written. Lock order everywhere is pages row, then site_pages rows, then
---     the owner's total row last (the trigger is named so it fires after enforce_site_page_limit),
---     so it cannot deadlock with publish_site or the page-limit trigger.
+--     running total per owner lives in `account_site_bytes`, kept by one AFTER ROW trigger on site_pages
+--     (insert, update of draft or published, delete), so a row that never lands (insert ... on conflict
+--     do nothing) is never counted; a write that would pass the cap is refused with HL009 (the RAISE
+--     aborts the statement). site_pages.page_id cannot change (a BEFORE trigger refuses it), so bytes
+--     never have to move between owners. Lock order everywhere is pages row, then site_pages rows,
+--     then the owner's total row last: an autosave locks its site_pages row and then the total, and
+--     deleting a site locks the pages row, then ALL of its site_pages rows (the first BEFORE DELETE
+--     trigger on pages, before the total is touched), then the total, so none can deadlock with
+--     publish_site, the page-limit trigger or each other.
 --   * admin_blocked_domain_impact also reads sub-pages (end of this file).
 --   * live_path cannot be a reserved path (the list mirrors RESERVED_PATHS in src/lib/document/path.ts;
 --     a unit test keeps the two equal) or start with hl-.
@@ -266,10 +270,11 @@ $$;
 
 revoke all on function public.site_page_doc_bytes(jsonb, jsonb) from public, anon, authenticated;
 
--- BEFORE insert, update of draft or published, delete. The total row is upserted (which locks it) and
--- the new total tested before the row is written; a refusal rolls the upsert back with the statement.
--- It fires after enforce_site_page_limit and set_updated_at (trigger names sort alphabetically), so
--- the total row is the last lock taken, the order publish_site and the limit trigger also follow.
+-- AFTER ROW insert, update of draft or published, delete. The total row is upserted (which locks it)
+-- and the new total tested; a refusal aborts the statement and rolls the upsert back with it. An AFTER
+-- trigger runs only for rows that really landed, so `insert ... on conflict do nothing` counts nothing
+-- for a skipped row. The row's own lock is taken by the write itself, so the total is always the last
+-- lock of an autosave (pages, then site_pages, then the total).
 -- A delete of a whole site reaches this trigger after the site row (and the owner) is gone, so the
 -- BEFORE DELETE trigger on pages (further down) frees those bytes instead and this one finds no owner.
 create function public.enforce_site_page_bytes()
@@ -289,14 +294,14 @@ begin
     where p.id = coalesce(new.page_id, old.page_id);
   if v_owner is null then
     -- Only a cascade from a deleted site gets here; there is nothing to count against.
-    return coalesce(new, old);
+    return null;
   end if;
 
   if tg_op = 'DELETE' then
     update public.account_site_bytes
       set bytes = greatest(bytes - public.site_page_doc_bytes(old.draft, old.published), 0)
       where owner_id = v_owner;
-    return old;
+    return null;
   end if;
 
   v_delta := public.site_page_doc_bytes(new.draft, new.published)
@@ -311,17 +316,41 @@ begin
     raise exception 'site storage limit reached: an account''s sub-pages may hold at most 64 MiB'
       using errcode = 'HL009';
   end if;
-  return new;
+  return null;
 end;
 $$;
 
 revoke all on function public.enforce_site_page_bytes() from public, anon, authenticated;
 
 create trigger site_pages_byte_cap
-  before insert or update of draft, published or delete on public.site_pages
+  after insert or update of draft, published or delete on public.site_pages
   for each row execute function public.enforce_site_page_bytes();
 
+-- A sub-page never moves to another site: the byte total is per owner and would drift. Server code
+-- that needs a copy inserts a new row.
+create function public.site_pages_page_id_immutable()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  raise exception 'site_pages.page_id cannot be changed'
+    using errcode = '23000';
+end;
+$$;
+
+revoke all on function public.site_pages_page_id_immutable() from public, anon, authenticated;
+
+create trigger site_pages_page_id_immutable
+  before update of page_id on public.site_pages
+  for each row
+  when (old.page_id is distinct from new.page_id)
+  execute function public.site_pages_page_id_immutable();
+
 -- Deleting a site (or its account) frees what its sub-pages held, before the cascade removes them.
+-- It fires after pages_queue_deleted_site_page_media (name order), which has already locked every
+-- sub-page row of the site, so the sum below (a fresh statement, a fresh snapshot) sees any autosave
+-- that committed while the delete waited for those locks.
 create function public.release_site_page_bytes_on_page_delete()
 returns trigger
 language plpgsql
@@ -440,6 +469,13 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- The first BEFORE DELETE trigger on pages (names sort alphabetically): lock the site's sub-page
+  -- rows now, in id order, so every path takes pages row, then site_pages rows, then the owner's
+  -- total (taken by pages_release_site_page_bytes after this one). An autosave holds its sub-page
+  -- row and then wants the total, so without this lock a delete holding the total could wait for
+  -- that row and deadlock.
+  perform 1 from public.site_pages where page_id = old.id order by id for update;
+
   insert into public.image_cleanup_queue (path, owner_id)
   select distinct p, old.owner_id
   from public.site_pages s
@@ -584,3 +620,59 @@ $$;
 
 comment on function public.admin_blocked_domain_impact(text, integer) is
   'The live sites (Home and published sub-pages) that link to a listed blocked domain or a subdomain of it (one row per site, with total_pages and draft_pages), read with blocked_links_in. A null page_id row means no live site matches. Server only.';
+
+-- ---------------------------------------------------------------------------
+-- requeue_media: move queue rows to the back in one statement
+-- ---------------------------------------------------------------------------
+
+-- The cleanup puts paths it could not remove back at the end of the owner's queue. service_role may
+-- not update the queue, and a delete followed by an insert loses rows when the second call fails, so
+-- one security definer function does it atomically.
+create function public.requeue_media(p_owner uuid, p_paths text[])
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_count integer;
+begin
+  update public.image_cleanup_queue
+    set queued_at = now()
+    where owner_id = p_owner and path = any (p_paths);
+  get diagnostics v_count = row_count;
+  return v_count;
+end;
+$$;
+
+revoke all on function public.requeue_media(uuid, text[]) from public, anon, authenticated;
+grant execute on function public.requeue_media(uuid, text[]) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- site_click_pairs: the click index without the documents
+-- ---------------------------------------------------------------------------
+
+-- Every id a click can name in a sub-page's PUBLISHED document: `id`, `googleId` and `appleId` at any
+-- depth up to 8 (the walk in src/lib/analytics/ingest/site-index.ts, which a unit test compares), as
+-- (block id, sub-page id) pairs, so the click index is built from ids and never reads a document.
+create function public.site_click_pairs(p_page_id uuid)
+returns table (block_id text, sub_page_id uuid)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select distinct i.block_id, s.id
+  from public.site_pages s
+  cross join lateral (
+    select jsonb_path_query(s.published, '$.**{0 to 8} ? (@.type() == "object").id ? (@.type() == "string")') #>> '{}' as block_id
+    union all
+    select jsonb_path_query(s.published, '$.**{0 to 8} ? (@.type() == "object").googleId ? (@.type() == "string")') #>> '{}'
+    union all
+    select jsonb_path_query(s.published, '$.**{0 to 8} ? (@.type() == "object").appleId ? (@.type() == "string")') #>> '{}'
+  ) as i
+  where s.page_id = p_page_id and s.published is not null
+$$;
+
+revoke all on function public.site_click_pairs(uuid) from public, anon, authenticated;
+grant execute on function public.site_click_pairs(uuid) to service_role;

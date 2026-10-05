@@ -19,6 +19,8 @@ export type SubSaveStatus =
   | "saved"
   | "error"
   | "too-large"
+  /** The account's 64 MiB sub-page cap (HL009): permanent until something is removed. */
+  | "storage-full"
   | "invalid"
   | "signed-out"
   | "blocked"
@@ -30,6 +32,7 @@ export type SubSaveResult =
   | { kind: "unauthorized" }
   | { kind: "missing" }
   | { kind: "too-large" }
+  | { kind: "storage-full" }
   | ({ kind: "blocked" } & BlockedLinkError)
   | { kind: "error" };
 
@@ -69,7 +72,7 @@ export class SubPageSaver {
   /** Pages whose last write was refused for good until they are edited. */
   private readonly refused = new Map<string, SubBlocked>();
   /** Pages the schema or the size limit refused, flagged until they are edited again. */
-  private readonly unsendable = new Map<string, "too-large" | "invalid">();
+  private readonly unsendable = new Map<string, "too-large" | "storage-full" | "invalid">();
   private version = 0;
   private timer: unknown = null;
   private retryIndex = 0;
@@ -220,6 +223,13 @@ export class SubPageSaver {
           if (!newer) {
             this.dirty.delete(id);
             this.unsendable.set(id, "too-large");
+          }
+          break;
+        case "storage-full":
+          // Refused for good until something is removed: not retried on a timer; the next edit tries again.
+          if (!newer) {
+            this.dirty.delete(id);
+            this.unsendable.set(id, "storage-full");
           }
           break;
         case "unauthorized":

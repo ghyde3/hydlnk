@@ -1249,10 +1249,21 @@ export type Database = {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
         Returns: Json
       }
+      requeue_media: {
+        Args: { p_owner: string; p_paths: string[] }
+        Returns: number
+      }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
       rollup_recent_days: { Args: { n: number }; Returns: number }
       run_domain_verification_sweep: { Args: never; Returns: undefined }
       run_nightly_maintenance: { Args: never; Returns: undefined }
+      site_click_pairs: {
+        Args: { p_page_id: string }
+        Returns: {
+          block_id: string
+          sub_page_id: string
+        }[]
+      }
       site_page_doc_bytes: {
         Args: { p_draft: Json; p_published: Json }
         Returns: number

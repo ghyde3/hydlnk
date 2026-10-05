@@ -3,6 +3,7 @@ import { emptySubPageDraft, resolveNav, suggestPath, type SubPageDraft } from "@
 import { pagesPerSiteMessage, toPlanId } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
 import type { Database, Json } from "@/lib/supabase/database.types";
+import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
 import { pathProblem } from "./pages";
 
 /**
@@ -21,6 +22,7 @@ export type SubPageError =
   | "not_found"
   | "account_suspended"
   | "page_limit"
+  | "storage_full"
   | "path_invalid"
   | "path_taken"
   | "create_failed"
@@ -38,6 +40,7 @@ export const SUB_PAGE_STATUS: Record<SubPageError, number> = {
   not_found: 404,
   account_suspended: 403,
   page_limit: 403,
+  storage_full: 403,
   path_invalid: 422,
   path_taken: 409,
   create_failed: 500,
@@ -49,6 +52,7 @@ export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
   account_suspended:
     "Your account is suspended, so its pages can’t be changed. Contact support to appeal.",
   page_limit: "This site is at its limit of pages.",
+  storage_full: STORAGE_FULL_MESSAGE,
   path_invalid: "Choose a valid path.",
   path_taken: "Another page of this site already uses that path.",
   create_failed: "Couldn’t add the page. Try again.",
@@ -146,6 +150,7 @@ export async function createSubPageWithClient(
         .eq("page_id", site.id);
       return failure("page_limit", pagesPerSiteMessage(account.plan, (count.count ?? 0) + 1));
     }
+    if (inserted.error.code === "HL009") return failure("storage_full");
     console.error("[site-pages] create failed", inserted.error.code, inserted.error.message);
     return failure("create_failed");
   }

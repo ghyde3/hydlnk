@@ -7,11 +7,16 @@
 --     back);
 --   * admin_blocked_domain_impact counts sub-pages (published for live, draft for drafts), grouped to
 --     the site's handle.
--- Lock order and non-blocking of event inserts are two-session properties, checked by hand (see
--- tests/unit/m11/review-fixes-sql.test.ts for the source assertions).
+--   * the total is kept by an AFTER ROW trigger: `on conflict do nothing` counts nothing, and
+--     site_pages.page_id cannot change;
+--   * requeue_media (atomic, service_role only) and site_click_pairs (the click index ids).
+-- Lock order (pages row, then site_pages rows, then the total: the first BEFORE DELETE trigger on pages
+-- locks the sub-page rows) and non-blocking of event inserts are two-session properties, and pgTAP
+-- runs in one session (no dblink), so tests/unit/m11-review-fixes-sql.test.ts asserts the lock
+-- statement and the trigger order in the migration source.
 
 begin;
-select plan(33);
+select plan(44);
 
 select tests.create_supabase_user('a', 'a-178@example.test');   -- pro
 select tests.create_supabase_user('b', 'b-178@example.test');   -- pro
@@ -233,5 +238,81 @@ select is(
   1::bigint, 'a draft-only sub-page link counts as a draft'
 );
 
+-- ---------------------------------------------------------------------------
+-- AFTER ROW accounting: skipped rows count nothing; page_id is immutable
+-- ---------------------------------------------------------------------------
+
+update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = tests.get_supabase_uid('a');
+insert into public.site_pages (id, page_id, draft)
+  values ('00000000-0000-4000-8000-00000178a0b1', '00000000-0000-4000-8000-00000178a002', pg_temp.doc('dup', 9000))
+  on conflict (id) do nothing;
+select is(pg_temp.total('a'), pg_temp.actual('a'), 'insert ... on conflict do nothing counts the bytes of a row that never landed');
+
+select throws_ok(
+  $$ update public.site_pages set page_id = '00000000-0000-4000-8000-00000178a001'
+       where id = '00000000-0000-4000-8000-00000178a0b1' $$,
+  '23000', null, 'moving a sub-page to another site is refused'
+);
+select is(pg_temp.total('a'), pg_temp.actual('a'), 'and the total did not move');
+select is(
+  (select page_id from public.site_pages where id = '00000000-0000-4000-8000-00000178a0b1'),
+  '00000000-0000-4000-8000-00000178a002'::uuid, 'the page is still on its site'
+);
+
+-- ---------------------------------------------------------------------------
+-- requeue_media
+-- ---------------------------------------------------------------------------
+
+insert into public.image_cleanup_queue (path, owner_id, queued_at) values
+  (tests.get_supabase_uid('a')::text || '/rq-1.webp', tests.get_supabase_uid('a'), now() - interval '2 days'),
+  (tests.get_supabase_uid('a')::text || '/rq-2.webp', tests.get_supabase_uid('a'), now() - interval '2 days'),
+  (tests.get_supabase_uid('b')::text || '/rq-3.webp', tests.get_supabase_uid('b'), now() - interval '2 days');
+select is(
+  public.requeue_media(tests.get_supabase_uid('a'), array[tests.get_supabase_uid('a')::text || '/rq-1.webp', tests.get_supabase_uid('b')::text || '/rq-3.webp']),
+  1, 'requeue_media touches only the named paths of that owner'
+);
+select ok(
+  (select queued_at > now() - interval '1 hour' from public.image_cleanup_queue where path = tests.get_supabase_uid('a')::text || '/rq-1.webp'),
+  'the row moved to the back'
+);
+select ok(
+  (select count(*) = 2 from public.image_cleanup_queue where queued_at < now() - interval '1 day'
+     and path in (tests.get_supabase_uid('a')::text || '/rq-2.webp', tests.get_supabase_uid('b')::text || '/rq-3.webp')),
+  'the other rows (the same owner''s unnamed one, another owner''s) were left alone'
+);
+select ok(
+  has_function_privilege('service_role', 'public.requeue_media(uuid, text[])', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.requeue_media(uuid, text[])', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.requeue_media(uuid, text[])', 'EXECUTE'),
+  'requeue_media is service_role only'
+);
+
+-- ---------------------------------------------------------------------------
+-- site_click_pairs
+-- ---------------------------------------------------------------------------
+
+insert into public.site_pages (id, page_id, draft, published, published_at) values
+  ('00000000-0000-4000-8000-00000178a0c1', '00000000-0000-4000-8000-00000178a002',
+   '{"path":"pairs","title":"P","description":"","blocks":[{"id":"DRAFTONLY"}]}',
+   '{"path":"pairs","title":"P","description":"","blocks":[{"id":"B1","type":"grid","items":[{"id":"G1"}]},{"id":"B2","googleId":"gg","appleId":"aa","n":[[{"id":"deep"}]],"id2":"nope","t":{"id":5}}]}',
+   now()),
+  ('00000000-0000-4000-8000-00000178a0c2', '00000000-0000-4000-8000-00000178a002',
+   '{"path":"unpub","title":"U","description":"","blocks":[{"id":"UNPUB"}]}', null, null);
+select is(
+  (select array_agg(block_id order by block_id collate "C") from public.site_click_pairs('00000000-0000-4000-8000-00000178a002')
+     where sub_page_id = '00000000-0000-4000-8000-00000178a0c1'),
+  array['B1','B2','G1','aa','deep','gg'],
+  'site_click_pairs returns every nested id, googleId and appleId of a published document, and nothing else'
+);
+select is(
+  (select count(*)::int from public.site_click_pairs('00000000-0000-4000-8000-00000178a002') where block_id in ('DRAFTONLY', 'UNPUB')),
+  0, 'drafts and unpublished pages are never read'
+);
+select ok(
+  has_function_privilege('service_role', 'public.site_click_pairs(uuid)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.site_click_pairs(uuid)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.site_click_pairs(uuid)', 'EXECUTE'),
+  'site_click_pairs is service_role only'
+);
+
 select * from finish();
-rollback;

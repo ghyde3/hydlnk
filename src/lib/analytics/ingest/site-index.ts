@@ -81,6 +81,34 @@ export function buildIndexShards(
   return shards.map((shard) => Object.fromEntries(shard));
 }
 
+/** One (block id, sub-page id) pair, as `site_click_pairs` returns them. */
+export interface SubPageIdPair {
+  block_id: string;
+  sub_page_id: string;
+}
+
+/**
+ * `buildIndexShards` from the ids alone: Home's document and the (block id, sub-page id) pairs of the
+ * sub-pages' published documents, which the database extracts so no sub-page document is read. Same
+ * rule as the walk: Home first, then sub-pages in id order, the first page holding an id wins.
+ */
+export function buildIndexShardsFromPairs(
+  home: unknown,
+  pairs: readonly SubPageIdPair[],
+): BlockIndex[] {
+  const index = new Map<string, string>();
+  const homeIds: string[] = [];
+  collectIds(home, homeIds);
+  for (const id of homeIds) if (!index.has(id)) index.set(id, "");
+  const ordered = pairs
+    .map((pair) => ({ id: pair.block_id, owner: pair.sub_page_id.toLowerCase() }))
+    .sort((a, b) => a.owner.localeCompare(b.owner));
+  for (const { id, owner } of ordered) if (!index.has(id)) index.set(id, owner);
+  const shards: Array<Map<string, string>> = Array.from({ length: INDEX_SHARDS }, () => new Map());
+  for (const [id, owner] of index) shards[shardOf(id)]!.set(id, owner);
+  return shards.map((shard) => Object.fromEntries(shard));
+}
+
 export interface SiteRead {
   home: unknown;
   subPages: PublishedSubPage[];

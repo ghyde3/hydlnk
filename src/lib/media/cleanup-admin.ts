@@ -44,19 +44,10 @@ export function adminCleanupDeps(
     },
     async requeue(ownerId, paths) {
       if (paths.length === 0) return;
-      // service_role may select, insert and delete on the queue, not update (see 102-media): a
-      // delete and a fresh insert move a row to the back (queued_at defaults to now()).
-      const removed = await admin
-        .from("image_cleanup_queue")
-        .delete()
-        .eq("owner_id", ownerId)
-        .in("path", paths);
-      if (removed.error) throw new Error(`Re-queueing media failed: ${removed.error.message}`);
-      const added = await admin.from("image_cleanup_queue").upsert(
-        paths.map((path) => ({ path, owner_id: ownerId })),
-        { onConflict: "path", ignoreDuplicates: true },
-      );
-      if (added.error) throw new Error(`Re-queueing media failed: ${added.error.message}`);
+      // One statement (service_role may not update the queue itself): the rows keep their place in
+      // the table and only move to the back, so a failure cannot lose any.
+      const { error } = await admin.rpc("requeue_media", { p_owner: ownerId, p_paths: paths });
+      if (error) throw new Error(`Re-queueing media failed: ${error.message}`);
     },
     async dequeue(ownerId, paths) {
       if (paths.length === 0) return;

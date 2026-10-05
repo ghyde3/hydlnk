@@ -22,6 +22,7 @@ export function createSubPageSaveFn(): SubSaveFn {
       if (status === 401) return { kind: "unauthorized" };
       const blocked = readBlockedLinkError(error);
       if (blocked) return { kind: "blocked", ...blocked };
+      if (error.code === "HL009") return { kind: "storage-full" };
       return error.code === "23514" ? { kind: "too-large" } : { kind: "error" };
     }
     if (data.length === 0) return { kind: "missing" };

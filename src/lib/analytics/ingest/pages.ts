@@ -9,7 +9,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { resolveLink } from "./link-target";
 import { getPublishedSubPage } from "@/lib/site/published";
 import {
-  buildIndexShards,
+  buildIndexShardsFromPairs,
   documentForBlock,
   shardOf,
   type BlockIndex,
@@ -109,9 +109,10 @@ async function readCore(pageId: string): Promise<CoreRead> {
 
 /** One shard of the site's block index, built from the PUBLISHED documents only (a draft is never read). */
 async function readIndexShard(pageId: string, shard: number): Promise<BlockIndex> {
-  const { data, error } = await createAdminSupabase()
+  const admin = createAdminSupabase();
+  const { data, error } = await admin
     .from("pages")
-    .select("published, accounts!inner(suspended_at), site_pages(id, published)")
+    .select("published, accounts!inner(suspended_at)")
     .eq("id", pageId)
     .maybeSingle();
   if (error)
@@ -119,11 +120,13 @@ async function readIndexShard(pageId: string, shard: number): Promise<BlockIndex
       `Loading the block index of page ${pageId} for a click failed: ${error.message}`,
     );
   if (!data || data.published === null || data.accounts.suspended_at !== null) return {};
-  const subPages = (data.site_pages ?? [])
-    .filter((subPage) => subPage.published !== null)
-    .map((subPage) => ({ id: subPage.id.toLowerCase(), published: subPage.published as unknown }))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  return buildIndexShards(data.published, subPages)[shard] ?? {};
+  // The sub-pages come as (block id, page id) pairs from SQL, never as documents.
+  const pairs = await admin.rpc("site_click_pairs", { p_page_id: pageId });
+  if (pairs.error)
+    throw new Error(
+      `Loading the sub-page ids of page ${pageId} for a click failed: ${pairs.error.message}`,
+    );
+  return buildIndexShardsFromPairs(data.published, pairs.data ?? [])[shard] ?? {};
 }
 
 function cached<Args extends [string, ...unknown[]], Result>(

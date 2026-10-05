@@ -7,6 +7,7 @@ import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
 import { TextField } from "@/components/blocks/text-field";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { NAV_MAX_ITEMS, NAV_MESSAGES, SUB_PAGE_LIMITS } from "@/lib/document";
+import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
 import type { SubSaveStatus } from "@/lib/site-pages/saver";
 import { PathField } from "./pages-card";
 import { ToggleRow } from "./toggle-row";
@@ -18,6 +19,7 @@ const SAVE_TEXT: Record<SubSaveStatus, string> = {
   saved: "Saved",
   error: "Not saved. Retrying…",
   "too-large": "This page is too large to save. Remove some content.",
+  "storage-full": STORAGE_FULL_MESSAGE,
   invalid: "This page can’t be saved yet. Fix the field with an error.",
   "signed-out": "You’re signed out. Sign in again to save.",
   blocked: "A link on this page points to a blocked site. Change it to save.",

@@ -43,6 +43,47 @@ describe("publish_site locks the site row without blocking foreign-key checks", 
   });
 });
 
+describe("lock order and after-row accounting", () => {
+  const firstDelete = SITE_PAGES.slice(
+    SITE_PAGES.indexOf("create function public.media_queue_site_refs_on_page_delete"),
+    SITE_PAGES.indexOf("create trigger pages_queue_deleted_site_page_media"),
+  );
+  it("the first BEFORE DELETE trigger on pages locks the site's sub-page rows, in id order", () => {
+    expect(firstDelete).toContain(
+      "perform 1 from public.site_pages where page_id = old.id order by id for update;",
+    );
+    // The lock is the first statement, before anything else in the body.
+    expect(firstDelete.indexOf("perform 1 from public.site_pages")).toBeLessThan(
+      firstDelete.indexOf("insert into public.image_cleanup_queue"),
+    );
+  });
+
+  it("the byte release trigger sorts after it, so its sum is read after the lock", () => {
+    const names = ["pages_queue_deleted_site_page_media", "pages_release_site_page_bytes"];
+    expect([...names].reverse().sort()).toEqual(names);
+    for (const name of names)
+      expect(SITE_PAGES).toMatch(
+        new RegExp(`create trigger ${name}\\s+before delete on public.pages`),
+      );
+  });
+
+  it("no other BEFORE DELETE trigger on pages sorts earlier", () => {
+    const names = [
+      ...SITE_PAGES.matchAll(/create trigger (\w+)\s+before delete on public\.pages/g),
+    ].map((m) => m[1]!);
+    expect([...names].sort()[0]).toBe("pages_queue_deleted_site_page_media");
+  });
+
+  it("the byte total is kept by an AFTER ROW trigger and page_id is immutable", () => {
+    expect(SITE_PAGES).toMatch(
+      /create trigger site_pages_byte_cap\s+after insert or update of draft, published or delete on public\.site_pages/,
+    );
+    expect(SITE_PAGES).toMatch(
+      /create trigger site_pages_page_id_immutable\s+before update of page_id on public\.site_pages/,
+    );
+  });
+});
+
 describe("the byte cap", () => {
   it("is 64 MiB, raises HL009 and fires after the page-limit trigger so its lock is last", () => {
     expect(SITE_PAGES).toContain("c_cap constant bigint := 67108864");

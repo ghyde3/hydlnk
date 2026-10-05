@@ -417,16 +417,23 @@ describe("M5-14 the real dependencies (secret key, server-only tables and functi
       bucket: "page-media",
       paths: [P1],
     });
-    // The kept path is re-queued (delete + insert) first; the removed one is dequeued last.
-    expect(calls.filter((c) => c.op === "delete").at(-1)?.args).toMatchObject({
+    // The kept path is re-queued in one RPC (no delete and insert pair); the removed one is dequeued.
+    expect(calls.filter((c) => c.op === "rpc").map((c) => (c.args as { fn: string }).fn)).toEqual([
+      "media_paths_in_use",
+      "requeue_media",
+    ]);
+    expect(calls.find((c) => (c.args as { fn?: string }).fn === "requeue_media")?.args).toEqual({
+      fn: "requeue_media",
+      p_owner: A,
+      p_paths: [P2],
+    });
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
+    expect(calls.find((c) => c.op === "delete")?.args).toMatchObject({
       table: "image_cleanup_queue",
       eq: { owner_id: A },
       in: { col: "path", values: [P1] },
     });
-    expect(calls.find((c) => c.op === "delete")?.args).toMatchObject({
-      in: { col: "path", values: [P2] },
-    });
-    expect(calls.some((c) => c.op === "upsert")).toBe(true);
+    expect(calls.some((c) => c.op === "upsert")).toBe(false);
   });
 
   it("a Storage error is thrown (nothing dequeued); cleanupMediaQuietly logs it and returns null", async () => {

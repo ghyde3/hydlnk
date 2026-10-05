@@ -26,6 +26,7 @@ import {
   BLOCKED_PUBLISH_NOTE,
   PUBLISH_FAILED_MESSAGE,
   PUBLISH_RATE_LIMITED_MESSAGE,
+  STORAGE_FULL_MESSAGE,
 } from "@/lib/editor/messages";
 import { initialEditorState } from "@/lib/editor/state";
 import { computePublishStatus } from "@/lib/editor/status";
@@ -312,7 +313,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
               ? { message: "Couldn’t publish. Your account is suspended.", retry: false }
               : result.reason === "rate_limited"
                 ? { message: PUBLISH_RATE_LIMITED_MESSAGE, retry: false }
-                : { message: PUBLISH_FAILED_MESSAGE, retry: true },
+                : result.reason === "storage_full"
+                  ? { message: STORAGE_FULL_MESSAGE, retry: false }
+                  : { message: PUBLISH_FAILED_MESSAGE, retry: true },
         );
       }
     } catch {

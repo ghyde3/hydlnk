@@ -42,6 +42,25 @@ vi.mock("next/cache", () => ({
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminSupabase: () => ({
+    // site_click_pairs: every id/googleId/appleId string of each published sub-page document.
+    async rpc(name: string) {
+      if (name !== "site_click_pairs") return { data: null, error: { message: name } };
+      const walk = (value: unknown, out: string[]): void => {
+        if (typeof value !== "object" || value === null) return;
+        if (Array.isArray(value)) return value.forEach((item) => walk(item, out));
+        for (const [key, child] of Object.entries(value)) {
+          if (["id", "googleId", "appleId"].includes(key) && typeof child === "string")
+            out.push(child);
+          else walk(child, out);
+        }
+      };
+      const data = [...state.subs].flatMap(([id, published]) => {
+        const ids: string[] = [];
+        walk(published, ids);
+        return ids.map((block_id) => ({ block_id, sub_page_id: id }));
+      });
+      return { data, error: null };
+    },
     from(table: string) {
       const filters = new Map<string, unknown>();
       const chain: Record<string, unknown> = {

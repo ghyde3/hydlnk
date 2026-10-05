@@ -37,7 +37,9 @@ export type PublishFailureReason =
   /** A link in the saved draft points to a blocked site (M5-03); `errors` name each link and its host. */
   | "blocked_link"
   /** Too many publishes in the last hour (M11-12): nothing was read or written; try again later. */
-  | "rate_limited";
+  | "rate_limited"
+  /** The account's sub-pages would pass the 64 MiB byte cap (HL009): not retryable until content is removed. */
+  | "storage_full";
 
 export type PublishResult =
   | { ok: true; publishedAt: string }
@@ -290,6 +292,7 @@ export async function publishPageCore(
   if (written.error) {
     const { code, message } = written.error;
     if (code === "P0002") return refuse("forbidden");
+    if (code === "HL009") return refuse("storage_full");
     if (code === "22023" || code === "23505") {
       // A page was added or deleted since the read above, or two pages took one path meanwhile:
       // nothing was written, and publishing again sees the site as it is now.
