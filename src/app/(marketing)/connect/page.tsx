@@ -13,20 +13,18 @@ import {
 import { appOrigin } from "@/lib/routing/urls";
 
 /*
- * Setup steps, as read on 2026-10-04 (M10-34). The labels below are the vendors' own; when one
- * changes, change it here and re-read both pages:
+ * Claude setup labels read on 2026-10-04 (M10-34); ChatGPT plugin labels re-checked on
+ * 2026-10-05. When a vendor changes the flow, re-read its documentation:
  *
  *   Claude (custom connectors, including Team and Enterprise Owners and the Free plan limit):
  *     https://claude.com/docs/connectors/custom/add-unlisted
  *   Claude Code (`claude mcp add --transport http`, then /mcp and Authenticate):
  *     https://code.claude.com/docs/en/mcp-quickstart
- *   ChatGPT (developer mode, the Plugins page, a public endpoint, the tools menu):
- *     https://developers.openai.com/apps-sdk/deploy/connect-chatgpt
+ *   ChatGPT (Plugins → plus → Create custom MCP server → Create as a plugin → install):
+ *     https://developers.openai.com/api/docs/guides/custom-mcp-server
  *
- * The two vendors' pages disagree with each other, and with older write-ups, on some words (Claude
- * says Customize and Connectors, ChatGPT says Plugins), so PROGRESS.md lists the re-check under
- * "Open for Gary". The ChatGPT page makes no claim about which plans can use developer mode, so
- * neither does this page.
+ * ChatGPT's current Plugins flow does not list Developer mode as a prerequisite.
+ * Account and workspace permissions apply; do not imply identical access on every ChatGPT plan.
  */
 
 export const metadata: Metadata = marketingMetadata({
@@ -187,32 +185,50 @@ export default function ConnectPage() {
 
               <h2 id="chatgpt">Connect ChatGPT</h2>
               <p>
-                These are the steps on OpenAI’s help page as of October 2026. ChatGPT’s menus change
-                often. If a label differs, look for developer mode or custom connectors in your
-                settings. Whether you can add a custom connector depends on your account and your
-                workspace.
+                Add HYDLNK to ChatGPT as a plugin. These steps follow OpenAI’s documentation as of
+                October 2026. Use ChatGPT on the web. ChatGPT’s menus may change, and availability
+                depends on your account and your workspace permissions.
               </p>
               <ol>
                 <li>
-                  <strong>Turn on developer mode.</strong> In ChatGPT, open Settings, then Security
-                  and login, and turn on Developer mode.
+                  <strong>Open Plugins.</strong> In ChatGPT, open the Plugins page.
                 </li>
                 <li>
-                  <strong>Start a new connection.</strong> Open the Plugins page and select the plus
-                  button.
+                  <strong>Add a custom MCP server.</strong> Select the plus button, then choose
+                  Create custom MCP server.
                 </li>
                 <li>
-                  <strong>Name it.</strong> Give it a name, such as HYDLNK, and a short description.
+                  <strong>Name the plugin.</strong> Enter HYDLNK as the name. You can add a
+                  description such as “Manage and publish your HYDLNK pages from ChatGPT.”
                 </li>
                 <li>
-                  <strong>Enter the address.</strong> Under Connection, choose a public endpoint and
-                  enter <code>{CONNECTOR_ADDRESS}</code>, then create it.
+                  <strong>Connect HYDLNK.</strong> Under Connection, enter{" "}
+                  <code>{CONNECTOR_ADDRESS}</code> as the Server URL. Choose OAuth for
+                  authentication.
                 </li>
                 <li>
-                  <strong>Use it.</strong> Start a new chat and add HYDLNK from the tools menu. When
-                  ChatGPT asks you to sign in to HYDLNK, choose what to allow and select Allow.
+                  <strong>Create the plugin.</strong> Review ChatGPT’s risk warning, select I
+                  understand and want to continue, then choose Create as a plugin. Review the tools
+                  ChatGPT finds.
+                </li>
+                <li>
+                  <strong>Sign in and allow.</strong> When ChatGPT asks you to connect your account,
+                  sign in on HYDLNK, choose what to allow and select Allow. Tick Publish your pages
+                  only if you want ChatGPT to publish for you.
+                </li>
+                <li>
+                  <strong>Install HYDLNK.</strong> Find the plugin in your personal plugins or the
+                  workspace where you created it, and choose Install if it is not already installed.
+                </li>
+                <li>
+                  <strong>Use it.</strong> Start a new conversation, type <code>@</code> in the
+                  prompt box and select HYDLNK. Then ask it to work on your page.
                 </li>
               </ol>
+              <p>
+                You do not need to enable Developer mode for this Plugins setup. ChatGPT may ask you
+                to confirm actions that change or publish content.
+              </p>
 
               <h2 id="privacy">Your privacy</h2>
               <ul>
@@ -250,7 +266,11 @@ export default function ConnectPage() {
 
               <h2 id="good-to-know">Good to know</h2>
               <ul>
-                <li>It works on every plan, Free included.</li>
+                <li>The connector is available on every HYDLNK plan, Free included.</li>
+                <li>
+                  Custom plugins and MCP actions in ChatGPT depend on your ChatGPT account and
+                  workspace permissions.
+                </li>
                 <li>
                   To keep things fair, an AI app can make about {MCP_USER_PER_MINUTE} requests a
                   minute for you, and can publish up to {MCP_PUBLISH_PER_HOUR} times an hour.
