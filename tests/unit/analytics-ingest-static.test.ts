@@ -189,8 +189,10 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     expect(selects).toEqual([
       "handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published_at)",
       "published, handle, accounts!inner(suspended_at), domains(hostname, status)",
-      "published, accounts!inner(suspended_at), site_pages(id, published)",
+      // Home's document only: a sub-page's block ids come from the site_click_pairs RPC (M11-12).
+      "published, accounts!inner(suspended_at)",
     ]);
+    expect(source).toMatch(/rpc\(\s*"site_click_pairs"/);
     for (const select of selects) expect(select).not.toMatch(/\bdraft\b|\*/);
     expect(strip(source)).not.toMatch(/\bdraft\b/);
   });

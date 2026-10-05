@@ -202,7 +202,11 @@ describe.skipIf(!run)("HL009 in Publish and the click index (local Supabase)", (
 
 describe("the media requeue is one RPC", () => {
   it("calls requeue_media once, never deleting or inserting, and throws on failure", async () => {
+    // The deps are given a client, so the admin factory is never called; mock it so the module
+    // loads where the server env is absent (CI's unit job).
+    vi.doMock("@/lib/supabase/admin", () => ({ createAdminSupabase: vi.fn() }));
     const { adminCleanupDeps } = await import("@/lib/media/cleanup-admin");
+    vi.doUnmock("@/lib/supabase/admin");
     const calls: unknown[] = [];
     const from = vi.fn();
     const ok = { rpc: async (...args: unknown[]) => (calls.push(args), { error: null }), from };
