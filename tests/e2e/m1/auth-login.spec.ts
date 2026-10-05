@@ -38,7 +38,7 @@ test.describe("M1-03 log in page and email sign-in link", () => {
     await expect(page.getByText("or", { exact: true })).toBeVisible();
     // Google's own button (stubbed here, M1-29) sits below the "or" rule.
     await expect(stubFace(page)).toBeVisible();
-    await expect(page.getByRole("link", { name: "Create your page" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "Create your site" })).toHaveAttribute(
       "href",
       "/signup",
     );

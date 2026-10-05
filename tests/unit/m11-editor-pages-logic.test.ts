@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptySubPageDraft } from "@/lib/document";
 import {
   addToNav,
+  navIsFull,
   moveInNav,
   orderSitePages,
   pageLimitState,
@@ -74,6 +75,15 @@ describe("menu moves", () => {
     expect(moveInNav(nav, "a", -1).items).toEqual(["a", "b", "c"]);
     expect(moveInNav(nav, "c", 1).items).toEqual(["a", "b", "c"]);
     expect(moveInNav(nav, "x", 1).items).toEqual(["a", "b", "c"]);
+  });
+  it("a page joins the menu only while it has fewer than 20 items", () => {
+    const items = Array.from({ length: 19 }, (_, i) => `p${i}`);
+    const nineteen = addToNav({ show: true, items }, "last");
+    expect(nineteen.items).toHaveLength(20);
+    expect(navIsFull(nineteen)).toBe(true);
+    // The 21st is created but stays out of the menu, so Home's draft keeps validating.
+    expect(addToNav(nineteen, "extra").items).toEqual(nineteen.items);
+    expect(navIsFull({ show: true, items })).toBe(false);
   });
 });
 

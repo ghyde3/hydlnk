@@ -135,7 +135,7 @@ export function stepsFor(input: {
       state: state(3),
       title: "We verify and issue SSL",
       text: live
-        ? `Verified. ${hostname} is serving your page over HTTPS.`
+        ? `Verified. ${hostname} is serving your site over HTTPS.`
         : stale
           ? STEP3_STALE
           : STEP3_PENDING,
@@ -172,7 +172,7 @@ export function showsStudioUpsell(plan: PlanId): boolean {
 
 /** The strip's sentence, with the Studio count read from the limits table. */
 export function studioUpsellText(): string {
-  return `Running pages for clients? Studio includes ${PLAN_LIMITS.studio.customDomains} custom domains.`;
+  return `Running sites for clients? Studio includes ${PLAN_LIMITS.studio.customDomains} custom domains.`;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -186,7 +186,7 @@ export const REMOVE_FAILED = "We couldn’t remove that domain from our host. Tr
 export const SERVES_FAILED = "We couldn’t save that. Try again.";
 export const RECORDS_UNAVAILABLE = "We couldn’t load your DNS records.";
 export const UNPUBLISHED_HINT =
-  "This page isn’t published yet. Visitors see a not-found page until you publish it.";
+  "This site isn’t published yet. Visitors see a not-found page until you publish it.";
 export const EMPTY_HOSTNAME = "Enter your domain, like links.example.com.";
 export const ADD_FAILED = "We couldn’t add that domain. Try again.";
 export const UNKNOWN_DOMAIN = "That domain isn’t on your account anymore. Reload the page.";

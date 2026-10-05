@@ -15,7 +15,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     const response = await page.goto(SIGNUP);
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("HYDLNK \u2014 Sign up");
-    await expect(page.getByRole("heading", { level: 1, name: "Create your page" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Create your site" })).toBeVisible();
     await expect(
       page.getByText(
         "Pick a handle and we\u2019ll email you a sign-in link. No password to remember.",
@@ -36,7 +36,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       "href",
       url(null, "/privacy"),
     );
-    await expect(page.getByText("Already have a page?")).toBeVisible();
+    await expect(page.getByText("Already have a site?")).toBeVisible();
     await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
   });
@@ -131,7 +131,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       page,
     }) => {
       await page.goto(SIGNUP);
-      await expect(page.getByRole("heading", { level: 1, name: "Create your page" })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Create your site" })).toBeVisible();
       await expectNoHorizontalScroll(page);
       await expectTapTargets(page);
       const bar = await page.locator("aside").boundingBox();

@@ -24,7 +24,7 @@ export default async function SignupPage({ searchParams }: PageProps<"/app/signu
   return (
     <AuthLayout handle={initialHandle}>
       <AuthHeading
-        title="Create your page"
+        title="Create your site"
         intro={"Pick a handle and we’ll email you a sign-in link. No password to remember."}
       />
       <div className="mt-7">
@@ -42,7 +42,7 @@ export default async function SignupPage({ searchParams }: PageProps<"/app/signu
         .
       </p>
       <p className="mt-4 flex flex-wrap items-center gap-x-1.5 text-sm text-text-2">
-        Already have a page?
+        Already have a site?
         <Link
           href="/login"
           className="inline-flex min-h-11 min-w-11 items-center font-semibold text-ink"

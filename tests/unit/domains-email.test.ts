@@ -13,8 +13,8 @@ describe("M5-23 the email", () => {
 
   it("subject, body sentence and the one link", () => {
     expect(content.subject).toBe("links.example.test is live");
-    expect(content.text).toContain("Your page is now served at https://links.example.test.");
-    expect(content.html).toContain("Your page is now served at https://links.example.test.");
+    expect(content.text).toContain("Your site is now served at https://links.example.test.");
+    expect(content.html).toContain("Your site is now served at https://links.example.test.");
     expect(content.text).toContain("Open links.example.test");
     expect(content.text).toContain("https://links.example.test/");
     const links = [...content.html.matchAll(/<a\s[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g)];

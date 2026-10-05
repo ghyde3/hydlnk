@@ -126,6 +126,6 @@ describe("M9-09 the component escapes everything it is handed", () => {
   it("the plain-text part is the template's words around the value, as text (nothing is parsed)", async () => {
     const hostname = 'x"><script>alert(1)</script>.example.test';
     const text = await render(createElement(DomainLive, { hostname }), { plainText: true });
-    expect(text).toBe(`Your page is now served at https://${hostname}.\n\nOpen ${hostname} https://${hostname}/`);
+    expect(text).toBe(`Your site is now served at https://${hostname}.\n\nOpen ${hostname} https://${hostname}/`);
   });
 });

@@ -68,6 +68,8 @@ export class SubPageSaver {
   private readonly dirty = new Map<string, Entry>();
   /** Pages whose last write was refused for good until they are edited. */
   private readonly refused = new Map<string, SubBlocked>();
+  /** Pages the schema or the size limit refused, flagged until they are edited again. */
+  private readonly unsendable = new Map<string, "too-large" | "invalid">();
   private version = 0;
   private timer: unknown = null;
   private retryIndex = 0;
@@ -98,6 +100,7 @@ export class SubPageSaver {
     if (this.disposed) return;
     this.version += 1;
     this.dirty.set(id, { doc, version: this.version });
+    this.unsendable.delete(id);
     if (this.refused.delete(id)) this.onBlocked(id, null);
     if (this.current === "signed-out" || this.current === "missing") return;
     if (this.current === "error") return;
@@ -108,6 +111,7 @@ export class SubPageSaver {
   /** Forget a page without writing it (it was deleted). */
   drop(id: string): void {
     this.dirty.delete(id);
+    this.unsendable.delete(id);
     if (this.refused.delete(id)) this.onBlocked(id, null);
     if (this.dirty.size === 0 && (this.current === "pending" || this.current === "saving")) {
       this.cancelTimer();
@@ -120,6 +124,7 @@ export class SubPageSaver {
     const stored = () =>
       this.dirty.size === 0 &&
       this.refused.size === 0 &&
+      this.unsendable.size === 0 &&
       (this.current === "idle" || this.current === "saved");
     if (this.disposed) return stored();
     this.cancelTimer();
@@ -175,7 +180,7 @@ export class SubPageSaver {
     return work;
   }
 
-  /** Writes every dirty page once, stopping at the first one that fails. */
+  /** Writes every dirty page once; a page that cannot be sent is flagged and the rest still go. Stops at a failure worth retrying. */
   private async write(): Promise<void> {
     if (this.disposed || this.dirty.size === 0) return;
     if (this.current !== "error" && this.current !== "signed-out") this.setStatus("saving");
@@ -183,14 +188,15 @@ export class SubPageSaver {
       if (this.disposed) return;
       // Client-side gate: never send what the schema or the size limit would refuse.
       if (jsonbTextBytes(entry.doc) > LIMITS.draftBytes) {
+        // This page stays flagged; the others are still written.
         this.dirty.delete(id);
-        this.setStatus("too-large");
-        return;
+        this.unsendable.set(id, "too-large");
+        continue;
       }
       if (!draftSubPageSchema.safeParse(entry.doc).success) {
         this.dirty.delete(id);
-        this.setStatus("invalid");
-        return;
+        this.unsendable.set(id, "invalid");
+        continue;
       }
       let result: SubSaveResult;
       try {
@@ -211,10 +217,11 @@ export class SubPageSaver {
           this.setStatus("missing");
           return;
         case "too-large":
-          this.dirty.delete(id);
-          this.cancelTimer();
-          this.setStatus("too-large");
-          return;
+          if (!newer) {
+            this.dirty.delete(id);
+            this.unsendable.set(id, "too-large");
+          }
+          break;
         case "unauthorized":
           this.cancelTimer();
           this.setStatus("signed-out");
@@ -245,7 +252,14 @@ export class SubPageSaver {
       this.setStatus("pending");
       this.arm(this.debounceMs);
     } else {
-      this.setStatus(this.refused.size > 0 ? "blocked" : "saved");
+      const flagged = [...this.unsendable.values()];
+      this.setStatus(
+        flagged.length > 0
+          ? flagged[flagged.length - 1]!
+          : this.refused.size > 0
+            ? "blocked"
+            : "saved",
+      );
     }
   }
 }

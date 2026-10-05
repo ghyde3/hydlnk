@@ -12,7 +12,7 @@ const FILES: readonly { kind: ExportKind; label: string }[] = [
 
 export const EXPORT_HINT =
   "Unique visitors are counted per day, so they do not add up across days.";
-export const EXPORT_UNAVAILABLE_HINT = "Export is available once your page has real data.";
+export const EXPORT_UNAVAILABLE_HINT = "Export is available once your site has real data.";
 
 const BUTTON =
   "inline-flex min-h-11 w-full items-center justify-center rounded-md border border-line-3 bg-surface px-4 text-center text-sm font-semibold text-ink no-underline hl:w-auto";

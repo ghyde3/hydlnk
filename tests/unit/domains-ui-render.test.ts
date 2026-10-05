@@ -81,7 +81,7 @@ describe("M4-10 Custom domain card by plan", () => {
 describe("M4-10 pieces", () => {
   it("the Studio strip links to /settings#plans", () => {
     const out = renderToStaticMarkup(createElement(StudioUpsell));
-    expect(out).toContain("Running pages for clients? Studio includes 15 custom domains.");
+    expect(out).toContain("Running sites for clients? Studio includes 15 custom domains.");
     expect(out).toContain('href="/settings#plans"');
     expect(out).toContain("Compare plans");
     expect(out).toContain("border-dashed");

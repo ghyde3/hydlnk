@@ -4,7 +4,7 @@ import { DomainLive } from "@/emails/domain-live";
 
 /**
  * The "your domain is live" email (M5-23, M9-09): the words, nothing else. Subject
- * "links.example.test is live", body "Your page is now served at https://links.example.test.", one
+ * "links.example.test is live", body "Your site is now served at https://links.example.test.", one
  * "Open links.example.test" link, an HTML and a plain-text part, no exclamation marks.
  *
  * The template is src/emails/domain-live.tsx (react-email). `render` is asynchronous, so this

@@ -7,7 +7,14 @@ import { tenantOrigin } from "@/lib/publish/urls";
 import { customOrigin } from "@/lib/routing/urls";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { resolveLink } from "./link-target";
-import { buildBlockIndex, documentForBlock, type SiteRead } from "./site-index";
+import { getPublishedSubPage } from "@/lib/site/published";
+import {
+  buildIndexShards,
+  documentForBlock,
+  shardOf,
+  type BlockIndex,
+  type SiteRead,
+} from "./site-index";
 import type { BeaconPage, ClickTarget } from "./types";
 import type { ContactCard } from "./vcard";
 
@@ -66,16 +73,21 @@ export async function lookupBeaconPage(pageId: string): Promise<BeaconPage | nul
   return read.found ? read.page : null;
 }
 
-/** What the cached click read hands back: plain JSON, so the data cache can store it. */
-type PublishedRead =
-  ({ found: true; handle: string; customHosts: string[] } & SiteRead) | { found: false };
+/**
+ * What the cached click reads hand back: plain JSON, so the data cache can store it. A site is never
+ * cached as one item (the Data Cache refuses an item over 2 MB and a Pro site is ten documents of up
+ * to 512 KiB, a Studio site five hundred). Three kinds of entry, all under the site's tag:
+ * the CORE (Home's document, the handle, the verified hosts), one INDEX SHARD (block id to the page
+ * that holds it, a sixteenth of the ids) and one entry per sub-page document (`site/published.ts`).
+ * A click reads the core, one shard and, for a sub-page block, that page's document.
+ */
+type CoreRead =
+  { found: true; handle: string; customHosts: string[]; home: unknown } | { found: false };
 
-async function readPublished(pageId: string): Promise<PublishedRead> {
+async function readCore(pageId: string): Promise<CoreRead> {
   const { data, error } = await createAdminSupabase()
     .from("pages")
-    .select(
-      "published, handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published)",
-    )
+    .select("published, handle, accounts!inner(suspended_at), domains(hostname, status)")
     .eq("id", pageId)
     .maybeSingle();
   // A database failure is an error, not a "not found": nobody should be told a link is gone
@@ -85,16 +97,9 @@ async function readPublished(pageId: string): Promise<PublishedRead> {
   if (!data || data.published === null || data.accounts.suspended_at !== null) {
     return { found: false };
   }
-  // Published sub-pages only, oldest id order for a stable index; a draft is never read.
-  const subPages = (data.site_pages ?? [])
-    .filter((subPage) => subPage.published !== null)
-    .map((subPage) => ({ id: subPage.id.toLowerCase(), published: subPage.published as unknown }))
-    .sort((a, b) => a.id.localeCompare(b.id));
   return {
     found: true,
     home: data.published,
-    subPages,
-    index: buildBlockIndex(data.published, subPages),
     handle: data.handle,
     customHosts: (data.domains ?? [])
       .filter((domain) => domain.status === "verified")
@@ -102,23 +107,68 @@ async function readPublished(pageId: string): Promise<PublishedRead> {
   };
 }
 
+/** One shard of the site's block index, built from the PUBLISHED documents only (a draft is never read). */
+async function readIndexShard(pageId: string, shard: number): Promise<BlockIndex> {
+  const { data, error } = await createAdminSupabase()
+    .from("pages")
+    .select("published, accounts!inner(suspended_at), site_pages(id, published)")
+    .eq("id", pageId)
+    .maybeSingle();
+  if (error)
+    throw new Error(
+      `Loading the block index of page ${pageId} for a click failed: ${error.message}`,
+    );
+  if (!data || data.published === null || data.accounts.suspended_at !== null) return {};
+  const subPages = (data.site_pages ?? [])
+    .filter((subPage) => subPage.published !== null)
+    .map((subPage) => ({ id: subPage.id.toLowerCase(), published: subPage.published as unknown }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return buildIndexShards(data.published, subPages)[shard] ?? {};
+}
+
+function cached<Args extends [string, ...unknown[]], Result>(
+  read: (...args: Args) => Promise<Result>,
+  name: string,
+  args: Args,
+  keyParts: string[],
+): Promise<Result> {
+  // `next dev` reads Postgres every time (the same rule as `published-page.ts`).
+  if (process.env.NODE_ENV !== "production") return read(...args);
+  return unstable_cache(read, [name, PUBLIC_READ_CACHE_VERSION, ...keyParts], {
+    tags: [pageTag(args[0])],
+    revalidate: PAGE_REVALIDATE_SECONDS,
+  })(...args);
+}
+
 /**
- * The site read of a click (M11-09): Home's published document, the published sub-pages and the
- * site-wide block index, cached under the site's tag, like the public page itself: Publish expires
- * the tag, so a link edited and republished redirects to its new URL at once, and a suspension or
- * deletion drops it. A click costs no query and one document parse, however many pages the site has.
- * `next dev` reads Postgres every time (the same rule as `published-page.ts`).
+ * The site read of a click (M11-09) for one block id: Home's published document, the sub-page that
+ * holds the block (when it is not Home) and the one-entry index that names it. Publish expires the
+ * tag, so a link edited and republished redirects to its new URL at once, and a suspension or
+ * deletion drops it. A click costs no query and at most two document parses.
  */
-function readPublishedCached(pageId: string): Promise<PublishedRead> {
-  if (process.env.NODE_ENV !== "production") return readPublished(pageId);
-  return unstable_cache(
-    readPublished,
-    ["click-target", "site-index", PUBLIC_READ_CACHE_VERSION, pageId],
-    {
-      tags: [pageTag(pageId)],
-      revalidate: PAGE_REVALIDATE_SECONDS,
-    },
-  )(pageId);
+async function readPublishedCached(
+  pageId: string,
+  blockId: string,
+): Promise<({ found: true; handle: string; customHosts: string[] } & SiteRead) | { found: false }> {
+  const core = await cached(readCore, "click-core", [pageId], [pageId]);
+  if (!core.found) return { found: false };
+  const shard = shardOf(blockId);
+  const index = await cached(readIndexShard, "click-index", [pageId, shard], [pageId, `${shard}`]);
+  const owner = Object.hasOwn(index, blockId) ? index[blockId]! : null;
+  const subPages: SiteRead["subPages"] = [];
+  if (owner !== null && owner !== "") {
+    const sub = await getPublishedSubPage(pageId, owner);
+    if (!sub) return { found: false };
+    subPages.push({ id: owner, published: sub.document });
+  }
+  return {
+    found: true,
+    handle: core.handle,
+    customHosts: core.customHosts,
+    home: core.home,
+    subPages,
+    index: owner === null ? {} : { [blockId]: owner },
+  };
 }
 
 /**
@@ -129,7 +179,7 @@ function readPublishedCached(pageId: string): Promise<PublishedRead> {
  * that is not a link, or a URL that is not plain http(s).
  */
 export async function resolveClickTarget(pageId: string, id: string): Promise<ClickTarget | null> {
-  const read = await readPublishedCached(pageId);
+  const read = await readPublishedCached(pageId, id);
   if (!read.found) return null;
   const holder = documentForBlock(read, id);
   if (!holder) return null;
@@ -157,7 +207,7 @@ export async function resolveContactCard(
   pageId: string,
   blockId: string,
 ): Promise<ContactCard | null> {
-  const read = await readPublishedCached(pageId);
+  const read = await readPublishedCached(pageId, blockId);
   if (!read.found) return null;
   const holder = documentForBlock(read, blockId);
   if (!holder) return null;

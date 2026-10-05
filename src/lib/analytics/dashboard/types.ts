@@ -58,7 +58,7 @@ export interface Breakdowns {
 export interface StatsData {
   window: RangeWindow;
   plan: PlanId;
-  /** The page has a published document; false shows "Publish your page to start counting views." */
+  /** The page has a published document; false shows "Publish your site to start counting views." */
   published: boolean;
   /** Every number is the deterministic sample set: the page has never recorded anything. */
   sample: boolean;

@@ -188,7 +188,8 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     const selects = [...source.matchAll(/\.select\(\s*"([^"]*)",?\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
       "handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published_at)",
-      "published, handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published)",
+      "published, handle, accounts!inner(suspended_at), domains(hostname, status)",
+      "published, accounts!inner(suspended_at), site_pages(id, published)",
     ]);
     for (const select of selects) expect(select).not.toMatch(/\bdraft\b|\*/);
     expect(strip(source)).not.toMatch(/\bdraft\b/);

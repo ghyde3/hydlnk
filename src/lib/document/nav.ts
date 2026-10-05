@@ -13,6 +13,7 @@ export const HOME_TARGET = "home";
 
 export const NAV_MESSAGES = {
   tooMany: `Use ${NAV_MAX_ITEMS} menu items or fewer.`,
+  menuFull: `The menu is full (${NAV_MAX_ITEMS} items). Take a page out of it first.`,
   duplicate: "A page may appear in the menu once.",
   badId: "Choose a page of this site.",
   badTarget: "Choose Home or a page of this site.",
@@ -63,4 +64,23 @@ export function pageLinkTarget(mode: "draft" | "publish"): z.ZodString {
   const base = z.string().trim().max(64, { error: NAV_MESSAGES.badTarget });
   if (mode === "draft") return base;
   return base.refine(isPageLinkTarget, { error: NAV_MESSAGES.badTarget });
+}
+
+/**
+ * The menu of a stored draft that does not validate, repaired instead of dropped: items that are not
+ * ids or repeat an earlier one are pruned and the list is cut to the cap; `show` is kept when it is a
+ * boolean. Undefined when `raw` is absent or not an object.
+ */
+export function repairNav(raw: unknown): Nav | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return undefined;
+  const { show, items } = raw as { show?: unknown; items?: unknown };
+  const kept: string[] = [];
+  if (Array.isArray(items)) {
+    for (const item of items) {
+      if (kept.length >= NAV_MAX_ITEMS) break;
+      if (typeof item !== "string" || !subPageIdSchema.safeParse(item).success) continue;
+      if (!kept.includes(item)) kept.push(item);
+    }
+  }
+  return { show: typeof show === "boolean" ? show : true, items: kept };
 }

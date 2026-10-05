@@ -6,7 +6,7 @@ import { Icon } from "@/components/app/icon";
 import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
 import { TextField } from "@/components/blocks/text-field";
 import { useWorkspace } from "@/components/workspace/workspace-context";
-import { SUB_PAGE_LIMITS } from "@/lib/document";
+import { NAV_MAX_ITEMS, NAV_MESSAGES, SUB_PAGE_LIMITS } from "@/lib/document";
 import type { SubSaveStatus } from "@/lib/site-pages/saver";
 import { PathField } from "./pages-card";
 import { ToggleRow } from "./toggle-row";
@@ -32,6 +32,7 @@ const SAVE_TEXT: Record<SubSaveStatus, string> = {
 export function PageSettingsCard() {
   const { site, liveUrl } = useWorkspace();
   const headingId = useId();
+  const [menuMessage, setMenuMessage] = useState<string | null>(null);
   const id = site.activeId;
   const settings = site.activeSettings;
   const item = site.items.find((entry) => entry.id === id);
@@ -89,8 +90,21 @@ export function PageSettingsCard() {
           label="Show in the menu"
           testId="page-in-menu"
           pressed={item.inMenu}
-          onToggle={() => site.toggleMenu(id)}
+          onToggle={() => {
+            // The menu holds at most NAV_MAX_ITEMS pages: past that the draft would not save.
+            if (!item.inMenu && menuItems.length >= NAV_MAX_ITEMS) {
+              setMenuMessage(NAV_MESSAGES.menuFull);
+              return;
+            }
+            setMenuMessage(null);
+            site.toggleMenu(id);
+          }}
         />
+        {menuMessage ? (
+          <p role="alert" data-testid="page-menu-full" className="m-0 text-[13px] text-bad">
+            {menuMessage}
+          </p>
+        ) : null}
         {item.inMenu && position !== null ? (
           <div className="flex flex-wrap items-center gap-2" data-testid="menu-order">
             <span className="text-[13px] text-text-2">

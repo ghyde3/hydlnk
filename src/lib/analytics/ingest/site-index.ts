@@ -52,6 +52,35 @@ export function buildBlockIndex(home: unknown, subPages: readonly PublishedSubPa
   return Object.fromEntries(index);
 }
 
+/**
+ * The index is cached in shards (by a hash of the id), so no cache entry holds a whole Studio site's
+ * ids: the Data Cache refuses an item over 2 MB, and 500 pages of 50 blocks and their nested ids would
+ * pass that in one map. A shard is about a sixteenth of it.
+ */
+export const INDEX_SHARDS = 16;
+
+/** The shard that holds `id`: a stable FNV-1a hash, so a write and a read always agree. */
+export function shardOf(id: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash % INDEX_SHARDS;
+}
+
+/** The block index split into `INDEX_SHARDS` plain objects, shard `n` holding the ids with `shardOf(id) === n`. */
+export function buildIndexShards(
+  home: unknown,
+  subPages: readonly PublishedSubPage[],
+): BlockIndex[] {
+  const shards: Array<Map<string, string>> = Array.from({ length: INDEX_SHARDS }, () => new Map());
+  for (const [id, owner] of Object.entries(buildBlockIndex(home, subPages))) {
+    shards[shardOf(id)]!.set(id, owner);
+  }
+  return shards.map((shard) => Object.fromEntries(shard));
+}
+
 export interface SiteRead {
   home: unknown;
   subPages: PublishedSubPage[];

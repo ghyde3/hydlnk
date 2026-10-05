@@ -319,6 +319,7 @@ export {
   isPageLinkTarget,
   navSchema,
   publishNav,
+  repairNav,
   resolveNav,
   subPageIdSchema,
   type Nav,

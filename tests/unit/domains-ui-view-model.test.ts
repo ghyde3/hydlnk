@@ -94,12 +94,12 @@ describe("M4-14 steps of a verified domain", () => {
       "Step 2 of 3, done",
       "Step 3 of 3, done",
     ]);
-    expect(steps[2]!.text).toBe("Verified. links.example.test is serving your page over HTTPS.");
+    expect(steps[2]!.text).toBe("Verified. links.example.test is serving your site over HTTPS.");
   });
 
   it("is never stale", () => {
     const stale = stepsFor({ status: "verified", hostname: "links.example.test", stale: true });
-    expect(stale[2]!.text).toBe("Verified. links.example.test is serving your page over HTTPS.");
+    expect(stale[2]!.text).toBe("Verified. links.example.test is serving your site over HTTPS.");
   });
 });
 
@@ -155,7 +155,7 @@ describe("M4-10 usage line, form and the Studio strip", () => {
     expect(showsStudioUpsell("free")).toBe(false);
     expect(showsStudioUpsell("studio")).toBe(false);
     expect(studioUpsellText()).toBe(
-      "Running pages for clients? Studio includes 15 custom domains.",
+      "Running sites for clients? Studio includes 15 custom domains.",
     );
   });
 });

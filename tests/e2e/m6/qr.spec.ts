@@ -60,7 +60,7 @@ test.describe("M6-31 the card", () => {
     await expect(address).toHaveText(url(user.handle));
     const mono = await address.evaluate((el) => getComputedStyle(el).fontFamily.toLowerCase());
     expect(mono).toContain("mono");
-    await expect(box.getByText("Scan it to open your page.")).toBeVisible();
+    await expect(box.getByText("Scan it to open your site.")).toBeVisible();
     await expect(box.getByRole("button", { name: "Download PNG", exact: true })).toBeVisible();
     await expect(box.getByRole("button", { name: "Download SVG", exact: true })).toBeVisible();
     // The primary button is charcoal, the secondary white with a border.
@@ -88,7 +88,7 @@ test.describe("M6-31 the states", () => {
     await emptyUser(context, "qs1");
     const box = await openDialog(page);
     await expect(
-      box.getByText("Publish your page first. Then you can download its QR code."),
+      box.getByText("Publish your site first. Then you can download its QR code."),
     ).toBeVisible();
     await expect(box.getByTestId("qr-code")).toHaveCount(0);
     await expect(box.getByRole("button")).toHaveCount(0);
@@ -97,7 +97,7 @@ test.describe("M6-31 the states", () => {
     await publishNow(page);
     await expect(box.getByTestId("qr-code")).toBeVisible();
     await expect(box.getByRole("button", { name: "Download PNG", exact: true })).toBeVisible();
-    await expect(box.getByText("Publish your page first")).toHaveCount(0);
+    await expect(box.getByText("Publish your site first")).toHaveCount(0);
   });
 
   test("M6-31 a suspended owner sees that the page isn't available, with no code and no downloads", async ({
@@ -106,7 +106,7 @@ test.describe("M6-31 the states", () => {
   }) => {
     await signInAsUser(context, "qs2", { suspended: true });
     const box = await openDialog(page);
-    await expect(box.getByText("This page isn’t available right now.")).toBeVisible();
+    await expect(box.getByText("This site isn’t available right now.")).toBeVisible();
     await expect(box.getByTestId("qr-code")).toHaveCount(0);
     await expect(box.getByRole("button", { name: /Download/ })).toHaveCount(0);
   });

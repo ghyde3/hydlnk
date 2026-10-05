@@ -7,7 +7,7 @@ import type { DomainErrorCode } from "./types";
  */
 
 export const DOMAIN_MESSAGES = {
-  hostnameTaken: "That domain is already connected to a page.",
+  hostnameTaken: "That domain is already connected to a site.",
   unreachableAdd: "We couldn’t reach our host to add that domain. Try again.",
   conflictElsewhere: "That domain is already connected elsewhere on our host. Contact support.",
   capacity: "We can’t add more domains right now. Try again later.",
@@ -18,8 +18,8 @@ export const DOMAIN_MESSAGES = {
     "This domain wasn’t connected within 7 days, so we released it. Add it again to try once more.",
   checkedJustNow: "Checked just now. DNS isn’t pointing here yet. Records can take a while to spread.",
   checkedFewSecondsAgo: "Checked a few seconds ago.",
-  choosePage: "Choose one of your pages for this domain.",
-  notYourPage: "Choose one of your pages for this domain.",
+  choosePage: "Choose one of your sites for this domain.",
+  notYourPage: "Choose one of your sites for this domain.",
   noSuchDomain: "We couldn’t find that domain.",
   signedOut: "Sign in to manage your domains.",
   suspended: "Your account is suspended. Contact support to appeal.",

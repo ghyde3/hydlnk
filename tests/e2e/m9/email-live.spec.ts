@@ -49,7 +49,7 @@ test.describe("M9-09 the message Mailpit receives", () => {
     // Both parts are there and non-empty, with the words of M5-23.
     expect(full.HTML.trim().length).toBeGreaterThan(100);
     expect(full.Text.trim().length).toBeGreaterThan(20);
-    const sentence = `Your page is now served at https://${host}.`;
+    const sentence = `Your site is now served at https://${host}.`;
     for (const part of [full.HTML, full.Text]) {
       expect(part.split(sentence).length - 1).toBe(1);
       expect(part).toContain(`Open ${host}`);
@@ -100,14 +100,14 @@ test.describe("M9-09 the HTML part in a viewport", () => {
     });
     expect(container).toBeGreaterThan(0);
     expect(container).toBeLessThanOrEqual(480);
-    await expect(page.getByText("Your page is now served at https://links.example.test.")).toBeVisible();
+    await expect(page.getByText("Your site is now served at https://links.example.test.")).toBeVisible();
   });
 
   test("M9-09 at 1440x900 it is one readable column and the link is visible without scrolling", async ({ page }, info) => {
     test.skip(info.project.name !== "desktop", "the desktop viewport");
     expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
     await openHtml(page);
-    const sentence = page.getByText("Your page is now served at https://links.example.test.");
+    const sentence = page.getByText("Your site is now served at https://links.example.test.");
     const link = page.getByRole("link", { name: "Open links.example.test" });
     await expect(link).toBeInViewport({ ratio: 1 });
     const [s, l] = [(await sentence.boundingBox())!, (await link.boundingBox())!];

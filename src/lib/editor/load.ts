@@ -26,7 +26,7 @@ import {
   pageUtmSchema,
   redirectSchema,
 } from "@/lib/document/link-fields";
-import { navSchema } from "@/lib/document/nav";
+import { repairNav } from "@/lib/document/nav";
 import { resolveProfileOptions } from "@/lib/document/profile-options";
 import { tokenOverridesSchema, validBlockOverrides } from "@/lib/theme";
 
@@ -261,9 +261,8 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   const redirect =
     source.redirect !== undefined && parsedRedirect.success ? parsedRedirect.data : undefined;
 
-  // The site's menu (M11-07): kept when it reads, else dropped (Publish prunes it anyway).
-  const parsedNav = navSchema.safeParse(source.nav);
-  const nav = source.nav !== undefined && parsedNav.success ? parsedNav.data : undefined;
+  // The site's menu (M11-07): pruned to the ids that read, at most the cap, never dropped whole.
+  const nav = repairNav(source.nav);
 
   const rawTheme = isRecord(source.theme) ? source.theme : undefined;
   let ref: string | null = null;

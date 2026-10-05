@@ -116,7 +116,7 @@ test.describe("M4-15 POST /api/cron/verify-domains", () => {
     expect(mail).toHaveLength(1);
     expect(mail[0]!.Subject).toBe(`${ready} is live`);
     const full = await getMessage(mail[0]!.ID);
-    expect(full.Text).toContain(`Your page is now served at https://${ready}.`);
+    expect(full.Text).toContain(`Your site is now served at https://${ready}.`);
     expect(full.Text).not.toContain("!");
     expect((full.HTML.match(/<a\s/g) ?? []).length).toBe(1);
     expect(full.HTML).toContain(`Open ${ready}`);

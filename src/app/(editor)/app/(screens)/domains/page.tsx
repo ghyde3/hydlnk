@@ -37,7 +37,7 @@ export default async function DomainsScreen() {
 
   return (
     <>
-      <ScreenHeader breadcrumb="Where your page lives" title="Domains" />
+      <ScreenHeader breadcrumb="Where your site lives" title="Domains" />
       <ScreenBody>
         <HydlnkAddressCard handle={current.handle} published={current.published_at !== null} />
         <CustomDomainCard

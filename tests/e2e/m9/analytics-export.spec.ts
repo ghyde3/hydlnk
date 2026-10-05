@@ -491,7 +491,7 @@ test.describe("M9-26 the screen", () => {
       await page.goto(ANALYTICS());
       const panel = row(page);
       await expect(panel).toBeVisible();
-      await expect(panel).toContainText("Export is available once your page has real data.");
+      await expect(panel).toContainText("Export is available once your site has real data.");
       await expect(panel).not.toContainText("do not add up across days");
       await expect(panel.getByRole("link")).toHaveCount(0);
       await expect(daily(page)).toBeDisabled();

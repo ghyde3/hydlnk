@@ -9,7 +9,7 @@ import { liveEmailContent, type LiveEmailContent } from "@/lib/domains/live-emai
 
 const HOST = "links.example.test";
 const ORIGIN = `https://${HOST}`;
-const SENTENCE = `Your page is now served at ${ORIGIN}.`;
+const SENTENCE = `Your site is now served at ${ORIGIN}.`;
 const LABEL = `Open ${HOST}`;
 
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;

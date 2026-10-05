@@ -135,11 +135,25 @@ describe("loadDraft: the site's menu (M11-07)", () => {
     expect(loaded.draft.nav).toEqual(nav);
   });
 
-  it("keeps a nav that reads when the rest of the draft is repaired, and drops one that does not", () => {
+  it("keeps a nav that reads when the rest of the draft is repaired, and prunes one that does not", () => {
     const broken = { ...fullDraft, nav, blocks: 5 };
     expect(loadDraft(broken, "mara")).toMatchObject({ repaired: true, draft: { nav } });
     const badNav = { ...fullDraft, nav: { show: true, items: ["not-an-id"] }, blocks: 5 };
-    expect(loadDraft(badNav, "mara").draft.nav).toBeUndefined();
+    expect(loadDraft(badNav, "mara").draft.nav).toEqual({ show: true, items: [] });
+  });
+
+  it("prunes a menu over the cap or with bad and repeated ids instead of dropping it", () => {
+    const ids = Array.from(
+      { length: 25 },
+      (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+    );
+    const over = { ...fullDraft, nav: { show: false, items: [...ids, ids[0], "junk", 7] } };
+    const loaded = loadDraft(over, "mara");
+    expect(loaded.repaired).toBe(true);
+    expect(loaded.draft.nav).toEqual({ show: false, items: ids.slice(0, 20) });
+    expect(draftDocSchema.safeParse(loaded.draft).success).toBe(true);
+    const mixed = { ...fullDraft, nav: { items: ["junk", ids[3], ids[3], ids[1]] } };
+    expect(loadDraft(mixed, "mara").draft.nav).toEqual({ show: true, items: [ids[3], ids[1]] });
   });
 
   it("invents no nav for a draft that has none", () => {

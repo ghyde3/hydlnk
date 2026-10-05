@@ -1,5 +1,6 @@
 import {
   HOME_TARGET,
+  NAV_MAX_ITEMS,
   PATH_MESSAGES,
   resolveNav,
   subPagePathError,
@@ -105,10 +106,15 @@ export function pathProblem(path: string, taken: Iterable<string>): string | nul
   return null;
 }
 
-/** Add `id` at the end of the menu (no change when it is there). */
+/** True when the menu holds the most items it may (the draft schema refuses one more). */
+export function navIsFull(nav: Partial<Nav> | undefined): boolean {
+  return resolveNav(nav).items.length >= NAV_MAX_ITEMS;
+}
+
+/** Add `id` at the end of the menu (no change when it is there or the menu is full). */
 export function addToNav(nav: Partial<Nav> | undefined, id: string): Nav {
   const resolved = resolveNav(nav);
-  return resolved.items.includes(id)
+  return resolved.items.includes(id) || resolved.items.length >= NAV_MAX_ITEMS
     ? resolved
     : { show: resolved.show, items: [...resolved.items, id] };
 }

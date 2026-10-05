@@ -248,10 +248,10 @@ describe("M6-31 to M6-33 copy: plain words", () => {
 
   it("the exported sentences are the specified ones", async () => {
     const qr = read(QR_CARD);
-    expect(qr).toContain("This page isn’t available right now.");
-    expect(qr).toContain("Publish your page first. Then you can download its QR code.");
-    expect(qr).toContain("Scan it to open your page.");
-    expect(qr).toContain("QR code for your page");
+    expect(qr).toContain("This site isn’t available right now.");
+    expect(qr).toContain("Publish your site first. Then you can download its QR code.");
+    expect(qr).toContain("Scan it to open your site.");
+    expect(qr).toContain("QR code for your site");
     const card = read("src/components/editor/share-card.tsx");
     expect(card).toContain("How your page looks when you send its link");
     expect(card).toContain(

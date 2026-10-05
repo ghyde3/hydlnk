@@ -114,6 +114,38 @@ describe("SubPageSaver", () => {
     vi.useRealTimers();
   });
 
+  it("an unsendable page does not hold back the others: they save, the bad one stays flagged", async () => {
+    vi.useFakeTimers();
+    const bad = { ...doc("A"), path: "x".repeat(200) };
+    const { saver, calls, statuses } = setup();
+    saver.schedule("a", bad);
+    saver.schedule("b", doc("B"));
+    saver.schedule("c", doc("C"));
+    await expect(saver.flush()).resolves.toBe(false);
+    expect(calls.map((c) => c.id)).toEqual(["b", "c"]);
+    expect(saver.hasUnsaved).toBe(false);
+    expect(statuses.at(-1)).toBe("invalid");
+    // Editing the bad page again re-arms the queue and clears the flag once it reads.
+    saver.schedule("a", doc("A fixed"));
+    await expect(saver.flush()).resolves.toBe(true);
+    expect(calls.map((c) => c.id)).toEqual(["b", "c", "a"]);
+    expect(statuses.at(-1)).toBe("saved");
+    saver.dispose();
+    vi.useRealTimers();
+  });
+
+  it("a page the server calls too large is flagged and the others still save", async () => {
+    vi.useFakeTimers();
+    const { saver, calls, statuses } = setup([{ kind: "too-large" }]);
+    saver.schedule("a", doc("A"));
+    saver.schedule("b", doc("B"));
+    await expect(saver.flush()).resolves.toBe(false);
+    expect(calls.map((c) => c.id)).toEqual(["a", "b"]);
+    expect(statuses.at(-1)).toBe("too-large");
+    saver.dispose();
+    vi.useRealTimers();
+  });
+
   it("a page that no longer exists is reported and not retried", async () => {
     vi.useFakeTimers();
     const { saver, calls, statuses } = setup([{ kind: "missing" }]);

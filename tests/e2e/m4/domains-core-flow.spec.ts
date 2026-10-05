@@ -154,7 +154,7 @@ test.describe("M4-11 add a custom domain through the Vercel Domains API", () => 
     expect((await addDomain(realDeps(), first.user.id, { hostname: host, pageId: first.pageId })).ok).toBe(true);
     for (const [site, typed] of [[first, host], [second, host.toUpperCase()]] as const) {
       const again = await addDomain(realDeps(), site.user.id, { hostname: typed, pageId: site.pageId });
-      expect(again).toEqual({ ok: false, error: "hostname_taken", message: "That domain is already connected to a page.", status: 409 });
+      expect(again).toEqual({ ok: false, error: "hostname_taken", message: "That domain is already connected to a site.", status: 409 });
     }
     expect(await addCalls(host)).toHaveLength(1);
     expect(await domainRowsFor(host)).toBe(1);
