@@ -10,6 +10,7 @@ import { customOrigin } from "@/lib/routing/urls";
 import {
   getTenantPageState,
   getTenantPageStateById,
+  getTenantSiteState,
   type PublishedPage,
 } from "@/app/(tenant)/published-page";
 import { homeUsesSiteIndex, siteContextFrom } from "@/lib/site/live";
@@ -183,7 +184,7 @@ async function subPageOf(
 /** `{handle}.hydlnk.com/{path}`: a live sub-page, or the plain 404 (a suspended owner: "isn't available"). */
 export async function handleSubPageResponse(handle: string, path: string): Promise<Response> {
   try {
-    const state = await getTenantPageState(handle);
+    const state = await getTenantSiteState(handle);
     if (state.kind === "suspended") return htmlResponse(unavailableDocument(), 404);
     if (state.kind !== "published") return plainNotFoundResponse();
     return await subPageOf(state.page, path, handle);

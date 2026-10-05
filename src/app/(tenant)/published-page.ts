@@ -212,3 +212,49 @@ export async function getTenantPageStateById(pageId: string): Promise<TenantPage
     page: { pageId, document: parsed.data, publishedAt: read.publishedAt, plan: read.plan },
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Sub-pages of a handle host (M11-06): the same read, with the handle looked up from the cache
+// ---------------------------------------------------------------------------------------------
+
+/** How long a handle's page id is remembered by the sub-page routes (the claim and delete flows expire it at once). */
+export const HANDLE_ID_REVALIDATE_SECONDS = 60;
+
+async function readHandleId(handle: string): Promise<string | null> {
+  const { data, error } = await createAdminSupabase()
+    .from("pages")
+    .select("id")
+    .eq("handle", handle)
+    .maybeSingle();
+  if (error) throw new Error(`Looking up page "${handle}" failed: ${error.message}`);
+  return data?.id ?? null;
+}
+
+/**
+ * The id of the page behind a handle, or null (unclaimed), remembered for a minute under the
+ * handle's own tag, which the claim flow (`invalidateHandle`) and the delete flows already expire. It
+ * is the id only: whether the owner is suspended and what is published are decided by the page's read
+ * under its own tag, so a remembered id never shows a page that should be dark. The sub-page routes
+ * are dynamic (nothing stored per request), so without this every request of a handle host would
+ * look the handle up in Postgres; with it a request costs cached reads only, whatever path it asks
+ * for. `next dev` reads every time, like the other public reads.
+ */
+function handlePageId(handle: string): Promise<string | null> {
+  if (process.env.NODE_ENV !== "production") return readHandleId(handle);
+  return unstable_cache(readHandleId, ["tenant-handle-id", PUBLIC_READ_CACHE_VERSION, handle], {
+    tags: [handleTag(handle)],
+    revalidate: HANDLE_ID_REVALIDATE_SECONDS,
+  })(handle);
+}
+
+/**
+ * What a handle host's sub-page route and its sitemap need of the site: Home's public read, found
+ * through the cached handle lookup (`getTenantPageState` is for the static Home route, which reads
+ * the handle once per generation). Same states as `getTenantPageStateById`.
+ */
+export async function getTenantSiteState(handle: string): Promise<TenantPageState> {
+  if (!handleSchema.safeParse(handle).success) return { kind: "missing" };
+  const pageId = await handlePageId(handle);
+  if (!pageId) return { kind: "missing" };
+  return getTenantPageStateById(pageId);
+}

@@ -22,6 +22,7 @@ const pageState = vi.hoisted(() => ({
 }));
 vi.mock("@/app/(tenant)/published-page", () => ({
   getTenantPageState: pageState.byHandle,
+  getTenantSiteState: pageState.byHandle,
   getTenantPageStateById: pageState.byId,
 }));
 vi.mock("@/lib/handles/availability", () => ({ checkHandle: pageState.check }));

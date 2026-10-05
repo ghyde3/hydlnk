@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/app/(tenant)/published-page", () => ({
   getTenantPageState: mocks.byHandle,
+  getTenantSiteState: mocks.byHandle,
   getTenantPageStateById: mocks.byId,
 }));
 vi.mock("@/lib/handles/availability", () => ({ checkHandle: mocks.check }));

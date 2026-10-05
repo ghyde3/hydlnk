@@ -1,5 +1,5 @@
 import "server-only";
-import { getTenantPageState, getTenantPageStateById } from "@/app/(tenant)/published-page";
+import { getTenantPageStateById, getTenantSiteState } from "@/app/(tenant)/published-page";
 import { getPrimaryDomain } from "@/lib/domains/primary";
 import { siteSitemapXml, type TextResponse } from "@/lib/marketing/seo";
 import { tenantOrigin } from "@/lib/publish/urls";
@@ -28,7 +28,7 @@ export async function tenantSitemap(
 ): Promise<TextResponse | null> {
   const { kind, handle } = classifyHost(host, rootDomain);
   if (kind === "tenant" && handle) {
-    const state = await getTenantPageState(handle);
+    const state = await getTenantSiteState(handle);
     if (state.kind !== "published") return notFound();
     const primary = await getPrimaryDomain(state.page.pageId);
     const origin = primary ? customOrigin(primary, rootDomain) : tenantOrigin(handle, rootDomain);
@@ -59,7 +59,7 @@ export async function tenantSitemap(
 export async function siteHostOrigin(host: string, rootDomain: string): Promise<string | null> {
   const { kind, handle } = classifyHost(host, rootDomain);
   if (kind === "tenant" && handle) {
-    const state = await getTenantPageState(handle);
+    const state = await getTenantSiteState(handle);
     return state.kind === "published" ? tenantOrigin(handle, rootDomain) : null;
   }
   if (kind !== "custom" || invalidHandleLabel(host, rootDomain)) return null;
