@@ -48,6 +48,9 @@ export function judgeHost(host: string, blockedDomains: readonly string[]): Bloc
   return null;
 }
 
+/** What the check reads of a published document: Home's, or a sub-page's (blocks only). */
+export type BlocklistDoc = Pick<PublishDoc, "blocks"> & { banner?: PublishDoc["banner"] };
+
 interface UrlField {
   blockId: string;
   itemId?: string;
@@ -55,7 +58,7 @@ interface UrlField {
 }
 
 /** Every URL of the published form: link, card, embed and image blocks, social icons, grid cells, links in text. */
-function urlFieldsOf(doc: PublishDoc): UrlField[] {
+function urlFieldsOf(doc: BlocklistDoc): UrlField[] {
   const fields: UrlField[] = [];
   for (const block of doc.blocks) {
     switch (block.type) {
@@ -117,7 +120,7 @@ function urlFieldsOf(doc: PublishDoc): UrlField[] {
  * refused too: it passed the schema, so something is off, and it is not served unchecked.
  */
 export function blockedLinksInPublished(
-  doc: PublishDoc,
+  doc: BlocklistDoc,
   blockedDomains: readonly string[],
 ): BlockedPublishError[] {
   const errors: BlockedPublishError[] = [];

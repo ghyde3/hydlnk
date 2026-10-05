@@ -325,6 +325,7 @@ export {
 } from "./nav";
 export {
   SUB_PAGE_LIMITS,
+  collectSubPagePublishErrors,
   draftSubPageSchema,
   emptySubPageDraft,
   publishSubPageSchema,

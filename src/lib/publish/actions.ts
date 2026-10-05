@@ -14,6 +14,8 @@ import { pageTag } from "./tags";
  *
  * On success only, `updateTag` expires the page's cache tag inside this action, so the next
  * request to the public page (and its OG image) is rendered from the new document, with no wait.
+ * The tag covers the whole site (M11-05): the sub-pages' public reads and the site index carry the
+ * same `page:<id>` tag, so one `updateTag` refreshes Home and every sub-page.
  * A failed publish returns the errors and touches no cache: the live page stays as it was. Any
  * other failure reads `{ok: false, errors: []}` with a `reason`.
  */

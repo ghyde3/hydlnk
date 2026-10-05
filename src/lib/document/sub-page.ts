@@ -3,7 +3,7 @@ import { featuredOverLimit, FEATURED_LIMIT_MESSAGE } from "./link-icons";
 import { LIMITS } from "./limits";
 import { requireMarkRanges } from "./marks";
 import { PATH_MESSAGES, isPathFormat, isReservedPath } from "./path";
-import { publishBlock } from "./publish";
+import { mapPublishIssues, publishBlock, type PublishError } from "./publish";
 import { blockSchema, publishBlockSchema, requireUniqueIds, text, type Block } from "./schema";
 
 /**
@@ -141,4 +141,16 @@ export function toSubPagePublishForm(draft: SubPageDraft): SubPagePublish {
 /** A new, empty sub-page draft (title "New page", no blocks) at `path`. */
 export function emptySubPageDraft(path: string, title = "New page"): SubPageDraft {
   return { path, title, description: "", blocks: [] };
+}
+
+/**
+ * The problems that stop a raw sub-page draft from publishing, one error per field, in the shape
+ * Home's `collectPublishErrors` gives: `path`, `title` and `description` have no block; every other
+ * issue names its block (and icon, cell or mark). Empty when the draft can be published. The caller
+ * adds the page's name (`subPageId`, `pageTitle`).
+ */
+export function collectSubPagePublishErrors(draft: unknown): PublishError[] {
+  const result = publishSubPageSchema.safeParse(draft);
+  if (result.success) return [];
+  return mapPublishIssues(result.error.issues, draft);
 }
