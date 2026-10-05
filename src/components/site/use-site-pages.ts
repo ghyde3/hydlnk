@@ -25,15 +25,20 @@ import { pagesPerSiteMessage } from "@/lib/limits/messages";
 import type { PlanId } from "@/lib/limits/table";
 import {
   addToNav,
+  blockIdsOf,
+  duplicatedPageContent,
   moveInNav,
+  moveToPlaceOf,
   orderSitePages,
   pageLimitState,
   pathProblem,
   removeFromNav,
+  subPageState,
   takenPaths,
   titleOf,
   HOME_PAGE_ID,
   type PageLimitState,
+  type PageState,
   type SitePageItem,
   type SubPageSummary,
 } from "@/lib/site-pages/pages";
@@ -99,8 +104,14 @@ export interface SiteValue {
   /** Fills Home and creates the template's two pages as drafts (M12-03). Publishes nothing. */
   applyTemplate: (id: SiteTemplateId) => Promise<SiteTemplateResult>;
   remove: (id: string) => Promise<SiteDeleteResult>;
+  /** A new draft page from a copy of this one, with fresh ids and a free path (M12-08). */
+  duplicate: (id: string) => Promise<SiteAddResult>;
+  /** Each sub-page's state against the live site (M12-08). */
+  pageStates: Readonly<Record<string, PageState>>;
   toggleMenu: (id: string) => void;
   moveInMenu: (id: string, direction: -1 | 1) => void;
+  /** Drag and drop: put a menu page where another one is. */
+  reorderMenu: (id: string, overId: string) => void;
   menuShown: boolean;
   setMenuShown: (show: boolean) => void;
   limit: PageLimitState;
@@ -348,6 +359,10 @@ export function useSitePages(args: {
     (id: string, direction: -1 | 1) => setNav((current) => moveInNav(current, id, direction)),
     [setNav],
   );
+  const reorderMenu = useCallback(
+    (id: string, overId: string) => setNav((current) => moveToPlaceOf(current, id, overId)),
+    [setNav],
+  );
   const setMenuShown = useCallback(
     (show: boolean) => setNav((current) => ({ ...resolveNav(current), show })),
     [setNav],
@@ -462,6 +477,21 @@ export function useSitePages(args: {
     [limit.max, limit.used, limitMessage, state.ids, state.editors, add, remove, editDraft],
   );
 
+  const duplicate = useCallback<SiteValue["duplicate"]>(
+    async (id) => {
+      const source = docOf(state, id);
+      if (!source) return { ok: false, message: "That page doesn’t exist." };
+      if (limit.atLimit) return { ok: false, message: limitMessage };
+      const taken = new Set<string>();
+      for (const pageId of state.ids) {
+        for (const blockId of blockIdsOf(state.editors[pageId]!.draft.blocks)) taken.add(blockId);
+      }
+      const copy = duplicatedPageContent(source, takenPaths(summaries), taken);
+      return add(copy);
+    },
+    [state, limit.atLimit, limitMessage, summaries, add],
+  );
+
   const flush = useCallback(async () => (await saverRef.current?.flush()) ?? true, []);
 
   const forms = useMemo(() => {
@@ -472,6 +502,14 @@ export function useSitePages(args: {
     }
     return map;
   }, [state]);
+  const pageStates = useMemo(() => {
+    const map: Record<string, PageState> = {};
+    for (const id of state.ids) {
+      const form = forms.get(id);
+      if (form) map[id] = subPageState(form, publishedForms.get(id) ?? null);
+    }
+    return map;
+  }, [state.ids, forms, publishedForms]);
   const dirty = state.ids.some(
     (id) => !publishFormsEqual(forms.get(id), publishedForms.get(id) ?? null),
   );
@@ -532,8 +570,11 @@ export function useSitePages(args: {
     add,
     applyTemplate,
     remove,
+    duplicate,
+    pageStates,
     toggleMenu,
     moveInMenu,
+    reorderMenu,
     menuShown: resolvedNav.show,
     setMenuShown,
     limit,

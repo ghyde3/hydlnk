@@ -1,13 +1,34 @@
 "use client";
 
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragEndEvent,
+  type Modifier,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { Icon } from "@/components/app/icon";
 import { Field, FORM_BUTTON, controlClass } from "@/components/blocks/field";
 import { TextField } from "@/components/blocks/text-field";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { SUB_PAGE_LIMITS, suggestPath } from "@/lib/document";
 import { PLAN_LIMITS } from "@/lib/limits/table";
+import { PAGE_STATE_LABEL, homePageState, type SitePageItem } from "@/lib/site-pages/pages";
 import { ToggleRow } from "./toggle-row";
 
 /**
@@ -22,7 +43,7 @@ import { ToggleRow } from "./toggle-row";
  * one is immediate and lives on the page's own settings.
  */
 export function PagesCard() {
-  const { site, plan } = useWorkspace();
+  const { site, plan, homeStatus } = useWorkspace();
   const suspended = useAccountSuspended();
   const headingId = useId();
   const [adding, setAdding] = useState(false);
@@ -47,42 +68,7 @@ export function PagesCard() {
         </span>
       </div>
 
-      <ul className="m-0 flex list-none flex-col gap-1.5 p-0" data-testid="page-list">
-        {site.items.map((item) => {
-          const active = item.id === site.activeId;
-          return (
-            <li key={item.id} className="min-w-0">
-              <button
-                type="button"
-                data-testid="page-row"
-                data-page-id={item.id}
-                aria-current={active ? "page" : undefined}
-                onClick={() => site.select(item.id)}
-                className={`flex min-h-11 w-full min-w-0 cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-md border px-3 py-1.5 text-left ${
-                  active ? "border-ink bg-page" : "border-line-3 bg-surface"
-                }`}
-              >
-                <span className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere] text-ink">
-                  {item.title}
-                </span>
-                <span className="flex min-w-0 items-center gap-2 text-xs text-text-2">
-                  <span className="font-mono [overflow-wrap:anywhere]">{item.path}</span>
-                  {item.home ? null : (
-                    <span data-testid="page-menu-state">
-                      {item.inMenu ? "In menu" : "Not in menu"}
-                    </span>
-                  )}
-                  {site.pagesWithErrors.has(item.id) ? (
-                    <span data-testid="page-needs-fix" className="font-semibold text-bad">
-                      Needs a fix
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      <PageList homeStatus={homeStatus} />
 
       {site.items
         .filter((item) => item.id !== site.activeId && site.pagesWithErrors.has(item.id))
@@ -273,5 +259,150 @@ export function PathField({
         </div>
       )}
     </Field>
+  );
+}
+
+const verticalOnly: Modifier = ({ transform }) => ({ ...transform, x: 0 });
+
+/**
+ * The list of pages (M11-08, M12-08): Home, the pages in the menu and the ones outside it. The pages
+ * in the menu can be dragged by their handle, with a pointer, a finger or the keyboard (Space to
+ * lift, the arrow keys to move, Space to drop, Escape to cancel); the up and down buttons of the
+ * page's settings do the same. Each row shows where the page stands against the live site.
+ */
+function PageList({ homeStatus }: { homeStatus: Parameters<typeof homePageState>[0] }) {
+  const { site } = useWorkspace();
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const menuIds = site.items.filter((item) => !item.home && item.inMenu).map((item) => item.id);
+  const title = (id: string | number) =>
+    site.items.find((item) => item.id === String(id))?.title ?? "page";
+  const place = (id: string | number) => menuIds.indexOf(String(id)) + 1;
+  const announcements: Announcements = {
+    onDragStart: ({ active }) =>
+      `Picked up ${title(active.id)}. Menu place ${place(active.id)} of ${menuIds.length}.`,
+    onDragOver: ({ active, over }) =>
+      over && over.id !== active.id
+        ? `${title(active.id)} moved to menu place ${place(over.id)} of ${menuIds.length}.`
+        : undefined,
+    onDragEnd: ({ active, over }) =>
+      over
+        ? `${title(active.id)} dropped at menu place ${place(over.id)} of ${menuIds.length}.`
+        : `${title(active.id)} dropped.`,
+    onDragCancel: ({ active }) =>
+      `Reordering canceled. ${title(active.id)} is back at menu place ${place(active.id)} of ${menuIds.length}.`,
+  };
+  function onDragEnd({ active, over }: DragEndEvent) {
+    if (over && active.id !== over.id) site.reorderMenu(String(active.id), String(over.id));
+  }
+
+  return (
+    <DndContext
+      id="page-menu"
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={[verticalOnly]}
+      onDragEnd={onDragEnd}
+      accessibility={{
+        announcements,
+        screenReaderInstructions: {
+          draggable:
+            "To move a page in the menu, press Space. Use the arrow keys to move it, Space to drop it, Escape to cancel.",
+        },
+      }}
+    >
+      <SortableContext items={menuIds} strategy={verticalListSortingStrategy}>
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0" data-testid="page-list">
+          {site.items.map((item) => (
+            <PageRow
+              key={item.id}
+              item={item}
+              sortable={!item.home && item.inMenu}
+              state={
+                item.home ? homePageState(homeStatus) : (site.pageStates[item.id] ?? "unpublished")
+              }
+            />
+          ))}
+        </ul>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function PageRow({
+  item,
+  sortable,
+  state,
+}: {
+  item: SitePageItem;
+  sortable: boolean;
+  state: keyof typeof PAGE_STATE_LABEL;
+}) {
+  const { site } = useWorkspace();
+  const active = item.id === site.activeId;
+  const {
+    setNodeRef,
+    setActivatorNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id, disabled: !sortable });
+  return (
+    <li
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        position: isDragging ? "relative" : undefined,
+        zIndex: isDragging ? 1 : undefined,
+      }}
+      className="flex min-w-0 items-stretch gap-1.5"
+    >
+      {sortable ? (
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          data-testid="page-drag-handle"
+          aria-label={`Move ${item.title} in the menu`}
+          {...attributes}
+          {...listeners}
+          className="inline-flex min-h-11 w-11 shrink-0 cursor-grab touch-none items-center justify-center rounded-md border border-line-3 bg-surface text-text-2"
+        >
+          <Icon icon={GripVertical} size={16} />
+        </button>
+      ) : null}
+      <button
+        type="button"
+        data-testid="page-row"
+        data-page-id={item.id}
+        aria-current={active ? "page" : undefined}
+        onClick={() => site.select(item.id)}
+        className={`flex min-h-11 w-full min-w-0 cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-md border px-3 py-1.5 text-left ${
+          active ? "border-ink bg-page" : "border-line-3 bg-surface"
+        }`}
+      >
+        <span className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere] text-ink">
+          {item.title}
+        </span>
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-text-2">
+          <span className="font-mono [overflow-wrap:anywhere]">{item.path}</span>
+          {item.home ? null : (
+            <span data-testid="page-menu-state">{item.inMenu ? "In menu" : "Not in menu"}</span>
+          )}
+          <span data-testid="page-state" data-state={state}>
+            {PAGE_STATE_LABEL[state]}
+          </span>
+          {site.pagesWithErrors.has(item.id) ? (
+            <span data-testid="page-needs-fix" className="font-semibold text-bad">
+              Needs a fix
+            </span>
+          ) : null}
+        </span>
+      </button>
+    </li>
   );
 }
