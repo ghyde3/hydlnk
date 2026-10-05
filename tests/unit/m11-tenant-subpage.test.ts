@@ -153,6 +153,30 @@ describe("M11-06 a sub-page as one finished document", () => {
     );
   });
 
+  it("wears the site's theme and fonts: the published tokens as CSS variables, the font preloads, the Free badge", async () => {
+    const { tokensToCssVars } = await import("@/lib/theme");
+    const css = doc.head.querySelector("style")!.textContent!;
+    // The published tokens are the page root's own variables (Home's mechanism), not a default theme.
+    const rootStyle = (
+      doc.querySelector("[data-page-root]")?.getAttribute("style") ?? ""
+    ).toLowerCase();
+    const vars = tokensToCssVars(home.tokens);
+    expect(vars["--t-accent"]).toBeDefined();
+    expect(rootStyle).toContain(`--t-accent:${vars["--t-accent"]!.toLowerCase()}`);
+    expect(rootStyle).toContain(`--t-bg:${vars["--t-bg"]!.toLowerCase()}`);
+    // The heading and body faces are preloaded and declared, like Home's.
+    const fonts = [...doc.head.querySelectorAll('link[rel="preload"][as="font"]')].map((l) =>
+      l.getAttribute("href"),
+    );
+    expect(fonts.some((href) => /fraunces/.test(href ?? ""))).toBe(true);
+    expect(fonts.some((href) => /inter/.test(href ?? ""))).toBe(true);
+    expect(css.toLowerCase()).toContain('@font-face{font-family:"fraunces"');
+    // A Free site's sub-page shows the badge; a paid plan's does not.
+    const badge = doc.querySelector(".pg-footer a.pg-footer-link");
+    expect(badge?.textContent).toBe("Made with HYDLNK");
+    expect(parse(drawSub({ plan: "pro" })).body.textContent).not.toContain("Made with HYDLNK");
+  });
+
   it("ships the rules of what it uses: the menu and the site header, none of the profile's extras", () => {
     const css = doc.head.querySelector("style")!.textContent!;
     expect(css).toContain(".pg-menu-item");

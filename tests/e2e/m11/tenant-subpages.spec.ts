@@ -91,6 +91,46 @@ test.describe("M11-05 a whole-site Publish from the editor", () => {
   });
 });
 
+test.describe("M11-08 deleting a page of the menu from the editor", () => {
+  test("M11-08 delete takes the page out of Home's draft menu, the live route answers 404 and the live menu drops it", async ({
+    page,
+    context,
+  }) => {
+    const site = await makeLiveSite("del");
+    const { signInAs } = await import("../fixtures/auth");
+    await signInAs(context, site.user.email);
+    const host = tenantHost(site);
+
+    // Before: the page is live and in the live menu (Home's published menu names it).
+    expect((await get(host, `/${ITEMS.path}`)).status).toBe(200);
+    expect((await get(host, "/")).body).toContain(ITEMS.title);
+    const navOf = async () =>
+      ((await pageRow(site.pageId)).draft as { nav?: { items?: string[] } }).nav?.items ?? [];
+    expect(await navOf()).toContain(site.itemsId);
+
+    await openEditor(page);
+    await page.getByTestId("page-row").filter({ hasText: ITEMS.title }).click();
+    await expect(page.getByTestId("page-in-menu")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("delete-page").click();
+    await page.getByTestId("delete-page-dialog").getByTestId("delete-page-confirm").click();
+    await expect(page.getByTestId("page-row").filter({ hasText: ITEMS.title })).toHaveCount(0);
+
+    // Home's draft menu no longer lists it (the autosave of Home), and the row is gone.
+    await expect.poll(navOf, { timeout: 15_000 }).toEqual([site.directionsId]);
+    const rows = await adminClient().from("site_pages").select("id").eq("page_id", site.pageId);
+    expect(rows.data?.map((row) => row.id)).toEqual([site.directionsId]);
+
+    // Live, on the very next request: the page is 404 and the menu lists only the other page.
+    expect((await get(host, `/${ITEMS.path}`)).status).toBe(404);
+    const home = await get(host, "/");
+    expect(home.status).toBe(200);
+    const menu = home.body.match(/<nav[^>]*class="pg-menu"[\s\S]*?<\/nav>/)?.[0] ?? "";
+    expect(menu).toContain(DIRECTIONS.title);
+    expect(menu).not.toContain(ITEMS.title);
+    expect(menu).not.toContain(`href="/${ITEMS.path}"`);
+  });
+});
+
 test.describe("M11-06 mara's seeded sub-pages", () => {
   test("M11-06 /items and /directions open, with the menu on Home and on each page", async ({
     page,

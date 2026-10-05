@@ -273,3 +273,52 @@ test("M11-05 a Publish that is refused for a sub-page opens that page and shows 
   await expect(page.locator("li[data-block-id]").first()).toContainText(/Add|link|address/i);
   expect(user.pageId).toBeTruthy();
 });
+
+test("M11-07 the menu holds 20 pages: a 21st page is created outside it, and Show in the menu is refused with a message", async ({
+  page,
+  context,
+}) => {
+  const user = await emptyUser(context, "pgcap", { plan: "studio" });
+  const admin = adminClient();
+  const rows = Array.from({ length: 20 }, (_, i) => ({
+    page_id: user.pageId,
+    draft: {
+      path: `p${i + 1}`,
+      title: `Page ${i + 1}`,
+      description: "",
+      blocks: [],
+    },
+  }));
+  const inserted = await admin.from("site_pages").insert(rows).select("id");
+  expect(inserted.error).toBeNull();
+  const ids = inserted.data!.map((row) => row.id as string);
+  const draft = (await pageRow(user.pageId)).draft as unknown as Record<string, unknown>;
+  await admin
+    .from("pages")
+    .update({ draft: { ...draft, nav: { show: true, items: ids } } })
+    .eq("id", user.pageId);
+
+  await openEditor(page);
+  await addPage(page, "Page 21", "p21");
+  await expect.poll(async () => (await subPages(user.pageId)).length).toBe(21);
+  // Created, but outside the full menu; Home's draft still reads (20 items) and saves.
+  await expect(rowTitled(page, "Page 21")).toContainText("Not in menu");
+  await expect(page.getByTestId("page-in-menu")).toHaveAttribute("aria-pressed", "false");
+  await page.getByTestId("page-in-menu").click();
+  await expect(page.getByTestId("page-menu-full")).toContainText("The menu is full (20 items)");
+  await expect(page.getByTestId("page-in-menu")).toHaveAttribute("aria-pressed", "false");
+  // Home's draft is still valid: a change on Home saves and the menu is untouched.
+  await rowsOf(page).first().click();
+  await page.getByRole("button", { name: "Publish", exact: true }).first().click();
+  await expect
+    .poll(async () => (await pageRow(user.pageId)).published !== null, { timeout: 30_000 })
+    .toBe(true);
+  expect(await navItems(user.pageId)).toEqual(ids);
+  // Taking one out frees a place.
+  await rowTitled(page, "Page 3").click();
+  await page.getByTestId("page-in-menu").click();
+  await expect.poll(async () => (await navItems(user.pageId)).length).toBe(19);
+  await rowTitled(page, "Page 21").click();
+  await page.getByTestId("page-in-menu").click();
+  await expect.poll(async () => (await navItems(user.pageId)).length).toBe(20);
+});

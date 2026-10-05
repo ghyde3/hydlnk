@@ -227,6 +227,34 @@ describe.skipIf(!run)("M11-05 publishPageCore publishes the whole site (local Su
     expect((await subRow(good)).published).toBeNull();
   });
 
+  it("a blocklisted link on a sub-page refuses the whole publish, naming that page", async () => {
+    const o = await owner("ws3b");
+    const good = await addSub(o, "Items", "items", [link("a-link-00001")]);
+    const domain = `blocked-${Math.random().toString(36).slice(2, 8)}.example`;
+    const bad = await addSub(o, "Directions", "directions", [
+      { ...link("b-link-00001"), url: `https://${domain}/x` } as Block,
+    ]);
+    await admin.from("blocked_domains").insert({ domain, reason: "test" });
+    try {
+      const result = await publish(o);
+      expect(result).toMatchObject({ ok: false, reason: "blocked_link" });
+      if (result.ok) return;
+      expect(result.errors).toEqual([
+        expect.objectContaining({
+          blockId: "b-link-00001",
+          subPageId: bad,
+          pageTitle: "Directions",
+        }),
+      ]);
+      // Nothing is live: not Home, not the clean page, not the refused one.
+      expect((await homeRow(o)).published).toBeNull();
+      expect((await subRow(good)).published).toBeNull();
+      expect((await subRow(bad)).published).toBeNull();
+    } finally {
+      await admin.from("blocked_domains").delete().eq("domain", domain);
+    }
+  });
+
   it("an empty title or a reserved path is refused, naming the page", async () => {
     const o = await owner("ws4");
     await addSub(o, "", "items");
