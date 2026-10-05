@@ -44,8 +44,8 @@ select has_table('public', 'page_versions', 'public.page_versions exists');
 select tests.rls_enabled('public', 'page_versions');
 select columns_are(
   'public', 'page_versions',
-  array['id', 'page_id', 'version_no', 'document', 'published_at', 'created_at'],
-  'page_versions has exactly the six columns of the contract'
+  array['id', 'page_id', 'version_no', 'document', 'published_at', 'created_at', 'sub_pages'],
+  'page_versions has exactly the seven columns of the contract'
 );
 select col_type_is('public', 'page_versions', 'version_no', 'integer', 'version_no is an integer');
 select col_type_is('public', 'page_versions', 'document', 'jsonb', 'document is jsonb');
