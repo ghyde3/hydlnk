@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { loadStatsResponse } from "@/lib/analytics/dashboard/load";
+import { parsePageFilter } from "@/lib/analytics/dashboard/page-filter";
 import { parseRange } from "@/lib/analytics/dashboard/range";
 import type { StatsResponse } from "@/lib/analytics/dashboard/types";
 import { getAppContext } from "@/lib/pages/context";
@@ -17,7 +18,7 @@ const STATUS: Record<string, number> = {
 };
 
 /**
- * GET /analytics/stats?range=7|30|90|365 on the app host: the numbers the Analytics screen shows
+ * GET /analytics/stats?range=7|30|90|365&filter=all|home|<id> on the app host: the numbers the Analytics screen shows
  * when the range control changes, as JSON (`StatsResponse`). It answers for the signed-in user's
  * current page only (the same rule as the screen: the `hl-page` cookie is a preference among their
  * own pages), and a Free account asking for 90 days or a year gets 403 `plan_required` and no data.
@@ -44,7 +45,8 @@ export async function GET(request: NextRequest) {
   }
 
   const range = parseRange(request.nextUrl.searchParams.get("range"));
+  const page = parsePageFilter(request.nextUrl.searchParams.get("filter"));
   return respond(
-    await loadStatsResponse({ ownerId: context.user.id, pageId: context.current.id, range }),
+    await loadStatsResponse({ ownerId: context.user.id, pageId: context.current.id, range, page }),
   );
 }

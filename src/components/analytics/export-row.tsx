@@ -1,4 +1,5 @@
 import { exportHref, type ExportKind } from "@/lib/analytics/export";
+import type { PageFilter } from "@/lib/analytics/dashboard/page-filter";
 import type { RangeDays } from "@/lib/analytics/dashboard/range";
 import { cn } from "@/lib/cn";
 import { Panel } from "./panel";
@@ -25,7 +26,15 @@ const BUTTON =
  * export: the two controls are disabled buttons and the hint says why. A Free account on 90 days or
  * a year never gets here (the upgrade card replaces the data), and the route refuses it as well.
  */
-export function ExportRow({ range, available }: { range: RangeDays; available: boolean }) {
+export function ExportRow({
+  range,
+  page = "all",
+  available,
+}: {
+  range: RangeDays;
+  page?: PageFilter;
+  available: boolean;
+}) {
   return (
     <Panel testId="export-row" className="flex flex-col gap-3">
       <h2 className="m-0 text-sm font-semibold">Export this range</h2>
@@ -34,7 +43,7 @@ export function ExportRow({ range, available }: { range: RangeDays; available: b
           available ? (
             <a
               key={kind}
-              href={exportHref(kind, range)}
+              href={exportHref(kind, range, page)}
               download=""
               data-export={kind}
               className={cn(BUTTON, "cursor-pointer")}

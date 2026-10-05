@@ -1,5 +1,6 @@
 import type { DayTotals } from "./dashboard/aggregate";
 import type { RangeDays } from "./dashboard/range";
+import type { PageFilter } from "./dashboard/page-filter";
 import type { LinkRow } from "./dashboard/types";
 
 /**
@@ -24,8 +25,9 @@ export const EXPORT_RATE_LIMIT = 20;
 export const EXPORT_RATE_WINDOW_SECONDS = 60;
 
 /** Where the screen's two download buttons point for a range: the route next to the page. */
-export function exportHref(kind: ExportKind, range: RangeDays): string {
-  return `/analytics/export?kind=${kind}&range=${range}`;
+export function exportHref(kind: ExportKind, range: RangeDays, page: PageFilter = "all"): string {
+  const base = `/analytics/export?kind=${kind}&range=${range}`;
+  return page === "all" ? base : `${base}&filter=${page}`;
 }
 
 // A cell --------------------------------------------------------------------------------------------
@@ -67,19 +69,28 @@ function csv(header: readonly string[], rows: readonly (readonly (string | numbe
   return `${CSV_BOM}${lines.join(EOL)}${EOL}`;
 }
 
-/** `date,views,clicks,uniques`: one row per UTC day, oldest first, zero days included. */
-export function dailyCsv(days: readonly DayTotals[]): string {
+/**
+ * `date,page,views,clicks,uniques`: one row per UTC day, oldest first, zero days included. `page` is
+ * the page filter the file was made for ("All pages", "Home" or a page title), the same on every row.
+ */
+export function dailyCsv(days: readonly DayTotals[], page: string): string {
   return csv(
-    ["date", "views", "clicks", "uniques"],
-    days.map((day) => [day.day, day.views, day.clicks, day.uniques]),
+    ["date", "page", "views", "clicks", "uniques"],
+    days.map((day) => [day.day, page, day.views, day.clicks, day.uniques]),
   );
 }
 
-/** `link_id,link,clicks`: one row per link that was clicked, in the order given (most clicks first). */
-export function linksCsv(links: readonly Pick<LinkRow, "id" | "label" | "clicks">[]): string {
+/**
+ * `link_id,link,page,clicks`: one row per link that was clicked, in the order given (most clicks
+ * first). `page` is the page that holds the link ("Home" or a page title; empty for a link that was
+ * removed since).
+ */
+export function linksCsv(
+  links: readonly (Pick<LinkRow, "id" | "label" | "clicks"> & { page: string })[],
+): string {
   return csv(
-    ["link_id", "link", "clicks"],
-    links.map((link) => [link.id, link.label, link.clicks]),
+    ["link_id", "link", "page", "clicks"],
+    links.map((link) => [link.id, link.label, link.page, link.clicks]),
   );
 }
 

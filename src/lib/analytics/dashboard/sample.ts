@@ -66,7 +66,7 @@ export function sampleStats(
   plan: PlanId,
   published: boolean,
   breakdowns: boolean,
-): StatsData {
+): Omit<StatsData, "pages" | "pageFilter"> {
   const days = window.range;
   const views = scale(SAMPLE_30D.views, days);
   // Clicks follow the views so the click-through stays the mockup's 31.3% on every range.

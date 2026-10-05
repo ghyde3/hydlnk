@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ScreenBody } from "@/components/app/screen";
+import { PAGE_FILTER_ALL, type PageFilter } from "@/lib/analytics/dashboard/page-filter";
 import { rangeWindow, type RangeDays, type RangeWindow } from "@/lib/analytics/dashboard/range";
 import type { StatsData, StatsResponse } from "@/lib/analytics/dashboard/types";
 import { PLAN_LIMITS, type PlanId } from "@/lib/limits";
@@ -10,6 +11,7 @@ import { ChartCard } from "./chart-card";
 import { ExportRow } from "./export-row";
 import { KpiStrip } from "./kpi-strip";
 import { LinksTable } from "./links-table";
+import { PageSelect } from "./page-select";
 import { RangeControl } from "./range-control";
 import { Footnote, SampleNote, StatsError, UpgradeCard } from "./states";
 
@@ -37,12 +39,18 @@ export function AnalyticsScreen({
   initial,
   initialWindow,
   plan,
+  initialPage = PAGE_FILTER_ALL,
 }: {
   initial: StatsResponse;
   initialWindow: RangeWindow;
   plan: PlanId;
+  initialPage?: PageFilter;
 }) {
   const [range, setRange] = useState<RangeDays>(initialWindow.range);
+  const [pageFilter, setPageFilter] = useState<PageFilter>(initialPage);
+  // The options come with the numbers; keep the last ones while a request is in flight or failed,
+  // so the select never empties under the user's finger.
+  const [pageOptions, setPageOptions] = useState(initial.ok ? initial.data.pages : []);
   const [response, setResponse] = useState<StatsResponse>(initial);
   const [loading, setLoading] = useState(false);
   const latest = useRef(0);
@@ -51,12 +59,12 @@ export function AnalyticsScreen({
   const window = rangeWindow(range, new Date(`${initialWindow.end}T12:00:00Z`));
   const lockedFrom = PLAN_LIMITS[plan].analyticsHistoryDays;
 
-  async function load(next: RangeDays) {
+  async function load(next: RangeDays, page: PageFilter) {
     const id = ++latest.current;
     setLoading(true);
     let result: StatsResponse = { ok: false, error: "load_failed" };
     try {
-      const res = await fetch(`${STATS_URL}?range=${next}`, {
+      const res = await fetch(`${STATS_URL}?range=${next}&filter=${encodeURIComponent(page)}`, {
         cache: "no-store",
         credentials: "same-origin",
         headers: { accept: "application/json" },
@@ -68,15 +76,26 @@ export function AnalyticsScreen({
     }
     if (id !== latest.current) return;
     setResponse(result);
+    if (result.ok) setPageOptions(result.data.pages);
     setLoading(false);
+  }
+
+  function remember(key: string, value: string) {
+    const params = new URLSearchParams(globalThis.location.search);
+    params.set(key, value);
+    globalThis.history.replaceState(null, "", `${globalThis.location.pathname}?${params}`);
   }
 
   function select(next: RangeDays) {
     setRange(next);
-    const params = new URLSearchParams(globalThis.location.search);
-    params.set("range", String(next));
-    globalThis.history.replaceState(null, "", `${globalThis.location.pathname}?${params}`);
-    void load(next);
+    remember("range", String(next));
+    void load(next, pageFilter);
+  }
+
+  function selectPage(next: PageFilter) {
+    setPageFilter(next);
+    remember("filter", next);
+    void load(range, next);
   }
 
   const data: StatsData | null = response.ok ? response.data : null;
@@ -105,6 +124,9 @@ export function AnalyticsScreen({
                 </span>
               ) : null}
             </div>
+            {pageOptions.length > 0 ? (
+              <PageSelect options={pageOptions} value={pageFilter} onSelect={selectPage} />
+            ) : null}
             <RangeControl range={range} lockedFrom={lockedFrom} onSelect={select} />
           </div>
         </div>
@@ -120,7 +142,11 @@ export function AnalyticsScreen({
               {data.sample ? <SampleNote published={data.published} /> : null}
               <KpiStrip kpis={data.kpis} />
               <ChartCard chart={data.chart} views={data.kpis.views} />
-              <ExportRow range={range} available={!data.sample && data.published} />
+              <ExportRow
+                range={range}
+                page={pageFilter}
+                available={!data.sample && data.published}
+              />
               <LinksTable links={data.links} views={data.kpis.views} />
               <BreakdownCards breakdowns={data.breakdowns} />
               <Footnote free={data.breakdowns === null} />
@@ -131,7 +157,7 @@ export function AnalyticsScreen({
               <Footnote free />
             </>
           ) : (
-            <StatsError onRetry={() => void load(range)} />
+            <StatsError onRetry={() => void load(range, pageFilter)} />
           )}
         </div>
       </ScreenBody>

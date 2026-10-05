@@ -1,4 +1,5 @@
 import type { PlanId } from "@/lib/limits";
+import type { PageFilter, PageOption } from "./page-filter";
 import type { RangeWindow } from "./range";
 
 /**
@@ -66,6 +67,10 @@ export interface StatsData {
   links: LinkRow[];
   /** null = the plan has no breakdowns: the three cards are replaced by locked cards. */
   breakdowns: Breakdowns | null;
+  /** The page select's options: All pages, Home, each page by title, "Deleted page" (M11-09). */
+  pages: PageOption[];
+  /** The filter these numbers are for. */
+  pageFilter: PageFilter;
 }
 
 /** What the stats query answers. `plan_required` is a Free account asking for more than 30 days. */

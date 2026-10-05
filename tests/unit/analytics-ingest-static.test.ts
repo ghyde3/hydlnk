@@ -185,10 +185,10 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
 
   it("the two page reads select only what they need: never the draft, never *", () => {
     const source = read("src/lib/analytics/ingest/pages.ts");
-    const selects = [...source.matchAll(/\.select\(\s*"([^"]*)"\s*\)/g)].map((m) => m[1]!);
+    const selects = [...source.matchAll(/\.select\(\s*"([^"]*)",?\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
-      "handle, accounts!inner(suspended_at), domains(hostname, status)",
-      "published, handle, accounts!inner(suspended_at), domains(hostname, status)",
+      "handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published_at)",
+      "published, handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published)",
     ]);
     for (const select of selects) expect(select).not.toMatch(/\bdraft\b|\*/);
     expect(strip(source)).not.toMatch(/\bdraft\b/);
@@ -196,7 +196,10 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
 
   it("the click target is read from the published document and parsed with the published schema", () => {
     const source = read("src/lib/analytics/ingest/pages.ts");
-    expect(source).toMatch(/publishedDocSchema\.safeParse/);
+    // Since M11-09 the document comes from the site index: Home's published schema, or a sub-page's.
+    expect(source).toMatch(/documentForBlock/);
+    expect(read("src/lib/analytics/ingest/site-index.ts")).toMatch(/publishedDocSchema\.safeParse/);
+    expect(read("src/lib/analytics/ingest/site-index.ts")).toMatch(/publishedSubPageSchema\.safeParse/);
     expect(read("src/lib/analytics/ingest/target.ts")).toMatch(/isHttpUrl/);
   });
 

@@ -156,7 +156,7 @@ function pass(
   target: ClickTarget,
   deps: IngestDeps,
 ): Response {
-  recordClick(request, params.pageId.toLowerCase(), params.blockId, deps);
+  recordClick(request, params.pageId.toLowerCase(), params.blockId, deps, target.subPageId);
   // 303: the browser follows with a GET. No cookie and nothing cached: the next visit asks again.
   return new Response(null, {
     status: 303,

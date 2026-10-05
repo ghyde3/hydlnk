@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { loadExportResponse } from "@/lib/analytics/dashboard/load";
+import { parsePageFilter } from "@/lib/analytics/dashboard/page-filter";
 import { parseRange } from "@/lib/analytics/dashboard/range";
 import {
   EXPORT_RATE_LIMIT,
@@ -35,7 +36,7 @@ function fail(error: string, status: number, headers: Record<string, string> = {
  * screen's numbers for the range as a CSV file, for the signed-in user's current page only (the same
  * rule as the screen and `/analytics/stats`: the `hl-page` cookie is a preference among their own
  * pages). The query string carries no page, owner or user id, and none is read: `?page=`,
- * `?pageId=`, `?owner=` and `?user=` change nothing. The plan limit is enforced by the loader on the
+ * `?pageId=`, `?owner=` and `?user=` change nothing. The one narrowing parameter is `?filter=all|home|<page id>` (M11-09): which page of the owner's own site the numbers are for, never which site. The plan limit is enforced by the loader on the
  * server: a Free account asking for 90 days or a year gets 403 `plan_required` and no data.
  *
  * Signed out is 401 JSON, never a redirect; any method but GET is 405; an unknown `kind` is 400; the
@@ -74,10 +75,11 @@ export async function GET(request: NextRequest) {
     ownerId: context.user.id,
     pageId: context.current.id,
     range,
+    page: parsePageFilter(request.nextUrl.searchParams.get("filter")),
   });
   if (!result.ok) return fail(result.error, STATUS[result.error] ?? 500);
 
-  const body = kind === "daily" ? dailyCsv(result.days) : linksCsv(result.links);
+  const body = kind === "daily" ? dailyCsv(result.days, result.pageLabel) : linksCsv(result.links);
   const filename = exportFilename(
     context.current.handle,
     kind,

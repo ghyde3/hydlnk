@@ -124,10 +124,10 @@ describe("M9-26 csvCell: RFC 4180 quoting", () => {
 
   it("M9-26 a label with a comma, a quote and a line break round-trips through a CSV parser", () => {
     const label = 'Spring sale, "20% off"\nends Friday';
-    const file = linksCsv([{ id: "linkaaaa1", label, clicks: 7 }]);
+    const file = linksCsv([{ id: "linkaaaa1", label, page: "Home", clicks: 7 }]);
     expect(parseCsv(file.replace(CSV_BOM, ""))).toEqual([
-      ["link_id", "link", "clicks"],
-      ["linkaaaa1", label, "7"],
+      ["link_id", "link", "page", "clicks"],
+      ["linkaaaa1", label, "Home", "7"],
     ]);
   });
 
@@ -140,10 +140,12 @@ describe("M9-26 csvCell: RFC 4180 quoting", () => {
       'a","b',
       "x\r\ny",
     ];
-    const file = linksCsv(hostile.map((label, i) => ({ id: `link${i}aaaaa`, label, clicks: i })));
+    const file = linksCsv(
+      hostile.map((label, i) => ({ id: `link${i}aaaaa`, label, page: "Home", clicks: i })),
+    );
     const rows = parseCsv(file.replace(CSV_BOM, ""));
     expect(rows).toHaveLength(hostile.length + 1);
-    for (const row of rows) expect(row).toHaveLength(3);
+    for (const row of rows) expect(row).toHaveLength(4);
     rows.slice(1).forEach((row, i) => {
       const expected = /^[=+\-@\t\r]/.test(hostile[i]!) ? `'${hostile[i]}` : hostile[i];
       expect(row[1]).toBe(expected);
@@ -159,34 +161,38 @@ describe("M9-26 the files", () => {
   ];
 
   it("M9-26 the daily file starts with a UTF-8 byte order mark, uses CRLF and has the header row", () => {
-    const file = dailyCsv(days);
+    const file = dailyCsv(days, "All pages");
     expect(file.charCodeAt(0)).toBe(0xfeff);
     expect(Buffer.from(file, "utf8").subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
     expect(file).toBe(
-      `${CSV_BOM}date,views,clicks,uniques\r\n` +
-        "2026-09-28,12,3,9\r\n" +
-        "2026-09-29,0,0,0\r\n" +
-        "2026-09-30,1284,392,900\r\n",
+      `${CSV_BOM}date,page,views,clicks,uniques\r\n` +
+        "2026-09-28,All pages,12,3,9\r\n" +
+        "2026-09-29,All pages,0,0,0\r\n" +
+        "2026-09-30,All pages,1284,392,900\r\n",
     );
     expect(file.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/); // no bare line endings
   });
 
-  it("M9-26 the links file has link_id, link and clicks, in the order given", () => {
+  it("M9-26 the links file has link_id, link, page and clicks, in the order given", () => {
     expect(
       linksCsv([
-        { id: "linkaaaa1", label: "Prints", clicks: 5 },
-        { id: "GoneBlock01", label: "Removed link", clicks: 2 },
+        { id: "linkaaaa1", label: "Prints", page: "Home", clicks: 5 },
+        { id: "GoneBlock01", label: "Removed link", page: "", clicks: 2 },
       ]),
-    ).toBe(`${CSV_BOM}link_id,link,clicks\r\nlinkaaaa1,Prints,5\r\nGoneBlock01,Removed link,2\r\n`);
+    ).toBe(
+      `${CSV_BOM}link_id,link,page,clicks\r\nlinkaaaa1,Prints,Home,5\r\nGoneBlock01,Removed link,,2\r\n`,
+    );
   });
 
   it("M9-26 a file with no rows is the header alone", () => {
-    expect(linksCsv([])).toBe(`${CSV_BOM}link_id,link,clicks\r\n`);
-    expect(dailyCsv([])).toBe(`${CSV_BOM}date,views,clicks,uniques\r\n`);
+    expect(linksCsv([])).toBe(`${CSV_BOM}link_id,link,page,clicks\r\n`);
+    expect(dailyCsv([], "All pages")).toBe(`${CSV_BOM}date,page,views,clicks,uniques\r\n`);
   });
 
   it("M9-26 a link id that starts with a dash is text too, not a formula", () => {
-    expect(linksCsv([{ id: "-abcdefgh", label: "x", clicks: 1 }])).toContain("\r\n'-abcdefgh,x,1");
+    expect(linksCsv([{ id: "-abcdefgh", label: "x", page: "Home", clicks: 1 }])).toContain(
+      "\r\n'-abcdefgh,x,Home,1",
+    );
   });
 });
 
@@ -224,6 +230,7 @@ describe("M9-26 file name, kinds, hrefs and the rate", () => {
     expect(exportHref("daily", 30)).toBe("/analytics/export?kind=daily&range=30");
     expect(exportHref("links", 7)).toBe("/analytics/export?kind=links&range=7");
     expect(exportHref("daily", 365)).toBe("/analytics/export?kind=daily&range=365");
+    expect(exportHref("links", 30, "home")).toBe("/analytics/export?kind=links&range=30&filter=home");
   });
 
   it("M9-26 twenty exports a minute", () => {
