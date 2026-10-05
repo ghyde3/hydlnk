@@ -51,12 +51,21 @@ export async function tenantSitemap(
   );
 }
 
-/** The origin a custom host's robots.txt names its sitemap on, or null when the host is not a verified domain. */
-export async function customHostOrigin(host: string, rootDomain: string): Promise<string | null> {
-  if (classifyHost(host, rootDomain).kind !== "custom" || invalidHandleLabel(host, rootDomain)) {
-    return null;
+/**
+ * The origin a site host's robots.txt names its sitemap on: a handle host whose site is published, or
+ * a custom host that is a verified domain of a published site. null for every other host (marketing,
+ * app, an unclaimed handle, an unknown or pending domain): no sitemap is named.
+ */
+export async function siteHostOrigin(host: string, rootDomain: string): Promise<string | null> {
+  const { kind, handle } = classifyHost(host, rootDomain);
+  if (kind === "tenant" && handle) {
+    const state = await getTenantPageState(handle);
+    return state.kind === "published" ? tenantOrigin(handle, rootDomain) : null;
   }
+  if (kind !== "custom" || invalidHandleLabel(host, rootDomain)) return null;
   const hostname = lookupKey(host);
-  if (!hostname || !(await resolveCustomDomain(host))) return null;
-  return customOrigin(hostname, rootDomain);
+  const pageId = hostname ? await resolveCustomDomain(host) : null;
+  if (!hostname || !pageId) return null;
+  const state = await getTenantPageStateById(pageId);
+  return state.kind === "published" ? customOrigin(hostname, rootDomain) : null;
 }

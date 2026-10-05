@@ -1,6 +1,6 @@
 import { SITEMAP_PATHS } from "@/components/marketing/site-map";
 import { classifyHost } from "@/lib/routing/host";
-import { protocolFor, rootOrigin } from "@/lib/routing/urls";
+import { rootOrigin } from "@/lib/routing/urls";
 
 /**
  * robots.txt and sitemap.xml for every host. The proxy skips both paths (see its matcher), so one
@@ -11,8 +11,9 @@ import { protocolFor, rootOrigin } from "@/lib/routing/urls";
  *   app        disallow everything: the editor is private
  *   www        same as marketing (normally redirected before it gets here)
  *   tenant     allow the page and its sub-pages, keep crawlers off the click-redirect and beacon
- *              routes, and name the site's own sitemap (M11-10)
- *   custom     as tenant, naming the sitemap once the route has resolved the host to a site
+ *              routes, and name the site's own sitemap (M11-10) once the route has found the
+ *              handle's site published
+ *   custom     as tenant, once the route has resolved the host to a published site
  *
  * The marketing sitemap exists only on the marketing host. A tenant host or a custom domain answers
  * its own site's sitemap (src/lib/tenant-render/sitemap.ts: Home and the live sub-pages), so it
@@ -26,15 +27,16 @@ export interface TextResponse {
 }
 
 /**
- * `siteOrigin`: for a custom host, the origin the route resolved it to (a verified domain of a
- * site); never taken from the request unchecked. A tenant host derives its own from the handle.
+ * `siteOrigin`: for a tenant or custom host, the origin the route resolved to a published site (the
+ * handle host, or a verified domain); never taken from the request unchecked, and null names no
+ * sitemap (an unclaimed handle, an unknown host).
  */
 export function robotsTxt(
   host: string,
   rootDomain: string,
   siteOrigin: string | null = null,
 ): TextResponse {
-  const { kind, handle } = classifyHost(host, rootDomain);
+  const { kind } = classifyHost(host, rootDomain);
   const plain = "text/plain; charset=utf-8";
   if (kind === "app") {
     return { status: 200, contentType: plain, body: "User-agent: *\nDisallow: /\n" };
@@ -46,10 +48,7 @@ export function robotsTxt(
       body: `User-agent: *\nAllow: /\n\nSitemap: ${rootOrigin(rootDomain)}/sitemap.xml\n`,
     };
   }
-  const own =
-    kind === "tenant" && handle
-      ? `${protocolFor(rootDomain)}://${handle}.${rootDomain}`
-      : siteOrigin;
+  const own = siteOrigin;
   return {
     status: 200,
     contentType: plain,

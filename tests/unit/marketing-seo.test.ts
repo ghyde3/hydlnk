@@ -46,9 +46,14 @@ describe.each([
       const robots = robotsTxt(host(handle), root);
       expect(robots.body).toContain("Allow: /");
       expect(robots.body).toContain("Disallow: /r/");
-      // The site's own sitemap, never the marketing one (M11-10).
-      expect(robots.body).toContain(`Sitemap: ${origin.replace("//", `//${handle}.`)}/sitemap.xml`);
-      expect(robots.body).not.toContain(`Sitemap: ${origin}/sitemap.xml`);
+      // No site resolved (an unclaimed handle): no sitemap named, and never the marketing one.
+      expect(robots.body).not.toContain("Sitemap:");
+      // Once the route found the handle's site published, it names that site's own sitemap (M11-10).
+      const own = origin.replace("//", `//${handle}.`);
+      expect(robotsTxt(host(handle), root, own).body).toContain(`Sitemap: ${own}/sitemap.xml`);
+      expect(robotsTxt(host(handle), root, own).body).not.toContain(
+        `Sitemap: ${origin}/sitemap.xml`,
+      );
       const sitemap = sitemapXml(host(handle), root);
       expect(sitemap.status).toBe(404);
       expect(sitemap.body).not.toContain("<urlset");

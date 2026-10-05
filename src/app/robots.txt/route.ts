@@ -1,6 +1,6 @@
 import { clientEnv } from "@/lib/env/client";
 import { robotsTxt } from "@/lib/marketing/seo";
-import { customHostOrigin } from "@/lib/tenant-render/sitemap";
+import { siteHostOrigin } from "@/lib/tenant-render/sitemap";
 
 /** GET /robots.txt on any host; the content depends on the host (src/lib/marketing/seo.ts). */
 export async function GET(request: Request): Promise<Response> {
@@ -8,7 +8,7 @@ export async function GET(request: Request): Promise<Response> {
   const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
   let siteOrigin: string | null = null;
   try {
-    siteOrigin = await customHostOrigin(host, rootDomain);
+    siteOrigin = await siteHostOrigin(host, rootDomain);
   } catch (error) {
     console.error("[robots] resolving the host failed", error);
   }
