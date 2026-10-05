@@ -137,6 +137,14 @@ export const blockDefaults: Record<BlockType, () => Block> = {
     googleId: newBlockId(),
     appleId: newBlockId(),
   }),
+  // Points at Home until the owner picks a page (M11-07).
+  page_link: () => ({
+    id: newBlockId(),
+    type: "page_link",
+    visible: true,
+    label: "New page link",
+    target: "home",
+  }),
 };
 
 /**

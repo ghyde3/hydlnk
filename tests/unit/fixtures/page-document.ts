@@ -166,6 +166,13 @@ export const blocks = {
     googleId: "map-google-0001",
     appleId: "map-apple-00001",
   },
+  page_link: {
+    id: "page-link-001",
+    type: "page_link",
+    visible: true,
+    label: "Directions",
+    target: "home",
+  },
   faq: {
     id: "faq-block-001",
     type: "faq",
@@ -234,6 +241,7 @@ export const fullDraft: DraftDoc = {
     blocks.book,
     blocks.apps,
     blocks.map,
+    blocks.page_link,
     { id: "header-hidden-1", type: "header", visible: false, text: "Coming soon" },
   ],
 };

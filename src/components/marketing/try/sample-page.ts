@@ -120,6 +120,9 @@ export function makeBlock(
         url: `https://example.com/link-${variant + 1}`,
       };
     }
+    case "page_link":
+      // M11-07: not a block the try-it page offers; a harmless link to Home keeps the switch total.
+      return { ...common, type: "page_link", label: "Home", target: "home" };
     case "card":
       return {
         ...common,
@@ -319,5 +322,8 @@ export function blockSummary(block: Block): string {
       return "App Store and Google Play";
     case "map":
       return clip(block.name || "Map location");
+    case "page_link":
+      // M11-07: not offered by the try-it page; the renderer worker may refine this.
+      return clip(block.label);
   }
 }

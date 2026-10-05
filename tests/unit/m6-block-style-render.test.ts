@@ -30,7 +30,8 @@ vi.mock("@/lib/env/client", () => ({
 
 const PAGE_ID = "00000000-0000-4000-8000-0000000000b1";
 const COLOR = "#C46A4F";
-const TYPES = BLOCK_TYPES;
+// M11-07: page_link has no editor form or renderer yet; those workers drop this filter with theirs.
+const TYPES = BLOCK_TYPES.filter((type) => type !== "page_link");
 
 type Raw = Record<string, unknown>;
 const block = (type: BlockType, extra: Raw = {}): Raw => ({ ...fixtureBlocks[type], ...extra });

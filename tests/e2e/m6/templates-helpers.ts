@@ -133,6 +133,8 @@ export function describeBlocks(blocks: DraftDoc["blocks"]): string[] {
         return `apps:${block.links.map((link) => link.store).join(",")}`;
       case "map":
         return `map:${block.name}`;
+      case "page_link":
+        return `page_link:${block.label}`;
     }
   });
 }

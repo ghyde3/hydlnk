@@ -17,7 +17,8 @@ export function BlockTypeChips({
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {BLOCK_TYPES.map((type) => (
+      {/* M11-07: page_link has no editor form yet; the editor worker removes this filter with its form. */}
+      {BLOCK_TYPES.filter((type) => type !== "page_link").map((type) => (
         <button
           key={type}
           type="button"

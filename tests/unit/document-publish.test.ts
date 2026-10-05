@@ -338,7 +338,10 @@ describe("block defaults (M2-10)", () => {
         ...emptyDraft("mara"),
         blocks: [blockDefaults[type]()],
       }).success;
-      expect(ok, type).toBe(type === "header" || type === "text" || type === "divider");
+      // page_link defaults to Home, a target that is always there (M11-07).
+      expect(ok, type).toBe(
+        type === "header" || type === "text" || type === "divider" || type === "page_link",
+      );
     }
   });
 });

@@ -7,6 +7,7 @@ import {
 import { pickShape, publishFocus } from "./focus";
 import { publishTextAndMarks } from "./marks";
 import { publishLock } from "./lock";
+import { publishNav } from "./nav";
 import { publishBanner, publishNameStyle } from "./page-extras";
 import { resolveProfileOptions } from "./profile-options";
 import { publishShare } from "./share";
@@ -56,12 +57,15 @@ export function toPublishForm(draft: DraftDoc, themeTokens: Partial<TokenSet> | 
   // never used either publishes byte-identically to before.
   const utm = publishPageUtm(draft.utm);
   const redirect = publishRedirect(draft.redirect);
+  // The site menu (M11-07): written only when it is not the default, like the extras above.
+  const nav = publishNav(draft.nav);
   return {
     version: 1,
     ...(share ? { share } : {}),
     ...(banner ? { banner } : {}),
     ...(utm ? { utm } : {}),
     ...(redirect ? { redirect } : {}),
+    ...(nav ? { nav } : {}),
     profile: {
       name: draft.profile.name.trim(),
       bio: draft.profile.bio.trim(),
@@ -147,7 +151,7 @@ function publishStoreLink<L extends { id: string; store: string; url: string }>(
   return { id: link.id, store: link.store, url: link.url.trim() };
 }
 
-function publishBlock(block: Block): Block | null {
+export function publishBlock(block: Block): Block | null {
   const base = { id: block.id, visible: true } as const;
   switch (block.type) {
     case "link":
@@ -287,6 +291,14 @@ function publishBlock(block: Block): Block | null {
         address: block.address.trim(),
         googleId: block.googleId,
         appleId: block.appleId,
+        ...cleanOverrides(block.overrides),
+      };
+    case "page_link":
+      return {
+        ...base,
+        type: "page_link",
+        label: block.label.trim(),
+        target: block.target.trim(),
         ...cleanOverrides(block.overrides),
       };
     default:

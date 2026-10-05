@@ -54,6 +54,7 @@ const CONTROLS: Record<BlockType, string[]> = {
   book: ["buttonStyle", "color", "radius"],
   apps: ["color", "radius"],
   map: ["radius", "borderWidth", "color"],
+  page_link: ["buttonStyle", "color", "radius"],
 };
 
 const LABELS: Record<BlockType, string> = {
@@ -72,6 +73,7 @@ const LABELS: Record<BlockType, string> = {
   book: "Color",
   apps: "Color",
   map: "Border color",
+  page_link: "Color",
 };
 
 /** The keys the Color control writes for a color, per block type. */
@@ -91,6 +93,7 @@ const WRITTEN: Record<BlockType, Record<string, string>> = {
   book: { buttonBg: COLOR, accent: COLOR, buttonText: "#F7F3EC" },
   apps: { text: COLOR, border: COLOR },
   map: { border: COLOR },
+  page_link: { buttonBg: COLOR, accent: COLOR, buttonText: "#F7F3EC" },
 };
 
 describe("M6-46 each block type's controls", () => {
@@ -109,7 +112,7 @@ describe("M6-46 each block type's controls", () => {
         expect(["buttonStyle", "color", "radius", "borderWidth"]).toContain(control);
       }
       expect(hasStyleControl(of(type), "buttonStyle"), type).toBe(
-        type === "link" || type === "book",
+        type === "link" || type === "book" || type === "page_link",
       );
     }
   });

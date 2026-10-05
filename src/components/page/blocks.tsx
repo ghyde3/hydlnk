@@ -627,6 +627,9 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockContext }) {
       return <AppsView block={block} ctx={ctx} />;
     case "map":
       return <MapView block={block} ctx={ctx} />;
+    case "page_link":
+      // M11-07: the renderer worker replaces this (a link button with a relative href, no /r).
+      return null;
     default:
       return null;
   }

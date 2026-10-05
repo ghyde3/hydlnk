@@ -277,8 +277,11 @@ describe("add_block's description matches the field schemas", () => {
     section.split("; ").map((part) => [part.split(":")[0]!.trim(), part]),
   );
 
+  // M11-07: page_link is not an MCP block type until sub-page support (M2).
+  const MCP_TYPES = BLOCK_TYPES.filter((type) => type !== "page_link");
+
   it("names every block type once", () => {
-    expect(Object.keys(segments).sort()).toEqual([...BLOCK_TYPES].sort());
+    expect(Object.keys(segments).sort()).toEqual([...MCP_TYPES].sort());
   });
 
   it("lists, for each type, the field names the input takes, and the input takes nothing else", () => {
@@ -298,11 +301,11 @@ describe("add_block's description matches the field schemas", () => {
     }
   });
 
-  it("the type enum is the fifteen block types", () => {
+  it("the type enum is the block types MCP knows (page_link left out until M2)", () => {
     const json = z.toJSONSchema(add.input, { io: "input" }) as unknown as {
       properties: { type: { enum: string[] } };
     };
-    expect(json.properties.type.enum).toEqual([...BLOCK_TYPES]);
+    expect(json.properties.type.enum).toEqual([...MCP_TYPES]);
   });
 });
 
