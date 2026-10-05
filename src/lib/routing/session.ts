@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { clientEnv } from "@/lib/env/client";
-import { SHARE_TOKEN_HEADER } from "@/lib/previews/share-headers";
+import { SHARE_PATH_HEADER, SHARE_TOKEN_HEADER } from "@/lib/previews/share-headers";
 import { setAppHeaders } from "./app-headers";
 import { hostOnlyCookie } from "./cookies";
 
@@ -30,6 +30,7 @@ export async function rewriteWithSession(
   const rewrite = () => {
     const headers = new Headers(request.headers);
     headers.delete(SHARE_TOKEN_HEADER);
+    headers.delete(SHARE_PATH_HEADER);
     return NextResponse.rewrite(destination, { request: { headers } });
   };
   let response = rewrite();

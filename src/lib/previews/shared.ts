@@ -1,5 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { stripHiddenCharacters, toPublishForm, type PublishDoc } from "@/lib/document";
+import {
+  HOME_TARGET,
+  draftSubPageSchema,
+  isValidSubPagePath,
+  stripHiddenCharacters,
+  toPublishForm,
+  toSubPagePublishForm,
+  type Block,
+  type PublishDoc,
+} from "@/lib/document";
 import { loadDraft } from "@/lib/editor/load";
 import type { Database } from "@/lib/supabase/database.types";
 import { homeUsesSiteIndex } from "@/lib/site/live";
@@ -35,11 +44,13 @@ export type SharedPreview =
       /** The owner's plan: the "Made with HYDLNK" badge follows it. */
       plan: string;
       /**
-       * The rest of the site as the draft has it (M11-07): the menu as plain text (the preview never
-       * leaves the draft) and the hrefs of its page links. Absent when Home uses neither. Previews
-       * of the sub-pages themselves are M2.
+       * The rest of the site as the draft has it (M11-07, M12-06): a working menu and the hrefs of its
+       * page links, all pointing at this same link's addresses (`/share/{token}` and
+       * `/share/{token}/{path}`), never at a tenant host. Absent when nothing needs it.
        */
       site?: SiteContext;
+      /** The page being previewed when the address named one (M12-06): its title and blocks. Absent for Home. */
+      subPage?: { title: string; blocks: readonly Block[] };
       /** When the link stops working (ISO, UTC). */
       expiresAt: string;
     };
@@ -48,8 +59,12 @@ export async function loadSharedPreview(
   admin: SupabaseClient<Database>,
   token: unknown,
   now: Date = new Date(),
+  /** What follows the token in the address ("" for Home, one valid path segment for a page, M12-06). */
+  path: string = "",
 ): Promise<SharedPreview> {
   if (!isPreviewTokenShape(token)) return { kind: "inactive" };
+  // A path that cannot be a page's (nested, reserved, odd characters) is the one 404 and never a query.
+  if (path !== "" && !isValidSubPagePath(path)) return { kind: "inactive" };
 
   const { data, error } = await admin
     .from("preview_links")
@@ -89,27 +104,67 @@ export async function loadSharedPreview(
   // characters) is taken out of what is shown. The stored draft is not touched.
   const doc = sanitizeSharedDoc(toPublishForm(draft, themeTokens));
 
-  // The menu of the draft, as plain text (M11-07). The sub-pages' drafts are read only when Home
-  // draws a menu or a page link, with the named columns of the link's own page.
+  // The site as the draft has it (M11-07, M12-06). The sub-pages' titles and paths are read only when
+  // the address names a page, or Home draws a menu or a page link: named columns, never whole drafts.
   let site: SiteContext | undefined;
-  if (homeUsesSiteIndex(doc)) {
-    // Only the path and title of each draft, never the whole documents.
+  let subPage: { title: string; blocks: readonly Block[] } | undefined;
+  const base = `/share/${token as string}`;
+  if (path !== "" || homeUsesSiteIndex(doc)) {
     const rows = await admin
       .from("site_pages")
       .select("id, path:draft->>path, title:draft->>title")
       .eq("page_id", page.id);
     if (rows.error)
       throw new Error(`Loading the pages of a shared preview failed: ${rows.error.message}`);
-    const summaries = (rows.data ?? []).flatMap((row): SitePageSummary[] => {
-      const { path, title: rawTitle } = row as unknown as {
+    const listed = (rows.data ?? []).map((row) => {
+      const { path: rowPath, title } = row as unknown as {
         path: string | null;
         title: string | null;
       };
-      if (typeof path !== "string" || typeof rawTitle !== "string") return [];
-      const title = stripHiddenCharacters(rawTitle).trim();
-      return title === "" ? [] : [{ id: row.id, path, title }];
+      return { id: row.id, path: rowPath, title };
     });
-    site = { hrefs: hrefsOf(summaries), menu: buildMenu(doc.nav, summaries, "home", "text") };
+    const summaries = listed.flatMap((row): SitePageSummary[] => {
+      if (typeof row.path !== "string" || typeof row.title !== "string") return [];
+      const title = stripHiddenCharacters(row.title).trim();
+      return title === "" ? [] : [{ id: row.id, path: row.path, title }];
+    });
+    let currentId = HOME_TARGET;
+    if (path !== "") {
+      const match = summaries.find((entry) => entry.path.trim() === path);
+      // No page of this site at that path: the same 404 as an inactive link.
+      if (!match) return { kind: "inactive" };
+      currentId = match.id;
+      // That one page's whole draft, by its id (which came from this link's own site).
+      const full = await admin
+        .from("site_pages")
+        .select("draft")
+        .eq("id", match.id)
+        .eq("page_id", page.id)
+        .maybeSingle();
+      if (full.error)
+        throw new Error(`Loading a page of a shared preview failed: ${full.error.message}`);
+      const parsed = draftSubPageSchema.safeParse(full.data?.draft);
+      if (!parsed.success) return { kind: "inactive" };
+      const publishForm = toSubPagePublishForm(parsed.data);
+      // The same cleaning as Home: hidden characters out of every text.
+      const cleaned = sanitizeSharedDoc({ ...doc, blocks: publishForm.blocks });
+      subPage = {
+        title: stripHiddenCharacters(publishForm.title),
+        blocks: cleaned.blocks,
+      };
+    }
+    // The menu is the draft's: Home and the sub-pages in Home's order, the current one marked, every
+    // entry a link to this same preview. Page links resolve to the same addresses.
+    const toShare = (href: string) => (href === "/" ? base : `${base}${href}`);
+    const menu = buildMenu(doc.nav, summaries, currentId, "links");
+    const hrefs: Record<string, string> = { [HOME_TARGET]: base };
+    for (const [id, href] of Object.entries(hrefsOf(summaries))) hrefs[id] = toShare(href);
+    site = {
+      hrefs,
+      menu: menu
+        ? { ...menu, items: menu.items.map((item) => ({ ...item, href: toShare(item.href) })) }
+        : null,
+    };
   }
 
   return {
@@ -119,5 +174,6 @@ export async function loadSharedPreview(
     plan: page.accounts.plan,
     expiresAt: data.expires_at,
     ...(site ? { site } : {}),
+    ...(subPage ? { subPage } : {}),
   };
 }

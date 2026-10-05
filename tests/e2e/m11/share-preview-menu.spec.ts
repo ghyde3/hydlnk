@@ -12,7 +12,7 @@ import { DIRECTIONS, ITEMS, makeLiveSite } from "./tenant-helpers";
 test.afterAll(cleanupUsers);
 test.describe.configure({ timeout: 120_000 });
 
-test("M11-07 the share preview shows the menu as plain text, in the owner's order, with no links in it", async ({}, info) => {
+test("M11-07, M12-06 the share preview shows the menu from the DRAFT titles, in the owner's order, as working preview links", async ({}, info) => {
   test.skip(!desktopOnly(info), "raw HTTP, no UI");
   const site = await makeLiveSite("shm");
   const link = await makeLink(site.user.id, site.pageId);
@@ -21,13 +21,12 @@ test("M11-07 the share preview shows the menu as plain text, in the owner's orde
 
   const nav = res.body.match(/<nav[^>]*class="pg-menu"[\s\S]*?<\/nav>/)?.[0];
   expect(nav, "the menu is drawn").toBeDefined();
-  expect(nav).toContain('data-menu-mode="text"');
-  // Plain text: spans, never anchors, so nothing in the menu can leave the draft.
-  expect(nav).not.toMatch(/<a[\s>]/);
-  expect(nav).not.toMatch(/href=/);
-  const labels = [...nav!.matchAll(/<span class="pg-menu-item"[^>]*>([^<]*)<\/span>/g)].map(
-    (m) => m[1],
-  );
+  // M12-06 supersedes the plain-text menu: the entries are links to this same preview.
+  expect(nav).toContain('data-menu-mode="links"');
+  const labels = [...nav!.matchAll(/<a class="pg-menu-item"[^>]*>([^<]*)<\/a>/g)].map((m) => m[1]);
   expect(labels).toEqual(["Home", ITEMS.title, DIRECTIONS.title]);
-  expect(nav).toMatch(/<span class="pg-menu-item" aria-current="page">Home<\/span>/);
+  expect(nav).toMatch(
+    /<a class="pg-menu-item"[^>]*aria-current="page"[^>]*>Home<\/a>|<a class="pg-menu-item" aria-current="page"[^>]*>Home<\/a>/,
+  );
+  for (const [, href] of nav!.matchAll(/href="([^"]+)"/g)) expect(href).toMatch(/^\/share\//);
 });

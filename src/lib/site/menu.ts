@@ -45,12 +45,21 @@ export interface SiteContext {
 
 export const MENU_HOME_LABEL = "Home";
 
+/** `/share/{43 base64url characters}` with an optional one-segment path. */
+const SHARE_HREF = /^\/share\/[A-Za-z0-9_-]{43}(?:\/[a-z0-9-]+)?$/;
+
 /**
  * The one vetted way a same-site anchor gets its href: "/" (Home) or "/" plus a valid, non-reserved
  * sub-page path, else null. Anything else (a scheme, "//host", a query, a nested path) is refused.
  */
 export function internalHref(href: string | null | undefined): string | null {
   if (href === "/") return href;
+  // The private share preview (M12-06) keeps its links inside the preview: the share address of a
+  // page, "/share/{token}" or "/share/{token}/{path}", is the one other same-site href.
+  if (typeof href === "string" && SHARE_HREF.test(href)) {
+    const path = href.slice("/share/".length).split("/")[1];
+    return path === undefined || isValidSubPagePath(path) ? href : null;
+  }
   if (typeof href !== "string" || !href.startsWith("/")) return null;
   return isValidSubPagePath(href.slice(1)) ? href : null;
 }
@@ -77,10 +86,11 @@ export function pageLinkHref(
   target: string,
   hrefs: SiteContext["hrefs"] | undefined,
 ): string | null {
-  if (target === HOME_TARGET) return "/";
+  // The share preview maps Home to its own address (M12-06); everywhere else Home is "/".
+  if (target === HOME_TARGET) return hrefs?.[HOME_TARGET] ?? "/";
   if (!hrefs || !Object.prototype.hasOwnProperty.call(hrefs, target)) return null;
   const href = hrefs[target]!;
-  return /^\/[a-z0-9-]+$/.test(href) ? href : null;
+  return /^\/[a-z0-9-]+$/.test(href) || SHARE_HREF.test(href) ? href : null;
 }
 
 /**

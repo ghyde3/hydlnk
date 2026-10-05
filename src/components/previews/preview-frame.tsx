@@ -11,7 +11,14 @@ import type { MouseEvent, ReactNode } from "react";
  */
 export function PreviewFrame({ children }: { children: ReactNode }) {
   function stopNavigation(event: MouseEvent<HTMLDivElement>): void {
-    if ((event.target as Element).closest("a")) event.preventDefault();
+    const anchor = (event.target as Element).closest("a");
+    if (!anchor) return;
+    // The private share preview's own menu and page links (M12-06) go to another page of the same
+    // preview, on this host; every other link stays where it is.
+    if (/^\/share\/[A-Za-z0-9_-]{43}(?:\/[a-z0-9-]+)?$/.test(anchor.getAttribute("href") ?? "")) {
+      return;
+    }
+    event.preventDefault();
   }
   return (
     <div data-preview-frame="" onClickCapture={stopNavigation} onAuxClickCapture={stopNavigation}>
