@@ -24,7 +24,9 @@
       "Edit",
       "Write",
       "Glob",
-      "Grep"
+      "Grep",
+      "Bash(scripts/q.sh *)",
+      "Bash(./scripts/q.sh *)"
     ],
     "ask": [],
     "deny": [
