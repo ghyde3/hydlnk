@@ -41,6 +41,7 @@ import { LockMark, lockOf, lockedLinkAttrs } from "./lock-mark";
 import { mailtoLink, outboundHref, telLink, vcardLink, type OutboundAttrs } from "./outbound";
 import { SocialGlyph } from "./social-icons";
 import { AppsView, BookView, MapView } from "./store-blocks";
+import { HoursView, ItemsView } from "./items-hours-blocks";
 
 /**
  * The block renderers. Nothing outside `src/components/page/` outputs block markup: the editor's
@@ -668,6 +669,10 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockContext }) {
       return <MapView block={block} ctx={ctx} />;
     case "page_link":
       return <PageLinkView block={block} ctx={ctx} />;
+    case "items":
+      return <ItemsView block={block} ctx={ctx} />;
+    case "hours":
+      return <HoursView block={block} ctx={ctx} />;
     default:
       return null;
   }

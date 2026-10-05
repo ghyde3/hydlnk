@@ -55,8 +55,8 @@ describe("M8-05 the script build", () => {
     expect(TENANT_SCRIPT_SRC).not.toMatch(/^\/(?:app|t|sites|r)(?:\/|$)/);
   });
 
-  it("is at most 8 KB unminified and 3 KB gzipped, ASCII only (it is served without a charset)", () => {
-    expect(Buffer.byteLength(source)).toBeLessThanOrEqual(8 * 1024);
+  it("is at most 12 KB unminified and 3 KB gzipped, ASCII only (it is served without a charset)", () => {
+    expect(Buffer.byteLength(source)).toBeLessThanOrEqual(12 * 1024);
     expect(gzipSync(built.code).length).toBeLessThanOrEqual(3 * 1024);
     expect(built.code).toMatch(/^[\x00-\x7f]*$/);
   });

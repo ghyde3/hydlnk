@@ -56,10 +56,7 @@ describe("block types (M2-01)", () => {
   });
 
   it("the full fixture covers every type and passes both schemas", () => {
-    // M12-01, M12-02: items and hours join the full fixture once their renderer lands.
-    expect(new Set(fullDraft.blocks.map((b) => b.type))).toEqual(
-      new Set(BLOCK_TYPES.filter((t) => t !== "items" && t !== "hours")),
-    );
+    expect(new Set(fullDraft.blocks.map((b) => b.type))).toEqual(new Set(BLOCK_TYPES));
     expect(both(fullDraft)).toEqual([true, true]);
   });
 

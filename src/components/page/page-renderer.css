@@ -1764,3 +1764,229 @@
 [data-page-root][data-align="left"] .pg-pagetitle {
   text-align: left;
 }
+
+/* Item and price list (M12-01) ------------------------------------------------------------------ */
+
+/* A list of bordered rows, or the same items in two columns. The photo keeps its box (the width and
+   height attributes give the ratio before the file loads), the price is display text that never
+   shrinks away, and a sold item has its price struck through and a "Sold" word in the accent. An
+   item with a link is one link: the whole row is at least 44px tall. */
+[data-page-root] .pg-items {
+  width: 100%;
+  min-width: 0;
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-items-heading {
+  margin: 0 0 10px;
+  font-family: var(--t-font-heading);
+  font-size: calc(20px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-items-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-page-root] .pg-items[data-layout="grid"] .pg-items-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* In a very narrow page (under 320px) two columns are too narrow for a price and a name. */
+@container (max-width: 319px) {
+  [data-page-root] .pg-items[data-layout="grid"] .pg-items-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+[data-page-root][data-density="compact"] .pg-items-list {
+  gap: 6px;
+}
+
+[data-page-root][data-density="airy"] .pg-items-list {
+  gap: 14px;
+}
+
+[data-page-root] .pg-item {
+  min-width: 0;
+}
+
+[data-page-root] .pg-item-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  height: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-items[data-layout="grid"] .pg-item-body {
+  flex-direction: column;
+}
+
+[data-page-root] a.pg-item-body[href] {
+  text-decoration: none;
+}
+
+[data-page-root] .pg-item-img {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: calc(var(--t-radius) / 2);
+  object-fit: cover;
+}
+
+[data-page-root] .pg-items[data-layout="grid"] .pg-item-img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+}
+
+[data-page-root] .pg-item-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+[data-page-root] .pg-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+
+[data-page-root] .pg-item-name {
+  min-width: 0;
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+[data-page-root] .pg-item-price {
+  flex: none;
+  font-size: calc(15px * var(--t-scale));
+  font-variant-numeric: tabular-nums;
+}
+
+[data-page-root] .pg-item[data-sold] .pg-item-price {
+  color: var(--t-text-muted);
+}
+
+[data-page-root] .pg-item-sold {
+  align-self: flex-start;
+  color: var(--t-accent);
+  font-size: calc(12px * var(--t-scale));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-page-root] .pg-item-desc {
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.45;
+}
+
+[data-page-root] a.pg-item-body[href]:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+/* Opening hours (M12-02) ------------------------------------------------------------------------ */
+
+/* A two-column table (day, times). Today's row is marked by the tenant script with
+   `aria-current="date"`, so the cached markup is the same for everyone; the status line has no
+   height until the script writes in it. */
+[data-page-root] .pg-hours {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 16px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-hours-status {
+  margin: 0 0 4px;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+}
+
+[data-page-root] .pg-hours-status:empty {
+  display: none;
+}
+
+[data-page-root] .pg-hours[data-open="true"] .pg-hours-status {
+  color: var(--t-accent);
+}
+
+[data-page-root] .pg-hours-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+[data-page-root] .pg-hours-caption {
+  margin: 0 0 4px;
+  font-family: var(--t-font-heading);
+  font-size: calc(18px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.3;
+  text-align: left;
+  text-transform: var(--t-letter-case);
+}
+
+[data-page-root] .pg-hours-row + .pg-hours-row > * {
+  border-top: 1px solid var(--t-border);
+}
+
+[data-page-root] .pg-hours-day,
+[data-page-root] .pg-hours-times {
+  padding: 8px 0;
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+[data-page-root] .pg-hours-day {
+  width: 42%;
+  padding-right: 12px;
+  font-weight: 500;
+  text-align: left;
+}
+
+[data-page-root] .pg-hours-times {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+[data-page-root] .pg-hours-row[aria-current] > * {
+  color: var(--t-accent);
+  font-weight: 700;
+}
+
+[data-page-root] .pg-hours-note {
+  margin: 8px 0 0;
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}

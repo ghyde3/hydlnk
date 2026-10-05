@@ -3,6 +3,6 @@
  * `pnpm tenant-assets`. tests/unit/m8-assets-script-build.test.ts fails when this file or
  * public/_t/{file} is missing or stale.
  */
-export const TENANT_SCRIPT_FILE = "p.ef4c02c4f640.js";
-export const TENANT_SCRIPT_SRC = "/_t/p.ef4c02c4f640.js";
-export const TENANT_SCRIPT_INTEGRITY = "sha384-6dAYAttfDPu27hE/0m3BYX/J80lQnDb/uonxgS+UdSpeuWRrkSyz26N7i8SByZv8";
+export const TENANT_SCRIPT_FILE = "p.28f7e9af53f9.js";
+export const TENANT_SCRIPT_SRC = "/_t/p.28f7e9af53f9.js";
+export const TENANT_SCRIPT_INTEGRITY = "sha384-Vus3Va0NtxEHoE3Y//TCjnWvquq6EPSBNbYcAYoIYf6gJqNoTHkrjEG2a3sALJkj";

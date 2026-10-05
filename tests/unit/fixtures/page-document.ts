@@ -276,6 +276,8 @@ export const fullDraft: DraftDoc = {
     blocks.apps,
     blocks.map,
     blocks.page_link,
+    blocks.items,
+    blocks.hours,
     { id: "header-hidden-1", type: "header", visible: false, text: "Coming soon" },
   ],
 };

@@ -268,8 +268,8 @@ describe("M9-19 a tampered page", () => {
 });
 
 describe("M9-19 the script's size and rules", () => {
-  it("is at most 3 KB gzipped and 8 KB unminified, ASCII only", () => {
-    expect(Buffer.byteLength(SOURCE)).toBeLessThanOrEqual(8 * 1024);
+  it("is at most 3 KB gzipped and 12 KB unminified, ASCII only", () => {
+    expect(Buffer.byteLength(SOURCE)).toBeLessThanOrEqual(12 * 1024);
     expect(gzipSync(CODE).length).toBeLessThanOrEqual(3 * 1024);
     expect(CODE).toMatch(/^[\x00-\x7f]*$/);
   });

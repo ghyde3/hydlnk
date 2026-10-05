@@ -57,10 +57,10 @@ const WAVE_M = ["page_link", "items", "hours"];
 const FULL_ORDER = [...ORIGINAL_NINE, ...WAVE_K, ...WAVE_M];
 /**
  * Types whose document layer exists but whose renderer, editor form, stylesheet family or add-block
- * chip is not built yet; an entry turns the checks below off for the type. Items and hours wait for
- * M12-01 and M12-02 (the editor and renderer workers empty this set).
+ * chip is not built yet; an entry turns the checks below off for the type. Empty since M12-01 and
+ * M12-02 landed.
  */
-const PENDING_UI = new Set<string>(["items", "hours"]); // M12-01, M12-02: stubs until their forms and renderers land
+const PENDING_UI = new Set<string>();
 const PLURALS: Record<string, string> = {
   faq: "faqs",
   contact: "contacts",

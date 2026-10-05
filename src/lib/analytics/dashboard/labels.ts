@@ -86,6 +86,14 @@ export function linkLabelsFromPublished(published: unknown): Map<string, string>
           }
         }
         break;
+      case "items":
+        // An item with a link (M12-01) is clicked under its own id and named by the item.
+        for (const item of Array.isArray(block.items) ? block.items : []) {
+          if (isRecord(item) && typeof item.id === "string" && text(item.url) !== "") {
+            labels.set(item.id, cutTo60(nameOf(item.name, item.url)));
+          }
+        }
+        break;
       case "text":
         // A link inside text (M6-28) is named by the text it is on, else by its address.
         for (const mark of Array.isArray(block.marks) ? block.marks : []) {
