@@ -130,7 +130,7 @@ export function makeBlock(
         ...common,
         type: "items",
         layout: "list",
-        items: [{ id: `${id}-0`, name: "Print", price: "$20", description: "", sold: false }],
+        items: [{ id: `${id}-0`, name: "Print", price: "20", description: "", sold: false }],
       };
     case "hours":
       // M12-02: not a block the try-it page offers; the default keeps the switch total.

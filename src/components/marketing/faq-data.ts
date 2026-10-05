@@ -95,6 +95,16 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
     title: "Links and blocks",
     items: [
       {
+        question: "Can I show a price list or my opening hours?",
+        answer:
+          "Yes. The item and price list block takes a name, a price shown exactly as you type it, a description, a photo and a link for each item, and you can mark an item Sold. The hours block takes each day of the week, your time zone and a short note, and shows visitors whether you are open now. Prices are only displayed: there is no checkout and no fee.",
+      },
+      {
+        question: "Are there templates for a garage sale, a small business or a musician?",
+        answer:
+          "Yes. Garage sale, Small business and Musician each give you Home and two pages with sample text to replace. They fit the free plan, they fill your draft only, and nothing goes live until you press Publish.",
+      },
+      {
         question: "Can I lock a link?",
         answer:
           "Yes, on every plan. Add a lock to a link and visitors must pass an age check or enter a code you choose before it opens. The link’s address isn’t in your page until they do.",
@@ -178,6 +188,11 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
         question: "How do I upgrade, change my card or cancel?",
         answer:
           "Upgrade from your account settings through Stripe Checkout. Change your card, download invoices or cancel at any time in the Stripe billing portal, under Manage billing.",
+      },
+      {
+        question: "Can I have more than one page on my site?",
+        answer:
+          "Yes. Your link page is Home, and you can add pages beside it, like you.hydlnk.com/menu or you.hydlnk.com/directions. Each page has its own title, description and blocks, and every page can show a menu you choose. One Publish sends the whole site live. How many pages you get depends on your plan; the answer on sites and pages below has the numbers.",
       },
       {
         question: "How many sites and pages do I get?",

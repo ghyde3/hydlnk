@@ -16,12 +16,13 @@ import {
 } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
 import { guideHref } from "@/components/marketing/site-map";
+import { pagesPerSiteText } from "@/lib/marketing/plan-limits";
 
 export const metadata: Metadata = marketingMetadata({
   path: "/features",
   title: "Features",
   description:
-    "Fifteen kinds of blocks, a profile with your logo, link tools, a branded QR code, CSV analytics, an editor with a live phone preview and a Publish button you control. Every feature is on every plan, free included, except version history and redirect mode on Pro and Studio.",
+    "Fifteen kinds of blocks, pages with a menu, price lists and opening hours, a profile with your logo, link tools, a branded QR code, CSV analytics, an editor with a live phone preview and a Publish button you control. Every feature is on every plan, free included, except version history and redirect mode on Pro and Studio.",
   image: "features",
 });
 
@@ -29,7 +30,10 @@ function FeatureList({ items }: { items: { title: string; body: string; icon: Re
   return (
     <ul className="grid gap-3 min-[640px]:grid-cols-2">
       {items.map((item) => (
-        <li key={item.title} className="flex gap-4 rounded-md border border-line bg-surface p-[18px]">
+        <li
+          key={item.title}
+          className="flex gap-4 rounded-md border border-line bg-surface p-[18px]"
+        >
           <IconTile>{item.icon}</IconTile>
           <div className="min-w-0">
             <h3 className="text-base font-semibold">{item.title}</h3>
@@ -267,6 +271,67 @@ const LINKS = [
   },
 ];
 
+const SITES = [
+  {
+    title: "Home and pages",
+    body: `Your link page is Home. Add pages beside it at addresses like you.hydlnk.com/menu, each with its own title, description and blocks. Free sites have ${pagesPerSiteText("free")}, Pro sites ${pagesPerSiteText("pro")}, and Studio sites ${pagesPerSiteText("studio")}.`,
+    icon: (
+      <Icon>
+        <rect x="4" y="4" width="10" height="13" rx="2" />
+        <path d="M17 8h3v12H9v-3" />
+      </Icon>
+    ),
+  },
+  {
+    title: "A menu you control",
+    body: "Show a menu on every page of the site, choose which pages are in it and put them in order. Or switch the menu off and link to pages from a Page link block instead.",
+    icon: (
+      <Icon>
+        <path d="M5 7h14M5 12h14M5 17h14" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Items and prices",
+    body: "List what you sell, with a name, a price shown exactly as you type it, a short description, a photo and a link for each item. Mark an item Sold and its price is struck through. Show the list as rows or as a grid. There is no checkout and no fee: it is a price list.",
+    icon: (
+      <Icon>
+        <path d="M4 5h16M4 10h10M4 15h16M4 20h10" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Opening hours",
+    body: "Set each day of the week as closed or open with one or two time ranges, pick your time zone and add a short note. The table shows today, and visitors see whether you are open now.",
+    icon: (
+      <Icon>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 8v4l3 2" />
+      </Icon>
+    ),
+  },
+  {
+    title: "Three templates to start from",
+    body: "Garage sale, Small business or Musician: each gives you Home and two pages with sample text to replace, so it fits the free plan. A template fills your draft only. Nothing goes live until you press Publish.",
+    icon: (
+      <Icon>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M4 10h16M10 10v10" />
+      </Icon>
+    ),
+  },
+  {
+    title: "One Publish for the whole site",
+    body: "Publish sends Home and every page live together, or none of them if something needs fixing. Private preview links show Home and each page with a working menu. Analytics can show the whole site or one page, and a visitor who sees two pages in a day is counted once.",
+    icon: (
+      <Icon>
+        <path d="M12 16V4M7 9l5-5 5 5" />
+        <path d="M5 20h14" />
+      </Icon>
+    ),
+  },
+];
+
 const SAFETY = [
   {
     title: "Only real web links",
@@ -363,9 +428,9 @@ export default function FeaturesPage() {
             />
             <ul className="mt-6 flex flex-col gap-3 text-[15px] leading-[1.6] text-text-2">
               <li>
-                <strong className="font-semibold text-ink">Photo.</strong> Upload, replace or
-                remove it, and choose its position, shape, size and border, or hide it. Without
-                one, your initials stand in, drawn in your accent color.
+                <strong className="font-semibold text-ink">Photo.</strong> Upload, replace or remove
+                it, and choose its position, shape, size and border, or hide it. Without one, your
+                initials stand in, drawn in your accent color.
               </li>
               <li>
                 <strong className="font-semibold text-ink">Logo.</strong> Show a logo beside your
@@ -382,9 +447,9 @@ export default function FeaturesPage() {
                 what you do and what you want people to tap.
               </li>
               <li>
-                <strong className="font-semibold text-ink">Support banner.</strong> A short
-                message, up to 100 characters, with an optional link, above your profile. Visitors
-                can dismiss it for their visit, and it sets no cookie.
+                <strong className="font-semibold text-ink">Support banner.</strong> A short message,
+                up to 100 characters, with an optional link, above your profile. Visitors can
+                dismiss it for their visit, and it sets no cookie.
               </li>
             </ul>
           </div>
@@ -481,6 +546,18 @@ export default function FeaturesPage() {
         />
         <div className="mt-10">
           <FeatureList items={LINKS} />
+        </div>
+      </Section>
+
+      <Section id="pages" labelledBy="pages-title">
+        <SectionIntro
+          eyebrow="Sites with pages"
+          titleId="pages-title"
+          title="More than one page, when you need it."
+          lead="A garage sale, a small shop or a band can want a price list, opening hours or a page for shows. Keep one link, and give each of those its own page on the same site."
+        />
+        <div className="mt-10">
+          <FeatureList items={SITES} />
         </div>
       </Section>
 
