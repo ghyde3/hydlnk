@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emptyDraft } from "@/lib/document";
+import { DEFAULT_PAGE_NAME } from "@/lib/pages/name";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { normalizeHandle, validateHandle } from "./rules";
 
@@ -50,7 +51,13 @@ export async function claimHandleWithClient(
 
   const { data, error } = await admin
     .from("pages")
-    .insert({ owner_id: userId, handle, draft: emptyDraft(handle) as unknown as Json })
+    .insert({
+      owner_id: userId,
+      handle,
+      // The column default is still "Main page" (sites made before Wave M keep it): name it here.
+      name: DEFAULT_PAGE_NAME,
+      draft: emptyDraft(handle) as unknown as Json,
+    })
     .select("id, handle")
     .single();
 

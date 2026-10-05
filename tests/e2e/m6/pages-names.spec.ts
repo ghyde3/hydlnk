@@ -23,8 +23,8 @@ test.afterAll(cleanupUsers);
 
 const header = (page: Page) => page.getByTestId("workspace-toolbar");
 const h1 = (page: Page) => header(page).getByRole("heading", { level: 1 });
-const pencil = (page: Page) => header(page).getByRole("button", { name: "Rename page" });
-const nameField = (page: Page) => header(page).getByLabel("Page name");
+const pencil = (page: Page) => header(page).getByRole("button", { name: "Rename site" });
+const nameField = (page: Page) => header(page).getByLabel("Site name");
 
 const patchUrl = (pageId: string) => `${supabaseUrl()}/rest/v1/pages?id=eq.${pageId}`;
 
@@ -187,7 +187,7 @@ test.describe("M6-13 the database side", () => {
     expect((rowAfter.draft as { rev: number }).rev).toBe((rowBefore.draft as { rev: number }).rev);
   });
 
-  test("M6-13 a created page is named by the server: Main page first, then Page 2 and Page 3; a name in the body is ignored", async ({
+  test("M6-13 a created page is named by the server: Main site first (helper-made sites keep Main page), then Site 2 and Site 3; a name in the body is ignored", async ({
     context,
   }, info) => {
     test.skip(!desktopOnly(info), "raw API, no UI");
@@ -199,8 +199,8 @@ test.describe("M6-13 the database side", () => {
     const third = await createPage(context, `zq-nm5c-${Math.random().toString(36).slice(2, 7)}`, {
       name: "Another",
     });
-    expect(await nameOf(second)).toBe("Page 2");
-    expect(await nameOf(third)).toBe("Page 3");
+    expect(await nameOf(second)).toBe("Site 2");
+    expect(await nameOf(third)).toBe("Site 3");
     expect(await nameOf(owner.pageId)).toBe("Main page");
   });
 });
@@ -217,7 +217,7 @@ test.describe("M6-14 the editor header", () => {
     const box = (await pencil(page).boundingBox())!;
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
-    await expect(pencil(page)).toHaveAttribute("aria-label", "Rename page");
+    await expect(pencil(page)).toHaveAttribute("aria-label", "Rename site");
     // The pencil follows the title.
     const title = (await h1(page).boundingBox())!;
     expect(box.x).toBeGreaterThanOrEqual(title.x + title.width - 1);
@@ -370,12 +370,12 @@ test.describe("M6-14 the editor header", () => {
     await nameField(page).fill("Typed name");
     const save = header(page).getByRole("button", { name: "Save", exact: true });
     await save.click();
-    await expect(header(page).getByText("Couldn’t rename the page. Try again.")).toBeVisible();
+    await expect(header(page).getByText("Couldn’t rename the site. Try again.")).toBeVisible();
     await expect(nameField(page)).toHaveValue("Typed name");
 
     mode = "500";
     await save.click();
-    await expect(header(page).getByText("Couldn’t rename the page. Try again.")).toBeVisible();
+    await expect(header(page).getByText("Couldn’t rename the site. Try again.")).toBeVisible();
     await expect(nameField(page)).toHaveValue("Typed name");
 
     mode = "401";
@@ -387,7 +387,7 @@ test.describe("M6-14 the editor header", () => {
 
     mode = "foreign";
     await save.click();
-    await expect(header(page).getByText("Couldn’t rename the page. Try again.")).toBeVisible();
+    await expect(header(page).getByText("Couldn’t rename the site. Try again.")).toBeVisible();
     expect(await nameOf(otherPage)).toBe("Main page");
     expect(await nameOf(owner.pageId)).toBe("Main page");
 
@@ -465,10 +465,10 @@ test.describe("M6-14 where names show", () => {
 
     await openEditor(page);
     await expect(h1(page)).toHaveText("Main page");
-    const switcher = page.locator("aside").getByRole("button", { name: /Switch page, current:/ });
+    const switcher = page.locator("aside").getByRole("button", { name: /Switch site, current:/ });
     await expect(switcher).toHaveAttribute(
       "aria-label",
-      `Switch page, current: ${owner.handle}.hydlnk.com`,
+      `Switch site, current: ${owner.handle}.hydlnk.com`,
     );
     await expect(switcher).toContainText(`${owner.handle}.hydlnk.com`);
     await switcher.click();
@@ -476,15 +476,15 @@ test.describe("M6-14 where names show", () => {
     await expect(items).toHaveCount(3);
     await expect(items.nth(0)).toContainText("Main page");
     await expect(items.nth(0)).toContainText(`${owner.handle}.hydlnk.com`);
-    await expect(items.nth(1)).toContainText("Page 2");
+    await expect(items.nth(1)).toContainText("Site 2");
     await expect(items.nth(1)).toContainText(`${secondHandle}.hydlnk.com`);
-    await expect(items.nth(2)).toContainText("Page 3");
+    await expect(items.nth(2)).toContainText("Site 3");
     for (let i = 0; i < 3; i++)
       expect((await items.nth(i).boundingBox())!.height).toBeGreaterThanOrEqual(44);
 
     // Choosing another page changes the h1 to that page's name.
     await items.nth(1).click();
-    await expect(h1(page)).toHaveText("Page 2");
+    await expect(h1(page)).toHaveText("Site 2");
     await expect(header(page).locator("p")).toHaveText(`${secondHandle}.hydlnk.com`);
 
     // Renaming one does not change the other two; Settings lists all three by name in creation order.
@@ -496,7 +496,7 @@ test.describe("M6-14 where names show", () => {
     expect(await nameOf(second)).toBe("Summer tour");
     await switcher.click();
     await expect(items.nth(1)).toContainText("Summer tour");
-    await expect(items.nth(2)).toContainText("Page 3");
+    await expect(items.nth(2)).toContainText("Site 3");
     await page.keyboard.press("Escape");
 
     await page.goto(url("app", "/settings"));
@@ -506,9 +506,9 @@ test.describe("M6-14 where names show", () => {
     await expect(rows.nth(0)).toContainText(`${owner.handle}.hydlnk.com`);
     await expect(rows.nth(1)).toContainText("Summer tour");
     await expect(rows.nth(1)).toContainText(`${secondHandle}.hydlnk.com`);
-    await expect(rows.nth(2)).toContainText("Page 3");
+    await expect(rows.nth(2)).toContainText("Site 3");
     // The delete dialog still names the address.
-    await rows.nth(2).getByRole("button", { name: "Delete page" }).click();
+    await rows.nth(2).getByRole("button", { name: "Delete site" }).click();
     await expect(page.getByRole("dialog")).toContainText(`Delete ${thirdHandle}.hydlnk.com?`);
     await page.keyboard.press("Escape");
 
@@ -518,7 +518,7 @@ test.describe("M6-14 where names show", () => {
     await expect(serves.locator("option")).toHaveText([
       `Main page · ${owner.handle}.hydlnk.com`,
       `Summer tour · ${secondHandle}.hydlnk.com`,
-      `Page 3 · ${thirdHandle}.hydlnk.com`,
+      `Site 3 · ${thirdHandle}.hydlnk.com`,
     ]);
   });
 

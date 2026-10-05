@@ -48,7 +48,7 @@ function counted(key: MeterKey, label: string, used: number, limit: number): Met
 export function buildMeters(plan: PlanId, usage: AccountUsage): Meter[] {
   const limits = PLAN_LIMITS[plan];
 
-  const pages = counted("pages", "Pages", usage.pages, limits.pages);
+  const pages = counted("pages", "Sites", usage.pages, limits.pages);
 
   // A plan with no custom domains shows "Not included", not "0 / 0". A kept domain past a downgrade
   // is still shown as what it is: used against a limit of 0, over.

@@ -26,6 +26,7 @@ import {
   pageUtmSchema,
   redirectSchema,
 } from "@/lib/document/link-fields";
+import { navSchema } from "@/lib/document/nav";
 import { resolveProfileOptions } from "@/lib/document/profile-options";
 import { tokenOverridesSchema, validBlockOverrides } from "@/lib/theme";
 
@@ -190,6 +191,8 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
         // The page's UTM defaults (M9-27) and redirect mode (M9-31), as stored.
         ...(stored.utm ? { utm: stored.utm } : {}),
         ...(stored.redirect ? { redirect: stored.redirect } : {}),
+        // The site's menu (M11-07), as stored: dropping it here would erase it on the next autosave.
+        ...(stored.nav ? { nav: stored.nav } : {}),
         theme: { ref: stored.theme.ref, overrides: stored.theme.overrides },
         blocks: stored.blocks.map(withVisible),
       },
@@ -258,6 +261,10 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
   const redirect =
     source.redirect !== undefined && parsedRedirect.success ? parsedRedirect.data : undefined;
 
+  // The site's menu (M11-07): kept when it reads, else dropped (Publish prunes it anyway).
+  const parsedNav = navSchema.safeParse(source.nav);
+  const nav = source.nav !== undefined && parsedNav.success ? parsedNav.data : undefined;
+
   const rawTheme = isRecord(source.theme) ? source.theme : undefined;
   let ref: string | null = null;
   if (typeof rawTheme?.ref === "string" && z.guid().safeParse(rawTheme.ref).success) {
@@ -296,6 +303,7 @@ export function loadDraft(raw: unknown, handle: string): LoadedDraft {
     ...(banner ? { banner } : {}),
     ...(utm ? { utm } : {}),
     ...(redirect ? { redirect } : {}),
+    ...(nav ? { nav } : {}),
     theme: { ref, overrides },
     blocks,
   };

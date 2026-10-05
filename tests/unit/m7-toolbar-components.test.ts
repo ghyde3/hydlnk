@@ -354,7 +354,7 @@ describe("M7-05 one toolbar, laid out by CSS", () => {
     ).not.toBeNull();
     expect(row().querySelector("[data-publish-status]")).not.toBeNull();
     expect(names(bar())).toEqual([
-      "Rename page",
+      "Rename site",
       "Undo",
       "Redo",
       "Preview",

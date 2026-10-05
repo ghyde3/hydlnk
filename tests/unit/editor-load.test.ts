@@ -126,6 +126,27 @@ describe("loadDraft: corrupted drafts", () => {
   });
 });
 
+describe("loadDraft: the site's menu (M11-07)", () => {
+  const nav = { show: false, items: ["00000000-0000-4000-8000-0000000000c1"] };
+
+  it("keeps Home's nav on a valid draft, so the next autosave does not erase it", () => {
+    const loaded = loadDraft({ ...fullDraft, nav }, "mara");
+    expect(loaded.repaired).toBe(false);
+    expect(loaded.draft.nav).toEqual(nav);
+  });
+
+  it("keeps a nav that reads when the rest of the draft is repaired, and drops one that does not", () => {
+    const broken = { ...fullDraft, nav, blocks: 5 };
+    expect(loadDraft(broken, "mara")).toMatchObject({ repaired: true, draft: { nav } });
+    const badNav = { ...fullDraft, nav: { show: true, items: ["not-an-id"] }, blocks: 5 };
+    expect(loadDraft(badNav, "mara").draft.nav).toBeUndefined();
+  });
+
+  it("invents no nav for a draft that has none", () => {
+    expect("nav" in loadDraft(fullDraft, "mara").draft).toBe(false);
+  });
+});
+
 describe("revKeyOf", () => {
   it("is what Postgres draft->>'rev' returns", () => {
     expect(revKeyOf({ rev: 5 })).toBe("5");

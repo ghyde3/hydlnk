@@ -20,7 +20,7 @@ export interface WorkspaceToolbarProps {
   pageId: string;
   /** `{handle}.hydlnk.com`: the mono address line above the page's name. */
   address: string;
-  /** `pages.name` (M6-13): the h1, with its "Rename page" pencil. */
+  /** `pages.name` (M6-13): the h1, with its "Rename site" pencil. */
   name: string;
   /**
    * The 'Workspace' tablist (M7-02): Edit, Design and Share. The toolbar places it, once: in the

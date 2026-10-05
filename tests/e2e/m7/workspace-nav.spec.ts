@@ -80,7 +80,7 @@ test.describe("M7-01 sidebar: one Editor item", () => {
     expect((await aside.boundingBox())!.width).toBe(240);
     const ys = {
       logo: (await aside.getByRole("link", { name: "HYDLNK home" }).boundingBox())!.y,
-      switcher: (await aside.getByRole("button", { name: /^Switch page/ }).boundingBox())!.y,
+      switcher: (await aside.getByRole("button", { name: /^Switch site/ }).boundingBox())!.y,
       nav: (await nav(page).boundingBox())!.y,
       plan: (await aside.getByRole("region", { name: "Plan" }).boundingBox())!.y,
       user: (await accountButton(page).boundingBox())!.y,

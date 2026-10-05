@@ -110,7 +110,7 @@ describe("M5-19 meterStateText on the real meters", () => {
 
   it("the sentence follows what the meter counts, and Studio has nothing to upgrade to", () => {
     expect(fullText("uploads", "free")).toBe("Full. Remove an image or upgrade.");
-    expect(fullText("pages", "free")).toBe("Full. Upgrade for more pages.");
+    expect(fullText("pages", "free")).toBe("Full. Upgrade for more sites.");
     expect(fullText("domains", "pro")).toBe("Full. Upgrade for more domains.");
     expect(fullText("themes", "free")).toBe("Full. Delete a theme or upgrade.");
     expect(fullText("uploads", "studio")).toBe("Full. Remove an image.");

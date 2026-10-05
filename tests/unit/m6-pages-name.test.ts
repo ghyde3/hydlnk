@@ -109,18 +109,18 @@ describe("M6-14 clampPageName (what the field holds while typing)", () => {
 });
 
 describe("M6-13 defaultPageName", () => {
-  it("the first page is Main page, later ones are Page 2 and Page 3", () => {
-    expect(DEFAULT_PAGE_NAME).toBe("Main page");
-    expect(defaultPageName(1)).toBe("Main page");
-    expect(defaultPageName(2)).toBe("Page 2");
-    expect(defaultPageName(3)).toBe("Page 3");
-    expect(defaultPageName(15)).toBe("Page 15");
+  it("the first site is Main site, later ones are Site 2 and Site 3 (M11-11)", () => {
+    expect(DEFAULT_PAGE_NAME).toBe("Main site");
+    expect(defaultPageName(1)).toBe("Main site");
+    expect(defaultPageName(2)).toBe("Site 2");
+    expect(defaultPageName(3)).toBe("Site 3");
+    expect(defaultPageName(15)).toBe("Site 15");
   });
 
-  it("a count that makes no sense falls back to Main page", () => {
-    expect(defaultPageName(0)).toBe("Main page");
-    expect(defaultPageName(-4)).toBe("Main page");
-    expect(defaultPageName(2.5)).toBe("Main page");
-    expect(defaultPageName(Number.NaN)).toBe("Main page");
+  it("a count that makes no sense falls back to Main site", () => {
+    expect(defaultPageName(0)).toBe("Main site");
+    expect(defaultPageName(-4)).toBe("Main site");
+    expect(defaultPageName(2.5)).toBe("Main site");
+    expect(defaultPageName(Number.NaN)).toBe("Main site");
   });
 });

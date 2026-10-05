@@ -271,7 +271,7 @@ test.describe("M7-02 leaving, coming back and switching pages", () => {
     await expect(undoButton(page)).toHaveAttribute("aria-disabled", "false");
 
     const switcher = page
-      .getByRole("button", { name: /^Switch page, current:/ })
+      .getByRole("button", { name: /^Switch site, current:/ })
       .filter({ visible: true });
     await switcher.click();
     await page.getByRole("menuitemradio", { name: new RegExp(secondHandle) }).click();
@@ -301,8 +301,8 @@ test.describe("M7-02 rename, Publish and the stale-tab guard", () => {
     await displayName(page).click();
     await page.keyboard.press("End");
     await page.keyboard.type(" X");
-    await page.getByRole("button", { name: "Rename page" }).click();
-    await page.getByLabel("Page name").fill("Renamed here");
+    await page.getByRole("button", { name: "Rename site" }).click();
+    await page.getByLabel("Site name").fill("Renamed here");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1 }).first()).toHaveText("Renamed here");
     await expect(saveIndicator(page)).toHaveText("Saved", { timeout: 20_000 });

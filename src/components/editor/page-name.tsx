@@ -9,7 +9,7 @@ import { clampPageName, normalizePageName, PAGE_NAME_MAX } from "@/lib/pages/nam
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 
 /** What the field says when the page could not be renamed and trying again may help. */
-export const RENAME_FAILED_MESSAGE = "Couldn’t rename the page. Try again.";
+export const RENAME_FAILED_MESSAGE = "Couldn’t rename the site. Try again.";
 /** The session is gone (a 401 from the database API): signing in again is the way out. */
 export const RENAME_SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again, then try again.";
 
@@ -138,7 +138,7 @@ export function PageName({ pageId, name }: { pageId: string; name: string }) {
         <button
           ref={pencilRef}
           type="button"
-          aria-label="Rename page"
+          aria-label="Rename site"
           title={suspended ? SUSPENDED_REASON : undefined}
           disabled={suspended}
           onClick={startEditing}
@@ -158,7 +158,7 @@ export function PageName({ pageId, name }: { pageId: string; name: string }) {
     >
       <div className="flex min-w-0 flex-col gap-1 hl:w-[300px]">
         <label htmlFor={inputId} className="sr-only">
-          Page name
+          Site name
         </label>
         <input
           ref={inputRef}

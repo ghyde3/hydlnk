@@ -20,7 +20,8 @@ import { useWorkspace } from "./workspace-context";
  * navigates), and during a theme preview it does nothing either.
  */
 export function WorkspacePreview() {
-  const { shownForm, pageId, chrome, preview, activeTab, onPreviewTap, draft } = useWorkspace();
+  const { shownForm, pageId, chrome, preview, activeTab, onPreviewTap, draft, site } =
+    useWorkspace();
   const themePreview = preview.view;
   return (
     <section
@@ -39,6 +40,11 @@ export function WorkspacePreview() {
         chrome={chrome}
         tappable={activeTab === "edit" && themePreview === null}
         onTap={onPreviewTap}
+        view={site.preview}
+        onNavigate={(href) => {
+          const id = site.hrefToId(href);
+          if (id !== null) site.select(id);
+        }}
       />
       {themePreview ? null : (
         <div className="flex w-full items-center justify-between">

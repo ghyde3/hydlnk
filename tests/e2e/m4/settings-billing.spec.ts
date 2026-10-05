@@ -88,13 +88,13 @@ test.describe("M4-05 Settings & billing: plan band and plan cards", () => {
     // Three cards with the blurbs from PLAN.md; nothing deferred from v1 is mentioned.
     await expect(page.locator("[data-plan-card]")).toHaveCount(3);
     await expect(card(page, "free")).toContainText(
-      "1 page, hydlnk.com address, 30 days of per-link clicks.",
+      "1 site with 3 pages, hydlnk.com address, 30 days of per-link clicks.",
     );
     await expect(card(page, "pro")).toContainText(
-      "3 pages, 1 custom domain, a year of analytics, no badge.",
+      "3 sites with 10 pages each, 1 custom domain, a year of analytics, no badge.",
     );
     await expect(card(page, "studio")).toContainText(
-      "15 pages, 15 custom domains, a year of analytics, no badge.",
+      "15 sites with unlimited pages each, 15 custom domains, a year of analytics, no badge.",
     );
     await expect(page.locator("main")).not.toContainText(/editors|team access|csv|scheduled/i);
 

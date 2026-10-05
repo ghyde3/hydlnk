@@ -31,7 +31,7 @@ export function PlanCard({
         </Link>
       </div>
       <span className="-mt-1.5 text-xs text-on-ink-muted">
-        {pageCount} of {pageLimit} pages
+        {pageCount} of {pageLimit} sites
       </span>
       <span aria-hidden="true" className="mt-1 mb-1.5 block h-1 rounded-[2px] bg-ink-2">
         <span

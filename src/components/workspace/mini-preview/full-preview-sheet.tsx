@@ -7,6 +7,7 @@ import { Icon } from "@/components/app/icon";
 import { PreviewFonts } from "@/components/design/tenant-fonts";
 import { resolvePreviewTap, type PreviewTap } from "@/components/editor/preview-taps";
 import type { PublishDoc } from "@/lib/document";
+import type { PreviewSite } from "@/components/site/use-site-pages";
 import { PageRenderer, type PageChrome } from "@/lib/editor/contracts";
 
 /**
@@ -55,6 +56,8 @@ export function FullPreviewSheet({
   chrome,
   onTap,
   themePreview = null,
+  view,
+  onNavigate,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -64,6 +67,10 @@ export function FullPreviewSheet({
   chrome: PageChrome;
   /** What a tap on the page opens. The sheet is already closed when this is called. */
   onTap?: (tap: PreviewTap) => void;
+  /** The rest of the site (M11-08): the menu, the page links and the sub-page drawn instead of Home. */
+  view?: PreviewSite | undefined;
+  /** A menu entry was pressed: the editor opens that page. */
+  onNavigate?: ((href: string) => void) | undefined;
   themePreview?: SheetThemePreview | null;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -106,6 +113,13 @@ export function FullPreviewSheet({
   function onClickCapture(event: MouseEvent<HTMLDivElement>): void {
     const target = event.target as Element;
     if (target.closest("a")) event.preventDefault();
+    // A menu entry or the sub-page header's link (M11-08): the editor opens that page, the sheet stays.
+    const nav = target.closest("a.pg-menu-item, a.pg-sitehead-link");
+    if (nav && onNavigate) {
+      event.stopPropagation();
+      onNavigate(nav.getAttribute("href") ?? "/");
+      return;
+    }
     if (!onTap || themePreview) return;
     // A facade's Play button plays here, like on the live page (M6-27): it is not an edit tap.
     if (target.closest("button.pg-embed-play")) return;
@@ -168,7 +182,14 @@ export function FullPreviewSheet({
             }`}
           >
             <PreviewFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
-            <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} />
+            <PageRenderer
+              doc={doc}
+              pageId={pageId}
+              mode="preview"
+              chrome={chrome}
+              {...(view?.site ? { site: view.site } : {})}
+              {...(view?.subPage ? { subPage: view.subPage } : {})}
+            />
           </div>
           {themePreview ? (
             <div

@@ -27,7 +27,7 @@ export function fullText(key: Meter["key"], plan: PlanId): string {
     case "uploads":
       return canUpgrade ? "Full. Remove an image or upgrade." : "Full. Remove an image.";
     case "pages":
-      return canUpgrade ? "Full. Upgrade for more pages." : "Full.";
+      return canUpgrade ? "Full. Upgrade for more sites." : "Full.";
     case "domains":
       return canUpgrade ? "Full. Upgrade for more domains." : "Full.";
     case "themes":

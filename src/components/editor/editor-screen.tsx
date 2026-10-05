@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { PagesCard } from "@/components/site/pages-card";
+import { SubPageEdit } from "@/components/site/sub-page-edit";
 import { PageTokensProvider } from "@/components/themes";
 import { StartFromTemplate } from "@/components/templates";
 import { useWorkspace } from "@/components/workspace/workspace-context";
@@ -28,6 +30,7 @@ export function EditTab() {
     templateThemes,
     profileTap,
     clearProfileTap,
+    site,
   } = useWorkspace();
   const { draft } = state;
 
@@ -69,8 +72,19 @@ export function EditTab() {
     clearProfileTap(tapNonce);
   }, [tapNonce, tapPart, clearProfileTap]);
 
+  // The pages of the site (M11-08): the list is always first; a sub-page replaces Home's cards.
+  if (!site.isHome) {
+    return (
+      <>
+        <PagesCard />
+        <SubPageEdit />
+      </>
+    );
+  }
+
   return (
     <>
+      <PagesCard />
       <ProfileCard
         name={draft.profile.name}
         bio={draft.profile.bio}

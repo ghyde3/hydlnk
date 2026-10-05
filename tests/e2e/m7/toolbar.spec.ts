@@ -52,7 +52,7 @@ test.describe("M7-05 the pinned toolbar, 1280px and up", () => {
       // Preview, ⋯, Publish.
       const parts = {
         h1: bar.getByRole("heading", { level: 1 }),
-        pencil: bar.getByRole("button", { name: "Rename page" }),
+        pencil: bar.getByRole("button", { name: "Rename site" }),
         tabs: bar.getByRole("tablist", { name: "Workspace" }),
         chip: bar.locator("[data-publish-status]"),
         save: bar.locator("[data-save-status]"),

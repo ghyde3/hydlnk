@@ -61,7 +61,7 @@ const css = (locator: Locator, property: string) =>
   locator.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property);
 
 /** The switcher button that is visible at the current width (the other placement is display:none). */
-const switcher = (page: Page) => page.getByRole("button", { name: /^Switch page, current:/ });
+const switcher = (page: Page) => page.getByRole("button", { name: /^Switch site, current:/ });
 
 /** Click a tab/link away from the left edge, where Next's dev indicator can sit over the first tab. */
 async function tap(locator: Locator): Promise<void> {
@@ -427,7 +427,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     const button = switcher(page);
     await expect(button).toHaveAttribute(
       "aria-label",
-      `Switch page, current: ${user.handle}.hydlnk.com`,
+      `Switch site, current: ${user.handle}.hydlnk.com`,
     );
     await expect(button).toHaveAttribute("aria-haspopup", "menu");
     await expect(button).toHaveAttribute("aria-expanded", "false");
@@ -468,7 +468,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
 
     const button = switcher(page);
     await button.click();
-    const menu = page.getByRole("menu", { name: "Pages" });
+    const menu = page.getByRole("menu", { name: "Sites" });
     await expect(menu).toBeVisible();
     const items = menu.getByRole("menuitemradio");
     await expect(items).toHaveCount(2);
@@ -480,7 +480,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
 
     // Arrow keys move between items; the current item has focus when the menu opens. Below the
     // pages the menu offers "New page" (M4-18; M1-18 allows it), which is part of the same cycle.
-    const newPage = menu.getByRole("menuitem", { name: "New page" });
+    const newPage = menu.getByRole("menuitem", { name: "New site" });
     await expect(items.nth(0)).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(items.nth(1)).toBeFocused();
@@ -506,7 +506,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     await expect(button).toBeFocused();
     await expect(button).toHaveAttribute(
       "aria-label",
-      `Switch page, current: ${user.handle}.hydlnk.com`,
+      `Switch site, current: ${user.handle}.hydlnk.com`,
     );
 
     // Outside click closes the menu and returns focus to the button.
@@ -553,7 +553,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     await page.getByRole("menuitemradio", { name: new RegExp(secondHandle) }).click();
     await expect(button).toHaveAttribute(
       "aria-label",
-      `Switch page, current: ${secondHandle}.hydlnk.com`,
+      `Switch site, current: ${secondHandle}.hydlnk.com`,
     );
     await expect(shown(secondHandle).first()).toBeVisible();
     await expect(shown(user.handle)).toHaveCount(0);
@@ -572,7 +572,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     await expect(page.locator("main dd", { hasText: secondHandle })).toBeVisible();
     await expect(switcher(page)).toHaveAttribute(
       "aria-label",
-      `Switch page, current: ${secondHandle}.hydlnk.com`,
+      `Switch site, current: ${secondHandle}.hydlnk.com`,
     );
   });
 
@@ -587,7 +587,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     const other = await signedInUser(otherContext, { label: "fo" });
     await otherContext.close();
 
-    const own = `Switch page, current: ${user.handle}.hydlnk.com`;
+    const own = `Switch site, current: ${user.handle}.hydlnk.com`;
     for (const value of ["not-a-uuid", other.pageId, "00000000-0000-4000-8000-0000000000ff"]) {
       await context.addCookies([{ name: "hl-page", value, url: url("app") }]);
       await page.goto(url("app", "/editor"));
@@ -613,7 +613,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     const manage = card.getByRole("link", { name: "Manage" });
     await expect(manage).toHaveAttribute("href", "/settings");
     expect(await css(manage, "color")).toBe("rgb(217, 184, 119)");
-    const count = card.getByText("1 of 1 pages");
+    const count = card.getByText("1 of 1 sites");
     expect(await css(count, "font-size")).toBe("12px");
     expect(await css(count, "color")).toBe("rgb(169, 164, 155)");
     const track = card.locator("[data-meter-fill]").locator("..");
@@ -626,13 +626,13 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     await setPlan(user.userId, "pro");
     await page.reload();
     await expect(card.getByText("Pro plan")).toBeVisible();
-    await expect(card.getByText("1 of 3 pages")).toBeVisible();
+    await expect(card.getByText("1 of 3 sites")).toBeVisible();
     expect(await fill.evaluate((el) => (el as HTMLElement).style.width)).toBe("33%");
 
     await setPlan(user.userId, "studio");
     await page.reload();
     await expect(card.getByText("Studio plan")).toBeVisible();
-    await expect(card.getByText("1 of 15 pages")).toBeVisible();
+    await expect(card.getByText("1 of 15 sites")).toBeVisible();
   });
 
   test("M1-18 the UI's plan limits match plan_limits() in the database", async () => {
@@ -759,7 +759,7 @@ test.describe("M1-18 page switcher, current page, plan meter and user block", ()
     expect(await text.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
 
     await button.click();
-    const menu = page.getByRole("menu", { name: "Pages" });
+    const menu = page.getByRole("menu", { name: "Sites" });
     const buttonBox = (await button.boundingBox())!;
     const menuBox = (await menu.boundingBox())!;
     expect(menuBox.y).toBeGreaterThanOrEqual(buttonBox.y + buttonBox.height);

@@ -170,7 +170,7 @@ test.describe("M4-10 Domains screen: HYDLNK address, plan states and Studio upse
     const address = page.locator("[data-hydlnk-address]");
     await expect(address.locator("[data-address-chip='live']")).toBeVisible();
 
-    await page.getByRole("button", { name: /^Switch page, current:/ }).click();
+    await page.getByRole("button", { name: /^Switch site, current:/ }).click();
     await page.getByRole("menuitemradio", { name: new RegExp(secondHandle) }).click();
     await expect(address.locator("[data-hydlnk-address-value]")).toHaveText(
       `${secondHandle}.hydlnk.com`,

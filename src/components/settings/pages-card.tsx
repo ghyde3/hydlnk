@@ -18,7 +18,7 @@ export interface PagesCardPage {
 export function PagesCard({ pages }: { pages: PagesCardPage[] }) {
   return (
     <Card className="flex flex-col gap-3.5">
-      <h2 className="text-sm font-semibold">Pages</h2>
+      <h2 className="text-sm font-semibold">Sites</h2>
       <ul className="flex flex-col">
         {pages.map((page) => (
           <li

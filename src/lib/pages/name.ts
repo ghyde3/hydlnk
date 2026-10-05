@@ -1,5 +1,5 @@
 /**
- * Page names (M6-13, M6-14): the private name of a page, shown in the editor header, the page
+ * Page names (M6-13, M6-14): the private name of a site, shown in the editor header, the page
  * switcher, Settings and Domains. One helper for the editor (what the rename field keeps and sends)
  * and for the server create code (the default name of a new page), so both agree with the database
  * check `pages_name_format` (migrations 20261005000001 and 20261005000002): trimmed, 1 to 60 characters, no control
@@ -12,8 +12,12 @@
 /** The most code points a name may hold (an emoji counts as 1). */
 export const PAGE_NAME_MAX = 60;
 
-/** What a page is called until its owner renames it: every first page, and every page before M6. */
-export const DEFAULT_PAGE_NAME = "Main page";
+/**
+ * What a site is called until its owner renames it: every first site. Sites made before Wave M keep
+ * the name they have ("Main page"): the database column default is still "Main page", so server code
+ * passes this name explicitly when it creates a site (M11-11).
+ */
+export const DEFAULT_PAGE_NAME = "Main site";
 
 /** Shown under the field when the name is empty or only spaces. */
 export const PAGE_NAME_REQUIRED_MESSAGE = "Add a name.";
@@ -51,9 +55,9 @@ export function normalizePageName(raw: string): PageNameResult {
 }
 
 /**
- * The name a page gets when it is created: the account's first page is "Main page", the next ones
- * "Page 2" and "Page 3" (`pageCount` is the number of pages the account owns after the insert).
+ * The name a site gets when it is created: the account's first site is "Main site", the next ones
+ * "Site 2" and "Site 3" (`pageCount` is the number of sites the account owns after the insert).
  */
 export function defaultPageName(pageCount: number): string {
-  return Number.isInteger(pageCount) && pageCount > 1 ? `Page ${pageCount}` : DEFAULT_PAGE_NAME;
+  return Number.isInteger(pageCount) && pageCount > 1 ? `Site ${pageCount}` : DEFAULT_PAGE_NAME;
 }

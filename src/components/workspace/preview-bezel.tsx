@@ -3,6 +3,7 @@
 import type { MouseEvent } from "react";
 import { PreviewFonts } from "@/components/design/tenant-fonts";
 import { resolvePreviewTap, type PreviewTap } from "@/components/editor/preview-taps";
+import type { PreviewSite } from "@/components/site/use-site-pages";
 import type { PublishDoc } from "@/lib/document";
 import { PageRenderer, type PageChrome } from "@/lib/editor/contracts";
 
@@ -29,6 +30,8 @@ export function PreviewBezel({
   chrome,
   tappable = false,
   onTap,
+  view,
+  onNavigate,
 }: {
   doc: PublishDoc;
   pageId: string;
@@ -36,10 +39,20 @@ export function PreviewBezel({
   chrome: PageChrome;
   tappable?: boolean;
   onTap?: (tap: PreviewTap) => void;
+  /** The rest of the site (M11-08): the menu and page links, and the sub-page being drawn instead of Home. */
+  view?: PreviewSite | undefined;
+  /** A click on a menu entry or the sub-page header's link: the editor opens that page ("/" is Home). */
+  onNavigate?: ((href: string) => void) | undefined;
 }) {
   function onClickCapture(event: MouseEvent<HTMLDivElement>): void {
     const target = event.target as Element;
     if (target.closest("a")) event.preventDefault();
+    const nav = target.closest("a.pg-menu-item, a.pg-sitehead-link");
+    if (nav && onNavigate) {
+      event.stopPropagation();
+      onNavigate(nav.getAttribute("href") ?? "/");
+      return;
+    }
     if (!tappable || !onTap) return;
     // A facade's Play button plays here, like on the live page (M6-27): it is not an edit tap.
     if (target.closest("button.pg-embed-play")) return;
@@ -68,7 +81,14 @@ export function PreviewBezel({
         }`}
       >
         <PreviewFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
-        <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} />
+        <PageRenderer
+          doc={doc}
+          pageId={pageId}
+          mode="preview"
+          chrome={chrome}
+          {...(view?.site ? { site: view.site } : {})}
+          {...(view?.subPage ? { subPage: view.subPage } : {})}
+        />
       </div>
     </div>
   );
