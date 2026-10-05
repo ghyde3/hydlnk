@@ -155,7 +155,7 @@ test.describe("M4-15 Check DNS now and live polling (UI)", () => {
     await expect(card.locator("[data-dns-record]")).toHaveCount(0);
     await expect(card.locator("[data-step-state='done']")).toHaveCount(3);
     await expect(card.locator("ol[data-domain-steps]")).toContainText(
-      `Verified. ${host} is serving your page over HTTPS.`,
+      `Verified. ${host} is serving your site over HTTPS.`,
     );
 
     // Once live it stops asking.
@@ -237,7 +237,7 @@ test.describe("M4-16 choose which page a domain serves", () => {
     await serves.selectOption(secondId);
     await expect(card.getByText("Saved", { exact: true })).toBeVisible();
     await expect(card.locator("[data-unpublished-hint]")).toHaveText(
-      "This page isn’t published yet. Visitors see a not-found page until you publish it.",
+      "This site isn’t published yet. Visitors see a not-found page until you publish it.",
     );
     expect((await domainRow(id))!.page_id).toBe(secondId);
 
@@ -281,7 +281,7 @@ test.describe("M4-17 remove a custom domain", () => {
 
     const confirm = card.locator("[data-remove-confirm]");
     await expect(confirm).toContainText(
-      `Remove ${host}? Visitors will no longer reach your page there.`,
+      `Remove ${host}? Visitors will no longer reach your site there.`,
     );
     await expect(confirm.getByRole("button", { name: "Remove domain" })).toBeVisible();
     await expect(confirm.getByRole("button", { name: "Keep domain" })).toBeVisible();

@@ -359,7 +359,7 @@ export function DomainCard({
             className="flex flex-col gap-3 rounded-md border border-line-2 bg-page p-3.5 hl:flex-row hl:items-center hl:justify-between"
           >
             <p id={confirmId} className="min-w-0 text-sm [overflow-wrap:anywhere]">
-              Remove {domain.hostname}? Visitors will no longer reach your page there.
+              Remove {domain.hostname}? Visitors will no longer reach your site there.
             </p>
             <div className="flex flex-col gap-2 hl:flex-row hl:shrink-0">
               <button

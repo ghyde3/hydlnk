@@ -158,18 +158,18 @@ test.describe("M9-26 the route", () => {
     expect(Buffer.from(res.body, "utf8").subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
     expect(res.body.replace(/\r\n/g, "")).not.toMatch(/[\r\n]/);
     const rows = rowsOf(res);
-    expect(rows[0]).toEqual(["date", "views", "clicks", "uniques"]);
+    expect(rows[0]).toEqual(["date", "page", "views", "clicks", "uniques"]);
     const days = rows.slice(1).map((row) => row[0]);
     expect(days).toHaveLength(30);
     expect(days[0]).toBe(dayAt(-29));
     expect(days.at(-1)).toBe(dayAt(0));
     expect([...days].sort()).toEqual(days);
     // A day with no events is a row of zeros.
-    expect(rows.find((row) => row[0] === dayAt(-4))).toEqual([dayAt(-4), "0", "0", "0"]);
+    expect(rows.find((row) => row[0] === dayAt(-4))).toEqual([dayAt(-4), "All pages", "0", "0", "0"]);
     // The numbers of a recorded day.
-    expect(rows.find((row) => row[0] === dayAt(-1))).toEqual([dayAt(-1), "3", "3", "3"]);
-    expect(rows.find((row) => row[0] === dayAt(-3))).toEqual([dayAt(-3), "2", "1", "1"]);
-    expect(rows.find((row) => row[0] === dayAt(0))).toEqual([dayAt(0), "2", "1", "2"]);
+    expect(rows.find((row) => row[0] === dayAt(-1))).toEqual([dayAt(-1), "All pages", "3", "3", "3"]);
+    expect(rows.find((row) => row[0] === dayAt(-3))).toEqual([dayAt(-3), "All pages", "2", "1", "1"]);
+    expect(rows.find((row) => row[0] === dayAt(0))).toEqual([dayAt(0), "All pages", "2", "1", "2"]);
   });
 
   test("M9-26 the links file: link_id, link, clicks; most clicks first; labels as in 'Clicks by link'; formulas become text", async ({
@@ -184,19 +184,19 @@ test.describe("M9-26 the route", () => {
     );
     expect(res.body.startsWith(BOM)).toBe(true);
     const lines = res.body.slice(1).split("\r\n");
-    expect(lines[0]).toBe("link_id,link,clicks");
+    expect(lines[0]).toBe("link_id,link,page,clicks");
     // Portrait: 2 (day -1) + 1 (today) = 3; Night Market 2; Studio, Instagram and the removed one 1 each.
     // The Night Market label was changed to a spreadsheet formula: written with an apostrophe, quoted.
     expect(lines.slice(1, 3)).toEqual([
-      `${LINKS.portrait.id},${LINKS.portrait.label},3`,
-      `${LINKS.night.id},"'=HYPERLINK(""http://evil.example"",""x"")",2`,
+      `${LINKS.portrait.id},${LINKS.portrait.label},Home,3`,
+      `${LINKS.night.id},"'=HYPERLINK(""http://evil.example"",""x"")",Home,2`,
     ]);
     const rest = lines.slice(3, -1).sort();
     expect(rest).toEqual(
       [
-        `${GONE_BLOCK},Removed link,1`,
-        `${LINKS.instagram.id},Instagram,1`,
-        `${LINKS.studio.id},${LINKS.studio.label},1`,
+        `${GONE_BLOCK},Removed link,,1`,
+        `${LINKS.instagram.id},Instagram,Home,1`,
+        `${LINKS.studio.id},${LINKS.studio.label},Home,1`,
       ].sort(),
     );
     expect(lines.at(-1)).toBe("");
@@ -217,9 +217,9 @@ test.describe("M9-26 the route", () => {
       const rows = rowsOf(res).slice(1);
       expect(rows, `range ${range}`).toHaveLength(range);
       const number = async (label: string) => Number((await kpi(page, label)).replace(/,/g, ""));
-      expect(sum(rows, 1), `views ${range}`).toBe(await number("Views"));
-      expect(sum(rows, 2), `clicks ${range}`).toBe(await number("Clicks"));
-      expect(sum(rows, 3), `uniques ${range}`).toBe(await number("Unique visitors"));
+      expect(sum(rows, 2), `views ${range}`).toBe(await number("Views"));
+      expect(sum(rows, 3), `clicks ${range}`).toBe(await number("Clicks"));
+      expect(sum(rows, 4), `uniques ${range}`).toBe(await number("Unique visitors"));
 
       // The links file adds up to the table's clicks.
       const links = await get(cookie, exportPath("links", range));
@@ -236,8 +236,8 @@ test.describe("M9-26 the route", () => {
     }
     // 90 days reaches the 45 day old click (Prints) and 80 day old ones; 30 days does not.
     const ninety = await get(cookie, exportPath("links", 90));
-    expect(ninety.body).toContain(`${LINKS.prints.id},${LINKS.prints.label},1`);
-    expect(ninety.body).toContain(`${LINKS.portrait.id},${LINKS.portrait.label},6`);
+    expect(ninety.body).toContain(`${LINKS.prints.id},${LINKS.prints.label},Home,1`);
+    expect(ninety.body).toContain(`${LINKS.portrait.id},${LINKS.portrait.label},Home,6`);
   });
 
   test("M9-26 the daily file never holds a visitor, referrer, device or country", async ({
@@ -342,7 +342,7 @@ test.describe("M9-26 the route", () => {
     const own = await get(cookie, exportPath("daily", 30));
     expect(own.headers["content-disposition"]).toContain(`filename="${b.handle}-daily-`);
     const ownRows = rowsOf(own);
-    expect(sum(ownRows.slice(1), 1)).toBe(2); // B's two views
+    expect(sum(ownRows.slice(1), 2)).toBe(2); // B's two views
     for (const extra of [
       `&page=${p.pageId}`,
       `&pageId=${p.pageId}`,
@@ -370,9 +370,9 @@ test.describe("M9-26 the route", () => {
     const cookie = await cookieOf(context, e);
     const daily = rowsOf(await get(cookie, exportPath("daily", 30)));
     expect(daily).toHaveLength(31);
-    for (const row of daily.slice(1)) expect(row.slice(1)).toEqual(["0", "0", "0"]);
+    for (const row of daily.slice(1)) expect(row.slice(1)).toEqual(["All pages", "0", "0", "0"]);
     const links = await get(cookie, exportPath("links", 30));
-    expect(links.body).toBe(`${BOM}link_id,link,clicks\r\n`);
+    expect(links.body).toBe(`${BOM}link_id,link,page,clicks\r\n`);
   });
 
   test("M9-26 the 21st export in a minute is 429 with Retry-After; the first twenty are 200", async ({
@@ -491,7 +491,7 @@ test.describe("M9-26 the screen", () => {
       await page.goto(ANALYTICS());
       const panel = row(page);
       await expect(panel).toBeVisible();
-      await expect(panel).toContainText("Export is available once your page has real data.");
+      await expect(panel).toContainText("Export is available once your site has real data.");
       await expect(panel).not.toContainText("do not add up across days");
       await expect(panel.getByRole("link")).toHaveCount(0);
       await expect(daily(page)).toBeDisabled();

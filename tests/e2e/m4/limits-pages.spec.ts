@@ -38,8 +38,8 @@ test.afterAll(cleanupUsers);
 test.describe.configure({ timeout: 150_000 });
 
 const box = async (locator: Locator) => (await locator.boundingBox())!;
-const switcher = (page: Page) => page.getByRole("button", { name: /^Switch page, current:/ });
-const switcherName = (handle: string) => `Switch page, current: ${handle}.hydlnk.com`;
+const switcher = (page: Page) => page.getByRole("button", { name: /^Switch site, current:/ });
+const switcherName = (handle: string) => `Switch site, current: ${handle}.hydlnk.com`;
 const tenantStatus = async (handle: string) =>
   (await rawRequest(`${handle}.localhost:3000`, "/")).status;
 
@@ -170,7 +170,7 @@ test.describe("M4-18 create a page: server-only, within the plan's limit", () =>
     expect(refused.status).toBe(403);
     expect(refused.json).toEqual({
       error: "page_limit",
-      message: "You’ve used 3 of 3 pages. Studio includes 15.",
+      message: "You’ve used 3 of 3 sites. Studio includes 15.",
     });
     expect(await pageCountForHandle(handle)).toBe(0);
     expect((await pagesOf(pro.userId)).length).toBe(3);
@@ -181,7 +181,7 @@ test.describe("M4-18 create a page: server-only, within the plan's limit", () =>
     expect(refusedFree.status).toBe(403);
     expect(refusedFree.json).toEqual({
       error: "page_limit",
-      message: "Free includes 1 page. Pro includes 3.",
+      message: "Free includes 1 site. Pro includes 3.",
     });
     expect((await pagesOf(free.userId)).length).toBe(1);
     await freeContext.close();
@@ -241,9 +241,9 @@ test.describe("M4-18 New page screen and the page switcher", () => {
 
     // The menu opens below its button and every row is at least 44px.
     await switcher(page).click();
-    const menu = page.getByRole("menu", { name: "Pages" });
+    const menu = page.getByRole("menu", { name: "Sites" });
     await expect(menu).toBeVisible();
-    const newItem = menu.getByRole("menuitem", { name: "New page" });
+    const newItem = menu.getByRole("menuitem", { name: "New site" });
     await expect(newItem).toBeVisible();
     await expect(newItem).not.toHaveAttribute("aria-disabled", "true");
     expect((await box(menu)).y).toBeGreaterThanOrEqual(
@@ -257,11 +257,11 @@ test.describe("M4-18 New page screen and the page switcher", () => {
 
     await newItem.click();
     await expect(page).toHaveURL(url("app", "/pages/new"));
-    await expect(page.getByRole("heading", { level: 1, name: "New page" })).toBeVisible();
-    await expect(page.locator("[data-usage]")).toHaveText("You’ve used 1 of 3 pages");
+    await expect(page.getByRole("heading", { level: 1, name: "New site" })).toBeVisible();
+    await expect(page.locator("[data-usage]")).toHaveText("You’ve used 1 of 3 sites");
 
     const input = page.getByLabel("Handle", { exact: true });
-    const create = page.getByRole("button", { name: "Create page" });
+    const create = page.getByRole("button", { name: "Create site" });
     await expect(input).toBeVisible();
     expect((await box(input)).height).toBeGreaterThanOrEqual(44);
     expect((await box(create)).height).toBeGreaterThanOrEqual(44);
@@ -275,7 +275,7 @@ test.describe("M4-18 New page screen and the page switcher", () => {
     } else {
       // Desktop: the screen sits in the main column to the right of the 240px sidebar.
       expect(
-        (await box(page.getByRole("heading", { level: 1, name: "New page" }))).x,
+        (await box(page.getByRole("heading", { level: 1, name: "New site" }))).x,
       ).toBeGreaterThanOrEqual(240);
     }
 
@@ -315,9 +315,9 @@ test.describe("M4-18 New page screen and the page switcher", () => {
     await addPage(user.userId, newHandle("nk2"));
     await page.goto(url("app", "/editor"));
     await switcher(page).click();
-    const menu = page.getByRole("menu", { name: "Pages" });
+    const menu = page.getByRole("menu", { name: "Sites" });
     const radios = menu.getByRole("menuitemradio");
-    const newItem = menu.getByRole("menuitem", { name: "New page" });
+    const newItem = menu.getByRole("menuitem", { name: "New site" });
     await expect(radios).toHaveCount(2);
     await expect(radios.nth(0)).toBeFocused();
     await page.keyboard.press("ArrowDown");
@@ -335,7 +335,7 @@ test.describe("M4-18 New page screen and the page switcher", () => {
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(url("app", "/pages/new"));
-    await expect(page.locator("[data-usage]")).toHaveText("You’ve used 2 of 3 pages");
+    await expect(page.locator("[data-usage]")).toHaveText("You’ve used 2 of 3 sites");
   });
 
   test("M4-18 at the page limit the New page item is disabled with the plan's message and See plans, and sends nothing", async ({
@@ -351,10 +351,10 @@ test.describe("M4-18 New page screen and the page switcher", () => {
 
     await page.goto(url("app", "/editor"));
     await switcher(page).click();
-    const menu = page.getByRole("menu", { name: "Pages" });
-    const newItem = menu.getByRole("menuitem", { name: "New page" });
+    const menu = page.getByRole("menu", { name: "Sites" });
+    const newItem = menu.getByRole("menuitem", { name: "New site" });
     await expect(newItem).toHaveAttribute("aria-disabled", "true");
-    await expect(menu).toContainText("Free includes 1 page. Pro includes 3.");
+    await expect(menu).toContainText("Free includes 1 site. Pro includes 3.");
     const seePlans = menu.getByRole("menuitem", { name: "See plans" });
     await expect(seePlans).toHaveAttribute("href", "/settings#plans");
     expect((await box(seePlans)).height).toBeGreaterThanOrEqual(44);
@@ -368,13 +368,13 @@ test.describe("M4-18 New page screen and the page switcher", () => {
 
     // The screen itself says the same and offers no form that would only be refused.
     await page.goto(url("app", "/pages/new"));
-    await expect(page.locator("[data-usage]")).toHaveText("You’ve used 1 of 1 pages");
-    await expect(page.getByRole("status")).toHaveText("Free includes 1 page. Pro includes 3.");
+    await expect(page.locator("[data-usage]")).toHaveText("You’ve used 1 of 1 sites");
+    await expect(page.getByRole("status")).toHaveText("Free includes 1 site. Pro includes 3.");
     await expect(page.getByRole("link", { name: "See plans" })).toHaveAttribute(
       "href",
       "/settings#plans",
     );
-    await expect(page.getByRole("button", { name: "Create page" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Create site" })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
     expect((await pagesOf(user.userId)).length).toBe(1);
@@ -473,7 +473,7 @@ test.describe("M4-19 delete a page: the server-only action", () => {
 
 test.describe("M4-19 Settings & billing: the Pages card and the delete dialog", () => {
   const pagesCard = (page: Page) =>
-    page.locator("main section", { has: page.getByRole("heading", { level: 2, name: "Pages" }) });
+    page.locator("main section", { has: page.getByRole("heading", { level: 2, name: "Sites" }) });
 
   test("M4-19 Delete page: dialog, typed confirmation, Escape and Cancel return focus, then the page is gone everywhere", async ({
     context,
@@ -497,7 +497,7 @@ test.describe("M4-19 Settings & billing: the Pages card and the delete dialog", 
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
 
-    const trigger = row.getByRole("button", { name: "Delete page" });
+    const trigger = row.getByRole("button", { name: "Delete site" });
     await trigger.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -506,10 +506,10 @@ test.describe("M4-19 Settings & billing: the Pages card and the delete dialog", 
       dialog.getByRole("heading", { name: `Delete ${user.handle}.hydlnk.com?` }),
     ).toBeVisible();
     await expect(dialog).toContainText(
-      "This deletes the page, its analytics and its custom domains. This can’t be undone.",
+      "This deletes the site, all its pages, its analytics and its custom domains. This can’t be undone.",
     );
     const field = dialog.getByLabel("Type the handle to confirm");
-    const confirm = dialog.getByRole("button", { name: "Delete page" });
+    const confirm = dialog.getByRole("button", { name: "Delete site" });
     const cancel = dialog.getByRole("button", { name: "Cancel" });
     await expect(field).toBeFocused();
     await expect(confirm).toBeDisabled();
@@ -551,8 +551,8 @@ test.describe("M4-19 Settings & billing: the Pages card and the delete dialog", 
     // Confirming deletes it.
     await trigger.click();
     await dialog.getByLabel("Type the handle to confirm").fill(user.handle);
-    await expect(dialog.getByRole("button", { name: "Delete page" })).toBeEnabled();
-    await dialog.getByRole("button", { name: "Delete page" }).click();
+    await expect(dialog.getByRole("button", { name: "Delete site" })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Delete site" }).click();
     // The first DELETE compiles its route in the dev server: allow for that.
     await expect(dialog).toBeHidden({ timeout: 60_000 });
     await expect(card.locator(`[data-page-row="${user.handle}"]`)).toHaveCount(0, {
@@ -570,7 +570,7 @@ test.describe("M4-19 Settings & billing: the Pages card and the delete dialog", 
     if (desktopOnly(info)) {
       await page.reload();
       await expect(page.getByRole("region", { name: "Plan", exact: true })).toContainText(
-        "1 of 3 pages",
+        "1 of 3 sites",
       );
     }
     // A new page can be created again.
@@ -582,10 +582,10 @@ test.describe("M4-19 Settings & billing: the Pages card and the delete dialog", 
     const user = await signedInUser(context, { label: "dl" });
     await page.goto(url("app", "/settings"));
     const row = pagesCard(page).locator(`[data-page-row="${user.handle}"]`);
-    await row.getByRole("button", { name: "Delete page" }).click();
+    await row.getByRole("button", { name: "Delete site" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Type the handle to confirm").fill(user.handle);
-    await dialog.getByRole("button", { name: "Delete page" }).click();
+    await dialog.getByRole("button", { name: "Delete site" }).click();
     await expect(page).toHaveURL(url("app", "/claim"), { timeout: 60_000 });
     await expect(page.getByRole("heading", { name: "Pick your handle" })).toBeVisible();
     expect(await pageRow(user.pageId)).toBeNull();
@@ -611,10 +611,10 @@ test.describe("M4-19 Settings & billing: the Pages card and the delete dialog", 
     });
     await page.goto(url("app", "/settings"));
     const row = pagesCard(page).locator(`[data-page-row="${user.handle}"]`);
-    await row.getByRole("button", { name: "Delete page" }).click();
+    await row.getByRole("button", { name: "Delete site" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Type the handle to confirm").fill(user.handle);
-    await dialog.getByRole("button", { name: "Delete page" }).click();
+    await dialog.getByRole("button", { name: "Delete site" }).click();
     await expect(dialog.getByRole("alert")).toHaveText(
       "Couldn’t remove its custom domain. Try again.",
     );

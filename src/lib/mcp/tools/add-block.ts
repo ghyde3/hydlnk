@@ -12,7 +12,8 @@ import { DRAFT_ONLY, WRITE_NOT_IDEMPOTENT, ifRevField, pageIdField } from "./com
 const input = z.strictObject({
   pageId: pageIdField,
   ifRev: ifRevField,
-  type: z.enum(BLOCK_TYPES).describe("The kind of block to add."),
+  // M11-07: page_link is excluded until MCP sub-page support (M2).
+  type: z.enum(BLOCK_TYPES).exclude(["page_link"]).describe("The kind of block to add."),
   fields: z
     .looseObject({})
     .optional()

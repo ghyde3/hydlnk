@@ -63,6 +63,12 @@ class World {
     dequeue: async (owner: string, paths: string[]) => {
       for (const p of paths) this.queued(owner).delete(p);
     },
+    requeue: async (owner: string, paths: string[]) => {
+      for (const p of paths) {
+        this.queued(owner).delete(p);
+        this.queued(owner).add(p);
+      }
+    },
   };
 }
 
@@ -295,16 +301,20 @@ describe("M5-14 cleanup is cheap and safe to run at any time", () => {
     expect(world.objects.has(P1)).toBe(true);
   });
 
-  it("checks and removes in chunks of 100", async () => {
-    for (let i = 0; i < 250; i++) {
+  it("works on at most 25 queued paths per run (Wave M1 review); the rest wait for the next run", async () => {
+    for (let i = 0; i < 60; i++) {
       const p = path(A, `img-${i.toString(16).padStart(32, "0")}`);
       world.objects.add(p);
       world.queued(A).add(p);
     }
     const result = await cleanupOwnerMedia(A, world.deps);
-    expect(result.deleted).toHaveLength(250);
-    expect(world.inUseCalls.map((c) => c.length)).toEqual([100, 100, 50]);
-    expect(world.removed.map((c) => c.length)).toEqual([100, 100, 50]);
+    expect(result.deleted).toHaveLength(25);
+    expect(world.inUseCalls.map((c) => c.length)).toEqual([25]);
+    expect(world.removed.map((c) => c.length)).toEqual([25]);
+    expect(world.objects.size).toBe(35);
+    expect(world.queued(A).size).toBe(35);
+    await cleanupOwnerMedia(A, world.deps);
+    await cleanupOwnerMedia(A, world.deps);
     expect(world.objects.size).toBe(0);
   });
 
@@ -312,7 +322,21 @@ describe("M5-14 cleanup is cheap and safe to run at any time", () => {
     const listQueue = vi.fn(async () => []);
     await cleanupOwnerMedia(A, { ...world.deps, listQueue });
     expect(listQueue).toHaveBeenCalledWith(A, CLEANUP_QUEUE_LIMIT);
-    expect(CLEANUP_QUEUE_LIMIT).toBe(1000);
+    expect(CLEANUP_QUEUE_LIMIT).toBe(25);
+  });
+
+  it("images a page still uses go to the back of the queue, so they cannot fill the batch for good", async () => {
+    const kept: string[] = [];
+    for (let i = 0; i < 25; i++) {
+      const p = path(A, `keep-${i.toString(16).padStart(32, "0")}`);
+      kept.push(p);
+      world.queued(A).add(p);
+    }
+    world.setDoc(A, "draft", kept.join(" "));
+    world.objects.add(P1);
+    world.queued(A).add(P1); // behind 25 kept paths
+    expect((await cleanupOwnerMedia(A, world.deps)).deleted).toEqual([]);
+    expect((await cleanupOwnerMedia(A, world.deps)).deleted).toEqual([P1]);
   });
 
   it("duplicate queue rows are handled once", async () => {
@@ -336,6 +360,7 @@ describe("M5-14 the real dependencies (secret key, server-only tables and functi
         const chain = {
           select: (cols: string) => ((state.select = cols), chain),
           delete: () => ((state.delete = true), chain),
+          upsert: () => ((state.upsert = true), chain),
           eq: (col: string, value: unknown) => (
             (((state.eq ??= {}) as Record<string, unknown>)[col] = value),
             chain
@@ -347,7 +372,10 @@ describe("M5-14 the real dependencies (secret key, server-only tables and functi
             return { data: (opts.queue ?? []).map((path) => ({ path })), error: null };
           },
           then: (resolve: (v: unknown) => unknown) => {
-            calls.push({ op: state.delete ? "delete" : "query", args: { ...state } });
+            calls.push({
+              op: state.delete ? "delete" : state.upsert ? "upsert" : "query",
+              args: { ...state },
+            });
             return Promise.resolve({ data: null, error: null }).then(resolve);
           },
         };
@@ -378,7 +406,7 @@ describe("M5-14 the real dependencies (secret key, server-only tables and functi
       table: "image_cleanup_queue",
       eq: { owner_id: A },
       order: { col: "queued_at", o: { ascending: true } },
-      limit: 1000,
+      limit: 25,
     });
     expect(calls.find((c) => c.op === "rpc")?.args).toEqual({
       fn: "media_paths_in_use",
@@ -389,11 +417,23 @@ describe("M5-14 the real dependencies (secret key, server-only tables and functi
       bucket: "page-media",
       paths: [P1],
     });
+    // The kept path is re-queued in one RPC (no delete and insert pair); the removed one is dequeued.
+    expect(calls.filter((c) => c.op === "rpc").map((c) => (c.args as { fn: string }).fn)).toEqual([
+      "media_paths_in_use",
+      "requeue_media",
+    ]);
+    expect(calls.find((c) => (c.args as { fn?: string }).fn === "requeue_media")?.args).toEqual({
+      fn: "requeue_media",
+      p_owner: A,
+      p_paths: [P2],
+    });
+    expect(calls.filter((c) => c.op === "delete")).toHaveLength(1);
     expect(calls.find((c) => c.op === "delete")?.args).toMatchObject({
       table: "image_cleanup_queue",
       eq: { owner_id: A },
       in: { col: "path", values: [P1] },
     });
+    expect(calls.some((c) => c.op === "upsert")).toBe(false);
   });
 
   it("a Storage error is thrown (nothing dequeued); cleanupMediaQuietly logs it and returns null", async () => {

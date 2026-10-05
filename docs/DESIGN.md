@@ -29,6 +29,20 @@ Reference mockups live in `design/mockups/` (see "Mockup files" below). Values h
 
 Brass is never body text on white, never a large fill. Primary buttons are charcoal, not brass (exception: primary CTA on charcoal backgrounds uses a brass fill with charcoal text).
 
+**Marketing palette (Gary, 2026-10-05).** On the marketing site (everything inside `MarketingShell`, scoped by its `.mk` class) cobalt is the **primary accent** and a brighter brass the **secondary**; the app keeps the values above.
+
+| Token | Value | Use (marketing) |
+| --- | --- | --- |
+| `--hl-accent` | `#2D5BE3` (hover `#2349C0`) | The claim buttons ("Claim it", "Claim your link") with white text (5.6:1), the look progress bar, the focus ring |
+| `--hl-accent-text` | `#2D5BE3` | Cobalt as text on light: headline highlight words, text links and arrows (5.6:1 on white) |
+| `--hl-accent-on-ink` | `#8FA8FF` | Cobalt as text on charcoal: links on dark bands (7.5:1) |
+| `--hl-brass` (marketing) | `#D4A23F` | Secondary: logo diamond, small markers, chart fills, the claim panel's halo |
+| `--hl-brass-text` (marketing) | `#8A6414` | Brass as text on light (5.4:1) |
+| `--hl-brass-soft` / text (marketing) | `#FBF0D9` / `#6B4C10` | "Pro" and "Recommended" chips |
+| `--hl-ink-link` (marketing) | `#EBC062` | Brass as text on charcoal where brass is kept |
+
+Rule of thumb: cobalt is for doing (act, follow, notice), brass is for being HYDLNK (marks and small details). Charcoal stays the base. Other primary buttons stay charcoal. This project's Tailwind has no default palette (`--color-*: initial`) and no default breakpoints (`--breakpoint-*: initial`): `bg-black`, `text-white`, `sm:` and `lg:` generate nothing; use the tokens above and `hl:` or `min-[NNNpx]:`.
+
 ### Type
 
 - UI: **Public Sans** 400/500/600/700. Data, URLs, handles, labels, eyebrows: **Geist Mono** 400/500.

@@ -274,10 +274,10 @@ test.describe("M5-09 the banner and the disabled controls", () => {
     // New page: in the page switcher menu, disabled with the reason and no plans link.
     await page
       .locator("aside")
-      .getByRole("button", { name: /^Switch page/ })
+      .getByRole("button", { name: /^Switch site/ })
       .click();
-    const menu = page.getByRole("menu", { name: "Pages" });
-    const newPage = menu.getByRole("menuitem", { name: "New page" });
+    const menu = page.getByRole("menu", { name: "Sites" });
+    const newPage = menu.getByRole("menuitem", { name: "New site" });
     await expect(newPage).toHaveAttribute("aria-disabled", "true");
     await expect(menu).toContainText("Your account is suspended.");
     await expect(menu.getByRole("menuitem", { name: "See plans" })).toHaveCount(0);
@@ -286,7 +286,7 @@ test.describe("M5-09 the banner and the disabled controls", () => {
     // /pages/new shows the reason and a disabled button.
     await page.goto(url("app", "/pages/new"));
     await expect(page.locator(BANNER)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Create page" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Create site" })).toBeDisabled();
     await expect(
       page.getByText("Your account is suspended.", { exact: true }).first(),
     ).toBeVisible();

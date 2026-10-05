@@ -5,11 +5,11 @@ import { NewPageForm } from "@/components/pages/new-page-form";
 import { PLAN_LIMITS, pageLimitMessage } from "@/lib/limits";
 import { getAppContext } from "@/lib/pages/context";
 
-export const metadata: Metadata = { title: "New page" };
+export const metadata: Metadata = { title: "New site" };
 
 /**
- * New page (M4-18, Signup.dc.html): another hydlnk.com address for the same account, inside the app
- * shell. Shows the usage line ("You’ve used 1 of 3 pages") and the handle form; at the plan's page
+ * New site (M4-18, M11-11, Signup.dc.html): another hydlnk.com address for the same account, inside the app
+ * shell. Shows the usage line ("You’ve used 1 of 3 sites") and the handle form; at the plan's page
  * limit it shows that plan's message and a link to the plans instead of a form that would only be
  * refused. The server-only create (POST /api/pages, then the database trigger) is the enforcement.
  */
@@ -20,11 +20,11 @@ export default async function NewPageScreen() {
 
   return (
     <>
-      <ScreenHeader breadcrumb="Pages" title="New page" />
+      <ScreenHeader breadcrumb="Sites" title="New site" />
       <ScreenBody maxWidth="max-w-[560px]">
         <Card className="flex flex-col gap-4">
           <p data-usage className="text-sm text-text-2">
-            You’ve used {pages.length} of {limit} pages
+            You’ve used {pages.length} of {limit} sites
           </p>
           {atLimit ? (
             <div className="flex flex-col items-start gap-2">

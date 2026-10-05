@@ -52,6 +52,7 @@ export function recordClick(
   pageId: string,
   blockId: string,
   deps: IngestDeps,
+  subPageId?: string,
 ): void {
   if (request.method === "HEAD") return;
   const userAgent = request.headers.get("user-agent");
@@ -61,6 +62,7 @@ export function recordClick(
   const row = {
     page_id: pageId,
     block_id: blockId,
+    ...(subPageId ? { sub_page_id: subPageId } : {}),
     type: "click" as const,
     referrer: null,
     device: deviceFromUserAgent(userAgent),

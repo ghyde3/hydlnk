@@ -78,7 +78,7 @@ test("M1-28 signing up gives you handle.hydlnk.com showing a placeholder page", 
   await editor.goto(firstLink);
   await editor.waitForURL(url("app", "/editor"), { timeout: 30_000 });
   const switcher = editor
-    .getByRole("button", { name: `Switch page, current: ${display}` })
+    .getByRole("button", { name: `Switch site, current: ${display}` })
     .filter({ visible: true });
   await expect(switcher).toHaveCount(1);
   await expect(switcher).toContainText(display);

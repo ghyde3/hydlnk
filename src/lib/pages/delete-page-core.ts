@@ -47,12 +47,12 @@ export const DELETE_PAGE_STATUS: Record<DeletePageError, number> = {
 };
 
 export const DELETE_PAGE_MESSAGES: Record<DeletePageError, string> = {
-  not_found: "That page doesn’t exist.",
+  not_found: "That site doesn’t exist.",
   confirmation_mismatch: "That doesn’t match the handle. Type it exactly to confirm.",
   domain_removal_failed: "Couldn’t remove its custom domain. Try again.",
-  delete_failed: "Couldn’t delete the page. Try again.",
+  delete_failed: "Couldn’t delete the site. Try again.",
   account_suspended:
-    "Your account is suspended, so its pages can’t be deleted. Contact support to appeal.",
+    "Your account is suspended, so its sites can’t be deleted. Contact support to appeal.",
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

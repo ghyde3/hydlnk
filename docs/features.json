@@ -5101,6 +5101,170 @@
       ],
       "mockup": "",
       "passes": true
+    },
+    {
+      "id": "M11-01",
+      "milestone": 11,
+      "area": "marketing",
+      "title": "Home page redesign: HYDLNK as the frame, user brands as the exhibits",
+      "acceptance": [
+        "Supersedes, in these respects only: M1-23 steps 3, 4 and 6 (the hero lead, the Mara phone mock and the token chips are replaced by the look stage below), M1-24 step 1 (the placeholder is now 'you') and the 'yourname.hydlnk.com' wording in M1-26 step 2 (now 'you.hydlnk.com'). Every other step of M1-23 to M1-27 stands.",
+        "Hero: the h1 'One link. Designed like it’s yours.', the claim form with placeholder 'you' and the line 'Claim your name in seconds, publish in minutes.' under it, and three look tabs (radio buttons) that restyle only the stage beside them (the address in the look's face and a demo phone); with JavaScript the looks advance every 6 seconds with a bar under the active tab and a Pause control, and stop on hover, focus, a pick, off screen or with reduced motion.",
+        "How it works on a charcoal band: h2 'From a name to a live page in minutes.', the transparent showreel, and three steps each with a time cue and a guide link.",
+        "See it in action (#see-it): twelve demo setups in a scroll-snap carousel, each phone with a setup button linking to its audience page; Previous and Next both move the carousel and Previous is disabled at the start; the counter and track follow the scroll.",
+        "The header is sticky; primary buttons use the cobalt accent and the brass is secondary (docs/DESIGN.md, Marketing palette).",
+        "Every demo handle passes the real handle rule and reserved list (tests/unit/marketing-demo-handles.test.ts).",
+        "At 390x844 and 1440x900 on http://localhost:3000/: no horizontal scroll, every button, input and standalone link at least 44px tall, and the look tabs, carousel buttons and claim form work."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-02",
+      "milestone": 11,
+      "area": "marketing",
+      "title": "Comparison pages: HYDLNK vs Linktree and HYDLNK vs Beacons",
+      "acceptance": [
+        "/vs/linktree and /vs/beacons return 200 on the marketing host with a unique title and meta description, exactly one h1 and a canonical URL, and both are in /sitemap.xml.",
+        "Every statement about the competitor comes from page data that records its source URL and the date it was checked; each page shows 'Checked October 2026', names the competitor's trademark as its owner's with 'HYDLNK is not affiliated', and shows no competitor logo.",
+        "A comparison table covers price, custom domain, badge removal, design control and commerce fees. HYDLNK's column reads from the app's own sources (prices from src/lib/billing/prices.ts, plan limits from the plan table) and says that Free shows a 'Made with HYDLNK' badge that Pro removes.",
+        "Each page links to at least one existing guide (/design-control, /custom-domains or /link-in-bio/instagram) and ends with the shared claim form, which hands off to app signup like the home page form.",
+        "At 390x844 and 1440x900: no horizontal scroll and every link and button at least 44px tall."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-03",
+      "milestone": 11,
+      "area": "marketing",
+      "title": "Search pages: Linktree custom domain, remove the Linktree badge, link in bio for Shopify",
+      "acceptance": [
+        "/linktree-custom-domain, /remove-linktree-badge and /link-in-bio/shopify return 200 with a unique title and meta description, exactly one h1 and a canonical URL, and all three are in /sitemap.xml.",
+        "Statements about Linktree and Shopify come from page data that records the source URL and the date checked, and each page shows 'Checked October 2026'; no competitor logos.",
+        "/linktree-custom-domain explains what Linktree offers for custom domains and how a custom domain works on HYDLNK (Pro), and links to /custom-domains. /remove-linktree-badge explains which Linktree plan hides its logo and says plainly that HYDLNK Free shows a 'Made with HYDLNK' badge that Pro removes, and links to /design-control or /pricing. /link-in-bio/shopify explains linking a Shopify store and products from a link-in-bio page, and links to /link-in-bio/instagram.",
+        "Each page ends with the shared claim form, which hands off to app signup like the home page form.",
+        "At 390x844 and 1440x900: no horizontal scroll and every link and button at least 44px tall."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-04",
+      "milestone": 11,
+      "area": "data",
+      "title": "Sub-pages: the site_pages table, document schema, pages-per-site limit and media cleanup",
+      "acceptance": [
+        "A migration adds `site_pages` as docs/PLAN.md 'Sites with pages (Wave M)' describes (the site's id with cascade, draft and published jsonb with the same size checks as `pages`, published_at, a generated `live_path` unique per site, timestamps). RLS is on with policies and pgTAP in the same change: an owner reads only their own sites' sub-pages and updates only `draft`, only while not suspended; anon reads nothing; another signed-in user can neither read nor write them.",
+        "The link blocklist trigger runs on sub-page draft writes exactly as on `pages` (pgTAP: a blocklisted URL in a sub-page draft is refused).",
+        "`plan_limits` gains `pages_per_site` (Free 3, Pro 10, Studio 500, counting Home), mirrored in src/lib/limits/table.ts and kept equal by the parity test. A BEFORE INSERT trigger refuses the sub-page that would pass it with its own HL error code; a downgraded site over the limit keeps its pages but cannot add one (pgTAP).",
+        "Zod: a sub-page document `{path, title, description, blocks}` in draft and publish forms, reusing the block schemas, limits and URL rules; `path` follows the PLAN rule and reserved list; Home's document gains `nav: {show, items}`; a `page_link` block type (label and a target: Home or a sub-page id). Unit tests cover valid, invalid and reserved paths, nav and page_link.",
+        "`media_paths_in_use` and the media cleanup triggers count sub-page drafts and published documents: an image used only on a sub-page survives a publish, and deleting a sub-page queues only images nothing else uses (pgTAP).",
+        "The wave's analytics columns ship here too, so all M1 migrations run in one place: `events` gains a page key (sub-page id, none for Home, no foreign key) and `daily_stats` and `daily_dim_stats` are keyed per page, with every existing row kept as Home (pgTAP).",
+        "Server routes create a sub-page (title 'New page' and a free path) and delete one, checking ownership with the secret key and refusing a suspended owner and another user's site; `pnpm db:types` is regenerated.",
+        "`supabase/seed.sql` gives the local demo site `mara` two published sub-pages (paths `items` and `directions`) listed in its nav, so every e2e test has a fixture."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-05",
+      "milestone": 11,
+      "area": "publish",
+      "title": "Whole-site publish",
+      "acceptance": [
+        "Publish (the editor action and MCP `publish_page`) publishes Home and every sub-page draft of the site in one transaction. If any document fails validation or the blocklist, two pages share a path, or a block id repeats across the site, nothing is published and the error names the page.",
+        "After a publish every page of the site serves its new content on the next request, on the handle host and on a verified custom domain.",
+        "A sub-page created after the last publish is not live (404) until the next publish, and editing a published sub-page's draft changes nothing live until Publish.",
+        "Version history keeps recording Home on each publish exactly as before; whole-site versions are M2.",
+        "Unit tests for the validation and the block-id rule; an e2e test publishes a site with two sub-pages and opens both at 390x844 and 1440x900."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-06",
+      "milestone": 11,
+      "area": "routing",
+      "title": "Sub-page routing and rendering",
+      "acceptance": [
+        "http://mara.localhost:3000/items serves the live sub-page whose path is `items`, and the same path on a verified custom domain serves it too (proven with a Host header and a verified domain row, as tests/e2e/m4/domains-core-routing.spec.ts does); `/` is Home; `/og`, `/r/...`, `/api/...` and the test hooks behave as before (path and matcher unit tests gain rows).",
+        "A path that is not a live sub-page (invented, unpublished, deleted, uppercase, or two segments deep) answers the branded 404, and requesting invented paths creates no cache entry per path; the route file documents how, and a unit test covers the path decision.",
+        "A sub-page renders with the site's published theme, fonts, badge rule and report link, a small site header linking to Home (avatar and profile name), its title as the only h1, and its blocks; tenant pages still ship no library JavaScript.",
+        "Redirect mode and a suspended owner apply to every page of the site, as they do to Home.",
+        "At 390x844 and 1440x900 on a sub-page: no horizontal scroll and every link and button at least 44px tall."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-07",
+      "milestone": 11,
+      "area": "blocks",
+      "title": "Navigation menu and page-link block",
+      "acceptance": [
+        "Home's published `nav` drives a menu on Home and every sub-page when `show` is on and at least one item is live: Home first, then the items in order, the current page marked with aria-current. It wraps on phones without horizontal scroll and every entry is at least 44px tall. The private share preview (`/share/{token}`) shows the menu as plain text, not links (sub-page previews through the share link are M2).",
+        "Publish drops nav items that point at a page no longer in the site (state the owner cannot see, left by a delete or a version restore), and refuses a `page_link` whose target is not a page of the site, naming the page and the block.",
+        "The `page_link` block renders like a link button with a relative href, is not routed through `/r`, and renders nothing if its target is deleted after publish. It follows the add-block-type steps (schema, limits, defaults, toPublishForm, renderer, editor form).",
+        "Unit tests for the menu and the block; an e2e test moves between Home and a sub-page by the menu and by a page link at 390x844 and 1440x900."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-08",
+      "milestone": 11,
+      "area": "editor",
+      "title": "Editor: the pages of a site",
+      "acceptance": [
+        "The editor lists the site's pages (Home first, then sub-pages in menu order) and switches the builder and the preview between them; the preview shows the menu.",
+        "Add page (a title; the path is suggested from it, editable, and checked live against the rule, the reserved list and the site's other paths), rename, edit the description, show or hide in the menu, reorder the menu, and delete with a confirmation that says the page leaves the live site now; deleting a page also removes it from Home's draft nav. Content and settings wait for Publish; delete is immediate.",
+        "At the plan limit, Add page gives way to the limit message with an upgrade link (the server refuses too, M11-04).",
+        "A sub-page's blocks use the same builder, autosave and draft rules as Home.",
+        "At 390x844 and 1440x900: the page list and every control work, no horizontal scroll, every control at least 44px tall."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-09",
+      "milestone": 11,
+      "area": "analytics",
+      "title": "Per-page analytics",
+      "acceptance": [
+        "The view beacon sends the sub-page id (none on Home), and `/api/e` refuses an id that is not a page of the site the request's host serves.",
+        "Views and clicks are stored and rolled up per page (columns from M11-04); a click on a sub-page block resolves through `/r` and counts for that page.",
+        "The analytics screen filters by page (All pages, Home, each page; a deleted page shows as 'Deleted page') and the CSV export has a page column.",
+        "Unit tests for the beacon check and the per-page rollup; an e2e test at 390x844 and 1440x900 that the page filter renders and switches."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-10",
+      "milestone": 11,
+      "area": "seo",
+      "title": "Tenant SEO for sites",
+      "acceptance": [
+        "A sub-page's head has the title '{page title} · {profile name}', its description, a canonical URL on the site's primary host (the verified custom domain when there is one) and the site's OG image; the private site name never appears.",
+        "`/sitemap.xml` on a handle host or custom domain lists Home and each live sub-page on the primary host, and robots.txt on tenant hosts names it; the marketing sitemap is unchanged.",
+        "Unit tests for the head and the sitemap."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-11",
+      "milestone": 11,
+      "area": "copy",
+      "title": "Sites wording across the app and marketing",
+      "acceptance": [
+        "The app says site for what was a page (switcher, new site flow, limits, billing and settings copy) and page for Home and sub-pages; new sites get private names 'Main site', then 'Site 2' (existing names are left as they are).",
+        "Pricing on the marketing site and in the app shows sites per plan (1, 3, 15) and pages per site (Home and 2, 10, Unlimited), read from the limits table, and PLAN.md's monetization table matches.",
+        "Copy tests (American spelling, no stale 'pages per plan' wording) pass, and at 390x844 and 1440x900 the pricing section has no horizontal scroll."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M11-12",
+      "milestone": 11,
+      "area": "security",
+      "title": "Wave M1 security review",
+      "acceptance": [
+        "`security-reviewer` runs over the wave (routing, RLS, publish, analytics ingest, media cleanup), and every finding is fixed or recorded in docs/PLAN.md with Gary's decision.",
+        "A user cannot read, write, publish or delete another user's sub-pages through any route or with the publishable key (pgTAP and route tests)."
+      ],
+      "passes": false
     }
   ]
 }

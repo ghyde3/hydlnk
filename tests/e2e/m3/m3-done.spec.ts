@@ -140,13 +140,13 @@ async function computedOf(live: Page): Promise<Record<string, Record<string, str
 }
 
 const switcher = (page: Page): Locator =>
-  page.getByRole("button", { name: /^Switch page, current:/ });
+  page.getByRole("button", { name: /^Switch site, current:/ });
 
 /** Switches the working page with the page switcher: the sidebar at 1440, the top-bar chip at 390. */
 async function switchPage(page: Page, handle: string): Promise<void> {
   await switcher(page).click();
   await page
-    .getByRole("menu", { name: "Pages" })
+    .getByRole("menu", { name: "Sites" })
     // M6-14: an item reads "{page name} {handle}.hydlnk.com", so the handle is not at the start.
     .getByRole("menuitemradio", { name: new RegExp(`${handle}\\.`) })
     .click();

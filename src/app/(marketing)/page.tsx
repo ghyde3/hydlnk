@@ -1,23 +1,23 @@
 import type { Metadata } from "next";
 import { AudienceStrip } from "@/components/marketing/audiences/audience-strip";
 import { CtaBand } from "@/components/marketing/cta-band";
-import { DemoGallery } from "@/components/marketing/demo/demo-gallery";
 import { DomainAnalytics } from "@/components/marketing/domain-analytics";
 import { FaqList } from "@/components/marketing/faq";
 import { HOME_FAQ } from "@/components/marketing/faq-data";
-import { Hero } from "@/components/marketing/hero";
+import "@/components/marketing/home/home.css";
+import { Hero } from "@/components/marketing/home/hero";
+import { HowItWorks } from "@/components/marketing/home/how-it-works";
+import { PeopleGallery } from "@/components/marketing/home/people";
 import { PlanCards } from "@/components/marketing/pricing";
 import {
-  ArrowLink,
   ButtonLink,
   H2,
   Section,
   SectionIntro,
 } from "@/components/marketing/primitives";
 import { MarketingShell } from "@/components/marketing/shell";
-import { guideHref } from "@/components/marketing/site-map";
 import { marketingMetadata } from "@/components/marketing/metadata";
-import { TryBuilder } from "@/components/marketing/try";
+import { SeeItInAction } from "@/components/marketing/showcase/see-it";
 import { monthlyText, perMonthBilledYearlyText } from "@/lib/marketing/prices";
 
 export const metadata: Metadata = marketingMetadata({
@@ -27,60 +27,12 @@ export const metadata: Metadata = marketingMetadata({
   image: "home",
 });
 
-const STEPS = [
-  {
-    number: "01",
-    title: "Claim your name",
-    body: "Pick a handle and your page lives at yourname.hydlnk.com. Sign in with an email link or Google: there’s no password to remember.",
-    href: guideHref("choosing-a-handle"),
-    link: "Choosing a handle",
-  },
-  {
-    number: "02",
-    title: "Build it with blocks",
-    body: "Add links, cards, images, video and music, social icons and grids, then drag them into order. Every change autosaves as a draft, next to a live phone preview.",
-    href: guideHref("getting-started"),
-    link: "Getting started",
-  },
-  {
-    number: "03",
-    title: "Style it, then publish",
-    body: "Start from a theme, then change any color, font or shape. Nothing goes live until you press Publish, and on Pro you can use a domain you already own.",
-    href: guideHref("designing-your-page"),
-    link: "Designing your page",
-  },
-] as const;
-
 export default function HomePage() {
   return (
     <MarketingShell current="home">
       <Hero />
 
-      <Section id="how-it-works" tone="page" labelledBy="how-title">
-        <SectionIntro
-          eyebrow="How it works"
-          titleId="how-title"
-          title="From a name to a published page in three steps."
-          lead="No code and no templates to fight. Pick your blocks, pick a look, and publish when you like it."
-        />
-        <ol className="mt-10 grid grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))] gap-3">
-          {STEPS.map((step) => (
-            <li
-              key={step.number}
-              className="flex flex-col gap-3 rounded-md border border-line bg-surface p-[22px]"
-            >
-              <span className="font-mono text-xs tracking-[0.08em] text-brass-text">
-                {step.number}
-              </span>
-              <h3 className="text-lg font-semibold tracking-[-0.01em]">{step.title}</h3>
-              <p className="text-[15px] leading-[1.6] text-text-2">{step.body}</p>
-              <ArrowLink href={step.href} className="mt-auto self-start">
-                {step.link}
-              </ArrowLink>
-            </li>
-          ))}
-        </ol>
-      </Section>
+      <HowItWorks />
 
       <Section id="demos" labelledBy="demos-title">
         <div className="flex flex-wrap items-end justify-between gap-6">
@@ -95,30 +47,19 @@ export default function HomePage() {
           </ButtonLink>
         </div>
         <div className="mt-10">
-          <DemoGallery />
+          <PeopleGallery />
         </div>
       </Section>
 
       {/* content-visibility: the browser skips drawing this section, and fetching the fonts its
-          sample page uses, until it is near the screen. */}
+          phones use, until it is near the screen. */}
       <Section
-        id="try"
+        id="see-it"
         tone="page"
-        labelledBy="try-title"
-        className="[contain-intrinsic-size:auto_1100px] [content-visibility:auto] min-[900px]:[contain-intrinsic-size:auto_1200px]"
+        labelledBy="see-it-title"
+        className="[contain-intrinsic-size:auto_900px] [content-visibility:auto]"
       >
-        <SectionIntro
-          eyebrow="Try it now"
-          titleId="try-title"
-          title="Make this page yours. No sign-up."
-          lead="Tap a theme, change a color, add a few blocks. Nothing is saved, and every theme and block is free on every plan."
-        />
-        <div className="mt-10">
-          <TryBuilder />
-        </div>
-        <ArrowLink href="/features" className="mt-8">
-          Every feature, in detail
-        </ArrowLink>
+        <SeeItInAction titleId="see-it-title" />
       </Section>
 
       <AudienceStrip tone="white" />

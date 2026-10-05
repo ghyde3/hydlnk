@@ -17,6 +17,7 @@ import { checkTap, type PreviewTap } from "@/components/editor/preview-taps";
 import { useAutosave } from "@/components/editor/use-autosave";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { useUndoRedo } from "@/components/editor/use-undo-redo";
+import { useSitePages, type SubPageInit } from "@/components/site/use-site-pages";
 import { useThemeLibrary, useThemePreview } from "@/components/themes";
 import { toPublishForm, type DraftDoc, type PublishDoc } from "@/lib/document";
 import { publishPage, type PageChrome } from "@/lib/editor/contracts";
@@ -24,9 +25,12 @@ import {
   BLOCKED_PUBLISH_DISABLED_REASON,
   BLOCKED_PUBLISH_NOTE,
   PUBLISH_FAILED_MESSAGE,
+  PUBLISH_RATE_LIMITED_MESSAGE,
+  STORAGE_FULL_MESSAGE,
 } from "@/lib/editor/messages";
 import { initialEditorState } from "@/lib/editor/state";
 import { computePublishStatus } from "@/lib/editor/status";
+import { homeForSite } from "@/lib/publish/site-checks";
 import type { PlanId } from "@/lib/limits/table";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { TokenSet } from "@/lib/theme";
@@ -70,6 +74,8 @@ export interface WorkspaceProviderProps {
   templateThemes: Record<string, Partial<TokenSet>>;
   themes: ThemeRow[];
   themesFailed: boolean;
+  /** The site's sub-pages (M11-08), read once like the draft. */
+  subPages: SubPageInit[];
 
   children: ReactNode;
 }
@@ -134,10 +140,34 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const autosave = useAutosave({ pageId, draft, initialRevKey: initial.revKey });
   const { flush, savedDraft, currentStatus, blocked } = autosave;
 
+  // The site's sub-pages (M11-08): their own settings, block editors and save queue; the menu is
+  // Home's draft, edited through `editDraft`.
+  const site = useSitePages({
+    siteId: pageId,
+    plan,
+    initial: props.subPages,
+    homeTitle: "Home",
+    nav: draft.nav,
+    editDraft,
+  });
+  const {
+    flush: flushSite,
+    markPublished: markSitePublished,
+    applyPublishErrors: applySiteErrors,
+    clearPublishErrors: clearSiteErrors,
+  } = site;
+
+  // One undo history at a time: the open page's (Home's, or the open sub-page's).
   const undoRedo = useUndoRedo({
-    history: state.history,
-    step: (direction, expect) =>
-      dispatch({ type: direction === "undo" ? "history/undo" : "history/redo", expect }),
+    history: site.activeEditor ? site.activeEditor.history : state.history,
+    step: (direction, expect) => {
+      const action = {
+        type: direction === "undo" ? "history/undo" : "history/redo",
+        expect,
+      } as const;
+      if (site.activeEditor) site.dispatchActive(action);
+      else dispatch(action);
+    },
     scope: `#${WORKSPACE_PANEL_ID}`,
     nativeWithin: '[data-testid="saved-themes-card"]',
   });
@@ -212,11 +242,18 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const [publishing, setPublishing] = useState(false);
   const [publishNote, setPublishNote] = useState<PublishNote | null>(null);
   const [publishedToken, setPublishedToken] = useState<number | null>(null);
-  const status = computePublishStatus({
+  // Publish stores Home's menu without entries for pages no longer in the site (`homeForSite`), so
+  // the chip compares that stored shape, not a draft menu that still names a removed page.
+  const siteIds = site.titles.map((page) => page.id);
+  const storedForm = homeForSite(form, siteIds);
+  const storedPublished = published.doc ? homeForSite(published.doc, siteIds) : null;
+  const homeStatus = computePublishStatus({
     hasPublished: published.has,
-    published: published.doc,
-    form,
+    published: storedPublished,
+    form: storedForm,
   });
+  // A sub-page edited, added or never published is a change to publish too.
+  const status = homeStatus === "published" && site.dirty ? "unpublished-changes" : homeStatus;
 
   const draftRef = useRef(draft);
   useEffect(() => {
@@ -243,22 +280,36 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         );
         return;
       }
+      // The sub-pages' newest edits are stored first too: Publish freezes what the database holds.
+      if (!(await flushSite())) {
+        setPublishNote({
+          message: "Couldn’t publish. Your latest changes aren’t saved yet.",
+          retry: true,
+        });
+        return;
+      }
       const snapshot = savedDraft() ?? draftRef.current;
       const result = await publishPage(pageId);
       if (result.ok) {
+        markSitePublished();
         setPublished({
           has: true,
           doc: toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)),
         });
         setPublishedAt(result.publishedAt);
         dispatch({ type: "publish/clear-errors" });
+        clearSiteErrors();
         setPublishedToken((token) => (token ?? 0) + 1);
         return;
       }
       // The gate refused: show what failed, on the tab that holds it (a soft navigation: the
       // toolbar, the preview and the draft stay). The reducer asks for focus on the first field.
-      dispatch({ type: "publish/errors", errors: result.errors });
-      const tab = failureTab(result.errors);
+      // Errors on a sub-page (M11-05) go to that page's editor, which opens; Home's stay here.
+      const homeErrors = result.errors.filter((error) => !error.subPageId);
+      dispatch({ type: "publish/errors", errors: homeErrors });
+      applySiteErrors(result.errors);
+      const tab =
+        homeErrors.length === 0 && result.errors.length > 0 ? "edit" : failureTab(homeErrors);
       if (tab !== null && tab !== activeTabRef.current) router.push(hrefOf(tab));
       if (result.errors.length === 0) {
         setPublishNote(
@@ -266,7 +317,11 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
             ? { message: "Couldn’t publish. Sign in again, then try again.", retry: false }
             : result.reason === "account_suspended"
               ? { message: "Couldn’t publish. Your account is suspended.", retry: false }
-              : { message: PUBLISH_FAILED_MESSAGE, retry: true },
+              : result.reason === "rate_limited"
+                ? { message: PUBLISH_RATE_LIMITED_MESSAGE, retry: false }
+                : result.reason === "storage_full"
+                  ? { message: STORAGE_FULL_MESSAGE, retry: false }
+                  : { message: PUBLISH_FAILED_MESSAGE, retry: true },
         );
       }
     } catch {
@@ -276,7 +331,19 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     } finally {
       setPublishing(false);
     }
-  }, [publishing, flush, savedDraft, currentStatus, pageId, themeTokensOf, router]);
+  }, [
+    publishing,
+    flush,
+    flushSite,
+    markSitePublished,
+    applySiteErrors,
+    clearSiteErrors,
+    savedDraft,
+    currentStatus,
+    pageId,
+    themeTokensOf,
+    router,
+  ]);
 
   // A "Couldn’t publish. A link points to a blocked site" note belongs to the refusal it was shown
   // for: once a save has gone through (the refusal is gone) it is stale and is not shown.
@@ -305,16 +372,30 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [],
   );
   const previewing = preview.theme !== null;
+  // The open page's blocks and where a block action goes: Home's, or the open sub-page's (M11-08).
+  const siteRef = useRef(site);
+  useEffect(() => {
+    siteRef.current = site;
+  }, [site]);
   const onPreviewTap = useCallback(
     (raw: PreviewTap) => {
       // During a theme preview (M6-44) a tap does nothing.
       if (previewing) return;
-      const tap = checkTap(raw, draftRef.current.blocks);
+      const open = siteRef.current;
+      const sub = open.activeEditor;
+      // The profile belongs to Home: a tap on it in a sub-page's header goes there.
+      if (sub && raw.kind === "profile") open.select("home");
+      const tap = checkTap(
+        raw,
+        sub && raw.kind !== "profile" ? sub.draft.blocks : draftRef.current.blocks,
+      );
       if (!tap) return;
       if (activeTabRef.current !== "edit") router.push("/editor");
       if (tap.kind === "profile") {
         tapNonce.current += 1;
         setProfileTap({ part: tap.part, nonce: tapNonce.current });
+      } else if (sub) {
+        open.dispatchActive({ type: "expand", id: tap.blockId, itemId: tap.itemId });
       } else {
         dispatch({ type: "expand", id: tap.blockId, itemId: tap.itemId });
       }
@@ -352,6 +433,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       chrome,
       state,
       draft,
+      site,
       dispatch: dispatch as Dispatch<WorkspaceAction>,
       editDraft,
       repaired: initial.repaired,
@@ -397,6 +479,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       chrome,
       state,
       draft,
+      site,
       editDraft,
       initial.repaired,
       autosave,

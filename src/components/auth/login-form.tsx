@@ -186,7 +186,7 @@ export function LoginForm({ notice, status }: { notice?: string; status?: string
           href="/signup"
           className="inline-flex min-h-11 min-w-11 items-center font-semibold text-ink"
         >
-          Create your page
+          Create your site
         </Link>
       </p>
     </div>

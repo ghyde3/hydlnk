@@ -36,6 +36,11 @@ export interface CleanupDeps {
   remove(paths: string[]): Promise<void>;
   /** Takes these paths off the owner's queue. */
   dequeue(ownerId: string, paths: string[]): Promise<void>;
+  /**
+   * Moves still-referenced paths to the back of the queue (queued_at = now), so the oldest-first
+   * batch of CLEANUP_QUEUE_LIMIT is never filled for good by images a page still uses.
+   */
+  requeue?(ownerId: string, paths: string[]): Promise<void>;
 }
 
 export interface CleanupResult {
@@ -47,9 +52,13 @@ export interface CleanupResult {
   discarded: string[];
 }
 
-/** Most queue rows one run reads, and how many paths go in one `inUse` or `remove` call. */
-export const CLEANUP_QUEUE_LIMIT = 1000;
-const CHUNK = 100;
+/**
+ * Most queue rows one run (one request) works on, and how many paths go in one `inUse` or `remove`
+ * call: 25 (Wave M1 review, M11-12), so one call cannot make the database test thousands of paths
+ * against every document. A longer queue is worked off over the next runs.
+ */
+export const CLEANUP_QUEUE_LIMIT = 25;
+const CHUNK = 25;
 
 /** True only for `{ownerId}/{name}.{jpg|png|webp}` with `ownerId` exactly the given uid. */
 export function isOwnedMediaPath(ownerId: string, path: string): boolean {
@@ -77,7 +86,9 @@ export async function cleanupOwnerMedia(
     const chunk = owned.slice(i, i + CHUNK);
     const used = new Set(await deps.inUse(ownerId, chunk));
     const unused = chunk.filter((path) => !used.has(path));
-    for (const path of chunk) if (used.has(path)) result.kept.push(path);
+    const keptHere = chunk.filter((path) => used.has(path));
+    result.kept.push(...keptHere);
+    if (keptHere.length > 0 && deps.requeue) await deps.requeue(ownerId, keptHere);
     if (unused.length === 0) continue;
     // The guard again, at the last moment before Storage: nothing outside `{ownerId}/` goes out.
     const safe = unused.filter((path) => isOwnedMediaPath(ownerId, path));

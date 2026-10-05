@@ -9,6 +9,7 @@ import { AppsForm, BookForm } from "./store-forms";
 import { ContactForm } from "./contact-form";
 import { DiscountForm } from "./discount-form";
 import { FaqForm } from "./faq-form";
+import { PageLinkForm } from "./page-link-form";
 import type { BlockFormProps } from "./types";
 
 export type { BlockFormProps } from "./types";
@@ -34,4 +35,6 @@ export const BLOCK_FORMS: Record<BlockType, ComponentType<BlockFormProps>> = {
   book: BookForm,
   apps: AppsForm,
   map: MapForm,
+  // M11-07: the editor worker replaces this stub with the real form (label, and a target picker).
+  page_link: PageLinkForm,
 };

@@ -56,3 +56,10 @@ coverage/
 design/showreel*/renders/
 design/showreel*/render.log
 design/showreel*/snapshots/
+
+# Generated-image sources for the marketing demos (not committed)
+assets/demo-sources/
+
+# Full-size image sources (generated with Higgsfield; prompts embedded). Kept on disk, never committed: the repo is public.
+assets/audience-sources/
+assets/portrait-sources/

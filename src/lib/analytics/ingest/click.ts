@@ -107,7 +107,7 @@ export async function handleClick(
     status: 302,
     headers: { Location: locationFor(target.url), "Cache-Control": "no-store" },
   });
-  recordClick(request, pageId, params.blockId, deps);
+  recordClick(request, pageId, params.blockId, deps, target.subPageId);
   return response;
 }
 

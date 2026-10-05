@@ -3,6 +3,7 @@ import { cleanupUsers, makeUser, phoneOnly, desktopOnly } from "../fixtures/data
 import { signInAs } from "../fixtures/auth";
 import { FAULT_COOKIE_IGNORED, PRODUCTION_BUILD, appRaw, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { routeGoogleScript } from "../fixtures/google-stub";
 import { emptyUser } from "../m2/editor-helpers";
 
 /**
@@ -187,7 +188,11 @@ test.describe("M5-20 an address that is not a handle", () => {
 test.describe("M5-20 sign-in link failures", () => {
   test("M5-20 /auth/callback?code=invalid lands on sign-in with the expired-link message and the email field focused", async ({
     page,
+    context,
   }) => {
+    // Google's own button (a 40px iframe wrapper, drawn when its script loads from the network) is
+    // not ours to size, and whether it loads in time made this layout check flaky: use the stub.
+    await routeGoogleScript(context);
     const raw = await appRaw("/auth/callback?code=invalid");
     expect(raw.status).toBe(303);
     expect(raw.location).toContain("/login?error=link_invalid");

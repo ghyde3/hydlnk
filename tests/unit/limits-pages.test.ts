@@ -145,7 +145,7 @@ describe.skipIf(!run)(
         ok: false,
         status: 403,
         error: "page_limit",
-        message: "You’ve used 3 of 3 pages. Studio includes 15.",
+        message: "You’ve used 3 of 3 sites. Studio includes 15.",
       });
       expect(await countPages(o.userId)).toBe(3);
     });
@@ -170,19 +170,19 @@ describe.skipIf(!run)(
       expect(await countPages(o.userId)).toBe(3);
     });
 
-    it("M4-18 a Free account's second page is refused with 'Free includes 1 page. Pro includes 3.'", async () => {
+    it("M4-18 a Free account's second page is refused with 'Free includes 1 site. Pro includes 3.'", async () => {
       const o = await owner("fe", "free");
       const refused = await create(o, handleOf("fe2"));
       expect(refused).toMatchObject({
         ok: false,
         status: 403,
         error: "page_limit",
-        message: "Free includes 1 page. Pro includes 3.",
+        message: "Free includes 1 site. Pro includes 3.",
       });
       expect(await countPages(o.userId)).toBe(1);
     });
 
-    it("M4-18 a Studio account's 15th page succeeds and its 16th fails with 'You’ve used 15 of 15 pages.'", async () => {
+    it("M4-18 a Studio account's 15th page succeeds and its 16th fails with 'You’ve used 15 of 15 sites.'", async () => {
       const o = await owner("st", "studio");
       for (let n = 2; n <= 15; n++) {
         const made = await create(o, handleOf(`st${n}`));
@@ -195,7 +195,7 @@ describe.skipIf(!run)(
         ok: false,
         status: 403,
         error: "page_limit",
-        message: "You’ve used 15 of 15 pages.",
+        message: "You’ve used 15 of 15 sites.",
       });
       expect(await countPages(o.userId)).toBe(15);
     });
@@ -300,7 +300,7 @@ describe.skipIf(!run)(
         ok: false,
         status: 403,
         error: "suspended",
-        message: "This account can’t create pages.",
+        message: "This account can’t create sites.",
       });
       expect(await countPages(o.userId)).toBe(1);
 

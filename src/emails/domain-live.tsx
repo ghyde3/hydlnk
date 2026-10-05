@@ -49,7 +49,7 @@ export function DomainLive({ hostname }: DomainLiveProps) {
         h(
           Text,
           { style: { fontSize: "16px", lineHeight: "24px", margin: "0 0 8px" } },
-          `Your page is now served at ${origin}.`,
+          `Your site is now served at ${origin}.`,
         ),
         h(
           Link,

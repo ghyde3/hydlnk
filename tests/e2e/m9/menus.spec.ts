@@ -217,7 +217,7 @@ test.describe("M9-05 the three menus at 1440x900", () => {
   }) => {
     await signedInUser(context, { label: "m9e" });
     await openTab(page, "Edit");
-    await page.getByRole("button", { name: "Rename page" }).click();
+    await page.getByRole("button", { name: "Rename site" }).click();
     const field = page.getByRole("textbox", { name: /page name|name/i }).first();
     await expect(field).toBeVisible();
     await field.fill("A name not saved yet");

@@ -87,7 +87,7 @@ export default function DomainsPage() {
           </span>
         }
         title="Your page, on your domain."
-        lead="Every page has a free address at yourname.hydlnk.com. On Pro and Studio you can also connect a domain you already own, bought at any registrar, like links.yourbrand.com. HYDLNK doesn’t sell or register domains, and SSL is automatic."
+        lead="Every page has a free address at you.hydlnk.com. On Pro and Studio you can also connect a domain you already own, bought at any registrar, like links.yourbrand.com. HYDLNK doesn’t sell or register domains, and SSL is automatic."
         secondary={{ href: guideHref("connecting-a-domain"), label: "Step-by-step guide" }}
         aside={<DomainSetupMock />}
       />
@@ -103,7 +103,7 @@ export default function DomainsPage() {
             <Chip tone="neutral" className="self-start">
               Every plan
             </Chip>
-            <h3 className="font-mono text-lg">yourname.hydlnk.com</h3>
+            <h3 className="font-mono text-lg">you.hydlnk.com</h3>
             <p className="text-[15px] leading-[1.6] text-text-2">
               Your handle is your address, live the moment you publish, over https. Nothing to
               set up and nothing to renew.

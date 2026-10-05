@@ -209,7 +209,7 @@ test.describe("M5-19 usage meters near their limit", () => {
     await page.goto(settings());
     await expect(meter(page, "pages").locator("[data-meter-text]")).toHaveText("1 / 1");
     await expect(meter(page, "pages").locator("[data-meter-state]")).toHaveText(
-      "Full. Upgrade for more pages.",
+      "Full. Upgrade for more sites.",
     );
     expect(await bg(fill(page, "pages"))).toBe(BAD);
     // A meter with no limit has no level at all.

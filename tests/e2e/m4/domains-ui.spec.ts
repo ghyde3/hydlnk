@@ -37,7 +37,7 @@ test.describe("M4-10 Domains screen: HYDLNK address, plan states and Studio upse
     const user = await signedInUser(context, { label: "dp", plan: "pro" });
     await page.goto(url("app", "/domains"));
 
-    await expect(page.locator("main > header p")).toHaveText("Where your page lives");
+    await expect(page.locator("main > header p")).toHaveText("Where your site lives");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Domains");
     await expectDomainsNavCurrent(page);
     await expect(page).toHaveTitle("Domains — HYDLNK");
@@ -77,7 +77,7 @@ test.describe("M4-10 Domains screen: HYDLNK address, plan states and Studio upse
     // The Studio strip is Pro only.
     const upsell = page.locator("[data-studio-upsell]");
     await expect(
-      upsell.getByText("Running pages for clients? Studio includes 15 custom domains."),
+      upsell.getByText("Running sites for clients? Studio includes 15 custom domains."),
     ).toBeVisible();
     const compare = upsell.getByRole("link", { name: "Compare plans" });
     await expect(compare).toHaveAttribute("href", "/settings#plans");
@@ -170,7 +170,7 @@ test.describe("M4-10 Domains screen: HYDLNK address, plan states and Studio upse
     const address = page.locator("[data-hydlnk-address]");
     await expect(address.locator("[data-address-chip='live']")).toBeVisible();
 
-    await page.getByRole("button", { name: /^Switch page, current:/ }).click();
+    await page.getByRole("button", { name: /^Switch site, current:/ }).click();
     await page.getByRole("menuitemradio", { name: new RegExp(secondHandle) }).click();
     await expect(address.locator("[data-hydlnk-address-value]")).toHaveText(
       `${secondHandle}.hydlnk.com`,
@@ -302,7 +302,7 @@ test.describe("M4-14 three-step setup list and status chip", () => {
     }
     await expect(card.locator("[data-step-state='done']")).toHaveCount(3);
     await expect(card.locator("ol[data-domain-steps]")).toContainText(
-      `Verified. ${host} is serving your page over HTTPS.`,
+      `Verified. ${host} is serving your site over HTTPS.`,
     );
     await expect(card.locator("[data-dns-record]")).toHaveCount(0);
     await expect(card.getByRole("button", { name: "Check DNS now" })).toHaveCount(0);

@@ -333,7 +333,7 @@ test.describe("M4-26 overview", () => {
     await page.goto(ANALYTICS());
     expect(await kpi(page, "Views")).toBe("3");
 
-    const switcher = page.getByRole("button", { name: /^Switch page, current:/ });
+    const switcher = page.getByRole("button", { name: /^Switch site, current:/ });
     await switcher.click();
     await page.getByRole("menuitemradio", { name: new RegExp(`${multi.handle}-b`) }).click();
     await expect(switcher).toHaveAttribute("aria-label", new RegExp(`current: ${multi.handle}-b`));

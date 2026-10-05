@@ -1,4 +1,5 @@
 import "server-only";
+import { isValidSubPagePath } from "@/lib/document/path";
 import { getPrimaryDomain } from "@/lib/domains/primary";
 import { customOgImageUrl } from "@/lib/domains/urls";
 import { clientEnv } from "@/lib/env/client";
@@ -6,11 +7,19 @@ import { checkHandle } from "@/lib/handles/availability";
 import type { HandleStatus } from "@/lib/handles/status";
 import { ogImageUrl, tenantOrigin } from "@/lib/publish/urls";
 import { customOrigin } from "@/lib/routing/urls";
-import { getTenantPageState, getTenantPageStateById } from "@/app/(tenant)/published-page";
+import {
+  getTenantPageState,
+  getTenantPageStateById,
+  getTenantSiteState,
+  type PublishedPage,
+} from "@/app/(tenant)/published-page";
+import { homeUsesSiteIndex, siteContextFrom } from "@/lib/site/live";
+import { getSiteIndex } from "@/lib/site/published";
 import { failureResponse } from "./failure";
 import { htmlResponse } from "./html-response";
 import { renderLivePage } from "./live-page";
 import { redirectModeResponse } from "./redirect";
+import { getSubPageHtml } from "./sub-page-html";
 import {
   missingDocument,
   placeholderDocument,
@@ -34,6 +43,15 @@ export function plainNotFoundResponse(): Response {
   return htmlResponse(plainNotFoundDocument(), 404);
 }
 
+/**
+ * The menu and the page-link hrefs of Home (M11-07), or nothing when Home uses neither: the site
+ * index is read (cached under the site's tag) only for a site that needs it.
+ */
+async function homeSite(page: PublishedPage) {
+  if (!homeUsesSiteIndex(page.document)) return undefined;
+  return siteContextFrom(await getSiteIndex(page.pageId), page.document, "home");
+}
+
 /** A handle host. `published`: the page. `unpublished`: the placeholder. Everything else is a 404. */
 export async function handleResponse(handle: string): Promise<Response> {
   try {
@@ -44,11 +62,13 @@ export async function handleResponse(handle: string): Promise<Response> {
         // Redirect mode (M9-31): a Pro page that sends visitors straight to one link answers 302.
         const redirected = redirectModeResponse(page);
         if (redirected) return redirected;
+        const site = await homeSite(page);
         return htmlResponse(
           renderLivePage({
             pageId: page.pageId,
             document: page.document,
             plan: page.plan,
+            ...(site ? { site } : {}),
             // The share card (M6-32) changes og:title and og:description only; the image stays the page's own /og.
             urls: { page: `${tenantOrigin(handle)}/`, image: ogImageUrl(handle, page.publishedAt) },
           }),
@@ -99,14 +119,67 @@ export async function siteResponse(pageId: string): Promise<Response> {
           image: customOgImageUrl(hostname, page.publishedAt, rootDomain),
         }
       : null;
+    const site = await homeSite(page);
     return htmlResponse(
       renderLivePage({
         pageId: page.pageId,
         document: page.document,
         plan: page.plan,
         urls,
+        ...(site ? { site } : {}),
       }),
     );
+  } catch (error) {
+    return failureResponse(error);
+  }
+}
+
+/**
+ * A sub-page of a site (M11-06), after the host was resolved to the site and the site's public read
+ * said it is published and its owner is not suspended. `path` is looked up in the site index (one
+ * cached read per site, under the site's tag), so a path that is not a live page answers the plain
+ * 404 without a read or a cache entry of its own; a path that is reads its page by its real id.
+ * Redirect mode applies to every page of the site, like Home. The canonical URL and the OG image are
+ * on the site's primary host: its verified custom domain when it has one, else the handle host
+ * (`handle`, null on a custom host whose domain was removed meanwhile: no canonical then).
+ */
+async function subPageOf(
+  page: PublishedPage,
+  path: string,
+  handle: string | null,
+): Promise<Response> {
+  if (!isValidSubPagePath(path)) return plainNotFoundResponse();
+  const index = await getSiteIndex(page.pageId);
+  const entry = index.find((candidate) => candidate.path === path);
+  if (!entry) return plainNotFoundResponse();
+
+  const redirected = redirectModeResponse(page);
+  if (redirected) return redirected;
+  // The finished HTML of this real page (the index lookup above proved `entry.id` is one), cached.
+  const html = await getSubPageHtml(page.pageId, entry.id, entry.path, handle);
+  if (html === null) return plainNotFoundResponse();
+  return htmlResponse(html);
+}
+
+/** `{handle}.hydlnk.com/{path}`: a live sub-page, or the plain 404 (a suspended owner: "isn't available"). */
+export async function handleSubPageResponse(handle: string, path: string): Promise<Response> {
+  try {
+    const state = await getTenantSiteState(handle);
+    if (state.kind === "suspended") return htmlResponse(unavailableDocument(), 404);
+    if (state.kind !== "published") return plainNotFoundResponse();
+    return await subPageOf(state.page, path, handle);
+  } catch (error) {
+    return failureResponse(error);
+  }
+}
+
+/** `{custom domain}/{path}`, after the proxy resolved the host to its site. */
+export async function siteSubPageResponse(pageId: string, path: string): Promise<Response> {
+  try {
+    const state = await getTenantPageStateById(pageId);
+    if (state.kind === "suspended") return htmlResponse(unavailableDocument(), 404);
+    if (state.kind !== "published") return plainNotFoundResponse();
+    return await subPageOf(state.page, path, null);
   } catch (error) {
     return failureResponse(error);
   }

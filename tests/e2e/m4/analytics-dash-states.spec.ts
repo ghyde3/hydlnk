@@ -113,7 +113,7 @@ test.describe("M4-29 sample data", () => {
     await page.goto(ANALYTICS());
     await expect(page.getByTestId("sample-chip")).toBeVisible();
     await expect(page.getByTestId("sample-note")).toHaveText(
-      "Publish your page to start counting views.",
+      "Publish your site to start counting views.",
     );
     expect(await kpi(page, "Views")).toBe("12,480");
     await expect(page.getByText("No visits yet.")).toHaveCount(0);

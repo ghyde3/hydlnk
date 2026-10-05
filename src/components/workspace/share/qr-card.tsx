@@ -21,9 +21,9 @@ import { QrStyleControls } from "./qr-style-controls";
 import { useQrStyleInputs } from "./qr-style-state";
 import { CARD, CARD_TITLE, PRIMARY_BUTTON, SECONDARY_BUTTON } from "./styles";
 
-export const QR_SUSPENDED_MESSAGE = "This page isn’t available right now.";
-export const QR_UNPUBLISHED_MESSAGE = "Publish your page first. Then you can download its QR code.";
-export const QR_HINT = "Scan it to open your page.";
+export const QR_SUSPENDED_MESSAGE = "This site isn’t available right now.";
+export const QR_UNPUBLISHED_MESSAGE = "Publish your site first. Then you can download its QR code.";
+export const QR_HINT = "Scan it to open your site.";
 const PNG_FAILED = "Couldn’t make the PNG. Try again.";
 const CODE_FAILED = "Couldn’t make the code. Try again.";
 
@@ -148,7 +148,7 @@ export function QrCard() {
                     : `0 0 ${side} ${side}`
                 }
                 role="img"
-                aria-label="QR code for your page"
+                aria-label="QR code for your site"
                 shapeRendering={drawing ? undefined : "crispEdges"}
                 style={
                   drawing

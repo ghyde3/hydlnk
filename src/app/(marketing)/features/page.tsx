@@ -486,7 +486,7 @@ export default function FeaturesPage() {
 
       <CtaBand
         title="Nearly every feature here is on the free plan."
-        note="Upgrade only when you want your own domain, more pages, a year of analytics, version history or redirect mode."
+        note="Upgrade only when you want your own domain, more sites and pages, a year of analytics, version history or redirect mode."
       />
     </MarketingShell>
   );

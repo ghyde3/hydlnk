@@ -127,6 +127,9 @@ export function blockRowSummary(block: Block): BlockRowSummary {
     case "map":
       // M9-22: the place name, and its address under it.
       return { typeLabel, title: line(block.name, untitled), sub: line(block.address, "") };
+    case "page_link":
+      // M11-07: the editor worker may add the target's page title as `sub`.
+      return { typeLabel, title: line(block.label, untitled), sub: "" };
     default:
       return { typeLabel: "Block", title: "Unknown block", sub: "" };
   }

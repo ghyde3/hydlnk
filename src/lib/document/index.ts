@@ -41,6 +41,7 @@ export {
   type LinkBlock,
   type Profile,
   type Share,
+  type PageLinkBlock,
   type PublishDoc,
   type SocialBlock,
   type SocialIcon,
@@ -298,3 +299,49 @@ export {
   redirectTargetIssue,
   type RedirectOption,
 } from "./redirect";
+
+// Sub-pages, site menu and page links (Wave M, M11-04, M11-07).
+export {
+  PATH_MESSAGES,
+  RESERVED_PATHS,
+  RESERVED_PATH_PREFIX,
+  SUB_PAGE_PATH_PATTERN,
+  isPathFormat,
+  isReservedPath,
+  isValidSubPagePath,
+  subPagePathError,
+  suggestPath,
+} from "./path";
+export {
+  HOME_TARGET,
+  NAV_MAX_ITEMS,
+  NAV_MESSAGES,
+  isPageLinkTarget,
+  navSchema,
+  publishNav,
+  repairNav,
+  resolveNav,
+  subPageIdSchema,
+  type Nav,
+} from "./nav";
+export {
+  SUB_PAGE_LIMITS,
+  collectSubPagePublishErrors,
+  draftSubPageSchema,
+  emptySubPageDraft,
+  publishSubPageSchema,
+  publishedSubPageSchema,
+  toSubPagePublishForm,
+  type SubPageDraft,
+  type SubPagePublish,
+} from "./sub-page";
+export {
+  pageLinkTargetErrors,
+  pruneNav,
+  siteBlockIdClashes,
+  sitePathClashes,
+  type BlockIdClash,
+  type PageLinkTargetError,
+  type PathClash,
+  type SitePageRef,
+} from "./site";

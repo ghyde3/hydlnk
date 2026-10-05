@@ -42,6 +42,8 @@ const BLOCK_CLASS_FAMILIES: Record<string, readonly string[]> = {
   // The block's own class and its parts (the badge, the mark) have two different bases.
   apps: ["apps", "app"],
   map: ["map"],
+  // A page link is drawn with the link button's classes (M11-07); the family has no rules of its own.
+  page_link: ["pagelink"],
 };
 
 /** Every block type with rules of its own, in the order of the table above. */
@@ -64,6 +66,9 @@ const FEATURE_CLASS_FAMILIES: Record<string, readonly string[]> = {
   "name-style": ["name-s", "name-l", "name-xl", "name-font"],
   // A locked link's padlock and hidden words (M9-30): only a page with a locked link carries them.
   lock: ["lock"],
+  // The site menu and a sub-page's header and title (M11-06, M11-07): only a page that draws them carries them.
+  menu: ["menu"],
+  sitehead: ["sitehead", "pagetitle"],
 };
 
 /** Every page feature with rules of its own. */
@@ -174,6 +179,10 @@ export interface TenantCssInput {
   banner?: unknown;
   /** The profile's logo and name style (M9-24): only whether each is in use is read, and the name font. */
   profile?: { logo?: unknown; nameFont?: unknown; nameSize?: unknown };
+  /** The page draws the site menu (M11-07). */
+  menu?: boolean;
+  /** The page is a sub-page: it draws the small site header and the title (M11-06). */
+  subPage?: boolean;
 }
 
 /**
@@ -182,9 +191,12 @@ export interface TenantCssInput {
  * draws the default for it), so a hostile string never adds a rule.
  */
 export function pageFeaturesOf(
-  doc: Pick<TenantCssInput, "banner" | "profile"> & Partial<Pick<TenantCssInput, "blocks">>,
+  doc: Pick<TenantCssInput, "banner" | "profile"> &
+    Partial<Pick<TenantCssInput, "blocks" | "menu" | "subPage">>,
 ): string[] {
   const features: string[] = [];
+  if (doc.menu === true) features.push("menu");
+  if (doc.subPage === true) features.push("sitehead");
   // A locked link (M9-30): only a link block with one of the two known lock kinds counts.
   if (doc.blocks?.some((block) => block.type === "link" && lockMarker(block.lock) !== null)) {
     features.push("lock");
@@ -209,7 +221,8 @@ export function tenantInlineCss(doc: TenantCssInput): string {
   return (
     buildFontFaces({ ...doc.tokens, nameFont: doc.profile?.nameFont }) +
     pageRulesCss(
-      doc.blocks.map((block) => block.type),
+      // A page link is drawn as a link button (M11-07), so it carries the link rules too.
+      doc.blocks.map((block) => (block.type === "page_link" ? "link" : block.type)),
       pageFeaturesOf(doc),
     )
   );

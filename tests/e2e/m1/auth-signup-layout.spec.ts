@@ -15,7 +15,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     const response = await page.goto(SIGNUP);
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("HYDLNK \u2014 Sign up");
-    await expect(page.getByRole("heading", { level: 1, name: "Create your page" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Create your site" })).toBeVisible();
     await expect(
       page.getByText(
         "Pick a handle and we\u2019ll email you a sign-in link. No password to remember.",
@@ -36,7 +36,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       "href",
       url(null, "/privacy"),
     );
-    await expect(page.getByText("Already have a page?")).toBeVisible();
+    await expect(page.getByText("Already have a site?")).toBeVisible();
     await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
   });
@@ -129,9 +129,13 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     test.skip(({ isMobile }) => !isMobile, "phone project only");
     test("M1-10 at 390x844: no scroll, 44px targets, slim logo-only bar, form directly beneath with 20px padding", async ({
       page,
+      context,
     }) => {
+      // Google's real script draws its own 40px button when it loads in time (CI); the stub keeps
+      // the page's own 44px cover the thing under test, as the other tests in this file do.
+      await routeGoogleScript(context);
       await page.goto(SIGNUP);
-      await expect(page.getByRole("heading", { level: 1, name: "Create your page" })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Create your site" })).toBeVisible();
       await expectNoHorizontalScroll(page);
       await expectTapTargets(page);
       const bar = await page.locator("aside").boundingBox();
@@ -188,7 +192,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
         })),
       ).toEqual({ size: "44px", weight: "700" });
 
-      const pill = panel.getByText("yourname", { exact: true });
+      const pill = panel.getByText("you", { exact: true });
       await expect(pill).toBeVisible();
       expect(await pill.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(217, 184, 119)");
       const suffix = panel.getByText(".hydlnk.com", { exact: true });
@@ -231,6 +235,6 @@ test.describe("M1-10 brand pill follows the handle", () => {
     await page.getByLabel("Handle").fill("Cool Name_9");
     await expect(page.locator("aside").getByText("coolname9", { exact: true })).toBeVisible();
     await page.getByLabel("Handle").fill("");
-    await expect(page.locator("aside").getByText("yourname", { exact: true })).toBeVisible();
+    await expect(page.locator("aside").getByText("you", { exact: true })).toBeVisible();
   });
 });

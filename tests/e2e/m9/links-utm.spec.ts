@@ -174,6 +174,7 @@ test.describe("M9-27 Location at the click redirect", () => {
         "id",
         "page_id",
         "referrer",
+        "sub_page_id",
         "ts",
         "type",
         "visitor_hash",

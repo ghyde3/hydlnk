@@ -6,8 +6,8 @@ import { useId, useRef, useState } from "react";
 const BUTTON =
   "inline-flex min-h-11 items-center justify-center rounded-md border px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50";
 
-const FAILED_MESSAGE = "Couldn’t delete the page. Try again.";
-const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to delete a page.";
+const FAILED_MESSAGE = "Couldn’t delete the site. Try again.";
+const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to delete a site.";
 
 /**
  * "Delete page" for one row of the Pages card (M4-19): a danger button that opens a modal (a native
@@ -76,7 +76,7 @@ export function DeletePageDialog({ pageId, handle }: { pageId: string; handle: s
         }}
         className={`${BUTTON} w-full border-bad-line bg-surface text-bad hl:w-auto`}
       >
-        Delete page
+        Delete site
       </button>
 
       <dialog
@@ -122,7 +122,8 @@ export function DeletePageDialog({ pageId, handle }: { pageId: string; handle: s
             Delete {address}?
           </h2>
           <p id={bodyId} className="text-sm leading-relaxed text-text-2">
-            This deletes the page, its analytics and its custom domains. This can’t be undone.
+            This deletes the site, all its pages, its analytics and its custom domains. This can’t
+            be undone.
           </p>
           <div className="flex flex-col gap-1.5">
             <label htmlFor={inputId} className="text-[13px] font-semibold text-ink-2">
@@ -161,7 +162,7 @@ export function DeletePageDialog({ pageId, handle }: { pageId: string; handle: s
               aria-busy={pending || undefined}
               className={`${BUTTON} w-full border-bad-line bg-surface text-bad hl:w-auto`}
             >
-              Delete page
+              Delete site
             </button>
           </div>
         </form>

@@ -139,8 +139,8 @@ test.describe("M7-02 one workspace", () => {
     await page.keyboard.press("ControlOrMeta+z");
     await expect(title).toHaveValue("");
     // The page-name field in the toolbar is not part of the draft: the browser's own undo stays.
-    await page.getByRole("button", { name: "Rename page" }).click();
-    const rename = page.getByLabel("Page name");
+    await page.getByRole("button", { name: "Rename site" }).click();
+    const rename = page.getByLabel("Site name");
     await rename.fill("Typed name");
     await rename.press("ControlOrMeta+z");
     await expect(rename).not.toHaveValue("Typed name");

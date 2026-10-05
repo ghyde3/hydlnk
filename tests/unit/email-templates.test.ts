@@ -109,7 +109,7 @@ const TEMPLATES: Spec[] = [
     section: "auth.email.template.invite",
     subject: "You're invited to HYDLNK",
     variables: ["SiteURL"],
-    anchors: [{ href: `${SITE}/signup`, text: "Create your page" }],
+    anchors: [{ href: `${SITE}/signup`, text: "Create your site" }],
     button: true,
     footer: IGNORE,
   },
@@ -494,7 +494,7 @@ describe("recovery.html and invite.html", () => {
 
   it("invite sends people to sign up", () => {
     expect(anchorsIn(html.get("invite.html")!)).toEqual([
-      { href: `${SITE}/signup`, text: "Create your page" },
+      { href: `${SITE}/signup`, text: "Create your site" },
     ]);
   });
 });

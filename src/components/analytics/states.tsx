@@ -47,7 +47,7 @@ export function Footnote({ free }: { free: boolean }) {
     >
       Counted without cookies. Bots are filtered out before anything is stored.
       {free
-        ? " On Free, this page shows 30 days of per-link clicks; referrers, devices and countries come with Pro."
+        ? " On Free, your site shows 30 days of per-link clicks; referrers, devices and countries come with Pro."
         : ""}
     </p>
   );
@@ -62,7 +62,7 @@ export function SampleNote({ published }: { published: boolean }) {
     >
       {published
         ? "No visits yet. These numbers are samples. Yours appear after the first view."
-        : "Publish your page to start counting views."}
+        : "Publish your site to start counting views."}
     </p>
   );
 }

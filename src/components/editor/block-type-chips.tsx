@@ -5,7 +5,7 @@ import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
 import { BLOCK_TYPES, BLOCK_TYPE_LABELS, type BlockType } from "@/lib/document";
 
 /**
- * The nine block-type chips in the order of BLOCK_TYPES (M2-10), 44px tall: the "Add a block" card
+ * The block-type chips in the order of BLOCK_TYPES (M2-10), 44px tall: the "Add a block" card
  * and the chooser under a "+" between two blocks (M6-04) show the same chips.
  */
 export function BlockTypeChips({

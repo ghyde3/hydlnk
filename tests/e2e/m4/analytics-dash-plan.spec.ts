@@ -154,7 +154,7 @@ test.describe("M4-30 Free on the screen", () => {
       );
     }
     await expect(page.getByTestId("analytics-footnote")).toHaveText(
-      "Counted without cookies. Bots are filtered out before anything is stored. On Free, this page shows 30 days of per-link clicks; referrers, devices and countries come with Pro.",
+      "Counted without cookies. Bots are filtered out before anything is stored. On Free, your site shows 30 days of per-link clicks; referrers, devices and countries come with Pro.",
     );
     // Neither the raw referrers of the page nor a breakdown row leaks into the HTML.
     expect(await page.locator("main").innerText()).not.toContain("instagram.com");

@@ -11,7 +11,7 @@ import "./marketing.css";
  */
 export function MarketingShell({ current, children }: { current?: NavKey; children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-surface">
+    <div className="mk flex min-h-dvh flex-col bg-surface">
       <a
         href="#main"
         className="sr-only z-50 rounded-md bg-surface text-sm font-semibold text-ink focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:inline-flex focus:min-h-11 focus:items-center focus:px-4 focus:py-3"

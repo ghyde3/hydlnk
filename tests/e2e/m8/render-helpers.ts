@@ -62,7 +62,12 @@ export interface LiveUser {
 export async function liveUser(
   context: BrowserContext,
   label: string,
-  opts: { plan?: "free" | "pro" | "studio"; blocks?: Block[]; bio?: string; tokens?: Partial<DraftDoc["theme"]> } = {},
+  opts: {
+    plan?: "free" | "pro" | "studio";
+    blocks?: Block[];
+    bio?: string;
+    tokens?: Partial<DraftDoc["theme"]>;
+  } = {},
 ): Promise<LiveUser> {
   const user = await emptyUser(context, label, opts.plan ? { plan: opts.plan } : {});
   const draft = emptyDraft(user.handle);
@@ -85,6 +90,13 @@ export async function queryCount(handle: string): Promise<number> {
   const res = await getTenant(handle, "/hl-query-count");
   expect(res.status, "the server must run with HYDLNK_QUERY_COUNTER=1").toBe(200);
   return (JSON.parse(res.text) as { count: number }).count;
+}
+
+/** How often the site index (the live sub-pages' paths) really read Postgres for this handle's site. */
+export async function indexQueryCount(handle: string): Promise<number> {
+  const res = await getTenant(handle, "/hl-query-count");
+  expect(res.status, "the server must run with HYDLNK_QUERY_COUNTER=1").toBe(200);
+  return (JSON.parse(res.text) as { indexCount: number }).indexCount;
 }
 
 /**

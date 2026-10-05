@@ -79,7 +79,7 @@ test.describe("M9-28 Link tracking: the page defaults", () => {
     await expect(card(page).getByText("0 / 40")).toHaveCount(3);
     await expect(
       card(page).getByText(
-        "Added to the end of every link on your page, such as ?utm_source=hydlnk. Email and phone links are left alone.",
+        "Added to the end of every link on your site, such as ?utm_source=hydlnk. Email and phone links are left alone.",
       ),
     ).toBeVisible();
     const clear = card(page).getByRole("button", { name: "Clear all" });

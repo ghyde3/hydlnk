@@ -6,13 +6,13 @@ import { appOrigin } from "@/lib/routing/urls";
 import { claimHint, DEFAULT_IDLE_HINT } from "./claim-hint";
 import { signupUrl } from "./signup-handoff";
 
-/** The shown suffix is brand copy, like "yourname.hydlnk.com" in the pricing list. */
+/** The shown suffix is brand copy, like "you.hydlnk.com" in the pricing list. */
 const HANDLE_SUFFIX = `.${HANDLE_DISPLAY_DOMAIN}`;
-const PLACEHOLDER = "yourname";
+const PLACEHOLDER = "you";
 
 /**
  * Both variants sit on charcoal, which is what makes the field the loudest thing on the page: a
- * white field and a brass button (DESIGN.md allows a brass primary only on charcoal).
+ * white field and a cobalt button (the marketing primary accent, marketing.css).
  *  - light: for a light page. The form brings its own charcoal panel.
  *  - dark: for a charcoal band. The band is the panel, so the form adds none.
  */
@@ -23,7 +23,7 @@ const VARIANTS = {
 
 /**
  * "Claim your handle". The field reads as the finished address: what you type sits right in front
- * of ".hydlnk.com", so "yourname.hydlnk.com" turns into your own link as you type. Without
+ * of ".hydlnk.com", so "you.hydlnk.com" turns into your own link as you type. Without
  * JavaScript it is a plain GET form to <app origin>/signup, so the raw value arrives as typed and
  * the signup page normalizes it. With JavaScript the submit is intercepted so the visitor lands on
  * signup?handle=<normalized value>, or on /signup with no parameter when the field is empty.
@@ -57,7 +57,8 @@ export function ClaimForm({
 
   const hint = claimHint(typed, idleHint);
   // The input is as wide as its text (one monospace character is one ch), so the suffix follows
-  // the last letter. min-w-0 and max-w-full let it stop growing and scroll once the row is full.
+  // the last letter. min-w-11 keeps a short word a 44px target; max-w-full lets it stop growing
+  // and scroll once the row is full.
   const width = `calc(${Math.max(typed.length, PLACEHOLDER.length)}ch + 2px)`;
 
   return (
@@ -96,13 +97,13 @@ export function ClaimForm({
             aria-invalid={hint.invalid || undefined}
             onChange={(event) => setTyped(event.currentTarget.value)}
             style={{ width }}
-            className="h-14 max-w-full min-w-0 bg-transparent p-0 font-mono text-[18px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-text-3"
+            className="h-14 max-w-full min-w-11 bg-transparent p-0 font-mono text-[18px] font-semibold text-ink outline-none placeholder:font-normal placeholder:text-text-3"
           />
           <span className="shrink-0 font-mono text-[18px] text-text-2">{HANDLE_SUFFIX}</span>
         </div>
         <button
           type="submit"
-          className="min-h-14 w-full cursor-pointer rounded-sm bg-brass px-7 text-base font-semibold whitespace-nowrap text-ink transition-colors hover:bg-ink-link motion-reduce:transition-none hl:w-auto"
+          className="min-h-14 w-full cursor-pointer rounded-sm bg-accent px-7 text-base font-semibold whitespace-nowrap text-surface transition-colors hover:bg-accent-hover motion-reduce:transition-none hl:w-auto"
         >
           Claim it
         </button>

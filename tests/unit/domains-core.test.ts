@@ -105,7 +105,7 @@ describe("M4-11 uniqueness: one hostname, one page, never two", () => {
     expect(await add(h, IDS.studio, "Links.Example.Test", IDS.studioPage)).toEqual({
       ok: false,
       error: "hostname_taken",
-      message: "That domain is already connected to a page.",
+      message: "That domain is already connected to a site.",
       status: 409,
     });
     expect(h.vercel.calls).toEqual([]);

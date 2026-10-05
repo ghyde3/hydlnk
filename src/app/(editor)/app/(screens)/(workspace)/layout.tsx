@@ -9,6 +9,7 @@ import { tenantOrigin } from "@/lib/editor/urls";
 import { getAppContext } from "@/lib/pages/context";
 import { handleAddress } from "@/lib/pages/plans";
 import { pageChrome } from "@/lib/publish/chrome";
+import { loadSubPages } from "@/lib/site-pages/load";
 import { publicPageAddress } from "@/lib/qr/address";
 import { loadTemplateThemes } from "@/lib/templates/load";
 import { failIfInjected } from "@/lib/testing/faults";
@@ -21,7 +22,7 @@ import { loadThemeLibrary } from "@/lib/themes/load";
  * names one of the user's own pages, else the oldest, so another user's page id in the cookie never
  * reaches these queries). This module imports no secret-key client.
  *
- *   the draft            required: without it nothing can be edited, so the workspace is the page
+ *   the draft            required (with the site's sub-pages, M11-08): without it nothing can be edited, so the workspace is the page
  *                        header and a "We couldn’t load your page" card with Retry (M5-15), no
  *                        toolbar, no tabs, no preview
  *   the theme library    system and the user's own saved themes: if it cannot be read the Design
@@ -44,7 +45,11 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
     (async () => {
       try {
         await failIfInjected("draft-load");
-        return { ok: true as const, data: await loadEditorPageData(current, user.id) };
+        const [data, subPages] = await Promise.all([
+          loadEditorPageData(current, user.id),
+          loadSubPages(current.id),
+        ]);
+        return { ok: true as const, data, subPages };
       } catch (error) {
         console.error("[workspace] loading the draft failed", error);
         return { ok: false as const };
@@ -99,6 +104,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
       templateThemes={templateThemes}
       themes={themesRead.ok ? themesRead.themes : []}
       themesFailed={!themesRead.ok}
+      subPages={draftRead.subPages}
     >
       <WorkspaceShell>{children}</WorkspaceShell>
     </WorkspaceProvider>

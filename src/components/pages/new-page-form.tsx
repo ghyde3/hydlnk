@@ -7,12 +7,12 @@ import { HandleField, type ServerHandleResult } from "@/components/auth/handle-f
 import { normalizeHandle } from "@/lib/handles/rules";
 import { isHandleStatus } from "@/lib/handles/status";
 
-const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to create a page.";
-const FAILED_MESSAGE = "Couldn’t create that page. Try again.";
+const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to create a site.";
+const FAILED_MESSAGE = "Couldn’t create that site. Try again.";
 
 /**
  * The form on /pages/new (M4-18, Signup.dc.html): the live-availability Handle field of Milestone 1
- * and a primary "Create page" button, both full width and at least 44px tall. Submitting posts
+ * and a primary "Create site" button, both full width and at least 44px tall. Submitting posts
  * {handle} to /api/pages, the server-only create (reserved, taken, short, invalid and race rules are
  * the claim's, the plan's page limit is the database's). A taken or reserved handle shows the same
  * status line as the live check; the page limit shows its plan-specific message with a link to the
@@ -76,7 +76,7 @@ export function NewPageForm() {
         title={suspended ? SUSPENDED_REASON : undefined}
         className="flex min-h-12 w-full cursor-pointer items-center justify-center rounded-md bg-ink px-4 text-[15px] font-semibold text-surface disabled:cursor-default disabled:opacity-70"
       >
-        {pending ? "Creating…" : "Create page"}
+        {pending ? "Creating…" : "Create site"}
       </button>
       {suspended ? <p className="-mt-2 text-[13px] text-bad">{SUSPENDED_REASON}</p> : null}
       {problem ? (

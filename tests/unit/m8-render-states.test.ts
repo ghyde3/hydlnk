@@ -22,10 +22,16 @@ const pageState = vi.hoisted(() => ({
 }));
 vi.mock("@/app/(tenant)/published-page", () => ({
   getTenantPageState: pageState.byHandle,
+  getTenantSiteState: pageState.byHandle,
   getTenantPageStateById: pageState.byId,
 }));
 vi.mock("@/lib/handles/availability", () => ({ checkHandle: pageState.check }));
 vi.mock("@/lib/domains/primary", () => ({ getPrimaryDomain: pageState.primary }));
+// The sub-page reads (M11-06) reach the database; the state specs here never draw a sub-page.
+vi.mock("@/lib/site/published", () => ({
+  getSiteIndex: vi.fn(async () => []),
+  getPublishedSubPage: vi.fn(async () => null),
+}));
 
 const states = await import("@/lib/tenant-render/state-pages");
 const { handleResponse, siteResponse, plainNotFoundResponse } = await import(

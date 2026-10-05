@@ -4,6 +4,7 @@
  * from another. Paths are root-relative; the root host is the only host that serves them.
  */
 
+import { COMPETITORS } from "./compare/data";
 import { AUDIENCES, PLATFORM_AUDIENCES, audienceHref } from "./audiences/data";
 
 export type NavKey =
@@ -125,6 +126,10 @@ export const FOOTER_COLUMNS: readonly {
       { href: "/learn", label: "All guides" },
       { href: guideHref("getting-started"), label: "Getting started" },
       { href: guideHref("connecting-a-domain"), label: "Connecting a domain" },
+      ...COMPETITORS.map((competitor) => ({
+        href: `/vs/${competitor.slug}`,
+        label: `HYDLNK vs ${competitor.name}`,
+      })),
       { href: "/faq", label: "FAQ" },
     ],
   },
@@ -139,6 +144,14 @@ export const FOOTER_COLUMNS: readonly {
   },
 ];
 
+/** The comparison and search pages (M11-02, M11-03). /vs/<slug> has one entry per competitor in compare/data.ts. */
+export const COMPARE_PATHS: readonly string[] = [
+  ...COMPETITORS.map((competitor) => `/vs/${competitor.slug}`),
+  "/linktree-custom-domain",
+  "/remove-linktree-badge",
+  "/link-in-bio/shopify",
+];
+
 /** Every indexable page on the root host, for sitemap.xml. */
 export const SITEMAP_PATHS: readonly string[] = [
   "/",
@@ -148,6 +161,7 @@ export const SITEMAP_PATHS: readonly string[] = [
   ...GUIDES.map((guide) => guideHref(guide.slug)),
   "/faq",
   "/connect",
+  ...COMPARE_PATHS,
   "/privacy",
   "/terms",
 ];

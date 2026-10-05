@@ -13,8 +13,9 @@ import type { IngestDeps } from "./types";
  *   method   anything but POST: 405
  *   size     over 2 KB: 413, read no further
  *   bot      missing or automated user agent: 204, nothing recorded
- *   body     {pageId, referrer}; anything else: 204, nothing recorded
+ *   body     {pageId, subPageId?, referrer}; anything else: 204, nothing recorded
  *   page     unknown, unpublished or suspended: 204, nothing recorded
+ *   subpage  a `subPageId` that is not a LIVE sub-page of that site: 204, nothing recorded (M11-09)
  *   origin   not the page's own origin or one of its verified custom hosts, or missing: 204
  *   record   one `events` row: type 'view', device, country, visitor hash, referrer hostname
  *
@@ -58,7 +59,9 @@ async function readCapped(request: Request, max: number): Promise<string | null>
   return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
-function parseBody(text: string): { pageId: string; referrer: unknown } | null {
+function parseBody(
+  text: string,
+): { pageId: string; subPageId: string | null; referrer: unknown } | null {
   let value: unknown;
   try {
     value = JSON.parse(text);
@@ -69,7 +72,15 @@ function parseBody(text: string): { pageId: string; referrer: unknown } | null {
   const record = value as Record<string, unknown>;
   const pageId = record.pageId;
   if (typeof pageId !== "string" || !UUID.test(pageId)) return null;
-  return { pageId: pageId.toLowerCase(), referrer: record.referrer };
+  // Home sends no sub-page id (absent or null); anything else must be a UUID.
+  const sub = record.subPageId;
+  if (sub !== undefined && sub !== null && (typeof sub !== "string" || !UUID.test(sub)))
+    return null;
+  return {
+    pageId: pageId.toLowerCase(),
+    subPageId: typeof sub === "string" ? sub.toLowerCase() : null,
+    referrer: record.referrer,
+  };
 }
 
 export async function handleBeacon(request: Request, deps: IngestDeps): Promise<Response> {
@@ -109,9 +120,16 @@ export async function handleBeacon(request: Request, deps: IngestDeps): Promise<
   });
   if (!ownHost) return accepted();
 
+  // A sub-page view counts only for a live sub-page of the site this host serves (the origin check
+  // above is that host check): a deleted, unpublished or foreign id records nothing.
+  if (body.subPageId !== null && !(page.subPageIds ?? []).includes(body.subPageId)) {
+    return accepted();
+  }
+
   try {
     await deps.insertEvent({
       page_id: body.pageId,
+      ...(body.subPageId !== null ? { sub_page_id: body.subPageId } : {}),
       block_id: "",
       type: "view",
       referrer: referrerHost(body.referrer, [ownHost]),

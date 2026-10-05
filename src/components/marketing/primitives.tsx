@@ -168,7 +168,7 @@ export function ArrowLink({
   children: ReactNode;
   className?: string;
 }) {
-  const classes = `inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-ink underline decoration-line-3 underline-offset-4 hover:decoration-ink ${className}`;
+  const classes = `inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-accent-text underline decoration-line-3 underline-offset-4 hover:decoration-accent-text ${className}`;
   const content = (
     <>
       {children}

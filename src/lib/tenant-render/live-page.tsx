@@ -1,9 +1,10 @@
 import "server-only";
 import type { Metadata } from "next";
 import { PageRenderer } from "@/components/page/page-renderer";
-import type { PublishDoc } from "@/lib/document";
+import type { PublishDoc, SubPagePublish } from "@/lib/document";
 import { pageChrome } from "@/lib/publish/chrome";
-import { pageMetadata } from "@/lib/publish/share-meta";
+import { pageMetadata, subPageMetadata } from "@/lib/publish/share-meta";
+import type { SiteContext } from "@/lib/site/menu";
 import {
   TENANT_SCRIPT_INTEGRITY,
   TENANT_SCRIPT_SRC,
@@ -22,7 +23,8 @@ import { renderStatic } from "./static-markup";
  *
  *   head      `pageMetadata` tags, the favicon, the font and avatar preloads, one `<style>`
  *   after     the body: one deferred same-origin `<script>` (the tenant script: tap to play, and the
- *             view beacon of M4-21), carrying the page id as `data-page-id`
+ *             view beacon of M4-21), carrying the page id as `data-page-id` (and, on a sub-page, its
+ *             id as `data-sub-page-id`, so the beacon splits views per page: M11-09)
  *
  * The footer's two links come from `pageChrome(plan, pageId)`, decided here from the owner's plan
  * (read server-side with the page) and the page id, never from the document. The script is part of
@@ -45,15 +47,28 @@ export interface LivePageInput {
    * description only, as that route has always answered.
    */
   urls: { page: string; image: string } | null;
+  /**
+   * The rest of the site (M11-07): the menu Home draws and the hrefs of its page links, from the
+   * published `nav` and the live sub-pages. Absent for a site that uses neither.
+   */
+  site?: SiteContext;
 }
 
-/** The tag of the one script. The page id is checked to be a UUID here, so nothing else can reach the attribute. */
-export function scriptTag(pageId: string): string {
+/**
+ * The tag of the one script. The page id (and the sub-page id) is checked to be a UUID here, so
+ * nothing else can reach the attribute.
+ */
+export function scriptTag(pageId: string, subPageId?: string): string {
   if (!UUID.test(pageId)) throw new Error("The tenant script needs a page id (UUID).");
+  if (subPageId !== undefined && !UUID.test(subPageId)) {
+    throw new Error("The tenant script needs a sub-page id (UUID).");
+  }
   return (
     `<script src="${escapeHtml(TENANT_SCRIPT_SRC)}"` +
     (TENANT_SCRIPT_INTEGRITY ? ` integrity="${escapeHtml(TENANT_SCRIPT_INTEGRITY)}"` : "") +
-    ` data-page-id="${pageId}" defer></script>`
+    ` data-page-id="${pageId}"` +
+    (subPageId === undefined ? "" : ` data-sub-page-id="${subPageId}"`) +
+    ` defer></script>`
   );
 }
 
@@ -80,16 +95,29 @@ function renderPage({
   pageId,
   document,
   plan,
-}: Pick<LivePageInput, "pageId" | "document" | "plan">) {
+  site,
+  subPage,
+}: Pick<LivePageInput, "pageId" | "document" | "plan" | "site"> & {
+  subPage?: { title: string; blocks: SubPagePublish["blocks"] };
+}) {
   return splitHints(
     renderStatic(
-      <PageRenderer doc={document} pageId={pageId} mode="live" chrome={pageChrome(plan, pageId)} />,
+      <PageRenderer
+        doc={document}
+        pageId={pageId}
+        mode="live"
+        chrome={pageChrome(plan, pageId)}
+        {...(site ? { site } : {})}
+        {...(subPage ? { subPage } : {})}
+      />,
     ),
   );
 }
 
 /** The renderer's root element alone: the part the editor preview draws identically. */
-export function livePageBody(input: Pick<LivePageInput, "pageId" | "document" | "plan">): string {
+export function livePageBody(
+  input: Pick<LivePageInput, "pageId" | "document" | "plan" | "site">,
+): string {
   return renderPage(input).root;
 }
 
@@ -110,11 +138,68 @@ export function renderLivePage(input: LivePageInput): string {
   return renderDocument(
     renderHead({
       metadata: urls ? pageMetadata(document, urls) : baseMetadata(document),
-      css: tenantInlineCss(document),
+      css: tenantInlineCss({ ...document, ...(input.site?.menu ? { menu: true } : {}) }),
       preloads,
       hints,
       jsonLd: faqJsonLd(document),
     }),
     root + scriptTag(pageId),
+  );
+}
+
+export interface LiveSubPageInput {
+  /** From the database row, never from the document. */
+  pageId: string;
+  subPageId: string;
+  /** The SITE's published document (Home's): its theme, fonts, banner and profile are the sub-page's. */
+  document: PublishDoc;
+  subPage: SubPagePublish;
+  plan: string;
+  site: SiteContext;
+  /** The page's address on the site's primary host and the site's OG image; null when there is no host to name. */
+  urls: { page: string; image: string } | null;
+}
+
+/**
+ * A published sub-page as one finished HTML document (M11-06): the same document as Home's, drawn
+ * by the same `PageRenderer` with the site's theme, fonts, banner, footer and report link, but with
+ * the small site header in place of the profile, the page's title as the one `<h1>`, and the
+ * sub-page's blocks. The head is `subPageMetadata` (M11-10): "{title} · {profile name}", its own
+ * description, the canonical URL and the site's image. The tenant script carries the sub-page id.
+ * The profile's own logo, name font and size are not drawn here, so neither their rules nor their
+ * font faces are in the page.
+ */
+export function renderLiveSubPage(input: LiveSubPageInput): string {
+  const { document, subPage, pageId, subPageId, urls } = input;
+  const { hints, root } = renderPage({
+    pageId,
+    document,
+    plan: input.plan,
+    site: input.site,
+    subPage: { title: subPage.title, blocks: subPage.blocks },
+  });
+  const preloads: HeadPreload[] = tenantFontPreloads(document.tokens).map((href): HeadPreload => ({
+    as: "font",
+    href,
+    type: "font/woff2",
+  }));
+  const metadata: Metadata = urls
+    ? subPageMetadata(document, subPage, urls)
+    : { title: subPageMetadata(document, subPage, { page: "", image: "" }).title as string };
+  return renderDocument(
+    renderHead({
+      metadata,
+      css: tenantInlineCss({
+        blocks: subPage.blocks,
+        tokens: document.tokens,
+        ...(document.banner ? { banner: document.banner } : {}),
+        ...(input.site.menu ? { menu: true } : {}),
+        subPage: true,
+      }),
+      preloads,
+      hints,
+      jsonLd: faqJsonLd(subPage),
+    }),
+    root + scriptTag(pageId, subPageId),
   );
 }

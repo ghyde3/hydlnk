@@ -145,7 +145,7 @@ describe("M9-26 the file and the screen agree", () => {
       expect(file.days.reduce((n, d) => n + d.uniques, 0)).toBe(screen.data.kpis.uniques);
       expect(file.window).toEqual(screen.data.window);
       // The links file is the screen's "Clicks by link" table: same rows, same order, same labels.
-      expect(file.links).toEqual(screen.data.links);
+      expect(file.links.map(({ page: _page, ...link }) => link)).toEqual(screen.data.links);
       expect(file.links.reduce((n, l) => n + l.clicks, 0)).toBe(
         screen.data.links.reduce((n, l) => n + l.clicks, 0),
       );
@@ -215,10 +215,10 @@ describe("M9-26 the file and the screen agree", () => {
 
   it("M9-26 the daily file holds the rows of the result", async () => {
     const { result } = await exported({ daily, events }, 7);
-    const lines = dailyCsv(result.days).split("\r\n");
-    expect(lines[0]).toBe("\uFEFFdate,views,clicks,uniques");
+    const lines = dailyCsv(result.days, result.pageLabel).split("\r\n");
+    expect(lines[0]).toBe("\uFEFFdate,page,views,clicks,uniques");
     expect(lines).toHaveLength(7 + 2);
-    expect(lines[1]).toBe("2026-09-24,10,3,7");
+    expect(lines[1]).toBe("2026-09-24,All pages,10,3,7");
   });
 });
 

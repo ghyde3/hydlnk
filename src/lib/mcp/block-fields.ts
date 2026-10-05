@@ -47,6 +47,8 @@ const TYPE_NAMES: Record<BlockType, string> = {
   book: "book",
   apps: "app store",
   map: "map",
+  // M11-07: sub-page support in MCP is M2. add_block excludes page_link and update_block takes no fields for it.
+  page_link: "page link",
 };
 
 export type FieldMode = "add" | "update";
@@ -196,6 +198,8 @@ function fieldSchemas(mode: FieldMode): Record<BlockType, z.ZodType> {
       })
       .partial(),
     map: z.strictObject({ name: text, address: text, overrides }).partial(),
+    // M11-07: no fields through MCP until M2 (see TYPE_NAMES).
+    page_link: z.strictObject({}),
   };
 }
 
@@ -219,6 +223,7 @@ export const BLOCK_FIELD_KEYS: Readonly<Record<BlockType, readonly string[]>> = 
   book: ["title", "author", "cover", "links", "overrides"],
   apps: ["links", "overrides"],
   map: ["name", "address", "overrides"],
+  page_link: [],
 };
 
 export const BLOCK_OVERRIDE_NAMES: readonly string[] = BLOCK_OVERRIDE_KEYS;

@@ -1,3 +1,5 @@
+import { isValidSubPagePath } from "@/lib/document/path";
+
 /**
  * Internal route prefixes. The proxy rewrites a request into one of these segments by host:
  *   app host     /signup      -> /app/signup
@@ -59,15 +61,17 @@ export function appRewritePath(pathname: string): string {
 
 /**
  * What a handle host's request is rewritten to: ("mara", "/") -> "/t/mara", ("mara", "/og") ->
- * "/t/mara/og", and with `testHooks` the two hook paths under the handle. Every other path is
- * `PLAIN_404_PATH`: a handle page has no sub-paths, and a route per invented path would be one cache
- * entry per invented path.
+ * "/t/mara/og", with `testHooks` the two hook paths under the handle, and ("mara", "/items") ->
+ * "/t/mara/p/items" for one valid sub-page segment (`subPageSegment`: a DYNAMIC route, so an invented
+ * path makes no cache entry). Every other path is `PLAIN_404_PATH`.
  */
 export function tenantRewritePath(handle: string, pathname: string, testHooks = false): string {
   if (pathname === "/" || pathname === "") return `/t/${handle}`;
   if (pathname === "/og" || (testHooks && TENANT_TEST_HOOK_PATHS.has(pathname))) {
     return join(`/t/${handle}`, pathname);
   }
+  const subPage = subPageSegment(pathname);
+  if (subPage !== null) return `/t/${handle}/p/${subPage}`;
   return PLAIN_404_PATH;
 }
 
@@ -80,5 +84,20 @@ export function siteRewritePath(pageId: string, pathname: string): string {
   if (pageId === UNKNOWN_SITE_ID) return PLAIN_404_PATH;
   if (pathname === "/" || pathname === "") return `/sites/${pageId}`;
   if (pathname === "/og") return `/sites/${pageId}/og`;
+  const subPage = subPageSegment(pathname);
+  if (subPage !== null) return `/sites/${pageId}/p/${subPage}`;
   return PLAIN_404_PATH;
+}
+
+/**
+ * The one segment of a path that may be a sub-page (M11-06): `/items` -> "items", and null for
+ * everything else (uppercase, two segments, a trailing slash, a reserved word such as `og`, `api` or
+ * `hl-query-count`, a dot). A pure shape decision with no lookup: a path that passes goes to the
+ * dynamic sub-page route, which answers the 404 for a path that is not a live page of the site
+ * without storing anything for it; one that fails is the one plain 404 entry, as before.
+ */
+export function subPageSegment(pathname: string): string | null {
+  if (!pathname.startsWith("/")) return null;
+  const segment = pathname.slice(1);
+  return isValidSubPagePath(segment) ? segment : null;
 }

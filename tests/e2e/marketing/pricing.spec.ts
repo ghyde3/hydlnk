@@ -2,6 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { SHOWN_PRICES } from "../fixtures/prices";
 import { expectNoHorizontalScroll, url } from "../helpers";
+import { pagesPerSiteCell, sitesText } from "@/lib/marketing/plan-limits";
 import { monthlyText, perMonthBilledYearlyText, yearlyText } from "@/lib/marketing/prices";
 
 /**
@@ -23,8 +24,10 @@ async function plansViolations(page: Page): Promise<string[]> {
 const cards = (page: Page) => page.locator("[data-plan-cards]");
 const card = (page: Page, name: string) =>
   cards(page).getByRole("heading", { level: 3, name, exact: true }).locator("xpath=../../..");
-const period = (page: Page, name: "Monthly" | "Yearly") => page.getByRole("radio", { name: new RegExp(`^${name}`) });
-const label = (page: Page, name: "Monthly" | "Yearly") => page.locator(".bt-option", { hasText: new RegExp(`^${name}`) });
+const period = (page: Page, name: "Monthly" | "Yearly") =>
+  page.getByRole("radio", { name: new RegExp(`^${name}`) });
+const label = (page: Page, name: "Monthly" | "Yearly") =>
+  page.locator(".bt-option", { hasText: new RegExp(`^${name}`) });
 
 async function expectYearlyView(page: Page) {
   await expect(card(page, "Pro")).toContainText(SHOWN_PRICES.yearlyHeadline("pro"), SHOWN);
@@ -64,7 +67,9 @@ for (const path of ["/", "/pricing"]) {
       await expect(card(page, "Free")).toContainText(SHOWN_PRICES.free, SHOWN);
     });
 
-    test("Monthly shows the monthly prices and Yearly brings the yearly ones back", async ({ page }) => {
+    test("Monthly shows the monthly prices and Yearly brings the yearly ones back", async ({
+      page,
+    }) => {
       await page.goto(url(null, path));
       await label(page, "Monthly").click();
       await expect(period(page, "Monthly")).toBeChecked();
@@ -109,7 +114,9 @@ for (const path of ["/", "/pricing"]) {
       await expect(focused).toHaveCSS("outline-width", "2px");
     });
 
-    test("fits the viewport, and the toggle and cards pass an axe scan in both views", async ({ page }) => {
+    test("fits the viewport, and the toggle and cards pass an axe scan in both views", async ({
+      page,
+    }) => {
       await page.goto(url(null, path));
       await expectNoHorizontalScroll(page);
       expect(await plansViolations(page)).toEqual([]);
@@ -120,10 +127,13 @@ for (const path of ["/", "/pricing"]) {
   });
 }
 
-test("the comparison table lists the monthly and the yearly price side by side", async ({ page }) => {
+test("the comparison table lists the monthly and the yearly price side by side", async ({
+  page,
+}) => {
   await page.goto(url(null, "/pricing"));
   const row = (name: string) => page.getByRole("row", { name: new RegExp(`^${name}`) });
-  const yearly = (plan: "pro" | "studio") => `${yearlyText(plan)} (${perMonthBilledYearlyText(plan)})`;
+  const yearly = (plan: "pro" | "studio") =>
+    `${yearlyText(plan)} (${perMonthBilledYearlyText(plan)})`;
   await expect(row("Price, billed monthly")).toContainText(monthlyText("pro"));
   await expect(row("Price, billed monthly")).toContainText(monthlyText("studio"));
   await expect(row("Price, billed yearly")).toContainText(yearly("pro"));
@@ -137,11 +147,36 @@ test("domains are connected, never sold: pricing and domains pages say so", asyn
   await page.goto(url(null, "/pricing"));
   const main = page.locator("main");
   await expect(main).toContainText("HYDLNK doesn’t sell or register domains");
-  await expect(main).toContainText("Pro includes 1 custom domain and Studio 15, and SSL is automatic");
+  await expect(main).toContainText(
+    "Pro includes 1 custom domain and Studio 15, and SSL is automatic",
+  );
   await page.goto(url(null, "/custom-domains"));
   await expect(page.locator("main")).toContainText("HYDLNK doesn’t sell or register domains");
   await expect(page.locator("main")).toContainText("domain you already own");
   await expect(page.locator("main")).toContainText(
     `Connect a domain you already own on Pro, ${perMonthBilledYearlyText("pro")}.`,
   );
+});
+
+test("M11-11 pricing shows sites per plan and pages per site from the limits table, with no sideways scroll", async ({
+  page,
+}) => {
+  await page.goto(url(null, "/pricing"));
+  const row = (name: string) => page.getByRole("row", { name: new RegExp(`^${name}`) });
+  for (const [name, plan] of [
+    ["Free", "free"],
+    ["Pro", "pro"],
+    ["Studio", "studio"],
+  ] as const) {
+    await expect(row("Sites").locator(`[data-plan="${name}"]`)).toHaveText(
+      sitesText(plan).split(" ")[0]!,
+    );
+    await expect(row("Pages per site").locator(`[data-plan="${name}"]`)).toHaveText(
+      pagesPerSiteCell(plan),
+    );
+  }
+  // The limits as the cards say them: the same words, from the same table.
+  await expect(page.locator("[data-plan-cards]")).toContainText(sitesText("pro"));
+  await expect(page.locator("[data-plan-cards]")).toContainText("Unlimited pages per site");
+  await expectNoHorizontalScroll(page);
 });

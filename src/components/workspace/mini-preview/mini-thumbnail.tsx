@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import type { PreviewSite } from "@/components/site/use-site-pages";
 import type { PublishDoc } from "@/lib/document";
 import { PageRenderer } from "@/lib/editor/contracts";
 import {
@@ -31,11 +32,14 @@ export function MiniThumbnail({
   doc,
   pageId,
   hidden = false,
+  view,
 }: {
   doc: PublishDoc;
   pageId: string;
   /** Not shown (the mini phone is round while a field has focus), but still drawn from the draft. */
   hidden?: boolean;
+  /** The sub-page drawn instead of Home (M11-08); its menu is left out of the picture. */
+  view?: PreviewSite | undefined;
 }) {
   const top = useMemo(
     () => ({
@@ -63,7 +67,14 @@ export function MiniThumbnail({
         }}
         className="absolute top-0 left-0 origin-top-left overflow-hidden"
       >
-        <PageRenderer doc={top} pageId={pageId} mode="preview" thumbnail />
+        <PageRenderer
+          doc={top}
+          pageId={pageId}
+          mode="preview"
+          thumbnail
+          {...(view?.site ? { site: { hrefs: view.site.hrefs } } : {})}
+          {...(view?.subPage ? { subPage: view.subPage } : {})}
+        />
       </div>
     </div>
   );

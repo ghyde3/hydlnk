@@ -260,7 +260,7 @@ test.describe("M4-33 a downgrade keeps every row and blocks only new writes", ()
     expect(create.status).toBe(403);
     expect(create.json).toEqual({
       error: "page_limit",
-      message: "Free includes 1 page. Pro includes 3.",
+      message: "Free includes 1 site. Pro includes 3.",
     });
     expect(await pageCountForHandle(newHandle)).toBe(0);
 

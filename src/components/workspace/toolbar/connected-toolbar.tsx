@@ -10,7 +10,15 @@ import { WorkspaceToolbar } from "./workspace-toolbar";
  */
 export function ConnectedWorkspaceToolbar() {
   const workspace = useWorkspace();
-  const { pageId, address, name, activeTab, status, undoRedo, autosave } = workspace;
+  const { pageId, address, name, activeTab, status, undoRedo, autosave, site } = workspace;
+  // Sub-pages save through their own queue (M11-08): while Home is settled, an unsaved page shows.
+  const homeSettled = autosave.status === "idle" || autosave.status === "saved";
+  const saveStatus =
+    homeSettled && site.saveStatus !== "idle" && site.saveStatus !== "saved"
+      ? site.saveStatus === "missing"
+        ? "conflict"
+        : site.saveStatus
+      : autosave.status;
   return (
     <WorkspaceToolbar
       pageId={pageId}
@@ -18,7 +26,7 @@ export function ConnectedWorkspaceToolbar() {
       name={name}
       tabs={<WorkspaceTabs active={activeTab} className="w-full p-0.5! hl:w-auto hl:p-[3px]!" />}
       status={status}
-      saveStatus={autosave.status}
+      saveStatus={saveStatus}
       undoRedo={undoRedo}
       flush={autosave.flush}
       liveUrl={workspace.hasPublished ? workspace.liveUrl : null}

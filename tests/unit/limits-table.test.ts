@@ -8,8 +8,10 @@ import {
   buildMeters,
   formatBytes,
   formatLimitBytes,
+  formatPagesPerSite,
   formatUploadUsage,
   pageLimitMessage,
+  pagesPerSiteMessage,
   planBlurb,
   toPlanId,
   uploadQuotaMessage,
@@ -31,6 +33,7 @@ describe("M4-02 the TypeScript limits table", () => {
       analyticsBreakdowns: false,
       versionsKept: 0,
       redirectMode: false,
+      pagesPerSite: 3,
     });
     expect(PLAN_LIMITS.pro).toEqual({
       pages: 3,
@@ -41,6 +44,7 @@ describe("M4-02 the TypeScript limits table", () => {
       analyticsBreakdowns: true,
       versionsKept: 25,
       redirectMode: true,
+      pagesPerSite: 10,
     });
     expect(PLAN_LIMITS.studio).toEqual({
       pages: 15,
@@ -51,6 +55,7 @@ describe("M4-02 the TypeScript limits table", () => {
       analyticsBreakdowns: true,
       versionsKept: 25,
       redirectMode: true,
+      pagesPerSite: 500,
     });
     // The exact figures the acceptance names.
     expect(PLAN_IDS.map((plan) => PLAN_LIMITS[plan].uploadBytes)).toEqual([
@@ -129,15 +134,32 @@ describe("M4-31 / M4-32 formatting", () => {
   });
 
   it("M4-18 the page-limit messages read per plan", () => {
-    expect(pageLimitMessage("free", 1)).toBe("Free includes 1 page. Pro includes 3.");
-    expect(pageLimitMessage("pro", 3)).toBe("You’ve used 3 of 3 pages. Studio includes 15.");
-    expect(pageLimitMessage("studio", 15)).toBe("You’ve used 15 of 15 pages.");
+    expect(pageLimitMessage("free", 1)).toBe("Free includes 1 site. Pro includes 3.");
+    expect(pageLimitMessage("pro", 3)).toBe("You’ve used 3 of 3 sites. Studio includes 15.");
+    expect(pageLimitMessage("studio", 15)).toBe("You’ve used 15 of 15 sites.");
+  });
+
+  it("M11-04 the pages-per-site messages and numbers read per plan, Studio as Unlimited", () => {
+    expect(pagesPerSiteMessage("free", 3)).toBe(
+      "Free includes 3 pages per site, Home and 2 more. Pro includes 10.",
+    );
+    expect(pagesPerSiteMessage("pro", 10)).toBe(
+      "You’ve used 10 of 10 pages on this site. Studio includes unlimited pages.",
+    );
+    expect(pagesPerSiteMessage("studio", 500)).toBe("You’ve used 500 of 500 pages on this site.");
+    expect(PLAN_IDS.map(formatPagesPerSite)).toEqual(["3", "10", "Unlimited"]);
   });
 
   it("M4-05 the plan blurbs come from the table and promise nothing deferred", () => {
-    expect(planBlurb("free")).toBe("1 page, hydlnk.com address, 30 days of per-link clicks.");
-    expect(planBlurb("pro")).toBe("3 pages, 1 custom domain, a year of analytics, no badge.");
-    expect(planBlurb("studio")).toBe("15 pages, 15 custom domains, a year of analytics, no badge.");
+    expect(planBlurb("free")).toBe(
+      "1 site with 3 pages (Home and 2), hydlnk.com address, 30 days of per-link clicks.",
+    );
+    expect(planBlurb("pro")).toBe(
+      "3 sites with 10 pages each, 1 custom domain, a year of analytics, no badge.",
+    );
+    expect(planBlurb("studio")).toBe(
+      "15 sites with unlimited pages each, 15 custom domains, a year of analytics, no badge.",
+    );
     for (const plan of PLAN_IDS) {
       expect(planBlurb(plan)).not.toMatch(/editor|team|csv|schedul/i);
     }

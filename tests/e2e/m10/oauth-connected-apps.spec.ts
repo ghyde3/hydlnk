@@ -77,7 +77,7 @@ test.describe("M10-18 the card", () => {
     const titles = await page.locator("main section > h2").allInnerTexts();
     const at = titles.indexOf("Connected apps");
     expect(at).toBeGreaterThan(0);
-    expect(titles[at - 1]).toBe("Pages");
+    expect(titles[at - 1]).toBe("Sites");
     expect(titles[at + 1]).toBe("Account");
     await expect(card(page)).toContainText(
       "Apps you’ve let manage your pages, like Claude or ChatGPT. Remove one to cut off its access.",
@@ -322,7 +322,7 @@ test.describe("M10-18 layout", () => {
 
     const connected = (await card(page).boundingBox())!;
     const pages = (await page
-      .locator("main section", { has: page.getByRole("heading", { level: 2, name: "Pages" }) })
+      .locator("main section", { has: page.getByRole("heading", { level: 2, name: "Sites" }) })
       .boundingBox())!;
     expect(Math.abs(connected.width - pages.width)).toBeLessThan(1);
     expect(connected.width).toBeLessThanOrEqual(920);

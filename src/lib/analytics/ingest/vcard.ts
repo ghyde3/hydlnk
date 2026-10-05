@@ -47,6 +47,8 @@ export interface ContactCard {
   handle: string;
   /** Hostnames of the page's VERIFIED custom domains. */
   customHosts: string[];
+  /** The sub-page that holds the contact block; absent for Home (M11-09). */
+  subPageId?: string | undefined;
 }
 
 export type VcardDeps = Pick<
@@ -163,6 +165,7 @@ export async function handleVcard(
     const row = {
       page_id: pageId,
       block_id: params.blockId,
+      ...(card.subPageId ? { sub_page_id: card.subPageId } : {}),
       type: "click" as const,
       referrer: null,
       device: deviceFromUserAgent(userAgent),

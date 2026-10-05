@@ -79,7 +79,13 @@ const palette = `
 const ticker = `
 <div class="ticker" id="ticker"><span class="dot"></span><span class="tk-k" id="tk-k">Color</span><span class="tk-v" id="tk-v">Ink</span></div>`;
 
-function html({ format, width, height }) {
+// alpha: the transparent cut for the site's "How it works" band. The base colour, dot grid, glow
+// and vignette are hidden (the page paints them as CSS); every UI element stays.
+const ALPHA_CSS = `
+      html, body, #root { background: transparent !important; }
+      #bg { display: none !important; }`;
+
+function html({ format, width, height, alpha = false }) {
   const wide = format === "wide";
   return `<!doctype html>
 <html lang="en">
@@ -91,7 +97,7 @@ function html({ format, width, height }) {
     <style>
 ${fonts}
 ${css}
-      html, body { width: ${width}px; height: ${height}px; }
+      html, body { width: ${width}px; height: ${height}px; }${alpha ? ALPHA_CSS : ""}
     </style>
   </head>
   <body>
@@ -146,10 +152,13 @@ ${js}
 }
 
 writeFileSync(join(ROOT, "index.html"), html({ format: "wide", width: 1920, height: 1080 }));
+// Transparent variants, rendered with `render -c alpha.html` (see README).
+writeFileSync(join(ROOT, "alpha.html"), html({ format: "wide", width: 1920, height: 1080, alpha: true }));
 // The 4:5 cut is its own project (one root composition per project), sharing the assets.
 const TALL = join(ROOT, "..", "showreel-tall");
 mkdirSync(TALL, { recursive: true });
 cpSync(join(ROOT, "assets"), join(TALL, "assets"), { recursive: true });
 for (const file of ["hyperframes.json", "package.json", "design.md", "BRIEF.md"]) cpSync(join(ROOT, file), join(TALL, file));
 writeFileSync(join(TALL, "index.html"), html({ format: "tall", width: 1080, height: 1350 }));
+writeFileSync(join(TALL, "alpha.html"), html({ format: "tall", width: 1080, height: 1350, alpha: true }));
 console.log("built index.html and ../showreel-tall/index.html");

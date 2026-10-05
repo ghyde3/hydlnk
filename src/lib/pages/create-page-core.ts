@@ -35,8 +35,8 @@ export const CREATE_PAGE_STATUS: Record<CreatePageError, number> = {
   suspended: 403,
 };
 
-export const CREATE_FAILED_MESSAGE = "Couldn’t create that page. Try again.";
-export const CREATE_SUSPENDED_MESSAGE = "This account can’t create pages.";
+export const CREATE_FAILED_MESSAGE = "Couldn’t create that site. Try again.";
+export const CREATE_SUSPENDED_MESSAGE = "This account can’t create sites.";
 
 async function limitMessage(admin: SupabaseClient<Database>, userId: string): Promise<string> {
   const [account, pages] = await Promise.all([
@@ -49,10 +49,9 @@ async function limitMessage(admin: SupabaseClient<Database>, userId: string): Pr
 }
 
 /**
- * Names the page just created (M6-13): the account's first page keeps the column default, "Main
- * page"; the next ones become "Page 2" and "Page 3" (the owner's page count after the insert). A
+ * Names the page just created (M6-13): the account's first page is "Main site"; the next ones become "Site 2" and "Site 3" (the owner's site count after the insert). A
  * request body never names a page: this is the only place a created page gets its name. A failure
- * here is logged and ignored, because the page exists and "Main page" is a fine name for it.
+ * here is logged and ignored, because the page exists and "Main site" is a fine name for it.
  */
 async function nameNewPage(
   admin: SupabaseClient<Database>,

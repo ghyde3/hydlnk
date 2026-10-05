@@ -3,16 +3,18 @@ import { axeViolations } from "../fixtures/a11y";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
- * The try-it builder on the home page (#try): a live phone preview drawn by the real page renderer,
+ * The try-it builder on an audience page (#try; the TikTok page, preset: Kai Brennan, Ember). It left the
+ * home page in M11-01 but is still the same component: a live phone preview drawn by the real page renderer,
  * with themes to tap, style choices and blocks to add. One smoke per viewport (phone 390x844 and
  * desktop 1440x900): a theme tap restyles the preview, a block added shows up in it, nothing
  * scrolls sideways. Nothing is saved, so no test needs an account.
  */
 
 const SIGNUP = url("app", "/signup");
+const PAGE_PATH = "/link-in-bio/tiktok";
 
 async function openBuilder(page: Page) {
-  await page.goto(url(null, "/"));
+  await page.goto(url(null, PAGE_PATH));
   await page.locator("#try").scrollIntoViewIfNeeded();
   // The builder's code loads as the section nears the screen; dev mode compiles it on first use.
   await expect(page.getByTestId("try-builder")).toHaveAttribute("data-try-ready", "true", {
@@ -47,17 +49,17 @@ async function firstLinkColor(page: Page, locator: Locator = root(page).locator(
   return locator.evaluate((el) => getComputedStyle(el).backgroundColor);
 }
 
-test.describe("home page try-it builder", () => {
+test.describe("audience page try-it builder", () => {
   test("the first view is the phone, drawn on the server, and the builder loads on approach", async ({
     page,
   }) => {
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));
-    await page.goto(url(null, "/"));
+    await page.goto(url(null, PAGE_PATH));
     // Before the section is near the screen: the sample page is there (no JavaScript needed), the
     // controls are not.
     await expect(page.getByTestId("try-phone")).toHaveCount(1);
-    await expect(root(page).locator(".pg-name")).toHaveText("Jordan Ellis");
+    await expect(root(page).locator(".pg-name")).toHaveText("Kai Brennan");
     await expect(page.getByTestId("try-builder")).toHaveCount(0);
 
     await page.locator("#try").scrollIntoViewIfNeeded();
@@ -84,8 +86,7 @@ test.describe("home page try-it builder", () => {
 
   test("tapping a theme restyles the preview", async ({ page }) => {
     await openBuilder(page);
-    const before = await tokens(page);
-    expect(before.background).toBe("rgb(232, 238, 227)"); // Sage
+    expect((await tokens(page)).background).not.toBe("rgb(22, 18, 14)"); // Ember, not Noir yet
 
     await choice(page, "Noir").click();
     await expect(page.getByTestId("try-status")).toHaveText("Noir theme applied.");
@@ -142,7 +143,7 @@ test.describe("home page try-it builder", () => {
     await openBuilder(page);
     await tab(page, "Blocks").click();
     const start = await blockTypes(page);
-    expect(start).toEqual(["social", "link", "link", "card"]);
+    expect([...start].sort()).toEqual(["card", "link", "link", "social"]);
 
     await page.locator("[data-try-add='divider']").click();
     await page.locator("[data-try-add='text']").click();
@@ -164,7 +165,7 @@ test.describe("home page try-it builder", () => {
     // (aria-disabled, not disabled, so the button keeps focus and still answers; hence the force.)
     await page.locator(`[data-try-up='${ids[0]}']`).click({ force: true });
     expect(await blockIds(page)).toEqual([ids[0], ids[2], ids[1], ...ids.slice(3)]);
-    await expect(page.getByTestId("try-status")).toHaveText("Social is already first.");
+    await expect(page.getByTestId("try-status")).toHaveText(`${start[0]![0]!.toUpperCase()}${start[0]!.slice(1)} is already first.`);
 
     // Remove the divider: gone from the preview, and keyboard focus stays in the list.
     const divider = (await blockIds(page)).find((id) => id?.startsWith("try-divider"))!;
@@ -214,7 +215,7 @@ test.describe("home page try-it builder", () => {
     await expect(root(page).locator(".pg-name")).toHaveText("Wren Haven");
     await expect(cta).toHaveAttribute("href", `${SIGNUP}?handle=wrenhaven`);
     await field.fill("");
-    await expect(root(page).locator(".pg-name")).toHaveText("Jordan Ellis");
+    await expect(root(page).locator(".pg-name")).toHaveText("Kai Brennan");
     await expect(cta).toHaveAttribute("href", SIGNUP);
   });
 

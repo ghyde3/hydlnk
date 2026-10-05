@@ -179,7 +179,7 @@ test.describe("M9-25 the Style group", () => {
     await emptyUser(context, "qs3");
     await openShare(page);
     await expect(qrCard(page)).toContainText(
-      "Publish your page first. Then you can download its QR code.",
+      "Publish your site first. Then you can download its QR code.",
     );
     await expect(styleGroup(page)).toHaveCount(0);
     await expect(qrCard(page).getByRole("button")).toHaveCount(0);
@@ -187,7 +187,7 @@ test.describe("M9-25 the Style group", () => {
     const suspended = await context.newPage();
     await signInAsUser(context, "qs3b", { suspended: true });
     await openShare(suspended);
-    await expect(qrCard(suspended)).toContainText("This page isn’t available right now.");
+    await expect(qrCard(suspended)).toContainText("This site isn’t available right now.");
     await expect(styleGroup(suspended)).toHaveCount(0);
     await expect(qrCard(suspended).getByRole("button")).toHaveCount(0);
   });

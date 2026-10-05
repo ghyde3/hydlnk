@@ -18,7 +18,7 @@ import { useWorkspace } from "../workspace-context";
 import { CARD, CARD_TITLE, SECONDARY_BUTTON } from "./styles";
 
 export const LINK_TRACKING_HINT =
-  "Added to the end of every link on your page, such as ?utm_source=hydlnk. Email and phone links are left alone.";
+  "Added to the end of every link on your site, such as ?utm_source=hydlnk. Email and phone links are left alone.";
 
 /** The Publish gate's message for one page default (`utm.source`, `utm.medium`, `utm.campaign`). */
 function gateMessage(errors: readonly PublishError[], key: UtmKey): string | null {

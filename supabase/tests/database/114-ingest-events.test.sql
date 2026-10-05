@@ -11,8 +11,8 @@ select is(
   (select array_agg(column_name::text order by column_name)
    from information_schema.columns
    where table_schema = 'public' and table_name = 'events'),
-  array['block_id', 'country', 'device', 'id', 'page_id', 'referrer', 'ts', 'type', 'visitor_hash'],
-  'events has exactly: id, page_id, block_id, type, ts, referrer, device, country, visitor_hash'
+  array['block_id', 'country', 'device', 'id', 'page_id', 'referrer', 'sub_page_id', 'ts', 'type', 'visitor_hash'],
+  'events has exactly: id, page_id, sub_page_id, block_id, type, ts, referrer, device, country, visitor_hash'
 );
 
 select is_empty(

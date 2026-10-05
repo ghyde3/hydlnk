@@ -143,10 +143,10 @@ test.describe("M10-19 account deletion", () => {
 
     await page.goto(SETTINGS);
     const row = page.locator(`[data-page-row="${extra}"]`);
-    await row.getByRole("button", { name: "Delete page" }).click();
+    await row.getByRole("button", { name: "Delete site" }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Type the handle to confirm").fill(extra);
-    await dialog.getByRole("button", { name: "Delete page" }).click();
+    await dialog.getByRole("button", { name: "Delete site" }).click();
     await expect(page.locator(`[data-page-row="${extra}"]`)).toHaveCount(0);
 
     const grants = await rows<{ revoked_at: string | null }>("oauth_grants", {

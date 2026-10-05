@@ -11,7 +11,7 @@ import { MiniPhonePreview } from "./mini-phone";
  * below 760px through `workspace-mini-phone-slot.tsx`.
  */
 export function ConnectedMiniPhone() {
-  const { shownForm, pageId, chrome, onPreviewTap, preview } = useWorkspace();
+  const { shownForm, pageId, chrome, onPreviewTap, preview, site } = useWorkspace();
   const [open, setOpen] = useState(false);
   const themeView = preview.view;
   const previewing = themeView !== null;
@@ -32,6 +32,11 @@ export function ConnectedMiniPhone() {
       onOpenChange={setOpen}
       onTap={onPreviewTap}
       themePreview={themeView}
+      view={site.preview}
+      onNavigate={(href) => {
+        const id = site.hrefToId(href);
+        if (id !== null) site.select(id);
+      }}
     />
   );
 }

@@ -274,3 +274,21 @@
   background: none;
   font-size: inherit;
 }
+
+
+/*
+ * The marketing palette (Gary, 2026-10-05): a brighter brass as the secondary color (brand marks,
+ * chips, small details) and cobalt (--hl-accent, globals.css) as the primary accent (claim buttons,
+ * links, headline highlights, the focus ring). Scoped to the marketing shell; the app keeps its own.
+ */
+.mk {
+  --hl-brass: #d4a23f;
+  --hl-brass-text: #8a6414; /* 5.4:1 on white */
+  --hl-brass-soft: #fbf0d9;
+  --hl-brass-soft-text: #6b4c10;
+  --hl-ink-link: #ebc062;
+}
+
+.mk :focus-visible {
+  outline-color: var(--hl-accent);
+}

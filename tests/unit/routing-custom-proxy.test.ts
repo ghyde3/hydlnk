@@ -38,13 +38,18 @@ beforeEach(() => {
 });
 
 describe("M4-09 a verified custom host", () => {
-  it("is rewritten to /sites/<pageId> and /sites/<pageId>/og; every other path is the one plain 404 (/sites/unknown), all with the tenant security headers", async () => {
+  it("is rewritten to /sites/<pageId> and /sites/<pageId>/og; a path that cannot be a sub-page is the one plain 404 (/sites/unknown), all with the tenant security headers", async () => {
     resolveCustomDomain.mockResolvedValue(PAGE);
     for (const [path, expected] of [
       ["/", `/sites/${PAGE}`],
       ["/og", `/sites/${PAGE}/og`],
-      ["/login", "/sites/unknown"],
-      ["/anything-else", "/sites/unknown"],
+      // A one-segment lowercase path is a sub-page (M11-06): the dynamic route answers it.
+      ["/login", `/sites/${PAGE}/p/login`],
+      ["/anything-else", `/sites/${PAGE}/p/anything-else`],
+      ["/Items", "/sites/unknown"],
+      ["/a/b", "/sites/unknown"],
+      ["/api", "/sites/unknown"],
+      ["/hl-query-count", "/sites/unknown"],
     ] as const) {
       const response = await proxy(request("links.example.org", path));
       expect(rewriteOf(response), path).toBe(expected);
@@ -119,13 +124,16 @@ describe("M4-09 a verified custom host", () => {
       "/api",
       "/api/cron/verify-domains",
       "/auth/callback",
-      "/settings",
-      "/domains",
-      "/analytics",
-      "/signup",
+      "/auth",
     ]) {
       const response = await proxy(request("links.example.org", path));
       expect(rewriteOf(response), path).toBe("/sites/unknown");
+    }
+    // The app's own screen names are plain sub-page shapes on a custom host (M11-06): the dynamic
+    // sub-page route answers the 404 of a path that is not a live page, never the app route.
+    for (const path of ["/settings", "/domains", "/analytics", "/signup"]) {
+      const response = await proxy(request("links.example.org", path));
+      expect(rewriteOf(response), path).toBe(`/sites/${PAGE}/p/${path.slice(1)}`);
     }
   });
 });

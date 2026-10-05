@@ -106,6 +106,7 @@ describe("M8-02 step 3: the renderer rules a page needs", () => {
         book: [".pg-book", ".pg-book-link"],
         apps: [".pg-apps", ".pg-app-badge"],
         map: [".pg-map", ".pg-map-link"],
+        page_link: [".pg-link"],
       };
       for (const prefix of prefixes[type]!) expect(all, `${type}: ${prefix}`).toContain(prefix);
     }

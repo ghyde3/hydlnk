@@ -26,6 +26,7 @@ import {
   LINK_ICON_ERROR_MESSAGE,
   featuredOverLimit,
 } from "./link-icons";
+import { navSchema, pageLinkTarget } from "./nav";
 import { LOGO_PLACEMENTS, NAME_SIZES, PROFILE_STYLE_MESSAGES, bannerIssues } from "./page-extras";
 import { SHARE_IMAGE_MIN_WIDTH, SHARE_IMAGE_WIDTH_MESSAGE } from "./share";
 import {
@@ -87,6 +88,7 @@ export const BLOCK_TYPES = [
   "book",
   "apps",
   "map",
+  "page_link",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -106,6 +108,7 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   book: "Book",
   apps: "App store",
   map: "Map",
+  page_link: "Page link",
 };
 
 /** Social platforms, in the order of the platform select. `email` stores an address, not a URL. */
@@ -188,7 +191,7 @@ const idSchema = z.string().regex(BLOCK_ID_PATTERN, {
  * must not contain control characters (newlines only when `multiline`) or bidi override/isolate
  * characters.
  */
-function text(
+export function text(
   mode: Mode,
   opts: { max: number; required?: string; multiline?: boolean },
 ): z.ZodString {
@@ -649,6 +652,17 @@ function buildBlocks(mode: Mode) {
     overrides: blockOverrides.optional(),
   });
 
+  // A link to Home or another page of the site (M11-07): a relative link, never routed through `/r`.
+  // `target` is "home" or a sub-page id; whether that page exists is checked across the site by
+  // `pageLinkTargetErrors` (./site), because one document cannot know its siblings.
+  const pageLink = z.object({
+    ...common,
+    type: z.literal("page_link"),
+    label: text(mode, { max: LIMITS.linkLabel, required: "Add a link label." }),
+    target: pageLinkTarget(mode),
+    overrides: blockOverrides.optional(),
+  });
+
   const block = z.discriminatedUnion("type", [
     link,
     card,
@@ -665,6 +679,7 @@ function buildBlocks(mode: Mode) {
     book,
     apps,
     map,
+    pageLink,
   ]);
 
   // The display options (M6-15, M6-17) are the same in both modes: a bad value fails the draft
@@ -769,6 +784,7 @@ export type DiscountBlock = Extract<Block, { type: "discount" }>;
 export type BookBlock = Extract<Block, { type: "book" }>;
 export type AppsBlock = Extract<Block, { type: "apps" }>;
 export type MapBlock = Extract<Block, { type: "map" }>;
+export type PageLinkBlock = Extract<Block, { type: "page_link" }>;
 export type BookLink = BookBlock["links"][number];
 export type AppLink = AppsBlock["links"][number];
 export type SocialIcon = SocialBlock["icons"][number];
@@ -799,7 +815,7 @@ export type DocTheme = z.infer<typeof themeSchema>;
 const tooManyBlocks = { error: `Use ${LIMITS.blocks} blocks or fewer.` };
 
 /** Ids are analytics keys: no two blocks, icons or cells in a document may share one. */
-function requireUniqueIds(
+export function requireUniqueIds(
   doc: { blocks: readonly Block[]; banner?: { id: string } | undefined },
   ctx: z.core.$RefinementCtx,
 ): void {
@@ -853,6 +869,8 @@ export const draftDocSchema = z
     utm: lenient.utm.optional(),
     /** Redirect mode (M9-31): the live page answers with a redirect to this link. Absent means off. */
     redirect: lenient.redirect.optional(),
+    /** The site menu (M11-07). Absent means the default: shown, no items. */
+    nav: navSchema.optional(),
     theme: themeSchema,
     blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
   })
@@ -947,6 +965,8 @@ export const publishedDocSchema = z
     utm: strict.utm.optional(),
     /** Redirect mode (M9-31), written only when it is on: the live page redirects to this link. */
     redirect: strict.redirect.optional(),
+    /** The site menu (M11-07), written only when it is not the default (shown, no items). */
+    nav: navSchema.optional(),
     theme: themeSchema,
     /**
      * Every token, resolved: system default, then theme, then page overrides. A document stored

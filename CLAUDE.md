@@ -8,6 +8,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 - `./scripts/init.sh`: start of every session, safe to rerun. Installs, starts local Supabase, writes `.env.local`, resets and seeds the db, starts the dev server, runs the smoke test.
 - `pnpm dev`: dev server on :3000. `pnpm verify`: typecheck + lint + unit + db tests.
 - `pnpm test` (Vitest unit), `pnpm test:db` (pgTAP RLS), `pnpm test:e2e` (Playwright: phone 390x844 and desktop 1440x900, against `next dev` here and against a production build in CI), `pnpm test:e2e:prod` (production smoke, release only).
+- `scripts/q.sh <command...>`: runs any check quietly. The full output goes to `tmp/logs/`; it prints one PASS line, or only the failing lines plus the log path. Agents run every test, typecheck and lint through it, a worker runs only its own test files, and the full `pnpm verify` runs once, at integration.
 - `pnpm screens <route> [--host app|<handle>]`: screenshots at both viewports into `tmp/screens/`.
 - `pnpm db:reset`: migrations + seed. `pnpm db:types`: regenerate `src/lib/supabase/database.types.ts`.
 - Plain `pnpm ...` works in Claude Code sessions: the SessionStart hook `pin-node.sh` puts Node 24 (from `.nvmrc`) and corepack's pnpm 10 on the Bash tool's PATH. In your own terminal, or any shell outside Claude Code, run `source ~/.nvm/nvm.sh && nvm use` first (the default node is older).

@@ -7,6 +7,7 @@ import {
 import { pickShape, publishFocus } from "./focus";
 import { publishTextAndMarks } from "./marks";
 import { publishLock } from "./lock";
+import { publishNav } from "./nav";
 import { publishBanner, publishNameStyle } from "./page-extras";
 import { resolveProfileOptions } from "./profile-options";
 import { publishShare } from "./share";
@@ -56,12 +57,15 @@ export function toPublishForm(draft: DraftDoc, themeTokens: Partial<TokenSet> | 
   // never used either publishes byte-identically to before.
   const utm = publishPageUtm(draft.utm);
   const redirect = publishRedirect(draft.redirect);
+  // The site menu (M11-07): written only when it is not the default, like the extras above.
+  const nav = publishNav(draft.nav);
   return {
     version: 1,
     ...(share ? { share } : {}),
     ...(banner ? { banner } : {}),
     ...(utm ? { utm } : {}),
     ...(redirect ? { redirect } : {}),
+    ...(nav ? { nav } : {}),
     profile: {
       name: draft.profile.name.trim(),
       bio: draft.profile.bio.trim(),
@@ -147,7 +151,7 @@ function publishStoreLink<L extends { id: string; store: string; url: string }>(
   return { id: link.id, store: link.store, url: link.url.trim() };
 }
 
-function publishBlock(block: Block): Block | null {
+export function publishBlock(block: Block): Block | null {
   const base = { id: block.id, visible: true } as const;
   switch (block.type) {
     case "link":
@@ -289,6 +293,14 @@ function publishBlock(block: Block): Block | null {
         appleId: block.appleId,
         ...cleanOverrides(block.overrides),
       };
+    case "page_link":
+      return {
+        ...base,
+        type: "page_link",
+        label: block.label.trim(),
+        target: block.target.trim(),
+        ...cleanOverrides(block.overrides),
+      };
     default:
       // Not a block this version knows (only reachable with unparsed data): never published.
       return null;
@@ -353,6 +365,12 @@ export interface PublishError {
   field: string;
   /** Copy for the editor, for example "Add a link label.". */
   message: string;
+  /**
+   * Set when the problem is on a sub-page (M11-05), never for Home: the page's id and the title the
+   * message names it by, so the editor can open that page.
+   */
+  subPageId?: string;
+  pageTitle?: string;
 }
 
 type Raw = Record<string, unknown> | undefined;
@@ -367,11 +385,23 @@ const asRecord = (value: unknown): Raw =>
 export function collectPublishErrors(draft: unknown): PublishError[] {
   const result = publishDocSchema.safeParse(draft);
   if (result.success) return [];
+  return mapPublishIssues(result.error.issues, draft);
+}
+
+/**
+ * Maps the issues of a document schema to the block (and icon or cell) that caused each, one error
+ * per field. Shared by Home's `collectPublishErrors` and the sub-pages' (`collectSubPagePublishErrors`):
+ * both documents hold the same `blocks`.
+ */
+export function mapPublishIssues(
+  issues: readonly { path: readonly PropertyKey[]; message: string }[],
+  draft: unknown,
+): PublishError[] {
   const rawBlocks = asRecord(draft)?.blocks;
   const errors: PublishError[] = [];
   const seen = new Set<string>();
 
-  for (const issue of result.error.issues) {
+  for (const issue of issues) {
     const path = issue.path;
     let error: PublishError;
     if (path[0] === "blocks" && typeof path[1] === "number") {

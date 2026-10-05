@@ -1,5 +1,5 @@
 import type { SaveStatus } from "@/lib/editor/autosave";
-import { SAVE_INDICATOR, TOO_LARGE_MESSAGE } from "@/lib/editor/messages";
+import { SAVE_INDICATOR, STORAGE_FULL_MESSAGE, TOO_LARGE_MESSAGE } from "@/lib/editor/messages";
 
 /** What the save indicator reads for each queue status (empty before the first edit). */
 export function saveIndicatorText(status: SaveStatus): string {
@@ -12,6 +12,8 @@ export function saveIndicatorText(status: SaveStatus): string {
     case "too-large":
       // The indicator itself carries this one (M2-04 step 5): there is nothing to retry.
       return TOO_LARGE_MESSAGE;
+    case "storage-full":
+      return STORAGE_FULL_MESSAGE;
     case "error":
     case "invalid":
     case "conflict":

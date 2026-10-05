@@ -40,6 +40,8 @@ export interface RawEvent {
   device: string | null;
   country: string | null;
   visitor_hash: string;
+  /** The page of the site the event happened on: null or absent = Home (M11-09). */
+  sub_page_id?: string | null;
 }
 
 const DIMS: readonly DimName[] = ["referrer", "device", "country"];
@@ -76,13 +78,15 @@ export function rollupRawEvents(events: readonly RawEvent[]): {
   daily: DailyRow[];
   dims: DimRow[];
 } {
-  const daily = new Map<string, DailyRow & { hashes: Set<string> }>();
+  // One row per day, page of the site and block, as the rollup writes them; unique visitors are
+  // counted per page (a visitor on two pages is one unique on each), then the pages are summed.
+  const daily = new Map<string, DailyRow & { hashes: Set<string>; sub: string }>();
   const dims = new Map<string, DimRow>();
-  const rowFor = (day: string, blockId: string) => {
-    const key = `${day}|${blockId}`;
+  const rowFor = (day: string, sub: string, blockId: string) => {
+    const key = `${day}|${sub}|${blockId}`;
     let row = daily.get(key);
     if (!row) {
-      row = { day, block_id: blockId, views: 0, clicks: 0, uniques: 0, hashes: new Set() };
+      row = { day, block_id: blockId, views: 0, clicks: 0, uniques: 0, hashes: new Set(), sub };
       daily.set(key, row);
     }
     return row;
@@ -91,14 +95,15 @@ export function rollupRawEvents(events: readonly RawEvent[]): {
   for (const event of events) {
     const day = utcDay(event.ts);
     const isView = event.type === "view";
+    const sub = event.sub_page_id ?? "";
 
     if (isView) {
-      const page = rowFor(day, "");
+      const page = rowFor(day, sub, "");
       page.views += 1;
       page.hashes.add(event.visitor_hash);
     } else {
-      rowFor(day, "").clicks += 1; // the page-level row carries every click of the day
-      const block = rowFor(day, event.block_id);
+      rowFor(day, sub, "").clicks += 1; // the page-level row carries every click of the day
+      const block = rowFor(day, sub, event.block_id);
       block.clicks += 1;
       block.hashes.add(event.visitor_hash);
     }
@@ -115,10 +120,19 @@ export function rollupRawEvents(events: readonly RawEvent[]): {
       else dimRow.clicks += 1;
     }
   }
-  return {
-    daily: [...daily.values()].map(({ hashes, ...row }) => ({ ...row, uniques: hashes.size })),
-    dims: [...dims.values()],
-  };
+  const merged = new Map<string, DailyRow>();
+  for (const { hashes, sub: _sub, ...row } of daily.values()) {
+    const key = `${row.day}|${row.block_id}`;
+    const into = merged.get(key);
+    if (into) {
+      into.views += row.views;
+      into.clicks += row.clicks;
+      into.uniques += hashes.size;
+    } else {
+      merged.set(key, { ...row, uniques: hashes.size });
+    }
+  }
+  return { daily: [...merged.values()], dims: [...dims.values()] };
 }
 
 // Totals ----------------------------------------------------------------------------------------

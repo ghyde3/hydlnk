@@ -42,7 +42,10 @@ describe("M4-21 the view beacon (the shared tenant script, M8-06)", () => {
   it("calls navigator.sendBeacon once, with a relative URL, a JSON string of {pageId, referrer}, after load", () => {
     expect((SCRIPT.match(/sendBeacon\(/g) ?? []).length).toBe(1);
     expect(SCRIPT).toContain('"/api/e"');
-    expect(SCRIPT).toContain("JSON.stringify({ pageId: pageId, referrer: doc.referrer })");
+    // M11-09: a sub-page's script element also carries data-sub-page-id, sent as subPageId (a UUID only).
+    expect(SCRIPT).toContain("var body = { pageId: pageId, referrer: doc.referrer };");
+    expect(SCRIPT).toContain("if (subPageId && UUID.test(subPageId)) body.subPageId = subPageId;");
+    expect(SCRIPT).toContain("JSON.stringify(body)");
     // After load: now if the document is already complete, else on the load event, and only once.
     expect(SCRIPT).toContain('doc.readyState === "complete"');
     expect(SCRIPT).toContain('window.addEventListener("load", beacon, { once: true })');
@@ -182,18 +185,24 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
 
   it("the two page reads select only what they need: never the draft, never *", () => {
     const source = read("src/lib/analytics/ingest/pages.ts");
-    const selects = [...source.matchAll(/\.select\(\s*"([^"]*)"\s*\)/g)].map((m) => m[1]!);
+    const selects = [...source.matchAll(/\.select\(\s*"([^"]*)",?\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
-      "handle, accounts!inner(suspended_at), domains(hostname, status)",
+      "handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published_at)",
       "published, handle, accounts!inner(suspended_at), domains(hostname, status)",
+      // Home's document only: a sub-page's block ids come from the site_click_pairs RPC (M11-12).
+      "published, accounts!inner(suspended_at)",
     ]);
+    expect(source).toMatch(/rpc\(\s*"site_click_pairs"/);
     for (const select of selects) expect(select).not.toMatch(/\bdraft\b|\*/);
     expect(strip(source)).not.toMatch(/\bdraft\b/);
   });
 
   it("the click target is read from the published document and parsed with the published schema", () => {
     const source = read("src/lib/analytics/ingest/pages.ts");
-    expect(source).toMatch(/publishedDocSchema\.safeParse/);
+    // Since M11-09 the document comes from the site index: Home's published schema, or a sub-page's.
+    expect(source).toMatch(/documentForBlock/);
+    expect(read("src/lib/analytics/ingest/site-index.ts")).toMatch(/publishedDocSchema\.safeParse/);
+    expect(read("src/lib/analytics/ingest/site-index.ts")).toMatch(/publishedSubPageSchema\.safeParse/);
     expect(read("src/lib/analytics/ingest/target.ts")).toMatch(/isHttpUrl/);
   });
 

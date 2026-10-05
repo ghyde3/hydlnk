@@ -174,7 +174,7 @@ export function PageSwitcherMenu({
       <button
         ref={buttonRef}
         type="button"
-        aria-label={`Switch page, current: ${address}`}
+        aria-label={`Switch site, current: ${address}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -206,7 +206,7 @@ export function PageSwitcherMenu({
         <div
           id={menuId}
           role="menu"
-          aria-label="Pages"
+          aria-label="Sites"
           onKeyDown={onMenuKeyDown}
           className={`absolute top-full z-30 mt-1.5 flex flex-col rounded-md border border-ink-line bg-ink-raised p-1 text-on-ink ${
             isChip ? "right-0 w-[min(18rem,calc(100vw-2rem))]" : "inset-x-0"
@@ -257,7 +257,7 @@ export function PageSwitcherMenu({
               className="flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-on-ink no-underline hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2"
             >
               <Icon icon={Plus} size={15} />
-              New page
+              New site
             </Link>
           ) : (
             <>
@@ -275,7 +275,7 @@ export function PageSwitcherMenu({
                 className="flex min-h-11 w-full cursor-not-allowed items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-on-ink-muted"
               >
                 <Icon icon={Plus} size={15} />
-                New page
+                New site
               </button>
               <p
                 id={`${menuId}-limit`}

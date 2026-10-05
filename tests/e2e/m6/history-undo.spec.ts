@@ -262,8 +262,8 @@ test.describe("M6-07 shortcuts, steps and saves", () => {
   }) => {
     const user = await seededUser(context, "uk3");
     await openEditor(page);
-    await header(page).getByRole("button", { name: "Rename page" }).click();
-    const field = header(page).getByLabel("Page name");
+    await header(page).getByRole("button", { name: "Rename site" }).click();
+    const field = header(page).getByLabel("Site name");
     await expect(field).toBeFocused();
     await field.fill("Renamed in the header");
     const before = await stored(user.pageId);
@@ -392,8 +392,8 @@ test.describe("M6-06 the toast, Publish and what is not a step", () => {
     await expect(redoButton(page)).toBeDisabled();
 
     // Rename the page (M6-14).
-    await page.getByRole("button", { name: "Rename page" }).click();
-    await page.getByLabel("Page name", { exact: true }).fill("Summer tour");
+    await page.getByRole("button", { name: "Rename site" }).click();
+    await page.getByLabel("Site name", { exact: true }).fill("Summer tour");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
       header(page).getByRole("heading", { level: 1, name: "Summer tour" }),

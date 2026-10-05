@@ -76,7 +76,7 @@ function dividers(n: number) {
 // ---------------------------------------------------------------------------------------------
 
 test.describe("M2-10 add a block", () => {
-  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store and Map), 4px radius, #D9D6D0 border and a brass plus", async ({
+  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store, Map and Page link), 4px radius, #D9D6D0 border and a brass plus", async ({
     page,
     context,
   }) => {
@@ -88,7 +88,7 @@ test.describe("M2-10 add a block", () => {
     const chips = card.locator("button:not([data-testid='start-from-template'])");
     // The brass plus is an icon (M9-02), so a chip's text is its label.
     await expect(chips).toHaveText(BLOCK_TYPES.map((t) => BLOCK_TYPE_LABELS[t]));
-    // M9-15: the fifteen chips wrap into at most three rows at 1440px.
+    // M9-15: the sixteen chips wrap into at most three rows at 1440px.
     if (page.viewportSize()!.width >= 1440) {
       const tops = await chips.evaluateAll((els) =>
         els.map((el) => Math.round(el.getBoundingClientRect().top)),
@@ -111,6 +111,7 @@ test.describe("M2-10 add a block", () => {
       "Book",
       "App store",
       "Map",
+      "Page link",
     ]);
     const first = chips.first();
     expect(await css(first, "border-top-left-radius")).toBe("4px");
@@ -253,7 +254,9 @@ test.describe("M2-10 add a block", () => {
       await expectTapTargets(page);
       for (const box of boxes) expect(box.right).toBeLessThanOrEqual(390);
     } else {
-      expect(rowCount).toBeLessThanOrEqual(2);
+      // M9-15 superseded "two rows" (docs/features.json): the chooser holds every type of `BLOCK_TYPES`
+      // (sixteen with the page link of Wave M1), at most three rows at 1440x900.
+      expect(rowCount).toBeLessThanOrEqual(3);
     }
   });
 });

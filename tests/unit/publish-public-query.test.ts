@@ -81,11 +81,13 @@ beforeEach(() => {
 const SOURCE = readFileSync(join(process.cwd(), "src/app/(tenant)/published-page.ts"), "utf8");
 
 describe("M2-22 the public query is server-only and selects published only", () => {
-  it("never selects draft or *, only published, published_at and the owner's account row", () => {
+  it("never selects draft or *, only published, published_at, the owner's account row and a handle's page id", () => {
     const selects = [...SOURCE.matchAll(/\.select\(\s*"([^"]*)"\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
       "published, published_at, accounts!inner(plan, suspended_at)",
       "id, accounts!inner(suspended_at)",
+      // M11-06: the handle's page id for the sub-page routes, nothing else of the row.
+      "id",
     ]);
     for (const select of selects) {
       expect(select).not.toMatch(/\bdraft\b/);

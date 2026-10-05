@@ -20,8 +20,8 @@ export const choosingAHandle: GuideBody = {
       <h2 id="what">What a handle is</h2>
       <p>
         A handle is the first part of your page’s address. The handle <code>wrenhaven</code> gives
-        you <code>wrenhaven.hydlnk.com</code>. Each handle belongs to one page, so on Pro or Studio,
-        where you can have more pages, each page has a handle of its own.
+        you <code>wrenhaven.hydlnk.com</code>. Each handle belongs to one site, so on Pro or Studio,
+        where you can have more sites, each site has a handle of its own.
       </p>
 
       <h2 id="rules">The rules</h2>

@@ -31,6 +31,7 @@ export type SaveStatus =
   | "saved" //      everything edited is stored
   | "error" //      the last write failed; retrying
   | "too-large" //  over the size limit: not sent (or refused by the database)
+  | "storage-full" // the account's 64 MiB sub-page cap (HL009): sub-page saves only, not retried
   | "invalid" //    the draft does not pass the draft schema: not sent
   | "conflict" //   another tab saved first; reload to continue
   | "signed-out" // the session ended (the write was refused with 401): edits stay, no retry loop

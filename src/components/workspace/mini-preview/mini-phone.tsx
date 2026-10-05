@@ -4,6 +4,7 @@ import { Smartphone } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/app/icon";
 import type { PreviewTap } from "@/components/editor/preview-taps";
+import type { PreviewSite } from "@/components/site/use-site-pages";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import type { PublishDoc } from "@/lib/document";
 import type { PageChrome } from "@/lib/editor/contracts";
@@ -34,6 +35,10 @@ export interface MiniPhonePreviewProps {
   onTap?: (tap: PreviewTap) => void;
   /** A theme on show (M6-44, M7-06): the sheet gets its bar, and a tap on the page does nothing. */
   themePreview?: SheetThemePreview | null;
+  /** The rest of the site (M11-08): the menu, the page links and the sub-page drawn instead of Home. */
+  view?: PreviewSite | undefined;
+  /** A menu entry was pressed in the sheet: the editor opens that page. */
+  onNavigate?: ((href: string) => void) | undefined;
 }
 
 /**
@@ -59,6 +64,8 @@ export function MiniPhonePreview({
   onOpenChange,
   onTap,
   themePreview,
+  view,
+  onNavigate,
 }: MiniPhonePreviewProps) {
   const isDesktop = useIsDesktop();
   const [ownOpen, setOwnOpen] = useState(false);
@@ -149,7 +156,7 @@ export function MiniPhonePreview({
       >
         {round ? <Icon icon={Smartphone} size={20} /> : null}
         {/* Kept mounted while it is round so it keeps following the draft; just not shown. */}
-        <MiniThumbnail doc={doc} pageId={pageId} hidden={round} />
+        <MiniThumbnail doc={doc} pageId={pageId} hidden={round} view={view} />
       </button>
       <FullPreviewSheet
         open={sheetOpen}
@@ -159,6 +166,8 @@ export function MiniPhonePreview({
         chrome={chrome}
         onTap={onTap}
         themePreview={themePreview}
+        view={view}
+        onNavigate={onNavigate}
       />
     </>
   );

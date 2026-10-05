@@ -160,6 +160,16 @@ export const STYLE_SPECS: Readonly<Record<StyleBlockType, StyleSpec>> = Object.f
     controls: ["color", "radius"],
     color: { label: "Color", keys: ["text", "border"], source: "text", border: false },
   },
+  // M11-07: a page link is a link button, so it offers the link's style controls.
+  page_link: {
+    controls: ["buttonStyle", "color", "radius"],
+    color: {
+      label: "Color",
+      keys: ["buttonBg", "accent", "buttonText"],
+      source: "buttonBg",
+      border: false,
+    },
+  },
   // M9-22: the card has a line of its own, like an image or an embed.
   map: {
     controls: ["radius", "borderWidth", "color"],
@@ -248,7 +258,8 @@ function colorValues(block: Block, color: string): Record<string, string> {
   const spec = styleSpecOf(block)!;
   const out: Record<string, string> = {};
   for (const key of spec.color.keys) out[key] = color;
-  if (block.type === "link" || block.type === "book") out.buttonText = inkFor(color);
+  if (block.type === "link" || block.type === "book" || block.type === "page_link")
+    out.buttonText = inkFor(color);
   return out;
 }
 

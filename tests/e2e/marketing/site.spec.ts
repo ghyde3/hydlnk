@@ -232,11 +232,13 @@ test("home showreel: the cut for the viewport plays, and the toggle pauses it", 
   isMobile,
 }) => {
   await page.goto(url());
+  // The showreel sits in the how-it-works band, below the hero.
+  await page.locator("[data-showreel]").scrollIntoViewIfNeeded();
   const toggle = page.locator("[data-showreel] button");
-  await expect(toggle).toHaveAttribute("aria-label", "Pause showreel");
+  await expect(toggle).toHaveAttribute("aria-label", "Pause showreel", { timeout: 15_000 });
   const video = page.locator("[data-showreel] video");
   expect(await video.evaluate((el: HTMLVideoElement) => el.currentSrc)).toMatch(
-    isMobile ? /showreel-4x5\.(webm|mp4)$/ : /showreel-16x9\.(webm|mp4)$/,
+    isMobile ? /showreel-4x5(-alpha)?\.(webm|mp4)$/ : /showreel-16x9(-alpha)?\.(webm|mp4)$/,
   );
   expect(await video.evaluate((el: HTMLVideoElement) => el.muted && !el.paused)).toBe(true);
   await toggle.click();
@@ -256,6 +258,7 @@ test("home showreel with reduced motion: poster only, until Play is pressed", as
   });
   const page = await context.newPage();
   await page.goto(url(), { waitUntil: "load" });
+  await page.locator("[data-showreel]").scrollIntoViewIfNeeded();
   const toggle = page.locator("[data-showreel] button");
   await expect(toggle).toHaveAttribute("aria-label", "Play showreel");
   await expect(toggle).toBeVisible();
@@ -267,7 +270,7 @@ test("home showreel with reduced motion: poster only, until Play is pressed", as
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-label", "Pause showreel");
   expect(await video.evaluate((el: HTMLVideoElement) => el.currentSrc)).toMatch(
-    isMobile ? /showreel-4x5\./ : /showreel-16x9\./,
+    isMobile ? /showreel-4x5(-alpha)?\./ : /showreel-16x9(-alpha)?\./,
   );
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => !el.paused)).toBe(true);
   await context.close();

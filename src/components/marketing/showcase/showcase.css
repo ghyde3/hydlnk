@@ -1,0 +1,510 @@
+/*
+ * "See it in action": six demo link pages in phones, one per theme. The phone screen (.sc-screen)
+ * reads the --t-* variables ShowPage sets from the theme, and the blocks reuse the .dp rules of
+ * demo/demo-page.css; everything new here is scoped under .sc-. The carousel frame around the
+ * phones (.sc-scroller, .sc-slide) is HYDLNK UI and uses --hl-* tokens only.
+ */
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Carousel frame                                                                                 */
+/* ---------------------------------------------------------------------------------------------- */
+
+.sc-scroller {
+  display: flex;
+  gap: 24px;
+  margin: 0;
+  padding: 6px 4px 4px;
+  overflow-x: auto;
+  list-style: none;
+  scroll-padding-inline: 4px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.sc-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sc-scroller {
+    scroll-behavior: smooth;
+  }
+}
+
+/* About three and a half phones in the 1200px column; never narrower than a phone. */
+.sc-slide {
+  display: flex;
+  flex: 0 0 max(290px, calc((100% - 72px) / 3.5));
+  flex-direction: column;
+  align-items: center;
+  scroll-snap-align: start;
+  border-radius: 6px;
+}
+
+/* One phone at a time on a phone-sized screen. */
+@media (max-width: 759px) {
+  .sc-slide {
+    flex-basis: 100%;
+    scroll-snap-align: center;
+  }
+}
+
+.sc-slide:focus-visible {
+  outline: 2px solid var(--hl-accent);
+  outline-offset: 2px;
+}
+
+.sc-nav-button {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--hl-line-3);
+  border-radius: 6px;
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+  cursor: pointer;
+}
+
+.sc-nav-button:hover:not(:disabled) {
+  border-color: var(--hl-ink);
+}
+
+.sc-nav-button:disabled {
+  color: var(--hl-line-3);
+  cursor: default;
+}
+
+.sc-nav-button:focus-visible {
+  outline: 2px solid var(--hl-brass);
+  outline-offset: 2px;
+}
+
+.sc-nav-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Position cue: a track the width of the row, and a brass thumb the width of one view. */
+.sc-track {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--hl-line-2);
+}
+
+.sc-thumb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 2px;
+  background: var(--hl-brass);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sc-thumb {
+    transition:
+      left 0.15s ease-out,
+      width 0.15s ease-out;
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* The phone screen                                                                               */
+/* ---------------------------------------------------------------------------------------------- */
+
+.sc-screen {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--t-bg);
+}
+
+.sc-bar {
+  display: block;
+  flex: none;
+  height: 32px;
+  padding: 10px 24px 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-bg);
+  color: var(--t-text-muted);
+  font: 500 10px/16px var(--font-mono);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sc-page {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.sc-dp .dp-col {
+  padding-top: 20px;
+}
+
+/* The page runs on below the phone: a short fade says so, like a real screen's fold. */
+.sc-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 56px;
+  background: linear-gradient(to bottom, transparent, var(--t-bg));
+  pointer-events: none;
+}
+
+/* Pictures fill their frames. */
+.sc-tile picture,
+.sc-cover picture,
+.sc-video picture {
+  position: absolute;
+  inset: 0;
+}
+
+.sc-tile img,
+.sc-cover img,
+.sc-video img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* A grid of images */
+.sc-gallery {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sc-tile {
+  position: relative;
+  display: block;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+}
+
+.sc-tile-label {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  padding: 2px 8px;
+  border-radius: calc(var(--t-radius) / 2);
+  background: color-mix(in srgb, var(--t-bg) 84%, transparent);
+  color: var(--t-text);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Music, podcast and video embeds */
+.sc-embed {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+  text-align: left;
+}
+
+.sc-embed-audio {
+  padding: 8px;
+}
+
+.sc-embed-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.sc-cover {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  border-radius: calc(var(--t-radius) * 0.6);
+  background: var(--t-border);
+}
+
+.sc-embed-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sc-embed-title {
+  display: block;
+  font-family: var(--t-font-heading);
+  font-size: 13px;
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+}
+
+.sc-embed-sub {
+  display: block;
+  overflow: hidden;
+  color: var(--t-text-muted);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-play {
+  display: flex;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+}
+
+.sc-play-glyph {
+  width: 16px;
+  height: 16px;
+}
+
+.sc-progress {
+  display: block;
+  height: 3px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--t-border);
+}
+
+.sc-progress-fill {
+  display: block;
+  width: 38%;
+  height: 100%;
+  background: var(--t-accent);
+}
+
+.sc-video {
+  position: relative;
+  display: block;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--t-border);
+}
+
+.sc-play-over {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+}
+
+.sc-embed-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+}
+
+/* Questions */
+.sc-faq {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  text-align: left;
+}
+
+.sc-faq-item {
+  display: block;
+  padding: 9px 11px;
+}
+
+.sc-faq-item + .sc-faq-item {
+  border-top: 1px solid var(--t-border);
+}
+
+.sc-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.sc-faq-a {
+  display: block;
+  margin-top: 4px;
+  color: var(--t-text-muted);
+  font-size: 11px;
+}
+
+.sc-chevron {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sc-chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+/* Discount code */
+.sc-discount {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 11px;
+  border: 1.5px dashed var(--t-accent);
+  border-radius: var(--t-radius);
+  text-align: left;
+}
+
+.sc-discount-desc {
+  color: var(--t-text-muted);
+  font-size: 11px;
+}
+
+.sc-discount-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sc-discount-code {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.sc-discount-copy {
+  padding: 4px 11px;
+  border-radius: calc(var(--t-radius) / 2);
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+/* Map card */
+.sc-map {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  text-align: left;
+}
+
+.sc-map-art {
+  display: block;
+  width: 100%;
+  height: 62px;
+  background: var(--t-surface);
+  fill: none;
+  stroke: var(--t-border);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.sc-map-art .sc-map-pin {
+  fill: var(--t-accent);
+  stroke: none;
+  opacity: 0.3;
+}
+
+.sc-map-art .sc-map-pin-dot {
+  fill: var(--t-accent);
+  stroke: none;
+}
+
+.sc-map-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 11px;
+}
+
+.sc-map-name {
+  display: block;
+  font-family: var(--t-font-heading);
+  font-size: 14px;
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+}
+
+.sc-map-address {
+  display: block;
+  color: var(--t-text-muted);
+  font-size: 10.5px;
+}
+
+/* A "live" link */
+.sc-live-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--t-accent);
+}
+
+/*
+ * The setup link: a small cobalt button on the phone's lower right corner, offset a little past
+ * the edge, with a thin white ring so it reads on any theme. 44px tall for touch.
+ */
+.sc-stage {
+  position: relative;
+}
+
+.sc-setup-link {
+  position: absolute;
+  right: -10px;
+  bottom: 28px;
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 14px;
+  border-radius: 6px;
+  background: var(--hl-accent);
+  box-shadow: 0 0 0 2px var(--hl-surface);
+  color: var(--hl-surface);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sc-setup-link:hover {
+  background: var(--hl-accent-hover);
+}
+
+.sc-setup-link:focus-visible {
+  outline: 2px solid var(--hl-accent);
+  outline-offset: 3px;
+}

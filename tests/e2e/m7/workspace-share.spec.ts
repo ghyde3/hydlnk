@@ -83,7 +83,7 @@ test.describe("M7-04 the cards", () => {
     await expect(section).toContainText("Not published yet. Publish to turn this address on.");
     await expect(section.getByRole("link", { name: "Open page" })).toHaveCount(0);
     await expect(card(page, "QR code")).toContainText(
-      "Publish your page first. Then you can download its QR code.",
+      "Publish your site first. Then you can download its QR code.",
     );
     await expect(page.getByTestId("qr-code")).toHaveCount(0);
     await expect(card(page, "QR code").getByRole("button")).toHaveCount(0);
@@ -110,7 +110,7 @@ test.describe("M7-04 the cards", () => {
       .eq("id", user.userId);
     expect(error).toBeNull();
     await openTab(page, "Share");
-    await expect(card(page, "QR code")).toContainText("This page isn’t available right now.");
+    await expect(card(page, "QR code")).toContainText("This site isn’t available right now.");
     await expect(page.getByTestId("qr-code")).toHaveCount(0);
     await expect(card(page, "QR code").getByRole("button")).toHaveCount(0);
     // Create link is disabled with the suspension's reason.
@@ -127,11 +127,11 @@ test.describe("M7-04 the cards", () => {
     await openTab(page, "Share");
     const code = page.getByTestId("qr-code");
     await expect(code).toHaveAttribute("role", "img");
-    await expect(code).toHaveAttribute("aria-label", "QR code for your page");
+    await expect(code).toHaveAttribute("aria-label", "QR code for your site");
     const box = (await code.boundingBox())!;
     expect(Math.round(box.width)).toBe(desktopOnly(info) ? 280 : 240);
     expect(Math.round(box.height)).toBe(Math.round(box.width));
-    await expect(card(page, "QR code")).toContainText("Scan it to open your page.");
+    await expect(card(page, "QR code")).toContainText("Scan it to open your site.");
     await expect(card(page, "QR code").locator("input, textarea, select, form")).toHaveCount(0);
   });
 

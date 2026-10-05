@@ -3,7 +3,7 @@ import { SECONDARY } from "./ui";
 import { studioUpsellText } from "./view-model";
 
 /**
- * The dashed strip under a Pro account's Custom domain card (M4-10): "Running pages for clients?
+ * The dashed strip under a Pro account's Custom domain card (M4-10): "Running sites for clients?
  * Studio includes 15 custom domains." with a "Compare plans" link to /settings#plans (which scrolls
  * the plans section into view and focuses the Studio card heading). The count comes from the limits
  * table. The page renders it for Pro only. Nothing here names what v1 does not have.

@@ -4,6 +4,7 @@ import { createContext, useContext, type Dispatch } from "react";
 import type { Autosave } from "@/components/editor/use-autosave";
 import type { UndoRedo } from "@/components/editor/use-undo-redo";
 import type { PreviewTap } from "@/components/editor/preview-taps";
+import type { SiteValue } from "@/components/site/use-site-pages";
 import type { ThemeLibrary, ThemePreview } from "@/components/themes";
 import type { DraftDoc, PublishDoc } from "@/lib/document";
 import type { PageChrome } from "@/lib/editor/contracts";
@@ -65,6 +66,8 @@ export interface WorkspaceValue {
   // The draft: ONE reducer, ONE history, ONE autosave queue for the three tabs.
   state: EditorState;
   draft: DraftDoc;
+  /** The site's pages (M11-08): the list, the open page, the open sub-page's editor, the menu and the preview's site. */
+  site: SiteValue;
   dispatch: Dispatch<WorkspaceAction>;
   /** `dispatch({ type: "draft/edit", ... })` with a batch number: writes made in one tick are one undo step. */
   editDraft: (update: (draft: DraftDoc) => DraftDoc, group?: string) => void;

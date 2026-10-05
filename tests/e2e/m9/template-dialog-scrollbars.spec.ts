@@ -1,6 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
-import { emptyPageUser, openDialog, openEditor, rect, dialogOf } from "../m7/templates-helpers";
+import {
+  dialogOf,
+  emptyPageUser,
+  openDialog,
+  openEditor,
+  rect,
+  startButton,
+} from "../m7/templates-helpers";
 
 /**
  * M9-06, the page behind the template dialog: it neither scrolls nor shifts, with classic 15px
@@ -38,11 +45,19 @@ test("M9-06 the page behind does not scroll (wheel, keyboard) and nothing shifts
   await page.evaluate(() => {
     document.documentElement.style.minHeight = "2600px";
   });
-  await page.evaluate(() => window.scrollTo(0, 300));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(300);
+  // Scrolled so that the button that opens the dialog sits mid-screen: Playwright scrolls a button that
+  // is near an edge into view before it clicks, which would move the page by itself (and did, once
+  // the Edit tab grew taller). Whatever the height of the cards above it, the page is scrolled and
+  // the click does not move it.
+  const startTop = await startButton(page).evaluate(
+    (el) => el.getBoundingClientRect().top + window.scrollY,
+  );
+  const scrolled = Math.max(300, Math.round(startTop - 450));
+  await page.evaluate((y) => window.scrollTo(0, y), scrolled);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrolled);
   const column = page.getByRole("main").first();
   const toolbar = page.getByTestId("workspace-toolbar");
-  const closed = { toolbar: await rect(toolbar), column: await rect(column), scrollY: 300 };
+  const closed = { toolbar: await rect(toolbar), column: await rect(column), scrollY: scrolled };
   expect(await page.evaluate(() => window.innerWidth - document.documentElement.clientWidth)).toBe(
     15,
   );

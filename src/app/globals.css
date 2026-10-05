@@ -35,6 +35,12 @@
   --hl-ink-raised-2: #2e2c29;
   --hl-ink-line: #45413b;
   --hl-ink-link: #d9b877;
+  /* Marketing accent (Gary, 2026-10-05): cobalt is the primary accent for actions, links and
+     highlights; brass is the secondary, for brand marks and small details. */
+  --hl-accent: #2d5be3; /* buttons and highlights, white text on it is 5.6:1 */
+  --hl-accent-hover: #2349c0;
+  --hl-accent-text: #2d5be3; /* cobalt as text on light, 5.6:1 on white */
+  --hl-accent-on-ink: #8fa8ff; /* cobalt as text on charcoal, 7.5:1 */
 
   /* Type */
   --hl-font-ui: var(--font-public-sans), system-ui, sans-serif;
@@ -77,6 +83,10 @@
   --color-ink-raised-2: var(--hl-ink-raised-2);
   --color-ink-line: var(--hl-ink-line);
   --color-ink-link: var(--hl-ink-link);
+  --color-accent: var(--hl-accent);
+  --color-accent-hover: var(--hl-accent-hover);
+  --color-accent-text: var(--hl-accent-text);
+  --color-accent-on-ink: var(--hl-accent-on-ink);
 
   --radius-*: initial;
   --radius-sm: var(--hl-radius-sm);

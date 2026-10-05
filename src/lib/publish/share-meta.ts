@@ -1,5 +1,10 @@
 import type { Metadata } from "next";
-import { shareDescriptionOf, shareTitleOf, type PublishDoc } from "@/lib/document";
+import {
+  shareDescriptionOf,
+  shareTitleOf,
+  type PublishDoc,
+  type SubPagePublish,
+} from "@/lib/document";
 
 /**
  * The metadata of a published tenant page, for the handle route and the custom-domain route alike
@@ -38,5 +43,35 @@ export function pageMetadata(
       description: cardDescription,
       images: [urls.image],
     },
+  };
+}
+
+/**
+ * The metadata of a published sub-page (M11-10): the title "{page title} · {profile name}" (the
+ * profile name is the public one; the site's private name is never read here), the page's own
+ * description, a canonical URL on the site's primary host and the site's OG image. The share card
+ * is Home's, so it is not used here: the page speaks for itself. `urls.page` is the page's address
+ * on the primary host (the verified custom domain when there is one), `urls.image` the site's /og.
+ */
+export function subPageMetadata(
+  document: Pick<PublishDoc, "profile">,
+  subPage: Pick<SubPagePublish, "title" | "description">,
+  urls: { page: string; image: string },
+): Metadata {
+  const { profile } = document;
+  const title = profile.name === "" ? subPage.title : `${subPage.title} · ${profile.name}`;
+  const description = subPage.description || undefined;
+  return {
+    title,
+    description,
+    alternates: { canonical: urls.page },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url: urls.page,
+      images: [{ url: urls.image, width: 1200, height: 630, alt: profile.name }],
+    },
+    twitter: { card: "summary_large_image", title, description, images: [urls.image] },
   };
 }

@@ -20,7 +20,7 @@ export const publishPage: ToolDefinition<typeof input> = {
   name: "publish_page",
   title: "Publish a page",
   description:
-    "Makes the saved draft live on the public page at once, replacing what visitors see. Only call it when the person has asked to publish. It runs the same checks as the Publish button and changes nothing when one fails: the answer is publish_refused with a plain list of what to fix, blocked_link, or account_suspended. It publishes the saved draft, so a change typed in the editor and not yet saved is not included. Publishing again with no changes works. Limited to 10 publishes an hour. Returns the live address.",
+    "Makes the saved draft live on the public page at once, replacing what visitors see. Only call it when the person has asked to publish. It publishes the whole site, Home and every other page of it together, so a page added since the last publish goes live too. It runs the same checks as the Publish button on every page and changes nothing when one fails: the answer is publish_refused with a plain list of what to fix (a problem on another page names that page), blocked_link, or account_suspended. It publishes the saved drafts, so a change typed in the editor and not yet saved is not included. Publishing again with no changes works. Limited to 10 publishes an hour. Returns the live address.",
   scope: MCP_SCOPES.publish,
   annotations: DESTRUCTIVE_IDEMPOTENT,
   input,

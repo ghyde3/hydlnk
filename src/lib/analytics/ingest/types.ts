@@ -11,6 +11,8 @@ export interface EventRow {
   device: string;
   country: string | null;
   visitor_hash: string;
+  /** The sub-page the event happened on (M11-09). Absent = Home (stored as null). */
+  sub_page_id?: string | null;
 }
 
 /** What the beacon needs to know about a page before it records a view. */
@@ -18,6 +20,8 @@ export interface BeaconPage {
   handle: string;
   /** Hostnames of the page's VERIFIED custom domains. */
   customHosts: string[];
+  /** Ids of the site's LIVE sub-pages (published ones), for the beacon's page check (M11-09). */
+  subPageIds?: string[];
 }
 
 /**
@@ -37,6 +41,8 @@ export interface ClickTarget {
   url: string;
   /** The link's lock, or absent for an unlocked link (M9-29). */
   lock?: ClickLock | undefined;
+  /** The sub-page whose published document holds the link; absent for Home (M11-09). */
+  subPageId?: string | undefined;
   /** `pages.handle` of the page: `{handle}.{root}` serves it. */
   handle: string;
   /** Hostnames of the page's VERIFIED custom domains. */

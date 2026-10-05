@@ -42,6 +42,13 @@ export function adminCleanupDeps(
       const { error } = await admin.storage.from(MEDIA_BUCKET).remove(paths);
       if (error) throw new Error(`Removing media failed: ${error.message}`);
     },
+    async requeue(ownerId, paths) {
+      if (paths.length === 0) return;
+      // One statement (service_role may not update the queue itself): the rows keep their place in
+      // the table and only move to the back, so a failure cannot lose any.
+      const { error } = await admin.rpc("requeue_media", { p_owner: ownerId, p_paths: paths });
+      if (error) throw new Error(`Re-queueing media failed: ${error.message}`);
+    },
     async dequeue(ownerId, paths) {
       if (paths.length === 0) return;
       const { error } = await admin
