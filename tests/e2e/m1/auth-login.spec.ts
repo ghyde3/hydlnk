@@ -243,7 +243,11 @@ test.describe("M1-03 log in page and email sign-in link", () => {
 
     test("M1-03 at 390x844: no horizontal scroll, 44px targets, slim logo-only bar, 16px inputs", async ({
       page,
+      context,
     }, testInfo) => {
+      // Google's real script draws its own 40px button when it loads in time (CI); the stub keeps
+      // the page's own 44px control the thing under test, as the other tests in this file do.
+      await routeGoogleScript(context);
       await openLogin(page);
       await expect(page.getByRole("heading", { level: 1, name: "Log in" })).toBeVisible();
       await expectNoHorizontalScroll(page);
