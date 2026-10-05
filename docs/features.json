@@ -5101,6 +5101,50 @@
       ],
       "mockup": "",
       "passes": true
+    },
+    {
+      "id": "M11-01",
+      "milestone": 11,
+      "area": "marketing",
+      "title": "Home page redesign: HYDLNK as the frame, user brands as the exhibits",
+      "acceptance": [
+        "Supersedes, in these respects only: M1-23 steps 3, 4 and 6 (the hero lead, the Mara phone mock and the token chips are replaced by the look stage below), M1-24 step 1 (the placeholder is now 'you') and the 'yourname.hydlnk.com' wording in M1-26 step 2 (now 'you.hydlnk.com'). Every other step of M1-23 to M1-27 stands.",
+        "Hero: the h1 'One link. Designed like it’s yours.', the claim form with placeholder 'you' and the line 'Claim your name in seconds, publish in minutes.' under it, and three look tabs (radio buttons) that restyle only the stage beside them (the address in the look's face and a demo phone); with JavaScript the looks advance every 6 seconds with a bar under the active tab and a Pause control, and stop on hover, focus, a pick, off screen or with reduced motion.",
+        "How it works on a charcoal band: h2 'From a name to a live page in minutes.', the transparent showreel, and three steps each with a time cue and a guide link.",
+        "See it in action (#see-it): twelve demo setups in a scroll-snap carousel, each phone with a setup button linking to its audience page; Previous and Next both move the carousel and Previous is disabled at the start; the counter and track follow the scroll.",
+        "The header is sticky; primary buttons use the cobalt accent and the brass is secondary (docs/DESIGN.md, Marketing palette).",
+        "Every demo handle passes the real handle rule and reserved list (tests/unit/marketing-demo-handles.test.ts).",
+        "At 390x844 and 1440x900 on http://localhost:3000/: no horizontal scroll, every button, input and standalone link at least 44px tall, and the look tabs, carousel buttons and claim form work."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M11-02",
+      "milestone": 11,
+      "area": "marketing",
+      "title": "Comparison pages: HYDLNK vs Linktree and HYDLNK vs Beacons",
+      "acceptance": [
+        "/vs/linktree and /vs/beacons return 200 on the marketing host with a unique title and meta description, exactly one h1 and a canonical URL, and both are in /sitemap.xml.",
+        "Every statement about the competitor comes from page data that records its source URL and the date it was checked; each page shows 'Checked October 2026', names the competitor's trademark as its owner's with 'HYDLNK is not affiliated', and shows no competitor logo.",
+        "A comparison table covers price, custom domain, badge removal, design control and commerce fees. HYDLNK's column reads from the app's own sources (prices from src/lib/billing/prices.ts, plan limits from the plan table) and says that Free shows a 'Made with HYDLNK' badge that Pro removes.",
+        "Each page links to at least one existing guide (/design-control, /custom-domains or /link-in-bio/instagram) and ends with the shared claim form, which hands off to app signup like the home page form.",
+        "At 390x844 and 1440x900: no horizontal scroll and every link and button at least 44px tall."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M11-03",
+      "milestone": 11,
+      "area": "marketing",
+      "title": "Search pages: Linktree custom domain, remove the Linktree badge, link in bio for Shopify",
+      "acceptance": [
+        "/linktree-custom-domain, /remove-linktree-badge and /link-in-bio/shopify return 200 with a unique title and meta description, exactly one h1 and a canonical URL, and all three are in /sitemap.xml.",
+        "Statements about Linktree and Shopify come from page data that records the source URL and the date checked, and each page shows 'Checked October 2026'; no competitor logos.",
+        "/linktree-custom-domain explains what Linktree offers for custom domains and how a custom domain works on HYDLNK (Pro), and links to /custom-domains. /remove-linktree-badge explains which Linktree plan hides its logo and says plainly that HYDLNK Free shows a 'Made with HYDLNK' badge that Pro removes, and links to /design-control or /pricing. /link-in-bio/shopify explains linking a Shopify store and products from a link-in-bio page, and links to /link-in-bio/instagram.",
+        "Each page ends with the shared claim form, which hands off to app signup like the home page form.",
+        "At 390x844 and 1440x900: no horizontal scroll and every link and button at least 44px tall."
+      ],
+      "passes": false
     }
   ]
 }
