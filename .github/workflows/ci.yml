@@ -235,6 +235,14 @@ jobs:
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
+      # The `!` line above does not keep fetch-cache out of the saved cache (a negation under a
+      # directory that is itself listed is not honoured), so a restore can bring back an earlier run's
+      # `unstable_cache` entries: the public reads of seeded pages (mara's fixed id) with the published_at
+      # of ANOTHER database. Home would then carry that old `?v=` in its og:image while the og route read
+      # a refreshed one, and M2-30 found no `immutable`. A server must start with an empty data cache.
+      - name: Drop the restored data cache
+        run: rm -rf .next/cache/fetch-cache
+
       # The server the browser suite runs on (M9-13): one production build per shard, made after
       # .env.local so it holds the local Supabase keys. The root domain is baked into a build, so
       # it has to be the one the server answers on (:3000, the value .env.local has); the test

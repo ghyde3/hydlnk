@@ -659,7 +659,11 @@ test.describe("M2-30 OG image and social metadata", () => {
   });
 
   test("M2-30 the og:image is a 1200x630 PNG with a public cache-control", async () => {
-    const meta = decode(metaContent((await tenantGet("mara")).text, "property", "og:image"))!;
+    // Its own page, not the shared seeded mara: a page and its image agree on the version on the very
+    // next request after a publish, which is what this asserts, and a server that carries stale data
+    // for the seeded fixture (a restored data cache of another database) must not decide it.
+    const fx = await publishedPage("ogcc");
+    const meta = decode(metaContent((await tenantGet(fx.handle)).text, "property", "og:image"))!;
     const target = new URL(meta);
     const res = await rawBuffer(target.host, `${target.pathname}${target.search}`);
     expect(res.status).toBe(200);
@@ -681,7 +685,7 @@ test.describe("M2-30 OG image and social metadata", () => {
         ].map((m) => Number(m[1] ?? m[2] ?? m[3])),
       );
     expect(longest(res.headers["cache-control"])).toBeLessThanOrEqual(300);
-    const bare = await tenantGet("mara", "/og");
+    const bare = await tenantGet(fx.handle, "/og");
     expect(longest(bare.headers["cache-control"])).toBeLessThanOrEqual(300);
     expect(bare.headers["cache-control"]).toMatch(/public/);
     expect(bare.body.equals(res.body)).toBe(true);

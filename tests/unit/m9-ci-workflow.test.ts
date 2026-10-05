@@ -88,6 +88,8 @@ describe("the production build of each shard", () => {
     expect(at("Write .env.local")).toBeGreaterThan(-1);
     expect(at("Write .env.local")).toBeLessThan(at("Restore the Next.js build cache"));
     expect(at("Restore the Next.js build cache")).toBeLessThan(at("Production build"));
+    expect(at("Restore the Next.js build cache")).toBeLessThan(at("Drop the restored data cache"));
+    expect(at("Drop the restored data cache")).toBeLessThan(at("Production build"));
     expect(at("Production build")).toBeLessThan(at("Install Playwright browsers"));
     expect(at("Production build")).toBeLessThan(at("End-to-end tests"));
     expect((e2eJob.match(/\bpnpm build\b/g) ?? []).length).toBe(1);
@@ -129,6 +131,19 @@ describe("the production build of each shard", () => {
     expect(cache).toMatch(
       /restore-keys: \|\n\s+nextjs-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('pnpm-lock\.yaml'\) \}\}-\n/,
     );
+  });
+});
+
+describe("the restored Next.js cache never carries a data cache", () => {
+  // The `!` line under `path` does not keep `.next/cache/fetch-cache` out of the saved cache (a
+  // negation under a directory that is itself listed is not honoured), so an earlier run's
+  // `unstable_cache` entries, which hold the public read of mara under a fixed id and another
+  // database's published_at, came back with the restore: Home was served with that old `?v=` of the
+  // og:image while the og route read a refreshed one (M2-30 failed with no `immutable`).
+  it("deletes fetch-cache right after the restore and before the build", () => {
+    const drop = step("Drop the restored data cache");
+    expect(drop).toContain("rm -rf .next/cache/fetch-cache");
+    expect(drop).not.toMatch(/if:/);
   });
 });
 
