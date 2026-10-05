@@ -17,7 +17,7 @@ interface BrandHandleValue {
 const BrandHandleContext = createContext<BrandHandleValue | null>(null);
 
 /**
- * Shares the handle being typed with the brand panel's pill ("yourname.hydlnk.com"). AuthLayout
+ * Shares the handle being typed with the brand panel's pill ("you.hydlnk.com"). AuthLayout
  * mounts the provider around the panel and the form column, so a form inside it can call
  * useBrandHandle().setHandle(value) on every keystroke and the pill follows.
  */
@@ -61,7 +61,7 @@ export function BrandHandlePill() {
     <div className="mt-6 inline-flex max-w-full items-center gap-2.5 rounded-md border border-ink-line bg-ink-raised px-3.5 py-3">
       <Icon icon={Lock} size={15} className="text-on-ink-muted" />
       <span className="font-mono text-lg [overflow-wrap:anywhere]">
-        <span className="text-ink-link">{handle || "yourname"}</span>
+        <span className="text-ink-link">{handle || "you"}</span>
         <span className="text-on-ink-muted">.hydlnk.com</span>
       </span>
     </div>

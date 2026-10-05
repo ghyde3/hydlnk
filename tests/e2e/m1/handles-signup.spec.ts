@@ -47,14 +47,14 @@ test.describe("M1-11 signup handle field", () => {
     await page.goto(url("app", "/signup"));
     const input = handleInput(page);
     await expect(input).toHaveValue("");
-    if (!isMobile) await expect(page.locator("aside")).toContainText("yourname.hydlnk.com");
+    if (!isMobile) await expect(page.locator("aside")).toContainText("you.hydlnk.com");
 
     await input.fill("Zq_Test 9!");
     await expect(input).toHaveValue("zqtest9");
     if (!isMobile) await expect(page.locator("aside")).toContainText("zqtest9.hydlnk.com");
 
     await input.fill("");
-    if (!isMobile) await expect(page.locator("aside")).toContainText("yourname.hydlnk.com");
+    if (!isMobile) await expect(page.locator("aside")).toContainText("you.hydlnk.com");
   });
 
   test("M1-11 empty or short: neutral message, neutral border, no request", async ({ page }) => {

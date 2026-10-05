@@ -53,7 +53,7 @@ export const PLANS: readonly Plan[] = [
       "1 page",
       "Every block, theme and design option",
       "3 saved themes",
-      "yourname.hydlnk.com",
+      "you.hydlnk.com",
       "Per-link clicks, last 30 days",
       "10 MB of uploads",
     ],
@@ -126,7 +126,7 @@ export const COMPARISON: readonly { label: string; values: [string, string, stri
   { label: "Saved themes", values: ["3", "Unlimited", "Unlimited, shared across pages"] },
   {
     label: "Address",
-    values: ["yourname.hydlnk.com", "+ 1 custom domain you own", "+ 15 custom domains you own"],
+    values: ["you.hydlnk.com", "+ 1 custom domain you own", "+ 15 custom domains you own"],
   },
   { label: "SSL for custom domains", values: ["—", "Automatic", "Automatic"] },
   { label: "Footer badge", values: ["“Made with HYDLNK”", "Removable", "Removable"] },

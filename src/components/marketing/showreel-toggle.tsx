@@ -3,15 +3,44 @@
 import { useEffect, useRef, useState } from "react";
 import type { ShowreelCuts } from "./showreel";
 
+/** The cuts of the transparent reel: a WebM with alpha (VP9) and a MOV with alpha (HEVC). */
+export type AlphaCuts = Record<
+  "wide" | "tall",
+  { media: string; poster: string; webm: string; mov: string }
+>;
+
 type State = "unready" | "playing" | "paused";
 type CutName = keyof ShowreelCuts;
 
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
+/**
+ * Which file carries the alpha channel in this browser, or null when none does. Safari (and every
+ * browser on iOS, which is WebKit) plays HEVC with alpha but not VP9 alpha; Chrome and Firefox
+ * play VP9 alpha. Chrome on macOS may claim HEVC support, so this goes by user agent first, not by
+ * canPlayType.
+ */
+export function alphaKind(video: HTMLVideoElement): "mov" | "webm" | null {
+  const ua = navigator.userAgent;
+  const webkit =
+    /CriOS|FxiOS|EdgiOS/.test(ua) ||
+    (/AppleWebKit/.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\/|Firefox\//.test(ua));
+  if (webkit) return video.canPlayType('video/quicktime; codecs="hvc1"') ? "mov" : null;
+  return video.canPlayType('video/webm; codecs="vp9"') ? "webm" : null;
+}
+
 /** Gives the video the sources of one cut (WebM first, MP4 for Safari) and reloads it. */
-function attach(video: HTMLVideoElement, name: CutName, cuts: ShowreelCuts): void {
+function attach(video: HTMLVideoElement, name: CutName, cuts: ShowreelCuts | AlphaCuts): void {
   if (video.dataset.cut === name) return;
   const cut = cuts[name];
+  if ("mov" in cut) {
+    const kind = alphaKind(video);
+    if (!kind) return;
+    video.src = kind === "mov" ? cut.mov : cut.webm;
+    video.dataset.cut = name;
+    video.load();
+    return;
+  }
   const sources = [
     [cut.webm, 'video/webm; codecs="vp9"'],
     [cut.mp4, "video/mp4"],
@@ -35,13 +64,15 @@ function attach(video: HTMLVideoElement, name: CutName, cuts: ShowreelCuts): voi
  * With prefers-reduced-motion: reduce nothing loads and the button offers Play instead. If the
  * viewport crosses 760px later, the other cut takes over.
  */
-export function ShowreelToggle({ cuts }: { cuts: ShowreelCuts }) {
+export function ShowreelToggle({ cuts }: { cuts: ShowreelCuts | AlphaCuts }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [state, setState] = useState<State>("unready");
 
   useEffect(() => {
     const video = ref.current?.closest("[data-showreel]")?.querySelector("video");
     if (!video) return;
+    // Transparent reel: with no file that keeps its alpha here, the poster is all there is.
+    if ("mov" in cuts.wide && !alphaKind(video)) return;
     const narrow = window.matchMedia(cuts.tall.media);
     const cutForViewport = (): CutName => (narrow.matches ? "tall" : "wide");
 

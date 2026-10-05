@@ -36,6 +36,7 @@ describe("proxy matcher: static assets skip the proxy", () => {
     "/marketing/showreel/showreel-16x9.webm",
     "/marketing/showreel/showreel-4x5.mp4",
     "/marketing/showreel/showreel-4x5.webm",
+    "/marketing/showreel/showreel-4x5-alpha.mov",
     "/marketing/showreel/showreel-16x9-poster.webp",
     "/marketing/demo/fennmoor-card.avif",
     "/marketing/og/pricing.jpg",

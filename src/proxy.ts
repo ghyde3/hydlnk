@@ -214,7 +214,7 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Skip Next.js internals (including dev HMR), the framework's metadata files and static assets:
   // any path ending in a static file extension, video included (the showreel in public/marketing
-  // is .mp4 and .webm). Those requests never need a host decision, and the proxy would otherwise
+  // is .mp4, .webm and .mov). Those requests never need a host decision, and the proxy would otherwise
   // run once per image and per video range request. The extension rule does not apply under /app,
   // /t, /sites, /r and /c (the lookahead `(?!(?:app|t|sites|r|c)/)`): those are routed by host, so
   // `/app/api/domains/<uuid>.png` still gets its host check instead of reaching the app route. tests/unit/routing-proxy-matcher.test.ts
@@ -224,6 +224,6 @@ export const config = {
   // (src/lib/marketing/seo.ts), so they stay unmatched. The pattern has to be a literal so
   // Next.js can analyse it at build time.
   matcher: [
-    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|(?!(?:app|t|sites|r|c)/).*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm)$).*)",
+    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|(?!(?:app|t|sites|r|c)/).*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm|mov)$).*)",
   ],
 };

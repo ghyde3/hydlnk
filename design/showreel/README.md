@@ -95,3 +95,20 @@ cwebp -q 78 -resize 864 0 poster-4x5.png -o showreel-4x5-poster.webp
 
 Copy the results to `public/marketing/showreel/` under the same names. Keep the files small: the
 page loads the poster first and the video after `load`, and each cut is 1.3 to 2.4 MB today.
+
+## Transparent cut (the "How it works" band)
+
+`node src/build.mjs` also writes `alpha.html` next to each `index.html`: the same reel with the base
+colour, dot grid, glow and vignette hidden (the site paints them as CSS in
+`src/components/marketing/home/how-it-works.css`). Render and encode (run in each folder, `-w 2`):
+
+```sh
+npx --yes hyperframes@0.8.111 render -c alpha.html -w 2 --quality standard --format mov -o renders/wide-alpha.mov
+# 4:5: in design/showreel-tall, renders/tall-alpha.mov
+ffmpeg -i renders/wide-alpha.mov -an -c:v libvpx-vp9 -pix_fmt yuva420p -auto-alt-ref 0 -b:v 0 -row-mt 1 -deadline good -cpu-used 1 -g 120 -crf 34 -pass 1 -f null /dev/null   # then -pass 2 to showreel-16x9-alpha.webm
+ffmpeg -i renders/wide-alpha.mov -an -c:v hevc_videotoolbox -alpha_quality 0.75 -b:v 1500k -tag:v hvc1 -allow_sw 1 -movflags +faststart showreel-16x9-alpha.mov
+ffmpeg -i renders/wide-alpha.mov -frames:v 1 -pix_fmt rgba p.png && cwebp -q 78 -alpha_q 80 -resize 1600 0 p.png -o showreel-16x9-alpha-poster.webp
+```
+
+Chrome and Firefox play the WebM (VP9 alpha), Safari and iOS the MOV (HEVC alpha, macOS only: needs
+VideoToolbox); `alphaKind` in `showreel-toggle.tsx` picks by user agent. 4:5 uses `-crf 34`, 864 px poster.

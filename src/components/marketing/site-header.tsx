@@ -23,7 +23,7 @@ export function SiteHeader({ current }: { current?: NavKey }) {
   const ariaCurrent = (key: NavKey) => (key === current ? ("page" as const) : undefined);
 
   return (
-    <header className="relative z-30 bg-ink text-on-ink">
+    <header className="sticky top-0 z-30 bg-ink text-on-ink">
       <div className="mx-auto flex min-h-16 w-full max-w-[1200px] items-center justify-between gap-4 px-6">
         <Link href="/" className="inline-flex min-h-11 items-center">
           <Logo />
@@ -47,7 +47,7 @@ export function SiteHeader({ current }: { current?: NavKey }) {
           <NavClaimLink
             href={`${appUrl}/signup`}
             rootDomain={rootDomain}
-            className="ml-2 hidden min-h-11 items-center rounded-md bg-brass px-4 text-sm font-semibold whitespace-nowrap text-ink hl:inline-flex"
+            className="ml-2 hidden min-h-11 items-center rounded-md bg-accent px-4 text-sm font-semibold whitespace-nowrap text-surface hover:bg-accent-hover hl:inline-flex"
           >
             Claim your link
           </NavClaimLink>
@@ -70,7 +70,7 @@ export function SiteHeader({ current }: { current?: NavKey }) {
             <div className="mx-auto mt-5 flex w-full max-w-[1200px] flex-col gap-2 hl:hidden">
               <a
                 href={`${appUrl}/signup`}
-                className="flex min-h-11 items-center justify-center rounded-md bg-brass px-4 text-sm font-semibold text-ink"
+                className="flex min-h-11 items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-surface hover:bg-accent-hover"
               >
                 Claim your link
               </a>

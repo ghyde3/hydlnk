@@ -188,7 +188,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
         })),
       ).toEqual({ size: "44px", weight: "700" });
 
-      const pill = panel.getByText("yourname", { exact: true });
+      const pill = panel.getByText("you", { exact: true });
       await expect(pill).toBeVisible();
       expect(await pill.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(217, 184, 119)");
       const suffix = panel.getByText(".hydlnk.com", { exact: true });
@@ -231,6 +231,6 @@ test.describe("M1-10 brand pill follows the handle", () => {
     await page.getByLabel("Handle").fill("Cool Name_9");
     await expect(page.locator("aside").getByText("coolname9", { exact: true })).toBeVisible();
     await page.getByLabel("Handle").fill("");
-    await expect(page.locator("aside").getByText("yourname", { exact: true })).toBeVisible();
+    await expect(page.locator("aside").getByText("you", { exact: true })).toBeVisible();
   });
 });

@@ -23,7 +23,7 @@ export function Hero() {
               Link in bio, with real design control
             </p>
             <h1 id="hero-title" className={`mt-5 ${H1}`}>
-              One link. Designed like <span className="text-brass-text">it’s yours.</span>
+              One link. Designed like <span className="text-accent-text">it’s yours.</span>
             </h1>
             <p className="mt-5 max-w-[520px] text-[clamp(16px,4.2vw,18px)] leading-[1.55] text-pretty text-text-2">
               A link-in-bio page that looks like your brand, not ours. Pick your layout, colors and

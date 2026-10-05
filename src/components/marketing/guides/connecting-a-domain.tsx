@@ -14,7 +14,7 @@ export const connectingADomain: GuideBody = {
   content: (
     <>
       <p>
-        Your page always has its free address, <code>yourname.hydlnk.com</code>. On Pro and
+        Your page always has its free address, <code>you.hydlnk.com</code>. On Pro and
         Studio you can also serve it from a domain you already own. It takes one DNS record, and
         the rest, including SSL, happens on its own.
       </p>
@@ -136,7 +136,7 @@ export const connectingADomain: GuideBody = {
       <h2 id="remove">Changing or removing a domain</h2>
       <p>
         Remove the domain in the editor’s Domains tab whenever you like. Your page stays live at{" "}
-        <code>yourname.hydlnk.com</code>. Then delete the record at your DNS provider so the name
+        <code>you.hydlnk.com</code>. Then delete the record at your DNS provider so the name
         doesn’t point anywhere unexpected. To switch to a different domain, remove the old one and
         add the new one. For background on how DNS works, see{" "}
         <Link href="/custom-domains#dns">DNS in plain words</Link>.

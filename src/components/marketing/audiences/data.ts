@@ -107,7 +107,7 @@ export const AUDIENCES: readonly Audience[] = [
     steps: [
       {
         title: "Build your page",
-        body: "Claim your handle and add a few blocks. It’s free and takes a few minutes. Your page will live at yourname.hydlnk.com.",
+        body: "Claim your handle and add a few blocks. It’s free and takes a few minutes. Your page will live at you.hydlnk.com.",
       },
       {
         title: "Open Edit profile",
@@ -190,7 +190,7 @@ export const AUDIENCES: readonly Audience[] = [
       {
         question: "Can I use HYDLNK before I have 1,000 followers?",
         answer:
-          "Yes. Your page is live at yourname.hydlnk.com the moment you publish, and you can share that address anywhere: another profile, a message, a flyer, or written in your TikTok bio. The TikTok link field is one place for it, not the only one.",
+          "Yes. Your page is live at you.hydlnk.com the moment you publish, and you can share that address anywhere: another profile, a message, a flyer, or written in your TikTok bio. The TikTok link field is one place for it, not the only one.",
       },
       {
         question: "How do I make my page match my TikTok style?",
@@ -229,7 +229,7 @@ export const AUDIENCES: readonly Audience[] = [
     steps: [
       {
         title: "Build your page",
-        body: "Claim your handle, add your blocks and pick a look. Your page will live at yourname.hydlnk.com.",
+        body: "Claim your handle, add your blocks and pick a look. Your page will live at you.hydlnk.com.",
       },
       {
         title: "Open Edit profile",
@@ -346,7 +346,7 @@ export const AUDIENCES: readonly Audience[] = [
     steps: [
       {
         title: "Build your page",
-        body: "Claim your handle and add the links you want viewers to have. Your page will live at yourname.hydlnk.com.",
+        body: "Claim your handle and add the links you want viewers to have. Your page will live at you.hydlnk.com.",
       },
       {
         title: "Open your channel profile",
@@ -467,7 +467,7 @@ export const AUDIENCES: readonly Audience[] = [
     steps: [
       {
         title: "Build your page",
-        body: "Claim your handle and add the links your viewers ask for most. Your page will live at yourname.hydlnk.com.",
+        body: "Claim your handle and add the links your viewers ask for most. Your page will live at you.hydlnk.com.",
       },
       {
         title: "Open your channel settings",
@@ -584,7 +584,7 @@ export const AUDIENCES: readonly Audience[] = [
     steps: [
       {
         title: "Build your page",
-        body: "Claim your handle and add your links. Your page will live at yourname.hydlnk.com, short enough to read out loud.",
+        body: "Claim your handle and add your links. Your page will live at you.hydlnk.com, short enough to read out loud.",
       },
       {
         title: "Open Edit profile",

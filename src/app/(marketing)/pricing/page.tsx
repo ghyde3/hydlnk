@@ -19,7 +19,7 @@ export const metadata: Metadata = marketingMetadata({
   image: "pricing",
 });
 
-/** Lets "yourname.hydlnk.com" wrap before ".hydlnk.com" in a narrow cell instead of mid-word. */
+/** Lets "you.hydlnk.com" wrap before ".hydlnk.com" in a narrow cell instead of mid-word. */
 function breakBeforeDomain(value: string): ReactNode {
   const at = value.indexOf(".hydlnk.com");
   if (at <= 0) return value;
@@ -36,7 +36,7 @@ const EVERY_PLAN = [
   "All fifteen blocks",
   "Every design option and every theme",
   "Live phone preview and autosaved drafts",
-  "yourname.hydlnk.com over https",
+  "you.hydlnk.com over https",
   "Per-link analytics with no cookies, and a CSV export",
   "No cut of your sales, ever",
 ];

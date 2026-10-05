@@ -272,7 +272,7 @@ test.describe("M1-24 claim form hands off to app signup", () => {
     await expect(label).toHaveText("Choose your handle");
     await expect(label).toBeVisible();
     expect((await box(label)).width).toBeGreaterThan(100);
-    await expect(input).toHaveAttribute("placeholder", "yourname");
+    await expect(input).toHaveAttribute("placeholder", "you");
     await expect(input).toHaveAttribute("autocomplete", "off");
     await expect(input).toHaveAttribute("spellcheck", "false");
     await expect(input).toHaveCSS("font-size", "18px");
@@ -728,7 +728,7 @@ test.describe("M1-26 pricing", () => {
       "1 page",
       "Every block, theme and design option",
       "3 saved themes",
-      "yourname.hydlnk.com",
+      "you.hydlnk.com",
       "Per-link clicks, last 30 days",
       "10 MB of uploads",
       "–Version history",
