@@ -30,6 +30,7 @@ import {
 } from "@/lib/editor/messages";
 import { initialEditorState } from "@/lib/editor/state";
 import { computePublishStatus } from "@/lib/editor/status";
+import { homeForSite } from "@/lib/publish/site-checks";
 import type { PlanId } from "@/lib/limits/table";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { TokenSet } from "@/lib/theme";
@@ -241,10 +242,15 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const [publishing, setPublishing] = useState(false);
   const [publishNote, setPublishNote] = useState<PublishNote | null>(null);
   const [publishedToken, setPublishedToken] = useState<number | null>(null);
+  // Publish stores Home's menu without entries for pages no longer in the site (`homeForSite`), so
+  // the chip compares that stored shape, not a draft menu that still names a removed page.
+  const siteIds = site.titles.map((page) => page.id);
+  const storedForm = homeForSite(form, siteIds);
+  const storedPublished = published.doc ? homeForSite(published.doc, siteIds) : null;
   const homeStatus = computePublishStatus({
     hasPublished: published.has,
-    published: published.doc,
-    form,
+    published: storedPublished,
+    form: storedForm,
   });
   // A sub-page edited, added or never published is a change to publish too.
   const status = homeStatus === "published" && site.dirty ? "unpublished-changes" : homeStatus;

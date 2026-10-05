@@ -215,7 +215,7 @@ test.describe("M6-04 the + between blocks", () => {
     await expect(rowOf(page, ids[0]!)).toBeFocused();
 
     await slotButton(page, 5).click();
-    await chooser(page, 5).getByRole("button", { name: "Link" }).click();
+    await chooser(page, 5).getByRole("button", { name: "Link", exact: true }).click();
     await expect(rows(page)).toHaveCount(5);
     ids = await rowIds(page);
     await expect(rowOf(page, ids[4]!)).toHaveAttribute("data-block-type", "link");

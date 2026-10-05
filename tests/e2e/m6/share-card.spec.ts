@@ -610,6 +610,9 @@ test.describe("M6-33 safety", () => {
     context,
   }) => {
     const user = await seededUser(context, "sn1");
+    // Wave M1: a copy of mara's page also carries her site menu (`nav`). The card must leave it as
+    // it was, so the stored keys are compared with what was there before, plus `share`.
+    const before = (await pageRow(user.pageId)).draft as unknown as Record<string, unknown>;
     await openShare(page);
     await page.waitForTimeout(800);
     const seen: { method: string; url: string }[] = [];
@@ -647,8 +650,19 @@ test.describe("M6-33 safety", () => {
     }
     const stored2 = await pageRow(user.pageId);
     expect(Object.keys(stored2.draft).sort()).toEqual(
-      ["blocks", "profile", "rev", "share", "theme", "version"].sort(),
+      [
+        ...new Set([
+          ...Object.keys(before),
+          "blocks",
+          "profile",
+          "rev",
+          "share",
+          "theme",
+          "version",
+        ]),
+      ].sort(),
     );
+    expect((stored2.draft as unknown as Record<string, unknown>).nav).toEqual(before.nav);
   });
 });
 
