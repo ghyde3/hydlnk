@@ -12,6 +12,7 @@ import {
   type AccountDetail,
 } from "@/lib/admin/account-view";
 import { requireAdmin } from "@/lib/admin/auth";
+import { serverEnv } from "@/lib/env/server";
 import { PLAN_IDS, PLAN_LIMITS, formatBytes, formatLimitBytes, type PlanId } from "@/lib/limits";
 import { tenantOrigin } from "@/lib/publish/urls";
 
@@ -55,7 +56,7 @@ export default async function AdminAccount({ params }: { params: Promise<{ id: s
   if (!account) notFound();
 
   const suspended = account.suspendedAt !== null;
-  const stripeUrl = stripeCustomerUrl(account.stripeCustomerId);
+  const stripeUrl = stripeCustomerUrl(account.stripeCustomerId, serverEnv.STRIPE_SECRET_KEY);
   const liveSite = account.sites.find((site) => site.published);
   const label = account.sites[0]?.handle ?? account.email;
 

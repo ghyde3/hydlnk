@@ -8,7 +8,7 @@ select plan(15);
 select tests.create_supabase_user('p', 'p-179@example.test');   -- pro
 select tests.create_supabase_user('f', 'f-179@example.test');   -- free
 select tests.create_supabase_user('x', 'x-179@example.test');   -- pro, someone else
-update public.accounts set plan = 'pro' where id in (tests.get_supabase_uid('p'), tests.get_supabase_uid('x'));
+update public.accounts set paid_plan = 'pro' where id in (tests.get_supabase_uid('p'), tests.get_supabase_uid('x'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000179a001', tests.get_supabase_uid('p'), 'zq179-p',

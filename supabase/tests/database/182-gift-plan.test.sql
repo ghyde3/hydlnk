@@ -195,15 +195,18 @@ insert into public.pages (owner_id, handle, draft)
 select tests.get_supabase_uid('b'), 'zq-182-' || n, '{"version":1,"rev":0}'::jsonb from generate_series(1, 3) n;
 -- Time passes: the end date is now in the past, but the job has not run yet.
 update public.accounts set gift_until = now() - interval '1 minute' where id = tests.get_supabase_uid('b');
--- (Writing the end date recomputes at once; put the plan back as it stood in the minutes before the job.)
+-- (Writing the end date recomputes at once; put the plan back as it stood in the minutes before the job,
+-- with the trigger off for that one write.)
+alter table public.accounts disable trigger recompute_account_plan;
 update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('b');
+alter table public.accounts enable trigger recompute_account_plan;
 select tests.authenticate_as_service_role();
 
 select is(
   (select plan from public.accounts where id = tests.get_supabase_uid('b')),
   'pro', 'until the job runs the plan still holds (the job is the one that ends it)'
 );
-select is(public.end_expired_gifts(), 1, 'the expiry job ends exactly the one expired gift');
+select is((select count(*)::int from public.end_expired_gifts()), 1, 'the expiry job ends exactly the one expired gift');
 select is(
   (select plan || '|' || paid_plan || '|' || coalesce(gift_plan, 'none') from public.accounts where id = tests.get_supabase_uid('b')),
   'free|free|none', 'the expired gift returns the account to its paid plan'
@@ -218,7 +221,7 @@ select throws_ok(
 );
 -- An open-ended gift and a future gift are not touched by the job.
 select is(public.admin_set_gift(tests.get_supabase_uid('a'), 'pro', null, null, '00000000-0000-4000-8000-000000000099'), 'ok', 'account a is gifted Pro with no end');
-select is(public.end_expired_gifts(), 0, 'the job leaves a gift with no end date alone');
+select is((select count(*)::int from public.end_expired_gifts()), 0, 'the job leaves a gift with no end date alone');
 
 -- ---------------------------------------------------------------------------
 -- The job is scheduled
@@ -227,8 +230,8 @@ select is(public.end_expired_gifts(), 0, 'the job leaves a gift with no end date
 select tests.clear_authentication();
 reset role;
 select is(
-  (select count(*)::int from cron.job where jobname = 'end-expired-gifts' and schedule = '*/10 * * * *'),
-  1, 'pg_cron runs end_expired_gifts every ten minutes'
+  (select count(*)::int from cron.job where jobname = 'end-expired-gifts' and schedule = '*/10 * * * *' and command like '%run_gift_expiry_sweep%'),
+  1, 'pg_cron runs the gift expiry sweep every ten minutes'
 );
 
 select * from finish();

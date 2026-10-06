@@ -21,8 +21,8 @@ select tests.create_supabase_user('pb', 'pb-131@example.test');   -- pro
 select tests.create_supabase_user('fr', 'fr-131@example.test');   -- free
 select tests.create_supabase_user('st', 'st-131@example.test');   -- studio
 
-update public.accounts set plan = 'pro' where id in (tests.get_supabase_uid('pa'), tests.get_supabase_uid('pb'));
-update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('st');
+update public.accounts set paid_plan = 'pro' where id in (tests.get_supabase_uid('pa'), tests.get_supabase_uid('pb'));
+update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('st');
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000013a001', tests.get_supabase_uid('pa'), 'zq131-pa-one',
@@ -268,13 +268,13 @@ select results_eq(
 );
 
 -- the numbering continues after a downgrade, an upgrade and publishes in between
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('pb');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('pb');
 update public.pages set published = '{"version":1,"n":29}', published_at = '2026-10-06 13:02:00+00' where id = '00000000-0000-4000-8000-00000013b001';
 select is(
   (select count(*)::int from public.page_versions where page_id = '00000000-0000-4000-8000-00000013b001'),
   25, 'while the plan is Free a publish records nothing and nothing is pruned or deleted'
 );
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('pb');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('pb');
 update public.pages set published = '{"version":1,"n":30}', published_at = '2026-10-06 13:03:00+00' where id = '00000000-0000-4000-8000-00000013b001';
 select results_eq(
   $$ select min(version_no), max(version_no), count(*)::int from public.page_versions
@@ -322,7 +322,7 @@ select is((select count(*)::int from public.page_versions), 2, 'a Studio owner r
 -- while the account was Pro), then flip the plan back with the secret key.
 select tests.clear_authentication();
 reset role;
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('fr');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('fr');
 update public.pages set published = jsonb_build_object('version', 1, 'f', 1), published_at = '2026-10-06 14:00:01+00' where id = '00000000-0000-4000-8000-00000013f001';
 update public.pages set published = jsonb_build_object('version', 1, 'f', 2), published_at = '2026-10-06 14:00:02+00' where id = '00000000-0000-4000-8000-00000013f001';
 update public.pages set published = jsonb_build_object('version', 1, 'f', 3), published_at = '2026-10-06 14:00:03+00' where id = '00000000-0000-4000-8000-00000013f001';
@@ -332,7 +332,7 @@ select is(
   (select count(*)::int from public.page_versions where page_id = '00000000-0000-4000-8000-00000013f001'),
   5, 'the account was Pro for five publishes: five stored rows'
 );
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('fr');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('fr');
 
 select tests.authenticate_as('fr');
 select is(
@@ -347,7 +347,7 @@ select is(
 -- the plan flips through the webhook (the secret key): effective on the next request, both ways
 select tests.clear_authentication();
 reset role;
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('fr');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('fr');
 select tests.authenticate_as('fr');
 select is(
   (select count(*)::int from public.page_versions),
@@ -355,12 +355,12 @@ select is(
 );
 select tests.clear_authentication();
 reset role;
-update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('fr');
+update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('fr');
 select tests.authenticate_as('fr');
 select is((select count(*)::int from public.page_versions), 5, 'Studio reads them too');
 select tests.clear_authentication();
 reset role;
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('fr');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('fr');
 select tests.authenticate_as('fr');
 select is((select count(*)::int from public.page_versions), 0, 'and downgrading hides them on the very next read');
 select tests.clear_authentication();

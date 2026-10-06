@@ -191,6 +191,24 @@ describe.skipIf(!run)("M13-07 gift_plan and end_gift (local Supabase)", () => {
     });
   });
 
+  it("an end that died before its audit row is repaired by the retry, once", async () => {
+    const o = await owner("gift-repair");
+    await gift({ id: o.userId, plan: "pro", until: "2099-12-31" });
+    // The earlier call: the change made, the audit row never written.
+    expect((await admin.rpc("admin_end_gift", { p_account: o.userId })).data).toBe("ended");
+    expect((await audits(o.userId)).map((r) => r.action)).toEqual(["gift_plan"]);
+
+    const calls = invalidateAccount.mock.calls.length;
+    expect(await endGift(o.userId)).toMatchObject({ ok: true, data: { changed: false } });
+    const after = await audits(o.userId);
+    expect(after.map((r) => r.action)).toEqual(["gift_plan", "end_gift"]);
+    expect(after[1]!.detail).toMatchObject({ retried: true, effective_plan: "free" });
+    expect(invalidateAccount.mock.calls.length).toBe(calls + 1);
+    // A third click finds the end logged and writes nothing.
+    expect(await endGift(o.userId)).toMatchObject({ ok: true, data: { changed: false } });
+    expect((await audits(o.userId)).length).toBe(2);
+  });
+
   it("refuses bad input with a 400 and changes and records nothing", async () => {
     const o = await owner("gift-bad");
     const calls = invalidateAccount.mock.calls.length;

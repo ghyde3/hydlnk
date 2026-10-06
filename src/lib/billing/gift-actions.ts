@@ -24,8 +24,10 @@ import type { Json } from "@/lib/supabase/database.types";
  * to write it fails the action (500) and the retry replays the same idempotent state change and
  * writes the row.
  *
- * Ending a gift that is not held answers 200 with `changed: false` and writes nothing (a gift that
- * ran out has been ended by the expiry job, which writes no audit row: nobody acted).
+ * Ending a gift that is not held answers 200 with `changed: false`; it writes nothing unless the newest
+ * gift row of the account is still the gift (an earlier call ended it and died before its audit row):
+ * then the missing `end_gift` row is written with `retried: true`. A gift that ran out is ended by the
+ * expiry sweep (`/api/cron/end-expired-gifts`), which writes its own system `end_gift` row.
  */
 
 export const GIFT_REASON_MAX = 500;
@@ -148,6 +150,27 @@ export const endGiftAction: AdminAction = {
     if (ended.error) throw new Error(`Ending the gift failed: ${ended.error.message}`);
     if (ended.data === "missing") return fail(404, "not_found", "That account doesn’t exist.");
     if (ended.data === "none") {
+      // No gift held: a second click, an expiry, or an earlier call that ended it and died before its
+      // audit row (the newest gift row of the account is then still the gift, not its end).
+      const last = await context.deps.db
+        .from("admin_audit")
+        .select("action")
+        .eq("account_id", accountId)
+        .in("action", ["gift_plan", "end_gift"])
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (last.error) throw new Error(`Reading the audit log failed: ${last.error.message}`);
+      if (last.data?.action === "gift_plan") {
+        const plans = await readPlans(context, accountId);
+        await writeAudit(context, "end_gift", accountId, {
+          effective_plan: plans.plan,
+          paid_plan: plans.paidPlan,
+          retried: true,
+        });
+        await context.deps.invalidateAccount(accountId);
+      }
       return { ok: true, status: 200, data: { changed: false } };
     }
     if (ended.data !== "ended") throw new Error("Ending the gift answered something unexpected");

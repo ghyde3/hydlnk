@@ -160,6 +160,26 @@ describe.skipIf(!run)("admin account, audit and draft view reads (local Supabase
     expect(rows.every((r) => r.admin_id === fakeAdminId)).toBe(true);
   });
 
+  it("loadAdminDraftView lists only valid sub-page paths: a tenant-written path never becomes a link", async () => {
+    const a = await owner("dv-paths", "pro");
+    // Write the hostile paths straight into the stored drafts (the editor would refuse them).
+    const paths = ["items", "share", "Has Space", 'x"onmouseover="y', "a/../b", "-bad"];
+    const inserted = [];
+    for (const path of paths) {
+      const draft = { ...emptySubPageDraft("items", "Title"), path };
+      inserted.push(
+        await admin.from("site_pages").insert({ page_id: a.pageId, draft: draft as never }),
+      );
+    }
+    const stored = inserted.filter((r) => !r.error).length;
+    const view = await drafts.loadAdminDraftView(admin as never, a.pageId, "");
+    expect(view.kind).toBe("active");
+    if (view.kind !== "active") return;
+    // Whatever the table accepted, only "items" survives.
+    expect(stored).toBeGreaterThanOrEqual(1);
+    expect(view.pages.map((p) => p.path)).toEqual(["items"]);
+  });
+
   it("loadAdminDraftView shows the draft (Home and a page), reads nothing it need not and writes nothing", async () => {
     const a = await owner("dv-a", "pro");
     const sub = await admin

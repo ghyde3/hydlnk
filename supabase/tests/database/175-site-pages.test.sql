@@ -17,7 +17,7 @@ select tests.create_supabase_user('b', 'b-175@example.test');   -- pro
 select tests.create_supabase_user('c', 'c-175@example.test');   -- pro, downgraded below
 select tests.create_supabase_user('d', 'd-175@example.test');   -- free, no sub-pages
 
-update public.accounts set plan = 'pro'
+update public.accounts set paid_plan = 'pro'
   where id in (tests.get_supabase_uid('b'), tests.get_supabase_uid('c'));
 
 insert into public.pages (id, owner_id, handle, draft) values
@@ -304,7 +304,7 @@ select throws_ok(
   'HL008', null, 'pro: the tenth sub-page is refused'
 );
 select lives_ok(
-  $$ update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('b') $$,
+  $$ update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('b') $$,
   'b upgrades to studio'
 );
 select lives_ok(
@@ -325,7 +325,7 @@ insert into public.site_pages (page_id, draft)
 select '00000000-0000-4000-8000-00000175c001',
        jsonb_build_object('path', 'c' || g, 'title', 'C', 'description', '', 'blocks', '[]'::jsonb)
 from generate_series(1, 4) g;
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('c');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('c');
 select is(
   (select count(*)::int from public.site_pages where page_id = '00000000-0000-4000-8000-00000175c001'),
   4,

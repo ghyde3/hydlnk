@@ -19,6 +19,31 @@ export function isAdminDraftPath(pathname: string): boolean {
   );
 }
 
+/**
+ * A path that Next's own routing would read as the draft route without being it: another case
+ * (`/Admin-draft/..`), a percent-encoded character (`/admin%2Ddraft/..`, `/admin-draft%2F..`), or the
+ * bare prefix. The proxy answers these with the app's plain 404 so none of them can reach the draft
+ * page without the share preview's headers (Wave N security review). Decoded up to three times; a
+ * malformed escape is not one (Next answers it itself).
+ */
+export function isAdminDraftLookalike(pathname: string): boolean {
+  if (isAdminDraftPath(pathname)) return false;
+  let current = pathname;
+  for (let round = 0; round < 3; round += 1) {
+    const lower = current.toLowerCase();
+    if (lower === ADMIN_DRAFT_PREFIX || lower.startsWith(`${ADMIN_DRAFT_PREFIX}/`)) return true;
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(current);
+    } catch {
+      return false;
+    }
+    if (decoded === current) return false;
+    current = decoded;
+  }
+  return false;
+}
+
 export async function adminDraftProxy(
   request: NextRequest,
   destination: URL,

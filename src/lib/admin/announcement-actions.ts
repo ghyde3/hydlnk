@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { fail, type ActionResult, type AdminAction } from "./types";
-import { looseDb, writeAudit } from "./audit-detail";
+import { latestAudit, looseDb, writeAudit } from "./audit-detail";
 import { validateAnnouncement } from "@/lib/announcements/rules";
 
 /**
@@ -66,8 +66,21 @@ export const clearAnnouncementAction: AdminAction = {
     if (found.error) throw new Error(`Reading the announcement failed: ${found.error.message}`);
     const row = found.data as { id: string; ends_at: string } | null;
     if (!row) return fail(404, "not_found", "That announcement doesn’t exist.");
-    // Already over (a second click, or it ran out): nothing to end.
+    // Already over (a second click, an earlier call that cleared it and died before its audit row, or
+    // it ran out). A clear cuts the end short, so the end the set row logged is later than the row's
+    // now; with no clear row after that set row, the earlier call is repaired here. (A scheduled
+    // message a dead call deleted is a 404 above: its row is gone and nothing can be repaired.)
     if (Date.parse(row.ends_at) <= context.deps.now().getTime()) {
+      const last = await latestAudit(db, ["set_announcement", "clear_announcement"], "id", id);
+      const loggedEnd =
+        typeof last?.detail.ends_at === "string" ? Date.parse(last.detail.ends_at) : NaN;
+      if (last?.action === "set_announcement" && loggedEnd > Date.parse(row.ends_at)) {
+        await writeAudit(db, context.actor.id, "clear_announcement", {
+          id,
+          rows: 0,
+          retried: true,
+        });
+      }
       return { ok: true, status: 200, data: { changed: false, id } };
     }
 

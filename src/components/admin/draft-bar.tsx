@@ -35,7 +35,7 @@ export function AdminDraftBar({
         {entries.map((entry) => (
           <a
             key={entry.path || "home"}
-            href={`/admin-draft/${pageId}${entry.path ? `/${entry.path}` : ""}`}
+            href={`/admin-draft/${pageId}${entry.path ? `/${encodeURIComponent(entry.path)}` : ""}`}
             aria-current={entry.path === current ? "page" : undefined}
             className={`${LINK} ${entry.path === current ? "bg-ink-raised" : ""} [overflow-wrap:anywhere]`}
           >

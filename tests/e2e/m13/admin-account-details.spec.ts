@@ -93,7 +93,7 @@ test.describe("M13-02 admin account details", () => {
     const stripe = page.getByRole("link", { name: "Open in Stripe" });
     await expect(stripe).toHaveAttribute(
       "href",
-      `https://dashboard.stripe.com/customers/${customer}`,
+      `https://dashboard.stripe.com/test/customers/${customer}`,
     );
     await expect(stripe).toHaveAttribute("rel", /noopener/);
     await expect(page.getByRole("link", { name: "Gift a plan" })).toHaveAttribute(

@@ -244,10 +244,10 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       const a = await owner("ret2");
       await publishDoc(a, formOf("One"));
       await publishDoc(a, formOf("Two"));
-      await admin.from("accounts").update({ plan: "free" }).eq("id", a.userId);
+      await admin.from("accounts").update({ paid_plan: "free" }).eq("id", a.userId);
       await publishDoc(a, formOf("Three while free"));
       expect(await versionsOf(a)).toHaveLength(2);
-      await admin.from("accounts").update({ plan: "pro" }).eq("id", a.userId);
+      await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", a.userId);
       await publishDoc(a, formOf("Four"));
       expect((await versionsOf(a)).map((r) => r.version_no)).toEqual([1, 2, 3]);
     });
@@ -585,14 +585,14 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       const f = await owner("abu1", "pro");
       await publishDoc(f, formOf("Was Pro"));
       const [version] = await versionsOf(f);
-      await admin.from("accounts").update({ plan: "free" }).eq("id", f.userId);
+      await admin.from("accounts").update({ paid_plan: "free" }).eq("id", f.userId);
       const before = await draftOfPage(f);
       expect(await restore(f, version!.id)).toEqual({ ok: false, reason: "plan_required" });
       expect(await preview(f, version!.id)).toEqual({ ok: false, reason: "plan_required" });
       expect(await draftOfPage(f)).toEqual(before);
       // the rows are kept, and an upgrade brings the answer back with no data change
       expect(await versionsOf(f)).toHaveLength(1);
-      await admin.from("accounts").update({ plan: "pro" }).eq("id", f.userId);
+      await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", f.userId);
       expect((await preview(f, version!.id)).ok).toBe(true);
     });
 
@@ -601,7 +601,7 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       await publishDoc(a, formOf("Doc"));
       const [version] = await versionsOf(a);
       expect((await preview(a, version!.id)).ok).toBe(true);
-      await admin.from("accounts").update({ plan: "free" }).eq("id", a.userId);
+      await admin.from("accounts").update({ paid_plan: "free" }).eq("id", a.userId);
       expect(await preview(a, version!.id)).toEqual({ ok: false, reason: "plan_required" });
       expect(await restore(a, version!.id)).toEqual({ ok: false, reason: "plan_required" });
     });

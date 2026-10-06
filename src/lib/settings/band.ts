@@ -11,6 +11,13 @@ import {
  * row in, the three lines out. Pure, so the copy rules are testable without Stripe or a browser.
  */
 
+/**
+ * The columns the band selects, by name: `authenticated` cannot read `gifted_by` (an admin's id), so
+ * `select *` is refused (20261013000008). Never add `gifted_by`.
+ */
+export const BILLING_COLUMNS =
+  "plan, paid_plan, gift_plan, gift_until, billing_interval, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id";
+
 /** The billing columns of `accounts` the band reads (all server-written, owner-readable). */
 export interface BillingSummary {
   /** The effective plan: the higher of `paidPlan` and an active gift (limits and features read it). */
@@ -44,7 +51,7 @@ const text = (value: unknown): string | null =>
   typeof value === "string" && value !== "" ? value : null;
 
 /**
- * Reads the billing columns from an `accounts` row fetched with `select *`. A column that does not
+ * Reads the billing columns from an `accounts` row fetched with the named billing columns. A column that does not
  * exist (the migration has not run) or holds something unexpected reads as "none", so the band
  * degrades to the plan name instead of failing the screen.
  */
@@ -67,7 +74,9 @@ export function parseBillingRow(
   const periodEnd = text(record.current_period_end);
   const parsedEnd = periodEnd ? new Date(periodEnd) : null;
   return {
-    plan,
+    // A gift whose end has passed counts as ended before the expiry job runs: until then `plan` still
+    // holds the gift's value, so the plan is what the account pays for.
+    plan: giftActive || giftPlan === "free" ? plan : paidPlan,
     paidPlan,
     gift: giftActive ? { plan: giftPlan, until: giftEnds } : null,
     interval: isBillingInterval(record.billing_interval) ? record.billing_interval : null,

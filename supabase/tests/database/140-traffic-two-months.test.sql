@@ -25,8 +25,8 @@ select tests.create_supabase_user('pro',    'pro-tm140@example.test');    -- pro
 select tests.create_supabase_user('studio', 'studio-tm140@example.test'); -- studio, 500,000 in both months
 select tests.create_supabase_user('oldrule', 'oldrule-tm140@example.test'); -- free, a flag made by the old 30-day rule
 
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('pro');
-update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('studio');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('pro');
+update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('studio');
 
 insert into public.pages (id, owner_id, handle, draft, published, published_at) values
   ('00000000-0000-4000-8000-0000000140a1', tests.get_supabase_uid('both'),    'tm140-both',    '{"version":1}', '{"version":1,"marker":"served"}', now()),
@@ -285,9 +285,9 @@ select results_eq(
 
 -- It stops being flagged once the owner is on a paid plan
 update public.traffic_flags set reviewed_at = now() - interval '40 days' where page_id = '00000000-0000-4000-8000-0000000140a1';
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('both');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('both');
 select is(public.flag_high_traffic_pages(), 0, 'a run after the owner upgraded to Pro creates nothing');
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('both');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('both');
 
 -- The threshold is a parameter, strictly greater than, applied to each month
 select cmp_ok(public.flag_high_traffic_pages(99998), '>=', 3, 'a lower threshold flags the pages that are over it in both months');

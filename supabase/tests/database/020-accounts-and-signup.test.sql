@@ -59,7 +59,7 @@ select is_empty(
 );
 
 select throws_ok(
-  format($$ update public.accounts set plan = 'studio' where id = %L $$, tests.get_supabase_uid('a')),
+  format($$ update public.accounts set paid_plan = 'studio' where id = %L $$, tests.get_supabase_uid('a')),
   '42501', null,
   'a user cannot change their own plan'
 );
@@ -74,7 +74,7 @@ select throws_ok(
   'a user cannot touch their own suspended_at'
 );
 select throws_ok(
-  format($$ update public.accounts set plan = 'studio' where id = %L $$, tests.get_supabase_uid('b')),
+  format($$ update public.accounts set paid_plan = 'studio' where id = %L $$, tests.get_supabase_uid('b')),
   '42501', null,
   'a user cannot change another account''s plan'
 );
@@ -107,7 +107,7 @@ select throws_ok(
   'anon cannot read accounts'
 );
 select throws_ok(
-  $$ update public.accounts set plan = 'studio' $$,
+  $$ update public.accounts set paid_plan = 'studio' $$,
   '42501', null,
   'anon cannot update accounts'
 );
@@ -135,7 +135,7 @@ select is(
 
 select tests.authenticate_as_service_role();
 select lives_ok(
-  format($$ update public.accounts set plan = 'pro', stripe_customer_id = 'cus_test_123' where id = %L $$, tests.get_supabase_uid('a')),
+  format($$ update public.accounts set paid_plan = 'pro', stripe_customer_id = 'cus_test_123' where id = %L $$, tests.get_supabase_uid('a')),
   'the server (service role) can set plan and stripe_customer_id'
 );
 select lives_ok(
@@ -143,7 +143,7 @@ select lives_ok(
   'the server can suspend an account'
 );
 select throws_ok(
-  format($$ update public.accounts set plan = 'platinum' where id = %L $$, tests.get_supabase_uid('a')),
+  format($$ update public.accounts set paid_plan = 'platinum' where id = %L $$, tests.get_supabase_uid('a')),
   '23514', null,
   'a plan outside free/pro/studio is rejected'
 );

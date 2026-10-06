@@ -97,16 +97,25 @@ export interface AuditRow {
   detail: Record<string, unknown>;
 }
 
+/** The actor of an audit row nobody acted on (the gift expiry sweep): the nil uuid. */
+export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
+
 /** The sub-page total cap of an account (HL009, migration 20261011000001): 64 MiB. */
 export const SITE_BYTES_CAP = 67_108_864;
 
 /**
  * The customer's page in Stripe's dashboard. Built from the stored id alone (no Stripe call). The
- * live dashboard, as the plan says; null for an id that is not a Stripe customer id.
+ * dashboard of the mode the configured key belongs to: a test key (`sk_test_`, `rk_test_`) opens the
+ * test dashboard, anything else (production runs live) the live one. Null for an id that is not a
+ * Stripe customer id. The key is only looked at for its prefix and never returned.
  */
-export function stripeCustomerUrl(customerId: string | null): string | null {
+export function stripeCustomerUrl(
+  customerId: string | null,
+  secretKey?: string | null,
+): string | null {
   if (!customerId || !/^cus_[A-Za-z0-9]+$/.test(customerId)) return null;
-  return `https://dashboard.stripe.com/customers/${customerId}`;
+  const test = /^[rs]k_test_/.test(secretKey ?? "");
+  return `https://dashboard.stripe.com/${test ? "test/" : ""}customers/${customerId}`;
 }
 
 /** "Oct 3, 2026": the date part of an ISO time, locale-free, UTC. */

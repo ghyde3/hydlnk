@@ -194,7 +194,7 @@ test.describe("M1-05 account row is created server-side on first sign-in", () =>
 
     // Idempotent: sign out, set the plan with the secret key, sign in again with another link.
     await context.clearCookies();
-    await adminClient().from("accounts").update({ plan: "pro" }).eq("id", userId);
+    await adminClient().from("accounts").update({ paid_plan: "pro" }).eq("id", userId);
     const before = (await accountRows(userId))[0];
     const { hashedToken } = await generateTokenHash(email);
     await openCallback(context, hashedToken);

@@ -525,7 +525,7 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
       expect(out.text).toBe("Your page had 3 views and 2 clicks in the last 30 days.");
       expect(everything(out.raw)).not.toMatch(/leak\.example|"views":8/);
       // A Free owner of the same data gets the numbers and a note instead of the breakdowns.
-      await admin.from("accounts").update({ plan: "free" }).eq("id", pro.userId);
+      await admin.from("accounts").update({ paid_plan: "free" }).eq("id", pro.userId);
       const free = await rt.call("get_analytics", { pageId: pro.pageId }, who(pro));
       expect(free.json).toMatchObject({
         breakdowns: null,

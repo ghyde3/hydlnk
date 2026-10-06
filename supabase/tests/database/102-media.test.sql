@@ -8,7 +8,7 @@ select plan(56);
 
 select tests.create_supabase_user('a', 'a@example.test');
 select tests.create_supabase_user('b', 'b@example.test');
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
 
 -- Paths of the shape the pipeline stores: {uid}/{avatar|bg|img}-{hash}.webp.
 create temp table p as

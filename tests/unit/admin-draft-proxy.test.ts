@@ -16,7 +16,8 @@ vi.mock("@/lib/env/client", () => ({
 const rewriteWithSession = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/routing/session", () => ({ rewriteWithSession }));
 
-const { adminDraftProxy, isAdminDraftPath } = await import("@/lib/previews/admin-draft-proxy");
+const { adminDraftProxy, isAdminDraftLookalike, isAdminDraftPath } =
+  await import("@/lib/previews/admin-draft-proxy");
 
 const ID = "11111111-2222-4333-8444-555555555555";
 
@@ -28,6 +29,34 @@ describe("isAdminDraftPath", () => {
     expect(isAdminDraftPath("/admin-draft/")).toBe(false);
     expect(isAdminDraftPath("/admin-drafts/x")).toBe(false);
     expect(isAdminDraftPath("/admin/pages")).toBe(false);
+  });
+});
+
+describe("isAdminDraftLookalike", () => {
+  it("catches other spellings of the route, and nothing else", () => {
+    for (const path of [
+      `/Admin-draft/${ID}`,
+      `/ADMIN-DRAFT/${ID}`,
+      `/admin%2Ddraft/${ID}`,
+      `/admin%2ddraft/${ID}`,
+      `/admin-draft%2F${ID}`,
+      `/admin%252Ddraft/${ID}`,
+      `/%61dmin-draft/${ID}`,
+      "/admin-draft",
+      "/admin-draft/",
+    ]) {
+      expect(isAdminDraftLookalike(path), path).toBe(true);
+    }
+    for (const path of [
+      `/admin-draft/${ID}`,
+      `/admin-drafts/${ID}`,
+      "/admin/pages",
+      "/",
+      "/settings",
+      "/admin%ZZdraft/x",
+    ]) {
+      expect(isAdminDraftLookalike(path), path).toBe(false);
+    }
   });
 });
 

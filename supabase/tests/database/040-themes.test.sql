@@ -8,7 +8,7 @@ select tests.create_supabase_user('a', 'a@example.test');   -- free: 3 saved the
 select tests.create_supabase_user('b', 'b@example.test');   -- free
 select tests.create_supabase_user('c', 'c@example.test');   -- pro: unlimited
 
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('c');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('c');
 
 insert into public.themes (id, owner_id, name, tokens) values
   ('00000000-0000-4000-8000-0000000000e1', tests.get_supabase_uid('b'), 'B''s theme', '{"accent":"#112233"}'),

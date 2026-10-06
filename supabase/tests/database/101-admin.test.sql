@@ -12,8 +12,8 @@ select tests.create_supabase_user('a', 'a-admin101@example.test');   -- stays ac
 select tests.create_supabase_user('b', 'b-admin101@example.test');   -- gets suspended
 select tests.create_supabase_user('c', 'c-admin101@example.test');   -- two pages, for the search
 
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('b');
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('c');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('b');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('c');
 
 insert into public.pages (owner_id, handle, draft, published, published_at) values
   (tests.get_supabase_uid('a'), 'adm-alpha',

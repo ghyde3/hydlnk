@@ -110,7 +110,7 @@ describe.skipIf(!run)("M9-27 M9-29 M9-31 the Publish gate (local Supabase)", () 
       const o = await owner("rd1", (h) => withRedirect(h, "lnk-target-01"), "pro");
       expect((await publish(o)).ok).toBe(true);
       const live = await publishedOf(admin, o.pageId);
-      await admin.from("accounts").update({ plan: "free" }).eq("id", o.userId);
+      await admin.from("accounts").update({ paid_plan: "free" }).eq("id", o.userId);
       const refused = await publish(o);
       expect(refused).toMatchObject({ ok: false, reason: "invalid" });
       if (!refused.ok)
@@ -123,7 +123,7 @@ describe.skipIf(!run)("M9-27 M9-29 M9-31 the Publish gate (local Supabase)", () 
       const draft = (await admin.from("pages").select("draft").eq("id", o.pageId).single()).data!
         .draft as { redirect?: unknown };
       expect(draft.redirect).toEqual({ linkId: "lnk-target-01" });
-      await admin.from("accounts").update({ plan: "pro" }).eq("id", o.userId);
+      await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", o.userId);
       expect((await publish(o)).ok).toBe(true);
     });
 

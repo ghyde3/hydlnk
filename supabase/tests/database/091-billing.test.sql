@@ -59,7 +59,7 @@ select lives_ok(
   'the subscription columns are readable by their owner'
 );
 
-select throws_ok($$ update public.accounts set plan = 'studio' $$, '42501', null, 'a client cannot set plan');
+select throws_ok($$ update public.accounts set paid_plan = 'studio' $$, '42501', null, 'a client cannot set plan');
 select throws_ok($$ update public.accounts set stripe_customer_id = 'cus_mine' $$, '42501', null, 'a client cannot set stripe_customer_id');
 select throws_ok($$ update public.accounts set suspended_at = null $$, '42501', null, 'a client cannot touch suspended_at');
 select throws_ok($$ update public.accounts set stripe_subscription_id = 'sub_mine' $$, '42501', null, 'a client cannot set stripe_subscription_id');
@@ -67,7 +67,7 @@ select throws_ok($$ update public.accounts set billing_interval = 'year' $$, '42
 select throws_ok($$ update public.accounts set current_period_end = now() $$, '42501', null, 'a client cannot set current_period_end');
 select throws_ok($$ update public.accounts set cancel_at_period_end = true $$, '42501', null, 'a client cannot set cancel_at_period_end');
 select throws_ok($$ update public.accounts set stripe_event_created_at = '2000-01-01' $$, '42501', null, 'a client cannot set stripe_event_created_at');
-select throws_ok($$ update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('b') $$, '42501', null, 'a client cannot update another account either');
+select throws_ok($$ update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('b') $$, '42501', null, 'a client cannot update another account either');
 select throws_ok($$ insert into public.accounts (id, plan) values (gen_random_uuid(), 'studio') $$, '42501', null, 'a client cannot insert an account');
 select throws_ok($$ delete from public.accounts $$, '42501', null, 'a client cannot delete an account');
 
@@ -87,7 +87,7 @@ reset role;
 select tests.clear_authentication();
 
 select throws_ok($$ select * from public.accounts $$, '42501', null, 'anon cannot read accounts');
-select throws_ok($$ update public.accounts set plan = 'studio' $$, '42501', null, 'anon cannot update accounts');
+select throws_ok($$ update public.accounts set paid_plan = 'studio' $$, '42501', null, 'anon cannot update accounts');
 select throws_ok($$ select * from public.stripe_events $$, '42501', null, 'anon cannot read stripe_events');
 select throws_ok(
   $$ insert into public.stripe_events (id, type, stripe_created_at) values ('evt_anon', 'x', now()) $$,

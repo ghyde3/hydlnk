@@ -427,7 +427,7 @@ test.describe("M6-09 / M6-12 replayed requests and other accounts", () => {
   }) => {
     const owner = await signedInUser(context, { label: "own" });
     const admin = adminClient();
-    await admin.from("accounts").update({ plan: "pro" }).eq("id", owner.userId);
+    await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", owner.userId);
     const second = await admin
       .from("pages")
       .insert({
@@ -440,7 +440,7 @@ test.describe("M6-09 / M6-12 replayed requests and other accounts", () => {
       .single();
     await makeLink(owner.userId, second.data!.id);
     await makeLink(owner.userId, owner.pageId);
-    await admin.from("accounts").update({ plan: "free" }).eq("id", owner.userId);
+    await admin.from("accounts").update({ paid_plan: "free" }).eq("id", owner.userId);
 
     await openDialog(page);
     await expect(dialog(page).locator("[data-preview-link]")).toHaveCount(1);

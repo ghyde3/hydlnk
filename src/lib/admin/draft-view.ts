@@ -66,8 +66,12 @@ export async function loadAdminDraftView(
   const pages = (rows.data ?? []).flatMap((row) => {
     const { path: rowPath, title } = row as unknown as { path: unknown; title: unknown };
     if (typeof rowPath !== "string" || typeof title !== "string") return [];
+    // The path is tenant-controlled and becomes a link in the admin's bar: only a valid sub-page
+    // path (one lowercase segment, not reserved) is kept (Wave N security review).
+    const cleanPath = rowPath.trim();
+    if (!isValidSubPagePath(cleanPath)) return [];
     const clean = stripHiddenCharacters(title).trim();
-    return clean === "" ? [] : [{ path: rowPath.trim(), title: clean }];
+    return clean === "" ? [] : [{ path: cleanPath, title: clean }];
   });
 
   return {

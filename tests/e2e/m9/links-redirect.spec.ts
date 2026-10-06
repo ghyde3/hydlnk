@@ -219,7 +219,7 @@ test.describe("M9-31 what the live address answers", () => {
 
     const admin = adminClient();
     expect(
-      (await admin.from("accounts").update({ plan: "free" }).eq("id", live.userId)).error,
+      (await admin.from("accounts").update({ paid_plan: "free" }).eq("id", live.userId)).error,
     ).toBeNull();
     await expireOwnerPages(browser, live.userId);
     const downgraded = await getPage(live.host);
@@ -227,7 +227,7 @@ test.describe("M9-31 what the live address answers", () => {
     expect(downgraded.location).toBeNull();
 
     expect(
-      (await admin.from("accounts").update({ plan: "pro" }).eq("id", live.userId)).error,
+      (await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", live.userId)).error,
     ).toBeNull();
     await expireOwnerPages(browser, live.userId);
     expect((await getPage(live.host)).status).toBe(302);

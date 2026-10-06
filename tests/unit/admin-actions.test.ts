@@ -48,7 +48,7 @@ describe.skipIf(!run)("M5-07 / M5-06 admin actions (local Supabase)", () => {
     const o = await makeOwner(admin, label);
     owners.push(o);
     if (extraPages.length > 0) {
-      await admin.from("accounts").update({ plan: "studio" }).eq("id", o.userId);
+      await admin.from("accounts").update({ paid_plan: "studio" }).eq("id", o.userId);
       for (const handle of extraPages) {
         const { error } = await admin
           .from("pages")
