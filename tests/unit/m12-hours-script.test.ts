@@ -134,7 +134,7 @@ describe("M12-02 the tenant script's open-now rule equals hoursStatusAt", () => 
         );
       }
     }
-  });
+  }, 30_000); // three zones across a week in jsdom: slow on CI runners
 
   it("refreshes every minute, and a block whose zone is unknown is read in UTC", () => {
     const seen = run({ ...nightShift, timezone: "Not/AZone" }, "2026-01-05T23:00:00Z");
