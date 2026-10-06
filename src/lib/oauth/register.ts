@@ -1,8 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { OAUTH_SCOPES, UNUSED_DCR_CAP } from "./constants";
-import { HYDLNK_NAME_REFUSAL, UNNAMED_APP, namesHydlnkWithoutRight, sanitizeClientName } from "./client-name";
+import {
+  HYDLNK_NAME_REFUSAL,
+  UNNAMED_APP,
+  namesHydlnkWithoutRight,
+  sanitizeClientName,
+} from "./client-name";
 import { VENDOR_NAME_REFUSAL, namesVendorWithoutRight } from "./known-clients";
 import { logOauthEvent, logOauthFailure } from "./log";
+import { redirectHosts } from "./blocked-hosts";
 import { validateRedirectUriList } from "./redirect-uri";
 import type { BodyRead } from "./http";
 import type { OauthStore } from "./store";
@@ -17,6 +23,7 @@ import type { OauthStore } from "./store";
  *   - the name cleaned and refused when it poses as this product (M10-09);
  *   - a vendor's name (Claude, ChatGPT and so on) only for an app that returns to that vendor or to
  *     this computer, and no return address on this product's own hosts (Wave L review);
+ *   - no return address on a host of an app an admin blocked (`oauth_blocked_hosts`, M13-10 review);
  *   - 20 registrations an hour per address, then 429. There is no overall bucket: one budget for
  *     every caller would let about fifteen addresses spend it and keep every real client's fallback
  *     registration at a 429 for the hour. Storage is bounded by the 20,000-row trim and the nightly
@@ -46,7 +53,7 @@ export interface HttpResult {
 }
 
 export interface RegisterDeps {
-  store: Pick<OauthStore, "insertDcrClient" | "trimUnusedDcr">;
+  store: Pick<OauthStore, "insertDcrClient" | "trimUnusedDcr" | "anyHostBlocked">;
   limit: LimitFn;
   now?: () => number;
   newClientId?: () => string;
@@ -127,6 +134,21 @@ export async function registerClient(
   );
   if (!redirects.ok) {
     return failure(400, "invalid_redirect_uri", "Use https redirect URIs, or http on localhost.");
+  }
+  // A return address on a host an admin has blocked (M13-10 review): the app they blocked would
+  // otherwise come back under a new id. Fails closed when the table cannot be read.
+  const hosts = redirectHosts(redirects.uris);
+  if (hosts.length > 0) {
+    let blocked: boolean;
+    try {
+      blocked = await deps.store.anyHostBlocked(hosts);
+    } catch (error) {
+      logOauthFailure("register", error);
+      return failure(500, "server_error", "We couldn’t register the app. Try again later.");
+    }
+    if (blocked) {
+      return failure(400, "invalid_redirect_uri", "That return address can’t be used.");
+    }
   }
 
   const method = read("token_endpoint_auth_method");

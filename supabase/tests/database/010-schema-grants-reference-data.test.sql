@@ -60,7 +60,9 @@ select tables_are(
     'account_site_bytes',
     'site_pages',
     -- Wave N: the app announcement (184)
-    'announcements'
+    'announcements',
+    -- Wave N: hosts of blocked OAuth apps, server only (187)
+    'oauth_blocked_hosts'
   ],
   'public holds exactly the contract tables'
 );
@@ -109,7 +111,7 @@ select set_eq(
   $$,
   $$
     values
-      ('accounts|authenticated|SELECT|*'),
+      ('accounts|authenticated|SELECT|billing_interval,cancel_at_period_end,created_at,current_period_end,gift_plan,gift_reason,gift_until,gifted_at,id,paid_plan,plan,stripe_customer_id,stripe_event_created_at,stripe_subscription_id,suspended_at,updated_at'),
       ('pages|authenticated|SELECT|*'),
       ('pages|authenticated|UPDATE|draft,name'),
       ('themes|anon|SELECT|*'),

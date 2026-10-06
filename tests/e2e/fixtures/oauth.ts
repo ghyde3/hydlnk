@@ -336,6 +336,9 @@ export async function issuedCodesCount(clientId?: string): Promise<number> {
 
 export async function removeClients(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
+  // Restoring clears the return hosts a block recorded (M13-10 review): without it a test that blocked
+  // an app would leave its host refused for every later registration.
+  for (const id of ids) await adminClient().rpc("admin_unblock_oauth_client", { p_client_id: id });
   await adminClient().from("oauth_clients").delete().in("client_id", ids);
 }
 

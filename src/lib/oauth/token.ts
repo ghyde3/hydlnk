@@ -89,6 +89,11 @@ function oauthError(
 const invalidRequest = (description: string) => oauthError(400, "invalid_request", description);
 const invalidGrant = () =>
   oauthError(400, "invalid_grant", "The code or the refresh token isn’t valid.");
+// A deliberate, tested exception to the token endpoint's single generic `invalid_grant` description
+// (m13-oauth-blocked.test.ts): the block check runs first, before any code, token or secret is looked
+// up, so this answer reveals nothing about a credential; and the same fact ("HYDLNK has blocked this
+// app.") is already public on the authorize error page for any client id. Do not copy the distinct
+// description to a check that runs after a code or token lookup.
 const blockedClient = () => oauthError(400, "invalid_grant", "HYDLNK has blocked this app.");
 const invalidClient = () => oauthError(400, "invalid_client", "The app isn’t recognized.");
 const invalidTarget = () =>

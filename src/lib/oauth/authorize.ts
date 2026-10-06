@@ -1,6 +1,7 @@
 import { allScopes, parseScopeParam } from "./scopes";
 import { OAUTH_REQUEST_SECONDS, orderedScopes, type OauthScope } from "./constants";
 import type { AuthorizeErrorClass, RedirectErrorCode } from "./messages";
+import { redirectHosts } from "./blocked-hosts";
 import { KNOWN_CLIENT_IDS, isKnownClientId } from "./known-clients";
 import { logOauthFailure } from "./log";
 import { matchesAnyRedirectUri, parseRedirectUri, redirectHostLabel } from "./redirect-uri";
@@ -101,7 +102,13 @@ export type AuthorizeResult =
 export interface AuthorizeDeps {
   store: Pick<
     OauthStore,
-    "insertRequest" | "getRequest" | "bindRequest" | "getActiveGrant" | "isSuspended" | "getClient"
+    | "insertRequest"
+    | "getRequest"
+    | "bindRequest"
+    | "getActiveGrant"
+    | "isSuspended"
+    | "getClient"
+    | "anyHostBlocked"
   >;
   limit: LimitFn;
   now: () => number;
@@ -214,6 +221,15 @@ async function run(input: AuthorizeInput, deps: AuthorizeDeps): Promise<Authoriz
   // 3b. an app an admin has blocked (M13-10) is refused before anything else is read from the
   // request, and never redirected: its return address is not trusted, whoever it is.
   if (client.blocked_at !== null) return errorPage("app_blocked");
+  // ... and so is a client that returns to a host of a blocked app (M13-10 review): the blocked app's
+  // new registration, or a metadata document that moved. A known client is never checked: its hosts
+  // can never be recorded (blocked-hosts.ts), so a damaged table cannot lock Claude out.
+  if (!isKnownClientId(client.client_id, { allowTestStub: deps.allowTestStub })) {
+    const hosts = redirectHosts(client.redirect_uris);
+    if (hosts.length > 0 && (await deps.store.anyHostBlocked(hosts))) {
+      return errorPage("app_blocked");
+    }
+  }
 
   // 4. the return address.
   if (
@@ -313,7 +329,8 @@ async function clientMayReceiveErrors(
   deps: Pick<AuthorizeDeps, "store" | "allowTestStub">,
 ): Promise<boolean> {
   if (client.kind !== "cimd") return false;
-  if (isKnownClientId(client.client_id, { allowTestStub: deps.allowTestStub === true })) return true;
+  if (isKnownClientId(client.client_id, { allowTestStub: deps.allowTestStub === true }))
+    return true;
   if (!user) return false;
   return (await deps.store.getActiveGrant(user.id, client.client_id)) !== null;
 }

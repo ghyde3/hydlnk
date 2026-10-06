@@ -103,6 +103,13 @@ export function createSupabaseOauthStore(admin: Admin = createAdminSupabase()): 
       if (error) fail("insertDcrClient", error);
     },
 
+    async anyHostBlocked(hosts) {
+      if (hosts.length === 0) return false;
+      const { data, error } = await admin.rpc("oauth_host_blocked", { p_hosts: [...hosts] });
+      if (error) fail("anyHostBlocked", error);
+      return data === true;
+    },
+
     async touchClient(clientId) {
       const { error } = await admin
         .from("oauth_clients")

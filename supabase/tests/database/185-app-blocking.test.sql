@@ -54,9 +54,9 @@ select is(
   0, 'anon and authenticated still hold nothing on oauth_clients'
 );
 select ok(
-  not has_function_privilege('anon', 'public.admin_block_oauth_client(text,uuid,text)', 'execute')
-  and not has_function_privilege('authenticated', 'public.admin_block_oauth_client(text,uuid,text)', 'execute')
-  and has_function_privilege('service_role', 'public.admin_block_oauth_client(text,uuid,text)', 'execute')
+  not has_function_privilege('anon', 'public.admin_block_oauth_client(text,uuid,text,text[])', 'execute')
+  and not has_function_privilege('authenticated', 'public.admin_block_oauth_client(text,uuid,text,text[])', 'execute')
+  and has_function_privilege('service_role', 'public.admin_block_oauth_client(text,uuid,text,text[])', 'execute')
   and not has_function_privilege('authenticated', 'public.admin_unblock_oauth_client(text)', 'execute')
   and has_function_privilege('service_role', 'public.admin_unblock_oauth_client(text)', 'execute')
   and not has_function_privilege('authenticated', 'public.admin_oauth_apps(integer)', 'execute')

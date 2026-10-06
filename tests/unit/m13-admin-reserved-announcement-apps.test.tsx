@@ -171,6 +171,8 @@ describe.skipIf(!run)("M13-08 to M13-10 admin actions (local Supabase)", () => {
     await admin.from("announcements").delete().gte("ends_at", "1970-01-01");
     for (const handle of reserved)
       await admin.rpc("admin_remove_reserved_handle", { p_handle: handle });
+    // Restoring clears the return hosts a block recorded (oauth_blocked_hosts has no other way out).
+    for (const id of clients) await admin.rpc("admin_unblock_oauth_client", { p_client_id: id });
     for (const id of clients) await admin.from("oauth_clients").delete().eq("client_id", id);
     await removeOwners(admin, owners);
   });
@@ -324,6 +326,26 @@ describe.skipIf(!run)("M13-08 to M13-10 admin actions (local Supabase)", () => {
       expect(active.data![0]!.message).toBe("Second");
     });
 
+    it("a clear that died before its audit row is repaired by the retry, once", async () => {
+      const set = await call(setAnnouncementAction, {
+        message: "Half cleared",
+        ends_at: future(2),
+      });
+      const id = (set as unknown as { data: { id: string } }).data.id;
+      // The earlier call: the announcement ended, the audit row never written.
+      expect((await admin.rpc("admin_clear_announcement")).error).toBeNull();
+      expect(await audit("clear_announcement", "id", id)).toHaveLength(0);
+
+      expect(await call(clearAnnouncementAction, { id })).toMatchObject({
+        ok: true,
+        data: { changed: false },
+      });
+      const rows = await audit("clear_announcement", "id", id);
+      expect(rows).toHaveLength(1);
+      expect(await call(clearAnnouncementAction, { id })).toMatchObject({ ok: true });
+      expect(await audit("clear_announcement", "id", id)).toHaveLength(1);
+    });
+
     it.each([
       ["no message", { message: "", ends_at: "2099-01-01T00:00:00Z" }],
       [
@@ -413,6 +435,30 @@ describe.skipIf(!run)("M13-08 to M13-10 admin actions (local Supabase)", () => {
         data: { changed: false },
       });
       expect(await audit("block_app", "client_id", id)).toHaveLength(1);
+    });
+
+    it("remembers the return hosts of a blocked app (never loopback, never claude.ai) until it is restored", async () => {
+      const host = `zq-${rand(8)}.example.test`;
+      const id = await newClient();
+      const set = await admin
+        .from("oauth_clients")
+        .update({
+          redirect_uris: [`https://${host}/cb`, "http://localhost:8123/cb", "https://claude.ai/x"],
+        })
+        .eq("client_id", id);
+      expect(set.error).toBeNull();
+      const hostBlocked = async (h: string) =>
+        (await admin.rpc("oauth_host_blocked", { p_hosts: [h] })).data;
+
+      expect(await hostBlocked(host)).toBe(false);
+      await call(blockAppAction, { client_id: id, reason: "abuse" });
+      expect(await hostBlocked(host)).toBe(true);
+      expect(await hostBlocked(host.toUpperCase())).toBe(true);
+      expect(await hostBlocked("claude.ai")).toBe(false);
+      expect(await hostBlocked("localhost")).toBe(false);
+
+      await call(unblockAppAction, { client_id: id });
+      expect(await hostBlocked(host)).toBe(false);
     });
 
     it("restores it: blocked_at cleared, one audit row, and restoring again changes nothing", async () => {

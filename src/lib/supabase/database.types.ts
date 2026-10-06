@@ -543,6 +543,27 @@ export type Database = {
           },
         ]
       }
+      oauth_blocked_hosts: {
+        Row: {
+          blocked_at: string
+          blocked_by: string | null
+          client_id: string
+          host: string
+        }
+        Insert: {
+          blocked_at?: string
+          blocked_by?: string | null
+          client_id: string
+          host: string
+        }
+        Update: {
+          blocked_at?: string
+          blocked_by?: string | null
+          client_id?: string
+          host?: string
+        }
+        Relationships: []
+      }
       oauth_clients: {
         Row: {
           blocked_at: string | null
@@ -1134,7 +1155,12 @@ export type Database = {
         }[]
       }
       admin_block_oauth_client: {
-        Args: { p_admin: string; p_client_id: string; p_reason: string }
+        Args: {
+          p_admin: string
+          p_client_id: string
+          p_hosts?: string[]
+          p_reason: string
+        }
         Returns: {
           grants_ended: number
           outcome: string
@@ -1334,7 +1360,12 @@ export type Database = {
         Returns: boolean
       }
       claim_domain_live_email: { Args: { p_id: string }; Returns: boolean }
-      end_expired_gifts: { Args: never; Returns: number }
+      end_expired_gifts: {
+        Args: never
+        Returns: {
+          account_id: string
+        }[]
+      }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
       mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
@@ -1414,6 +1445,7 @@ export type Database = {
       }
       oauth_end_family: { Args: { p_family: string }; Returns: undefined }
       oauth_end_grant: { Args: { p_grant: string }; Returns: undefined }
+      oauth_host_blocked: { Args: { p_hosts: string[] }; Returns: boolean }
       oauth_redeem_code: {
         Args: {
           p_access_hash: string
@@ -1522,6 +1554,7 @@ export type Database = {
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
       rollup_recent_days: { Args: { n: number }; Returns: number }
       run_domain_verification_sweep: { Args: never; Returns: undefined }
+      run_gift_expiry_sweep: { Args: never; Returns: undefined }
       run_nightly_maintenance: { Args: never; Returns: undefined }
       site_click_pairs: {
         Args: { p_page_id: string }

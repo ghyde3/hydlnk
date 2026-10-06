@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { fail, type ActionResult, type AdminAction } from "./types";
+import { hostsToBlock } from "@/lib/oauth/blocked-hosts";
 import { latestAudit, looseDb, writeAudit } from "./audit-detail";
 
 /**
@@ -11,7 +12,7 @@ import { latestAudit, looseDb, writeAudit } from "./audit-detail";
  *                and codes, and sets `oauth_clients.blocked_at`. The authorize and token endpoints refuse
  *                a client with that set (src/lib/oauth), and the metadata upsert never writes it, so a
  *                re-fetch cannot lift it. Needs a reason (at most 500 characters).
- *   unblock_app  clears `blocked_at`. The ended grants stay ended: people connect the app again.
+ *   unblock_app  clears `blocked_at` and the hosts it recorded. The ended grants stay ended: people connect the app again.
  *
  * Each writes one `admin_audit` row after the change; a retry that finds the change made writes a row
  * the earlier call died before writing. Nothing here reads a person, a token or tool content.
@@ -25,6 +26,17 @@ const blockInput = z.object({ client_id: clientId, reason: z.string().max(5000).
 const unblockInput = z.object({ client_id: clientId });
 
 const NOT_FOUND = "That app doesn’t exist.";
+
+async function redirectsOf(db: ReturnType<typeof looseDb>, id: string): Promise<string[]> {
+  const { data, error } = await db
+    .from("oauth_clients")
+    .select("redirect_uris")
+    .eq("client_id", id)
+    .maybeSingle();
+  if (error) throw new Error(`Reading the app failed: ${error.message}`);
+  const uris = (data as { redirect_uris: unknown } | null)?.redirect_uris;
+  return Array.isArray(uris) ? uris.filter((uri): uri is string => typeof uri === "string") : [];
+}
 
 async function nameOf(db: ReturnType<typeof looseDb>, id: string): Promise<string | null> {
   const { data, error } = await db
@@ -53,6 +65,9 @@ export const blockAppAction: AdminAction = {
       p_client_id: id,
       p_admin: context.actor.id,
       p_reason: reason,
+      // The return hosts are remembered so the app cannot come back under a new id (M13-10 review);
+      // never a host of a known client, never loopback.
+      p_hosts: hostsToBlock(await redirectsOf(db, id)),
     });
     if (error) throw new Error(`Blocking the app failed: ${error.message}`);
     const row = (

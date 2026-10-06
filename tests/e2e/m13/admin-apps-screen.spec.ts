@@ -1,10 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { cleanupUsers } from "../fixtures/data";
+import { cleanupUsers, rand } from "../fixtures/data";
 import { appRaw } from "../fixtures/http";
 import {
   authorizeRaw,
-  mcpAnswers,
   mcpStatus,
   mintGrant,
   pkcePair,
@@ -33,8 +32,9 @@ test.afterAll(async () => {
 const SCREEN = url("app", "/admin/apps");
 const rowOf = (page: Page, clientId: string) => page.locator(`tr[data-client-id="${clientId}"]`);
 
+/** Its own return host: a block records the host (M13-10 review), and the two projects run at once. */
 async function newApp(name: string): Promise<RegisteredClient> {
-  const client = await registerClient(["https://a.example/cb"], name);
+  const client = await registerClient([`https://zq-${rand(10)}.example.test/cb`], name);
   made.push(client.client_id);
   return client;
 }
@@ -74,9 +74,9 @@ test.describe("M13-10 connected apps screen", () => {
     const app = await newApp("Watched app");
     const ownerContext = await browser.newContext();
     const owner = await signInAsUser(ownerContext, "appown");
-    const minted = await mintGrant(ownerContext, app.client_id);
-    const mcp = await mcpAnswers();
-    if (mcp) expect(await mcpStatus(minted.accessToken)).not.toBe(401);
+    const redirectUri = app.redirect_uris[0]!;
+    const minted = await mintGrant(ownerContext, app.client_id, { redirectUri });
+    expect(await mcpStatus(minted.accessToken)).not.toBe(401);
 
     await signInAsAdmin(context, "appadm");
     await open(page);
@@ -114,15 +114,37 @@ test.describe("M13-10 connected apps screen", () => {
     expect(audit.data).toHaveLength(1);
 
     // Its token stopped at once, its refresh is refused, and it can't start a new authorization.
-    if (mcp) expect(await mcpStatus(minted.accessToken)).toBe(401);
+    expect(await mcpStatus(minted.accessToken)).toBe(401);
     const refreshed = await refreshTokens(app.client_id, minted.refreshToken);
     expect(refreshed.status).toBe(400);
     expect(refreshed.body.error).toBe("invalid_grant");
-    const authorize = await authorizeRaw(app.client_id, pkcePair().challenge, undefined, {
-      cookie: await sessionCookie(ownerContext),
-    });
+    const authorize = await authorizeRaw(
+      app.client_id,
+      pkcePair().challenge,
+      { redirectUri },
+      {
+        cookie: await sessionCookie(ownerContext),
+      },
+    );
     expect(authorize.status).toBe(400);
     expect(authorize.body).toContain("HYDLNK has blocked this app.");
+
+    // It can't come back under a new id: a registration returning to the same host is refused, and so
+    // is a stored client that does (the host was recorded when the app was blocked).
+    const host = new URL(app.redirect_uris[0]!).host;
+    const again2 = await appRaw("/oauth/register", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": `203.0.113.${50 + Math.floor(Math.random() * 100)}`,
+      },
+      body: JSON.stringify({
+        redirect_uris: [`https://${host}/other`],
+        client_name: "Same app, new id",
+      }),
+    });
+    expect(again2.status).toBe(400);
+    expect(JSON.parse(again2.body).error).toBe("invalid_redirect_uri");
 
     // Restore: authorizing works again, the old refresh token stays dead.
     await rowOf(page, app.client_id)
@@ -131,12 +153,17 @@ test.describe("M13-10 connected apps screen", () => {
     await expect(page.getByRole("status")).toContainText("Restored Watched app");
     // With no connection left and no block, an app has nothing to show: it leaves the list.
     await expect(rowOf(page, app.client_id)).toHaveCount(0);
-    const again = await authorizeRaw(app.client_id, pkcePair().challenge, undefined, {
-      cookie: await sessionCookie(ownerContext),
-    });
+    const again = await authorizeRaw(
+      app.client_id,
+      pkcePair().challenge,
+      { redirectUri },
+      {
+        cookie: await sessionCookie(ownerContext),
+      },
+    );
     expect(again.status).toBe(200);
     expect((await refreshTokens(app.client_id, minted.refreshToken)).status).toBe(400);
-    const fresh = await mintGrant(ownerContext, app.client_id);
+    const fresh = await mintGrant(ownerContext, app.client_id, { redirectUri });
     expect(fresh.accessToken).not.toBe(minted.accessToken);
     expect(owner.userId).toBeTruthy();
     await ownerContext.close();

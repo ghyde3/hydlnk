@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { hostsToBlock } from "@/lib/oauth/blocked-hosts";
 import {
   GrantLimitError,
   type ActiveGrantRow,
@@ -110,6 +111,12 @@ export class FakeOauthStore implements OauthStore {
     if (!row) return null;
     return options?.withLogo ? { ...row } : { ...row, logo_png: null };
   }
+  /** oauth_blocked_hosts: host -> the client whose block recorded it. */
+  blockedHosts = new Map<string, string>();
+  async anyHostBlocked(hosts: readonly string[]) {
+    this.count("anyHostBlocked");
+    return hosts.some((host) => this.blockedHosts.has(host.toLowerCase()));
+  }
   /** admin_block_oauth_client (20261013000005): block, end every grant and token, drop open requests. */
   blockClient(clientId: string, adminId = "99999999-9999-4999-8999-999999999999", reason = "") {
     const row = this.clients.get(clientId);
@@ -117,6 +124,10 @@ export class FakeOauthStore implements OauthStore {
     row.blocked_at ??= this.iso(this.clock);
     row.blocked_by ??= adminId;
     row.blocked_reason ??= reason || null;
+    // The route passes hostsToBlock(redirect_uris); the function stores them.
+    for (const host of hostsToBlock(row.redirect_uris)) {
+      if (!this.blockedHosts.has(host)) this.blockedHosts.set(host, clientId);
+    }
     const grantIds = new Set(this.grants.filter((g) => g.clientId === clientId).map((g) => g.id));
     for (const token of this.tokens) {
       if (grantIds.has(token.grantId) && token.revokedAt === null) token.revokedAt = this.clock;
@@ -138,6 +149,7 @@ export class FakeOauthStore implements OauthStore {
     row.blocked_at = null;
     row.blocked_by = null;
     row.blocked_reason = null;
+    for (const [host, owner] of this.blockedHosts) if (owner === clientId) this.blockedHosts.delete(host);
     return "unblocked";
   }
   async upsertCimdClient(client: NewClient) {
