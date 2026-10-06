@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — Release: Wave M2 (blocks, templates, whole-site versions, MCP sub-pages)
+
+- PR #24 merged, merge commit 948b158 (Gary's "Release 24"). Migrations applied through release-migrations.yml (dry run 37505636381, apply 37506421245): 20261012000001_site_versions, 20261012000002_site_uniques, 20261012000003_item_click_pairs, 20261012000004_items_blocklist (a `page_versions.sub_pages` column and the version trigger replaced, a new `daily_site_stats` table backfilled from kept events, `site_click_pairs` and `blocked_links_in` replaced; no data removed, nothing in auth). Deployment https://vercel.com/ghyde3s-projects/hydlnk/7RTmvxJS4BTYXv4MSQyMve1iaQXo (success).
+- Checks: full browser suite green on the production build (run 37498464704, head 9942415); the release head cf8472d (flips, the FAQ and Terms note, decisions) ran Verify only, green (run 37505629161). `pnpm test:e2e:prod` 12/12. Live: /features shows "Eighteen blocks" and the #pages section, /faq states the 32 MB version limit, /terms is dated October 6, 2026.
+- Gary confirmed: version storage up to about 0.5 GiB for a 15-site Studio account (told to customers in the FAQ; the Terms now say plan limits may be adjusted), the 12 KB tenant script cap, the Musician template's hidden embeds. M12-10 closed. Features: 287 of 319.
+- Next: the admin wave on `m14-admin` (Gary picked all ten tools in the Admin Plan artifact, with reserved handles pre-filled with reserved names and brands).
+
 ## 2026-10-06 — Wave M2 built and proven: blocks, templates, whole-site versions, MCP sub-pages
 
 On `m13-sites-m2` (PR #24), resumed after the pause. Flipped to `passes: true`: M12-01 to M12-09, M12-11, M12-12. M12-10 (security review) stays false until Gary confirms the one accepted item (version storage up to about 0.5 GiB for a 15-site Studio account; PLAN Decided, "Sites with pages M2 security review").
