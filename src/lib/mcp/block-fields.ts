@@ -5,6 +5,8 @@ import {
   BOOK_STORES,
   LIMITS,
   SOCIAL_PLATFORMS,
+  DAY_KEYS,
+  HOURS_TIMEZONES,
   appStoresLimitMessage,
   bookStoresLimitMessage,
   type BlockType,
@@ -47,9 +49,7 @@ const TYPE_NAMES: Record<BlockType, string> = {
   book: "book",
   apps: "app store",
   map: "map",
-  // M11-07: sub-page support in MCP is M2. add_block excludes page_link and update_block takes no fields for it.
   page_link: "page link",
-  // M12-05 adds items and hours to MCP; add_block excludes them until then.
   items: "items",
   hours: "hours",
 };
@@ -110,6 +110,25 @@ function fieldSchemas(mode: FieldMode): Record<BlockType, z.ZodType> {
     ...itemId(mode),
     store: up ? text.optional() : text,
     url: text.optional(),
+  });
+  const listItem = z.strictObject({
+    ...itemId(mode),
+    name: up ? text.optional() : text,
+    price: text.optional(),
+    description: text.optional(),
+    image: nullable(imageInput).optional(),
+    url: nullable(text).optional(),
+    sold: z.boolean().optional(),
+  });
+  const hoursRange = z.strictObject({ open: text, close: text });
+  const hoursDay = z.strictObject({
+    closed: z.boolean().optional(),
+    ranges: z
+      .array(hoursRange)
+      .max(LIMITS.hoursRanges, {
+        error: `Use up to ${LIMITS.hoursRanges} time ranges a day.`,
+      })
+      .optional(),
   });
   const iconsMessage = { error: `Use ${LIMITS.socialIconsMin} to ${LIMITS.socialIconsMax} icons.` };
   const cellsMessage = { error: `Use ${LIMITS.gridCellsMin} to ${LIMITS.gridCellsMax} cells.` };
@@ -201,11 +220,30 @@ function fieldSchemas(mode: FieldMode): Record<BlockType, z.ZodType> {
       })
       .partial(),
     map: z.strictObject({ name: text, address: text, overrides }).partial(),
-    // M11-07: no fields through MCP until M2 (see TYPE_NAMES).
-    page_link: z.strictObject({}),
-    // M12-05: no fields through MCP yet.
-    items: z.strictObject({}),
-    hours: z.strictObject({}),
+    page_link: z
+      .strictObject({ label: text, target: text, overrides })
+      .partial()
+      .required(up ? {} : { label: true, target: true }),
+    items: z
+      .strictObject({
+        heading: nullable(text),
+        layout: text,
+        items: z.array(listItem),
+        overrides,
+      })
+      .partial()
+      .required(up ? {} : { items: true }),
+    hours: z
+      .strictObject({
+        timezone: text,
+        days: up
+          ? z.strictObject(Object.fromEntries(DAY_KEYS.map((key) => [key, hoursDay.optional()])))
+          : z.strictObject(Object.fromEntries(DAY_KEYS.map((key) => [key, hoursDay]))),
+        note: nullable(text),
+        overrides,
+      })
+      .partial()
+      .required(up ? {} : { timezone: true, days: true }),
   };
 }
 
@@ -229,10 +267,9 @@ export const BLOCK_FIELD_KEYS: Readonly<Record<BlockType, readonly string[]>> = 
   book: ["title", "author", "cover", "links", "overrides"],
   apps: ["links", "overrides"],
   map: ["name", "address", "overrides"],
-  page_link: [],
-  // M12-05: items and hours take no fields through MCP yet.
-  items: [],
-  hours: [],
+  page_link: ["label", "target", "overrides"],
+  items: ["heading", "layout", "items", "overrides"],
+  hours: ["timezone", "days", "note", "overrides"],
 };
 
 export const BLOCK_OVERRIDE_NAMES: readonly string[] = BLOCK_OVERRIDE_KEYS;
@@ -258,7 +295,12 @@ function nestedKeys(type: BlockType, path: readonly PropertyKey[]): string[] {
     case "cells":
       return ["title", "subtitle", "url"];
     case "items":
-      return ["question", "answer"];
+      return type === "items"
+        ? ["name", "price", "description", "image", "url", "sold"]
+        : ["question", "answer"];
+    case "days":
+      if (path.length === 1) return [...DAY_KEYS];
+      return path.length === 2 ? ["closed", "ranges"] : ["open", "close"];
     case "links":
       return ["store", "url"];
     case "icon":
@@ -318,6 +360,7 @@ export const BOOK_STORE_LIST = BOOK_STORES.join(", ");
 export const APP_STORE_LIST = APP_STORES.join(", ");
 export const LINK_ICON_LIST = LINK_ICONS.join(", ");
 export const LINK_FEATURED_LIST = LINK_FEATURED.join(", ");
+export const HOURS_TIMEZONE_LIST = HOURS_TIMEZONES.join(", ");
 export const IMAGE_SHAPE_LIST = IMAGE_SHAPES.join(", ");
 
 export { BLOCK_TYPES };

@@ -1,13 +1,14 @@
 import { z } from "zod";
 import { MCP_SCOPES } from "../constants";
-import { commitDraft } from "../commit";
+import { commitBlocks } from "../commit";
 import { MESSAGES, ToolFailure } from "../errors";
 import type { ToolDefinition } from "../types";
-import { DRAFT_ONLY, WRITE_IDEMPOTENT, ifRevField, pageIdField } from "./common";
+import { DRAFT_ONLY, WRITE_IDEMPOTENT, ifRevField, pageIdField, subPageIdField } from "./common";
 
 const input = z
   .strictObject({
     pageId: pageIdField,
+    subPageId: subPageIdField,
     ifRev: ifRevField,
     blockId: z.string().max(40).describe("The block to move, from get_page."),
     toIndex: z
@@ -36,13 +37,13 @@ const input = z
 export const moveBlock: ToolDefinition<typeof input> = {
   name: "move_block",
   title: "Move a block",
-  description: `Moves one block to a new place in the page's order. Send exactly one of toIndex (0 is first), afterBlockId, or position (first or last). Only the order changes. ${DRAFT_ONLY} Returns the new order as block ids and types. Moving a block to where it already is changes nothing. Errors: block_not_found, invalid_input, conflict.`,
+  description: `Moves one block to a new place in the page's order. Send exactly one of toIndex (0 is first), afterBlockId, or position (first or last). Only the order changes. ${DRAFT_ONLY} Returns the new order as block ids and types. Pass subPageId for a block on another page of the site. Moving a block to where it already is changes nothing. Errors: block_not_found, invalid_input, conflict.`,
   scope: MCP_SCOPES.write,
   annotations: WRITE_IDEMPOTENT,
   input,
   page: "one",
   async handler(args, call) {
-    const result = await commitDraft(call, args.ifRev, (doc) => {
+    const result = await commitBlocks(call, args.ifRev, (doc) => {
       const from = doc.blocks.findIndex((item) => item.id === args.blockId);
       if (from === -1) throw new ToolFailure("block_not_found", MESSAGES.block_not_found);
       const order = (blocks: typeof doc.blocks) =>

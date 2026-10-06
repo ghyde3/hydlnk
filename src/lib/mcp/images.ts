@@ -1,7 +1,7 @@
 import "server-only";
 import { imageRefSchema, type ImageRef } from "@/lib/document";
 import { MESSAGES, ToolFailure } from "./errors";
-import { listOwnedPages } from "./page-access";
+import { listOwnedPages, listOwnedSubPageDocs } from "./page-access";
 import type { AdminClient } from "./types";
 
 /**
@@ -40,9 +40,15 @@ export function collectRefsByPath(value: unknown, into: Map<string, ImageRef> = 
 
 export type ImageResolver = (imageId: string) => Promise<ImageRef>;
 
+/** Sub-page documents are read this many at a time, and at most this many in all, per call. */
+const SUB_PAGE_BATCH = 100;
+const SUB_PAGE_SCAN_MAX = 1000;
+
 /**
  * A resolver for one tool call. It reads the caller's pages once, on first use, and answers every
- * later image from that read. The path is built from the TOKEN'S user: `{userId}/{imageId}`.
+ * later image from that read. The path is built from the TOKEN'S user: `{userId}/{imageId}`. An
+ * image that no Home draft holds is looked for on the sub-pages (M12-05), a batch at a time and only
+ * until it is found, so a site with hundreds of pages is not read whole for one image.
  */
 export function createImageResolver(admin: AdminClient, userId: string): ImageResolver {
   let known: Promise<Map<string, ImageRef>> | null = null;
@@ -58,13 +64,32 @@ export function createImageResolver(admin: AdminClient, userId: string): ImageRe
     })();
     return known;
   };
+  let scanned = 0;
+  let exhausted = false;
+  /** Reads the next batch of sub-page documents into `refs`; false when there is nothing left. */
+  const scanMore = async (refs: Map<string, ImageRef>): Promise<boolean> => {
+    if (exhausted || scanned >= SUB_PAGE_SCAN_MAX) return false;
+    const rows = await listOwnedSubPageDocs(admin, userId, scanned, SUB_PAGE_BATCH);
+    scanned += SUB_PAGE_BATCH;
+    if (rows.length < SUB_PAGE_BATCH) exhausted = true;
+    for (const row of rows) {
+      collectRefsByPath(row.draft, refs);
+      collectRefsByPath(row.published, refs);
+    }
+    return rows.length > 0;
+  };
   return async (imageId) => {
     if (typeof imageId !== "string" || !IMAGE_ID_PATTERN.test(imageId)) {
       throw new ToolFailure("invalid_input", MESSAGES.imageIsUrl, {
         issues: [{ path: "image", message: MESSAGES.imageIsUrl }],
       });
     }
-    const ref = (await load()).get(`${userId}/${imageId}`);
+    const refs = await load();
+    const key = `${userId}/${imageId}`;
+    while (!refs.has(key) && (await scanMore(refs))) {
+      // keep reading batches of sub-pages until the image turns up or they run out
+    }
+    const ref = refs.get(key);
     if (!ref) throw new ToolFailure("image_not_found", MESSAGES.image_not_found);
     return { ...ref };
   };

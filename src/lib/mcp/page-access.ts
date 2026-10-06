@@ -1,9 +1,15 @@
 import "server-only";
 import { toPlanId, type PlanId } from "@/lib/limits";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
-import { MCP_LIST_PAGES_MAX } from "./constants";
+import { MCP_LIST_PAGES_MAX, MCP_LIST_SUB_PAGES_MAX } from "./constants";
 import { MESSAGES, pageIdRequiredMessage } from "./errors";
-import type { AdminClient, LoadPageResult, OwnedPage } from "./types";
+import type {
+  AdminClient,
+  LoadPageResult,
+  LoadSubPageResult,
+  OwnedPage,
+  OwnedSubPage,
+} from "./types";
 
 /**
  * The one place the connector reads pages and drafts (M10-22, M10-24). Every read filters on the
@@ -195,4 +201,141 @@ export async function loadThemeTokens(
     system: data.owner_id === null,
     tokens: tokens.success ? tokens.data : {},
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sub-pages (M12-05)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `site_pages` has no owner column: a sub-page belongs to the owner of its site. Every read below
+ * joins the site (`SITE_JOIN`) and filters on `pages.owner_id` IN THE QUERY, and asks
+ * again in code, so the owner rule holds whatever the caller passes. A sub-page of another site, of
+ * another account, a random id and a malformed id are one answer: `not_found`.
+ */
+// PostgREST spells an inner join with an exclamation mark, which the copy rules keep out of every
+// string in this directory; the character is built so the join stays readable here.
+const SITE_JOIN = `site:pages${String.fromCharCode(33)}inner(owner_id)`;
+const SUB_PAGE_BASE = `id, page_id, created_at, updated_at, published_at, live_path, ${SITE_JOIN}`;
+const SUB_PAGE_WITH_DOCS = `${SUB_PAGE_BASE}, draft, published`;
+
+interface SubPageRow {
+  id: string;
+  page_id: string;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+  live_path: string | null;
+  site: { owner_id: string } | { owner_id: string }[] | null;
+  draft?: unknown;
+  published?: unknown;
+}
+
+function siteOwnerOf(row: SubPageRow): string | null {
+  const site = Array.isArray(row.site) ? row.site[0] : row.site;
+  return site?.owner_id ?? null;
+}
+
+/** One sub-page of the caller's site `siteId`, with its documents when `docs` is true. */
+export async function loadOwnedSubPage(
+  admin: AdminClient,
+  userId: string,
+  siteId: string,
+  subPageId: string,
+  options: { docs?: boolean } = {},
+): Promise<LoadSubPageResult> {
+  if (!UUID.test(subPageId) || !UUID.test(siteId)) return { ok: false, failure: { ...NOT_FOUND } };
+  const docs = options.docs === true;
+  const found = await admin
+    .from("site_pages")
+    .select(docs ? SUB_PAGE_WITH_DOCS : SUB_PAGE_BASE)
+    .eq("id", subPageId.toLowerCase())
+    .eq("page_id", siteId.toLowerCase())
+    .eq("site.owner_id", userId)
+    .maybeSingle();
+  if (found.error) throw new PageReadError("reading the page failed");
+  const row = found.data as unknown as SubPageRow | null;
+  if (!row || siteOwnerOf(row) !== userId || row.page_id !== siteId.toLowerCase()) {
+    return { ok: false, failure: { ...NOT_FOUND } };
+  }
+  const subPage: OwnedSubPage = {
+    id: row.id,
+    siteId: row.page_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    rev: Date.parse(row.updated_at),
+    publishedAt: row.published_at,
+    livePath: row.live_path,
+    ...(docs ? { draft: row.draft, published: row.published ?? null } : {}),
+  };
+  return { ok: true, subPage };
+}
+
+/** What `list_pages` and the path checks need of a sub-page: its title and path, never its blocks. */
+export interface SubPageSummaryRow {
+  id: string;
+  siteId: string;
+  title: string;
+  path: string;
+  livePath: string | null;
+  publishedAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * The sub-pages of the caller's sites `siteIds`, oldest first (at most `MCP_LIST_SUB_PAGES_MAX` a
+ * site are kept by the caller; this read is capped at 1,000 rows in all). Only the title and the
+ * path are read from the draft.
+ */
+export async function listSubPageSummaries(
+  admin: AdminClient,
+  userId: string,
+  siteIds: readonly string[],
+): Promise<SubPageSummaryRow[]> {
+  if (siteIds.length === 0) return [];
+  const { data, error } = await admin
+    .from("site_pages")
+    .select(
+      `id, page_id, title:draft->>title, path:draft->>path, live_path, published_at, created_at, ${SITE_JOIN}`,
+    )
+    .in("page_id", [...siteIds])
+    .eq("site.owner_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(MCP_LIST_SUB_PAGES_MAX * 10);
+  if (error) throw new PageReadError("listing the pages of a site failed");
+  return (
+    (data ?? []) as unknown as Array<SubPageRow & { title: string | null; path: string | null }>
+  )
+    .filter((row) => siteOwnerOf(row) === userId)
+    .map((row) => ({
+      id: row.id,
+      siteId: row.page_id,
+      title: row.title ?? "",
+      path: row.path ?? "",
+      livePath: row.live_path,
+      publishedAt: row.published_at,
+      createdAt: row.created_at,
+    }));
+}
+
+/**
+ * The documents (draft and published) of the caller's sub-pages, `size` rows from `offset`, in id
+ * order. The image resolver reads them in batches, only when an image is not found on a Home draft.
+ */
+export async function listOwnedSubPageDocs(
+  admin: AdminClient,
+  userId: string,
+  offset: number,
+  size: number,
+): Promise<Array<{ draft: unknown; published: unknown }>> {
+  const { data, error } = await admin
+    .from("site_pages")
+    .select(`draft, published, ${SITE_JOIN}`)
+    .eq("site.owner_id", userId)
+    .order("id", { ascending: true })
+    .range(offset, offset + size - 1);
+  if (error) throw new PageReadError("reading the pages of a site failed");
+  return ((data ?? []) as unknown as SubPageRow[])
+    .filter((row) => siteOwnerOf(row) === userId)
+    .map((row) => ({ draft: row.draft, published: row.published ?? null }));
 }

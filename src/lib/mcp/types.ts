@@ -31,6 +31,29 @@ export interface OwnedPage {
 export type LoadPageResult =
   { ok: true; page: OwnedPage } | { ok: false; failure: ToolFailureInfo };
 
+/**
+ * A sub-page of one of the caller's sites (M12-05). `rev` is the page's `updated_at` as milliseconds:
+ * a sub-page document has no rev of its own, and the database bumps `updated_at` on every write the
+ * editor or a tool makes, so it plays the part of the optimistic lock.
+ */
+export interface OwnedSubPage {
+  id: string;
+  /** The site (the `pages` row) it belongs to. */
+  siteId: string;
+  createdAt: string;
+  /** The exact stored text of `updated_at`: the conditional update compares against it. */
+  updatedAt: string;
+  rev: number;
+  publishedAt: string | null;
+  livePath: string | null;
+  /** Only when the tool asked for the draft (`needsDraft`). */
+  draft?: unknown;
+  published?: unknown;
+}
+
+export type LoadSubPageResult =
+  { ok: true; subPage: OwnedSubPage } | { ok: false; failure: ToolFailureInfo };
+
 export interface RateVerdict {
   allowed: boolean;
   retryAfter: number;
@@ -58,6 +81,13 @@ export interface ToolDeps {
     pageId: string | undefined,
     options: { withDraft: boolean },
   ) => Promise<LoadPageResult>;
+  /** One sub-page of the already ownership-checked site `siteId`; Home is not a sub-page. */
+  loadSubPage: (
+    userId: string,
+    siteId: string,
+    subPageId: string,
+    options: { withDraft: boolean },
+  ) => Promise<LoadSubPageResult>;
   recordActivity: (row: ActivityRow) => Promise<void>;
   /** Runs work after the response (`after()` in production). */
   defer: (work: () => Promise<unknown> | unknown) => void;
@@ -83,6 +113,8 @@ export interface ToolCall extends ToolIdentity {
   admin: AdminClient;
   /** The caller's page, resolved and ownership-checked, for a tool that works on one; else null. */
   page: OwnedPage | null;
+  /** The sub-page named by `subPageId`, resolved under `page` (a site of the caller); else null (Home). */
+  subPage: OwnedSubPage | null;
   deps: ToolDeps;
   defer: ToolDeps["defer"];
   now: () => Date;
@@ -102,7 +134,7 @@ export interface ToolDefinition<Schema extends z.ZodType = z.ZodType> {
   handler: (args: z.output<Schema>, call: ToolCall) => Promise<ToolSuccess>;
 }
 
-/** A tool as stored in the registry: its schema is erased so one list can hold all twelve. */
+/** A tool as stored in the registry: its schema is erased so one list can hold all of them. */
 export type AnyToolDefinition = ToolDefinition<z.ZodType>;
 
 export type { ToolFailureInfo, ToolSuccess };

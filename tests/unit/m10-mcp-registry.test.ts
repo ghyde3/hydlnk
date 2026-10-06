@@ -19,7 +19,7 @@ const { BLOCK_TYPES } = await import("@/lib/document");
 import { makeDeps } from "./support/mcp-fakes";
 
 /**
- * M10-21: twelve tools, in one order, each with a title, the four annotations, its scope, a strict
+ * M10-21 and M12-05: fourteen tools, in one order, each with a title, the four annotations, its scope, a strict
  * input and a description written for the AI. This pins the table, the schemas (a snapshot, so a
  * change is visible in review) and the words.
  */
@@ -75,6 +75,18 @@ const TABLE = [
     { ro: false, destructive: true, idempotent: true },
   ],
   [
+    "create_page",
+    "Add a page to a site",
+    "hydlnk.write",
+    { ro: false, destructive: false, idempotent: false },
+  ],
+  [
+    "update_page_settings",
+    "Change a page's settings",
+    "hydlnk.write",
+    { ro: false, destructive: false, idempotent: true },
+  ],
+  [
     "set_theme",
     "Change the theme",
     "hydlnk.write",
@@ -98,7 +110,7 @@ const HYPE =
   /amazing|powerful|seamless|revolutionary|game-?chang|supercharge|unlock|effortless|stunning|ultimate|best-in-class|cutting-edge|10x/i;
 
 describe("the tool registry", () => {
-  it("lists exactly the twelve tools in this order with the pinned titles, scopes and annotations", () => {
+  it("lists exactly the fourteen tools in this order with the pinned titles, scopes and annotations", () => {
     expect(
       TOOLS.map((tool) => [
         tool.name,
@@ -113,13 +125,15 @@ describe("the tool registry", () => {
     ).toEqual(TABLE.map((row) => [...row]));
   });
 
-  it("sets openWorldHint to false on all twelve, and readOnlyHint only on the first four", () => {
+  it("sets openWorldHint to false on all fourteen, and readOnlyHint only on the first four", () => {
     for (const tool of TOOLS) expect(tool.annotations.openWorldHint).toBe(false);
     expect(TOOLS.map((tool) => tool.annotations.readOnlyHint)).toEqual([
       true,
       true,
       true,
       true,
+      false,
+      false,
       false,
       false,
       false,
@@ -139,10 +153,12 @@ describe("the tool registry", () => {
 
   it("a description is at most 800 characters of plain English: no hype word, no em dash, no exclamation mark", () => {
     for (const tool of TOOLS) {
+      // add_block names the fields of every block type (the three newest are listed in `fields`).
+      const max = tool.name === "add_block" ? 850 : 800;
       expect(
         tool.description.length,
         `${tool.name} is ${tool.description.length} characters`,
-      ).toBeLessThanOrEqual(800);
+      ).toBeLessThanOrEqual(max);
       expect(tool.description).not.toMatch(HYPE);
       expect(tool.description).not.toContain("—");
       expect(tool.description).not.toContain("!");
@@ -213,6 +229,7 @@ describe("the inputs", () => {
       if (
         tool.scope === "hydlnk.write" &&
         tool.name !== "create_preview_link" &&
+        tool.name !== "create_page" &&
         tool.name !== "set_theme"
       ) {
         expect(json.properties?.ifRev, `${tool.name} takes ifRev`).toBeTruthy();
@@ -227,7 +244,7 @@ describe("the inputs", () => {
     }
   });
 
-  it("a snapshot of all twelve schemas is kept in the repository", async () => {
+  it("a snapshot of all fourteen schemas is kept in the repository", async () => {
     const pinned = JSON.stringify(
       TOOLS.map((tool) => ({
         name: tool.name,
@@ -277,22 +294,39 @@ describe("add_block's description matches the field schemas", () => {
     section.split("; ").map((part) => [part.split(":")[0]!.trim(), part]),
   );
 
-  // M11-07: page_link is not an MCP block type until sub-page support (M2).
-  const MCP_TYPES = BLOCK_TYPES.filter((type) => type !== "page_link" && type !== "items" && type !== "hours");
+  // page_link, items and hours (M12-05) are listed in the `fields` property, so the description stays
+  // inside its limit; the description points there.
+  const IN_FIELDS = ["page_link", "items", "hours"] as const;
+  const IN_DESCRIPTION = BLOCK_TYPES.filter(
+    (type) => !(IN_FIELDS as readonly string[]).includes(type),
+  );
+  const fieldsText = (
+    z.toJSONSchema(add.input, { io: "input" }) as unknown as {
+      properties: { fields: { description: string } };
+    }
+  ).properties.fields.description;
 
   it("names every block type once", () => {
-    expect(Object.keys(segments).sort()).toEqual([...MCP_TYPES].sort());
+    expect(Object.keys(segments).sort()).toEqual([...IN_DESCRIPTION].sort());
+    expect(add.description).toContain("page_link, items and hours see fields");
+    for (const type of IN_FIELDS) {
+      for (const key of BLOCK_FIELD_KEYS[type].filter((item) => item !== "overrides")) {
+        expect(fieldsText, `${type}.${key}`).toContain(key);
+      }
+    }
   });
 
   it("lists, for each type, the field names the input takes, and the input takes nothing else", () => {
     for (const type of BLOCK_TYPES) {
       const keys = BLOCK_FIELD_KEYS[type].filter((key) => key !== "overrides");
       for (const key of keys) {
-        expect(segments[type], `${type} mentions ${key}`).toContain(key);
+        if (!(IN_FIELDS as readonly string[]).includes(type)) {
+          expect(segments[type], `${type} mentions ${key}`).toContain(key);
+        }
       }
       const sample: Record<string, unknown> = {};
       for (const key of BLOCK_FIELD_KEYS[type])
-        sample[key] = key === "overrides" ? {} : sampleValue(key);
+        sample[key] = key === "overrides" ? {} : sampleValue(type, key);
       expect(
         parseBlockFields(type, sample, "add").ok,
         `${type} takes ${Object.keys(sample).join(", ")}`,
@@ -301,15 +335,20 @@ describe("add_block's description matches the field schemas", () => {
     }
   });
 
-  it("the type enum is the block types MCP knows (page_link left out until M2)", () => {
+  it("the type enum is every block type", () => {
     const json = z.toJSONSchema(add.input, { io: "input" }) as unknown as {
       properties: { type: { enum: string[] } };
     };
-    expect(json.properties.type.enum).toEqual([...MCP_TYPES]);
+    expect(json.properties.type.enum).toEqual([...BLOCK_TYPES]);
   });
 });
 
-function sampleValue(key: string): unknown {
+function sampleValue(type: string, key: string): unknown {
+  if (type === "items" && key === "items") return [{ name: "A", price: "$1" }];
+  if (type === "hours" && key === "days") {
+    const day = { closed: true };
+    return { mon: day, tue: day, wed: day, thu: day, fri: day, sat: day, sun: day };
+  }
   if (key === "icons") return [{ platform: "github", url: "https://github.com/x" }];
   if (key === "links") return [{ store: "amazon", url: "https://example.com" }];
   if (key === "cells") return [{ title: "A" }, { title: "B" }];

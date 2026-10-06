@@ -1,5 +1,6 @@
 import type { AnyToolDefinition } from "../types";
 import { addBlock } from "./add-block";
+import { createPage } from "./create-page";
 import { createPreviewLink } from "./create-preview-link";
 import { getAnalytics } from "./get-analytics";
 import { getDomains } from "./get-domains";
@@ -10,10 +11,11 @@ import { publishPage } from "./publish-page";
 import { removeBlock } from "./remove-block";
 import { setTheme } from "./set-theme";
 import { updateBlock } from "./update-block";
+import { updatePageSettings } from "./update-page-settings";
 import { updateProfile } from "./update-profile";
 
 /**
- * The twelve tools, in the order `tools/list` returns them (M10-21). One registry: a tool exists
+ * The fourteen tools, in the order `tools/list` returns them (M10-21). One registry: a tool exists
  * when it is here, and every handler is reached through `runTool`, never directly.
  */
 export const TOOLS: readonly AnyToolDefinition[] = [
@@ -26,6 +28,8 @@ export const TOOLS: readonly AnyToolDefinition[] = [
   updateBlock,
   moveBlock,
   removeBlock,
+  createPage,
+  updatePageSettings,
   setTheme,
   createPreviewLink,
   publishPage,

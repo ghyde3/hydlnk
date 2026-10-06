@@ -58,6 +58,9 @@ export const MCP_SHORTENED_TEXT_CHARS = 200;
 /** The most pages `list_pages` returns (the Studio limit). */
 export const MCP_LIST_PAGES_MAX = 15;
 
+/** The most pages `list_pages` lists for one site; the site's own count says when there are more. */
+export const MCP_LIST_SUB_PAGES_MAX = 100;
+
 /** The one protected-resource path the endpoint lives at, on the app host. */
 export const MCP_RESOURCE_PATH = MCP_PATH;
 /** The RFC 9728 document for it (path-insertion form). */

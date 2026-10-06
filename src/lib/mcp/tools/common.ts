@@ -19,13 +19,22 @@ export const pageIdField = z
     "The page's id from list_pages. Leave it out only when the account has exactly one page.",
   );
 
+export const subPageIdField = z
+  .string()
+  .max(64)
+  .meta({ format: "uuid" })
+  .optional()
+  .describe(
+    "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+  );
+
 export const ifRevField = z
   .number()
   .int()
   .min(0)
   .optional()
   .describe(
-    "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict.",
+    "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
   );
 
 export const READ_ONLY: ToolAnnotationSet = {

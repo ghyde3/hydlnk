@@ -7,8 +7,16 @@ import {
   blockDefaults,
   blockSchema,
   changeSocialPlatform,
+  DAY_KEYS,
+  HOME_TARGET,
   collectPublishErrors,
+  collectSubPagePublishErrors,
   draftDocSchema,
+  draftSubPageSchema,
+  publishedSubPageSchema,
+  toSubPagePublishForm,
+  newListItem,
+  isHoursTimezone,
   newAppLink,
   newBookLink,
   newFaqItem,
@@ -17,6 +25,7 @@ import {
   normalizeUrl,
   publishBlockSchema,
   publishedDocSchema,
+  publishFormsEqual,
   resolveProfileOptions,
   singleLine,
   stripHiddenCharacters,
@@ -26,6 +35,7 @@ import {
   type DraftDoc,
   type ImageRef,
   type SocialPlatform,
+  type SubPageDraft,
 } from "@/lib/document";
 import { SOCIAL_PLATFORMS } from "@/lib/document";
 import { computePublishStatus, type PublishStatus } from "@/lib/editor/status";
@@ -33,7 +43,7 @@ import { resolveTokens, type TokenSet } from "@/lib/theme";
 import { friendlyPublishError, friendlyPublishErrors } from "@/lib/themes/publish-errors";
 import { MESSAGES, ToolFailure, type ToolIssue } from "./errors";
 import { imageIdOf } from "./images";
-import { SOCIAL_PLATFORM_LIST, type ParsedFields } from "./block-fields";
+import { HOURS_TIMEZONE_LIST, SOCIAL_PLATFORM_LIST, type ParsedFields } from "./block-fields";
 
 /**
  * The AI-friendly layer over the page document (M10-24..M10-27). Two halves, both pure:
@@ -258,6 +268,32 @@ export function blockView(input: Block): Rec {
       };
     case "map":
       return { ...base, name: block.name, address: block.address, ...extras };
+    case "page_link":
+      return { ...base, label: block.label, target: block.target, ...extras };
+    case "items":
+      return {
+        ...base,
+        ...(block.heading ? { heading: block.heading } : {}),
+        layout: block.layout,
+        items: (block.items as Rec[]).map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          description: item.description,
+          ...(item.image ? { image: imageView(item.image as ImageRef) } : {}),
+          ...(item.url ? { url: item.url } : {}),
+          sold: item.sold === true,
+        })),
+        ...extras,
+      };
+    case "hours":
+      return {
+        ...base,
+        timezone: block.timezone,
+        days: block.days,
+        ...(block.note ? { note: block.note } : {}),
+        ...extras,
+      };
     default:
       return { ...base };
   }
@@ -369,6 +405,41 @@ export function readDraft(raw: unknown): DraftDoc | null {
   return parsed.success ? (parsed.data as unknown as DraftDoc) : null;
 }
 
+/** The stored draft of a sub-page, parsed; null when it cannot be read. */
+export function readSubPageDraft(raw: unknown): SubPageDraft | null {
+  const parsed = draftSubPageSchema.safeParse(raw);
+  return parsed.success ? (parsed.data as unknown as SubPageDraft) : null;
+}
+
+/**
+ * A sub-page's state in the words Home's `publishStatus` uses: never published is `not-published`,
+ * the draft's publish form equal to what is live is `published`, anything else `unpublished-changes`.
+ * Compared the way Publish compares (hidden blocks and key order do not count).
+ */
+export function subPageStatusOf(input: { draft: SubPageDraft; published: unknown }): PublishStatus {
+  const parsed =
+    input.published === null || input.published === undefined
+      ? null
+      : publishedSubPageSchema.safeParse(input.published);
+  if (input.published === null || input.published === undefined) return "not-published";
+  const live = parsed?.success ? parsed.data : null;
+  if (live === null) return "unpublished-changes";
+  return publishFormsEqual(toSubPagePublishForm(input.draft), live)
+    ? "published"
+    : "unpublished-changes";
+}
+
+/** What Publish would refuse on a sub-page, in Publish's own words (at most 20). */
+export function subPagePublishIssues(rawDraft: unknown): PublishIssueView[] {
+  return friendlyPublishErrors(collectSubPagePublishErrors(rawDraft))
+    .slice(0, 20)
+    .map((error) => ({
+      blockId: error.blockId,
+      field: error.itemId ? `${error.field} (item ${error.itemId})` : error.field,
+      message: error.message,
+    }));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Patch
 // ---------------------------------------------------------------------------------------------
@@ -389,6 +460,9 @@ export function imageIdsIn(type: BlockType, fields: ParsedFields): string[] {
   };
   if (type === "card" || type === "image") add(fields.image);
   if (type === "book") add(fields.cover);
+  if (type === "items" && Array.isArray(fields.items)) {
+    for (const item of fields.items as Rec[]) add(item.image);
+  }
   if (type === "link" && fields.icon && typeof fields.icon === "object") {
     add((fields.icon as { imageId: string }).imageId);
   }
@@ -419,7 +493,7 @@ type ItemMerge = {
   key: string;
   label: string;
   makeNew: () => Rec;
-  merge: (item: Rec, given: Rec, path: string) => Rec;
+  merge: (item: Rec, given: Rec, path: string, images: ResolvedImages) => Rec;
 };
 
 /**
@@ -428,7 +502,12 @@ type ItemMerge = {
  * get new ids and dropped ones disappear. A given item is merged over the item it matches, so a field
  * it leaves out stays.
  */
-function mergeItems(block: Rec, given: Rec[], spec: ItemMerge): Rec[] {
+function mergeItems(
+  block: Rec,
+  given: Rec[],
+  spec: ItemMerge,
+  images: ResolvedImages = new Map(),
+): Rec[] {
   const existing = (block[spec.key] as Rec[]) ?? [];
   const existingIds = new Set(existing.map((item) => String(item.id)));
   // Ids the caller named on purpose: no other item may take one of them by position.
@@ -457,7 +536,7 @@ function mergeItems(block: Rec, given: Rec[], spec: ItemMerge): Rec[] {
     used.add(id);
     const { id: _ignored, ...rest } = entry;
     void _ignored;
-    return spec.merge(base, rest, path);
+    return spec.merge(base, rest, path, images);
   });
   return out;
 }
@@ -537,6 +616,60 @@ function storeMerge(label: string, make: () => Rec): ItemMerge {
 }
 const BOOK_MERGE = storeMerge("store links", () => ({ ...newBookLink() }) as Rec);
 const APPS_MERGE = storeMerge("store links", () => ({ ...newAppLink() }) as Rec);
+
+const ITEMS_MERGE: ItemMerge = {
+  key: "items",
+  label: "items",
+  makeNew: () => ({ ...newListItem() }) as Rec,
+  merge(item, given, _path, images) {
+    const out = { ...item };
+    if (given.name !== undefined) out.name = cleanLine(String(given.name));
+    if (given.price !== undefined) out.price = cleanLine(String(given.price));
+    if (given.description !== undefined) out.description = cleanLine(String(given.description));
+    if (given.sold !== undefined) out.sold = given.sold === true;
+    if (given.url !== undefined) {
+      const url = given.url === null ? "" : cleanUrl(String(given.url));
+      if (url === "") delete out.url;
+      else out.url = url;
+    }
+    if (given.image !== undefined) {
+      if (given.image === null) delete out.image;
+      else out.image = refOf(images, given.image as ImageInput, false);
+    }
+    return out;
+  },
+};
+
+/** The page a `page_link` points at as it is stored: "home", or a lower-case page id. */
+export function cleanPageTarget(value: string): string {
+  const target = cleanLine(value).trim();
+  return target.toLowerCase() === HOME_TARGET ? HOME_TARGET : target.toLowerCase();
+}
+
+/** A day of an hours block from the fields of a call, laid over the day it already has. */
+function mergeDay(current: Rec, given: Rec, path: string): Rec {
+  const ranges = given.ranges as Rec[] | undefined;
+  if (given.closed === undefined && ranges === undefined) {
+    fail(path, 'Give closed: true, or ranges such as [{ open: "09:00", close: "17:00" }].');
+  }
+  if (given.closed === true && ranges && ranges.length > 0) {
+    fail(path, "A closed day takes no ranges. Send closed: true alone, or ranges alone.");
+  }
+  if (given.closed === undefined && ranges && ranges.length === 0) {
+    fail(path, "Add opening times, or set closed to true.");
+  }
+  const closed = given.closed === true;
+  const next: Rec = { ...current };
+  next.closed = given.closed === undefined ? false : closed;
+  if (closed) next.ranges = [];
+  else if (ranges) {
+    next.ranges = ranges.map((range) => ({
+      open: cleanLine(String(range.open)),
+      close: cleanLine(String(range.close)),
+    }));
+  }
+  return next;
+}
 
 export interface PatchResult {
   block: Block;
@@ -669,6 +802,47 @@ export function patchBlock(
       line("name");
       line("address");
       break;
+    case "page_link":
+      line("label");
+      if (fields.target !== undefined) block.target = cleanPageTarget(String(fields.target));
+      break;
+    case "items":
+      if (fields.heading !== undefined) {
+        if (fields.heading === null) delete block.heading;
+        else block.heading = cleanLine(String(fields.heading));
+      }
+      if (fields.layout !== undefined) {
+        const layout = String(fields.layout).trim();
+        if (layout !== "list" && layout !== "grid") fail("fields.layout", "Choose list or grid.");
+        block.layout = layout;
+      }
+      if (fields.items !== undefined) {
+        block.items = mergeItems(block, fields.items as Rec[], ITEMS_MERGE, images);
+      }
+      break;
+    case "hours": {
+      if (fields.timezone !== undefined) {
+        const zone = String(fields.timezone).trim();
+        if (!isHoursTimezone(zone)) {
+          fail("fields.timezone", `Choose a time zone from: ${HOURS_TIMEZONE_LIST}.`);
+        }
+        block.timezone = zone;
+      }
+      if (fields.days !== undefined) {
+        const days = { ...asRec(block.days) };
+        for (const key of DAY_KEYS) {
+          const given = (fields.days as Rec)[key];
+          if (given !== undefined)
+            days[key] = mergeDay(asRec(days[key]), given as Rec, `fields.days.${key}`);
+        }
+        block.days = days;
+      }
+      if (fields.note !== undefined) {
+        if (fields.note === null) delete block.note;
+        else block.note = cleanLine(String(fields.note));
+      }
+      break;
+    }
   }
 
   if (fields.overrides !== undefined) {
@@ -687,7 +861,14 @@ export function buildBlock(
   images: ResolvedImages,
   visible: boolean,
 ): Block {
-  return patchBlock(blockDefaults[type](), fields, images, visible).block;
+  const base = blockDefaults[type]() as unknown as Rec;
+  // The editor's chips start with sample items and Monday to Friday hours; a block built from a
+  // call holds only what the call says, so sample text never reaches a page by accident.
+  if (type === "items") base.items = [];
+  if (type === "hours") {
+    base.days = Object.fromEntries(DAY_KEYS.map((key) => [key, { closed: true, ranges: [] }]));
+  }
+  return patchBlock(base as unknown as Block, fields, images, visible).block;
 }
 
 /** The path of a zod issue as `fields.items[1].answer`, with the block's own keys under `fields`. */

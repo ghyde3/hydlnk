@@ -8,7 +8,7 @@ import { TOOLS } from "./tools";
 import type { AnyToolDefinition, ToolDeps, ToolIdentity } from "./types";
 
 /**
- * Registers the twelve tools on an `McpServer` (one is built per request, the way mcp-handler
+ * Registers the fourteen tools on an `McpServer` (one is built per request, the way mcp-handler
  * serves statelessly). The SDK is given a schema that ADVERTISES the real input (the JSON Schema of
  * the tool's zod schema, `additionalProperties: false`) but validates nothing: the SDK turns a
  * validation failure into a raw error text, and `runTool` owns the order of checks and the words of

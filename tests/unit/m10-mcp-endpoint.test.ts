@@ -627,7 +627,7 @@ describe("the protocol, through the real SDK handler (stateless, both generation
     expect(response.status).toBe(202);
   });
 
-  it("tools/list returns the twelve tools in order, whatever the token's scopes, with their security schemes", async () => {
+  it("tools/list returns the fourteen tools in order, whatever the token's scopes, with their security schemes", async () => {
     const { rpc } = protocolSetup();
     const { message } = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     expect(message.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
@@ -640,6 +640,8 @@ describe("the protocol, through the real SDK handler (stateless, both generation
       "update_block",
       "move_block",
       "remove_block",
+      "create_page",
+      "update_page_settings",
       "set_theme",
       "create_preview_link",
       "publish_page",
@@ -670,7 +672,7 @@ describe("the protocol, through the real SDK handler (stateless, both generation
       { jsonrpc: "2.0", id: 4, method: "tools/list", params: { _meta: ENVELOPE } },
       { "mcp-protocol-version": "2026-07-28", "mcp-method": "tools/list" },
     );
-    expect(list.message.result.tools).toHaveLength(12);
+    expect(list.message.result.tools).toHaveLength(14);
   });
 
   it("an unknown tool is -32602, resources, prompts and completion are method not found, malformed JSON is -32700 with a 400", async () => {

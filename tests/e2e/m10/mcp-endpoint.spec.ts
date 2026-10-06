@@ -243,11 +243,11 @@ test.describe("the protocol", () => {
       expect(result.instructions.length).toBeLessThanOrEqual(1200);
       expect(init.headers.get("mcp-session-id")).toBeNull();
       expect((await mcp.initialized()).status).toBe(202);
-      expect(await mcp.listTools()).toHaveLength(12);
+      expect(await mcp.listTools()).toHaveLength(14);
     }
   });
 
-  test("M10-21 tools/list is the pinned table of twelve for any valid token, whatever its scopes", async () => {
+  test("M10-21 tools/list is the pinned table of fourteen for any valid token, whatever its scopes", async () => {
     const user = await makeUser("mcp-list", { plan: "free" });
     const mcp = new McpClient((await mintToken(user.id, READ_ONLY_SCOPES)).token);
     await mcp.initialize();
@@ -272,6 +272,16 @@ test.describe("the protocol", () => {
       ["update_block", "Update a block", false, false, true, false, "hydlnk.write"],
       ["move_block", "Move a block", false, false, true, false, "hydlnk.write"],
       ["remove_block", "Remove a block", false, true, true, false, "hydlnk.write"],
+      ["create_page", "Add a page to a site", false, false, false, false, "hydlnk.write"],
+      [
+        "update_page_settings",
+        "Change a page's settings",
+        false,
+        false,
+        true,
+        false,
+        "hydlnk.write",
+      ],
       ["set_theme", "Change the theme", false, false, true, false, "hydlnk.write"],
       ["create_preview_link", "Create a preview link", false, false, false, false, "hydlnk.write"],
       ["publish_page", "Publish a page", false, true, true, false, "hydlnk.publish"],
@@ -279,7 +289,10 @@ test.describe("the protocol", () => {
     for (const tool of tools) {
       expect(tool.inputSchema.additionalProperties, tool.name).toBe(false);
       expect(tool.outputSchema, tool.name).toBeUndefined();
-      expect(tool.description.length, tool.name).toBeLessThanOrEqual(800);
+      // add_block names the fields of every block type (the three newest in `fields`).
+      expect(tool.description.length, tool.name).toBeLessThanOrEqual(
+        tool.name === "add_block" ? 850 : 800,
+      );
     }
   });
 
@@ -292,7 +305,7 @@ test.describe("the protocol", () => {
     expect(
       (discover.message!.result as { supportedVersions: string[] }).supportedVersions,
     ).toContain("2026-07-28");
-    expect(await mcp.listTools()).toHaveLength(12);
+    expect(await mcp.listTools()).toHaveLength(14);
     await insertPage(user.id, uniq("era"));
     const pages = await mcp.call<{ pages: unknown[] }>("list_pages");
     expect(pages.pages).toHaveLength(1);

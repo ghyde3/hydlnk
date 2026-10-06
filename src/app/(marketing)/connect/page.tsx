@@ -112,7 +112,10 @@ export default function ConnectPage() {
               <ul>
                 <li>See your pages and your numbers: views, clicks and your top links.</li>
                 <li>Edit your profile: your name, your bio and your photo options.</li>
-                <li>Add, change, move and remove links and the other blocks on your page.</li>
+                <li>
+                  Add, change, move and remove links and the other blocks on your pages, add pages
+                  to your site, and change a page’s title, address and place in the menu.
+                </li>
                 <li>Change your theme, by name or one setting at a time.</li>
                 <li>Make a private preview link to your draft, good for 7 days.</li>
                 <li>List your custom domains and show their status.</li>

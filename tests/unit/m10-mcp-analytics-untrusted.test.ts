@@ -41,6 +41,7 @@ async function call() {
     ...identity(),
     admin: deps.admin,
     page: ownedPage(),
+    subPage: null,
     deps,
     defer: deps.defer,
     now: deps.now,
