@@ -2,6 +2,7 @@ import Link from "next/link";
 import { OverviewNumbersSection } from "@/components/admin/overview-numbers";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
 import { requireAdmin } from "@/lib/admin/auth";
+import { healthTile } from "@/lib/admin/health";
 import { readHealth, readOverviewNumbers, readSignups } from "@/lib/admin/overview-queries";
 import { countOpenReports, countSuspendedAccounts } from "@/lib/admin/queries";
 import { countBlockedDomains } from "@/lib/blocklist/admin-queries";
@@ -23,7 +24,8 @@ export default async function AdminOverview() {
     readHealth().catch(() => null),
   ]);
   // Red when a job failed or is late; unknown (a dash) when the jobs could not be read.
-  const unhealthy = health !== null && !health.healthy;
+  const tile = healthTile(health);
+  const unhealthy = tile.state === "bad";
   return (
     <>
       <ScreenHeader breadcrumb="admin / overview" title="Admin" />
@@ -48,18 +50,14 @@ export default async function AdminOverview() {
           <Link
             href="/admin/health"
             data-testid="health-tile"
-            data-health={health === null ? "unknown" : unhealthy ? "bad" : "ok"}
+            data-health={tile.state}
             className={`${TILE} ${unhealthy ? "!border-bad bg-bad-line/30" : ""}`}
           >
             <span className="font-mono text-xs text-text-2">Health</span>
             <span
-              className={`text-sm font-semibold ${unhealthy ? "text-bad" : health ? "text-good" : "text-text-2"}`}
+              className={`text-sm font-semibold ${unhealthy ? "text-bad" : tile.state === "ok" ? "text-good" : "text-text-2"}`}
             >
-              {health === null
-                ? "Couldn’t be read"
-                : unhealthy
-                  ? `${health.failed} failed, ${health.late} late`
-                  : "All jobs on time"}
+              {tile.text}
             </span>
           </Link>
         </div>

@@ -12,6 +12,8 @@ export interface ReservedRow {
   reason: string | null;
   kind: ReservedKind;
   addedBy: string | null;
+  /** The adding admin's email (null for a built-in row, or an admin whose account is gone). */
+  addedByEmail: string | null;
   /** ISO timestamp. */
   createdAt: string;
   /** A page already uses this handle (a reservation only stops new claims). */
@@ -31,4 +33,12 @@ export function parseReservedKind(raw: string | string[] | undefined): ReservedK
 export function parseReservedPage(raw: string | string[] | undefined): number {
   const value = Number(Array.isArray(raw) ? raw[0] : raw);
   return Number.isInteger(value) && value >= 1 && value <= 10_000 ? value : 1;
+}
+
+/** Who the Added column names: the admin's email, their id when the account is gone, else "Built in". */
+export function reservedAddedBy(
+  row: Pick<ReservedRow, "kind" | "addedBy" | "addedByEmail">,
+): string {
+  if (row.kind === "system") return "Built in";
+  return row.addedByEmail ?? row.addedBy ?? "Built in";
 }

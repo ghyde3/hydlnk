@@ -79,10 +79,22 @@ describe("parseAuditFilter", () => {
 });
 
 describe("stripeCustomerUrl", () => {
-  it("builds the live dashboard link from the stored id alone", () => {
+  it("builds the live dashboard link when the key is live (or there is none)", () => {
+    for (const key of [undefined, null, "", "sk_live_abc", "rk_live_abc"]) {
+      expect(stripeCustomerUrl("cus_Abc123", key)).toBe(
+        "https://dashboard.stripe.com/customers/cus_Abc123",
+      );
+    }
     expect(stripeCustomerUrl("cus_Abc123")).toBe(
       "https://dashboard.stripe.com/customers/cus_Abc123",
     );
+  });
+  it("builds the test dashboard link when the key is a test key", () => {
+    for (const key of ["sk_test_abc", "rk_test_abc"]) {
+      expect(stripeCustomerUrl("cus_Abc123", key)).toBe(
+        "https://dashboard.stripe.com/test/customers/cus_Abc123",
+      );
+    }
   });
   it("is null for nothing or for anything that is not a customer id", () => {
     expect(stripeCustomerUrl(null)).toBeNull();
@@ -105,5 +117,17 @@ describe("small helpers", () => {
   });
   it("the sub-page cap is 64 MiB", () => {
     expect(SITE_BYTES_CAP).toBe(64 * 1024 * 1024);
+  });
+});
+
+describe("reservedAddedBy (M13-08)", () => {
+  it("names the adding admin's email, their id when the account is gone, and Built in for system rows", async () => {
+    const { reservedAddedBy } = await import("@/lib/admin/reserved-view");
+    expect(reservedAddedBy({ kind: "admin", addedBy: "u1", addedByEmail: "a@x.test" })).toBe(
+      "a@x.test",
+    );
+    expect(reservedAddedBy({ kind: "admin", addedBy: "u1", addedByEmail: null })).toBe("u1");
+    expect(reservedAddedBy({ kind: "admin", addedBy: null, addedByEmail: null })).toBe("Built in");
+    expect(reservedAddedBy({ kind: "system", addedBy: null, addedByEmail: null })).toBe("Built in");
   });
 });

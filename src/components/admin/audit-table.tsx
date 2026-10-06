@@ -1,4 +1,4 @@
-import { auditLabel, formatDate, type AuditRow } from "@/lib/admin/account-view";
+import { SYSTEM_ACTOR_ID, auditLabel, formatDate, type AuditRow } from "@/lib/admin/account-view";
 import { formatWhen } from "./format";
 
 const TH =
@@ -66,7 +66,7 @@ export function AuditTable({
               </td>
               <td className={`${TD} font-mono text-[13px] [overflow-wrap:anywhere]`}>
                 <span className={LABEL}>Admin</span>
-                {row.adminEmail ?? row.adminId}
+                {row.adminId === SYSTEM_ACTOR_ID ? "System" : (row.adminEmail ?? row.adminId)}
               </td>
               <td className={TD}>
                 <span className={LABEL}>Action</span>

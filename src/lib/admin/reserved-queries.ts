@@ -18,12 +18,20 @@ export async function listReservedHandles(options: {
   });
   if (error) throw new Error(`Listing reserved handles failed: ${error.message}`);
   const list = data ?? [];
+  const adderIds = [...new Set(list.map((row) => row.added_by).filter((id): id is string => !!id))];
+  const emails = new Map<string, string>();
+  if (adderIds.length > 0) {
+    const found = await db.rpc("admin_account_emails", { p_ids: adderIds });
+    if (found.error) throw new Error(`Reading admin emails failed: ${found.error.message}`);
+    for (const row of found.data ?? []) emails.set(row.id, row.email);
+  }
   return {
     rows: list.map((row) => ({
       handle: row.handle,
       reason: row.reason,
       kind: row.kind === "system" ? "system" : "admin",
       addedBy: row.added_by,
+      addedByEmail: row.added_by ? (emails.get(row.added_by) ?? null) : null,
       createdAt: row.created_at,
       held: row.holder_page_id !== null,
     })),

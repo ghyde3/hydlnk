@@ -1,8 +1,11 @@
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { HealthList } from "@/components/admin/health-list";
 import { mapDomainHelp, registrarGuideLinks, formatAge } from "@/lib/admin/domains-help";
 import {
   DEFAULT_LATE_AFTER_SECONDS,
   classifyJob,
+  healthTile,
   lateAfterSeconds,
   summarizeHealth,
   type CronJobRow,
@@ -88,6 +91,42 @@ describe("M13-06 the late rule", () => {
     );
     expect(bad).toMatchObject({ healthy: false, failed: 1, late: 1 });
     expect(summarizeHealth([], NOW).healthy).toBe(true);
+  });
+});
+
+describe("M13-06 the Overview health tile and the health list", () => {
+  it("no job history is neutral, never green: no jobs, or jobs that never ran", () => {
+    expect(summarizeHealth([], NOW).noHistory).toBe(true);
+    expect(healthTile(summarizeHealth([], NOW))).toEqual({
+      state: "none",
+      text: "No job history yet",
+    });
+    const never = summarizeHealth([job({ last_run_at: null, last_status: null })], NOW);
+    expect(never.noHistory).toBe(true);
+    expect(healthTile(never).state).toBe("none");
+  });
+
+  it("green only when jobs have run and are on time; unreadable is its own state", () => {
+    expect(healthTile(summarizeHealth([job({})], NOW))).toEqual({
+      state: "ok",
+      text: "All jobs on time",
+    });
+    expect(healthTile(null).state).toBe("unknown");
+  });
+
+  it("a failed job run makes the tile red and the health page's row says Failed", () => {
+    const summary = summarizeHealth(
+      [
+        job({}),
+        job({ jobid: 2, jobname: "purge-old-events", last_status: "failed", last_message: "boom" }),
+      ],
+      NOW,
+    );
+    expect(healthTile(summary)).toEqual({ state: "bad", text: "1 failed, 0 late" });
+    const html = renderToStaticMarkup(<HealthList jobs={summary.jobs} />);
+    expect(html).toMatch(/data-job="purge-old-events"[^>]*data-state="failed"/);
+    expect(html).toContain("Failed");
+    expect(html).toMatch(/data-job="verify-pending-domains"[^>]*data-state="ok"/);
   });
 });
 

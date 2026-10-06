@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
 import { postAdmin } from "@/lib/blocklist/admin-client";
 import { formatAddedDate } from "@/lib/blocklist/admin-view";
-import type { ReservedRow } from "@/lib/admin/reserved-view";
+import { reservedAddedBy, type ReservedRow } from "@/lib/admin/reserved-view";
 import { DANGER, FieldBox, LABEL, PRIMARY, SECONDARY, TD, TH, controlClass } from "./fields";
 
 /**
@@ -201,9 +201,10 @@ export function ReservedManager({ rows }: { rows: ReservedRow[] }) {
                     </td>
                     <td className={`${TD} font-mono text-[13px] hl:whitespace-nowrap`}>
                       <span className={LABEL}>Added</span>
-                      {row.addedBy || row.kind === "admin"
-                        ? formatAddedDate(row.createdAt)
-                        : "Built in"}
+                      {row.kind === "admin" ? `${formatAddedDate(row.createdAt)} · ` : ""}
+                      <span data-added-by="" className="[overflow-wrap:anywhere]">
+                        {reservedAddedBy(row)}
+                      </span>
                     </td>
                     <td className={TD}>
                       <div className="mt-1 hl:mt-0">

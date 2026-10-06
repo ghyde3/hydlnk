@@ -20,13 +20,14 @@ const ADMIN: Principal = {
 const A = "00000000-0000-4000-8000-0000000000a1";
 const HOST = "links.example.test";
 
-function setup(options: { audit?: "ok" | "fail" } = {}) {
+function setup(options: { audit?: "ok" | "fail"; status?: "pending" | "error" } = {}) {
   const h = harness({
     domains: [
       domainRow({
         id: A,
         hostname: HOST,
         page_id: IDS.proPage,
+        status: options.status ?? "pending",
         created_at: "2026-10-01T00:00:00.000Z",
       }),
     ],
@@ -64,6 +65,17 @@ const run = (deps: () => AdminDeps, input: unknown) =>
   executeAdminAction(recheckDomainAction, ADMIN, input, deps);
 
 describe("M13-04 Re-check now", () => {
+  it("a domain in the error state is put back to pending and then really checked", async () => {
+    const { h, audit, deps } = setup({ status: "error" });
+    expect(h.admin.state.domains[0]!.status).toBe("error");
+    const result = await run(deps, { id: A });
+    expect(result).toMatchObject({ ok: true, data: { domainId: A, checked: true } });
+    expect(h.vercel.count("verify")).toBe(1);
+    expect(h.admin.state.rpcLog.map((r) => r.name)).toContain("claim_domain_check");
+    expect(h.admin.state.domains[0]!.status).not.toBe("error");
+    expect(audit).toHaveLength(1);
+  });
+
   it("runs the same verification as the cron: one Vercel verify request, last_checked_at moves, an audit row is written", async () => {
     const { h, audit, deps } = setup();
     const before = h.admin.state.domains[0]!.last_checked_at;

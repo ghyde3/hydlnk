@@ -116,13 +116,42 @@ export interface HealthSummary {
   late: number;
   /** True when no job is failed or late. */
   healthy: boolean;
+  /** True when there is nothing to judge: no job is scheduled, or none has ever run. */
+  noHistory: boolean;
 }
 
 export function summarizeHealth(rows: readonly CronJobRow[], now: Date): HealthSummary {
   const jobs = rows.map((row) => classifyJob(row, now));
   const failed = jobs.filter((job) => job.state === "failed").length;
   const late = jobs.filter((job) => job.state === "late").length;
-  return { jobs, failed, late, healthy: failed === 0 && late === 0 };
+  return {
+    jobs,
+    failed,
+    late,
+    healthy: failed === 0 && late === 0,
+    noHistory: jobs.every((job) => job.lastRunAt === null),
+  };
+}
+
+export type HealthTileState = "unknown" | "none" | "bad" | "ok";
+
+/**
+ * What the Overview's Health tile says. No job history is neutral ("No job history yet"), never green:
+ * an empty list is not proof that anything runs. A failed or late job is red; green only when jobs
+ * have run and all are on time.
+ */
+export function healthTile(summary: HealthSummary | null): {
+  state: HealthTileState;
+  text: string;
+} {
+  if (summary === null) return { state: "unknown", text: "Couldn’t be read" };
+  if (summary.failed > 0 || summary.late > 0) {
+    if (summary.noHistory && summary.failed === 0)
+      return { state: "none", text: "No job history yet" };
+    return { state: "bad", text: `${summary.failed} failed, ${summary.late} late` };
+  }
+  if (summary.noHistory) return { state: "none", text: "No job history yet" };
+  return { state: "ok", text: "All jobs on time" };
 }
 
 /** "3 min ago", "2 h ago", "1 d ago": coarse on purpose. */

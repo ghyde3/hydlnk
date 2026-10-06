@@ -12,7 +12,8 @@ import { fail, type ActionResult, type AdminAction } from "./types";
  * Reached only through `executeAdminAction` (listed in `ADMIN_ACTIONS`), so a caller who is not an
  * admin never gets here. The domain is read from the path (`{id}`), never trusted from the body.
  * Every re-check writes one `recheck_domain` row to `admin_audit`, after the check, and a failure to
- * write it fails the action (500). A repeated click is another check of the same domain, which the
+ * write it fails the action (500). A domain in the 'error' state is put back to pending first, because
+ * only a pending domain can be claimed for a check. A repeated click is another check of the same domain, which the
  * cooldown keeps to one Vercel request every few seconds.
  */
 
@@ -37,6 +38,17 @@ export const recheckDomainAction: AdminAction = {
     const owner = (found.data.pages as unknown as { owner_id: string } | null)?.owner_id ?? null;
 
     if (!domainDeps) throw new Error("The domain dependencies are not wired");
+    // `claim_domain_check` claims only a pending domain, so a domain in the 'error' state would never be
+    // asked about again. Putting it back to pending first (service role, only from 'error') is what
+    // "Re-check now" means for it; the verification then decides its state like any other check.
+    if (found.data.status === "error") {
+      const reset = await db
+        .from("domains")
+        .update({ status: "pending" })
+        .eq("id", id)
+        .eq("status", "error");
+      if (reset.error) throw new Error(`Resetting the domain failed: ${reset.error.message}`);
+    }
     const outcome = await verifyDomain(domainDeps(), id, { withRecords: false });
     if (!outcome) return fail(404, "not_found", "That domain doesn’t exist any more.");
 
