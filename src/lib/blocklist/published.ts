@@ -95,6 +95,12 @@ function urlFieldsOf(doc: BlocklistDoc): UrlField[] {
           fields.push({ blockId: block.id, itemId: link.id, url: link.url });
         }
         break;
+      case "items":
+        // The optional link of each item (M12-01), by the item's id.
+        for (const item of block.items) {
+          if (item.url) fields.push({ blockId: block.id, itemId: item.id, url: item.url });
+        }
+        break;
       case "map": {
         // The two targets `/r/` builds for a map (M9-22): fixed hosts, judged as a defense.
         const targets = mapTargets(block.name, block.address);

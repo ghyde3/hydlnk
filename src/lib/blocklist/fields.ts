@@ -41,6 +41,11 @@ export function urlFieldsOf(block: Block): UrlField[] {
     case "apps":
       // The store buttons (M9-20, M9-21): each entry's id is the item, like a social icon.
       return block.links.map((link) => ({ blockId: block.id, itemId: link.id, value: link.url }));
+    case "items":
+      // The optional link of each item (M12-01): the item's id is the item.
+      return block.items.flatMap((item) =>
+        item.url ? [{ blockId: block.id, itemId: item.id, value: item.url }] : [],
+      );
     case "map": {
       // A map stores no address; its two buttons go to the targets `/r/` builds (M9-22). They are
       // fixed hosts, so this is a defense: it keeps the check whole if the targets ever change.

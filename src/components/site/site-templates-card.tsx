@@ -3,11 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { useWorkspace } from "@/components/workspace/workspace-context";
-import {
-  SITE_TEMPLATES,
-  isSiteTemplateId,
-  type SiteTemplateId,
-} from "@/lib/site-templates/catalog";
+import { SITE_TEMPLATES, type SiteTemplateId } from "@/lib/site-templates/catalog";
+import { consumePendingTemplate } from "@/lib/site-templates/pending";
 
 /**
  * The site templates on an empty Home (M12-03): Garage sale, Small business and Musician. Choosing
@@ -23,22 +20,24 @@ export function SiteTemplatesCard() {
   const [failure, setFailure] = useState<string | null>(null);
   const noRoom = site.limit.max - site.limit.used < 2;
 
-  // The new-site flow lands here with `?template=<id>`: it is applied once, and the address is cleaned.
-  const fromUrl = useRef(false);
+  // The new-site form leaves a one-shot flag (never an address parameter, so a link cannot apply a
+  // template): consumed once on mount. A `?template=` in the address is ignored and only cleaned.
+  const consumed = useRef(false);
   useEffect(() => {
-    if (fromUrl.current) return;
-    fromUrl.current = true;
+    if (consumed.current) return;
+    consumed.current = true;
     const params = new URLSearchParams(window.location.search);
-    const wanted = params.get("template");
-    if (wanted === null) return;
-    params.delete("template");
-    const query = params.toString();
-    window.history.replaceState(
-      null,
-      "",
-      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
-    );
-    if (isSiteTemplateId(wanted) && !noRoom) void choose(wanted);
+    if (params.has("template")) {
+      params.delete("template");
+      const query = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+      );
+    }
+    const wanted = consumePendingTemplate();
+    if (wanted && !noRoom) void choose(wanted);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
   }, []);
 

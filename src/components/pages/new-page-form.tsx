@@ -7,6 +7,7 @@ import { HandleField, type ServerHandleResult } from "@/components/auth/handle-f
 import { normalizeHandle } from "@/lib/handles/rules";
 import { isHandleStatus } from "@/lib/handles/status";
 import { SITE_TEMPLATES, isSiteTemplateId } from "@/lib/site-templates/catalog";
+import { setPendingTemplate } from "@/lib/site-templates/pending";
 
 const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to create a site.";
 const FAILED_MESSAGE = "Couldn’t create that site. Try again.";
@@ -45,7 +46,9 @@ export function NewPageForm() {
       if (response.status === 201) {
         // A full navigation, on purpose: the cookie the route just set decides which page every
         // screen shows, and a client-side push could render from the previous page.
-        window.location.assign(template ? `/editor?template=${template}` : "/editor");
+        // The choice travels as a one-shot flag in this tab, not in the address (M12-03).
+        if (template) setPendingTemplate(template);
+        window.location.assign("/editor");
         return;
       }
       const body = (await response.json().catch(() => null)) as {

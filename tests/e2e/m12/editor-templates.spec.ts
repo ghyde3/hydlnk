@@ -109,6 +109,21 @@ test("M12-03 the template is only offered on an empty Home, and the Free limit i
   await expectNoHorizontalScroll(page);
 });
 
+test("M12-03 a ?template= link applies nothing: it needs a click on the card", async ({
+  page,
+  context,
+}) => {
+  const user = await emptyUser(context, "tpl");
+  await page.goto(url("app", "/editor?template=musician"));
+  const card = page.getByTestId("site-templates");
+  await expect(card).toBeVisible();
+  await expect(page).not.toHaveURL(/template=/);
+  // Give a wrongly applied template time to land, then prove nothing was written.
+  await page.waitForTimeout(1500);
+  expect(await drafts(user.pageId)).toHaveLength(0);
+  await expect(card).toBeVisible();
+});
+
 test("M12-03 the new-site flow offers the templates", async ({ page, context }) => {
   const user = await emptyUser(context, "tpn", { plan: "pro" });
   await page.goto(url("app", "/pages/new"));

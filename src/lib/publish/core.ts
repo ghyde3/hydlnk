@@ -1,4 +1,5 @@
 import "server-only";
+import { placedBlockImages, type Placed } from "./placed-images";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { blockedLinksInPublished, checkBlocklist, loadBlockedDomains } from "@/lib/blocklist";
@@ -332,31 +333,6 @@ async function loadThemeTokens(
   if (!data) return null;
   const tokens = tokenSetSchema.partial().safeParse(data.tokens);
   return tokens.success ? tokens.data : null;
-}
-
-interface Placed {
-  ref: ImageRef;
-  blockId: string | null;
-  field: string;
-}
-
-/** The images the blocks hold (a sub-page has nothing else), with where each sits. */
-function placedBlockImages(blocks: readonly Block[]): Placed[] {
-  const placed: Placed[] = [];
-  for (const block of blocks) {
-    if ((block.type === "card" || block.type === "image") && block.image) {
-      placed.push({ ref: block.image, blockId: block.id, field: "image" });
-    }
-    // A link's thumbnail (M6-20): the same rules, reported under the field `icon`.
-    if (block.type === "link" && block.icon?.type === "image") {
-      placed.push({ ref: block.icon.image, blockId: block.id, field: "icon" });
-    }
-    // A book's cover (M9-20): the same rules, reported under the field `cover`.
-    if (block.type === "book" && block.cover) {
-      placed.push({ ref: block.cover, blockId: block.id, field: "cover" });
-    }
-  }
-  return placed;
 }
 
 /** Every image of the publish form (visible blocks only) with where it sits, for the error. */

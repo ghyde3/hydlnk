@@ -375,8 +375,10 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
     it("a link to a blocked site on a sub-page is blocked_link, and the draft stays as it was", async () => {
       const o = await owner("ab-blocked");
       const id = await addSubPage(o, "items");
-      const { data } = await admin.from("blocked_domains").select("domain").limit(1);
-      if (!data || data.length === 0) return; // the blocklist is empty on this database
+      // Seed a blocked domain of our own, so the test never depends on the database's list.
+      const domain = "blocked-m12-sub.example";
+      await admin.from("blocked_domains").upsert({ domain, reason: "test" });
+      const data = [{ domain }];
       const out = await rt.call(
         "add_block",
         {
@@ -387,6 +389,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
         },
         who(o),
       );
+      await admin.from("blocked_domains").delete().eq("domain", domain);
       expect(out.error!.code).toBe("blocked_link");
       expect((await subRow(id)).draft.blocks).toHaveLength(0);
     });
