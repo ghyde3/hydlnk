@@ -62,8 +62,9 @@ describe("M10-34 the documentation the steps were written against", () => {
 
   it("names each documentation URL and the date they were read, in a source comment", () => {
     expect(comment).toContain("2026-10-04");
+    expect(comment).toContain("2026-10-05");
     expect(comment).toContain("https://claude.com/docs/connectors/custom/add-unlisted");
-    expect(comment).toContain("https://developers.openai.com/apps-sdk/deploy/connect-chatgpt");
+    expect(comment).toContain("https://developers.openai.com/api/docs/guides/custom-mcp-server");
     expect(comment).toContain("https://code.claude.com/docs/en/mcp-quickstart");
   });
 

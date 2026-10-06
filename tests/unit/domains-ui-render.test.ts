@@ -2,6 +2,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/env/client", () => ({
+  clientEnv: { NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000" },
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => undefined }) }));
 vi.mock("@/lib/domains/actions", () => ({
   addDomainAction: vi.fn(),
@@ -150,6 +153,19 @@ describe("M4-13 records block", () => {
     expect(text).toContain(
       "Using a root domain like example.test instead? Add an A record for @ pointing to 198.51.100.7.",
     );
+  });
+
+  it("links the four registrar guides on the marketing origin, as a 44px link (M13-01)", () => {
+    const out = renderToStaticMarkup(
+      createElement(RecordsBlock, {
+        ...props,
+        records: [{ type: "CNAME", name: "links", value: "abc123.example-dns.test" }],
+      }),
+    );
+    expect(out).toContain("data-registrar-guides");
+    expect(out).toContain("/learn/connecting-a-domain#providers");
+    expect(out).toContain("min-h-11");
+    expect(out).toContain("Step-by-step guides for GoDaddy, Namecheap, Squarespace and Cloudflare");
   });
 
   it("when the records could not be loaded: the sentence and Try again, and no record values", () => {

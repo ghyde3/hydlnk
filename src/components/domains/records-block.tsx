@@ -1,12 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { clientEnv } from "@/lib/env/client";
 import type { DomainRecord } from "@/lib/domains/types";
+import { rootOrigin } from "@/lib/routing/urls";
 import { RECORDS_UNAVAILABLE } from "./view-model";
 import { SECONDARY } from "./ui";
 
 /** How long a Copy button says "Copied" before it goes back to "Copy". */
 export const COPIED_MS = 2000;
+
+/** The link under the records to the four registrar guides. */
+export const REGISTRAR_GUIDES_LINK =
+  "Step-by-step guides for GoDaddy, Namecheap, Squarespace and Cloudflare";
 
 /**
  * Copy for one record row: writes only the Value to the clipboard and says "Copied" for two
@@ -178,6 +184,13 @@ export function RecordsBlock({
           <Mono>@</Mono> pointing to <Mono>{apex.ipv4}</Mono>.
         </p>
       ) : null}
+      <a
+        data-registrar-guides
+        href={`${rootOrigin(clientEnv.NEXT_PUBLIC_ROOT_DOMAIN)}/learn/connecting-a-domain#providers`}
+        className="inline-flex min-h-11 items-center self-start text-[13px] font-semibold text-ink underline"
+      >
+        {REGISTRAR_GUIDES_LINK}
+      </a>
     </>
   );
 }

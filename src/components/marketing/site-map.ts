@@ -73,6 +73,34 @@ export const GUIDES: readonly Guide[] = [
     minutes: 6,
   },
   {
+    slug: "connect-a-domain-godaddy",
+    title: "Connect a domain at GoDaddy",
+    summary:
+      "Add the DNS record HYDLNK shows at GoDaddy, with the exact menus and fields, and what to check if it doesn’t verify.",
+    minutes: 5,
+  },
+  {
+    slug: "connect-a-domain-namecheap",
+    title: "Connect a domain at Namecheap",
+    summary:
+      "Add the DNS record HYDLNK shows at Namecheap, with the exact menus and fields, and what to check if it doesn’t verify.",
+    minutes: 5,
+  },
+  {
+    slug: "connect-a-domain-squarespace",
+    title: "Connect a domain at Squarespace",
+    summary:
+      "Add the DNS record HYDLNK shows at Squarespace, with the exact menus and fields, and what to check if it doesn’t verify.",
+    minutes: 5,
+  },
+  {
+    slug: "connect-a-domain-cloudflare",
+    title: "Connect a domain at Cloudflare",
+    summary:
+      "Add the DNS record HYDLNK shows at Cloudflare, with the exact menus and fields, and what to check if it doesn’t verify.",
+    minutes: 5,
+  },
+  {
     slug: "understanding-analytics",
     title: "Understanding analytics",
     summary:

@@ -2,6 +2,20 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — Release: registrar setup guides (PR #26)
+
+- PR #26 merged, merge commit 2082049 (Gary's "release 26"). No migrations (dry run 37487065892: remote database up to date). Deployment https://vercel.com/ghyde3s-projects/hydlnk/9zvRTtZ2nHoK1DYsXQvDct5Uvs2W (success).
+- Checks: CI Verify green on the release head c65426c; content pages skip the full browser suite (Gary, 2026-10-06). `pnpm test:e2e:prod` 12/12. Live: the four /learn/connect-a-domain-* guides answer 200, the sitemap lists all four, and /learn/connecting-a-domain links to each.
+- main merged into `m13-sites-m2` (PROGRESS and features.json conflicts kept both sides). Wave M2 stays paused.
+
+## 2026-10-06 — Registrar setup guides (M13-01)
+
+On `content-domain-guides` (PR #26), off main. Flipped M13-01 to `passes: true`.
+
+- Four Learn guides: /learn/connect-a-domain-godaddy, -namecheap, -squarespace, -cloudflare (shared parts in src/components/marketing/guides/registrar-parts.tsx). Each checks where DNS is managed, adds the subdomain CNAME and the root A record with the values HYDLNK shows (no hard-coded addresses, Vercel never named), lists the provider's default records to remove and its gotchas (Cloudflare: DNS only), how long it takes, and ends with "Checked October 2026" and the provider help articles it is based on (researched 2026-10-06). Linked from the Learn index, the sitemap, "Connecting a domain" and the app's Domains screen.
+- Evidence: tests/e2e/marketing/domain-guides.spec.ts 10/10 at 390x844 and 1440x900; tests/unit/registrar-guides.test.ts; `pnpm typecheck` and `pnpm lint` clean; after `pnpm db:reset`, `pnpm test --retry 2` 382 files and 9,874 tests and `pnpm test:db` 46 files and 2,040 tests; CI Verify green (run 37484519014). Content pages skip the full browser suite (Gary, 2026-10-06).
+- The Wave M1 release log and the Wave M2 pause log are on `m13-sites-m2` (PR #24) and reach main with it.
+
 ## 2026-10-05 — Wave M2 paused (Gary)
 
 On `m13-sites-m2` (draft PR #24). Gary paused Wave M2 after phase 2 started; workers were let finish what they could within about 45 minutes and stopped at clean points. Nothing is uncommitted or stashed. No `passes` flipped; the full `pnpm verify`, the reviews and the CI browser suite have not run on this branch (each worker ran only its own targeted checks, all green).
