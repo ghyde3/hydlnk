@@ -1,6 +1,6 @@
 "use client";
 
-import type { MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { PreviewFonts } from "@/components/design/tenant-fonts";
 import { PageRenderer, type PageChrome } from "@/components/page/page-renderer";
 import type { PublishDoc } from "@/lib/document";
@@ -10,13 +10,20 @@ import {
   previewingStatus,
 } from "@/lib/versions/messages";
 import type { HistoryRow } from "@/lib/versions/load";
+import type { PreviewSubPage } from "@/lib/versions/types";
 import { LocalTime } from "./local-time";
 
 /** What the preview shows: nothing chosen yet, one version loading, loaded, or failed. */
 export type PreviewState =
   | { status: "idle" }
   | { status: "loading"; version: HistoryRow }
-  | { status: "ready"; version: HistoryRow; doc: PublishDoc; missingImages: number }
+  | {
+      status: "ready";
+      version: HistoryRow;
+      doc: PublishDoc;
+      subPages: PreviewSubPage[];
+      missingImages: number;
+    }
   | { status: "failed"; version: HistoryRow };
 
 /**
@@ -33,11 +40,14 @@ export function VersionPage({
   pageId,
   chrome,
   bezel,
+  subPage,
 }: {
   doc: PublishDoc;
   pageId: string;
   chrome: PageChrome;
   bezel: boolean;
+  /** Draw this sub-page of the version (under Home's theme and profile) instead of Home. */
+  subPage?: PreviewSubPage;
 }) {
   function onClickCapture(event: MouseEvent<HTMLDivElement>): void {
     if ((event.target as Element).closest("a")) event.preventDefault();
@@ -45,7 +55,19 @@ export function VersionPage({
   const page = (
     <div data-testid="version-page" onClickCapture={onClickCapture} className="w-full">
       <PreviewFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
-      <PageRenderer doc={doc} pageId={pageId} mode="preview" chrome={chrome} inertEmbeds />
+      <PageRenderer
+        doc={doc}
+        pageId={pageId}
+        mode="preview"
+        chrome={chrome}
+        inertEmbeds
+        {...(subPage
+          ? {
+              subPage: { title: subPage.doc.title, blocks: subPage.doc.blocks },
+              inertLinks: true,
+            }
+          : {})}
+      />
     </div>
   );
   if (!bezel) return page;
@@ -128,8 +150,76 @@ export function VersionPreviewBody({
         </p>
       ) : null}
       {state.status === "ready" ? (
-        <VersionPage doc={state.doc} pageId={pageId} chrome={chrome} bezel={bezel} />
+        <PagesOfVersion
+          key={version.id}
+          doc={state.doc}
+          subPages={state.subPages}
+          pageId={pageId}
+          chrome={chrome}
+          bezel={bezel}
+        />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Home and each sub-page of a version behind a page switcher (M12-04): one chip per page, Home
+ * first, the chosen one drawn below. Only the switcher is shown when the version is Home alone.
+ */
+function PagesOfVersion({
+  doc,
+  subPages,
+  pageId,
+  chrome,
+  bezel,
+}: {
+  doc: PublishDoc;
+  subPages: PreviewSubPage[];
+  pageId: string;
+  chrome: PageChrome;
+  bezel: boolean;
+}) {
+  const [chosen, setChosen] = useState<string>("home");
+  const current = subPages.find((page) => page.id === chosen);
+  const chip = (id: string, label: string, hint?: string) => (
+    <button
+      key={id}
+      type="button"
+      data-testid="version-page-chip"
+      data-page={id}
+      aria-pressed={(current?.id ?? "home") === id}
+      onClick={() => setChosen(id)}
+      title={hint}
+      className={`inline-flex min-h-11 max-w-full items-center rounded-md border px-3.5 text-sm font-semibold ${
+        (current?.id ?? "home") === id
+          ? "border-ink bg-ink text-surface"
+          : "border-line-3 bg-surface text-ink"
+      }`}
+    >
+      <span className="truncate">{label}</span>
+    </button>
+  );
+  return (
+    <>
+      {subPages.length > 0 ? (
+        <div
+          role="group"
+          aria-label="Pages in this version"
+          data-testid="version-page-switch"
+          className="flex w-full flex-wrap gap-2"
+        >
+          {chip("home", "Home")}
+          {subPages.map((page) => chip(page.id, page.title, `/${page.path}`))}
+        </div>
+      ) : null}
+      <VersionPage
+        doc={doc}
+        pageId={pageId}
+        chrome={chrome}
+        bezel={bezel}
+        {...(current ? { subPage: current } : {})}
+      />
+    </>
   );
 }

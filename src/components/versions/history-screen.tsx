@@ -10,6 +10,9 @@ import {
   EMPTY_MESSAGE,
   UNDONE,
   UNDO_FAILED,
+  UNDO_UNAVAILABLE_PAGES,
+  notRestoredHeading,
+  notRestoredLine,
   restoreFailureMessage,
   restoredMessage,
 } from "@/lib/versions/messages";
@@ -85,6 +88,7 @@ export function HistoryScreen({
             status: "ready",
             version: row,
             doc: result.doc,
+            subPages: result.subPages,
             missingImages: result.missingImages,
           });
         } else if (result.reason === "plan_required") {
@@ -118,13 +122,37 @@ export function HistoryScreen({
           undoState.current = saved ? { saved, unpublished, id: row.id } : null;
           // The draft is now this version: it differs from the live page unless this is the live one.
           setUnpublished(!row.live);
-          const message = restoredMessage(result.restored, result.missingImages);
+          const message = restoredMessage(
+            result.restored,
+            result.missingImages,
+            result.pagesRestored,
+          );
+          // Undo snapshots Home's draft only: after other pages were written it is not offered.
+          const canUndo = saved !== null && result.pagesRestored === 0;
+          if (!canUndo) undoState.current = null;
           setRestore({
             phase: "finished",
             id: row.id,
-            outcome: { kind: "done", message, canUndo: saved !== null, undoing: false },
+            outcome: {
+              kind: "done",
+              message,
+              canUndo,
+              undoing: false,
+              ...(result.pagesRestored > 0 ? { note: UNDO_UNAVAILABLE_PAGES } : {}),
+              ...(result.notRestored.length > 0
+                ? {
+                    notRestored: {
+                      heading: notRestoredHeading(result.notRestored.length),
+                      lines: result.notRestored.map((page) => ({
+                        id: page.id,
+                        text: notRestoredLine(page),
+                      })),
+                    },
+                  }
+                : {}),
+            },
           });
-          if (saved) {
+          if (canUndo) {
             undoTimer.current = setTimeout(() => {
               setRestore((current) =>
                 current.phase === "finished" && current.outcome.kind === "done"

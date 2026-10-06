@@ -1,4 +1,12 @@
-import type { Block, DocTheme, DraftDoc, ImageRef, PublishDoc } from "@/lib/document";
+import {
+  type Block,
+  type DocTheme,
+  type DraftDoc,
+  type ImageRef,
+  type PublishDoc,
+  type SubPageDraft,
+  type SubPagePublish,
+} from "@/lib/document";
 import { TOKEN_KEYS, resolveTokens, type TokenOverrides, type TokenSet } from "@/lib/theme";
 import { mediaPathOf } from "@/lib/themes/bg-image";
 
@@ -19,7 +27,12 @@ export type ImagePlace = "photo" | "block" | "background";
  * the ones `collectImageRefs` and Publish's `placedImages` walk: the profile photo, card and image
  * blocks, a link's thumbnail (M6-20), the share image (M6-32) and the background image.
  */
-export function ownedImagePaths(doc: PublishDoc, ownerId: string, mediaOrigin: string): string[] {
+export function ownedImagePaths(
+  doc: PublishDoc,
+  ownerId: string,
+  mediaOrigin: string,
+  subPages: readonly { blocks: readonly Block[] }[] = [],
+): string[] {
   const paths = new Set<string>();
   const own = (path: string | null) => {
     if (path !== null && path.startsWith(`${ownerId}/`)) paths.add(path);
@@ -27,11 +40,13 @@ export function ownedImagePaths(doc: PublishDoc, ownerId: string, mediaOrigin: s
   own(doc.profile.photo?.path ?? null);
   // The profile's logo (M9-24).
   own(doc.profile.logo?.path ?? null);
-  for (const block of doc.blocks) {
+  for (const block of [...doc.blocks, ...subPages.flatMap((page) => page.blocks)]) {
     if ((block.type === "card" || block.type === "image") && block.image) own(block.image.path);
     if (block.type === "link" && block.icon?.type === "image") own(block.icon.image.path);
     // A book's cover (M9-20).
     if (block.type === "book" && block.cover) own(block.cover.path);
+    // An item's photo (M12-01).
+    if (block.type === "items") for (const item of block.items) own(item.image?.path ?? null);
   }
   own(doc.share?.image?.path ?? null);
   own(mediaPathOf(doc.tokens.bgImage, mediaOrigin));
@@ -47,6 +62,60 @@ export interface CheckedImages {
   missingImages: number;
   /** The resolved background image was replaced (the draft's page-level overrides then say so). */
   backgroundMissing: boolean;
+}
+
+/** An image reference is kept only when the checker says so; the checker counts what it drops. */
+type KeepImage = <R extends { path: string }>(ref: R | null) => R | null;
+
+/**
+ * One block with the images that cannot be shown taken out: the shared half of `nullMissingImages`
+ * (Home) and `nullMissingSubPageImages`. A link's thumbnail is removed from the link, a card, image
+ * or book image becomes null, and an item's photo is removed from the item (M12-01). The block is
+ * returned as it came when nothing changed.
+ */
+function checkBlockImages(block: Block, keep: KeepImage): Block {
+  if ((block.type === "card" || block.type === "image") && block.image) {
+    const image = keep(block.image);
+    return image === block.image ? block : ({ ...block, image } as Block);
+  }
+  if (block.type === "link" && block.icon?.type === "image") {
+    if (keep(block.icon.image) !== null) return block;
+    const rest = { ...block };
+    delete rest.icon;
+    return rest;
+  }
+  // A cover that cannot be shown becomes null (the draft schema has the key as null): the book,
+  // its text and its store buttons stay, and the page draws no cover (M9-20).
+  if (block.type === "book" && block.cover) {
+    const cover = keep(block.cover);
+    return cover === block.cover ? block : ({ ...block, cover } as Block);
+  }
+  // An item whose photo is gone stays, without the photo (the draft schema has no null for it).
+  if (block.type === "items" && block.items.some((item) => item.image)) {
+    let changed = false;
+    const items = block.items.map((item) => {
+      if (!item.image || keep(item.image) !== null) return item;
+      changed = true;
+      const rest = { ...item };
+      delete rest.image;
+      return rest;
+    });
+    return changed ? { ...block, items } : block;
+  }
+  return block;
+}
+
+function makeKeep(
+  ownerId: string,
+  isPresent: (path: string) => boolean,
+  onMissing: () => void,
+): KeepImage {
+  return (ref) => {
+    if (ref === null) return null;
+    if (ref.path.startsWith(`${ownerId}/`) && isPresent(ref.path)) return ref;
+    onMissing();
+    return null;
+  };
 }
 
 /**
@@ -68,35 +137,14 @@ export function nullMissingImages(
   isPresent: (path: string) => boolean,
 ): CheckedImages {
   let missing = 0;
-  const keep = (ref: ImageRef | null): ImageRef | null => {
-    if (ref === null) return null;
-    if (ref.path.startsWith(`${ownerId}/`) && isPresent(ref.path)) return ref;
+  const keep = makeKeep(ownerId, isPresent, () => {
     missing += 1;
-    return null;
-  };
+  });
 
   const photo = keep(doc.profile.photo);
   // A logo that cannot be shown is left off the profile (M9-24), so the page is drawn without it.
   const logo = doc.profile.logo ? keep(doc.profile.logo) : null;
-  const blocks = doc.blocks.map((block): Block => {
-    if ((block.type === "card" || block.type === "image") && block.image) {
-      const image = keep(block.image);
-      return image === block.image ? block : ({ ...block, image } as Block);
-    }
-    if (block.type === "link" && block.icon?.type === "image") {
-      if (keep(block.icon.image) !== null) return block;
-      const rest = { ...block };
-      delete rest.icon;
-      return rest;
-    }
-    // A cover that cannot be shown becomes null (the draft schema has the key as null): the book,
-    // its text and its store buttons stay, and the page draws no cover (M9-20).
-    if (block.type === "book" && block.cover) {
-      const cover = keep(block.cover);
-      return cover === block.cover ? block : ({ ...block, cover } as Block);
-    }
-    return block;
-  });
+  const blocks = doc.blocks.map((block) => checkBlockImages(block, keep));
 
   let share = doc.share;
   if (share?.image) {
@@ -129,6 +177,25 @@ export function nullMissingImages(
     },
     missingImages: missing,
     backgroundMissing,
+  };
+}
+
+/**
+ * A sub-page of a version with its missing images taken out the way Home's are (M12-04), and how
+ * many there were. Never mutates its input.
+ */
+export function nullMissingSubPageImages(
+  page: SubPagePublish,
+  ownerId: string,
+  isPresent: (path: string) => boolean,
+): { page: SubPagePublish; missingImages: number } {
+  let missing = 0;
+  const keep = makeKeep(ownerId, isPresent, () => {
+    missing += 1;
+  });
+  return {
+    page: { ...page, blocks: page.blocks.map((block) => checkBlockImages(block, keep)) },
+    missingImages: missing,
   };
 }
 
@@ -206,7 +273,20 @@ export function versionToDraft(doc: PublishDoc, theme: DocTheme, rev: number): D
     // The version's UTM defaults and redirect mode (M9-27, M9-31), when it had them.
     ...(doc.utm === undefined ? {} : { utm: { ...doc.utm } }),
     ...(doc.redirect === undefined ? {} : { redirect: { ...doc.redirect } }),
+    // The site menu (M11-07): Home's document carries it, so a restore keeps it. An entry for a page
+    // deleted since is dropped at Publish (`pruneNav`).
+    ...(doc.nav === undefined ? {} : { nav: { show: doc.nav.show, items: [...doc.nav.items] } }),
     theme,
     blocks: doc.blocks.map((block) => ({ ...block, visible: true }) as Block),
+  };
+}
+
+/** The draft of a sub-page a version restores to: its path, title, description and blocks (ids kept, all visible). */
+export function versionToSubPageDraft(page: SubPagePublish): SubPageDraft {
+  return {
+    path: page.path,
+    title: page.title,
+    description: page.description,
+    blocks: page.blocks.map((block) => ({ ...block, visible: true }) as Block),
   };
 }
