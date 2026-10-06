@@ -39,7 +39,7 @@ export type BlockId =
   | "apps"
   | "map";
 
-/** A feature card's icon: one of the fifteen blocks, or a general one. */
+/** A feature card's icon: one of the blocks, or a general one. */
 export type FitIcon = BlockId | "design" | "phone" | "chart" | "domain" | "preview" | "tag";
 
 export interface AudienceStep {

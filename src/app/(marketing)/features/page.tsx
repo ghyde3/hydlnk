@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { BLOCK_CATALOG } from "@/components/marketing/block-catalog";
+import { BLOCK_CATALOG, BLOCK_COUNT_WORD_CAP } from "@/components/marketing/block-catalog";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { WRENHAVEN } from "@/components/marketing/demo/brands";
 import { DemoPage, PhoneFrame } from "@/components/marketing/demo/demo-page";
@@ -21,8 +21,7 @@ import { pagesPerSiteText } from "@/lib/marketing/plan-limits";
 export const metadata: Metadata = marketingMetadata({
   path: "/features",
   title: "Features",
-  description:
-    "Fifteen kinds of blocks, pages with a menu, price lists and opening hours, a profile with your logo, link tools, a branded QR code, CSV analytics, an editor with a live phone preview and a Publish button you control. Every feature is on every plan, free included, except version history and redirect mode on Pro and Studio.",
+  description: `${BLOCK_COUNT_WORD_CAP} kinds of blocks, pages with a menu, price lists and opening hours, a profile with your logo, link tools, a branded QR code, CSV analytics, an editor with a live phone preview and a Publish button you control. Every feature is on every plan, free included, except version history and redirect mode on Pro and Studio.`,
   image: "features",
 });
 
@@ -380,7 +379,7 @@ export default function FeaturesPage() {
       <PageHero
         eyebrow="Features"
         title="Everything a link page needs. Nothing it doesn’t."
-        lead="Fifteen kinds of block, a profile with your logo, tools for your links, an editor with a live phone preview and a page that goes live only when you press Publish. All of it is on every plan, free included, apart from version history and redirect mode on Pro and Studio."
+        lead={`${BLOCK_COUNT_WORD_CAP} kinds of block, a profile with your logo, tools for your links, an editor with a live phone preview and a page that goes live only when you press Publish. All of it is on every plan, free included, apart from version history and redirect mode on Pro and Studio.`}
         aside={
           <figure className="flex flex-col items-center gap-3">
             <PhoneFrame>
@@ -397,8 +396,8 @@ export default function FeaturesPage() {
         <SectionIntro
           eyebrow="Blocks"
           titleId="blocks-title"
-          title="Fifteen blocks, in any order."
-          lead="A page is a column of blocks under your profile. Add up to 50, drag them into order, style each one and switch any of them off without deleting it. Links take an icon or a small thumbnail, and up to 3 can be featured with a bolder look. The last six blocks are for what you sell, answer and share: FAQ, contact details, discount codes, books, apps and places."
+          title={`${BLOCK_COUNT_WORD_CAP} blocks, in any order.`}
+          lead="A page is a column of blocks under your profile. Add up to 50, drag them into order, style each one and switch any of them off without deleting it. Links take an icon or a small thumbnail, and up to 3 can be featured with a bolder look. The later blocks are for what you sell, answer and share: FAQ, contact details, discount codes, books, apps and places, and for a whole site: links to your other pages, price lists and opening hours."
         />
         <ul className="mt-10 grid gap-3 min-[640px]:grid-cols-2 min-[1024px]:grid-cols-3">
           {BLOCK_CATALOG.map((block) => (
