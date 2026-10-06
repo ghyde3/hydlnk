@@ -76,7 +76,14 @@ export function PagesTable({ rows }: { rows: AdminPageRow[] }) {
                 {row.pageCount}
               </td>
               <td className={TD}>
-                <div className="mt-1 hl:mt-0">
+                <div className="mt-1 flex flex-col items-start gap-2 hl:mt-0 hl:flex-row hl:items-center">
+                  <a
+                    href={`/admin/accounts/${row.ownerId}`}
+                    aria-label={`Account details for ${row.handle ?? row.ownerEmail}`}
+                    className="inline-flex min-h-11 items-center justify-center rounded-md border border-line-3 bg-surface px-4 text-sm font-semibold text-ink no-underline"
+                  >
+                    Account
+                  </a>
                   {row.state === "suspended" ? (
                     <UnsuspendButton
                       accountId={row.ownerId}

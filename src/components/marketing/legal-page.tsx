@@ -5,8 +5,8 @@ import type { NavKey } from "./site-map";
 
 /** The date shown on a legal page unless it passes its own. */
 export const LEGAL_UPDATED = { iso: "2026-10-02", label: "October 2, 2026" } as const;
-/** The Privacy Policy changed on this date (the connected AI apps section, Wave L). */
-export const PRIVACY_UPDATED = { iso: "2026-10-04", label: "October 4, 2026" } as const;
+/** The Privacy Policy changed on this date (staff may view a draft for support, Wave N; before that, the connected AI apps section). */
+export const PRIVACY_UPDATED = { iso: "2026-10-06", label: "October 6, 2026" } as const;
 /** The Terms changed on this date (the Free plan traffic section). */
 export const TERMS_UPDATED = { iso: "2026-10-06", label: "October 6, 2026" } as const;
 

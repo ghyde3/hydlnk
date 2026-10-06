@@ -182,6 +182,7 @@ export default function PrivacyPage() {
         <li>To send service messages, such as sign-in links, receipts and notices about important changes. We don’t send marketing email without your permission.</li>
         <li>To meet legal obligations, such as tax records.</li>
       </ul>
+      <p>HYDLNK staff may view an unpublished draft to help with a support request or to investigate a report, and each view is logged.</p>
       <p>We don’t sell personal information, use it for advertising or let advertisers track people on HYDLNK pages.</p>
 
       <h2 id="connected-apps">Connected AI apps</h2>
