@@ -44,7 +44,7 @@ function fail(operation: string, error: { code?: string; message: string }): nev
 }
 
 const CLIENT_COLUMNS =
-  "client_id, kind, client_name, redirect_uris, fetched_at, expires_at, created_at, last_seen_at";
+  "client_id, kind, client_name, redirect_uris, fetched_at, expires_at, created_at, last_seen_at, blocked_at, blocked_by, blocked_reason";
 
 function toClientRow(row: Record<string, unknown>): ClientRow {
   return {
@@ -57,6 +57,9 @@ function toClientRow(row: Record<string, unknown>): ClientRow {
     expires_at: (row.expires_at as string | null) ?? null,
     created_at: row.created_at as string,
     last_seen_at: row.last_seen_at as string,
+    blocked_at: (row.blocked_at as string | null) ?? null,
+    blocked_by: (row.blocked_by as string | null) ?? null,
+    blocked_reason: (row.blocked_reason as string | null) ?? null,
   };
 }
 

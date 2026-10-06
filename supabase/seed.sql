@@ -53,7 +53,7 @@ insert into auth.identities (
 
 -- The mockups show Mara on the Pro plan ("2 of 3 pages").
 update public.accounts
-  set plan = 'pro'
+  set paid_plan = 'pro'
   where id = '00000000-0000-4000-8000-0000000000a1';
 
 -- ---------------------------------------------------------------------------
@@ -261,3 +261,49 @@ set
   draft = draft || '{"nav": {"show": true, "items": ["00000000-0000-4000-8000-0000000000c1", "00000000-0000-4000-8000-0000000000c2"]}}'::jsonb,
   published = published || '{"nav": {"show": true, "items": ["00000000-0000-4000-8000-0000000000c1", "00000000-0000-4000-8000-0000000000c2"]}}'::jsonb
 where id = '00000000-0000-4000-8000-0000000000b1';
+
+-- ---------------------------------------------------------------------------
+-- Admin domains screen fixture (M13-04): a second demo account, Nico, on Studio, with two custom
+-- domains stuck in the states /admin/domains lists: one pending for three days (never verified) and
+-- one whose last check failed. Their hosts end in .example and never resolve. Nico has no magic-link
+-- use; he only exists so the admin screens have something to show.
+-- ---------------------------------------------------------------------------
+
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change, email_change_token_new,
+  email_change_token_current, phone_change, phone_change_token, reauthentication_token
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '00000000-0000-4000-8000-0000000000a2',
+  'authenticated',
+  'authenticated',
+  'nico@example.test',
+  extensions.crypt(gen_random_uuid()::text, extensions.gen_salt('bf')),
+  now(),
+  '{"provider": "email", "providers": ["email"]}',
+  '{}',
+  now() - interval '5 days',
+  now(),
+  '', '', '', '', '', '', '', ''
+);
+
+update public.accounts
+  set paid_plan = 'studio'
+  where id = '00000000-0000-4000-8000-0000000000a2';
+
+insert into public.pages (id, owner_id, handle, draft)
+values (
+  '00000000-0000-4000-8000-0000000000b2',
+  '00000000-0000-4000-8000-0000000000a2',
+  'nico-demo',
+  '{"version":1,"rev":0,"profile":{"name":"Nico Demo","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}'::jsonb
+);
+
+insert into public.domains (id, page_id, hostname, status, created_at, last_checked_at)
+values
+  ('00000000-0000-4000-8000-0000000000d1', '00000000-0000-4000-8000-0000000000b2',
+   'links.nico-stuck.example', 'pending', now() - interval '3 days', now() - interval '5 minutes'),
+  ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-0000000000b2',
+   'go.nico-failing.example', 'error', now() - interval '2 hours', now() - interval '5 minutes');

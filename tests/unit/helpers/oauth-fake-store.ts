@@ -96,6 +96,9 @@ export class FakeOauthStore implements OauthStore {
       expires_at: kind === "cimd" ? this.iso(this.clock + 3600_000) : null,
       created_at: this.iso(this.clock),
       last_seen_at: this.iso(this.clock),
+      blocked_at: null,
+      blocked_by: null,
+      blocked_reason: null,
       ...over,
     };
     this.clients.set(clientId, row);
@@ -119,6 +122,9 @@ export class FakeOauthStore implements OauthStore {
       expires_at: client.expires_at ?? this.iso(this.clock),
       created_at: this.iso(this.clock),
       last_seen_at: this.iso(this.clock),
+      blocked_at: null,
+      blocked_by: null,
+      blocked_reason: null,
     });
   }
   async insertDcrClient(client: NewClient) {
@@ -133,6 +139,9 @@ export class FakeOauthStore implements OauthStore {
       expires_at: null,
       created_at: this.iso(this.clock),
       last_seen_at: this.iso(this.clock),
+      blocked_at: null,
+      blocked_by: null,
+      blocked_reason: null,
     });
   }
   async touchClient(clientId: string) {

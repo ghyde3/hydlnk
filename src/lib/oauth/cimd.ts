@@ -167,6 +167,9 @@ export async function loadCimdClientWith(
       expires_at: new Date(expiresAt).toISOString(),
       created_at: new Date(fetchedAt).toISOString(),
       last_seen_at: new Date(fetchedAt).toISOString(),
+      blocked_at: null,
+      blocked_by: null,
+      blocked_reason: null,
     };
     try {
       if (!known) await deps.store.trimUnusedCimd(CIMD_UNUSED_CAP, KNOWN_CLIENT_IDS);

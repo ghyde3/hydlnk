@@ -38,7 +38,13 @@ export type Database = {
           cancel_at_period_end: boolean
           created_at: string
           current_period_end: string | null
+          gift_plan: string | null
+          gift_reason: string | null
+          gift_until: string | null
+          gifted_at: string | null
+          gifted_by: string | null
           id: string
+          paid_plan: string
           plan: string
           stripe_customer_id: string | null
           stripe_event_created_at: string | null
@@ -51,7 +57,13 @@ export type Database = {
           cancel_at_period_end?: boolean
           created_at?: string
           current_period_end?: string | null
+          gift_plan?: string | null
+          gift_reason?: string | null
+          gift_until?: string | null
+          gifted_at?: string | null
+          gifted_by?: string | null
           id: string
+          paid_plan?: string
           plan?: string
           stripe_customer_id?: string | null
           stripe_event_created_at?: string | null
@@ -64,7 +76,13 @@ export type Database = {
           cancel_at_period_end?: boolean
           created_at?: string
           current_period_end?: string | null
+          gift_plan?: string | null
+          gift_reason?: string | null
+          gift_until?: string | null
+          gifted_at?: string | null
+          gifted_by?: string | null
           id?: string
+          paid_plan?: string
           plan?: string
           stripe_customer_id?: string | null
           stripe_event_created_at?: string | null
@@ -101,6 +119,36 @@ export type Database = {
           detail?: Json
           id?: never
           report_id?: string | null
+        }
+        Relationships: []
+      }
+      announcements: {
+        Row: {
+          created_at: string
+          created_by: string
+          ends_at: string
+          id: string
+          link: string | null
+          message: string
+          starts_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          ends_at: string
+          id?: string
+          link?: string | null
+          message: string
+          starts_at: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          ends_at?: string
+          id?: string
+          link?: string | null
+          message?: string
+          starts_at?: string
         }
         Relationships: []
       }
@@ -497,6 +545,9 @@ export type Database = {
       }
       oauth_clients: {
         Row: {
+          blocked_at: string | null
+          blocked_by: string | null
+          blocked_reason: string | null
           client_id: string
           client_name: string
           created_at: string
@@ -508,6 +559,9 @@ export type Database = {
           redirect_uris: string[]
         }
         Insert: {
+          blocked_at?: string | null
+          blocked_by?: string | null
+          blocked_reason?: string | null
           client_id: string
           client_name: string
           created_at?: string
@@ -519,6 +573,9 @@ export type Database = {
           redirect_uris: string[]
         }
         Update: {
+          blocked_at?: string | null
+          blocked_by?: string | null
+          blocked_reason?: string | null
           client_id?: string
           client_name?: string
           created_at?: string
@@ -856,13 +913,25 @@ export type Database = {
       }
       reserved_handles: {
         Row: {
+          added_by: string | null
+          created_at: string
           handle: string
+          kind: string
+          reason: string | null
         }
         Insert: {
+          added_by?: string | null
+          created_at?: string
           handle: string
+          kind?: string
+          reason?: string | null
         }
         Update: {
+          added_by?: string | null
+          created_at?: string
           handle?: string
+          kind?: string
+          reason?: string | null
         }
         Relationships: []
       }
@@ -1019,11 +1088,57 @@ export type Database = {
           upload_bytes: number
         }[]
       }
+      admin_account_detail: {
+        Args: { p_id: string }
+        Returns: {
+          active_apps: number
+          domains: number
+          email: string
+          gift_plan: string
+          gift_reason: string
+          gift_until: string
+          gifted_at: string
+          gifted_by: string
+          id: string
+          last_sign_in_at: string
+          live_sites: number
+          paid_plan: string
+          plan: string
+          reports_open: number
+          reports_total: number
+          signed_up_at: string
+          site_bytes: number
+          sites: number
+          stripe_customer_id: string
+          sub_pages: number
+          suspended_at: string
+          upload_bytes: number
+          verified_domains: number
+        }[]
+      }
       admin_account_emails: {
         Args: { p_ids: string[] }
         Returns: {
           email: string
           id: string
+        }[]
+      }
+      admin_add_reserved_handle: {
+        Args: { p_admin: string; p_handle: string; p_reason: string }
+        Returns: {
+          handle: string
+          holder_email: string
+          holder_owner_id: string
+          holder_page_id: string
+          outcome: string
+        }[]
+      }
+      admin_block_oauth_client: {
+        Args: { p_admin: string; p_client_id: string; p_reason: string }
+        Returns: {
+          grants_ended: number
+          outcome: string
+          tokens_ended: number
         }[]
       }
       admin_blocked_domain_impact: {
@@ -1037,6 +1152,96 @@ export type Database = {
           total_pages: number
         }[]
       }
+      admin_clear_announcement: { Args: never; Returns: number }
+      admin_cron_health: {
+        Args: never
+        Returns: {
+          active: boolean
+          duration_ms: number
+          failed_24h: number
+          jobid: number
+          jobname: string
+          last_end_at: string
+          last_message: string
+          last_run_at: string
+          last_status: string
+          runs_24h: number
+          schedule: string
+        }[]
+      }
+      admin_domains_needing_help: {
+        Args: { p_limit?: number }
+        Returns: {
+          age_seconds: number
+          created_at: string
+          domain_id: string
+          handle: string
+          hostname: string
+          last_checked_at: string
+          owner_email: string
+          owner_id: string
+          page_id: string
+          reason: string
+          status: string
+        }[]
+      }
+      admin_end_gift: { Args: { p_account: string }; Returns: string }
+      admin_list_reserved_handles: {
+        Args: {
+          p_kind?: string
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+        }
+        Returns: {
+          added_by: string
+          created_at: string
+          handle: string
+          holder_owner_id: string
+          holder_page_id: string
+          kind: string
+          reason: string
+          total_count: number
+        }[]
+      }
+      admin_oauth_apps: {
+        Args: { p_limit?: number }
+        Returns: {
+          active_connections: number
+          blocked_at: string
+          blocked_by: string
+          blocked_reason: string
+          calls_7d: number
+          client_id: string
+          client_name: string
+          created_at: string
+          errors_7d: number
+          kind: string
+          last_call_at: string
+        }[]
+      }
+      admin_overview_numbers: {
+        Args: never
+        Returns: {
+          accounts_free: number
+          accounts_pro: number
+          accounts_studio: number
+          accounts_total: number
+          gifted_active: number
+          live_custom_domains: number
+          live_sites: number
+          live_sub_pages: number
+          paying_pro: number
+          paying_studio: number
+          paying_total: number
+          sub_pages: number
+          views_7d: number
+        }[]
+      }
+      admin_remove_reserved_handle: {
+        Args: { p_handle: string }
+        Returns: string
+      }
       admin_search_pages: {
         Args: { p_limit?: number; p_offset?: number; p_query?: string }
         Returns: {
@@ -1049,6 +1254,33 @@ export type Database = {
           published_at: string
           suspended_at: string
           total_count: number
+        }[]
+      }
+      admin_set_announcement: {
+        Args: {
+          p_admin: string
+          p_ends: string
+          p_link: string
+          p_message: string
+          p_starts: string
+        }
+        Returns: string
+      }
+      admin_set_gift: {
+        Args: {
+          p_account: string
+          p_admin: string
+          p_plan: string
+          p_reason: string
+          p_until: string
+        }
+        Returns: string
+      }
+      admin_signups_per_day: {
+        Args: { p_days?: number }
+        Returns: {
+          day: string
+          signups: number
         }[]
       }
       admin_traffic_flags: {
@@ -1068,6 +1300,10 @@ export type Database = {
           window_end: string
           window_start: string
         }[]
+      }
+      admin_unblock_oauth_client: {
+        Args: { p_client_id: string }
+        Returns: string
       }
       apply_subscription_state: {
         Args: {
@@ -1098,6 +1334,7 @@ export type Database = {
         Returns: boolean
       }
       claim_domain_live_email: { Args: { p_id: string }; Returns: boolean }
+      end_expired_gifts: { Args: never; Returns: number }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
       mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
