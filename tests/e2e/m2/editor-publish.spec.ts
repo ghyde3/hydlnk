@@ -3,6 +3,7 @@ import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
+import { showPreviewSheet } from "../m7/phone-preview";
 import { newBlockId } from "@/lib/document";
 import {
   css,
@@ -26,10 +27,11 @@ test.afterAll(cleanupUsers);
 
 const NOIR = "00000000-0000-4000-8000-000000000001";
 const publishButton = (page: Page) =>
-  page.locator("main > header").getByRole("button", { name: "Publish", exact: true });
+  page.getByTestId("workspace-toolbar").getByRole("button", { name: "Publish", exact: true });
 const alertFor = (page: Page, text: string | RegExp) =>
   page.getByRole("alert").filter({ hasText: text });
-const rowButton = (page: Page, id: string) => rowOf(page, id).locator("button[aria-expanded]");
+const rowButton = (page: Page, id: string) =>
+  rowOf(page, id).locator("button[aria-expanded]").first();
 
 const BAD = { link: "lnkBad001", embed: "embBad001", image: "imgBad001", header: "hdrGood01" };
 
@@ -96,7 +98,7 @@ test.describe("M2-24 publish errors", () => {
     await rowButton(page, BAD.embed).click();
     await expect(
       rowOf(page, BAD.embed).getByText(
-        "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.",
+        "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.",
       ),
     ).toBeVisible();
     await rowButton(page, BAD.image).click();
@@ -240,23 +242,15 @@ test.describe("M2-24 publish errors", () => {
     await expect(statusChip(page)).toHaveText("Not published");
   });
 
-  test("M2-24 phone: Publish on the Preview tab switches to Blocks and shows the alert; everything wraps and is 44px", async ({
+  test("M2-24 phone: Publish from the pinned row shows the alert and opens the first bad row; everything wraps and is 44px", async ({
     page,
     context,
   }, info) => {
     test.skip(!phoneOnly(info), "phone layout");
     await brokenPage(context, "pe6");
     await openEditor(page);
-    await page.getByRole("tab", { name: "Preview" }).click();
-    await expect(page.getByRole("tab", { name: "Preview" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    // M7-09: the phone has no Preview tab; Publish is in the pinned row on every tab.
     await publishButton(page).click();
-    await expect(page.getByRole("tab", { name: "Blocks" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
     await expect(alertFor(page, "Fix 3 blocks before publishing.")).toBeVisible();
     await expect(rowButton(page, BAD.link)).toHaveAttribute("aria-expanded", "true");
     await expectNoHorizontalScroll(page);
@@ -276,7 +270,8 @@ test.describe("M2-24 publish errors", () => {
     await publishButton(page).click();
     const alert = alertFor(page, "Fix 3 blocks before publishing.");
     await expect(alert).toBeVisible();
-    const column = (await page.getByRole("region", { name: "Blocks", exact: true }).boundingBox())!;
+    // M7-02: the block column is the workspace's one tab panel.
+    const column = (await page.getByRole("tabpanel").boundingBox())!;
     const box = (await alert.boundingBox())!;
     expect(box.width).toBeLessThanOrEqual(720);
     expect(Math.abs(box.width - column.width)).toBeLessThanOrEqual(1);
@@ -396,20 +391,37 @@ test.describe("M2-27 the status chip", () => {
   test("M2-27 a new page is Not published; after Publish it is Published without a reload, with a View live page link", async ({
     page,
     context,
-  }) => {
+  }, info) => {
     const user = await emptyUser(context, "st4");
     await openEditor(page);
     const chip = statusChip(page);
     await expect(chip).toHaveText("Not published");
     await expect(page.getByRole("link", { name: "View live page" })).toHaveCount(0);
+    if (desktopOnly(info)) {
+      // M7-05: from 760px the Preview menu has 'View live page', off (aria-disabled) until Publish.
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
+      await expect(page.getByRole("menuitem", { name: /View live page/ })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+      );
+      await page.keyboard.press("Escape");
+    }
 
     await publishButton(page).click();
     await expect(chip).toHaveText("Published");
-    // The header link; the "Published." toast carries a second one (M2-23).
-    const link = page.locator("main > header").getByRole("link", { name: "View live page" });
+    // M7-05: the header link is gone; the "Published." toast carries 'View live page' (M2-23), and
+    // from 760px the Preview menu's item turns on at once.
+    const link = page.getByRole("status").getByRole("link", { name: "View live page" });
     await expect(link).toHaveAttribute("href", `http://${user.handle}.localhost:3000`);
     await expect(link).toHaveAttribute("target", "_blank");
     expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    if (desktopOnly(info)) {
+      await page.getByRole("button", { name: "Preview", exact: true }).click();
+      const item = page.getByRole("menuitem", { name: "View live page" });
+      await expect(item).toHaveAttribute("href", `http://${user.handle}.localhost:3000`);
+      await expect(item).toHaveAttribute("target", "_blank");
+      await page.keyboard.press("Escape");
+    }
     const row = await pageRow(user.pageId);
     expect(row.published_at).not.toBeNull();
     const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
@@ -453,14 +465,15 @@ test.describe("M2-27 the status chip", () => {
     expect(updated.error).toBeNull();
     await reloadEditor(page);
     await expect(statusChip(page)).toHaveText("Unpublished changes");
-    // The preview resolves the new theme values.
+    // The preview resolves the new theme values (a phone shows it in the sheet, M7-09).
+    await showPreviewSheet(page);
     await expect
       .poll(() => css(previewScreen(page).locator("[data-page-root]"), "background-color"))
       .toBe("rgb(16, 24, 32)");
     await admin.from("themes").delete().eq("id", theme.data!.id);
   });
 
-  test("M2-27 phone: the chip wraps inside the header; the live link and every control are 44px", async ({
+  test("M2-27 phone: the chip sits inside the pinned row; every control is 44px (the header's live link is the toast's and the Share tab's now, M7-05)", async ({
     page,
     context,
   }, info) => {
@@ -469,13 +482,12 @@ test.describe("M2-27 the status chip", () => {
     await openEditor(page);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
-    await expectTapTargets(page, "main > header");
-    const header = (await page.locator("main > header").boundingBox())!;
+    await expectTapTargets(page, "[data-testid='workspace-toolbar']");
+    // Below 760px the toolbar is `display: contents`; its pinned row is the box.
+    const header = (await page.getByTestId("workspace-toolbar-row").boundingBox())!;
     const chip = (await statusChip(page).boundingBox())!;
     expect(chip.x).toBeGreaterThanOrEqual(header.x);
     expect(chip.x + chip.width).toBeLessThanOrEqual(header.x + header.width);
-    const link = (await page.getByRole("link", { name: "View live page" }).boundingBox())!;
-    expect(link.height).toBeGreaterThanOrEqual(44);
   });
 
   test("M2-27 desktop: the chip sits left of the Preview and Publish buttons", async ({
@@ -486,7 +498,9 @@ test.describe("M2-27 the status chip", () => {
     await seededUser(context, "st7");
     await openEditor(page);
     const chip = (await statusChip(page).boundingBox())!;
-    const preview = (await page.getByRole("link", { name: "Preview", exact: true }).boundingBox())!;
+    const preview = (await page
+      .getByRole("button", { name: "Preview", exact: true })
+      .boundingBox())!;
     const publish = (await publishButton(page).boundingBox())!;
     expect(chip.x + chip.width).toBeLessThanOrEqual(preview.x);
     expect(preview.x + preview.width).toBeLessThanOrEqual(publish.x);

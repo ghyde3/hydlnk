@@ -12,8 +12,10 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 const EDITOR_DIRS = [
+  "src/app/(editor)/app/(screens)/(workspace)",
   "src/app/(editor)/app/(screens)/editor",
   "src/components/editor",
+  "src/components/workspace",
   "src/lib/editor",
 ];
 
@@ -30,6 +32,13 @@ function sourceFiles(dir: string): string[] {
 const files = EDITOR_DIRS.flatMap((dir) => sourceFiles(resolve(ROOT, dir)));
 
 const GATE_ACCOUNT_REPAIR = "src/lib/auth/accounts.ts";
+/**
+ * Wave L (M10-12): the gate asks `resumeOauthRequest` whether the person came here to sign in for an
+ * app's connection. It reads one pending request by the id in an HttpOnly cookie, with the secret
+ * key (the OAuth tables have no client access), and only decides where to send the verified session
+ * user. Not editor code; named here so a second path to the admin client cannot appear unnoticed.
+ */
+const GATE_OAUTH_RESUME = "src/lib/oauth/resume.ts";
 
 const FORBIDDEN: [RegExp, string][] = [
   [/@\/lib\/supabase\/admin/, "the secret-key Supabase client"],
@@ -42,7 +51,9 @@ const FORBIDDEN: [RegExp, string][] = [
 describe("M2-03: the editor never uses the secret-key client", () => {
   it("finds the editor's modules", () => {
     const names = files.map((file) => relative(ROOT, file));
-    expect(names).toContain("src/app/(editor)/app/(screens)/editor/page.tsx");
+    expect(names).toContain("src/app/(editor)/app/(screens)/(workspace)/layout.tsx");
+    expect(names).toContain("src/app/(editor)/app/(screens)/(workspace)/editor/page.tsx");
+    expect(names).toContain("src/components/workspace/workspace-provider.tsx");
     expect(names).toContain("src/lib/editor/page-data.ts");
     expect(names).toContain("src/components/editor/editor-screen.tsx");
   });
@@ -54,7 +65,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     }
   });
 
-  it("no module the editor page reaches through its imports uses the secret-key client, except behind the Publish Server Action", () => {
+  it("no module the editor page reaches through its imports uses the secret-key client, except behind the Publish and preview-link Server Actions", () => {
     // Follow every static import from the editor route (the page, the screen, the gate modules it
     // calls), not just the files in the editor folders. A "use server" module is a boundary: it runs
     // on the server only and may use the secret key (that is what Publish is), so it is listed, not
@@ -83,7 +94,13 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     };
     const seen = new Set<string>();
     const boundaries = new Set<string>();
-    const queue = [resolve(ROOT, "src/app/(editor)/app/(screens)/editor/page.tsx")];
+    const workspace = "src/app/(editor)/app/(screens)/(workspace)";
+    const queue = [
+      resolve(ROOT, `${workspace}/layout.tsx`),
+      resolve(ROOT, `${workspace}/editor/page.tsx`),
+      resolve(ROOT, `${workspace}/design/page.tsx`),
+      resolve(ROOT, `${workspace}/share/page.tsx`),
+    ];
     while (queue.length > 0) {
       const file = queue.pop()!;
       if (seen.has(file)) continue;
@@ -100,6 +117,10 @@ describe("M2-03: the editor never uses the secret-key client", () => {
         boundaries.add(GATE_ACCOUNT_REPAIR);
         continue;
       }
+      if (relative(ROOT, file) === GATE_OAUTH_RESUME) {
+        boundaries.add(GATE_OAUTH_RESUME);
+        continue;
+      }
       // Comments may mention the server env ("for the secret key use ..."): only code counts.
       const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
       for (const [pattern, what] of FORBIDDEN) {
@@ -114,7 +135,16 @@ describe("M2-03: the editor never uses the secret-key client", () => {
       }
     }
     expect(seen.size).toBeGreaterThan(40);
-    expect([...boundaries].sort()).toEqual([GATE_ACCOUNT_REPAIR, "src/lib/publish/actions.ts"]);
+    // The preview-link actions (M6-09) are the second Server Action module: the share dialog calls them.
+    // `hashLinkCode` (M9-30) is the third: the link form's 'Set code' button (the limiter behind it
+    // reads the counter store with the secret key), loaded with a dynamic import when a code is set.
+    expect([...boundaries].sort()).toEqual([
+      GATE_ACCOUNT_REPAIR,
+      "src/lib/links/actions.ts",
+      GATE_OAUTH_RESUME,
+      "src/lib/previews/actions.ts",
+      "src/lib/publish/actions.ts",
+    ]);
   });
 
   it("loads the draft with the user's session (the server client)", () => {
@@ -122,7 +152,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     expect(loader).toContain("@/lib/supabase/server");
     expect(loader).toContain("createServerSupabase");
     const page = readFileSync(
-      resolve(ROOT, "src/app/(editor)/app/(screens)/editor/page.tsx"),
+      resolve(ROOT, "src/app/(editor)/app/(screens)/(workspace)/layout.tsx"),
       "utf8",
     );
     expect(page).toContain("getAppContext");

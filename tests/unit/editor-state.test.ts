@@ -106,7 +106,10 @@ describe("add a block (M2-10)", () => {
     expect(byType.social).toMatchObject({ icons: [{ platform: "instagram", url: "" }] });
     expect((byType.grid as { cells: unknown[] }).cells).toHaveLength(2);
     expect(byType.divider).toMatchObject({ type: "divider" });
-    expect(new Set(ids(state)).size).toBe(9);
+    expect(byType.faq).toMatchObject({ items: [{ question: "", answer: "" }] });
+    expect(byType.contact).toMatchObject({ name: "", phone: "", email: "", hours: "" });
+    expect(byType.discount).toMatchObject({ code: "", description: "", url: "" });
+    expect(new Set(ids(state)).size).toBe(BLOCK_TYPES.length);
   });
 
   it("does nothing at the 50-block limit", () => {
@@ -316,12 +319,38 @@ describe("block/set-image (an upload finished)", () => {
 
   it("works for card blocks, removes with null, and ignores other types and unknown ids", () => {
     const card = { ...blocks.card, title: "T", image: null } as Block;
-    const base = initialEditorState({ ...fullDraft, blocks: [card, blocks.link] });
+    const base = initialEditorState({ ...fullDraft, blocks: [card, blocks.header] });
     const set = run(base, { type: "block/set-image", id: card.id, image: photo });
     expect(set.draft.blocks[0]).toMatchObject({ title: "T", image: photo });
     const removed = run(set, { type: "block/set-image", id: card.id, image: null });
     expect(removed.draft.blocks[0]).toMatchObject({ image: null });
-    expect(run(base, { type: "block/set-image", id: blocks.link.id, image: photo })).toBe(base);
+    expect(run(base, { type: "block/set-image", id: blocks.header.id, image: photo })).toBe(base);
     expect(run(base, { type: "block/set-image", id: "nope", image: photo })).toBe(base);
+  });
+
+  it("M6-21 sets a link's thumbnail as its icon, replacing a built-in one, and null removes the icon key", () => {
+    const withIcon = { ...blocks.link, icon: { type: "builtin", name: "star" } } as Block;
+    let state = initialEditorState({ ...fullDraft, blocks: [withIcon] });
+    // Typed while the file was on its way: kept.
+    state = run(state, {
+      type: "block/update",
+      block: { ...withIcon, label: "typed meanwhile" } as Block,
+    });
+    state = run(state, { type: "block/set-image", id: withIcon.id, image: photo });
+    expect(state.draft.blocks[0]).toMatchObject({
+      label: "typed meanwhile",
+      icon: { type: "image", image: photo },
+    });
+    // Never both kinds: the built-in name is gone.
+    expect((state.draft.blocks[0] as { icon: object }).icon).toEqual({
+      type: "image",
+      image: photo,
+    });
+    // Removing clears the key; a link that never had an icon is a new draft only if it changed.
+    state = run(state, { type: "block/set-image", id: withIcon.id, image: null });
+    expect("icon" in state.draft.blocks[0]!).toBe(false);
+    expect(state.draft.blocks[0]).toMatchObject({ label: "typed meanwhile" });
+    // It is one undo step each: undo brings the thumbnail back.
+    expect(state.history.past.length).toBeGreaterThan(1);
   });
 });

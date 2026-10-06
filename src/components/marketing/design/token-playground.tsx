@@ -1,0 +1,120 @@
+import { NORTHFOLD, SMOKE_PHOTO } from "../demo/brands";
+import { DemoPage, PhoneFrame } from "../demo/demo-page";
+import "./token-playground.css";
+
+interface Group {
+  name: string;
+  legend: string;
+  hint: string;
+  options: { value: string; label: string }[];
+}
+
+const GROUPS: Group[] = [
+  {
+    name: "tp-theme",
+    legend: "Theme",
+    hint: "A complete look: colors, fonts, shapes and spacing.",
+    options: [
+      { value: "smoke", label: "Smoke" },
+      { value: "noir", label: "Noir" },
+      { value: "ivory", label: "Ivory" },
+    ],
+  },
+  {
+    name: "tp-button",
+    legend: "Button style",
+    hint: "Change just the buttons.",
+    options: [
+      { value: "theme", label: "Theme default" },
+      { value: "fill", label: "Solid" },
+      { value: "outline", label: "Outline" },
+      { value: "soft", label: "Soft" },
+      { value: "shadow", label: "Shadow" },
+      { value: "pill", label: "Pill" },
+    ],
+  },
+  {
+    name: "tp-radius",
+    legend: "Corners",
+    hint: "Buttons, cards and tiles.",
+    options: [
+      { value: "theme", label: "Theme default" },
+      { value: "0", label: "Square" },
+      { value: "8", label: "Soft" },
+      { value: "16", label: "Round" },
+      { value: "28", label: "Rounder" },
+    ],
+  },
+  {
+    name: "tp-font",
+    legend: "Heading font",
+    hint: "The name, headers and card titles.",
+    options: [
+      { value: "theme", label: "Theme default" },
+      { value: "fraunces", label: "Fraunces" },
+      { value: "instrument", label: "Instrument Serif" },
+      { value: "geist", label: "Geist" },
+    ],
+  },
+  {
+    name: "tp-bg",
+    legend: "Background",
+    hint: "A flat color, a gradient or a photo.",
+    options: [
+      { value: "theme", label: "Theme default" },
+      { value: "solid", label: "Flat" },
+      { value: "gradient", label: "Gradient" },
+      { value: "image", label: "Photo" },
+    ],
+  },
+];
+
+/**
+ * The token playground: pick a theme, then override single tokens on top of it, and the demo
+ * page follows. Plain radio groups and CSS (`:has()`), no JavaScript: the choices are real form
+ * controls (keyboard and screen reader friendly), and the page they restyle is a decorative demo.
+ * "Theme" in each group means no override, which is how the product resolves tokens too: the page's
+ * own overrides win over its theme.
+ */
+export function TokenPlayground() {
+  return (
+    <div className="tp grid items-start gap-x-14 gap-y-10 min-[1024px]:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="flex flex-col gap-5">
+        {GROUPS.map((group) => (
+          <fieldset key={group.name} className="min-w-0">
+            <legend className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="text-sm font-semibold text-ink">{group.legend}</span>
+              <span className="text-[13px] text-text-2">{group.hint}</span>
+            </legend>
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {group.options.map((option, index) => (
+                <label key={option.value} className="tp-option">
+                  <input
+                    type="radio"
+                    name={group.name}
+                    value={option.value}
+                    defaultChecked={index === 0}
+                    className="sr-only"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ))}
+        <p className="text-sm leading-[1.6] text-text-2">
+          The editor works the same way. A theme sets the whole look, and anything you change on
+          your page wins over it. Choose Theme default to undo a change.
+        </p>
+      </div>
+      <figure className="flex flex-col items-center gap-3 justify-self-center">
+        <PhoneFrame>
+          <DemoPage brand={NORTHFOLD} theme={SMOKE_PHOTO} inlineTheme={false} />
+        </PhoneFrame>
+        <figcaption className="font-mono text-xs text-text-2">
+          Northfold Studio, a demo page, restyled live
+        </figcaption>
+      </figure>
+    </div>
+  );
+}

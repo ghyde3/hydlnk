@@ -19,13 +19,16 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { GripVertical } from "lucide-react";
 import { useMemo, useState, type Dispatch } from "react";
-import type { Block, PublishError } from "@/lib/document";
+import { LIMITS, type Block, type BlockType, type PublishError } from "@/lib/document";
+import { Icon } from "@/components/app/icon";
+import { PageBlocksProvider } from "@/components/blocks/forms/featured-context";
 import { blockRowSummary } from "@/lib/editor/contracts";
-import { EMPTY_BLOCKS_MESSAGE } from "@/lib/editor/messages";
+import { ALL_HIDDEN_MESSAGE, EMPTY_BLOCKS_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
+import { AddSlot } from "./add-slot";
 import { BlockRow } from "./block-row";
-import { GripIcon } from "./icons";
 
 const NO_ERRORS: PublishError[] = [];
 
@@ -67,6 +70,8 @@ export function BlockList({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const [activeId, setActiveId] = useState<UniqueIdentifier | null>(null);
+  // The "+" whose type chooser is open (its position, from 1), or null. One at a time.
+  const [openSlot, setOpenSlot] = useState<number | null>(null);
   const ids = useMemo(() => blocks.map((block) => block.id), [blocks]);
   const errorsByBlock = useMemo(() => {
     const map = new Map<string, PublishError[]>();
@@ -95,10 +100,11 @@ export function BlockList({
         ? `${nameOf(blockById(active.id))} dropped at position ${position(over.id)} of ${ids.length}.`
         : `${nameOf(blockById(active.id))} dropped.`,
     onDragCancel: ({ active }) =>
-      `Reordering cancelled. ${nameOf(blockById(active.id))} is back at position ${position(active.id)} of ${ids.length}.`,
+      `Reordering canceled. ${nameOf(blockById(active.id))} is back at position ${position(active.id)} of ${ids.length}.`,
   };
 
   function onDragStart(event: DragStartEvent): void {
+    setOpenSlot(null);
     setActiveId(event.active.id);
   }
   function onDragEnd(event: DragEndEvent): void {
@@ -109,6 +115,26 @@ export function BlockList({
     }
   }
 
+  const full = blocks.length >= LIMITS.blocks;
+  const toggleSlot = (position: number) =>
+    setOpenSlot((current) => (current === position ? null : position));
+  const pickForSlot = (position: number, type: BlockType) => {
+    setOpenSlot(null);
+    dispatch({ type: "block/add", blockType: type, index: position - 1 });
+  };
+  const slot = (position: number) => (
+    <AddSlot
+      key={`slot-${position}`}
+      position={position}
+      open={openSlot === position && !full}
+      full={full}
+      onToggle={() => toggleSlot(position)}
+      onPick={(type) => pickForSlot(position, type)}
+    />
+  );
+
+  // Every block is switched off: the page shows only the profile, and the list says so (M5-15).
+  const allHidden = blocks.length > 0 && blocks.every((block) => block.visible === false);
   const active = activeId === null ? undefined : blockById(activeId);
   const activeSummary = active ? blockRowSummary(active) : null;
 
@@ -126,57 +152,73 @@ export function BlockList({
           {EMPTY_BLOCKS_MESSAGE}
         </p>
       ) : (
-        <DndContext
-          id="editor-blocks"
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[verticalOnly]}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onDragCancel={() => setActiveId(null)}
-          accessibility={{
-            announcements,
-            screenReaderInstructions: {
-              draggable:
-                "To pick up a block, press Space. Use the arrow keys to move it, Space to drop it, Escape to cancel.",
-            },
-          }}
-        >
-          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            <ol className="m-0 flex list-none flex-col gap-1.5 p-0">
-              {blocks.map((block, index) => (
-                <BlockRow
-                  key={block.id}
-                  block={block}
-                  index={index}
-                  total={blocks.length}
-                  expanded={expandedId === block.id}
-                  errors={errorsByBlock.get(block.id) ?? NO_ERRORS}
-                  focus={focus && "blockId" in focus && focus.blockId === block.id ? focus : null}
-                  dispatch={dispatch}
-                />
-              ))}
-            </ol>
-          </SortableContext>
-          <DragOverlay>
-            {activeSummary ? (
-              <div
-                data-testid="drag-overlay"
-                className="flex min-h-[58px] items-center gap-0.5 rounded-md border border-ink bg-surface pr-4 ring-1 ring-ink"
-              >
-                <span className="flex size-11 shrink-0 items-center justify-center text-[#9a958d]">
-                  <GripIcon />
-                </span>
-                <span className="flex min-w-0 flex-col gap-0.5 px-1">
-                  <span className="font-mono text-[11px] tracking-[0.06em] text-text-3 uppercase">
-                    {activeSummary.typeLabel}
+        <>
+          {allHidden ? (
+            <p
+              data-testid="all-hidden"
+              className="rounded-md border border-dashed border-line-3 bg-surface px-4 py-4 text-center text-sm text-text-2"
+            >
+              {ALL_HIDDEN_MESSAGE}
+            </p>
+          ) : null}
+          <DndContext
+            id="editor-blocks"
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[verticalOnly]}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            onDragCancel={() => setActiveId(null)}
+            accessibility={{
+              announcements,
+              screenReaderInstructions: {
+                draggable:
+                  "To pick up a block, press Space. Use the arrow keys to move it, Space to drop it, Escape to cancel.",
+              },
+            }}
+          >
+            <PageBlocksProvider blocks={blocks}>
+              <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+                <ol className="m-0 flex list-none flex-col p-0">
+                  {slot(1)}
+                  {blocks.flatMap((block, index) => [
+                    <BlockRow
+                      key={block.id}
+                      block={block}
+                      index={index}
+                      total={blocks.length}
+                      expanded={expandedId === block.id}
+                      errors={errorsByBlock.get(block.id) ?? NO_ERRORS}
+                      focus={
+                        focus && "blockId" in focus && focus.blockId === block.id ? focus : null
+                      }
+                      dispatch={dispatch}
+                    />,
+                    slot(index + 2),
+                  ])}
+                </ol>
+              </SortableContext>
+            </PageBlocksProvider>
+            <DragOverlay>
+              {activeSummary ? (
+                <div
+                  data-testid="drag-overlay"
+                  className="flex min-h-[58px] items-center gap-0.5 rounded-md border border-ink bg-surface pr-4 ring-1 ring-ink"
+                >
+                  <span className="flex size-11 shrink-0 items-center justify-center text-[#9a958d]">
+                    <Icon icon={GripVertical} size={15} />
                   </span>
-                  <span className="truncate text-sm font-semibold">{activeSummary.title}</span>
-                </span>
-              </div>
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+                  <span className="flex min-w-0 flex-col gap-0.5 px-1">
+                    <span className="font-mono text-[11px] tracking-[0.06em] text-text-3 uppercase">
+                      {activeSummary.typeLabel}
+                    </span>
+                    <span className="truncate text-sm font-semibold">{activeSummary.title}</span>
+                  </span>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </>
       )}
 
       <div role="status" aria-live="polite" className="sr-only">

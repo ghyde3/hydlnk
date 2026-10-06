@@ -192,3 +192,72 @@ select
   ),
   now()
 from doc;
+
+-- ---------------------------------------------------------------------------
+-- Her two sub-pages (M11-04): `items` and `directions`, published, draft equal to published, listed in
+-- Home's menu (`nav`, Home's draft and published documents). Blocks are shaped like Home's, and every
+-- block id is unique across the whole site, Home included.
+--
+-- Sub-page ids: ...00c1 items, ...00c2 directions. Block ids:
+--   items       header Hd1sIt3mA9Qx  text Tx4iTm6eB2Wn  link Lk7iTm0cD5Vr
+--   directions  header Hd2dRc8tN6Yp  text Tx5dRc1oB3Ks  link Lk9dRc4mP7Hj
+-- ---------------------------------------------------------------------------
+
+with docs(id, doc) as (
+  values
+    ('00000000-0000-4000-8000-0000000000c1'::uuid, $json$
+    {
+      "path": "items",
+      "title": "Prints and gear",
+      "description": "Limited prints and studio gear from Mara Okafor, shipped from Orlando.",
+      "blocks": [
+        { "id": "Hd1sIt3mA9Qx", "type": "header", "visible": true, "text": "Prints and gear" },
+        {
+          "id": "Tx4iTm6eB2Wn",
+          "type": "text",
+          "visible": true,
+          "text": "Archival prints from the Night Market series, signed and numbered. Ships in about a week."
+        },
+        {
+          "id": "Lk7iTm0cD5Vr",
+          "type": "link",
+          "visible": true,
+          "label": "Browse all prints",
+          "url": "https://maraokafor.example/prints"
+        }
+      ]
+    }
+    $json$::jsonb),
+    ('00000000-0000-4000-8000-0000000000c2'::uuid, $json$
+    {
+      "path": "directions",
+      "title": "Directions",
+      "description": "How to find the studio: address, parking and opening days.",
+      "blocks": [
+        { "id": "Hd2dRc8tN6Yp", "type": "header", "visible": true, "text": "Find the studio" },
+        {
+          "id": "Tx5dRc1oB3Ks",
+          "type": "text",
+          "visible": true,
+          "text": "Open Tuesday to Saturday, by appointment. Free parking is behind the building."
+        },
+        {
+          "id": "Lk9dRc4mP7Hj",
+          "type": "link",
+          "visible": true,
+          "label": "Open in maps",
+          "url": "https://maraokafor.example/studio/directions"
+        }
+      ]
+    }
+    $json$::jsonb)
+)
+insert into public.site_pages (id, page_id, draft, published, published_at)
+select d.id, '00000000-0000-4000-8000-0000000000b1', d.doc, d.doc, now()
+from docs d;
+
+update public.pages
+set
+  draft = draft || '{"nav": {"show": true, "items": ["00000000-0000-4000-8000-0000000000c1", "00000000-0000-4000-8000-0000000000c2"]}}'::jsonb,
+  published = published || '{"nav": {"show": true, "items": ["00000000-0000-4000-8000-0000000000c1", "00000000-0000-4000-8000-0000000000c2"]}}'::jsonb
+where id = '00000000-0000-4000-8000-0000000000b1';

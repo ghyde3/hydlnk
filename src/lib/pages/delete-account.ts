@@ -2,13 +2,32 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { isAccountSuspended } from "@/lib/admin/suspension";
 import { getSessionUser } from "@/lib/auth/session";
+import { cancelAccountBilling } from "@/lib/billing/cancel";
+import { expireDomainHost } from "@/lib/domains/expire-host";
+import { revokeAllGrants } from "@/lib/oauth/grants";
+import { DISCONNECT_FAILED } from "@/lib/oauth/messages";
 import { expireDeletedPages } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { failIfInjected } from "@/lib/testing/faults";
+import { removeAccountDomains } from "./delete-domains";
+import { removeAccountMedia } from "./delete-media";
 import { CURRENT_PAGE_COOKIE, pickCurrentPage } from "./pick";
 
 export type DeleteAccountState = { error: string } | null;
+
+/** What the dialog shows when a step before the deletion fails (M4-34). */
+const BILLING_ERROR = "We couldn’t cancel your subscription. Try again.";
+const DOMAIN_ERROR = "We couldn’t remove your custom domain. Try again.";
+const MEDIA_ERROR = "We couldn’t remove your uploaded images. Try again.";
+/** A suspended account cannot be deleted (M5-09): that would erase the suspension and free its handle. */
+const SUSPENDED_ERROR =
+  "Your account is suspended, so it can’t be deleted. Contact support to appeal.";
+const SUSPENDED_CHECK_ERROR = "We couldn’t check your account. Try again.";
+
+const errorText = (error: unknown): string => (error instanceof Error ? error.message : "unknown");
 
 /** Where a deleted account lands. /login shows "Your account was deleted." for this flag. */
 const ACCOUNT_DELETED_PATH = "/login?deleted=1";
@@ -33,8 +52,23 @@ const ACCOUNT_DELETED_PATH = "/login?deleted=1";
  * `expireDeletedPages`, the one place page tags are touched besides Publish): the deleted page stops being served at once instead of living on in the
  * cache. This runs after the delete, not before: a request that regenerated the page between an
  * early invalidation and the delete would put it straight back, with nothing left to expire it.
- * TODO(M4): remove Storage objects, cancel the Stripe subscription and detach custom domains
- * from Vercel before the user is deleted.
+ *
+ * M4-34: before the user is deleted, in this order, each step stopping the deletion when it
+ * fails (nothing is deleted, the dialog says what to retry). M10-19 adds a step 0, after the
+ * suspension check and the handle confirmation: every connected app is disconnected (`revokeAllGrants`).
+ *   1. every live Stripe subscription of the account's customer is canceled (the customer id is
+ *      the session user's own account row, never request input), so a failed deletion can never
+ *      leave a paying account behind;
+ *   2. each custom domain of the user's pages is removed from the Vercel project (and, once the user is
+ *      deleted, the proxy's remembered lookup of each hostname is expired, M8-11);
+ *   3. the user's objects under `{uid}/` in the `page-media` bucket are removed.
+ * Every step is safe to run again, so a retry after a failure picks up where it stopped.
+ *
+ * M5-09: a suspended account cannot be deleted. The account is read first (secret key, fresh) and a
+ * suspended one, one that cannot be read, or one with no account row is refused before anything
+ * else runs: no Stripe call, no domain, no image, no auth deletion. Without this a suspended owner
+ * could delete the account, which erases `suspended_at`, frees the handle and wipes the page the
+ * admin needs to review.
  */
 export async function deleteAccount(
   _previous: DeleteAccountState,
@@ -42,6 +76,13 @@ export async function deleteAccount(
 ): Promise<DeleteAccountState> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
+
+  try {
+    if (await isAccountSuspended(user.id)) return { error: SUSPENDED_ERROR };
+  } catch (error) {
+    console.error("[account] reading the account before a delete failed", errorText(error));
+    return { error: SUSPENDED_CHECK_ERROR };
+  }
 
   const confirmation = formData.get("confirm");
   const supabase = await createServerSupabase();
@@ -60,11 +101,49 @@ export async function deleteAccount(
     return { error: "That doesn’t match your handle. Type it exactly to confirm." };
   }
 
+  // M10-19 (Wave L): every connected app is disconnected first, so a half-failed deletion can never
+  // leave an AI app able to publish while the account is being taken apart. Nothing else runs if it fails.
+  try {
+    // The end-to-end specs' way to make this step fail; does nothing in production.
+    await failIfInjected("grants-revoke");
+    await revokeAllGrants(user.id);
+  } catch (error) {
+    console.error("[account] disconnecting connected apps failed", errorText(error));
+    return { error: DISCONNECT_FAILED };
+  }
+
+  // Billing next: a subscription that cannot be canceled stops the whole deletion.
+  try {
+    await cancelAccountBilling(user.id);
+  } catch (error) {
+    console.error("[account] canceling the subscription failed", errorText(error));
+    return { error: BILLING_ERROR };
+  }
+
+  let hostnames: string[] = [];
+  try {
+    hostnames = await removeAccountDomains(pages.map((page) => page.id));
+  } catch (error) {
+    console.error("[account] removing a custom domain failed", errorText(error));
+    return { error: DOMAIN_ERROR };
+  }
+
+  try {
+    await removeAccountMedia(user.id);
+  } catch (error) {
+    console.error("[account] removing uploaded images failed", errorText(error));
+    return { error: MEDIA_ERROR };
+  }
+
   const { error: deleteError } = await createAdminSupabase().auth.admin.deleteUser(user.id);
   if (deleteError) {
     console.error("[account] delete failed", deleteError.message);
     return { error: "We couldn’t delete your account. Try again in a moment." };
   }
+
+  // The user is gone and so are their domain rows: the proxy stops answering for those hostnames (M8-11;
+  // it never throws, a failure is logged and the lookup's own lifetime is the backstop).
+  for (const hostname of hostnames) expireDomainHost(hostname);
 
   // The user is gone: expire what the cache holds for each of their pages. A failure here must not
   // turn a completed deletion into an error message, so it is logged and the flow carries on.

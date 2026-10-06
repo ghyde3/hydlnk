@@ -119,10 +119,11 @@ test.describe("M2-20 image block with alt text", () => {
     await expect(img).toHaveAttribute("loading", "lazy");
     await expect(img).toHaveAttribute(
       "src",
-      new RegExp(`/storage/v1/object/public/page-media/${user.userId}/`),
+      new RegExp(`^http://localhost:\\d+/media/${user.userId}/`),
     );
     const link = root.locator("a");
-    await expect(link).toHaveAttribute("href", "https://maraokafor.com/studio");
+    // The link goes through the click redirect (M4-22): the destination is not in the markup.
+    await expect(link).toHaveAttribute("href", new RegExp(`^/r/[0-9a-f-]{36}/${id}$`));
     await expect(link).toHaveAttribute("rel", "nofollow noopener");
     await expect(link.locator("img")).toHaveCount(1);
 

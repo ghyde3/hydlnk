@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { BLOCKED_FIELD_MESSAGE } from "@/lib/blocklist/messages";
 import {
-  EMBED_ERROR_MESSAGE,
   LIMITS,
   URL_ERROR_MESSAGE,
+  embedErrorMessage,
   isHttpUrl,
   normalizeUrl,
   parseEmbed,
@@ -23,7 +24,9 @@ import { Field, controlClass } from "./field";
  *     `aria-invalid` and `aria-describedby`. The error appears after the first blur and then follows
  *     every keystroke. An empty field shows no error of its own; Publish names it.
  *   - `error` carries the Publish gate's message for this field. It shows until the value being
- *     edited validates, even if the parent has not re-run its check yet.
+ *     edited validates, even if the parent has not re-run its check yet. The one exception is the
+ *     blocked-site message (M5-03): a well-formed address is exactly what that is about, so it
+ *     shows for as long as the parent passes it (the parent clears it when the address changes).
  *
  * It never trims, rewrites or validates on the fly while typing: the value in the draft is exactly
  * what was typed, apart from the blur normalization above.
@@ -44,7 +47,7 @@ export function UrlField({
   onChange: (next: string) => void;
   /** The Publish gate's message for this field, if it has one. */
   error?: string | null;
-  /** `embed` accepts only YouTube and Spotify links and says so in its message. */
+  /** `embed` accepts only links from the eight embed providers and says so in its message. */
   kind?: "web" | "embed";
   /** An empty value is fine (the image block's optional link). */
   optional?: boolean;
@@ -56,8 +59,9 @@ export function UrlField({
   const [touched, setTouched] = useState(false);
   const [edited, setEdited] = useState(false);
 
-  const message = kind === "embed" ? EMBED_ERROR_MESSAGE : URL_ERROR_MESSAGE;
   const trimmed = value.trim();
+  // An embed link that does not parse says which providers work, or, for a short link, to open it first.
+  const message = kind === "embed" ? embedErrorMessage(trimmed) : URL_ERROR_MESSAGE;
   const valid =
     trimmed === ""
       ? optional
@@ -68,7 +72,8 @@ export function UrlField({
   // Local rule: a non-empty value that is not valid, once the field has been left.
   const localError = touched && trimmed !== "" && !valid ? message : null;
   // Publish's message stays until this field is edited into a valid value.
-  const shown = localError ?? (error && !(edited && valid) ? error : null);
+  const blocked = error === BLOCKED_FIELD_MESSAGE;
+  const shown = localError ?? (error && (blocked || !(edited && valid)) ? error : null);
 
   return (
     <Field label={label} error={shown} hint={hint} className={className}>

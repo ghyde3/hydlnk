@@ -1,28 +1,16 @@
+import { Check } from "lucide-react";
 import type { ReactNode } from "react";
+import { CHECK_ON_FILL_STROKE, Icon } from "@/components/app/icon";
 import { Logo } from "@/components/logo";
 import { clientEnv } from "@/lib/env/client";
 import { rootOrigin } from "@/lib/routing/urls";
 import { BrandHandlePill, BrandHandleProvider } from "./brand-handle";
 
 const BULLETS = [
-  "Every block and the full theme system",
+  "Every block, theme and design option",
   "Per-link analytics from day one",
   "Bring your own domain whenever you’re ready",
 ];
-
-function Check() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="size-4 flex-none fill-none stroke-brass stroke-[2.2]"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    </svg>
-  );
-}
 
 /**
  * Shared frame of the log in, sign up and claim screens (Signup.dc.html): a charcoal brand panel
@@ -54,7 +42,12 @@ export function AuthLayout({ children, handle = "" }: { children: ReactNode; han
             <ul className="mt-8 flex flex-col gap-3 text-[15px] text-line-2">
               {BULLETS.map((text) => (
                 <li key={text} className="flex items-center gap-2.5">
-                  <Check />
+                  <Icon
+                    icon={Check}
+                    size={16}
+                    strokeWidth={CHECK_ON_FILL_STROKE}
+                    className="text-brass"
+                  />
                   {text}
                 </li>
               ))}

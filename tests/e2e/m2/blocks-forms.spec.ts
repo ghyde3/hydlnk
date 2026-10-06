@@ -23,7 +23,7 @@ test.afterAll(cleanupUsers);
 
 const URL_MESSAGE = "Enter a full web address, like https://example.com.";
 const EMBED_MESSAGE =
-  "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.";
+  "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.";
 
 test.describe("M2-15 link block panel", () => {
   test("M2-15 adds a Link block: the row, the preview anchor and the stored draft", async ({
@@ -49,7 +49,8 @@ test.describe("M2-15 link block panel", () => {
     await showView(page, "Preview");
     const anchor = previewScreen(page).locator(`a[data-block-id="${id}"]`);
     await expect(anchor).toHaveText("Portrait sessions - fall dates");
-    await expect(anchor).toHaveAttribute("href", "https://maraokafor.com/portraits");
+    // The link goes through the click redirect (M4-22): the destination is not in the markup.
+    await expect(anchor).toHaveAttribute("href", new RegExp(`^/r/[0-9a-f-]{36}/${id}$`));
     await expect(anchor).toHaveAttribute("rel", "nofollow noopener");
     const column = await box(previewScreen(page).locator("[data-block-id]").first());
     expect((await box(anchor)).width).toBeGreaterThan(column.width * 0.5);
@@ -164,34 +165,61 @@ test.describe("M2-16 header, text and divider panels", () => {
 
     const text = await addBlock(page, "text");
     await expect(text.row).toContainText("New text block");
-    await expect(text.panel.getByRole("textbox", { name: "Text" })).toHaveValue("New text block");
+    // M9-12: the text field is the Tiptap editor (a contenteditable), so it has text, not a value.
+    await expect(text.panel.getByRole("textbox", { name: "Text", exact: true })).toHaveText(
+      "New text block",
+    );
     await expect(text.panel).toContainText("14 / 600");
 
     const divider = await addBlock(page, "divider");
     await expect(divider.row).toContainText("Divider");
   });
 
-  test("M2-16 the divider panel has only Move up, Move down and Delete block", async ({
+  test("M2-16 the divider panel has no content field, only its style group and the four panel buttons (Duplicate block since M6-05)", async ({
     page,
     context,
   }) => {
     await userWithDraft(context, "dv");
     await openEditor(page);
     const { panel } = await addBlock(page, "divider");
-    await expect(panel.getByRole("button")).toHaveText(["Move up", "Move down", "Delete block"]);
-    await expect(panel.locator("input, textarea, select")).toHaveCount(0);
+    // M6-05 puts 'Duplicate block' in every panel, the divider's included (it was three buttons before).
+    // The first, with no text, is the line color's swatch: a button since M9-07 (it opens the picker).
+    await expect(panel.getByRole("button")).toHaveText([
+      "",
+      "Move up",
+      "Move down",
+      "Duplicate block",
+      "Delete block",
+    ]);
+    await expect(panel.getByRole("button", { name: "Color swatch" })).toBeVisible();
+    // M6-46: the divider's only field is its own style group's, the line's color (the hex field next
+    // to the swatch); it has no text, address or select of its own.
+    await expect(panel.locator("input, textarea, select")).toHaveCount(1);
+    await expect(
+      panel.getByTestId("override-controls").locator("input, textarea, select"),
+    ).toHaveCount(1);
+    await expect(panel.getByLabel("Line color", { exact: true })).toBeVisible();
   });
 
   test("M2-16 the text counter follows typing and stops at 600", async ({ page, context }) => {
     const user = await userWithDraft(context, "tx");
     await openEditor(page);
     const { panel, id } = await addBlock(page, "text");
-    const area = panel.getByRole("textbox", { name: "Text" });
+    const area = panel.getByRole("textbox", { name: "Text", exact: true });
     await area.fill("line one\nline two");
     await expect(panel).toContainText("17 / 600");
-    await area.fill("x".repeat(650));
+    // M9-12: a long paste over the whole text (the editor cuts it to the 600 that fit).
+    await area.click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await area.evaluate((el) => {
+      const transfer = new DataTransfer();
+      transfer.setData("text/plain", "x".repeat(650));
+      el.dispatchEvent(
+        new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true }),
+      );
+    });
     await expect(panel).toContainText("600 / 600");
-    expect((await area.inputValue()).length).toBe(600);
+    expect(Array.from(await area.innerText())).toHaveLength(600);
     await expectDraft(user.pageId, (d) =>
       d.blocks.some((b) => b.id === id && b.type === "text" && b.text.length === 600),
     );
@@ -204,7 +232,9 @@ test.describe("M2-16 header, text and divider panels", () => {
     const header = await addBlock(page, "header");
     await header.panel.getByLabel("Text", { exact: true }).fill("<script>alert(1)</script>");
     const text = await addBlock(page, "text");
-    await text.panel.getByRole("textbox", { name: "Text" }).fill("first line\nsecond line");
+    await text.panel
+      .getByRole("textbox", { name: "Text", exact: true })
+      .fill("first line\nsecond line");
     await addBlock(page, "divider");
 
     await showView(page, "Preview");
@@ -237,7 +267,7 @@ test.describe("M2-16 header, text and divider panels", () => {
     ).toBeGreaterThanOrEqual(44);
     const text = await addBlock(page, "text");
     expect(
-      (await box(text.panel.getByRole("textbox", { name: "Text" }))).height,
+      (await box(text.panel.getByRole("textbox", { name: "Text", exact: true }))).height,
     ).toBeGreaterThanOrEqual(44);
     await expectNoHorizontalScroll(page);
   });
@@ -538,6 +568,6 @@ test.describe("M2-20 and M2-21 image and card panels", () => {
     await expect(card).toContainText("Night Market");
     await expect(card).toContainText("View");
     await expect(card.locator("img")).toHaveCount(0);
-    await expect(card).toHaveAttribute("href", "https://maraokafor.com/night-market");
+    await expect(card).toHaveAttribute("href", new RegExp(`^/r/[0-9a-f-]{36}/${id}$`));
   });
 });

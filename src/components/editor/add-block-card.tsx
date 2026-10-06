@@ -1,9 +1,10 @@
 "use client";
 
-import type { Dispatch } from "react";
-import { BLOCK_TYPES, BLOCK_TYPE_LABELS, LIMITS } from "@/lib/document";
+import type { Dispatch, ReactNode } from "react";
+import { LIMITS } from "@/lib/document";
 import { BLOCK_LIMIT_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction } from "@/lib/editor/state";
+import { BlockTypeChips } from "./block-type-chips";
 
 /**
  * "Add a block" (M2-10): nine type chips in the order of BLOCK_TYPES. A chip appends one block of
@@ -13,9 +14,12 @@ import type { EditorAction } from "@/lib/editor/state";
 export function AddBlockCard({
   blockCount,
   dispatch,
+  footer,
 }: {
   blockCount: number;
   dispatch: Dispatch<EditorAction>;
+  /** Under the chips and the limit note: the "Start from a template" button (M6-40). */
+  footer?: ReactNode;
 }) {
   const full = blockCount >= LIMITS.blocks;
   return (
@@ -29,30 +33,16 @@ export function AddBlockCard({
         </h2>
         <span className="text-xs text-text-2">Goes to the end of the page</span>
       </div>
-      <div className="flex flex-wrap gap-1.5">
-        {BLOCK_TYPES.map((type) => (
-          <button
-            key={type}
-            type="button"
-            disabled={full}
-            onClick={() => dispatch({ type: "block/add", blockType: type })}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-sm border border-line-2 bg-surface px-2.5 text-[13px] text-ink disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <span
-              aria-hidden="true"
-              className="text-[15px] leading-none font-semibold text-brass-text"
-            >
-              +
-            </span>
-            {BLOCK_TYPE_LABELS[type]}
-          </button>
-        ))}
-      </div>
+      <BlockTypeChips
+        disabled={full}
+        onPick={(type) => dispatch({ type: "block/add", blockType: type })}
+      />
       {full ? (
         <span role="status" className="text-[13px] text-text-2">
           {BLOCK_LIMIT_MESSAGE}
         </span>
       ) : null}
+      {footer}
     </section>
   );
 }

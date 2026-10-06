@@ -30,6 +30,7 @@ import {
 import {
   bannerRef,
   blocks,
+  bookCoverRef,
   fullDraft,
   fullPublished,
   noirTokens,
@@ -337,7 +338,10 @@ describe("block defaults (M2-10)", () => {
         ...emptyDraft("mara"),
         blocks: [blockDefaults[type]()],
       }).success;
-      expect(ok, type).toBe(type === "header" || type === "text" || type === "divider");
+      // page_link defaults to Home, a target that is always there (M11-07).
+      expect(ok, type).toBe(
+        type === "header" || type === "text" || type === "divider" || type === "page_link",
+      );
     }
   });
 });
@@ -347,7 +351,17 @@ describe("emptyDraft", () => {
     expect(emptyDraft("mara")).toEqual({
       version: 1,
       rev: 0,
-      profile: { name: "mara", bio: "", photo: null },
+      profile: {
+        name: "mara",
+        bio: "",
+        photo: null,
+        photoShape: "circle",
+        photoSize: "medium",
+        photoBorder: "page",
+        showPhoto: true,
+        showName: true,
+        showBio: true,
+      },
       theme: { ref: null, overrides: {} },
       blocks: [],
     });
@@ -456,9 +470,9 @@ describe("code point helpers", () => {
 });
 
 describe("collectImageRefs", () => {
-  it("lists the photo, card images and image blocks", () => {
-    expect(collectImageRefs(fullDraft)).toEqual([photoRef, bannerRef, bannerRef]);
+  it("lists the photo, card images, image blocks and a book's cover (M9-20)", () => {
+    expect(collectImageRefs(fullDraft)).toEqual([photoRef, bannerRef, bannerRef, bookCoverRef]);
     expect(collectImageRefs(emptyDraft("mara"))).toEqual([]);
-    expect(collectImageRefs(fullPublished)).toEqual([photoRef, bannerRef, bannerRef]);
+    expect(collectImageRefs(fullPublished)).toEqual([photoRef, bannerRef, bannerRef, bookCoverRef]);
   });
 });

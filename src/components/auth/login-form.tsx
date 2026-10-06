@@ -10,6 +10,7 @@ import {
 } from "react";
 import { requestSignInLink } from "@/lib/auth/actions";
 import { EMAIL_ERROR, emailSchema } from "@/lib/auth/email";
+import { TOO_MANY_EMAILS_MESSAGE } from "@/lib/auth/otp-error";
 import Link from "next/link";
 import { AuthHeading } from "./auth-heading";
 import { GoogleButton, OrDivider } from "./google-button";
@@ -37,6 +38,12 @@ export function LoginForm({ notice, status }: { notice?: string; status?: string
   const [now, setNow] = useState(0);
   const [pending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Arriving with a message from /auth/callback (a link that expired or was already used): the
+  // field is the next thing to touch, so it has the focus (M5-20).
+  useEffect(() => {
+    if (notice) inputRef.current?.focus();
+  }, [notice]);
 
   // The buttons stay disabled until React has hydrated the form, so a tap that comes too early
   // cannot submit a native GET form (which would put the address in the URL). The field itself is
@@ -66,8 +73,9 @@ export function LoginForm({ notice, status }: { notice?: string; status?: string
         setResendAt(next);
         return;
       }
-      if (result.error === "rate_limited") {
-        setError(RATE_LIMITED);
+      if (result.error === "rate_limited" || result.error === "too_many_emails") {
+        // The typed address stays in the field (it is uncontrolled and the form does not unmount).
+        setError(result.error === "rate_limited" ? RATE_LIMITED : TOO_MANY_EMAILS_MESSAGE);
         if (fromResend) setResendAt(Date.now() + RESEND_SECONDS * 1000);
       } else {
         setError(result.error === "invalid_email" ? EMAIL_ERROR : SEND_FAILED);
@@ -178,7 +186,7 @@ export function LoginForm({ notice, status }: { notice?: string; status?: string
           href="/signup"
           className="inline-flex min-h-11 min-w-11 items-center font-semibold text-ink"
         >
-          Create your page
+          Create your site
         </Link>
       </p>
     </div>

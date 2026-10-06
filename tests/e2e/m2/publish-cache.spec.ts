@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { emptyDraft, publishedDocSchema, toPublishForm, type Block } from "@/lib/document";
 import { adminClient, publishableKey, signInAs, supabaseUrl } from "../fixtures/auth";
-import { cleanupUsers, makeUser, rand } from "../fixtures/data";
+import { addPage, cleanupUsers, makeUser, rand } from "../fixtures/data";
+import { authCookies, cookieHeader } from "../fixtures/http";
 import { pageRow, setDraft, accessToken, emptyUser } from "./editor-helpers";
 import { SERVER_PORT, pngSizeOf, rawBuffer, tenantGet } from "./publish-helpers";
 
@@ -49,8 +50,12 @@ async function queryCount(handle: string): Promise<number> {
 }
 
 /** A user with a published page (name, bio and one link) and a draft equal to it. */
-async function publishedUser(context: Parameters<typeof emptyUser>[0], label: string) {
-  const user = await emptyUser(context, label);
+async function publishedUser(
+  context: Parameters<typeof emptyUser>[0],
+  label: string,
+  plan?: "free" | "pro" | "studio",
+) {
+  const user = await emptyUser(context, label, plan ? { plan } : {});
   const draft = emptyDraft(user.handle);
   draft.profile.name = `Zq ${label}`;
   draft.profile.bio = `Bio of ${label}`;
@@ -64,7 +69,15 @@ async function publishedUser(context: Parameters<typeof emptyUser>[0], label: st
   return { ...user, draft };
 }
 
+/**
+ * Opens the editor with the browser kept off the page's `/og` image. Since M6-33 the share preview
+ * loads the live `/og?v=<publishedAt>` on open and again the moment Publish finishes. Each of those
+ * is a second reader of the page's cache entry: it reads the database once for itself, or races the
+ * GET under test (two concurrent misses are two reads). The OG image is fetched explicitly where a
+ * test needs it, over plain HTTP, which this does not touch.
+ */
 async function openEditor(page: Page) {
+  await page.route(/\/og\?v=/, (route) => route.abort());
   await page.goto(`${APP}/editor`);
   await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
 }
@@ -334,6 +347,28 @@ test.describe("M2-26 Publish invalidates the page cache with updateTag (producti
     await expect(page).toHaveURL(/\/login/);
 
     // The very next request: the page is gone from the cache, not served stale for a year.
+    const after = await tenantGet(user.handle);
+    expect(after.status).toBe(404);
+    expect(after.text).not.toContain(user.draft.profile.name);
+  });
+
+  test("M4-19 deleting a page expires its cached page at once, with no waiting", async ({
+    context,
+  }) => {
+    const user = await publishedUser(context, "pd", "pro");
+    await addPage(user.id, `zq-pd2-${rand(5)}`); // the account keeps a page: this is not the last one
+    await tenantGet(user.handle);
+    expect(cacheState(await tenantGet(user.handle))).toBe("HIT");
+
+    const res = await rawBuffer(`app.localhost:${SERVER_PORT}`, `/api/pages/${user.pageId}`, {
+      method: "DELETE",
+      cookie: cookieHeader(await authCookies(context)),
+      headers: { "content-type": "application/json" },
+      body: Buffer.from(JSON.stringify({ confirm: user.handle })),
+    });
+    expect(res.status, res.text).toBe(200);
+
+    // The very next request: the page's tag and its handle's cached 404 were expired by the delete.
     const after = await tenantGet(user.handle);
     expect(after.status).toBe(404);
     expect(after.text).not.toContain(user.draft.profile.name);

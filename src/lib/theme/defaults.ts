@@ -17,7 +17,7 @@ export const SYSTEM_DEFAULT_TOKENS: Readonly<TokenSet> = Object.freeze({
   fontBody: "Inter",
   scale: 1,
   weightHeading: 600,
-  letterCase: "none",
+  letterCase: "normal",
   radius: 12,
   borderWidth: 1,
   buttonStyle: "fill",
@@ -28,4 +28,8 @@ export const SYSTEM_DEFAULT_TOKENS: Readonly<TokenSet> = Object.freeze({
   bgImage: null,
   overlayOpacity: 0,
   blur: 0,
+  // Top to bottom, in the page's own surface and background colors: the gradient as it always was.
+  gradientAngle: 180,
+  gradientFrom: null,
+  gradientTo: null,
 });

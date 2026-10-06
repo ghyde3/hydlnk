@@ -1,5 +1,5 @@
 -- events and reserved_handles are server-only, daily_stats is read-only for owners,
--- and the nightly rollup + 90-day retention do what PLAN.md says.
+-- and the nightly rollup + 60-day retention do what PLAN.md says.
 
 begin;
 select plan(46);
@@ -40,9 +40,12 @@ select throws_ok($$ delete from public.events $$, '42501', null, 'authenticated 
 select throws_ok($$ select * from public.reserved_handles $$, '42501', null, 'authenticated cannot read reserved_handles');
 select throws_ok($$ insert into public.reserved_handles (handle) values ('mine') $$, '42501', null, 'authenticated cannot add reserved handles');
 select throws_ok($$ delete from public.reserved_handles $$, '42501', null, 'authenticated cannot delete reserved handles');
-select throws_ok(
-  $$ select * from public.plan_limits('free') $$,
-  '42501', null, 'authenticated cannot call plan_limits through the API'
+-- M4-02: plan_limits is the one deliberate exception. It takes a plan name and returns the public
+-- pricing numbers (nothing per account), so the client can show them; 010 pins it as the only
+-- function anon or authenticated may execute, and an unknown plan still raises.
+select is(
+  (select max_pages from public.plan_limits('free')), 1,
+  'authenticated can call plan_limits (it returns the public plan numbers, M4-02)'
 );
 select throws_ok(
   $$ select public.run_nightly_maintenance() $$,
@@ -78,7 +81,7 @@ select lives_ok(
   'the server can insert a click'
 );
 select is(
-  (select count(*)::int from public.events),
+  (select count(*)::int from public.events where page_id = '00000000-0000-4000-8000-0000000000f1'),
   2,
   'and read events back'
 );
@@ -117,7 +120,7 @@ select throws_ok(
 );
 
 -- ---------------------------------------------------------------------------
--- Rollup: yesterday (UTC) into daily_stats, then 90-day retention
+-- Rollup: yesterday (UTC) into daily_stats, then 60-day retention (M8-12, was 90)
 -- ---------------------------------------------------------------------------
 
 delete from public.events;
@@ -146,10 +149,10 @@ select '00000000-0000-4000-8000-0000000000f2', 'view', y.ts, 'v9' from _yday y;
 insert into public.events (page_id, type, visitor_hash)
 values ('00000000-0000-4000-8000-0000000000f1', 'view', 'today');
 
--- one event 91 days old and one 89 days old
+-- one event 61 days old and one 59 days old
 insert into public.events (page_id, type, ts, visitor_hash) values
-  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '91 days', 'old'),
-  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '89 days', 'recent');
+  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '61 days', 'old'),
+  ('00000000-0000-4000-8000-0000000000f1', 'view', now() - interval '59 days', 'recent');
 
 select lives_ok($$ select public.run_nightly_maintenance() $$, 'the nightly maintenance runs');
 
@@ -157,7 +160,7 @@ select results_eq(
   $$ select block_id, views, clicks, uniques from public.daily_stats
      where page_id = '00000000-0000-4000-8000-0000000000f1' and day = (now() at time zone 'utc')::date - 1
      order by block_id $$,
-  $$ values ('', 3, 0, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
+  $$ values ('', 3, 3, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
   'yesterday''s events are rolled up per page and block: counts and distinct visitors'
 );
 select is(
@@ -173,7 +176,7 @@ select is(
 select is(
   (select count(*)::int from public.events where visitor_hash = 'old'),
   0,
-  'raw events older than 90 days are deleted'
+  'raw events older than 60 days are deleted'
 );
 select is(
   (select count(*)::int from public.events where visitor_hash in ('recent', 'today', 'v1', 'v2', 'v9')),
@@ -186,7 +189,7 @@ select results_eq(
   $$ select block_id, views, clicks, uniques from public.daily_stats
      where page_id = '00000000-0000-4000-8000-0000000000f1' and day = (now() at time zone 'utc')::date - 1
      order by block_id $$,
-  $$ values ('', 3, 0, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
+  $$ values ('', 3, 3, 2), ('Bt5rJ1fGz6Os', 0, 2, 1), ('Qw8vC2nKd4Ly', 0, 1, 1) $$,
   'a re-run replaces the day''s rows instead of double counting'
 );
 

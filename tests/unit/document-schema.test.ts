@@ -29,8 +29,9 @@ const publishOk = (doc: unknown) => publishDocSchema.safeParse(doc).success;
 const both = (doc: unknown) => [draftOk(doc), publishOk(doc)];
 
 describe("block types (M2-01)", () => {
-  it("has exactly nine types, in chip order", () => {
-    expect([...BLOCK_TYPES]).toEqual([
+  it("has the nine originals, then faq, contact, discount, book, apps and map, in chip order (M9-15)", () => {
+    // Each Wave K block lands on its own, so the list is the full order cut to the types that exist.
+    const order = [
       "link",
       "card",
       "header",
@@ -40,7 +41,16 @@ describe("block types (M2-01)", () => {
       "embed",
       "grid",
       "divider",
-    ]);
+      "faq",
+      "contact",
+      "discount",
+      "book",
+      "apps",
+      "map",
+      "page_link",
+    ];
+    expect(BLOCK_TYPES.length).toBeGreaterThanOrEqual(12);
+    expect([...BLOCK_TYPES]).toEqual(order.slice(0, BLOCK_TYPES.length));
   });
 
   it("the full fixture covers every type and passes both schemas", () => {
@@ -623,7 +633,7 @@ describe("block overrides", () => {
       { radius: -5 },
       { radius: 33 },
       { accent: "red" },
-      { accent: "#FFF" },
+      { accent: "#GGGGGG" },
       { buttonStyle: "glow" },
       { buttonText: 12 },
       { radius: "4" },
@@ -632,9 +642,14 @@ describe("block overrides", () => {
     }
   });
 
-  it("only link and card blocks carry overrides", () => {
-    const parsed = draftDocSchema.parse(draftWith({ ...blocks.header, overrides: { radius: 4 } }));
-    expect(parsed.blocks[0]).not.toHaveProperty("overrides");
+  // M6-45: every block type carries overrides now (it was link and card until then); the keys
+  // outside the ten are still stripped, wherever they sit. The full matrix is in
+  // tests/unit/m6-block-style-schema.test.ts.
+  it("every block type carries overrides, and only the ten allowed keys", () => {
+    const parsed = draftDocSchema.parse(
+      draftWith({ ...blocks.header, overrides: { radius: 4, fontHeading: "Geist" } }),
+    );
+    expect(parsed.blocks[0]).toHaveProperty("overrides", { radius: 4 });
     expect(publishOk(draftWith({ ...blocks.card, overrides: { buttonStyle: "pill" } }))).toBe(true);
   });
 });
@@ -778,7 +793,7 @@ describe("collectPublishErrors", () => {
           blockId: "embed-yt-ep04",
           field: "url",
           message:
-            "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.",
+            "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.",
         },
         { blockId: "image-studio-1", field: "image", message: "Upload an image." },
         {

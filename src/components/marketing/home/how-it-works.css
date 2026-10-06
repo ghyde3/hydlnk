@@ -1,0 +1,45 @@
+/*
+ * The "How it works" band wears the showreel's own background (design/showreel/src/reel.css:
+ * #1c1b1a, a 48px dot grid, a brass glow, a vignette) as plain CSS, so the transparent video on top
+ * of it has no visible edge. Values are the reel's, not HYDLNK UI tokens; keep them in step.
+ */
+.hiw {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background: #1c1b1a;
+}
+
+.hiw-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, #34312d 1.6px, transparent 1.9px);
+  background-size: 48px 48px;
+}
+
+/* The reel's 1200px glow, centered behind the video (the reel moves it; here it sits still). */
+.hiw-glow {
+  position: absolute;
+  left: 50%;
+  top: var(--hiw-glow-y, 55%);
+  width: 1200px;
+  height: 1200px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(184, 145, 79, 0.26) 0%,
+    rgba(184, 145, 79, 0.1) 38%,
+    rgba(184, 145, 79, 0) 70%
+  );
+}
+
+.hiw-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    120% 90% at 50% 50%,
+    rgba(28, 27, 26, 0) 55%,
+    rgba(18, 17, 16, 0.75) 100%
+  );
+}

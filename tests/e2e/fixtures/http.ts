@@ -1,5 +1,7 @@
 import http from "node:http";
 import type { BrowserContext, Cookie } from "@playwright/test";
+import { usesProductionServer } from "../../../scripts/lib/e2e-server";
+import { DEV_PORT } from "../helpers";
 import { publishableKey, supabaseUrl } from "./auth";
 
 /**
@@ -24,19 +26,24 @@ export interface RawResponse {
 
 /**
  * One request to the dev server on 127.0.0.1:3000 naming `host` (Node does not resolve *.localhost
- * reliably, Chromium does), redirects not followed. Pass `cookie` for a Cookie header.
+ * reliably, Chromium does), redirects not followed. Pass `cookie` for a Cookie header. With
+ * HL_DEV_PORT set (a second checkout on its own port) the request goes to that port and a host
+ * written as `name.localhost:3000` is sent as `name.localhost:<port>`, so no spec needs editing.
  */
 export function rawRequest(
   host: string,
   path: string,
   opts: { cookie?: string; method?: string; headers?: Record<string, string>; body?: string } = {},
 ): Promise<RawResponse> {
-  const headers: Record<string, string | number> = { Host: host, ...opts.headers };
+  const headers: Record<string, string | number> = {
+    Host: host.replace(/:3000$/, `:${DEV_PORT}`),
+    ...opts.headers,
+  };
   if (opts.cookie) headers.cookie = opts.cookie;
   if (opts.body !== undefined) headers["content-length"] = Buffer.byteLength(opts.body);
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { host: "127.0.0.1", port: 3000, path, method: opts.method ?? "GET", headers },
+      { host: "127.0.0.1", port: DEV_PORT, path, method: opts.method ?? "GET", headers },
       (res) => {
         const chunks: Buffer[] = [];
         res.on("data", (chunk: Buffer) => chunks.push(chunk));
@@ -63,6 +70,25 @@ export function rawRequest(
  * only a run against `next start` can be strict. Run it that way with E2E_PROD_BUILD=1.
  */
 export const NEVER_STORED = process.env.E2E_PROD_BUILD === "1" ? /no-store/ : /no-store|no-cache/;
+
+/**
+ * True when the server under test is a production build (`next start`): CI's browser suite
+ * (E2E_PROD_BUILD=1, M9-13) or a server someone started by hand (HL_PROD_PORT). A production build
+ * caches what a tenant host answers (pages, 404s, OG images, the /r click target, the custom-host
+ * lookup) and `next dev` caches none of it, so a spec that writes straight to the database and then
+ * expects the very next request to show it needs the real invalidation first (see expire.ts).
+ */
+export const PRODUCTION_BUILD =
+  process.env.E2E_PROD_BUILD === "1" || Boolean(process.env.HL_PROD_PORT);
+
+/**
+ * True when the server under test is a production build that does NOT honour the `hl-fault` cookie
+ * (src/lib/testing/faults.ts), so the failure-screen specs skip. A dev server honours it; so does
+ * the production build CI starts (M9-13: `next start` through playwright.config.ts, with the test
+ * hooks on). A production server someone started by hand (HL_PROD_PORT, or E2E_PROD_BUILD=1 with
+ * their own `next start`) honours it only when it was started with HYDLNK_QUERY_COUNTER=1.
+ */
+export const FAULT_COOKIE_IGNORED = PRODUCTION_BUILD && !usesProductionServer(process.env);
 
 /** rawRequest to the app host. */
 export const appRaw = (path: string, opts?: Parameters<typeof rawRequest>[2]) =>

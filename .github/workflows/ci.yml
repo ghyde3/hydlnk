@@ -1,14 +1,22 @@
 name: CI
 
-# Runs on every pull request (any base branch) and on pushes to main.
-# One job: install, typecheck, lint, unit tests, db (RLS) tests against a local
-# Supabase, then Playwright at both viewports. No secrets are needed: everything
-# talks to the throwaway local Supabase stack started inside the job.
+# Fast job on every pull request and push to main: typecheck, lint, unit, db (RLS) and
+# integration tests against a local Supabase (a few minutes).
+# The full browser suite (Playwright at both viewports, split over 8 runners, plus the
+# production-build checks) runs nightly, from the Actions tab (Run workflow), or on a pull
+# request labelled `full-ci` (Gary, 2026-10-03). No secrets are needed: everything talks to
+# the throwaway local Supabase stack started inside each job.
+# In CI the browser suite runs against a production build (M9-13): each shard runs `pnpm build`
+# once and Playwright serves it with `next start`; locally `pnpm test:e2e` still uses `next dev`.
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
   push:
     branches: [main]
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,7 +34,7 @@ jobs:
   verify:
     name: Verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -96,47 +104,265 @@ jobs:
           # These are local-stack keys, but keep the secret key out of the job log anyway.
           secret="$(sed -n 's/^SUPABASE_SECRET_KEY="\(.*\)"$/\1/p' .env.local)"
           if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
+          # Milestone 4: the local Stripe and Vercel placeholders (never real keys) the billing and
+          # account-deletion specs need, from the same list scripts/init.sh uses.
+          . scripts/lib/local-env-placeholders.sh
+          ensure_local_env_placeholders .env.local > /dev/null
 
       # The Vitest files that need the running stack (M1-05 ensureAccount, M2-23/M2-25 the publish
-      # gate, and the seeded mara rows, all against the real database) are skipped by the unit step
+      # gate, the seeded mara rows, the system themes, the token and theme publish gate, the plan
+      # limits parity, page create and delete, the upload quota, the link blocklist and its Publish
+      # gate, and the admin suspension and its audit, all against the real database)
+      # are skipped by the unit step
       # above. REQUIRE_SUPABASE=1 makes a missing stack fail here instead of skipping.
       - name: Integration tests (Vitest against local Supabase)
         env:
           REQUIRE_SUPABASE: "1"
+        # --retry 2: the local Supabase gateway (Kong) sometimes answers one request with "An invalid
+        # response was received from the upstream server" right after start-up; a retried test still has
+        # to pass every assertion. Root cause tracked separately.
         run: >-
-          pnpm exec vitest run
+          pnpm exec vitest run --retry 2
           tests/unit/auth-ensure-account.test.ts
           tests/unit/publish-core.test.ts
           tests/unit/document-seed.test.ts
+          tests/unit/themes-system.test.ts
+          tests/unit/themes-publish.test.ts
+          tests/unit/limits-parity.test.ts
+          tests/unit/limits-pages.test.ts
+          tests/unit/limits-upload-stack.test.ts
+          tests/unit/blocklist-matching.test.ts
+          tests/unit/blocklist-gate.test.ts
+          tests/unit/reports-footer.test.ts
+          tests/unit/admin-actions.test.ts
+          tests/unit/admin-suspension.test.ts
+
+      - name: Supabase diagnostics
+        if: failure()
+        run: |
+          docker ps -a --format 'table {{.Names}}\t{{.Status}}' || true
+          for c in $(docker ps -a --filter 'name=supabase_' --format '{{.Names}}'); do
+            echo "::group::$c (last 60 lines)"
+            docker logs --tail 60 "$c" 2>&1 || true
+            echo "::endgroup::"
+          done
+
+  e2e:
+    name: Browser suite (${{ matrix.shard }}/8)
+    needs: verify
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'full-ci')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # No `version:` input: pnpm/action-setup reads it from package.json "packageManager".
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.109.0
+
+      # Keep: db, auth (always on), rest, kong, inbucket (the Mailpit mail catcher), plus
+      # storage and meta (storage-api creates the storage.* tables that migrations may
+      # reference). Skip the rest: studio, imgproxy, vector, analytics (Logflare),
+      # edge-runtime, realtime. The pooler is already disabled in config.toml.
+      - name: Start local Supabase
+        run: supabase start -x studio,imgproxy,vector,analytics,edge-runtime,realtime
+
+      # `start` only seeds a fresh database; reset applies migrations and seed.sql explicitly.
+      - name: Reset database (migrations + seed)
+        run: supabase db reset
+
+      - name: Write .env.local
+        run: |
+          # `|| true`: status can exit non-zero when optional services are stopped; the line count
+          # check below catches a real failure.
+          status="$(supabase status -o env \
+            --override-name api.url=NEXT_PUBLIC_SUPABASE_URL \
+            --override-name auth.publishable_key=NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY \
+            --override-name auth.secret_key=SUPABASE_SECRET_KEY || true)"
+          printf '%s\n' "$status" \
+            | grep -E '^(NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY|SUPABASE_SECRET_KEY)=' \
+            > .env.local
+          echo 'NEXT_PUBLIC_ROOT_DOMAIN=localhost:3000' >> .env.local
+          if [ "$(wc -l < .env.local)" -ne 4 ]; then
+            echo "::error::.env.local is missing variables from 'supabase status -o env'"
+            exit 1
+          fi
+          # These are local-stack keys, but keep the secret key out of the job log anyway.
+          secret="$(sed -n 's/^SUPABASE_SECRET_KEY="\(.*\)"$/\1/p' .env.local)"
+          if [ -n "$secret" ]; then echo "::add-mask::$secret"; fi
+          # Milestone 4: the local Stripe and Vercel placeholders (never real keys) the billing and
+          # account-deletion specs need, from the same list scripts/init.sh uses.
+          . scripts/lib/local-env-placeholders.sh
+          ensure_local_env_placeholders .env.local > /dev/null
+
+      # The Next.js build cache (M9-13): a rebuild of an unchanged or a little changed `src/` reuses the
+      # compiled output. The exact key is the lockfile plus every file under src/; the restore key is
+      # the lockfile alone, so a new commit still starts from the newest cache of the same dependencies.
+      # `fetch-cache` is left out: it is not build output but what the server stores while it runs
+      # (the cached public pages and their lookups, up to a day old), and the next run's database is new.
+      - name: Restore the Next.js build cache
+        id: next-cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            .next/cache
+            !.next/cache/fetch-cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('src/**') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+      # The `!` line above does not keep fetch-cache out of the saved cache (a negation under a
+      # directory that is itself listed is not honoured), so a restore can bring back an earlier run's
+      # `unstable_cache` entries: the public reads of seeded pages (mara's fixed id) with the published_at
+      # of ANOTHER database. Home would then carry that old `?v=` in its og:image while the og route read
+      # a refreshed one, and M2-30 found no `immutable`. A server must start with an empty data cache.
+      - name: Drop the restored data cache
+        run: rm -rf .next/cache/fetch-cache
+
+      # The server the browser suite runs on (M9-13): one production build per shard, made after
+      # .env.local so it holds the local Supabase keys. The root domain is baked into a build, so
+      # it has to be the one the server answers on (:3000, the value .env.local has); the test
+      # hooks flag is what `next start` below runs with (src/lib/env/test-hooks.ts). A failed build
+      # fails the shard here, before any test runs.
+      - name: Production build (the server of the browser suite)
+        env:
+          NEXT_PUBLIC_ROOT_DOMAIN: localhost:3000
+          HYDLNK_QUERY_COUNTER: "1"
+        run: |
+          mkdir -p tmp
+          started=$(date +%s)
+          pnpm build
+          echo "Production build, shard ${{ matrix.shard }}: $(( $(date +%s) - started )) s (Next.js cache hit: ${{ steps.next-cache.outputs.cache-hit || 'false' }})" | tee -a "$GITHUB_STEP_SUMMARY"
+          # A server writes into .next while it runs (cached pages, 404s and lookups on disk, which the
+          # next server then finds on its first request). Shard 1's cache checks need a clean build, so
+          # keep one: the suite's server starts from .next, the checks from this copy.
+          if [ "${{ matrix.shard }}" = "1" ]; then cp -a .next .next-pristine; fi
 
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
-      # Both projects (390 and 1440). playwright.config.ts starts `pnpm dev` as the webServer.
-      - name: End-to-end tests
-        run: pnpm test:e2e
-
-      # M2-26 needs a production build: x-nextjs-cache only exists there. The root domain is baked
-      # into the build, so the port in it is the server's port; the dev server that Playwright starts
-      # on :3000 (no such variables) is only used to sign users in. See the header of the spec.
-      - name: Production build and cache checks (M2-26)
+      # Both projects (390 and 1440), against the production build above. With CI and HL_E2E_SERVER=start,
+      # playwright.config.ts starts `next start -p 3000` as the webServer (scripts/lib/e2e-server.ts),
+      # with the test hooks on, and fails when something already answers on :3000. E2E_PROD_BUILD=1
+      # turns on the checks the specs keep for a production build (strict no-store headers, the exact
+      # Cache-Control of the draft preview). The specs that need HL_PROD_PORT stay skipped here: they
+      # run in the cache-check step below.
+      - name: End-to-end tests on the production build (shard ${{ matrix.shard }} of 8)
+        env:
+          HL_E2E_SERVER: start
+          E2E_PROD_BUILD: "1"
         run: |
           mkdir -p tmp
-          NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm build
+          pnpm test:e2e --shard=${{ matrix.shard }}/8 2>&1 | tee tmp/e2e-shard.log
+
+      # Passed, skipped, flaky and failed counts of this shard, for the job summary and the PR comment.
+      - name: Test counts of this shard
+        if: always()
+        run: |
+          echo "### Shard ${{ matrix.shard }}/8" >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^ +[0-9]+ (passed|skipped|flaky|failed|did not run|interrupted)' tmp/e2e-shard.log \
+            | sed 's/^ */- /' >> "$GITHUB_STEP_SUMMARY" || echo "- no result lines in the log" >> "$GITHUB_STEP_SUMMARY"
+
+      # M2-26, M4-08, M4-19, M5-08 and Wave J (M8-04, M8-09, M8-10, M8-11) need a production build:
+      # x-nextjs-cache only exists there (a suspended page must answer 404 at once and the live page
+      # again after unsuspend, with the cache in front); the second and third servers (PAID_PLANS_OPEN=false,
+      # HYDLNK_QUERY_COUNTER=0) are the only way to see those startup settings in a browser.
+      # They run on THIS shard's build, the one the suite used (a clean copy of it, see the build step): it has localhost:3000 baked in,
+      # and the specs take HL_PROD_PORT=3000 (the same server then also signs the users in, which
+      # the session cookie, host-only and not port-bound, makes no different from the old two ports).
+      # Playwright stopped its own server when the suite ended; this step starts the same build by
+      # hand on :3000 with each setting, so there is no second build. Without HL_E2E_SERVER the
+      # config reuses whatever answers on :3000, which is the server started here.
+      - name: Production cache checks and the closed-plans switch, on the suite's build (M2-26, M4-08, M4-19, M5-08, M8-04, M8-09, M8-10, M8-11)
+        if: matrix.shard == 1
+        run: |
+          mkdir -p tmp
+          # The suite's server wrote cached pages into .next: start these from the build as it was made.
+          rm -rf .next
+          mv .next-pristine .next
           # The client bundle holds no secret key (M2-22): skipped by the unit step, which has no build.
           pnpm exec vitest run tests/unit/publish-bundle.test.ts
-          NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm start -p 3100 > tmp/start-3100.log 2>&1 &
-          prod_pid=$!
+          # The servers run as `next start` itself, not through `pnpm start`: $! must be the server, because
+          # killing the pnpm wrapper does not reliably stop it, and the usual way to find the leftover (lsof)
+          # is not on the runner image. That is how the closed-plans spec first ran against the open server.
+          port_answers() { curl -s -o /dev/null --max-time 2 http://localhost:3000/; }
+          # Never go on while something still answers on the port: the next spec would test that server.
+          wait_port_free() { # $1: what to say when it never frees up
+            for _ in $(seq 1 10); do
+              if ! port_answers; then return 0; fi
+              sleep 1
+            done
+            echo "::error::$1"; exit 1
+          }
+          start_prod() { # $1: log file; the rest: extra environment settings for this server
+            wait_port_free "something answers on :3000 before the server was started (the suite's own server did not stop?)"
+            env NEXT_PUBLIC_ROOT_DOMAIN=localhost:3000 HYDLNK_QUERY_COUNTER=1 "${@:2}" ./node_modules/.bin/next start -p 3000 > "$1" 2>&1 &
+            prod_pid=$!
+            for _ in $(seq 1 60); do
+              if ! kill -0 "$prod_pid" 2>/dev/null; then
+                echo "::error::next start exited before it answered on :3000"; cat "$1"; exit 1
+              fi
+              if curl -s -o /dev/null --max-time 5 http://localhost:3000/; then return 0; fi
+              sleep 1
+            done
+            echo "::error::next start did not answer on :3000"; cat "$1"; exit 1
+          }
+          stop_prod() {
+            kill "$prod_pid" 2>/dev/null || true
+            for _ in $(seq 1 20); do
+              if ! kill -0 "$prod_pid" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            if kill -0 "$prod_pid" 2>/dev/null; then kill -9 "$prod_pid" 2>/dev/null || true; fi
+            wait_port_free "something still answers on :3000 after the server was stopped"
+          }
           trap 'kill "$prod_pid" 2>/dev/null || true' EXIT
-          for _ in $(seq 1 60); do
-            if curl -s -o /dev/null --max-time 5 http://localhost:3100/; then break; fi
-            sleep 1
-          done
-          HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts
+          start_prod tmp/start-3000.log
+          HL_PROD_PORT=3000 pnpm exec playwright test tests/e2e/m2/publish-cache.spec.ts tests/e2e/m4/billing-badge.spec.ts tests/e2e/m5/suspend-cache.spec.ts
+          # Wave J (M8-04, M8-09, M8-10, M8-11): the finished page's cache, the first-visit budget, the
+          # script and font files' headers, and the custom-host lookup cache, all of which exist only in a production build.
+          HL_PROD_PORT=3000 pnpm exec playwright test tests/e2e/m8/render-cache.spec.ts tests/e2e/m8/assets-budget.spec.ts tests/e2e/m8/assets-served.spec.ts tests/e2e/m8/assets-fonts-live.spec.ts tests/e2e/m8/levers-domain-cache.spec.ts
+          # PAID_PLANS_OPEN is read when the server starts: stop this one, start the same build with the
+          # plans closed and run its spec.
+          stop_prod
+          start_prod tmp/start-3000-closed.log PAID_PLANS_OPEN=false
+          HL_PROD_PORT=3000 HL_PLANS_CLOSED=1 pnpm exec playwright test tests/e2e/m4/billing-plans-closed.spec.ts
+          # M8-10: without the test flag the proxy never sends x-hl-domain-cache (start_prod's last setting wins).
+          stop_prod
+          start_prod tmp/start-3000-noflag.log HYDLNK_QUERY_COUNTER=0
+          HL_PROD_PORT=3000 HL_COUNTER_OFF=1 pnpm exec playwright test tests/e2e/m8/levers-domain-cache.spec.ts --project=desktop
+          # The screenshots step below starts the dev server on :3000.
+          stop_prod
 
-      # The screens script needs a running dev server; Playwright stopped its own after the tests.
-      # Runs only when the e2e tests passed. Fills the "screens" artifact below.
+      # The screens script needs a running dev server (`next dev` runs beside the production build: it
+      # keeps its files in .next/dev); the production server on :3000 is stopped by now. Runs only when
+      # the e2e tests passed. Fills the "screens" artifact below.
       - name: Screenshots at 390 and 1440
+        if: matrix.shard == 1
         run: |
           mkdir -p tmp
           pnpm dev > tmp/dev.log 2>&1 &
@@ -154,7 +380,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright
+          name: playwright-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
@@ -162,13 +388,24 @@ jobs:
           retention-days: 14
 
       - name: Upload screenshots
-        if: always()
+        if: always() && matrix.shard == 1
         uses: actions/upload-artifact@v7
         with:
           name: screens
           path: tmp/screens/
           if-no-files-found: ignore
           retention-days: 14
+
+      # What was listening on the server ports, and what the servers said (the cache-check step above;
+      # the suite's own server writes to the Playwright log, `[WebServer]` lines).
+      - name: Production server diagnostics
+        if: failure()
+        run: |
+          ps -eo pid,ppid,etime,args | grep -E 'next|pnpm' | grep -v grep || true
+          ss -ltnp 2>/dev/null | grep -E ':3000\b' || true
+          for f in tmp/start-3000.log tmp/start-3000-closed.log tmp/start-3000-noflag.log; do
+            if [ -f "$f" ]; then echo "::group::$f (last 40 lines)"; tail -40 "$f"; echo "::endgroup::"; fi
+          done
 
       - name: Supabase diagnostics
         if: failure()

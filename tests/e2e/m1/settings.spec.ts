@@ -43,7 +43,10 @@ test.describe("M1-20 Settings & billing: Account section", () => {
     expect(await css(h1, "font-size")).toBe("22px");
     expect(await css(h1, "font-weight")).toBe("700");
 
-    const card = page.locator("main section");
+    // The Account card: Milestone 4 adds the plan band, usage, plans and pages cards above it.
+    const card = page.locator("main section", {
+      has: page.getByRole("heading", { level: 2, name: "Account" }),
+    });
     await expect(card).toHaveCount(1);
     expect(await css(card, "background-color")).toBe("rgb(255, 255, 255)");
     expect(await css(card, "border-top-width")).toBe("1px");
@@ -116,7 +119,9 @@ test.describe("M1-20 Settings & billing: Account section", () => {
     expect(handleBox.y).toBeGreaterThan(emailBox.y + emailBox.height - 1);
     expect(Math.abs(handleBox.x - emailBox.x)).toBeLessThan(1);
 
-    const card = page.locator("main section");
+    const card = page.locator("main section", {
+      has: page.getByRole("heading", { level: 2, name: "Account" }),
+    });
     const cardBox = (await card.boundingBox())!;
     const signOut = (await page.getByRole("button", { name: "Sign out" }).boundingBox())!;
     const del = (await page.getByRole("button", { name: "Delete account" }).boundingBox())!;

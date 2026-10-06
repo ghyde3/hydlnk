@@ -1,0 +1,301 @@
+/*
+ * Marketing-only styles that utilities express poorly: the comparison table's phone layout and
+ * long-form prose (guides, privacy, terms). HYDLNK UI tokens only.
+ */
+
+/* Plan comparison: a normal table from 760px; below it, each row is the feature name over three
+   labeled cells. Roles on the elements keep the table semantics when display changes. */
+@media (max-width: 759px) {
+  .compare thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .compare tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .compare th[scope="row"] {
+    grid-column: 1 / -1;
+    padding-bottom: 2px;
+  }
+
+  .compare td {
+    padding-top: 6px;
+    overflow-wrap: anywhere;
+  }
+
+  .compare td::before {
+    content: attr(data-plan);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--hl-text-2);
+    font-family: var(--hl-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+}
+
+/* Billing toggle (plan cards on the home page and /pricing) -----------------------------------
+   Monthly | Yearly is a pair of radio buttons inside [data-billing-root]; no JavaScript. A paid
+   plan's price is rendered twice, once per period, and the checked radio decides which one shows.
+   Yearly is checked in the markup, so it is also the view before and without any interaction.
+   The segmented control is the HYDLNK one: a track with a white, ringed selected item. */
+
+.bt {
+  display: inline-flex;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--hl-radius);
+  background: var(--hl-track);
+}
+
+.bt-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--hl-radius-sm);
+  color: var(--hl-text-2);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bt-option:hover {
+  color: var(--hl-ink);
+}
+
+.bt-option:has(input:checked) {
+  background: var(--hl-surface);
+  color: var(--hl-ink);
+  box-shadow: 0 0 0 1px var(--hl-line-2);
+}
+
+.bt-option:has(input:focus-visible) {
+  outline: var(--hl-focus-width) solid var(--hl-brass);
+  outline-offset: var(--hl-focus-offset);
+}
+
+.bt-save {
+  padding: 2px 6px;
+  border-radius: var(--hl-radius-sm);
+  background: var(--hl-brass-soft);
+  color: var(--hl-brass-soft-text);
+  font-family: var(--hl-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+[data-billing-view="monthly"] {
+  display: none;
+}
+
+[data-billing-root]:has(input[name="billing"][value="monthly"]:checked) [data-billing-view="monthly"] {
+  display: block;
+}
+
+[data-billing-root]:has(input[name="billing"][value="monthly"]:checked) [data-billing-view="yearly"] {
+  display: none;
+}
+
+/* Forced colors drop backgrounds and shadows: underline the selected period instead. */
+@media (forced-colors: active) {
+  .bt-option:has(input:checked) {
+    text-decoration: underline 2px;
+    text-underline-offset: 5px;
+  }
+}
+
+/* Long-form text ------------------------------------------------------------------------------ */
+
+.prose-hl {
+  max-width: 70ch;
+  color: var(--hl-ink);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.prose-hl > * + * {
+  margin-top: 1em;
+}
+
+.prose-hl h2 {
+  margin-top: 2.4em;
+  font-size: clamp(22px, 5vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  scroll-margin-top: 24px;
+}
+
+.prose-hl h3 {
+  margin-top: 1.8em;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  scroll-margin-top: 24px;
+}
+
+.prose-hl h2 + *,
+.prose-hl h3 + * {
+  margin-top: 0.6em;
+}
+
+.prose-hl p,
+.prose-hl li {
+  color: var(--hl-text-2);
+}
+
+.prose-hl strong {
+  color: var(--hl-ink);
+  font-weight: 600;
+}
+
+.prose-hl ul,
+.prose-hl ol {
+  padding-left: 1.4em;
+}
+
+.prose-hl ul {
+  list-style: disc;
+}
+
+.prose-hl ol {
+  list-style: decimal;
+}
+
+.prose-hl li + li {
+  margin-top: 0.45em;
+}
+
+.prose-hl li::marker {
+  color: var(--hl-text-3);
+}
+
+.prose-hl a {
+  color: var(--hl-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--hl-line-3);
+  text-underline-offset: 3px;
+}
+
+.prose-hl a:hover {
+  text-decoration-color: var(--hl-ink);
+}
+
+/* A list that is only links (provider guides, a guide's sources): each link is a 44px touch target. */
+.prose-hl .link-list a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.prose-hl code {
+  padding: 0.1em 0.35em;
+  border-radius: var(--hl-radius-sm);
+  background: var(--hl-track);
+  color: var(--hl-ink);
+  font-family: var(--hl-font-mono);
+  font-size: 0.88em;
+  overflow-wrap: anywhere;
+}
+
+.prose-hl table {
+  width: 100%;
+  border: 1px solid var(--hl-line-2);
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--hl-radius);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.prose-hl th,
+.prose-hl td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--hl-line);
+  text-align: left;
+  vertical-align: top;
+  /* Words stay whole (the table widens their column); long code values can still break. */
+  overflow-wrap: break-word;
+}
+
+.prose-hl thead th {
+  border-top: 0;
+  background: var(--hl-page);
+  color: var(--hl-text-2);
+  font-family: var(--hl-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.prose-hl td {
+  color: var(--hl-text-2);
+}
+
+.prose-hl .callout {
+  padding: 14px 16px;
+  border: 1px solid var(--hl-line);
+  border-left: 0;
+  border-radius: var(--hl-radius);
+  background: var(--hl-page);
+  color: var(--hl-ink);
+}
+
+/* A command to copy (the /connect page's Claude Code step): wraps inside itself, never widens the page. */
+.prose-hl pre {
+  padding: 12px 14px;
+  border: 1px solid var(--hl-line);
+  border-radius: var(--hl-radius);
+  background: var(--hl-track);
+  color: var(--hl-ink);
+  font-family: var(--hl-font-mono);
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.prose-hl pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+
+/*
+ * The marketing palette (Gary, 2026-10-05): a brighter brass as the secondary color (brand marks,
+ * chips, small details) and cobalt (--hl-accent, globals.css) as the primary accent (claim buttons,
+ * links, headline highlights, the focus ring). Scoped to the marketing shell; the app keeps its own.
+ */
+.mk {
+  --hl-brass: #d4a23f;
+  --hl-brass-text: #8a6414; /* 5.4:1 on white */
+  --hl-brass-soft: #fbf0d9;
+  --hl-brass-soft-text: #6b4c10;
+  --hl-ink-link: #ebc062;
+}
+
+.mk :focus-visible {
+  outline-color: var(--hl-accent);
+}

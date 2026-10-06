@@ -29,6 +29,20 @@ Reference mockups live in `design/mockups/` (see "Mockup files" below). Values h
 
 Brass is never body text on white, never a large fill. Primary buttons are charcoal, not brass (exception: primary CTA on charcoal backgrounds uses a brass fill with charcoal text).
 
+**Marketing palette (Gary, 2026-10-05).** On the marketing site (everything inside `MarketingShell`, scoped by its `.mk` class) cobalt is the **primary accent** and a brighter brass the **secondary**; the app keeps the values above.
+
+| Token | Value | Use (marketing) |
+| --- | --- | --- |
+| `--hl-accent` | `#2D5BE3` (hover `#2349C0`) | The claim buttons ("Claim it", "Claim your link") with white text (5.6:1), the look progress bar, the focus ring |
+| `--hl-accent-text` | `#2D5BE3` | Cobalt as text on light: headline highlight words, text links and arrows (5.6:1 on white) |
+| `--hl-accent-on-ink` | `#8FA8FF` | Cobalt as text on charcoal: links on dark bands (7.5:1) |
+| `--hl-brass` (marketing) | `#D4A23F` | Secondary: logo diamond, small markers, chart fills, the claim panel's halo |
+| `--hl-brass-text` (marketing) | `#8A6414` | Brass as text on light (5.4:1) |
+| `--hl-brass-soft` / text (marketing) | `#FBF0D9` / `#6B4C10` | "Pro" and "Recommended" chips |
+| `--hl-ink-link` (marketing) | `#EBC062` | Brass as text on charcoal where brass is kept |
+
+Rule of thumb: cobalt is for doing (act, follow, notice), brass is for being HYDLNK (marks and small details). Charcoal stays the base. Other primary buttons stay charcoal. This project's Tailwind has no default palette (`--color-*: initial`) and no default breakpoints (`--breakpoint-*: initial`): `bg-black`, `text-white`, `sm:` and `lg:` generate nothing; use the tokens above and `hl:` or `min-[NNNpx]:`.
+
 ### Type
 
 - UI: **Public Sans** 400/500/600/700. Data, URLs, handles, labels, eyebrows: **Geist Mono** 400/500.
@@ -44,12 +58,16 @@ Brass is never body text on white, never a large fill. Primary buttons are charc
 - Touch targets ≥ 44px on anything tappable on phones.
 - Focus: 2px brass outline, 2px offset (`:focus-visible`).
 
+### Icons
+
+Icons in the HYDLNK UI are Lucide (`lucide-react`), drawn through the one `Icon` wrapper (`src/components/app/icon.tsx`): the 24 grid, stroke 1.8 (1.9 for the editor's own upload, rename, undo and redo, 2.4 for a check mark on a fill), round caps and joins, `currentColor`, so an icon follows its control's text color in every state. Sizes are the ones the app already used: 14px (a menu chevron), 15px (editor chips, upload, the drag grip), 16px (sidebar, rename, close), 18px (the toolbar's Undo, Redo and ⋯), 20px (the phone tab bar, carousel arrows, the mini phone). Icons are decorative by default: `aria-hidden="true"`, `focusable="false"`, no `<title>`; the control that holds one keeps its own `aria-label` or visible text. Import each glyph by name (`import { Pencil } from "lucide-react"`), never `import *` or the dynamic icon. The app and the editor only: the public page, the marketing site and the logo never import Lucide, and a public page's brand marks are Simple Icons paths written into the static HTML.
+
 ## Layout and responsive rules
 
 - Mobile first. One breakpoint at **760px** (container query on the page root in the mockups; a media query is fine in the real app).
-- **App ≥ 760px:** charcoal sidebar (240px: logo, page switcher, nav, plan meter, user) + main column (white header bar with mono breadcrumb and 22px title; content on `--hl-page`).
-- **App < 760px:** sidebar hidden → charcoal top bar (logo + page switcher chip) and a fixed white bottom tab bar (Editor, Design, Stats, Domains, Account; active = ink text + 2px brass top marker; respects safe-area inset). Main content gets bottom padding to clear it.
-- **Editor and Design < 760px:** the side-by-side preview becomes a "Blocks | Preview" (or "Tokens | Preview") segmented tab; the phone bezel is dropped and the preview renders full width.
+- **App ≥ 760px:** charcoal sidebar (240px: logo, page switcher, nav with Editor, Analytics and Domains, plan meter, and the account menu: the user block at the bottom, a button that opens Settings & billing and Sign out) + main column (white header bar with mono breadcrumb and 22px title; content on `--hl-page`).
+- **App < 760px:** sidebar hidden → charcoal top bar (logo + page switcher chip) and a fixed white bottom tab bar (Editor, Stats, Domains, Account; active = ink text + 2px brass top marker; respects safe-area inset; Editor is current on Edit, Design, Share and version history, Account on Settings & billing). Main content gets bottom padding to clear it.
+- **Editor workspace (Edit, Design, Share):** one workspace with three tabs, Edit (/editor), Design (/design) and Share (/share), under one pinned toolbar that stays put as the tabs change (page name, tabs, status, Undo, Redo, Preview, ⋯ and Publish at 760px and up; below 760px a short pinned row of Undo, Redo, status and Publish with the tabs directly under it); the preview sits beside the content in a phone bezel from 760px and is a floating mini phone above the tab bar below 760px that opens a full-size preview, instead of a dock or Blocks | Preview tabs.
 - **Marketing < 760px:** nav shows logo + Log in only; claim-handle form button drops to its own full-width row; all grids collapse to one column; token chips around the hero phone are hidden.
 - Tables collapse on phones: DNS record → stacked definition list with its own Copy button; analytics link table drops the share-bar column.
 

@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { emptyDraft, toPublishForm, type Block, type PublishDoc } from "@/lib/document";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
+import { expireOwnerPages } from "../fixtures/expire";
 import {
   accessTokenFor,
   cleanupUsers,
@@ -211,12 +212,12 @@ test.describe("M2-22 public page", () => {
     await context.close();
   });
 
-  test("M2-22 response headers: CSP without a script nonce, nosniff, referrer policy", async () => {
+  test("M2-22 response headers: the closed CSP (M8-07: script-src 'self', no nonce, no inline script), nosniff, referrer policy", async () => {
     const res = await tenantGet("mara");
     expect(res.headers["content-security-policy"]).toBe(
-      "frame-src https://www.youtube-nocookie.com https://open.spotify.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
     );
-    expect(res.headers["content-security-policy"]).not.toMatch(/nonce|script-src/);
+    expect(res.headers["content-security-policy"]).not.toMatch(/nonce|unsafe-eval/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
     expect(res.headers["x-frame-options"]).toBe("DENY");
@@ -270,8 +271,10 @@ test.describe("M2-22 public page", () => {
     });
     await page.goto(url(fx.handle));
 
-    // YouTube mounts its iframe on a click; Spotify is an iframe from the start.
+    // Each player mounts its iframe on a tap: YouTube and, since M8-05, Spotify too (no iframe from the start).
+    await expect(page.locator("iframe")).toHaveCount(0);
     await page.getByRole("button", { name: /Play video/ }).click();
+    await page.getByRole("button", { name: /Play music/ }).click();
     const frames = page.locator("iframe");
     await expect(frames).toHaveCount(2);
     const sources = await frames.evaluateAll((els) =>
@@ -382,6 +385,7 @@ test.describe("M2-28 Made with HYDLNK", () => {
 
   test("M2-28 the badge follows the account's plan at render time, with no republish", async ({
     page,
+    browser,
   }) => {
     const fx = await publishedPage("bplan", { plan: "free" });
     await page.goto(url(fx.handle));
@@ -394,12 +398,16 @@ test.describe("M2-28 Made with HYDLNK", () => {
         .single()
     ).data;
 
+    // A production build serves the cached page until its tag expires; the Stripe webhook expires it
+    // (M4-08), and here the plan is set straight in the database, so expire it the way the webhook does.
     const up = await adminClient().from("accounts").update({ plan: "pro" }).eq("id", fx.userId);
     expect(up.error).toBeNull();
+    await expireOwnerPages(browser, fx.userId);
     await page.goto(url(fx.handle));
     await expect(badge(page)).toHaveCount(0);
 
     await adminClient().from("accounts").update({ plan: "free" }).eq("id", fx.userId);
+    await expireOwnerPages(browser, fx.userId);
     await page.goto(url(fx.handle));
     await expect(badge(page)).toHaveCount(1);
     const after = (
@@ -651,7 +659,11 @@ test.describe("M2-30 OG image and social metadata", () => {
   });
 
   test("M2-30 the og:image is a 1200x630 PNG with a public cache-control", async () => {
-    const meta = decode(metaContent((await tenantGet("mara")).text, "property", "og:image"))!;
+    // Its own page, not the shared seeded mara: a page and its image agree on the version on the very
+    // next request after a publish, which is what this asserts, and a server that carries stale data
+    // for the seeded fixture (a restored data cache of another database) must not decide it.
+    const fx = await publishedPage("ogcc");
+    const meta = decode(metaContent((await tenantGet(fx.handle)).text, "property", "og:image"))!;
     const target = new URL(meta);
     const res = await rawBuffer(target.host, `${target.pathname}${target.search}`);
     expect(res.status).toBe(200);
@@ -660,9 +672,21 @@ test.describe("M2-30 OG image and social metadata", () => {
     expect(res.body.length).toBeGreaterThan(5_000);
     expect(res.headers["cache-control"]).toMatch(/public/);
     expect(res.headers["cache-control"]).toMatch(/s-maxage=\d+|max-age=\d+/);
-    // The exact URL of the metadata is immutable; the bare /og is cached briefly.
+    // The exact URL of the metadata is immutable; the bare /og is cached briefly. Neither may sit in a
+    // CDN for more than five minutes (M5-08): nothing purges a CDN copy, and a suspended page's name,
+    // bio and photo must not outlive its 404.
     expect(res.headers["cache-control"]).toMatch(/immutable/);
-    const bare = await tenantGet("mara", "/og");
+    const longest = (value: unknown) =>
+      Math.max(
+        ...[
+          ...String(value).matchAll(
+            /(?:s-)?maxage=(\d+)|max-age=(\d+)|stale-while-revalidate=(\d+)/g,
+          ),
+        ].map((m) => Number(m[1] ?? m[2] ?? m[3])),
+      );
+    expect(longest(res.headers["cache-control"])).toBeLessThanOrEqual(300);
+    const bare = await tenantGet(fx.handle, "/og");
+    expect(longest(bare.headers["cache-control"])).toBeLessThanOrEqual(300);
     expect(bare.headers["cache-control"]).toMatch(/public/);
     expect(bare.body.equals(res.body)).toBe(true);
   });
@@ -691,7 +715,9 @@ test.describe("M2-30 OG image and social metadata", () => {
     expect((await tenantGet(`nobody-${rand(6)}`, "/og")).status).toBe(404);
   });
 
-  test("M2-30 editing the draft does not change the image; changing the published name does", async () => {
+  test("M2-30 editing the draft does not change the image; changing the published name does", async ({
+    browser,
+  }) => {
     const fx = await publishedPage("ogedit", { name: "Zq Original" });
     const before = (await tenantGet(fx.handle, "/og")).body;
 
@@ -709,6 +735,9 @@ test.describe("M2-30 OG image and social metadata", () => {
       .from("pages")
       .update({ published: next, published_at: new Date().toISOString() })
       .eq("id", fx.pageId);
+    // Publish expires the page's tag (a production build caches the image under it); this write
+    // went straight to the database, so expire it the way an admin action does.
+    await expireOwnerPages(browser, fx.userId);
     const after = (await tenantGet(fx.handle, "/og")).body;
     expect(after.equals(before)).toBe(false);
     expect(pngSizeOf(after)).toEqual({ width: 1200, height: 630 });

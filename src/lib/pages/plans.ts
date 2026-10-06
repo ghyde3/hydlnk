@@ -1,16 +1,18 @@
+import { PLAN_LIMITS } from "@/lib/limits";
+
 /**
- * Plan display facts for the app chrome. The limits mirror `public.plan_limits()` (PLAN.md ->
- * Monetization); that function is revoked from the `authenticated` role, so the UI keeps its own
- * copy and a spec (tests/e2e/m1/shell.spec.ts) fails if the two ever drift. Enforcement stays in
- * the database triggers: this is only for labels and meters.
+ * Plan display facts for the app chrome. The numbers come from the one limits table
+ * ("@/lib/limits", mirrored by `public.plan_limits()`; tests/unit/limits-parity.test.ts keeps the
+ * two equal), so a limit is never typed twice. Enforcement stays in the database triggers: this is
+ * only for labels and meters.
  */
 export const PLANS = ["free", "pro", "studio"] as const;
 export type Plan = (typeof PLANS)[number];
 
 export const PLAN_INFO: Record<Plan, { label: string; maxPages: number }> = {
-  free: { label: "Free", maxPages: 1 },
-  pro: { label: "Pro", maxPages: 3 },
-  studio: { label: "Studio", maxPages: 15 },
+  free: { label: "Free", maxPages: PLAN_LIMITS.free.pages },
+  pro: { label: "Pro", maxPages: PLAN_LIMITS.pro.pages },
+  studio: { label: "Studio", maxPages: PLAN_LIMITS.studio.pages },
 };
 
 /** Narrows whatever the database returned; an unknown value reads as the free plan. */

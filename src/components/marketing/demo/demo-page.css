@@ -1,0 +1,356 @@
+/*
+ * Demo link-in-bio pages on the marketing site. Every rule is scoped under .dp and reads the
+ * --t-* variables DemoPage sets on its root: tenant theme values, used only inside these demo
+ * frames. The phone bezel (.hl-phone) is HYDLNK UI and uses --hl-* tokens.
+ */
+
+.hl-phone {
+  position: relative;
+  width: 290px;
+  height: 600px;
+  flex: none;
+  padding: 9px;
+  border: 1px solid var(--hl-line-3);
+  border-radius: 40px;
+  background: var(--hl-ink);
+}
+
+.hl-phone-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 32px;
+  isolation: isolate;
+}
+
+.dp {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--t-bg);
+  color: var(--t-text);
+  font-family: var(--t-font-body);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+  -webkit-font-smoothing: antialiased;
+  transition:
+    background-color 0.45s ease,
+    color 0.45s ease;
+}
+
+.dp *,
+.dp *::before,
+.dp *::after {
+  box-sizing: border-box;
+}
+
+.dp img {
+  display: block;
+  max-width: 100%;
+}
+
+.dp[data-bg-type="gradient"] {
+  background:
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--t-accent) 26%, var(--t-bg)) 0%, transparent 70%),
+    var(--t-bg);
+}
+
+.dp-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.dp-bg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dp-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--t-bg);
+  opacity: var(--t-overlay-opacity);
+}
+
+.dp-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 304px;
+  min-width: 0;
+  padding: 34px 16px 18px;
+}
+
+/* The column is taller than the phone screen; nothing in it may shrink to fit. */
+.dp-col > *,
+.dp-blocks > * {
+  flex-shrink: 0;
+}
+
+.dp-avatar {
+  display: block;
+  width: 58px;
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid var(--t-accent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--t-accent) 14%, transparent);
+}
+
+.dp-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dp-name {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--t-font-heading);
+  font-size: 24px;
+  font-weight: var(--t-weight-heading);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+}
+
+.dp[data-heading-font="Instrument Serif"] .dp-name {
+  font-size: 27px;
+  letter-spacing: 0;
+}
+
+.dp-bio {
+  display: block;
+  max-width: 230px;
+  color: var(--t-text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.dp-social {
+  display: flex;
+  gap: 8px;
+  margin: 2px 0 6px;
+}
+
+.dp-social-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--t-border);
+  border-radius: 50%;
+  color: var(--t-text-muted);
+}
+
+.dp-social-icon svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dp-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  width: 100%;
+}
+
+.dp[data-density="compact"] .dp-blocks {
+  gap: 6px;
+}
+
+.dp[data-density="airy"] .dp-blocks {
+  gap: 12px;
+}
+
+/* Link buttons, one rule per buttonStyle (the same five the product has). */
+.dp-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid var(--t-button-bg);
+  border-radius: var(--t-radius);
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  transition:
+    background-color 0.45s ease,
+    color 0.45s ease,
+    border-color 0.45s ease,
+    border-radius 0.45s ease;
+}
+
+.dp[data-density="airy"] .dp-link {
+  min-height: 44px;
+}
+
+.dp-link[data-button-style="outline"] {
+  border-color: var(--t-accent);
+  background: transparent;
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.dp-link[data-button-style="soft"] {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--t-button-bg) 18%, transparent);
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+.dp-link[data-button-style="shadow"] {
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+}
+
+.dp-link[data-button-style="pill"] {
+  border-radius: 999px;
+}
+
+/* Link card: a 5:2 banner with the title over a scrim, and a caption row. */
+.dp-card {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  text-align: left;
+}
+
+.dp-card-banner {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  aspect-ratio: 5 / 2;
+  padding: 10px 12px;
+  background: var(--t-surface);
+}
+
+.dp-card-banner picture,
+.dp-card-image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dp-card-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to top, color-mix(in srgb, var(--t-bg) 88%, transparent), transparent 80%);
+}
+
+.dp-card-title {
+  color: var(--t-accent);
+  font-family: var(--t-font-heading);
+  font-size: 22px;
+  font-weight: var(--t-weight-heading);
+  line-height: 1;
+}
+
+.dp-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 11px;
+}
+
+.dp-card-arrow {
+  color: var(--t-accent);
+}
+
+.dp-image {
+  display: block;
+  overflow: hidden;
+  border-radius: var(--t-radius);
+}
+
+.dp-image img {
+  width: 100%;
+  height: auto;
+}
+
+.dp-header {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--t-font-heading);
+  font-size: 18px;
+  font-weight: var(--t-weight-heading);
+  line-height: 1.15;
+}
+
+.dp-text {
+  display: block;
+  color: var(--t-text-muted);
+  font-size: 11.5px;
+}
+
+.dp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.dp-grid-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 10px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+  text-align: left;
+}
+
+.dp-grid-title {
+  font-family: var(--t-font-heading);
+  font-size: 15px;
+  font-weight: var(--t-weight-heading);
+  line-height: 1.1;
+}
+
+.dp-grid-sub {
+  color: var(--t-text-muted);
+  font-size: 10.5px;
+}
+
+.dp-divider {
+  display: block;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--t-border);
+}
+
+.dp-badge {
+  display: block;
+  margin-top: 6px;
+  color: var(--t-text-muted);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}

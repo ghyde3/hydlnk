@@ -21,6 +21,18 @@ export const publicEnvSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.url({ error: "Expected the Supabase project URL" }),
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
   NEXT_PUBLIC_ROOT_DOMAIN: rootDomainSchema,
+  /**
+   * OAuth client id of the "Sign in with Google" button (Google Identity Services). Public by
+   * design: it ships to the browser and appears in Google's own iframe. Optional: when it is not
+   * set the Google button and the "or" rule above it are hidden and email sign-in works alone. It
+   * must be the same Web client id that is registered in Supabase's Google provider, which checks
+   * the token's audience against it.
+   */
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: z
+    .string()
+    .optional()
+    // Optional means it can never take the app down: a value of only spaces reads as unset.
+    .transform((value) => value?.trim() || undefined),
 });
 
 /**
@@ -33,6 +45,7 @@ export function readPublicEnv() {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     NEXT_PUBLIC_ROOT_DOMAIN: process.env.NEXT_PUBLIC_ROOT_DOMAIN,
+    NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
   };
 }
 

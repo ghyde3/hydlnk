@@ -202,6 +202,58 @@ describe("rewriteWithSession (M1-06)", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
 
+  it("never forwards a share-token header the client chose, on a plain request or on a refresh (Wave I review)", async () => {
+    // The private preview's token is the proxy's to set (`shareProxy`, after the rate limit); a
+    // client-sent `x-hl-share-token` on any other app-host path must not reach a page.
+    const fresh = jwt(3600);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        );
+        if (url.pathname === "/auth/v1/token")
+          return json(200, sessionJson(fresh, "refresh-2", 3600));
+        if (url.pathname === "/auth/v1/user") return json(200, sessionJson(fresh, "x", 1).user);
+        return json(404, {});
+      }),
+    );
+    const forged = "A".repeat(43);
+    const overridden = (response: Response) =>
+      (response.headers.get("x-middleware-override-headers") ?? "").split(",");
+
+    const plain = await rewriteWithSession(
+      new NextRequest("http://app.localhost:3000/shared-draft", {
+        headers: { "x-hl-share-token": forged, "X-Forwarded-For": "203.0.113.9" },
+      }),
+      destination(),
+    );
+    expect(plain.headers.get("x-middleware-request-x-hl-share-token")).toBeNull();
+    expect(overridden(plain)).not.toContain("x-hl-share-token");
+    // Other headers still go through: only the one name is dropped.
+    expect(plain.headers.get("x-middleware-request-x-forwarded-for")).toBe("203.0.113.9");
+
+    // The refresh path builds a second response from the mutated request; it must not bring the
+    // header back, and it must still carry the refreshed cookie.
+    const refreshed = await rewriteWithSession(
+      new NextRequest("http://app.localhost:3000/shared-draft", {
+        headers: {
+          "x-hl-share-token": forged,
+          cookie: cookieFor(sessionJson(jwt(-600), "refresh-1", -600)),
+        },
+      }),
+      destination(),
+    );
+    expect(refreshed.headers.get("x-middleware-request-x-hl-share-token")).toBeNull();
+    expect(overridden(refreshed)).not.toContain("x-hl-share-token");
+    const forwardedCookie = refreshed.headers.get("x-middleware-request-cookie") ?? "";
+    const encoded = new RegExp(`${COOKIE_NAME}=base64-([A-Za-z0-9_-]+)`).exec(forwardedCookie)?.[1];
+    expect(encoded).toBeTruthy();
+    expect(JSON.parse(Buffer.from(encoded!, "base64url").toString()).refresh_token).toBe(
+      "refresh-2",
+    );
+  });
+
   it("an unreachable auth server does not take the app host down", async () => {
     // The real client retries network errors for a long while; what matters here is the proxy's
     // own catch, so this one case swaps in a client whose getClaims() throws at once.

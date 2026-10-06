@@ -14,6 +14,12 @@ vi.mock("@/lib/auth/session", () => ({ getSessionUser }));
 const publishPageCore = vi.fn();
 vi.mock("@/lib/publish/core", () => ({ publishPageCore }));
 
+const cleanupMediaQuietly = vi.fn();
+vi.mock("@/lib/media/cleanup-admin", () => ({ cleanupMediaQuietly }));
+
+const rateLimit = vi.fn();
+vi.mock("@/lib/rate-limit", () => ({ rateLimit }));
+
 const { publishPage } = await import("@/lib/publish/actions");
 
 const PAGE = "00000000-0000-4000-8000-0000000000B1";
@@ -21,8 +27,11 @@ const USER = "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01";
 
 beforeEach(() => {
   updateTag.mockClear();
+  cleanupMediaQuietly.mockReset();
   getSessionUser.mockReset();
   publishPageCore.mockReset();
+  rateLimit.mockReset();
+  rateLimit.mockResolvedValue({ allowed: true, retryAfter: 0 });
 });
 
 const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
@@ -66,6 +75,17 @@ describe("M2-26 Publish calls updateTag, inside the action, on success only", ()
     expect(updateTag).toHaveBeenCalledWith(`page:${PAGE.toLowerCase()}`);
   });
 
+  it("M5-14 then works off the owner's cleanup queue, after updateTag, for the session user", async () => {
+    getSessionUser.mockResolvedValue({ id: USER, email: "a@example.com" });
+    publishPageCore.mockResolvedValue({ ok: true, publishedAt: "2026-10-02T01:00:00.000Z" });
+    await publishPage(PAGE);
+    expect(cleanupMediaQuietly).toHaveBeenCalledTimes(1);
+    expect(cleanupMediaQuietly).toHaveBeenCalledWith(USER);
+    expect(updateTag.mock.invocationCallOrder[0]!).toBeLessThan(
+      cleanupMediaQuietly.mock.invocationCallOrder[0]!,
+    );
+  });
+
   it.each([
     [
       "a validation failure",
@@ -78,6 +98,7 @@ describe("M2-26 Publish calls updateTag, inside the action, on success only", ()
     publishPageCore.mockResolvedValue(result);
     expect(await publishPage(PAGE)).toEqual(result);
     expect(updateTag).not.toHaveBeenCalled();
+    expect(cleanupMediaQuietly).not.toHaveBeenCalled(); // nothing was published: nothing was dropped
   });
 
   it("passes no user when there is no session (the gate answers unauthorized)", async () => {
@@ -86,6 +107,7 @@ describe("M2-26 Publish calls updateTag, inside the action, on success only", ()
     await publishPage(PAGE);
     expect(publishPageCore).toHaveBeenCalledWith({ pageId: PAGE, userId: null });
     expect(updateTag).not.toHaveBeenCalled();
+    expect(cleanupMediaQuietly).not.toHaveBeenCalled();
   });
 });
 
@@ -109,5 +131,31 @@ describe("M2-26 autosave never invalidates the page cache", () => {
         `${file} calls a cache invalidation`,
       ).toContain(file);
     }
+  });
+});
+
+describe("M11-12 Publish is rate limited per account (60 an hour)", () => {
+  it("counts the session user under publish:<id> with 60 per 3600 seconds", async () => {
+    getSessionUser.mockResolvedValue({ id: USER, email: "a@example.com" });
+    publishPageCore.mockResolvedValue({ ok: true, publishedAt: "2026-10-02T01:00:00.000Z" });
+    await publishPage(PAGE);
+    expect(rateLimit).toHaveBeenCalledWith(`publish:${USER}`, 60, 3600);
+  });
+
+  it("past the limit nothing is published, no tag is expired and the reason is rate_limited", async () => {
+    getSessionUser.mockResolvedValue({ id: USER, email: "a@example.com" });
+    rateLimit.mockResolvedValue({ allowed: false, retryAfter: 120 });
+    const result = await publishPage(PAGE);
+    expect(result).toEqual({ ok: false, errors: [], reason: "rate_limited" });
+    expect(publishPageCore).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(cleanupMediaQuietly).not.toHaveBeenCalled();
+  });
+
+  it("a signed-out call is refused by the gate, not counted", async () => {
+    getSessionUser.mockResolvedValue(null);
+    publishPageCore.mockResolvedValue({ ok: false, errors: [], reason: "unauthorized" });
+    await publishPage(PAGE);
+    expect(rateLimit).not.toHaveBeenCalled();
   });
 });

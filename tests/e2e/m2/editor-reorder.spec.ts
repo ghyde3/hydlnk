@@ -16,6 +16,7 @@ import {
   seededUser,
   setDraft,
 } from "./editor-helpers";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /** M2-14: reorder blocks with dnd-kit (pointer, touch, keyboard) and with Move up / Move down. */
 
@@ -26,7 +27,8 @@ const WORDS = ["One", "Two", "Three", "Four", "Five"];
 
 const handle = (page: Page, id: string) =>
   rowOf(page, id).getByRole("button", { name: "Drag to reorder" });
-const rowButton = (page: Page, id: string) => rowOf(page, id).locator("button[aria-expanded]");
+const rowButton = (page: Page, id: string) =>
+  rowOf(page, id).locator("button[aria-expanded]").first();
 const order = (page: Page) =>
   rows(page).evaluateAll((els) => els.map((el) => el.getAttribute("data-block-id")));
 const previewOrder = (page: Page) =>
@@ -162,7 +164,7 @@ test.describe("M2-14 drag handles", () => {
     await page.keyboard.press("ArrowDown");
     await page.waitForTimeout(150);
     await page.keyboard.press("Escape");
-    await expect(liveRegion(page)).toContainText("cancelled");
+    await expect(liveRegion(page)).toContainText("canceled");
     expect(await order(page)).toEqual(expected);
     await page.waitForTimeout(1200);
     const stored = await expectDraft(user.pageId, () => true);
@@ -191,9 +193,9 @@ test.describe("M2-14 drag handles", () => {
     await expect(status).toHaveText("Moved to position 1 of 5");
     await expect(up).toBeDisabled(); // first now
     await expect(down).toBeFocused(); // focus moved to the twin button, not lost
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Preview" }).click();
+    if (phoneOnly(info)) await showPreviewSheet(page);
     expect(await previewOrder(page)).toEqual([FIVE[1], FIVE[0], FIVE[2], FIVE[3], FIVE[4]]);
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     await down.click();
     await down.click();

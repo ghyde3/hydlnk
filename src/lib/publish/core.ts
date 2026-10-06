@@ -1,22 +1,45 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { blockedLinksInPublished, checkBlocklist, loadBlockedDomains } from "@/lib/blocklist";
 import {
   collectPublishErrors,
+  collectSubPagePublishErrors,
   publishDocSchema,
+  publishSubPageSchema,
   publishedDocSchema,
+  publishedSubPageSchema,
   toPublishForm,
+  toSubPagePublishForm,
+  type Block,
   type ImageRef,
   type PublishDoc,
   type PublishError,
 } from "@/lib/document";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
+import { checkLinkRules, misplacedLockErrors } from "./link-rules";
+import { homeForSite, nameErrors, pageTitleOf, siteErrors, type SiteSubPage } from "./site-checks";
+import { mediaOrigin } from "@/lib/media/url";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
+import { mediaPathOf } from "@/lib/themes/bg-image";
+import { PUBLISH_STOPPED, friendlyPublishErrors } from "@/lib/themes/publish-errors";
 
 /** Why a publish did not happen, besides `invalid` (the draft has problems the editor can show). */
-export type PublishFailureReason = "unauthorized" | "forbidden" | "invalid" | "error";
+export type PublishFailureReason =
+  | "unauthorized"
+  | "forbidden"
+  | "invalid"
+  | "error"
+  /** The owner's account is suspended (M5-09): nothing is published until an admin unsuspends it. */
+  | "account_suspended"
+  /** A link in the saved draft points to a blocked site (M5-03); `errors` name each link and its host. */
+  | "blocked_link"
+  /** Too many publishes in the last hour (M11-12): nothing was read or written; try again later. */
+  | "rate_limited"
+  /** The account's sub-pages would pass the 64 MiB byte cap (HL009): not retryable until content is removed. */
+  | "storage_full";
 
 export type PublishResult =
   | { ok: true; publishedAt: string }
@@ -49,14 +72,33 @@ const refuse = (
  *
  *   1. no session user: `unauthorized`; a page the user does not own (or that does not exist):
  *      `forbidden`. Nothing is read or written first;
- *   2. `publishDocSchema` on the stored draft (required fields, http(s) URLs, embed allowlist,
- *      no control or bidi characters, block limit): any issue returns `{ok:false, errors}` naming
- *      the block, and writes nothing;
- *   3. every image path of a visible block starts with the owner's uid and exists in `page-media`;
+ *   2. the link blocklist (M5-03) on the stored draft, the same database function the `pages` trigger
+ *      runs on every draft save: a site listed after the draft was saved is caught here. A link to
+ *      a blocked site returns `blocked_link` with one error per link (block, field, host); the
+ *      check failing is `error` (closed, never "clean");
+ *   2b. `publishDocSchema` on the stored draft (required fields, http(s) URLs, embed allowlist,
+ *      no control or bidi characters, block limit, page and block token overrides): any issue
+ *      returns `{ok:false, errors}` naming the block or the design field and how to fix it
+ *      ("Publish stopped: bg isn’t a valid color. Reset it in Design."), and writes nothing;
+ *   3. every image path of a visible block starts with the owner's uid and exists in `page-media`,
+ *      and so does the resolved background image (M3-05): a `bgImage` is only ever one of the
+ *      owner's own uploads, whether it came from the page overrides or from a saved theme;
  *   4. `toPublishForm` with the tokens of the draft's theme row (a system theme or one the owner
- *      owns; a missing or foreign one resolves like no theme, as the editor does), then
+ *      owns: the lookup is scoped to `owner_id` null or the page owner, so a draft that names
+ *      someone else's theme, or a deleted one, resolves like no theme, as the editor does), then
  *      `publishedDocSchema` on the result: the frozen, fully resolved document;
- *   5. `pages.published` and `published_at` are written with the secret key, filtered on the owner.
+ *   5. the link blocklist again, now on the final published form with the platform's URL parser
+ *      (`blockedLinksInPublished`: the authority, see src/lib/blocklist/published.ts);
+ *   6. `pages.published` and `published_at` are written with the secret key, filtered on the owner.
+ *
+ * Whole-site Publish (M11-05): the gate above runs for Home and then for every sub-page of the site
+ * (`site_pages.draft`: the sub-page schema, images, the lock rule and the final blocklist check, the
+ * same rules as for Home), and the checks that span documents run once all of them passed
+ * (`siteErrors`: one path per page, a block id used once in the whole site, `page_link` targets that
+ * are pages of the site). Every error of a sub-page names the page. Step 6 is the `publish_site`
+ * function: Home and every sub-page are written in one transaction or not at all, and the version
+ * trigger of `pages` still records Home. A sub-page's draft is published with the site, so a page
+ * created after the last Publish goes live at this one and not before.
  *
  * A failed gate writes nothing, so a failed Publish leaves the live page and its cache as they were.
  */
@@ -83,10 +125,49 @@ export async function publishPageCore(
   }
   if (!page.data || page.data.owner_id !== userId) return refuse("forbidden");
 
+  // A suspended owner cannot bring a page back by republishing (M5-08, M5-09). Read with the secret
+  // key, after the ownership check so it says nothing about anyone else's account; fails closed.
+  const account = await admin
+    .from("accounts")
+    .select("suspended_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (account.error) {
+    console.error("[publish] reading the account failed", account.error.message);
+    return refuse("error");
+  }
+  if (!account.data || account.data.suspended_at !== null) return refuse("account_suspended");
+
   const raw: unknown = page.data.draft;
+
+  // The sub-pages (M11-05): read after the ownership check, with the same secret key. The id is the
+  // site's own, so these rows are the owner's. A failed read refuses (closed).
+  const subRows = await admin
+    .from("site_pages")
+    .select("id, draft, created_at")
+    .eq("page_id", pageId.data);
+  if (subRows.error) {
+    console.error("[publish] reading the sub-pages failed", subRows.error.message);
+    return refuse("error");
+  }
+  const subDrafts = [...(subRows.data ?? [])].sort((a, b) =>
+    a.created_at === b.created_at ? (a.id < b.id ? -1 : 1) : a.created_at < b.created_at ? -1 : 1,
+  );
+
+  // The blocklist again, on the stored draft (M5-03): the trigger checks every save, but a domain
+  // listed since then is only caught here. Nothing has been written yet.
+  let blocked;
+  try {
+    blocked = await checkBlocklist(admin, raw);
+  } catch (error) {
+    console.error("[publish] checking the link blocklist failed", error);
+    return refuse("error");
+  }
+  if (blocked.errors.length > 0) return refuse("blocked_link", blocked.errors);
+
   const parsed = publishDocSchema.safeParse(raw);
   if (!parsed.success) {
-    const errors = collectPublishErrors(raw);
+    const errors = friendlyPublishErrors(collectPublishErrors(raw));
     return refuse(
       "invalid",
       errors.length > 0
@@ -108,7 +189,11 @@ export async function publishPageCore(
 
   let mediaErrors: PublishError[];
   try {
-    mediaErrors = await checkImages(form, userId, deps.mediaExists ?? storageExists(admin));
+    const exists = deps.mediaExists ?? storageExists(admin);
+    mediaErrors = [
+      ...(await checkImages(form, userId, exists)),
+      ...(await checkBackground(form, draft.theme.overrides.bgImage !== undefined, userId, exists)),
+    ];
   } catch (error) {
     console.error("[publish] checking the images failed", error);
     return refuse("error");
@@ -123,18 +208,106 @@ export async function publishPageCore(
     ]);
   }
 
-  const publishedAt = (deps.now?.() ?? new Date()).toISOString();
-  const written = await admin
-    .from("pages")
-    .update({ published: checked.data as unknown as Json, published_at: publishedAt })
-    .eq("id", pageId.data)
-    .eq("owner_id", userId)
-    .select("id");
-  if (written.error) {
-    console.error("[publish] writing the published page failed", written.error.message);
+  // The sub-pages (M11-05): each is validated like Home, all problems of all pages are reported
+  // together, and every error names its page. Nothing has been written yet.
+  const prepared = prepareSubPages(subDrafts);
+  if (prepared.errors.length > 0) return refuse("invalid", prepared.errors);
+  const subPages = prepared.subPages;
+  try {
+    const exists = deps.mediaExists ?? storageExists(admin);
+    const subMediaErrors: PublishError[] = [];
+    for (const page of subPages) {
+      subMediaErrors.push(
+        ...nameErrors(await checkPlaced(placedBlockImages(page.form.blocks), userId, exists), page),
+      );
+    }
+    if (subMediaErrors.length > 0) return refuse("invalid", subMediaErrors);
+  } catch (error) {
+    console.error("[publish] checking the sub-page images failed", error);
     return refuse("error");
   }
-  if (!written.data || written.data.length === 0) return refuse("forbidden");
+
+  // The rules that span documents (paths, block ids, page links). Home's menu drops entries that
+  // point at a page no longer in the site, before anything else reads it.
+  const home = homeForSite(
+    checked.data,
+    subPages.map((page) => page.id),
+  );
+  const crossErrors = siteErrors(home, subPages);
+  if (crossErrors.length > 0) return refuse("invalid", crossErrors);
+
+  // Redirect mode and locks (M9-29, M9-31): the rules that need the raw draft, the plan or the
+  // page's hosts. Nothing is written yet; a failed read refuses (closed, never "fine").
+  let linkErrors: PublishError[];
+  try {
+    linkErrors = await checkLinkRules(admin, {
+      pageId: pageId.data,
+      userId,
+      form: checked.data,
+      raw,
+    });
+  } catch (error) {
+    console.error("[publish] checking the link rules failed", error);
+    return refuse("error");
+  }
+  for (const row of subDrafts) {
+    const page = subPages.find((candidate) => candidate.id === row.id);
+    if (page) linkErrors.push(...nameErrors(misplacedLockErrors(row.draft), page));
+  }
+  if (linkErrors.length > 0) return refuse("invalid", linkErrors);
+
+  // The authoritative blocklist check (M5-03): on the FINAL form, the exact document about to be
+  // stored and served, with the platform's own URL parser (what a browser follows). The database
+  // check above (the same function the `pages` trigger runs) is the early, specific one; its Postgres
+  // reading of a URL can lag a browser's (Unicode tables, whitespace the schema trims), so this one
+  // decides. Fails closed: a blocklist that cannot be read publishes nothing.
+  let blockedDomains: string[];
+  try {
+    blockedDomains = await loadBlockedDomains(admin);
+  } catch (error) {
+    console.error("[publish] reading the blocked domains failed", error);
+    return refuse("error");
+  }
+  const blockedFinal = [
+    ...blockedLinksInPublished(home, blockedDomains),
+    ...subPages.flatMap((page) =>
+      nameErrors(blockedLinksInPublished(page.form, blockedDomains), page),
+    ),
+  ];
+  if (blockedFinal.length > 0) return refuse("blocked_link", blockedFinal);
+
+  const publishedAt = (deps.now?.() ?? new Date()).toISOString();
+  // Home and every sub-page in one transaction, or nothing (M11-05). The function checks the owner
+  // itself and that the pages given are exactly the site's current sub-pages.
+  const written = await admin.rpc("publish_site", {
+    p_page_id: pageId.data,
+    p_owner_id: userId,
+    p_home: home as unknown as Json,
+    p_sub_pages: subPages.map((page) => ({
+      id: page.id,
+      published: page.form as unknown as Json,
+    })),
+    p_published_at: publishedAt,
+  });
+  if (written.error) {
+    const { code, message } = written.error;
+    if (code === "P0002") return refuse("forbidden");
+    if (code === "HL009") return refuse("storage_full");
+    if (code === "22023" || code === "23505") {
+      // A page was added or deleted since the read above, or two pages took one path meanwhile:
+      // nothing was written, and publishing again sees the site as it is now.
+      console.error("[publish] the site changed while publishing", code, message);
+      return refuse("invalid", [
+        {
+          blockId: null,
+          field: "document",
+          message: "The pages of this site changed while publishing. Publish again.",
+        },
+      ]);
+    }
+    console.error("[publish] writing the published site failed", message);
+    return refuse("error");
+  }
   return { ok: true, publishedAt };
 }
 
@@ -167,16 +340,39 @@ interface Placed {
   field: string;
 }
 
+/** The images the blocks hold (a sub-page has nothing else), with where each sits. */
+function placedBlockImages(blocks: readonly Block[]): Placed[] {
+  const placed: Placed[] = [];
+  for (const block of blocks) {
+    if ((block.type === "card" || block.type === "image") && block.image) {
+      placed.push({ ref: block.image, blockId: block.id, field: "image" });
+    }
+    // A link's thumbnail (M6-20): the same rules, reported under the field `icon`.
+    if (block.type === "link" && block.icon?.type === "image") {
+      placed.push({ ref: block.icon.image, blockId: block.id, field: "icon" });
+    }
+    // A book's cover (M9-20): the same rules, reported under the field `cover`.
+    if (block.type === "book" && block.cover) {
+      placed.push({ ref: block.cover, blockId: block.id, field: "cover" });
+    }
+  }
+  return placed;
+}
+
 /** Every image of the publish form (visible blocks only) with where it sits, for the error. */
 function placedImages(form: PublishDoc): Placed[] {
   const placed: Placed[] = [];
   if (form.profile.photo) {
     placed.push({ ref: form.profile.photo, blockId: null, field: "profile.photo" });
   }
-  for (const block of form.blocks) {
-    if ((block.type === "card" || block.type === "image") && block.image) {
-      placed.push({ ref: block.image, blockId: block.id, field: "image" });
-    }
+  // The logo (M9-24): the same ownership and existence rules, under its own field.
+  if (form.profile.logo) {
+    placed.push({ ref: form.profile.logo, blockId: null, field: "profile.logo" });
+  }
+  placed.push(...placedBlockImages(form.blocks));
+  // The share image (M6-32): the same ownership and existence rules, under its own field.
+  if (form.share?.image) {
+    placed.push({ ref: form.share.image, blockId: null, field: "share.image" });
   }
   return placed;
 }
@@ -190,9 +386,17 @@ async function checkImages(
   ownerId: string,
   exists: (path: string) => Promise<boolean>,
 ): Promise<PublishError[]> {
+  return checkPlaced(placedImages(form), ownerId, exists);
+}
+
+async function checkPlaced(
+  placed: readonly Placed[],
+  ownerId: string,
+  exists: (path: string) => Promise<boolean>,
+): Promise<PublishError[]> {
   const errors: PublishError[] = [];
   const own: Placed[] = [];
-  for (const item of placedImages(form)) {
+  for (const item of placed) {
     if (item.ref.path.startsWith(`${ownerId}/`)) own.push(item);
     else {
       errors.push({
@@ -222,10 +426,90 @@ async function checkImages(
   return errors;
 }
 
+/**
+ * The resolved background image (M3-05). `bgImage` is a URL in the token set, so the schema alone
+ * would let a draft point every visitor's browser at any host, or at another user's upload. Here it
+ * must be exactly one of this project's `page-media` URLs, inside the page owner's own folder, and
+ * the object must exist. `fromOverrides` says where the value came from, for the message.
+ */
+async function checkBackground(
+  form: PublishDoc,
+  fromOverrides: boolean,
+  ownerId: string,
+  exists: (path: string) => Promise<boolean>,
+): Promise<PublishError[]> {
+  const value = form.tokens.bgImage;
+  if (value === null) return [];
+  const field = fromOverrides ? "theme.overrides.bgImage" : "theme.bgImage";
+  const stopped = (message: string): PublishError[] => [
+    { blockId: null, field, message: `${PUBLISH_STOPPED} ${message}` },
+  ];
+
+  const path = mediaPathOf(value, mediaOrigin());
+  if (path === null || !path.startsWith(`${ownerId}/`)) {
+    return stopped(
+      "bgImage isn’t one of your uploaded images. Pick the background image again in Design.",
+    );
+  }
+  if (!(await exists(path))) {
+    return stopped("the background image is no longer available. Upload it again in Design.");
+  }
+  return [];
+}
+
 function storageExists(admin: SupabaseClient<Database>) {
   const bucket = admin.storage.from(MEDIA_BUCKET);
   return async (path: string): Promise<boolean> => {
     const { data } = await bucket.exists(path);
     return data;
   };
+}
+
+interface SubDraftRow {
+  id: string;
+  draft: Json;
+}
+
+/**
+ * Every sub-page draft through the Publish gate's schema (M11-05): `publishSubPageSchema` on the
+ * draft (a valid path, a title, complete blocks), `toSubPagePublishForm`, then
+ * `publishedSubPageSchema` on the form. The errors of all pages are returned together, each naming
+ * its page; a page that passes is returned as ready to publish, in the order given.
+ */
+function prepareSubPages(rows: readonly SubDraftRow[]): {
+  subPages: SiteSubPage[];
+  errors: PublishError[];
+} {
+  const subPages: SiteSubPage[] = [];
+  const errors: PublishError[] = [];
+  for (const row of rows) {
+    const page = { id: row.id, title: pageTitleOf(row.draft) };
+    const parsed = publishSubPageSchema.safeParse(row.draft);
+    if (!parsed.success) {
+      const found = collectSubPagePublishErrors(row.draft);
+      errors.push(
+        ...nameErrors(
+          found.length > 0
+            ? found
+            : [{ blockId: null, field: "document", message: "Fix this page before publishing." }],
+          page,
+        ),
+      );
+      continue;
+    }
+    const form = toSubPagePublishForm(parsed.data);
+    const checked = publishedSubPageSchema.safeParse(form);
+    if (!checked.success) {
+      console.error("[publish] a sub-page's publish form failed validation", checked.error.issues);
+      errors.push(
+        ...nameErrors(
+          [{ blockId: null, field: "document", message: "Fix this page before publishing." }],
+          page,
+        ),
+      );
+      continue;
+    }
+    subPages.push({ ...page, title: checked.data.title, form: checked.data });
+  }
+  return { subPages, errors };
 }

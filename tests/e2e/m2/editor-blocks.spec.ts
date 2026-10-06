@@ -21,6 +21,7 @@ import {
   setDraft,
 } from "./editor-helpers";
 import { makePng } from "./editor-images";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /** M2-10 (add), M2-11 (rows and panels), M2-12 (visibility), M2-13 (delete with undo). */
 
@@ -41,7 +42,8 @@ const IDS = {
 
 const toggle = (page: Page, id: string) =>
   rowOf(page, id).getByRole("button", { name: "Visible on page" });
-const rowButton = (page: Page, id: string) => rowOf(page, id).locator("button[aria-expanded]");
+const rowButton = (page: Page, id: string) =>
+  rowOf(page, id).locator("button[aria-expanded]").first();
 const panel = (page: Page, id: string) => page.locator(`#block-panel-${id}`);
 const countHeading = (page: Page, n: number) =>
   page.getByRole("heading", { level: 2, name: `Blocks · ${n}` });
@@ -55,10 +57,10 @@ const previewIds = (page: Page) =>
     .evaluateAll((els) => els.map((el) => el.getAttribute("data-block-id")));
 
 async function openPreviewTab(page: Page, info: { project: { name: string } }) {
-  if (info.project.name === "phone") await page.getByRole("tab", { name: "Preview" }).click();
+  if (info.project.name === "phone") await showPreviewSheet(page);
 }
 async function openBlocksTab(page: Page, info: { project: { name: string } }) {
-  if (info.project.name === "phone") await page.getByRole("tab", { name: "Blocks" }).click();
+  if (info.project.name === "phone") await hidePreviewSheet(page);
 }
 
 function dividers(n: number) {
@@ -74,7 +76,7 @@ function dividers(n: number) {
 // ---------------------------------------------------------------------------------------------
 
 test.describe("M2-10 add a block", () => {
-  test("M2-10 nine chips in order, 4px radius, #D9D6D0 border and a brass plus", async ({
+  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store, Map and Page link), 4px radius, #D9D6D0 border and a brass plus", async ({
     page,
     context,
   }) => {
@@ -82,10 +84,17 @@ test.describe("M2-10 add a block", () => {
     await openEditor(page);
     const card = page.getByRole("region", { name: "Add a block" });
     await expect(card.getByText("Goes to the end of the page")).toBeVisible();
-    const chips = card.getByRole("button");
-    await expect(chips).toHaveText(
-      BLOCK_TYPES.map((t) => `+${BLOCK_TYPE_LABELS[t]}`).map((t) => t),
-    );
+    // One chip per block type; the card's secondary "Start from a template" button (M6-40) is not one.
+    const chips = card.locator("button:not([data-testid='start-from-template'])");
+    // The brass plus is an icon (M9-02), so a chip's text is its label.
+    await expect(chips).toHaveText(BLOCK_TYPES.map((t) => BLOCK_TYPE_LABELS[t]));
+    // M9-15: the sixteen chips wrap into at most three rows at 1440px.
+    if (page.viewportSize()!.width >= 1440) {
+      const tops = await chips.evaluateAll((els) =>
+        els.map((el) => Math.round(el.getBoundingClientRect().top)),
+      );
+      expect(new Set(tops).size).toBeLessThanOrEqual(3);
+    }
     expect(BLOCK_TYPES.map((t) => BLOCK_TYPE_LABELS[t])).toEqual([
       "Link",
       "Card",
@@ -96,11 +105,18 @@ test.describe("M2-10 add a block", () => {
       "Embed",
       "Grid",
       "Divider",
+      "FAQ",
+      "Contact",
+      "Discount code",
+      "Book",
+      "App store",
+      "Map",
+      "Page link",
     ]);
     const first = chips.first();
     expect(await css(first, "border-top-left-radius")).toBe("4px");
     expect(await css(first, "border-top-color")).toBe("rgb(217, 214, 208)");
-    expect(await css(first.locator("span"), "color")).toBe("rgb(132, 104, 57)");
+    expect(await css(first.locator("svg"), "color")).toBe("rgb(132, 104, 57)");
   });
 
   test("M2-10 each chip appends one block with its defaults, a fresh id, and the draft saves", async ({
@@ -116,7 +132,10 @@ test.describe("M2-10 add a block", () => {
       const row = rows(page).nth(i);
       expect(await row.getAttribute("data-block-type")).toBe(type);
       // Expanded, in view, with focus on the first input (a divider focuses the row).
-      await expect(row.locator("button[aria-expanded]")).toHaveAttribute("aria-expanded", "true");
+      await expect(row.locator("button[aria-expanded]").first()).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
       await expect(row).toBeInViewport();
       if (type === "divider") {
         await expect(row).toBeFocused();
@@ -129,17 +148,19 @@ test.describe("M2-10 add a block", () => {
           };
         });
         expect(focused.inside, `${type}: focus is inside the new row`).toBe(true);
-        expect(["INPUT", "TEXTAREA", "SELECT"]).toContain(focused.tag);
+        // A text block's field is the rich text editor (M9-12): a contenteditable, or its placeholder
+        // for the moment before the editor module arrives.
+        expect(type === "text" ? ["DIV"] : ["INPUT", "TEXTAREA", "SELECT"]).toContain(focused.tag);
       }
     }
     await expect(saveIndicator(page)).toHaveText("Saved");
-    const draft = await expectDraft(user.pageId, (d) => d.blocks.length === 9);
+    const draft = await expectDraft(user.pageId, (d) => d.blocks.length === BLOCK_TYPES.length);
     expect(draftDocSchema.safeParse(draft).success).toBe(true);
     const byType: Record<string, Record<string, unknown>> = Object.fromEntries(
       draft.blocks.map((b) => [b.type, b]),
     );
     expect(draft.blocks.map((b) => b.type)).toEqual([...BLOCK_TYPES]);
-    expect(new Set(draft.blocks.map((b) => b.id)).size).toBe(9);
+    expect(new Set(draft.blocks.map((b) => b.id)).size).toBe(BLOCK_TYPES.length);
     expect(byType.link).toMatchObject({ label: "New link", url: "", visible: true });
     expect(byType.card).toMatchObject({ title: "New card", caption: "", url: "", image: null });
     expect(byType.header).toMatchObject({ text: "New section" });
@@ -149,6 +170,21 @@ test.describe("M2-10 add a block", () => {
     expect(byType.embed).toMatchObject({ url: "", caption: "Video or music" });
     expect(byType.grid!.cells).toHaveLength(2);
     expect(byType.divider).toMatchObject({ type: "divider", visible: true });
+    // M9-16, M9-17, M9-19: a FAQ starts with one empty question, a contact and a discount code empty.
+    expect(byType.faq).toMatchObject({ items: [{ question: "", answer: "" }] });
+    expect(byType.contact).toMatchObject({ name: "", phone: "", email: "", hours: "" });
+    expect(byType.discount).toMatchObject({ code: "", description: "", url: "" });
+    // M9-20, M9-21, M9-22: a book starts with one empty Amazon row, an app block with one empty App
+    // Store row, a map with two fresh ids that are neither equal nor the block's.
+    expect(byType.book).toMatchObject({
+      title: "",
+      author: "",
+      cover: null,
+      links: [{ store: "amazon", url: "" }],
+    });
+    expect(byType.apps).toMatchObject({ links: [{ store: "appstore", url: "" }] });
+    expect(byType.map).toMatchObject({ name: "", address: "" });
+    expect(new Set([byType.map!.id, byType.map!.googleId, byType.map!.appleId]).size).toBe(3);
 
     // The live preview follows: the new link shows its label.
     await openPreviewTab(page, info);
@@ -168,7 +204,12 @@ test.describe("M2-10 add a block", () => {
     await chip(page, "divider").click();
     await expect(countHeading(page, 50)).toBeVisible();
     for (const type of BLOCK_TYPES) await expect(chip(page, type)).toBeDisabled();
-    await expect(page.getByText("You’ve reached the 50-block limit.")).toBeVisible();
+    // M6-05 shows the same message beside Duplicate in an open panel: this one is the Add card's.
+    await expect(
+      page
+        .getByRole("region", { name: "Add a block" })
+        .getByText("You’ve reached the 50-block limit."),
+    ).toBeVisible();
     // A disabled chip adds nothing.
     await chip(page, "link").click({ force: true });
     await expect(rows(page)).toHaveCount(50);
@@ -196,12 +237,15 @@ test.describe("M2-10 add a block", () => {
     await emptyUser(context, "ad5");
     await openEditor(page);
     const card = page.getByRole("region", { name: "Add a block" });
-    const boxes = await card.getByRole("button").evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return { y: Math.round(r.y), height: r.height, right: r.right };
-      }),
-    );
+    // The nine chips (the secondary "Start from a template" button, M6-40, is on a row of its own).
+    const boxes = await card
+      .locator("button:not([data-testid='start-from-template'])")
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return { y: Math.round(r.y), height: r.height, right: r.right };
+        }),
+      );
     for (const box of boxes) expect(box.height).toBeGreaterThanOrEqual(44);
     const rowCount = new Set(boxes.map((b) => b.y)).size;
     if (phoneOnly(info)) {
@@ -210,7 +254,9 @@ test.describe("M2-10 add a block", () => {
       await expectTapTargets(page);
       for (const box of boxes) expect(box.right).toBeLessThanOrEqual(390);
     } else {
-      expect(rowCount).toBeLessThanOrEqual(2);
+      // M9-15 superseded "two rows" (docs/features.json): the chooser holds every type of `BLOCK_TYPES`
+      // (sixteen with the page link of Wave M1), at most three rows at 1440x900.
+      expect(rowCount).toBeLessThanOrEqual(3);
     }
   });
 });
@@ -375,7 +421,8 @@ test.describe("M2-11 block rows", () => {
     test.skip(!desktopOnly(info), "desktop layout");
     await seededUser(context, "rw6");
     await openEditor(page);
-    const column = (await page.getByRole("region", { name: "Blocks", exact: true }).boundingBox())!;
+    // M7-02: the block column is the workspace's one tab panel.
+    const column = (await page.getByRole("tabpanel").boundingBox())!;
     const row = (await rowOf(page, IDS.link).boundingBox())!;
     expect(row.width).toBeLessThanOrEqual(720);
     expect(Math.abs(row.width - column.width)).toBeLessThanOrEqual(1);
@@ -383,8 +430,8 @@ test.describe("M2-11 block rows", () => {
 });
 
 async function seededPageId(page: Page): Promise<string | undefined> {
-  // The handle is in the breadcrumb: `{handle}.hydlnk.com / main`.
-  const crumb = await page.locator("main > header p").innerText();
+  // The handle is in the breadcrumb: `{handle}.hydlnk.com`.
+  const crumb = await page.locator("[data-toolbar-name] p").first().innerText();
   const handle = crumb.split(".hydlnk.com")[0]!;
   const { data } = await adminClient().from("pages").select("id").eq("handle", handle).single();
   return data?.id as string | undefined;
@@ -482,7 +529,7 @@ test.describe("M2-12 visibility toggle", () => {
     expect(live0.body).toContain("Studio rental by the hour");
     await toggle(page, IDS.link2).click();
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
@@ -513,7 +560,7 @@ test.describe("M2-12 visibility toggle", () => {
     expect(res.status).toBe(200);
     await openEditor(page);
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
@@ -605,7 +652,11 @@ test.describe("M2-13 delete with undo", () => {
     await openEditor(page);
     await rowButton(page, IDS.divider).click();
     await panel(page, IDS.divider).getByRole("button", { name: "Delete block" }).click();
-    const undo = page.getByRole("button", { name: "Undo" });
+    // The header has its own Undo button (M6-07): this one is the toast's.
+    const undo = page
+      .getByRole("status")
+      .filter({ hasText: "Block deleted." })
+      .getByRole("button", { name: "Undo" });
     await expect(undo).toBeVisible();
     await page.waitForTimeout(7000);
     await expect(undo).toBeVisible();
@@ -616,7 +667,7 @@ test.describe("M2-13 delete with undo", () => {
   test("M2-13 deleting the last block shows the empty state; reload keeps it gone; the live page still has it; no Storage call", async ({
     page,
     context,
-  }) => {
+  }, info) => {
     const user = await emptyUser(context, "de3");
     const id = newBlockId();
     await setDraft(
@@ -645,7 +696,9 @@ test.describe("M2-13 delete with undo", () => {
     await rowButton(page, id).click();
     await panel(page, id).getByRole("button", { name: "Delete block" }).click();
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
+    await openPreviewTab(page, info);
     await expect(previewScreen(page)).not.toContainText("Only block here");
+    await openBlocksTab(page, info);
     await expect(saveIndicator(page)).toHaveText("Saved");
     await reloadEditor(page);
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
@@ -703,7 +756,7 @@ test.describe("M2-13 delete with undo", () => {
     expect(box.x).toBeGreaterThanOrEqual(0);
     expect(box.x + box.width).toBeLessThanOrEqual(390);
     const publish = (await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish" })
       .boundingBox())!;
     expect(box.y).toBeGreaterThan(publish.y + publish.height);

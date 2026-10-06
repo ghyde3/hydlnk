@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { resumeOauthRequest } from "@/lib/oauth/resume";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getSessionUser, requireUser, type SessionUser } from "./session";
 
@@ -8,6 +9,8 @@ import { getSessionUser, requireUser, type SessionUser } from "./session";
 export interface AppPage {
   id: string;
   handle: string;
+  /** `pages.name`: the page's private name (M6-13), "Main page" until its owner renames it. */
+  name: string;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -21,7 +24,7 @@ const listOwnPages = cache(async (userId: string): Promise<AppPage[]> => {
   const supabase = await createServerSupabase();
   const { data, error } = await supabase
     .from("pages")
-    .select("id, handle, published_at, created_at, updated_at")
+    .select("id, handle, name, published_at, created_at, updated_at")
     .eq("owner_id", userId)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`Loading the signed-in user's pages failed: ${error.message}`);
@@ -64,5 +67,8 @@ export async function redirectIfSignedIn(): Promise<void> {
   const user = await getSessionUser();
   if (!user) return;
   const pages = await listOwnPages(user.id);
+  // Wave L (M10-12): a person who came here to sign in for an app's connection goes back to its
+  // consent screen. An account with no page claims one first, and the claim resumes the request.
+  if (pages.length > 0) await resumeOauthRequest(user.id);
   redirect(pages.length > 0 ? "/editor" : "/claim");
 }

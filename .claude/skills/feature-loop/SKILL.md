@@ -18,7 +18,7 @@ You may be running unattended (`claude -p`, no one to answer). Anything that wou
 3. **Pick.** Take the given id, otherwise the first feature in `docs/features.json` with `"passes": false` (the file may be an array or `{ "features": [...] }`). Read its `acceptance` steps, the matching parts of `docs/PLAN.md` and, for UI, `docs/DESIGN.md` and the mockup named in its screen table. If it depends on a feature that does not pass yet, take that one instead.
 4. **Plan.** Write a short plan in your reply: files to touch, tests to add (unit, pgTAP, Playwright), risks. Stay inside this feature; do not build neighbors.
 5. **Implement with tests.** Tests first where practical. Unit tests in `tests/unit/`, policy tests in `supabase/tests/database/` for any table or policy change (use the `db-change` skill), Playwright in `tests/e2e/` covering the acceptance steps at 390x844 and 1440x900. Follow the area rules in `.claude/rules/`. A new block type uses the `add-block-type` skill.
-6. **Verify.** All must pass:
+6. **Verify.** Run each check through `scripts/q.sh` (e.g. `scripts/q.sh pnpm verify`) so only failures reach you; grep the log it names for more. All must pass:
    - `pnpm verify` (typecheck, lint, unit, db).
    - `pnpm test:e2e` (both projects: phone 390x844 and desktop 1440x900).
    - UI work: `pnpm screens <route>`, then read the PNGs in `tmp/screens/` against the mockup and DESIGN.md.

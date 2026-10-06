@@ -1,13 +1,14 @@
-import { mailtoHref, safeHref } from "@/lib/document";
+import { mailtoHref, safeHref, telHref } from "@/lib/document";
 
 /**
  * The one place the renderer gets an `href` from tenant content. Every outbound anchor spreads the
  * result of `outboundHref` (web links) or `mailtoLink` (the social email icon), so no anchor can
  * carry a raw tenant string, and none can forget `rel`.
  *
- * Milestone 2 returns the validated destination itself. Milestone 4 switches this function to the
- * click-tracking redirect (`/r/${pageId}/${id}`, the target still read from the published
- * document on the server); nothing else in the renderer changes.
+ * A web link's `href` is the click-tracking redirect, `/r/<pageId>/<id>` (M4-22): relative, so it
+ * goes to whichever host served the page, and the destination is never in the markup: the server
+ * reads it from the page's published document by id. The destination is still validated here
+ * (`safeHref`), so a link with no usable URL renders without an `href` at all, as before.
  */
 
 /** Opens no new tab; tells crawlers not to follow and the destination not to get `window.opener`. */
@@ -27,22 +28,47 @@ export interface OutboundAttrs {
 }
 
 /**
- * `href` and `rel` for a web link. Wraps `safeHref` (http and https only, no credentials, no
- * control characters), so `javascript:` and `data:` URLs never reach an anchor.
+ * `href` and `rel` for a web link: `/r/<pageId>/<id>` when the destination passes `safeHref` (http
+ * and https only, no credentials, no control characters), nothing otherwise, so `javascript:` and
+ * `data:` URLs never produce an anchor that goes anywhere. Both path segments are encoded, so an
+ * id can never add a segment or a query.
  */
 export function outboundHref(
   url: string | null | undefined,
-  // Unused until Milestone 4 builds the /r/ URL from it; part of the signature so call sites do not change.
   target: OutboundTarget,
 ): OutboundAttrs {
-  void target;
-  return { href: safeHref(url), rel: OUTBOUND_REL };
+  if (safeHref(url) === undefined) return { href: undefined, rel: OUTBOUND_REL };
+  return {
+    href: `/r/${encodeURIComponent(target.pageId)}/${encodeURIComponent(target.id)}`,
+    rel: OUTBOUND_REL,
+  };
 }
 
 /**
  * `href` and `rel` for the social email icon: `mailto:<address>` for a valid address, nothing
- * otherwise. Mailto links are not tracked, so Milestone 4 leaves this one alone.
+ * otherwise. Mailto links are not tracked: this one stays a plain `mailto:`.
  */
 export function mailtoLink(address: string | null | undefined): OutboundAttrs {
   return { href: mailtoHref(address), rel: OUTBOUND_REL };
+}
+
+/**
+ * `href` and `rel` for the contact block's phone number (M9-17): `tel:<+digits>` built by `telHref`
+ * from the leading "+" and the digits only, nothing for a value that is not a phone number. Like
+ * `mailto:`, a `tel:` link is not tracked.
+ */
+export function telLink(phone: string | null | undefined): OutboundAttrs {
+  return { href: telHref(phone), rel: OUTBOUND_REL };
+}
+
+/**
+ * `href` and `rel` for "Save contact" (M9-17, M9-18): the relative `/c/<pageId>/<blockId>` route of
+ * the page's own host, which builds the vCard on the server from the published block. Both segments
+ * are encoded, so an id can never add a segment or a query.
+ */
+export function vcardLink(target: OutboundTarget): OutboundAttrs {
+  return {
+    href: `/c/${encodeURIComponent(target.pageId)}/${encodeURIComponent(target.id)}`,
+    rel: OUTBOUND_REL,
+  };
 }

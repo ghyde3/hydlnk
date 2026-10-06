@@ -9,9 +9,10 @@
  *   - every selector is scoped under [data-page-root], and everything the page needs is set
  *     explicitly, so it looks the same on the tenant host (no reset stylesheet) and inside the
  *     editor (Tailwind's preflight).
- * Enum tokens (density, align, buttonStyle) arrive as data attributes, because CSS cannot branch
- * on the value of a variable. Not styled yet (Milestone 3): background image, gradient, overlay
- * and blur, and web fonts.
+ * Enum tokens (density, align, buttonStyle, and the background type as data-bg-type) arrive as
+ * data attributes, because CSS cannot branch on the value of a variable. The background image is
+ * the one picture the owner uploaded (see background.ts), drawn on its own layer so the blur never
+ * touches the content. Not styled yet: web fonts.
  */
 
 /* Root: the size container, the full-viewport background and the base type ---------------------- */
@@ -24,6 +25,8 @@
 }
 
 [data-page-root] {
+  position: relative;
+  isolation: isolate;
   container-type: inline-size;
   display: flex;
   justify-content: center;
@@ -41,6 +44,58 @@
 /* A framed mount (the editor's phone bezel) fills its frame instead of the viewport. */
 [data-page-frame] [data-page-root] {
   min-height: 100%;
+}
+
+/* Background: solid is the bg token above; gradient runs surface to bg over the page; an image
+   sits on its own layer (.pg-bg) with the bg token as the color behind it. --------------------- */
+
+[data-page-root][data-bg-type="gradient"] {
+  background: linear-gradient(
+    var(--t-gradient-angle),
+    var(--t-gradient-from) 0%,
+    var(--t-gradient-to) 55%
+  );
+}
+
+/* A gradient with colors of its own (data-gradient, set by the renderer when either stop is set)
+   runs the whole length of the page. Without them, the stops above are the gradient the page has
+   always had: the surface color at 0% and the page color at 55%. */
+[data-page-root][data-bg-type="gradient"][data-gradient="custom"] {
+  background: linear-gradient(
+    var(--t-gradient-angle),
+    var(--t-gradient-from) 0%,
+    var(--t-gradient-to) 100%
+  );
+}
+
+/* The layer fills the whole page and clips the picture, which is drawn larger than the layer by
+   three blur radii on every side: a blur fades out at the picture's own edge, and this keeps that
+   fade outside the visible area, so the blurred page has no unblurred or see-through margin. */
+[data-page-root] .pg-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+[data-page-root] .pg-bg-image {
+  position: absolute;
+  inset: calc(var(--t-blur) * -3);
+  background-color: var(--t-bg);
+  background-image: var(--t-bg-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: blur(var(--t-blur));
+}
+
+/* The page color over the picture, at the overlay opacity. Never blurred. */
+[data-page-root] .pg-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--t-bg);
+  opacity: var(--t-overlay-opacity);
 }
 
 [data-page-root] a {
@@ -65,6 +120,8 @@
 /* Column: capped by the maxWidth token, always centered; `align` aligns what is inside ------------ */
 
 [data-page-root] .pg-column {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -157,6 +214,95 @@
   overflow-wrap: anywhere;
 }
 
+/* Profile options (M6-15, M6-17): the avatar's shape, size and border arrive as data attributes on
+   .pg-avatar from fixed lists (profile.tsx); the defaults (circle, medium, page) are the rules
+   above, so a page that sets none looks as it always did. The name's hidden form is the clip
+   technique: a 1px absolutely positioned box, so the page keeps its one <h1> for screen readers
+   and search while nothing is drawn, and it takes no room in the column. ---------------------- */
+
+[data-page-root] .pg-avatar[data-shape="rounded"] {
+  border-radius: 24%;
+}
+
+[data-page-root] .pg-avatar[data-shape="square"] {
+  border-radius: 0;
+}
+
+[data-page-root] .pg-avatar[data-size="small"] {
+  width: 64px;
+  height: 64px;
+  font-size: calc(24px * var(--t-scale));
+}
+
+[data-page-root] .pg-avatar[data-size="large"] {
+  width: 144px;
+  height: 144px;
+  font-size: calc(54px * var(--t-scale));
+}
+
+[data-page-root] .pg-avatar[data-border="none"] {
+  border: 0;
+}
+
+[data-page-root] .pg-avatar[data-border="thin"] {
+  border: 2px solid var(--t-accent);
+}
+
+[data-page-root] .pg-avatar[data-border="thick"] {
+  border: 4px solid var(--t-accent);
+}
+
+/* Without a photo the name is the first thing in the header: no gap for an avatar that is not there. */
+[data-page-root] .pg-profile > .pg-name:first-child {
+  margin-top: 0;
+}
+
+/* With no profile header above them (the photo, the name and the bio all hidden), the blocks open
+   the page: the first one starts at the column's top padding, whatever top margin its type has
+   (header, social, divider), so there is no empty gap where the profile was. */
+[data-page-root] .pg-column > .pg-blocks:first-child > :first-child,
+[data-page-root]
+  .pg-column
+  > .pg-name[data-visually-hidden]:first-child
+  + .pg-blocks
+  > :first-child {
+  margin-top: 0;
+}
+
+[data-page-root] .pg-name[data-visually-hidden] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Narrow containers: every size steps down (48px, 64px, 96px), as the default did on its own. */
+@container (max-width: 319px) {
+  [data-page-root] .pg-avatar[data-size="small"] {
+    width: 48px;
+    height: 48px;
+    font-size: calc(18px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-avatar[data-size="medium"] {
+    width: 64px;
+    height: 64px;
+    font-size: calc(24px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-avatar[data-size="large"] {
+    width: 96px;
+    height: 96px;
+    font-size: calc(36px * var(--t-scale));
+  }
+}
+
 /* Link button -------------------------------------------------------------------------------- */
 
 [data-page-root] .pg-link {
@@ -187,8 +333,10 @@
   min-height: 64px;
 }
 
+/* An outline button never drops below 1px, so it stays visible at border width 0. */
 [data-page-root] .pg-link[data-button-style="outline"] {
   border-color: var(--t-accent);
+  border-width: max(var(--t-border-width), 1px);
   background: transparent;
   color: var(--t-text);
   font-weight: 500;
@@ -196,7 +344,7 @@
 
 [data-page-root] .pg-link[data-button-style="soft"] {
   border-color: transparent;
-  background: color-mix(in srgb, var(--t-button-bg) 18%, transparent);
+  background: color-mix(in srgb, var(--t-accent) 16%, transparent);
   color: var(--t-text);
   font-weight: 500;
 }
@@ -211,6 +359,188 @@
   border-radius: 999px;
 }
 
+/* Link icon and thumbnail (M6-20): one decorative first child at the start edge of the button. The
+   label is its own box that takes the space left, centered, and wraps inside it, so it never goes
+   under the icon. The glyph is stroked with currentcolor (set on the <svg>), so it follows the
+   button style and any color override. A thumbnail is a 40px square, its corners from the radius
+   token capped at 12px; 9px around it keeps a thumbnail button as tall as a plain one (58px). ---- */
+
+[data-page-root] .pg-link[data-icon] {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+[data-page-root] .pg-link[data-icon="image"] {
+  padding-block: 9px;
+  padding-inline-start: 9px;
+}
+
+[data-page-root][data-density="compact"] .pg-link[data-icon="image"] {
+  padding-block: 6px;
+}
+
+[data-page-root] .pg-link-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+[data-page-root] .pg-link-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: min(var(--t-radius), 12px);
+  object-fit: cover;
+}
+
+[data-page-root] .pg-link-label {
+  flex: 1 1 0%;
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Locked link (M9-30): a padlock at the end edge of the button and visually hidden words after the
+   label. The end padding keeps the label clear of the glyph, so a long label wraps inside the space
+   left and never goes under it; the glyph follows the button's text color. -------------------- */
+
+[data-page-root] .pg-link.pg-lock {
+  position: relative;
+  padding-inline-end: 44px;
+}
+
+[data-page-root] .pg-lock-glyph {
+  position: absolute;
+  inset-inline-end: 16px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  pointer-events: none;
+}
+
+[data-page-root] .pg-lock-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Featured link (M6-22): the bold style. Weight 700, 8px more minimum height than a plain link at
+   the same density, and a 2px ring in the accent drawn outside the border (the block's own accent
+   override reaches it, because that override is set on the anchor). The shadow style keeps its
+   offset shadow next to the ring. A ring is a box-shadow, so nothing around it moves. ----------- */
+
+[data-page-root] .pg-link[data-featured] {
+  min-height: 66px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px var(--t-accent);
+}
+
+[data-page-root][data-density="compact"] .pg-link[data-featured] {
+  min-height: 56px;
+}
+
+[data-page-root][data-density="airy"] .pg-link[data-featured] {
+  min-height: 72px;
+}
+
+[data-page-root] .pg-link[data-featured][data-button-style="shadow"] {
+  box-shadow:
+    0 0 0 2px var(--t-accent),
+    4px 4px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+}
+
+/* The motion of `pulse` and `shine` is CSS only and runs only when the device has not asked for
+   less motion; otherwise the link is just bold. Pulse breathes a soft halo around the ring (on the
+   anchor); shine sweeps a highlight across the button (on ::after, clipped by the button's own
+   corners), about every 4 seconds. Both are drawn from the accent and the button text color. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-page-root] .pg-link[data-featured="pulse"] {
+    animation: pg-featured-pulse 2.4s ease-in-out infinite;
+  }
+
+  [data-page-root] .pg-link[data-featured="pulse"][data-button-style="shadow"] {
+    animation-name: pg-featured-pulse-offset;
+  }
+
+  [data-page-root] .pg-link[data-featured="shine"] {
+    position: relative;
+  }
+
+  [data-page-root] .pg-link[data-featured="shine"]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+        105deg,
+        transparent 38%,
+        color-mix(in srgb, var(--t-button-text) 32%, transparent) 50%,
+        transparent 62%
+      )
+      0 0 / 300% 100% no-repeat;
+    background-position: 100% 0;
+    pointer-events: none;
+    animation: pg-featured-shine 4s ease-in-out infinite;
+  }
+
+  [data-page-root] .pg-link[data-featured="shine"][data-button-style="outline"]::after,
+  [data-page-root] .pg-link[data-featured="shine"][data-button-style="soft"]::after {
+    background-image: linear-gradient(
+      105deg,
+      transparent 38%,
+      color-mix(in srgb, var(--t-accent) 26%, transparent) 50%,
+      transparent 62%
+    );
+  }
+
+  @keyframes pg-featured-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 4px color-mix(in srgb, var(--t-accent) 0%, transparent);
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 8px color-mix(in srgb, var(--t-accent) 30%, transparent);
+    }
+  }
+
+  @keyframes pg-featured-pulse-offset {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 4px color-mix(in srgb, var(--t-accent) 0%, transparent),
+        4px 4px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 2px var(--t-accent),
+        0 0 0 8px color-mix(in srgb, var(--t-accent) 30%, transparent),
+        4px 4px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+    }
+  }
+
+  @keyframes pg-featured-shine {
+    0%,
+    55% {
+      background-position: 100% 0;
+    }
+
+    100% {
+      background-position: 0 0;
+    }
+  }
+}
+
 /* Link card ---------------------------------------------------------------------------------- */
 
 [data-page-root] .pg-card {
@@ -218,7 +548,7 @@
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--t-border);
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
   color: var(--t-text);
 }
@@ -289,8 +619,13 @@
 
 /* Header, text and divider ------------------------------------------------------------------- */
 
+/* The heading's color is its own, explicit, from the text token (M6-45): it used to be inherited
+   from the page root, and an inline variable on the heading would not have changed that. Still a
+   variable, so a theme change reaches it and a block's own text color override (set inline on the
+   heading) wins. */
 [data-page-root] .pg-header {
   margin: 12px 0 0;
+  color: var(--t-text);
   font-family: var(--t-font-heading);
   font-size: calc(26px * var(--t-scale));
   font-weight: var(--t-weight-heading);
@@ -308,6 +643,47 @@
   text-align: center;
   white-space: pre-line;
   overflow-wrap: anywhere;
+}
+
+/* Lines of a text block that has paragraph alignment (M9-11): every line is a block of its own, so
+   the line breaks are the spans' (they are not written as text) and an empty line keeps one line of
+   height. `white-space: pre-line` of the paragraph still applies inside a line. The alignment comes
+   from the closed `data-align` attribute only; a line without one follows the page. Strike and
+   underline need no rule: `<s>` and `<u>` draw their own decoration. */
+[data-page-root] .pg-text-line {
+  display: block;
+  min-height: 1.5em;
+  min-height: 1lh;
+}
+
+[data-page-root] .pg-text-line[data-align="left"] {
+  text-align: left;
+}
+
+[data-page-root] .pg-text-line[data-align="center"] {
+  text-align: center;
+}
+
+[data-page-root] .pg-text-line[data-align="right"] {
+  text-align: right;
+}
+
+/* Links inside text (M6-28): the accent color, always underlined (color is not the only cue), and
+   vertical padding so the box is at least 44px tall. Padding on an inline box does not change the
+   line spacing. Bold and italic need no rule of their own: they inherit the block's variables. */
+[data-page-root] .pg-text-link {
+  padding-block: 16px;
+  color: var(--t-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-text-link:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 [data-page-root][data-align="left"] .pg-header,
@@ -339,6 +715,54 @@
 [data-page-root] .pg-image-img {
   width: 100%;
   height: auto;
+  border-radius: var(--t-radius);
+}
+
+/* A shaped image (M6-23): the picture sits in a frame whose aspect-ratio is set here, so its height
+   is the same before and after the file loads. The image fills it (cover) and `object-position`
+   comes from the block's focus, written inline from two numbers (image-frame.tsx); without a focus
+   the default 50% 50% applies. Without a shape none of this applies and the image is drawn as before. */
+[data-page-root] .pg-image-frame {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--t-radius);
+}
+
+[data-page-root] .pg-image-frame[data-shape="square"] {
+  aspect-ratio: 1 / 1;
+}
+
+[data-page-root] .pg-image-frame[data-shape="landscape"] {
+  aspect-ratio: 4 / 3;
+}
+
+[data-page-root] .pg-image-frame[data-shape="wide"] {
+  aspect-ratio: 16 / 9;
+}
+
+[data-page-root] .pg-image-frame > .pg-image-img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
+}
+
+/* An image's own border (M6-45). An image has no border: this draws one only for a block that sets
+   its own border thickness (`data-bordered`, emitted by the renderer from that block's overrides),
+   in the border token, which the block may override as well. The border is on the picture, inside
+   the shaped frame when there is one, and the picture takes the radius so the corners match. A
+   border thickness of 0 draws none. No existing image has the attribute, so none gains a border. */
+[data-page-root] .pg-image[data-bordered] .pg-image-img {
+  border: var(--t-border-width) solid var(--t-border);
+}
+
+[data-page-root] .pg-image[data-bordered] .pg-image-frame > .pg-image-img {
   border-radius: var(--t-radius);
 }
 
@@ -392,7 +816,14 @@
   stroke-linejoin: round;
 }
 
-/* Embed: a click-to-play poster for YouTube, a lazy player for Spotify ------------------------ */
+/* A brand mark (M9-04) is one filled path, never a stroked line. Email and Website carry only the
+   class above and keep their outline. */
+[data-page-root] .pg-social-glyph-brand {
+  fill: currentcolor;
+  stroke: none;
+}
+
+/* Embed: a click-to-play poster for every provider, Spotify included ---------------------------- */
 
 [data-page-root] .pg-embed {
   width: 100%;
@@ -409,7 +840,7 @@
   aspect-ratio: 16 / 9;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--t-border);
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
   background: hsl(0 0% 2%);
   color: white;
@@ -438,16 +869,30 @@
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border: 0;
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
 }
 
-[data-page-root] .pg-embed-spotify {
-  display: block;
-  width: 100%;
+/* The tall and fixed-height players (M6-27): a facade of the player's own height or a short bar
+   (inline height), and an iframe that never outgrows the column. */
+[data-page-root] .pg-embed-play[data-embed-fit="player"],
+[data-page-root] .pg-embed-play[data-embed-fit="bar"] {
+  aspect-ratio: auto;
+}
+
+[data-page-root] .pg-embed-iframe {
   max-width: 100%;
-  border: 0;
+}
+
+[data-page-root] .pg-embed-unavailable {
+  margin: 0;
+  padding: 16px 12px;
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 [data-page-root] .pg-embed-caption {
@@ -481,7 +926,7 @@
   min-width: 0;
   min-height: 44px;
   padding: 16px;
-  border: 1px solid var(--t-border);
+  border: var(--t-border-width) solid var(--t-border);
   border-radius: var(--t-radius);
   color: var(--t-text);
   overflow-wrap: anywhere;
@@ -500,6 +945,491 @@
   color: var(--t-text-muted);
   font-size: calc(13px * var(--t-scale));
   line-height: 1.4;
+}
+
+/* FAQ (M9-16) --------------------------------------------------------------------------------- */
+
+/* One native <details> per question: all closed, every answer already in the HTML. The marker is a
+   chevron drawn with two borders in the accent (no image, no icon font); `[open]` turns it. The
+   summary is at least 44px tall and keeps the 2px accent focus ring inside its own box, so the
+   neighbor above or below never clips it. */
+[data-page-root] .pg-faq {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-faq-item + .pg-faq-item {
+  border-top: 1px solid var(--t-border);
+}
+
+[data-page-root] .pg-faq-q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 16px;
+  list-style: none;
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-faq-q::-webkit-details-marker {
+  display: none;
+}
+
+[data-page-root] .pg-faq-q::after {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-right: 2px solid var(--t-accent);
+  border-bottom: 2px solid var(--t-accent);
+  transform: rotate(45deg);
+}
+
+[data-page-root] .pg-faq-item[open] > .pg-faq-q::after {
+  margin-top: 4px;
+  transform: rotate(-135deg);
+}
+
+[data-page-root] .pg-faq-q:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: -2px;
+}
+
+[data-page-root] .pg-faq-a {
+  margin: 0;
+  padding: 0 16px 14px;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Contact details (M9-17) ---------------------------------------------------------------------- */
+
+/* A card: the name, a phone number and an email address as links (underlined, so color is not the
+   only cue), the hours and "Save contact". Each link is its own 44px row; long values wrap. */
+[data-page-root] .pg-contact {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  text-align: center;
+}
+
+[data-page-root][data-align="left"] .pg-contact {
+  align-items: flex-start;
+  text-align: left;
+}
+
+[data-page-root] .pg-contact-name {
+  max-width: 100%;
+  margin: 0 0 4px;
+  font-family: var(--t-font-heading);
+  font-size: calc(20px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-contact-phone,
+[data-page-root] .pg-contact-email {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 44px;
+  font-size: calc(15px * var(--t-scale));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-contact-hours {
+  max-width: 100%;
+  margin: 4px 0 0;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-contact-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 0 18px;
+  border: max(var(--t-border-width), 1px) solid var(--t-text);
+  border-radius: var(--t-radius);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Discount code (M9-19) ------------------------------------------------------------------------ */
+
+/* The code is always drawn and selectable in one gesture (`user-select: all`). The Copy button
+   keeps its box but is invisible until the tenant script marks the block `data-js`, so nothing
+   shifts and a page without JavaScript never shows a dead button. The status line has no height
+   until the script writes in it, and no row gap of its own (the gaps are margins). */
+[data-page-root] .pg-discount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-discount-desc {
+  flex: 1 0 100%;
+  margin: 0 0 10px;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-discount-code {
+  display: flex;
+  flex: 1 1 0%;
+  align-items: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px dashed var(--t-accent);
+  border-radius: min(var(--t-radius), 12px);
+  color: var(--t-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: calc(16px * var(--t-scale));
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+[data-page-root] .pg-discount-copy {
+  visibility: hidden;
+  flex: none;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid var(--t-accent);
+  border-radius: min(var(--t-radius), 12px);
+  background: transparent;
+  color: var(--t-accent);
+  font: inherit;
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-page-root] .pg-discount[data-js] .pg-discount-copy {
+  visibility: visible;
+}
+
+[data-page-root] .pg-discount-status {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+  line-height: 1.4;
+  text-align: center;
+}
+
+[data-page-root] .pg-discount-status:not(:empty) {
+  margin-top: 8px;
+}
+
+[data-page-root] .pg-discount-shop {
+  display: flex;
+  flex: 1 0 100%;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 10px 16px;
+  border: 1px solid var(--t-button-bg);
+  border-radius: var(--t-radius);
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Book links (M9-20) ------------------------------------------------------------------------- */
+
+/* The cover sits at the start edge in a 2:3 frame whose width and ratio are set here, so its box is
+   the same before and after the file loads. The text and the store buttons take the rest. */
+[data-page-root] .pg-book {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-page-root] .pg-book-cover {
+  display: block;
+  flex: none;
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: min(var(--t-radius), 12px);
+  background: var(--t-surface);
+}
+
+[data-page-root] .pg-book-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+[data-page-root] .pg-book-body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+[data-page-root] .pg-book-title {
+  margin: 0;
+  color: var(--t-text);
+  font-family: var(--t-font-heading);
+  font-size: calc(18px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-book-author {
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-book-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* A store button is a link button (the page's button style), at least 44px tall. */
+[data-page-root] .pg-book-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: var(--t-border-width) solid var(--t-button-bg);
+  border-radius: var(--t-radius);
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-book[data-button-style="outline"] .pg-book-link {
+  border-color: var(--t-accent);
+  border-width: max(var(--t-border-width), 1px);
+  background: transparent;
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+[data-page-root] .pg-book[data-button-style="soft"] .pg-book-link {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--t-accent) 16%, transparent);
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+[data-page-root] .pg-book[data-button-style="shadow"] .pg-book-link {
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+}
+
+[data-page-root] .pg-book[data-button-style="pill"] .pg-book-link {
+  border-radius: 999px;
+}
+
+/* App store buttons (M9-21) ------------------------------------------------------------------ */
+
+/* A badge is filled with the text color and lettered in the page color, with a line in the border
+   color: no color of its own. At least 48px tall and 150px wide, side by side or wrapped. */
+[data-page-root] .pg-apps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-page-root] .pg-app-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 150px;
+  min-height: 48px;
+  padding: 6px 16px 6px 14px;
+  border: 1px solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-text);
+  color: var(--t-bg);
+  text-align: start;
+}
+
+[data-page-root] .pg-app-mark {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  fill: currentColor;
+}
+
+[data-page-root] .pg-app-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+[data-page-root] .pg-app-small {
+  font-size: calc(10px * var(--t-scale));
+  letter-spacing: 0.02em;
+}
+
+[data-page-root] .pg-app-name {
+  font-size: calc(17px * var(--t-scale));
+  font-weight: 600;
+}
+
+/* Map location (M9-22) ----------------------------------------------------------------------- */
+
+/* An address card: a decorative street grid and pin (inline SVG, drawn from the page's own tokens),
+   the place, its address and the two links of the 'Open in Maps' chooser. No map image, no frame,
+   no request. The card has a line of its own, as a grid cell has. */
+[data-page-root] .pg-map {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-map-art {
+  display: block;
+  width: 100%;
+  height: 96px;
+  background: var(--t-surface);
+}
+
+[data-page-root] .pg-map-grid {
+  fill: none;
+  stroke: var(--t-border);
+  stroke-width: 1;
+}
+
+[data-page-root] .pg-map-road {
+  fill: none;
+  stroke: var(--t-text-muted);
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0.45;
+}
+
+[data-page-root] .pg-map-pin {
+  fill: var(--t-accent);
+}
+
+[data-page-root] .pg-map-body {
+  padding: 14px 16px 16px;
+}
+
+[data-page-root] .pg-map-name {
+  margin: 0;
+  font-size: calc(16px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-map-address {
+  margin: 4px 0 0;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-map-open {
+  margin: 12px 0 6px;
+  color: var(--t-text-muted);
+  font-size: calc(12px * var(--t-scale));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-page-root] .pg-map-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-page-root] .pg-map-link {
+  display: flex;
+  flex: 1 1 120px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--t-accent);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: center;
 }
 
 /* Footer slot (badge and report link) --------------------------------------------------------- */
@@ -526,6 +1456,136 @@
   text-underline-offset: 3px;
 }
 
+/* Support banner (M9-23) --------------------------------------------------------------------------
+   A bar across the page's width above the column (the root carries data-banner only when there is
+   one, and stacks it above the column), its content centered in at most 480px. Drawn with the
+   surface, text, border and accent tokens; the dismiss anchor points at the bar's own id, so
+   :target hides it with no script and no cookie. Not sticky. */
+
+[data-page-root][data-banner] {
+  flex-direction: column;
+  align-items: center;
+}
+
+[data-page-root][data-banner] > .pg-column {
+  flex: 1 1 auto;
+}
+
+[data-page-root] .pg-banner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0 8px;
+  width: 100%;
+  padding: 4px max(16px, calc((100% - 480px) / 2));
+  border-bottom: 1px solid var(--t-border);
+  background: var(--t-surface);
+  color: var(--t-text);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.4;
+  text-align: center;
+}
+
+[data-page-root] .pg-banner:target {
+  display: none;
+}
+
+[data-page-root] .pg-banner-text {
+  min-width: 0;
+  margin: 0;
+  padding: 11px 0;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-banner-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--t-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-page-root] .pg-banner-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--t-text-muted);
+  font-size: calc(22px * var(--t-scale));
+  line-height: 1;
+}
+
+/* Logo and name style (M9-24) ---------------------------------------------------------------------
+   A logo beside the name sits in a row that has the name's font size, so the logo's height (1.25em)
+   follows the size class; "instead" puts the image inside the name's own heading. The size classes
+   are the closed list of the schema (none for medium: today's size); pg-name-font takes the name's
+   family from the --t-font-name variable the renderer sets from the font allowlist. */
+
+[data-page-root] .pg-logo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1em 0.3em;
+  max-width: 100%;
+  min-width: 0;
+  margin: 8px 0 0;
+  font-size: calc(40px * var(--t-scale));
+  line-height: 1.05;
+}
+
+[data-page-root][data-align="left"] .pg-logo-row {
+  justify-content: flex-start;
+}
+
+[data-page-root] .pg-profile > .pg-logo-row:first-child {
+  margin-top: 0;
+}
+
+[data-page-root] .pg-logo-row > .pg-name {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  font-size: inherit;
+}
+
+[data-page-root] .pg-logo {
+  display: block;
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  height: 1.25em;
+  object-fit: contain;
+}
+
+[data-page-root] .pg-name-s,
+[data-page-root] .pg-logo-row.pg-name-s {
+  font-size: calc(40px * 0.85 * var(--t-scale));
+}
+
+[data-page-root] .pg-name-l,
+[data-page-root] .pg-logo-row.pg-name-l {
+  font-size: calc(40px * 1.25 * var(--t-scale));
+}
+
+[data-page-root] .pg-name-xl,
+[data-page-root] .pg-logo-row.pg-name-xl {
+  font-size: calc(40px * 1.5 * var(--t-scale));
+}
+
+[data-page-root] .pg-name-font {
+  font-family: var(--t-font-name);
+}
+
 /* Narrow containers: the editor's 310px phone bezel. Real phones are at least 320px wide. -------- */
 
 @container (max-width: 319px) {
@@ -548,7 +1608,159 @@
     font-size: calc(12px * var(--t-scale));
   }
 
+  [data-page-root] .pg-logo-row {
+    font-size: calc(26px * var(--t-scale));
+  }
+
+  [data-page-root] .pg-name-s,
+  [data-page-root] .pg-logo-row.pg-name-s {
+    font-size: calc(26px * 0.85 * var(--t-scale));
+  }
+
+  [data-page-root] .pg-name-l,
+  [data-page-root] .pg-logo-row.pg-name-l {
+    font-size: calc(26px * 1.25 * var(--t-scale));
+  }
+
+  [data-page-root] .pg-name-xl,
+  [data-page-root] .pg-logo-row.pg-name-xl {
+    font-size: calc(26px * 1.5 * var(--t-scale));
+  }
+
   [data-page-root] .pg-header {
     font-size: calc(20px * var(--t-scale));
   }
+}
+
+/* Sites with pages (M11-06, M11-07) ----------------------------------------------------------------
+   The site menu, the small header of a sub-page and its title. A page carries these rules only when it
+   uses them (the `menu` and `sitehead` page features, src/lib/tenant-assets/css.ts). */
+
+[data-page-root] .pg-menu {
+  width: 100%;
+  min-width: 0;
+}
+
+[data-page-root] .pg-menu-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-page-root][data-align="left"] .pg-menu-list {
+  justify-content: flex-start;
+}
+
+[data-page-root] .pg-menu-entry {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+}
+
+[data-page-root] .pg-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-menu-item[aria-current="page"] {
+  border-color: var(--t-accent);
+  background: color-mix(in srgb, var(--t-accent) 14%, transparent);
+  color: var(--t-accent);
+}
+
+[data-page-root] .pg-sitehead {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-page-root][data-align="left"] .pg-sitehead {
+  justify-content: flex-start;
+}
+
+[data-page-root] .pg-sitehead-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+[data-page-root] .pg-sitehead-avatar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border: var(--t-border-width) solid var(--t-accent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--t-accent) 14%, transparent);
+  color: var(--t-accent);
+  font-family: var(--t-font-heading);
+  font-size: calc(16px * var(--t-scale));
+  line-height: 1;
+}
+
+[data-page-root] .pg-sitehead-avatar[data-shape="rounded"] {
+  border-radius: 12px;
+}
+
+[data-page-root] .pg-sitehead-avatar[data-shape="square"] {
+  border-radius: 0;
+}
+
+[data-page-root] .pg-sitehead-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+[data-page-root] .pg-sitehead-name {
+  min-width: 0;
+  font-family: var(--t-font-heading);
+  font-size: calc(16px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-pagetitle {
+  max-width: 100%;
+  min-width: 0;
+  margin: 8px 0 0;
+  color: var(--t-text);
+  font-family: var(--t-font-heading);
+  font-size: calc(30px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.1;
+  text-align: center;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root][data-align="left"] .pg-pagetitle {
+  text-align: left;
 }

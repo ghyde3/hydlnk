@@ -6,6 +6,28 @@ import prettier from "eslint-config-prettier/flat";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // A backslash that escapes nothing is almost always a mistake: "\;" is just ";" in a JavaScript
+  // string (the vCard escape of Wave K was silently a no-op because of it). Not in Next's presets.
+  { rules: { "no-useless-escape": "error" } },
+  // Public pages draw images straight from Storage (M5-11, M5-12): the pipeline already made the
+  // bytes the right size, so nothing may go through the /_next/image optimizer.
+  {
+    files: ["src/components/page/**", "src/app/(tenant)/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next/image",
+              message:
+                "Public pages use a plain <img> on the stored WebP (M5-11, M5-12); next/image would add /_next/image requests.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Must stay last: turns off stylistic rules that conflict with Prettier.
   prettier,
   globalIgnores([

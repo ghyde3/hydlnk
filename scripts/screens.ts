@@ -8,14 +8,15 @@
  *
  * Writes tmp/screens/<host>-<slug>-<width>.png (host is "root" when --host is omitted; slug is
  * the route with non-alphanumerics turned into "-", "index" for "/") and prints the absolute paths.
- * Assumes the dev server is already running (pnpm dev, or scripts/init.sh).
+ * Assumes the dev server is already running (pnpm dev, or scripts/init.sh). It is looked for on
+ * port 3000, or on HL_DEV_PORT when set (HL_DEV_PORT=3200 pnpm screens / for a worktree server).
  */
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "@playwright/test";
 import { DESKTOP, PHONE } from "./lib/viewports";
 
-const DEV_PORT = 3000;
+const DEV_PORT = Number(process.env.HL_DEV_PORT ?? 3000);
 const OUT_DIR = path.resolve(process.cwd(), "tmp", "screens");
 
 const USAGE =
@@ -97,6 +98,9 @@ async function main(): Promise<void> {
         const response = await page.goto(target, { waitUntil: "load", timeout: 60_000 });
         // Let late network activity and web fonts settle; never block on a chatty dev server.
         await page.waitForLoadState("networkidle", { timeout: 5_000 }).catch(() => undefined);
+        // A full-page capture never scrolls, so a section marked content-visibility:auto (the home
+        // page's try-it builder) would come out blank. Draw everything for the picture.
+        await page.addStyleTag({ content: "* { content-visibility: visible !important; }" });
         await page.evaluate(() => document.fonts.ready);
         const file = path.join(OUT_DIR, `${host ?? "root"}-${slug}-${profile.viewport.width}.png`);
         await page.screenshot({ path: file, fullPage: true });

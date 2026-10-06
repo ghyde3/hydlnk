@@ -8,6 +8,8 @@ export interface EditorPageData extends LoadedDraft {
   /** The draft's theme row (system or the owner's own), or null: none, deleted or unreadable. */
   themeTokens: Partial<TokenSet> | null;
   hasPublished: boolean;
+  /** `pages.published_at` (an ISO time) or null: it versions the live /og URL the share card shows (M6-33). */
+  publishedAt: string | null;
   published: PublishDoc | null;
 }
 
@@ -54,6 +56,7 @@ export async function loadEditorPageData(
     ...loaded,
     themeTokens,
     hasPublished: data.published_at !== null,
+    publishedAt: data.published_at ?? null,
     published: parsedPublished?.success ? parsedPublished.data : null,
   };
 }

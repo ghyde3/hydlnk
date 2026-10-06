@@ -1,6 +1,8 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { CHECK_ON_FILL_STROKE, Icon } from "@/components/app/icon";
 import { normalizeHandle, validateHandle, HANDLE_DISPLAY_DOMAIN } from "@/lib/handles/rules";
 import {
   CHECKING_MESSAGE,
@@ -156,15 +158,7 @@ export function HandleField({
       >
         <span className={`inline-flex items-start gap-1.5 ${TONE_TEXT[tone]}`}>
           {status === "available" ? (
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="mt-[3px] size-3.5 flex-none fill-none stroke-current stroke-[2.4]"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M5 12.5l4.5 4.5L19 7.5" />
-            </svg>
+            <Icon icon={Check} size={14} strokeWidth={CHECK_ON_FILL_STROKE} className="mt-[3px]" />
           ) : null}
           <span className="[overflow-wrap:anywhere]">{message}</span>
         </span>

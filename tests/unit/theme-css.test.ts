@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FONT_ALLOWLIST,
   FONT_GENERIC,
@@ -89,14 +89,24 @@ describe("tokensToCssVars", () => {
     }
   });
 
-  it("emits none for a null background image and url() for a real one", () => {
-    expect(vars["--t-bg-image"]).toBe("none");
-    const out = tokensToCssVars({
-      ...noirTokens,
-      bgType: "image",
-      bgImage: "https://images.example.com/bg.webp?v=2",
+  describe("the background image", () => {
+    const MEDIA =
+      "http://127.0.0.1:54321/storage/v1/object/public/page-media/0b6f1a5e-7c1d-4a52-9d0e-3a7c5e8f2b14/bg-0123abcd.webp";
+    beforeEach(() => vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321"));
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("emits none for a null background image and url() for one uploaded to this project", () => {
+      expect(vars["--t-bg-image"]).toBe("none");
+      const out = tokensToCssVars({ ...noirTokens, bgType: "image", bgImage: MEDIA });
+      expect(out["--t-bg-image"]).toBe(`url("${MEDIA}")`);
     });
-    expect(out["--t-bg-image"]).toBe('url("https://images.example.com/bg.webp?v=2")');
+
+    it("sanitizes a third-party image URL (or a query on the project's own) to none", () => {
+      for (const bgImage of ["https://images.example.com/bg.webp?v=2", `${MEDIA}?v=2`]) {
+        const out = tokensToCssVars({ ...noirTokens, bgType: "image", bgImage });
+        expect(out["--t-bg-image"], bgImage).toBe("none");
+      }
+    });
   });
 
   it("is deterministic and does not mutate its input", () => {

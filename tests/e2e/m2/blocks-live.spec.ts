@@ -101,7 +101,8 @@ test.describe("M2-15 link button", () => {
     await page.goto(live.url);
     const first = page.locator("a[data-block-type=link]").first();
     await expect(first).toHaveText("Portrait sessions - fall dates");
-    await expect(first).toHaveAttribute("href", "https://maraokafor.example/book");
+    // The link goes through the click redirect (M4-22): the destination is not in the markup.
+    await expect(first).toHaveAttribute("href", `/r/${live.pageId}/${doc.blocks[0]!.id}`);
     await expect(first).toHaveAttribute("rel", "nofollow noopener");
     expect(await css(first, "display")).toBe("flex");
     expect(await css(first, "justify-content")).toBe("center");
@@ -153,7 +154,8 @@ test.describe("M2-15 link button", () => {
     expect(looks.outline.border).toBe(RGB.accent);
     expect(looks.soft.bg).not.toBe("rgba(0, 0, 0, 0)");
     expect(looks.soft.bg).not.toBe(RGB.accent);
-    expect(looks.soft.bg).toMatch(/0\.18|\/ 0\.18/);
+    // Soft is the accent at 16% alpha (M3-11; the Milestone 2 renderer drew 18%).
+    expect(looks.soft.bg).toMatch(/0\.16|\/ 0\.16/);
     expect(looks.shadow.shadow).not.toBe("none");
     expect(looks.pill.radius).toBe("999px");
     expect(looks.pill.bg).toBe(RGB.accent);
@@ -367,7 +369,7 @@ test.describe("M2-17 social icons", () => {
       await anchors.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label"))),
     ).toEqual(["Instagram", "TikTok", "YouTube", "X", "Email"]);
     expect(await anchors.last().getAttribute("href")).toBe("mailto:hello@maraokafor.example");
-    expect(await anchors.first().getAttribute("href")).toBe("https://example.com/instagram");
+    expect(await anchors.first().getAttribute("href")).toBe(`/r/${live.pageId}/ico-live-0001`);
     for (const anchor of await anchors.all()) {
       const rect = await box(anchor);
       expect(rect.width).toBe(44);
@@ -379,10 +381,18 @@ test.describe("M2-17 social icons", () => {
       const svg = await box(anchor.locator("svg"));
       expect(svg.width).toBe(18);
       expect(svg.height).toBe(18);
-      expect(await css(anchor.locator("svg"), "stroke")).toBe(RGB.text);
+      // A brand mark is a filled path since M9-04 (fill is the text color, no stroke); Email stays
+      // a line drawing (stroke is the text color, no fill).
+      const isBrand = await anchor
+        .locator("svg")
+        .evaluate((el) => el.classList.contains("pg-social-glyph-brand"));
+      expect(await css(anchor.locator("svg"), isBrand ? "fill" : "stroke")).toBe(RGB.text);
+      expect(await css(anchor.locator("svg"), isBrand ? "stroke" : "fill")).toBe("none");
     }
     expect(await css(nav, "column-gap")).toBe("10px");
     expect(await css(nav, "flex-wrap")).toBe("wrap");
+    // The page's own host and nothing else: since M8-01 the theme fonts come from our own host, so a
+    // tenant page no longer asks Google for a stylesheet or for font files.
     expect([...hosts]).toEqual([new URL(live.url).host]);
   });
 
@@ -554,9 +564,15 @@ test.describe("M2-19 embeds", () => {
     const facade = page.locator("[data-block-type=embed] button");
     await expect(facade).toBeVisible();
     await page.waitForTimeout(1000);
-    const third = requests.filter((u) =>
-      /youtube|youtu\.be|google|ytimg|gstatic|doubleclick/i.test(new URL(u).host),
-    );
+    // The page's own Google Fonts stylesheet and files (M3-04) are expected; nothing else google,
+    // and no YouTube host at all, until Play is pressed.
+    const fontHosts = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
+    const third = requests.filter((u) => {
+      const host = new URL(u).host;
+      return (
+        !fontHosts.has(host) && /youtube|youtu\.be|google|ytimg|gstatic|doubleclick/i.test(host)
+      );
+    });
     expect(third).toEqual([]);
     await expect(page.locator("iframe")).toHaveCount(0);
 
@@ -584,33 +600,47 @@ test.describe("M2-19 embeds", () => {
     await expectNoHorizontalScroll(page);
   });
 
-  test("M2-19 Spotify renders a lazy iframe, 152px for a track and 352px for an album, inside the column", async ({
+  test("M2-19 Spotify renders a facade as tall as its player, 152px for a track and 352px for an album, inside the column; a tap mounts the player", async ({
     page,
   }) => {
-    await page.route(/open\.spotify\.com/, (route) => route.abort());
+    // M8-05 supersedes the lazy iframe: nothing is requested from Spotify until a tap.
+    const requested: string[] = [];
+    await page.route(/open\.spotify\.com/, (route) => {
+      requested.push(route.request().url());
+      return route.abort();
+    });
     const live = await publishedPage(
       "es",
       publishDocOf([spotify("track"), spotify("album", "The album")], { tokens: NOIR }),
     );
     await page.goto(live.url);
-    const frames = page.locator("[data-block-type=embed] iframe");
-    await expect(frames).toHaveCount(2);
-    expect(await frames.evaluateAll((els) => els.map((el) => el.getAttribute("src")))).toEqual([
-      "https://open.spotify.com/embed/track/37i9dQZF1DXcBWIGoYBM5M",
-      "https://open.spotify.com/embed/album/37i9dQZF1DXcBWIGoYBM5M",
-    ]);
-    expect(await frames.evaluateAll((els) => els.map((el) => el.getAttribute("loading")))).toEqual([
-      "lazy",
-      "lazy",
-    ]);
+    await expect(page.locator("[data-block-type=embed] iframe")).toHaveCount(0);
+    const posters = page.locator("[data-block-type=embed] .pg-embed-play");
+    await expect(posters).toHaveCount(2);
     const col = await column(page);
-    const [track, album] = await Promise.all((await frames.all()).map((frame) => box(frame)));
+    const [track, album] = await Promise.all((await posters.all()).map((poster) => box(poster)));
     expect(track!.height).toBe(152);
     expect(album!.height).toBe(352);
     for (const rect of [track!, album!]) {
       expect(rect.width).toBeLessThanOrEqual(col.width + 1);
       expect(rect.x).toBeGreaterThanOrEqual(col.x - 1);
     }
+    expect(requested).toEqual([]);
+    await expectNoHorizontalScroll(page);
+
+    await posters.first().click();
+    await posters.first().click();
+    const frames = page.locator("[data-block-type=embed] iframe");
+    await expect(frames).toHaveCount(2);
+    expect(await frames.evaluateAll((els) => els.map((el) => el.getAttribute("src")))).toEqual([
+      "https://open.spotify.com/embed/track/37i9dQZF1DXcBWIGoYBM5M",
+      "https://open.spotify.com/embed/album/37i9dQZF1DXcBWIGoYBM5M",
+    ]);
+    const [playingTrack, playingAlbum] = await Promise.all(
+      (await frames.all()).map((frame) => box(frame)),
+    );
+    expect(playingTrack!.height).toBe(152);
+    expect(playingAlbum!.height).toBe(352);
     await expectNoHorizontalScroll(page);
   });
 
@@ -658,10 +688,13 @@ test.describe("M2-20 image block", () => {
     await expect(img).toHaveAttribute("loading", "lazy");
     await expect(img).toHaveAttribute(
       "src",
-      new RegExp(`/storage/v1/object/public/page-media/${image.path}$`),
+      new RegExp(`^http://localhost:\\d+/media/${image.path}$`),
     );
     const anchor = linked!.locator("a");
-    await expect(anchor).toHaveAttribute("href", "https://maraokafor.example/studio");
+    await expect(anchor).toHaveAttribute(
+      "href",
+      `/r/${live.pageId}/${await linked!.getAttribute("data-block-id")}`,
+    );
     await expect(anchor).toHaveAttribute("rel", "nofollow noopener");
     expect(await css(img, "border-top-left-radius")).toBe("16px");
     expect(await css(img, "max-width")).toBe("100%");
@@ -710,7 +743,10 @@ test.describe("M2-21 link card", () => {
     const live = await publishedPage("cd", doc);
     await page.goto(live.url);
     const card = page.locator("a[data-block-type=card]").first();
-    await expect(card).toHaveAttribute("href", "https://maraokafor.example/night-market");
+    await expect(card).toHaveAttribute(
+      "href",
+      `/r/${live.pageId}/${await card.getAttribute("data-block-id")}`,
+    );
     await expect(card).toHaveAttribute("rel", "nofollow noopener");
     expect(await css(card, "border-top-width")).toBe("1px");
     expect(await css(card, "border-top-color")).toBe(RGB.border);

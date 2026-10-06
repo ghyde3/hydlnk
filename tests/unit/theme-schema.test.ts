@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BLOCK_OVERRIDE_KEYS,
   FONT_ALLOWLIST,
@@ -50,7 +50,7 @@ describe("tokenSetSchema", () => {
     expect(tokenSetSchema.safeParse({ ...noirTokens, customCss: "body{}" }).success).toBe(false);
   });
 
-  it("covers exactly the 23 contract keys", () => {
+  it("covers exactly the 26 contract keys (23 plus the three gradient tokens of M6-41)", () => {
     expect([...TOKEN_KEYS].sort()).toEqual(
       [
         "bg",
@@ -76,17 +76,21 @@ describe("tokenSetSchema", () => {
         "bgImage",
         "overlayOpacity",
         "blur",
+        "gradientAngle",
+        "gradientFrom",
+        "gradientTo",
       ].sort(),
     );
   });
 
   it.each([
-    ["short hex", { accent: "#FFF" }],
     ["named color", { accent: "red" }],
-    ["color with alpha", { accent: "#C9A86AFF" }],
+    ["non-hex digits", { accent: "#GGGGGG" }],
+    ["hex longer than #RRGGBBAA", { accent: "#C9A86AFFAA" }],
+    ["a hex with no #", { accent: "C9A86A" }],
     ["font outside the allowlist", { fontHeading: "Comic Sans MS" }],
-    ["scale too small", { scale: 0.8 }],
-    ["scale too large", { scale: 1.3 }],
+    ["scale too small", { scale: 0.79 }],
+    ["scale too large", { scale: 1.31 }],
     ["weight not offered", { weightHeading: 300 }],
     ["radius over 32", { radius: 33 }],
     ["negative border width", { borderWidth: -1 }],
@@ -94,28 +98,56 @@ describe("tokenSetSchema", () => {
     ["max width under 360", { maxWidth: 359 }],
     ["max width over 720", { maxWidth: 721 }],
     ["overlay over 1", { overlayOpacity: 1.1 }],
-    ["blur over 20", { blur: 21 }],
+    ["blur over 24", { blur: 25 }],
+    ["the legacy letterCase none", { letterCase: "none" }],
     ["unknown button style", { buttonStyle: "neon" }],
     ["unknown density", { density: "huge" }],
     ["javascript: background image", { bgImage: "javascript:alert(1)" }],
+    ["a third-party https background image", { bgImage: "https://images.example.com/bg.webp" }],
   ])("rejects %s", (_name, patch) => {
     expect(tokenSetSchema.safeParse({ ...noirTokens, ...patch }).success).toBe(false);
   });
 
-  it("accepts the range edges and an https background image", () => {
-    const edges = {
-      ...noirTokens,
-      scale: 0.875,
-      radius: 32,
-      borderWidth: 4,
-      maxWidth: 720,
-      overlayOpacity: 1,
-      blur: 20,
-      weightHeading: 800,
-      bgType: "image",
-      bgImage: "https://images.example.com/bg.webp",
-    };
-    expect(tokenSetSchema.safeParse(edges).success).toBe(true);
+  it("accepts #RGB, #RRGGBB and #RRGGBBAA colors", () => {
+    for (const accent of ["#FFF", "#c9a86a", "#C9A86A", "#C9A86AFF"]) {
+      expect(tokenSetSchema.safeParse({ ...noirTokens, accent }).success, accent).toBe(true);
+    }
+  });
+
+  describe("with the project's Supabase URL set", () => {
+    beforeEach(() => vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "http://127.0.0.1:54321"));
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("accepts the range edges and a background image uploaded to this project", () => {
+      const edges = {
+        ...noirTokens,
+        scale: 0.8,
+        radius: 32,
+        borderWidth: 4,
+        maxWidth: 720,
+        overlayOpacity: 1,
+        blur: 24,
+        weightHeading: 700,
+        bgType: "image",
+        bgImage:
+          "http://127.0.0.1:54321/storage/v1/object/public/page-media/0b6f1a5e-7c1d-4a52-9d0e-3a7c5e8f2b14/bg-0123abcd.webp",
+      };
+      expect(tokenSetSchema.safeParse(edges).success).toBe(true);
+    });
+
+    it("refuses another origin, another bucket and a query on the project's own origin", () => {
+      const ok =
+        "http://127.0.0.1:54321/storage/v1/object/public/page-media/0b6f1a5e-7c1d-4a52-9d0e-3a7c5e8f2b14/bg-0123abcd.webp";
+      expect(tokenSetSchema.safeParse({ ...noirTokens, bgImage: ok }).success).toBe(true);
+      for (const bgImage of [
+        ok.replace("127.0.0.1:54321", "evil.example.com"),
+        ok.replace("page-media", "avatars"),
+        `${ok}?x=1`,
+        `${ok}#frag`,
+      ]) {
+        expect(tokenSetSchema.safeParse({ ...noirTokens, bgImage }).success, bgImage).toBe(false);
+      }
+    });
   });
 });
 
@@ -132,26 +164,31 @@ describe("tokenOverridesSchema", () => {
 });
 
 describe("blockOverridesSchema", () => {
-  it("allows exactly the eight block-level keys", () => {
+  // M6-45: textMuted and borderWidth joined the original eight.
+  it("allows exactly the ten block-level keys", () => {
     expect([...BLOCK_OVERRIDE_KEYS].sort()).toEqual([
       "accent",
       "border",
+      "borderWidth",
       "buttonBg",
       "buttonStyle",
       "buttonText",
       "radius",
       "surface",
       "text",
+      "textMuted",
     ]);
     const everyKey = {
       accent: "#111111",
       buttonBg: "#222222",
       buttonText: "#333333",
       text: "#444444",
+      textMuted: "#777777",
       surface: "#555555",
       border: "#666666",
       buttonStyle: "soft",
       radius: 8,
+      borderWidth: 2,
     };
     expect(blockOverridesSchema.safeParse(everyKey).success).toBe(true);
     expect(blockOverridesSchema.safeParse({}).success).toBe(true);

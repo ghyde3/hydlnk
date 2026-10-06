@@ -15,7 +15,7 @@ test.afterAll(cleanupUsers);
 
 const URL_MESSAGE = "Enter a full web address, like https://example.com.";
 const EMBED_MESSAGE =
-  "Paste a link to a YouTube video or a Spotify track, album, playlist or episode.";
+  "Paste a link from YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music or Twitch.";
 
 async function publishedRow(pageId: string) {
   const { data, error } = await adminClient()

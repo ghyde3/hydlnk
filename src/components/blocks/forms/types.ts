@@ -14,6 +14,14 @@ export interface BlockFormProps {
    */
   onImage: (image: ImageRef | null) => void;
   errors: PublishError[];
+  /**
+   * For a field that edits live while it has the focus (the text block's editor, M9-12): a live edit
+   * that is not a step of the workspace's undo history by itself. `session` names the editing session;
+   * `onSessionEnd` (the focus left, or the field went away) makes the whole session one step. A form
+   * that has no such field ignores both, and a caller that gives neither gets plain `onChange` edits.
+   */
+  onSessionChange?: ((next: Block, session: string) => void) | undefined;
+  onSessionEnd?: (() => void) | undefined;
 }
 
 /** The messages the Publish gate gave one field of this block (or of one icon or cell). */

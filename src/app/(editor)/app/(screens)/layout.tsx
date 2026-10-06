@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { AppShellFrame } from "@/components/app/app-shell-frame";
+import { PlanProvider } from "@/components/versions/plan-context";
 import { getAppContext } from "@/lib/pages/context";
 
 // Every signed-in screen is titled "<Screen> — HYDLNK": a page exports `title: "Screen"` and this
@@ -27,5 +28,9 @@ export const viewport: Viewport = {
  */
 export default async function ScreensLayout({ children }: { children: ReactNode }) {
   const context = await getAppContext();
-  return <AppShellFrame context={context}>{children}</AppShellFrame>;
+  return (
+    <AppShellFrame context={context}>
+      <PlanProvider plan={context.plan}>{children}</PlanProvider>
+    </AppShellFrame>
+  );
 }

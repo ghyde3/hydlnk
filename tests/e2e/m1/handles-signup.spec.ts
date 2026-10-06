@@ -13,6 +13,8 @@ import {
 } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { getMessage, messagesTo, signInLinkFrom, waitForMessages } from "../fixtures/mailpit";
+import { gsi, routeGoogleScript, setGoogleCredential, stubFace } from "../fixtures/google-stub";
+import { GOOGLE_FAILED_MESSAGE } from "@/lib/auth/google-shared";
 
 const RED = "rgb(178, 58, 43)"; // #B23A2B
 const GREEN = "rgb(47, 125, 79)"; // #2F7D4F
@@ -45,14 +47,14 @@ test.describe("M1-11 signup handle field", () => {
     await page.goto(url("app", "/signup"));
     const input = handleInput(page);
     await expect(input).toHaveValue("");
-    if (!isMobile) await expect(page.locator("aside")).toContainText("yourname.hydlnk.com");
+    if (!isMobile) await expect(page.locator("aside")).toContainText("you.hydlnk.com");
 
     await input.fill("Zq_Test 9!");
     await expect(input).toHaveValue("zqtest9");
     if (!isMobile) await expect(page.locator("aside")).toContainText("zqtest9.hydlnk.com");
 
     await input.fill("");
-    if (!isMobile) await expect(page.locator("aside")).toContainText("yourname.hydlnk.com");
+    if (!isMobile) await expect(page.locator("aside")).toContainText("you.hydlnk.com");
   });
 
   test("M1-11 empty or short: neutral message, neutral border, no request", async ({ page }) => {
@@ -130,7 +132,8 @@ test.describe("M1-11 signup handle field", () => {
     }
   });
 
-  test("M1-11 a failing endpoint says so and leaves submit enabled", async ({ page }) => {
+  test("M1-11 a failing endpoint says so and leaves submit enabled", async ({ page, context }) => {
+    await routeGoogleScript(context);
     await page.route("**/api/handles/check**", (route) =>
       route.fulfill({
         status: 500,
@@ -143,7 +146,10 @@ test.describe("M1-11 signup handle field", () => {
     await expect(status(page)).toHaveText(MESSAGES.failed);
     expect(await colorOf(page)).toBe(NEUTRAL_TEXT);
     await expect(page.getByRole("button", { name: "Email me a sign-in link" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeEnabled();
+    // A failing check does not block Google's button (the server judges the handle again before
+    // anyone is signed in): its face is live and no cover sits over it.
+    await expect(stubFace(page)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
   });
 
   test("M1-11 the status region is a polite live region wired to the input", async ({ page }) => {
@@ -204,9 +210,11 @@ test.describe("M1-11 signup handle field", () => {
 
   test("M1-11 phone: 30-character handle fits, long messages wrap, tap targets are 44px", async ({
     page,
+    context,
     isMobile,
   }) => {
     test.skip(!isMobile, "phone project only");
+    await routeGoogleScript(context);
     await page.goto(url("app", `/signup?handle=${"a".repeat(30)}`));
     await expect(status(page)).toHaveText(`${"a".repeat(30)}.hydlnk.com is available`);
     await expectNoHorizontalScroll(page);
@@ -420,57 +428,60 @@ test.describe("M1-12 signup with an email sign-in link", () => {
   });
 });
 
-test.describe("M1-13 Continue with Google on signup", () => {
+/*
+ * M1-13 was written for the redirect flow (a "Continue with Google" button that left for Supabase's
+ * authorize endpoint with the handle in a short-lived cookie). Google sign-up is now Google's own
+ * button handing the page an ID token (M1-30, tests/e2e/m5/google-signin.spec.ts), so these specs
+ * keep the intent of M1-13 for it: an unusable handle never reaches Google and sets no cookie, a
+ * usable one rides along to the server and never into a URL, and the layout holds. The last spec
+ * (the pending-handle cookie claimed after sign-in) is unchanged. Google's script is stubbed.
+ */
+test.describe("M1-13 Google on signup (replaced by the Google Identity Services button)", () => {
   const AUTHORIZE = "http://127.0.0.1:54321/auth/v1/authorize**";
 
-  test("M1-13 leaves for Supabase's authorize endpoint with the handle in a short-lived cookie only", async ({
+  test("M1-13 a usable handle reaches the server with the credential, never leaves for Supabase's authorize endpoint and sets no handle cookie when sign-in is refused", async ({
     page,
     context,
   }) => {
+    await routeGoogleScript(context);
     const handle = `zq-gs-${rand()}`;
-    let authorizeUrl = "";
-    await context.route(AUTHORIZE, (route) => {
-      authorizeUrl = route.request().url();
-      return route.fulfill({ status: 200, contentType: "text/plain", body: "google stub" });
-    });
-
-    await page.goto(url("app", `/signup?handle=${handle}`));
-    await expect(status(page)).toHaveText(`${handle}.hydlnk.com is available`);
-    await page.getByRole("button", { name: "Continue with Google" }).click();
-    await page.waitForURL(AUTHORIZE, { waitUntil: "commit" });
-
-    const parsed = new URL(authorizeUrl);
-    expect(parsed.origin + parsed.pathname).toBe("http://127.0.0.1:54321/auth/v1/authorize");
-    expect(parsed.searchParams.get("provider")).toBe("google");
-    expect(parsed.searchParams.get("redirect_to")).toBe("http://app.localhost:3000/auth/callback");
-    expect(authorizeUrl).not.toContain(handle);
-    expect(parsed.searchParams.get("code_challenge")).toBeTruthy(); // PKCE, verifier cookie below
-
-    const cookies = await context.cookies("http://app.localhost:3000");
-    expect(cookies.some((c) => c.name.endsWith("code-verifier"))).toBe(true);
-    const pending = cookies.find((c) => c.name === "hl-pending-handle");
-    expect(pending, "pending-handle cookie").toBeTruthy();
-    expect(pending!.value).toBe(handle);
-    expect(pending!.httpOnly).toBe(true);
-    expect(pending!.sameSite).toBe("Lax");
-    expect(pending!.domain.startsWith(".")).toBe(false);
-    expect(pending!.domain).toBe("app.localhost");
-    const lifeSeconds = pending!.expires - Date.now() / 1000;
-    expect(lifeSeconds).toBeGreaterThan(0);
-    expect(lifeSeconds).toBeLessThanOrEqual(901);
-  });
-
-  test("M1-13 an unusable handle never leaves for Google and sets no cookie", async ({
-    page,
-    context,
-  }) => {
     let left = false;
     await context.route(AUTHORIZE, (route) => {
       left = true;
-      return route.fulfill({ status: 200, body: "stub" });
+      return route.fulfill({ status: 200, contentType: "text/plain", body: "google stub" });
     });
+    const urls: string[] = [];
+    page.on("request", (request) => urls.push(request.url()));
+
+    await page.goto(url("app", `/signup?handle=${handle}`));
+    await expect(status(page)).toHaveText(`${handle}.hydlnk.com is available`);
+    await expect(stubFace(page)).toBeVisible();
+    // A usable handle: no cover over Google's button.
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveCount(0);
+
+    // A credential that is not a Google token: refused by the server before anyone is signed in.
+    await setGoogleCredential(page, "not-a-token");
+    await stubFace(page).click();
+    await expect(page.locator('p[role="alert"]')).toHaveText(GOOGLE_FAILED_MESSAGE);
+    expect((await gsi(page)).clicks).toBe(1);
+
+    expect(left).toBe(false);
+    expect(page.url()).toBe(url("app", `/signup?handle=${handle}`));
+    expect(urls.filter((u) => u.includes("/auth/v1/authorize"))).toEqual([]);
+    const cookies = await context.cookies("http://app.localhost:3000");
+    expect(cookies.find((c) => c.name === "hl-pending-handle")).toBeUndefined();
+    expect(cookies.filter((c) => c.name.startsWith("sb-"))).toEqual([]);
+  });
+
+  test("M1-13 an unusable handle never reaches Google and sets no cookie", async ({
+    page,
+    context,
+  }) => {
+    await routeGoogleScript(context);
     await page.goto(url("app", "/signup"));
-    const google = page.getByRole("button", { name: "Continue with Google" });
+    await expect(stubFace(page)).toBeAttached();
+    // The cover over Google's button: an aria-disabled button that sends focus to the Handle field.
+    const cover = page.getByRole("button", { name: "Continue with Google" });
 
     const cases: [string, string][] = [
       ["mara", MESSAGES.taken],
@@ -481,30 +492,39 @@ test.describe("M1-13 Continue with Google on signup", () => {
     for (const [handle, message] of cases) {
       await handleInput(page).fill(handle);
       await page.getByLabel("Email", { exact: true }).focus();
-      await google.click();
       await expect(status(page)).toHaveText(message);
+      await expect(cover).toHaveAttribute("aria-disabled", "true");
+      // A real press lands on the cover (force: it is aria-disabled on purpose).
+      await cover.click({ force: true });
       await expect(handleInput(page)).toBeFocused();
     }
     await page.waitForTimeout(500);
-    expect(left).toBe(false);
+    // Google's button was never pressed (initialised once, never opened), and nothing was set.
+    const state = await gsi(page);
+    expect(state.clicks).toBe(0);
+    expect(state.inits).toHaveLength(1);
     expect(page.url()).toContain("/signup");
     const cookies = await context.cookies("http://app.localhost:3000");
     expect(cookies.find((c) => c.name === "hl-pending-handle")).toBeUndefined();
   });
 
-  test("M1-13 layout: full-width 48px button on the phone, below the 'or' rule on desktop", async ({
+  test("M1-13 layout: Google's button spans the column on the phone, below the 'or' rule on desktop", async ({
     page,
+    context,
     isMobile,
   }) => {
+    await routeGoogleScript(context);
     await page.goto(url("app", "/signup?handle=zq-gs-1"));
-    const google = page.getByRole("button", { name: "Continue with Google" });
-    const box = (await google.boundingBox())!;
+    await expect(stubFace(page)).toBeVisible();
+    const box = (await stubFace(page).boundingBox())!;
+    const row = (await stubFace(page).locator("xpath=..").boundingBox())!;
+    // Google draws its button 40px tall in its own iframe (no resizing); the row keeps 48px.
+    expect(row.height).toBeGreaterThanOrEqual(48);
     if (isMobile) {
       await expectNoHorizontalScroll(page);
       await expectTapTargets(page);
       const column = (await page.locator("main > div").boundingBox())!;
       expect(Math.round(box.width)).toBe(Math.round(column.width));
-      expect(Math.round(box.height)).toBe(48);
     } else {
       const or = (await page.getByRole("separator").boundingBox())!;
       expect(box.y).toBeGreaterThan(or.y);

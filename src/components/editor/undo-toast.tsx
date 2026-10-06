@@ -29,7 +29,7 @@ export function UndoToast({
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed inset-x-4 bottom-[calc(68px+env(safe-area-inset-bottom))] z-30 hl:inset-x-auto hl:bottom-6 hl:left-[272px]"
+      className="pointer-events-none fixed left-4 right-[72px] bottom-[calc(68px+env(safe-area-inset-bottom))] z-30 hl:right-auto hl:bottom-6 hl:left-[272px]"
     >
       {deleted ? (
         <div className="pointer-events-auto flex items-center justify-between gap-3 rounded-md bg-ink py-1 pr-1 pl-4 text-sm text-on-ink hl:w-fit hl:min-w-[280px]">

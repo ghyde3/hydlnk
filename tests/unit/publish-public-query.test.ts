@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fullPublished } from "./fixtures/page-document";
 
@@ -55,7 +53,12 @@ function query(table: string) {
     },
     async maybeSingle() {
       if (entry.select.startsWith("id,"))
-        return { data: page ? { id: PAGE_ID } : null, error: null };
+        return {
+          data: page
+            ? { id: PAGE_ID, accounts: { suspended_at: page.accounts.suspended_at } }
+            : null,
+          error: null,
+        };
       return { data: page, error: null };
     },
   };
@@ -64,7 +67,7 @@ function query(table: string) {
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => ({ from: query }) }));
 
 const { getTenantPageState } = await import("../../src/app/(tenant)/published-page");
-const { TenantPage } = await import("@/components/tenant/tenant-page");
+const { renderLivePage } = await import("@/lib/tenant-render/live-page");
 
 beforeEach(() => {
   calls.length = 0;
@@ -78,11 +81,13 @@ beforeEach(() => {
 const SOURCE = readFileSync(join(process.cwd(), "src/app/(tenant)/published-page.ts"), "utf8");
 
 describe("M2-22 the public query is server-only and selects published only", () => {
-  it("never selects draft or *, only published, published_at and the owner's account row", () => {
+  it("never selects draft or *, only published, published_at, the owner's account row and a handle's page id", () => {
     const selects = [...SOURCE.matchAll(/\.select\(\s*"([^"]*)"\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
       "published, published_at, accounts!inner(plan, suspended_at)",
       "id, accounts!inner(suspended_at)",
+      // M11-06: the handle's page id for the sub-page routes, nothing else of the row.
+      "id",
     ]);
     for (const select of selects) {
       expect(select).not.toMatch(/\bdraft\b/);
@@ -104,13 +109,12 @@ describe("M2-25 the live page reads only `published`: no call to themes", () => 
     expect(state.kind).toBe("published");
     if (state.kind !== "published") return;
 
-    const html = renderToStaticMarkup(
-      createElement(TenantPage, {
-        document: state.page.document,
-        pageId: state.page.pageId,
-        plan: state.page.plan,
-      }),
-    );
+    const html = renderLivePage({
+      pageId: state.page.pageId,
+      document: state.page.document,
+      plan: state.page.plan,
+      urls: null,
+    });
     expect(html).toContain("Mara Okafor");
     expect(html).toContain("--t-bg:#16120E");
 
@@ -144,16 +148,20 @@ describe("M2-22 / M2-28 what the query returns", () => {
     expect(await getTenantPageState("mara")).toEqual({ kind: "unpublished", pageId: PAGE_ID });
   });
 
-  it("an unknown handle, a suspended owner, a malformed handle and a broken document are missing", async () => {
-    page = null;
-    expect(await getTenantPageState("nobody")).toEqual({ kind: "missing" });
-
+  it("a suspended owner is `suspended` (M5-08): no document is read for it, and the handle is not missing", async () => {
     page = {
       published: fullPublished,
       published_at: "2026-10-02T00:00:00.000Z",
       accounts: { plan: "free", suspended_at: "2026-10-01T00:00:00.000Z" },
     };
-    expect(await getTenantPageState("mara")).toEqual({ kind: "missing" });
+    expect(await getTenantPageState("mara")).toEqual({ kind: "suspended" });
+    // Only the handle lookup ran: the published column of a suspended page is never selected.
+    expect(calls.map((c) => c.select)).toEqual(["id, accounts!inner(suspended_at)"]);
+  });
+
+  it("an unknown handle, a malformed handle and a broken document are missing", async () => {
+    page = null;
+    expect(await getTenantPageState("nobody")).toEqual({ kind: "missing" });
 
     calls.length = 0;
     expect(await getTenantPageState("Not A Handle!")).toEqual({ kind: "missing" });

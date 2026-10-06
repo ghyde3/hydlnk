@@ -25,6 +25,9 @@ next-env.d.ts
 # Local scratch, screenshots
 tmp/
 
+# Vitest cache
+.vitest/
+
 # Supabase local
 supabase/.temp/
 supabase/.env
@@ -48,3 +51,15 @@ yarn-error.log*
 test-results/
 playwright-report/
 coverage/
+
+# HyperFrames render output (design/showreel README: not committed)
+design/showreel*/renders/
+design/showreel*/render.log
+design/showreel*/snapshots/
+
+# Generated-image sources for the marketing demos (not committed)
+assets/demo-sources/
+
+# Full-size image sources (generated with Higgsfield; prompts embedded). Kept on disk, never committed: the repo is public.
+assets/audience-sources/
+assets/portrait-sources/

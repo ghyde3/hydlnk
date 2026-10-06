@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "./fixtures/react-facade";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -176,12 +177,17 @@ describe("M2-05 blocks", () => {
 });
 
 describe("M2-05 outbound links", () => {
-  it("outboundHref returns the validated URL and the one rel", () => {
+  it("outboundHref returns the /r redirect of a validated URL and the one rel (M4-22)", () => {
     const target = { pageId: PAGE_ID, id: "block-id-001" };
     expect(outboundHref("https://example.com/x", target)).toEqual({
-      href: "https://example.com/x",
+      href: `/r/${PAGE_ID}/block-id-001`,
       rel: "nofollow noopener",
     });
+    // The destination is never in the markup, and the ids cannot add a segment or a query.
+    expect(outboundHref("https://example.com/x", target).href).not.toContain("example.com");
+    expect(outboundHref("https://example.com/x", { pageId: PAGE_ID, id: "a/b?c=d" }).href).toBe(
+      `/r/${PAGE_ID}/a%2Fb%3Fc%3Dd`,
+    );
     for (const bad of [
       "javascript:alert(1)",
       "data:text/html,x",
@@ -210,7 +216,14 @@ describe("M2-05 outbound links", () => {
     );
     const anchors = Array.from(parsed.querySelectorAll("main a"));
     expect(anchors.length).toBeGreaterThan(5);
-    for (const a of anchors) expect(a.getAttribute("rel")).toBe("nofollow noopener");
+    // M11-07: an anchor to another page of the same site (a menu entry or a page link) is a plain
+    // relative path ("/" or "/segment", never "//host"): it is followed and has no rel. Every other
+    // anchor keeps the rule.
+    const sameSite = (href: string | null) => href !== null && /^\/(?!\/)/.test(href);
+    for (const a of anchors) {
+      if (sameSite(a.getAttribute("href"))) continue;
+      expect(a.getAttribute("rel")).toBe("nofollow noopener");
+    }
   });
 });
 
@@ -220,7 +233,7 @@ describe("M2-15 link block", () => {
   it("renders one anchor with the label, the url and no target", () => {
     const parsed = dom(render(doc({}, [link()])));
     const a = parsed.querySelector("a[data-block-type=link]")!;
-    expect(a.getAttribute("href")).toBe(blocks.link.url);
+    expect(a.getAttribute("href")).toBe(`/r/${PAGE_ID}/${blocks.link.id}`);
     expect(a.getAttribute("rel")).toBe("nofollow noopener");
     expect(a.textContent).toBe(blocks.link.label);
     expect(a.hasAttribute("target")).toBe(false);
@@ -301,9 +314,10 @@ describe("M2-17 social block", () => {
       "Threads",
       "Email",
     ]);
+    // Web icons go through /r by their own icon id; the email icon stays an untracked mailto: (M4-22).
     expect(anchors.map((a) => a.getAttribute("href"))).toEqual([
-      "https://instagram.com/maraokafor",
-      "https://www.threads.net/@maraokafor",
+      `/r/${PAGE_ID}/icon-instagram`,
+      `/r/${PAGE_ID}/icon-threads-1`,
       "mailto:hello@maraokafor.com",
     ]);
     for (const a of anchors) {
@@ -361,7 +375,7 @@ describe("M2-18 grid block", () => {
     const cells = Array.from(parsed.querySelectorAll("[data-block-type=grid] a"));
     expect(cells).toHaveLength(2);
     expect(cells[0]!.getAttribute("data-item-id")).toBe("cell-prints-01");
-    expect(cells[0]!.getAttribute("href")).toBe("https://maraokafor.com/prints");
+    expect(cells[0]!.getAttribute("href")).toBe(`/r/${PAGE_ID}/cell-prints-01`);
     expect(cells[0]!.textContent).toBe("PrintsShop the archive");
   });
 
@@ -386,7 +400,7 @@ describe("M2-21 card block", () => {
     const parsed = dom(render(doc({}, [{ ...blocks.card, image: null }])));
     const card = parsed.querySelector("[data-block-type=card]")!;
     expect(card.tagName).toBe("A");
-    expect(card.getAttribute("href")).toBe(blocks.card.url);
+    expect(card.getAttribute("href")).toBe(`/r/${PAGE_ID}/${blocks.card.id}`);
     expect(card.querySelectorAll("a")).toHaveLength(0);
     expect(card.querySelector("img")).toBeNull();
     expect(card.querySelector(".pg-card-banner")?.hasAttribute("data-has-image")).toBe(false);
@@ -432,7 +446,7 @@ describe("M2-20 image block", () => {
     expect(img.getAttribute("loading")).toBe("lazy");
     expect(img.getAttribute("alt")).toBe(blocks.image.alt);
     const link = parsed.querySelector("[data-block-type=image] a")!;
-    expect(link.getAttribute("href")).toBe(blocks.image.url);
+    expect(link.getAttribute("href")).toBe(`/r/${PAGE_ID}/${blocks.image.id}`);
     expect(link.contains(img)).toBe(true);
   });
 
@@ -473,8 +487,10 @@ describe("M2-19 embed block", () => {
     expect(parsed.querySelector(".pg-embed-caption")?.textContent).toBe(
       "Behind the lens, ep. 4 · YouTube",
     );
-    // No request to a third party before the click: no thumbnail, no preconnect, no script.
-    expect(html).not.toMatch(/youtube\.com|youtube-nocookie|youtu\.be|google/);
+    // No request to a third party before the click: no thumbnail, no preconnect, no script. (The player's
+    // own address rides in the button's `data-embed-*` attributes, which only a tap turns into an iframe.)
+    const bare = html.replace(/ data-embed-[a-z]+="[^"]*"/g, "");
+    expect(bare).not.toMatch(/youtube\.com|youtube-nocookie|youtu\.be|google/);
     expect(html).not.toContain("ytimg");
     expect(html).not.toContain("<script");
   });
@@ -492,34 +508,38 @@ describe("M2-19 embed block", () => {
     ["playlist", 352],
     ["show", 352],
     ["artist", 352],
-  ])("renders a lazy Spotify %s iframe %ipx tall from the rebuilt embed url", (kind, height) => {
-    const parsed = dom(render(doc({}, [sp(kind)])));
-    const frame = parsed.querySelector("iframe")!;
-    expect(frame.getAttribute("src")).toBe(
-      `https://open.spotify.com/embed/${kind}/37i9dQZF1DXcBWIGoYBM5M`,
-    );
-    expect(frame.getAttribute("height")).toBe(String(height));
-    expect(frame.getAttribute("width")).toBe("100%");
-    expect(frame.getAttribute("loading")).toBe("lazy");
-    expect(frame.getAttribute("title")).toBe("Studio playlist (Spotify player)");
-    expect(frame.getAttribute("allow")).toContain("encrypted-media");
-    expect(parsed.querySelector("button")).toBeNull();
-  });
+  ])(
+    "renders a Spotify %s facade %ipx tall that carries the rebuilt embed url (M8-05)",
+    (kind, height) => {
+      const parsed = dom(render(doc({}, [sp(kind)])));
+      expect(parsed.querySelector("iframe")).toBeNull();
+      const button = parsed.querySelector("[data-block-type=embed] button")!;
+      expect(button.getAttribute("data-embed-src")).toBe(
+        `https://open.spotify.com/embed/${kind}/37i9dQZF1DXcBWIGoYBM5M`,
+      );
+      expect(button.getAttribute("data-embed-height")).toBe(String(height));
+      expect(button.getAttribute("style")).toContain(`height:${height}px`);
+      expect(button.getAttribute("data-embed-fit")).toBe("player");
+      expect(button.getAttribute("data-embed-title")).toBe("Studio playlist (Spotify player)");
+      expect(button.getAttribute("data-embed-allow")).toContain("encrypted-media");
+      expect(button.getAttribute("aria-label")).toBe("Play music: Studio playlist");
+    },
+  );
 
-  it("builds the iframe src from the parsed id, never from the typed url", () => {
+  it("builds the player url from the parsed id, never from the typed url", () => {
     const tricky = {
       ...sp("track"),
       url: "https://open.spotify.com/track/37i9dQZF1DXcBWIGoYBM5M?x=%22%20onload%3Dalert(1)",
     };
-    const frame = dom(render(doc({}, [tricky]))).querySelector("iframe")!;
-    expect(frame.getAttribute("src")).toBe(
+    const button = dom(render(doc({}, [tricky]))).querySelector("[data-block-type=embed] button")!;
+    expect(button.getAttribute("data-embed-src")).toBe(
       "https://open.spotify.com/embed/track/37i9dQZF1DXcBWIGoYBM5M",
     );
   });
 
   it.each([
     "https://evil.example/x",
-    "https://vimeo.com/76979871",
+    "https://vimeo.com/channels/staffpicks",
     "https://www.youtube.com/@maraokafor",
     "https://youtube.com.evil.example/watch?v=jNQXAC9IVRw",
     "javascript:alert(1)",

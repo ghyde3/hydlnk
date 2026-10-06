@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { axeViolations } from "../fixtures/a11y";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
+import { PRODUCTION_BUILD } from "../fixtures/http";
 import { rendererFixtureDoc } from "@/components/page/fixture-doc";
 import { TOKEN_KEYS, tokenCssVarName } from "@/lib/theme";
 import type { Block } from "@/lib/document";
@@ -218,7 +219,7 @@ test.describe("M2-05 the shared page renderer", () => {
     await expect(img).toHaveAttribute("alt", "Mara Okafor");
     await expect(img).toHaveAttribute(
       "src",
-      new RegExp(`/storage/v1/object/public/page-media/${photo.path}$`),
+      new RegExp(`^http://localhost:\\d+/media/${photo.path}$`),
     );
     expect(await css(img, "object-fit")).toBe("cover");
     const avatar = await box(page.locator(".pg-avatar"));
@@ -228,7 +229,7 @@ test.describe("M2-05 the shared page renderer", () => {
     expect(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(200);
   });
 
-  test("M2-05 outbound anchors have rel nofollow noopener and an http(s) href", async ({
+  test("M2-05 outbound anchors have rel nofollow noopener and an /r redirect href (mailto for email)", async ({
     page,
   }) => {
     const live = await publishedPage("ro", publishDocOf(ALL_BLOCKS));
@@ -240,7 +241,7 @@ test.describe("M2-05 the shared page renderer", () => {
     );
     for (const [href, rel] of attrs) {
       expect(rel).toBe("nofollow noopener");
-      expect(href).toMatch(/^(https?:\/\/|mailto:)/);
+      expect(href).toMatch(/^(\/r\/[0-9a-f-]{36}\/[A-Za-z0-9_-]+|mailto:.+)$/);
     }
   });
 
@@ -297,6 +298,14 @@ test.describe("M2-05 the dev-only fixture route /dev/renderer", () => {
     page,
   }, testInfo) => {
     const response = await page.goto(url(undefined, "/dev/renderer"));
+    if (PRODUCTION_BUILD) {
+      // The fixture is dev-only: a production build answers 404 (RendererFixture), which is what
+      // CI's browser suite runs against. The stress layout is held on real pages by the specs above.
+      expect(response?.status(), "the fixture route must not exist in a production build").toBe(
+        404,
+      );
+      return;
+    }
     expect(response?.status(), "needs src/app/(marketing)/dev/renderer/page.tsx").toBe(200);
     await expectStressLayout(page, testInfo.project.name);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Abcdefghij".repeat(6));
@@ -321,10 +330,14 @@ test.describe("M2-05 the editor preview uses the same renderer", () => {
     await showView(page, "Preview");
     const before = page.url();
     await previewScreen(page).locator(`a[data-block-id="${link.id}"]`).click();
+    // M6-03: a tap in the phone's full-size preview opens the block (the Blocks tab), so reopen Preview.
+    await showView(page, "Preview");
     await previewScreen(page).locator(`[data-block-id="${social.id}"] a`).first().click();
     await page.waitForTimeout(300);
     expect(page.url()).toBe(before);
-    // The renderer's root is the preview's root too, with the draft's resolved background.
+    // The renderer's root is the preview's root too, with the draft's resolved background. (A tap in
+    // the phone's sheet closed it, M7-09, so open it again.)
+    await showView(page, "Preview");
     const root = previewScreen(page).locator("[data-page-root]");
     await expect(root).toHaveCount(1);
     expect(await css(root, "background-color")).toBe("rgb(247, 247, 245)");

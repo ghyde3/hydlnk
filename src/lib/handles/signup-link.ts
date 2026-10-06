@@ -1,11 +1,13 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import { emailSchema } from "@/lib/auth/email";
+import { classifyOtpError } from "@/lib/auth/otp-error";
 import { clientEnv } from "@/lib/env/client";
 import { PENDING_HANDLE_METADATA_KEY } from "./pending";
 
 export type SignupLinkResult =
-  { ok: true } | { ok: false; error: "invalid_email" | "rate_limited" | "failed" };
+  | { ok: true }
+  | { ok: false; error: "invalid_email" | "rate_limited" | "too_many_emails" | "failed" };
 
 /**
  * Emails a sign-in link that carries the chosen handle (M1-12). The handle rides inside the
@@ -38,13 +40,8 @@ export async function sendSignupLink(email: unknown, handle: string): Promise<Si
   });
   if (!error) return { ok: true };
 
-  if (
-    error.status === 429 ||
-    error.code === "over_email_send_rate_limit" ||
-    error.code === "over_request_rate_limit"
-  ) {
-    return { ok: false, error: "rate_limited" };
-  }
+  const failure = classifyOtpError(error);
+  if (failure !== "failed") return { ok: false, error: failure };
   console.error(
     "[handles] sending the signup link failed",
     error.code ?? error.status,

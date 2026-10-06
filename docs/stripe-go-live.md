@@ -1,5 +1,7 @@
 # Stripe go-live runbook
 
+> **Status (2026-10-06):** live billing is set up. Gary configured it by hand, and a live dry run (`setup-live.sh --profile hydlnk-live --live`) against the HYDLNK account found the products, the four prices, the customer portal and the webhook already matching `catalog.json`: no changes needed. Use this kit for future price changes.
+
 Gary's checklist for taking real payments. Do the steps in order. Plan on an hour or two, most of it waiting on Stripe's own checks.
 
 Two rules for the whole thing: a Stripe secret never goes into chat, a file or the shell history (password manager, then straight into Vercel), and nothing here touches production code until step f.

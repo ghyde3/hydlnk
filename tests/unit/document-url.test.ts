@@ -259,9 +259,25 @@ describe("every URL-bearing field of publishDocSchema", () => {
     expect(
       tokenSetSchema.safeParse({ ...noirTokens, bgImage: "javascript:alert(1)" }).success,
     ).toBe(false);
+    // Not "the same rule" any more (M3-02): a background image is an upload to this project's
+    // page-media bucket, so a third-party URL is refused and a project media URL is accepted.
     expect(
       tokenSetSchema.safeParse({ ...noirTokens, bgImage: "https://example.com/a.png" }).success,
-    ).toBe(true);
+    ).toBe(false);
+    const previous = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    try {
+      expect(
+        tokenSetSchema.safeParse({
+          ...noirTokens,
+          bgImage:
+            "http://127.0.0.1:54321/storage/v1/object/public/page-media/0b6f1a5e-7c1d-4a52-9d0e-3a7c5e8f2b14/bg-0123abcd.webp",
+        }).success,
+      ).toBe(true);
+    } finally {
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previous;
+    }
   });
 });
 

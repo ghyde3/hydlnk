@@ -4,7 +4,7 @@ import { emptyDraft } from "@/lib/document";
 import { claimHandleWithClient } from "@/lib/handles/claim-core";
 import { adminClient, deleteUser } from "../fixtures/auth";
 import { cleanupUsers, makeUser, rand } from "../fixtures/data";
-import { NEVER_STORED, rawRequest } from "../fixtures/http";
+import { NEVER_STORED, PRODUCTION_BUILD, rawRequest } from "../fixtures/http";
 
 /**
  * M1-15: a tenant host serves a placeholder for a claimed-but-unpublished handle and a 404 for an
@@ -21,6 +21,16 @@ async function claimed(label: string) {
 }
 
 test.afterAll(cleanupUsers);
+
+/**
+ * A production build (CI's browser suite, M9-13; or HL_PROD_PORT) caches what a tenant host answers:
+ * an unclaimed handle's 404 for 5 seconds and a malformed host's for a day (`s-maxage`, M2-26), and
+ * a claimed page until its tag expires. `next dev` caches nothing. So the 404's Cache-Control is
+ * `no-store` or `no-cache` there (M1-15's wording, kept) and a short shared-cache lifetime here, and a
+ * claim or an account deletion made straight in the database (as these specs do) shows only once
+ * the cached answer expires: the real claim and delete call `invalidateHandle`.
+ */
+const NOT_FOUND_CACHE = PRODUCTION_BUILD ? /^s-maxage=\d+(,|$)/ : NEVER_STORED;
 
 test.describe("M1-15 placeholder for a claimed handle", () => {
   test("M1-15 serves 200 with title, one h1, the line and noindex", async ({ page }) => {
@@ -134,7 +144,7 @@ test.describe("M1-15 404 for an unclaimed handle", () => {
     const handle = `zq-none-${rand()}`;
     const res = await rawRequest(`${handle}.localhost:3000`, "/");
     expect(res.status).toBe(404);
-    expect(res.headers["cache-control"]).toMatch(NEVER_STORED);
+    expect(res.headers["cache-control"]).toMatch(NOT_FOUND_CACHE);
     expect(res.headers["set-cookie"]).toBeUndefined();
     expect(res.body).toContain('<meta name="robots" content="noindex"');
 
@@ -168,21 +178,33 @@ test.describe("M1-15 404 for an unclaimed handle", () => {
     expect(await claimHandleWithClient(adminClient(), owner.id, handle)).toMatchObject({
       ok: true,
     });
-    const response = await page.reload();
-    expect(response?.status()).toBe(200);
+    // `next dev` answers at once. A production build may still hold the 5 second cached 404 of the
+    // first request above (the claim here did not go through the action that expires it): reload
+    // until the placeholder replaces it, which takes at most one expiry and a regeneration.
+    await expect
+      .poll(async () => (await page.reload())?.status(), {
+        timeout: PRODUCTION_BUILD ? 30_000 : 5_000,
+        intervals: [500, 1_000, 2_000],
+      })
+      .toBe(200);
     await expect(page.getByText("Nothing published here yet.")).toBeVisible();
 
     await deleteUser(owner.id);
-    const after = await rawRequest(host, "/");
-    expect(after.status).toBe(404);
-    expect(after.body).toContain("This address isn’t claimed.");
+    // The 404 back "at once" is the dev server's: a production build keeps the cached placeholder
+    // until its tag expires, which the delete-account action does (checked end to end in
+    // tests/unit/delete-account-cache.test.ts and the Milestone 4 account deletion specs).
+    if (!PRODUCTION_BUILD) {
+      const after = await rawRequest(host, "/");
+      expect(after.status).toBe(404);
+      expect(after.body).toContain("This address isn’t claimed.");
+    }
   });
 
   test("M1-15 two labels, a malformed label and a reserved handle are plain 404s without cookies", async () => {
     for (const host of ["a.b.localhost:3000", "-x1.localhost:3000", "api.localhost:3000"]) {
       const res = await rawRequest(host, "/");
       expect(res.status, host).toBe(404);
-      expect(res.headers["cache-control"], host).toMatch(NEVER_STORED);
+      expect(res.headers["cache-control"], host).toMatch(NOT_FOUND_CACHE);
       expect(res.headers["set-cookie"], host).toBeUndefined();
       expect(res.body, host).not.toContain("This address isn’t claimed.");
     }

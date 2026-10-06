@@ -4,6 +4,8 @@ import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { uniq } from "../fixtures/data";
 import { getMessage, messagesTo, waitForMessages } from "../fixtures/mailpit";
+import { gsi, routeGoogleScript, stubFace } from "../fixtures/google-stub";
+import { GOOGLE_NONCE_COOKIE } from "@/lib/auth/google-shared";
 
 const LOGIN = url("app", "/login");
 const SUPABASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321";
@@ -24,7 +26,9 @@ const sendButton = (page: Page) => page.getByRole("button", { name: "Email me a 
 test.describe("M1-03 log in page and email sign-in link", () => {
   test("M1-03 layout: charcoal panel, Log in form, no handle or password field", async ({
     page,
+    context,
   }) => {
+    await routeGoogleScript(context);
     const response = await openLogin(page);
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("HYDLNK — Log in");
@@ -32,8 +36,9 @@ test.describe("M1-03 log in page and email sign-in link", () => {
     await expect(emailField(page)).toBeVisible();
     await expect(sendButton(page)).toBeVisible();
     await expect(page.getByText("or", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Create your page" })).toHaveAttribute(
+    // Google's own button (stubbed here, M1-29) sits below the "or" rule.
+    await expect(stubFace(page)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Create your site" })).toHaveAttribute(
       "href",
       "/signup",
     );
@@ -163,8 +168,14 @@ test.describe("M1-03 log in page and email sign-in link", () => {
 
   test("M1-03 invalid input shows an alert, sends no request and refocuses the field", async ({
     page,
+    context,
   }) => {
+    await routeGoogleScript(context);
     await openLogin(page);
+    // Google's button asks the server for its nonce when the page loads (M1-29): let that finish,
+    // so what is recorded below is only what pressing the email button sends.
+    await expect(stubFace(page)).toBeVisible();
+    await expect.poll(async () => (await gsi(page)).inits.length).toBe(1);
     const posts: string[] = [];
     page.on("request", (r) => {
       if (r.method() === "POST") posts.push(r.url());
@@ -232,7 +243,11 @@ test.describe("M1-03 log in page and email sign-in link", () => {
 
     test("M1-03 at 390x844: no horizontal scroll, 44px targets, slim logo-only bar, 16px inputs", async ({
       page,
+      context,
     }, testInfo) => {
+      // Google's real script draws its own 40px button when it loads in time (CI); the stub keeps
+      // the page's own 44px control the thing under test, as the other tests in this file do.
+      await routeGoogleScript(context);
       await openLogin(page);
       await expect(page.getByRole("heading", { level: 1, name: "Log in" })).toBeVisible();
       await expectNoHorizontalScroll(page);
@@ -288,26 +303,43 @@ function readKey(): string {
   return /^NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=(.*)$/m.exec(text)![1]!.trim();
 }
 
-test.describe("M1-08 Continue with Google", () => {
-  test("M1-08 starts the PKCE authorize request with the bare callback as redirect_to", async ({
+/*
+ * M1-08 was written for the redirect flow (a "Continue with Google" button that started Supabase's
+ * PKCE authorize request). Google sign-in is now Google's own button handing the page an ID token
+ * (M1-29, tests/e2e/m5/google-signin.spec.ts), so these specs keep the intent of M1-08 for it:
+ * the button is on the page below the "or" rule, pressing it never sends the browser off to
+ * Supabase's authorize endpoint, a failed external sign-in lands on /login with a message and no
+ * session, and the layout holds at 390 and 1440. Google's script is stubbed; Google is never driven.
+ */
+test.describe("M1-08 Google on the log in page (replaced by the Google Identity Services button)", () => {
+  test("M1-08 the button is Google's own: initialised once, popup mode, and pressing it never starts a redirect to Supabase's authorize endpoint", async ({
     page,
+    context,
   }) => {
-    await openLogin(page);
+    await routeGoogleScript(context);
     let authorize: string | undefined;
     await page.route("**/auth/v1/authorize**", async (route) => {
       authorize = route.request().url();
       await route.fulfill({ status: 200, contentType: "text/html", body: "<p>intercepted</p>" });
     });
-    await page.getByRole("button", { name: "Continue with Google" }).click();
-    await expect.poll(() => authorize, { timeout: 10_000 }).toBeTruthy();
+    await openLogin(page);
+    await expect(stubFace(page)).toBeVisible();
 
-    const target = new URL(authorize!);
-    expect(target.host).toBe(new URL(SUPABASE).host);
-    expect(target.pathname).toBe("/auth/v1/authorize");
-    expect(target.searchParams.get("provider")).toBe("google");
-    expect(target.searchParams.get("code_challenge")).toBeTruthy();
-    expect(target.searchParams.get("code_challenge_method")).toBeTruthy();
-    expect(target.searchParams.get("redirect_to")).toBe("http://app.localhost:3000/auth/callback");
+    const state = await gsi(page);
+    expect(state.inits).toHaveLength(1);
+    expect(state.inits[0]).toMatchObject({ ux_mode: "popup", auto_select: false });
+    expect(state.inits[0]!.client_id.length).toBeGreaterThan(0);
+    // The nonce handed to Google is a hash; the raw value stays in an httpOnly cookie.
+    expect(state.inits[0]!.nonce).toMatch(/^[0-9a-f]{64}$/);
+    expect(
+      (await context.cookies(LOGIN)).find((c) => c.name === GOOGLE_NONCE_COOKIE)?.httpOnly,
+    ).toBe(true);
+
+    // A press with no usable credential stays on the page: nothing goes to /authorize.
+    await stubFace(page).click();
+    await page.waitForTimeout(500);
+    expect(authorize).toBeUndefined();
+    expect(page.url()).toBe(LOGIN);
   });
 
   test("M1-08 the callback is in the local redirect allow-list", async () => {
@@ -316,7 +348,7 @@ test.describe("M1-08 Continue with Google", () => {
     expect(list).toContain('"http://app.localhost:3000/auth/callback"');
   });
 
-  test("M1-08 a cancelled Google sign-in lands on /login with the message and no session", async ({
+  test("M1-08 a failed external sign-in lands on /login with the message and no session", async ({
     page,
     context,
   }) => {
@@ -324,47 +356,51 @@ test.describe("M1-08 Continue with Google", () => {
       url("app", "/auth/callback?error=access_denied&error_description=The+user+denied+access"),
     );
     expect(response?.status()).toBe(200);
-    await expect(page).toHaveURL(url("app", "/login?error=google_cancelled"));
+    await expect(page).toHaveURL(url("app", "/login?error=link_invalid"));
     await expect(
-      page.getByText("Google sign-in didn’t finish. Try again or use an email link."),
+      page.getByText("That sign-in link expired or was already used. Request a new one."),
     ).toBeVisible();
     expect((await context.cookies()).filter((c) => c.name.startsWith("sb-"))).toEqual([]);
   });
 
   test.describe("phone layout", () => {
     test.skip(({ isMobile }) => !isMobile, "phone project only");
-    test("M1-08 at 390x844: full-width 48px Google button with a 1px #C9C5BE border", async ({
+    test("M1-08 at 390x844: Google's button spans the form column inside a row at least 48px tall", async ({
       page,
+      context,
     }) => {
+      await routeGoogleScript(context);
       await openLogin(page);
+      await expect(stubFace(page)).toBeVisible();
       await expectNoHorizontalScroll(page);
       await expectTapTargets(page);
-      const button = page.getByRole("button", { name: "Continue with Google" });
-      const box = await button.boundingBox();
-      const form = await page.locator("form").boundingBox();
-      expect(box!.height).toBe(48);
-      expect(box!.width).toBeCloseTo(form!.width, 0);
-      const style = await button.evaluate((el) => {
-        const s = getComputedStyle(el);
-        return { w: s.borderTopWidth, color: s.borderTopColor, style: s.borderTopStyle };
-      });
-      expect(style).toEqual({ w: "1px", color: "rgb(201, 197, 190)", style: "solid" });
+      // Google draws its button 40px tall inside its own iframe and does not allow resizing it; the
+      // row around it keeps the 48px height.
+      const face = (await stubFace(page).boundingBox())!;
+      const row = (await stubFace(page).locator("xpath=..").boundingBox())!;
+      const form = (await page.locator("form").boundingBox())!;
+      expect(row.height).toBeGreaterThanOrEqual(48);
+      expect(face.width).toBeCloseTo(form.width, 0);
     });
   });
 
   test.describe("desktop layout", () => {
     test.skip(({ isMobile }) => isMobile, "desktop project only");
-    test("M1-08 at 1440x900: Google button below the or divider in the 400px column, 48px tall", async ({
+    test("M1-08 at 1440x900: Google's button below the or divider in the 400px column", async ({
       page,
+      context,
     }) => {
+      await routeGoogleScript(context);
       await openLogin(page);
+      await expect(stubFace(page)).toBeVisible();
       const divider = await page.getByText("or", { exact: true }).boundingBox();
-      const button = await page.getByRole("button", { name: "Continue with Google" }).boundingBox();
+      const button = (await stubFace(page).boundingBox())!;
+      const row = (await stubFace(page).locator("xpath=..").boundingBox())!;
       const column = await page.locator("main > div").boundingBox();
-      expect(button!.y).toBeGreaterThan(divider!.y);
-      expect(button!.height).toBe(48);
-      expect(button!.width).toBeLessThanOrEqual(400);
-      expect(button!.x).toBeGreaterThanOrEqual(column!.x - 1);
+      expect(button.y).toBeGreaterThan(divider!.y);
+      expect(row.height).toBeGreaterThanOrEqual(48);
+      expect(button.width).toBeLessThanOrEqual(400);
+      expect(button.x).toBeGreaterThanOrEqual(column!.x - 1);
     });
   });
 });

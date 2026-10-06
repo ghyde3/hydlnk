@@ -1,9 +1,14 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { PublishDoc } from "@/lib/document";
+import type { Block, PublishDoc } from "@/lib/document";
+import type { SiteContext } from "@/lib/site/menu";
 import { tokensToCssVars } from "@/lib/theme";
+import { backgroundImageUrl, gradientIsCustom } from "./background";
+import { Banner, bannerOf } from "./banner";
 import { BlockView, type BlockContext } from "./blocks";
 import { PageFooter, type PageChrome } from "./footer";
 import { Profile } from "./profile";
+import { SiteHeader } from "./site-header";
+import { SiteMenu } from "./site-menu";
 import "./page-renderer.css";
 
 export type { PageChrome } from "./footer";
@@ -21,6 +26,23 @@ export interface PageRendererProps {
   chrome?: PageChrome;
   /** Extra footer content for callers that need more than the two standard links. */
   footer?: ReactNode;
+  /** A small decorative copy (the editor's phone dock): nothing interactive, nothing third-party. See `BlockContext.thumbnail`. */
+  thumbnail?: boolean;
+  /** Embeds as still posters, not players: nothing is requested from YouTube or Spotify (the shared preview, M6-10). See `BlockContext.inertEmbeds`. */
+  inertEmbeds?: boolean;
+  /** `page_link` blocks as plain text, not anchors (the shared preview, M11-12). See `BlockContext.inertLinks`. */
+  inertLinks?: boolean;
+  /**
+   * The rest of the site (M11-07): the href of each sub-page for `page_link` blocks, and the menu to
+   * draw (built by `buildMenu`: null for none). Absent for a page drawn on its own.
+   */
+  site?: SiteContext;
+  /**
+   * Draw a sub-page (M11-06) instead of Home's own content: the site's small header (avatar and name,
+   * linking to Home) replaces the profile, the title is the page's one `<h1>`, and `blocks` replace
+   * Home's. `doc` still supplies the site's theme, fonts, banner and profile.
+   */
+  subPage?: { title: string; blocks: readonly Block[] };
 }
 
 /**
@@ -35,21 +57,71 @@ export interface PageRendererProps {
  * Clicks are not handled here: the editor preview wraps the renderer and stops anchors from
  * navigating, so the markup (and the hrefs) stay identical everywhere.
  */
-export function PageRenderer({ doc, pageId, mode, chrome, footer }: PageRendererProps) {
+export function PageRenderer({
+  doc,
+  pageId,
+  mode,
+  chrome,
+  footer,
+  thumbnail,
+  inertEmbeds,
+  inertLinks,
+  site,
+  subPage,
+}: PageRendererProps) {
   const { tokens } = doc;
-  const ctx: BlockContext = { pageId, tokens, mode };
+  const ctx: BlockContext = {
+    pageId,
+    tokens,
+    mode,
+    ...(thumbnail ? { thumbnail } : {}),
+    ...(inertEmbeds ? { inertEmbeds } : {}),
+    ...(inertLinks ? { inertLinks } : {}),
+    ...(site ? { site: { hrefs: site.hrefs } } : {}),
+  };
+  // The background image is drawn only from the owner's page-media bucket: the URL is rebuilt from
+  // a validated path, and anything else (a third-party address, a bad row) draws no image.
+  const image = backgroundImageUrl(tokens);
+  const vars: Record<string, string> = tokensToCssVars(tokens);
+  vars["--t-bg-image"] = image === null ? "none" : `url("${image}")`;
+  const backgroundType =
+    image !== null ? "image" : tokens.bgType === "gradient" ? "gradient" : "solid";
+  // The support banner (M9-23): above the column, across the page's width. `data-banner` on the root
+  // only when there is one, so a page without it has the markup it always had.
+  const banner = bannerOf(doc);
   return (
     <div
       className="pg-root"
       data-page-root=""
+      {...(banner ? { "data-banner": "" } : {})}
       data-density={tokens.density}
       data-align={tokens.align}
-      style={tokensToCssVars(tokens) as CSSProperties}
+      data-bg-type={backgroundType}
+      data-gradient={
+        backgroundType === "gradient" && gradientIsCustom(tokens) ? "custom" : undefined
+      }
+      style={vars as CSSProperties}
     >
+      {image === null ? null : (
+        // Behind the content, inside the root so it fills the whole page: the picture (blurred on
+        // its own, so text and buttons never are) with the page color laid over it at the overlay
+        // opacity. Decorative, so hidden from assistive technology.
+        <div className="pg-bg" aria-hidden="true">
+          <div className="pg-bg-image" data-bg-layer="image" />
+          <div className="pg-bg-overlay" data-bg-layer="overlay" />
+        </div>
+      )}
+      {banner ? <Banner banner={banner} pageId={pageId} thumbnail={thumbnail === true} /> : null}
       <div className="pg-column">
-        <Profile profile={doc.profile} />
+        {subPage ? (
+          <SiteHeader profile={doc.profile} link={thumbnail !== true} />
+        ) : (
+          <Profile profile={doc.profile} />
+        )}
+        {site?.menu ? <SiteMenu items={site.menu.items} mode={site.menu.mode} /> : null}
+        {subPage ? <h1 className="pg-pagetitle">{subPage.title}</h1> : null}
         <main className="pg-blocks">
-          {doc.blocks.map((block) => (
+          {(subPage ? subPage.blocks : doc.blocks).map((block) => (
             <BlockView key={block.id} block={block} ctx={ctx} />
           ))}
         </main>

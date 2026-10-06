@@ -22,7 +22,7 @@ select tests.clear_authentication();
 
 select set_eq(
   $$ select name from public.themes $$,
-  $$ values ('Noir'), ('Ivory'), ('Smoke') $$,
+  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember'), ('Linen'), ('Cloud'), ('Blush'), ('Citrus'), ('Graphite'), ('Ocean'), ('Plum'), ('Forest'), ('Sunset') $$,
   'anon reads the system themes and nothing else'
 );
 select is(
@@ -55,7 +55,7 @@ select tests.authenticate_as('a');
 
 select set_eq(
   $$ select name from public.themes where owner_id is null $$,
-  $$ values ('Noir'), ('Ivory'), ('Smoke') $$,
+  $$ values ('Noir'), ('Ivory'), ('Smoke'), ('Paper'), ('Sage'), ('Midnight'), ('Ember'), ('Linen'), ('Cloud'), ('Blush'), ('Citrus'), ('Graphite'), ('Ocean'), ('Plum'), ('Forest'), ('Sunset') $$,
   'an authenticated user reads the system themes'
 );
 select set_eq(
@@ -230,9 +230,9 @@ select throws_ok(
   'a theme needs a name'
 );
 select throws_ok(
-  format($$ insert into public.themes (owner_id, name, tokens) values (%L, repeat('n', 61), '{}') $$, tests.get_supabase_uid('c')),
+  format($$ insert into public.themes (owner_id, name, tokens) values (%L, repeat('n', 41), '{}') $$, tests.get_supabase_uid('c')),
   '23514', null,
-  'a theme name is at most 60 characters'
+  'a theme name is at most 40 characters'
 );
 select throws_ok(
   format($$ insert into public.themes (owner_id, name, tokens) values (%L, 'Huge', jsonb_build_object('x', repeat('x', 9000))) $$, tests.get_supabase_uid('c')),
@@ -262,8 +262,8 @@ select is_empty(
 );
 select is(
   (select count(*)::int from public.themes where owner_id is null),
-  4,
-  'and the system themes stay (3 shipped + the one the server added)'
+  17,
+  'and the system themes stay (16 shipped + the one the server added)'
 );
 
 select * from finish();

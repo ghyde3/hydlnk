@@ -2,14 +2,20 @@
 
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { GripVertical } from "lucide-react";
 import { memo, useEffect, useLayoutEffect, useRef, type Dispatch } from "react";
-import type { Block, PublishError } from "@/lib/document";
+import { LIMITS, type Block, type PublishError } from "@/lib/document";
 import { BLOCK_FORMS, blockRowSummary } from "@/lib/editor/contracts";
+import { BLOCK_LIMIT_MESSAGE } from "@/lib/editor/messages";
 import type { EditorAction, FocusRequest } from "@/lib/editor/state";
-import { GripIcon } from "./icons";
+import { Icon } from "@/components/app/icon";
+import { FeaturedChip } from "@/components/blocks/featured-chip";
+import { LinkTagsChip, LockChip } from "@/components/blocks/link-field-chips";
+import { OverrideChip } from "@/components/themes";
 
 /** A text control to start typing in: the file input of an image control is hidden, so it is skipped. */
-const FIRST_FIELD = "input:not([type=file]):not([type=hidden]), textarea, select";
+const FIRST_FIELD =
+  "input:not([type=file]):not([type=hidden]), textarea, select, [contenteditable=true], [data-text-editor-first]";
 
 interface BlockRowProps {
   block: Block;
@@ -27,7 +33,7 @@ interface BlockRowProps {
 /**
  * One row of the block list (M2-11, M2-12, M2-13, M2-14): drag handle, type, title and sub line,
  * visibility toggle, and an edit panel with the block's form (the renderer area's BLOCK_FORMS) and
- * Move up, Move down and Delete block. Only the handle is a drag activator (and the only element
+ * Move up, Move down, Duplicate block (M6-05) and Delete block. Only the handle is a drag activator (and the only element
  * with `touch-action: none`), so a swipe that starts on the row scrolls the page.
  */
 export const BlockRow = memo(function BlockRow({
@@ -54,9 +60,11 @@ export const BlockRow = memo(function BlockRow({
   const invalid = errors.length > 0;
   const Form = BLOCK_FORMS[block.type];
   const panelDomId = `block-panel-${block.id}`;
+  // At the 50-block limit nothing can be added to the page, a copy included.
+  const full = total >= LIMITS.blocks;
 
   // Focus requests: a new block's first input (a divider: the row), a failed publish's first
-  // invalid input, the neighbour of a deleted row. Each also scrolls the target into view.
+  // invalid input, the neighbor of a deleted row. Each also scrolls the target into view.
   const nonce = focus?.nonce ?? null;
   useEffect(() => {
     if (!focus || nonce === null) return;
@@ -70,7 +78,9 @@ export const BlockRow = memo(function BlockRow({
           ? [
               panel.querySelector<HTMLElement>('[aria-invalid="true"]'),
               panel
-                .querySelector<HTMLElement>('p[data-field="image"]')
+                .querySelector<HTMLElement>(
+                  'p[data-field="image"], p[data-field="icon"], p[data-field="featured"]',
+                )
                 ?.parentElement?.parentElement?.querySelector<HTMLElement>(
                   "button:not(:disabled)",
                 ) ?? null,
@@ -80,7 +90,14 @@ export const BlockRow = memo(function BlockRow({
                 a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
               )
           : [];
-      const target = invalidControls[0] ?? panel?.querySelector<HTMLElement>(FIRST_FIELD);
+      // A tap on one social icon or grid cell in the preview (M6-03) asks for that item's first field.
+      const item =
+        focus.kind === "first-input" && focus.itemId !== undefined
+          ? panel?.querySelector<HTMLElement>(
+              `[data-item-id="${globalThis.CSS.escape(focus.itemId)}"] :is(input:not([type=file]):not([type=hidden]), textarea, select)`,
+            )
+          : null;
+      const target = invalidControls[0] ?? item ?? panel?.querySelector<HTMLElement>(FIRST_FIELD);
       if (target) {
         target.scrollIntoView({ block: "center" });
         target.focus({ preventScroll: true });
@@ -128,7 +145,7 @@ export const BlockRow = memo(function BlockRow({
       data-block-type={block.type}
       data-invalid={invalid ? "" : undefined}
       data-hidden={hidden ? "true" : undefined}
-      className={`overflow-hidden rounded-md border ${border} ${sortable.isDragging ? "opacity-40" : ""}`}
+      className={`overflow-clip rounded-md border ${border} ${sortable.isDragging ? "opacity-40" : ""}`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
     >
       <div className="flex items-center gap-0.5 pr-1">
@@ -151,7 +168,7 @@ export const BlockRow = memo(function BlockRow({
             {...listeners}
             className="flex size-11 shrink-0 cursor-grab touch-none items-center justify-center text-[#9a958d]"
           >
-            <GripIcon />
+            <Icon icon={GripVertical} size={15} />
           </button>
           <button
             ref={mainRef}
@@ -182,6 +199,10 @@ export const BlockRow = memo(function BlockRow({
             ) : null}
           </button>
         </div>
+        <OverrideChip block={block} />
+        <FeaturedChip block={block} />
+        <LinkTagsChip block={block} />
+        <LockChip block={block} />
         {hidden ? (
           <span className="hidden shrink-0 rounded-sm bg-track px-[7px] py-[3px] font-mono text-[11px] whitespace-nowrap text-text-2 hl:inline-block">
             Hidden
@@ -215,9 +236,13 @@ export const BlockRow = memo(function BlockRow({
             block={block}
             errors={errors}
             onChange={(next) => dispatch({ type: "block/update", block: next })}
+            onSessionChange={(next, session) =>
+              dispatch({ type: "block/session-update", block: next, session })
+            }
+            onSessionEnd={() => dispatch({ type: "block/session-end" })}
             onImage={(image) => dispatch({ type: "block/set-image", id: block.id, image })}
           />
-          <div className="flex flex-wrap gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-1.5">
             <button
               ref={moveUpRef}
               type="button"
@@ -226,7 +251,7 @@ export const BlockRow = memo(function BlockRow({
                 pendingMove.current = "up";
                 dispatch({ type: "block/move", id: block.id, delta: -1 });
               }}
-              className="min-h-11 flex-1 basis-[84px] rounded-md border border-line-3 bg-surface px-3 text-[13px] font-medium text-ink disabled:opacity-50"
+              className="min-h-11 rounded-md border border-line-3 bg-surface px-3 text-[13px] font-medium text-ink disabled:opacity-50"
             >
               Move up
             </button>
@@ -238,18 +263,31 @@ export const BlockRow = memo(function BlockRow({
                 pendingMove.current = "down";
                 dispatch({ type: "block/move", id: block.id, delta: 1 });
               }}
-              className="min-h-11 flex-1 basis-[84px] rounded-md border border-line-3 bg-surface px-3 text-[13px] font-medium text-ink disabled:opacity-50"
+              className="min-h-11 rounded-md border border-line-3 bg-surface px-3 text-[13px] font-medium text-ink disabled:opacity-50"
             >
               Move down
             </button>
             <button
               type="button"
+              disabled={full}
+              onClick={() => dispatch({ type: "duplicate", id: block.id })}
+              className="min-h-11 rounded-md border border-line-3 bg-surface px-3 text-[13px] font-medium text-ink disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Duplicate block
+            </button>
+            <button
+              type="button"
               onClick={() => dispatch({ type: "block/delete", id: block.id })}
-              className="min-h-11 flex-1 basis-[84px] rounded-md border border-bad-line bg-surface px-3 text-[13px] font-medium text-bad"
+              className="min-h-11 rounded-md border border-bad-line bg-surface px-3 text-[13px] font-medium text-bad"
             >
               Delete block
             </button>
           </div>
+          {full ? (
+            <span role="status" className="text-[13px] text-text-2">
+              {BLOCK_LIMIT_MESSAGE}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </li>

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { publicQueryCount, queryCounterEnabled } from "@/lib/publish/query-counter";
+import {
+  publicQueryCount,
+  siteIndexQueryCount,
+  queryCounterEnabled,
+} from "@/lib/publish/query-counter";
 import { lookupPageId } from "../../../published-page";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ han
   const pageId = await lookupPageId(handle);
   if (!pageId) return new NextResponse(null, { status: 404 });
   return NextResponse.json(
-    { pageId, count: publicQueryCount(pageId) },
+    { pageId, count: publicQueryCount(pageId), indexCount: siteIndexQueryCount(pageId) },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

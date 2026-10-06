@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { routeGoogleScript, stubFace } from "../fixtures/google-stub";
 
 const SIGNUP = url("app", "/signup");
 const css = (page: Page, selector: string, prop: string) =>
@@ -9,11 +10,12 @@ const css = (page: Page, selector: string, prop: string) =>
     .evaluate((el, p) => getComputedStyle(el).getPropertyValue(p), prop);
 
 test.describe("M1-10 signup page layout with brand panel and form", () => {
-  test("M1-10 title and form column copy", async ({ page }) => {
+  test("M1-10 title and form column copy", async ({ page, context }) => {
+    await routeGoogleScript(context);
     const response = await page.goto(SIGNUP);
     expect(response?.status()).toBe(200);
     await expect(page).toHaveTitle("HYDLNK \u2014 Sign up");
-    await expect(page.getByRole("heading", { level: 1, name: "Create your page" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Create your site" })).toBeVisible();
     await expect(
       page.getByText(
         "Pick a handle and we\u2019ll email you a sign-in link. No password to remember.",
@@ -23,17 +25,18 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Email me a sign-in link" })).toBeVisible();
     await expect(page.getByText("or", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+    // Google's own button (stubbed here, M1-30) follows the "or" rule.
+    await expect(stubFace(page)).toBeVisible();
     await expect(page.getByText("By continuing you agree to the")).toBeVisible();
     await expect(page.getByRole("link", { name: "Terms" })).toHaveAttribute(
       "href",
-      "http://localhost:3000/terms",
+      url(null, "/terms"),
     );
     await expect(page.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute(
       "href",
-      "http://localhost:3000/privacy",
+      url(null, "/privacy"),
     );
-    await expect(page.getByText("Already have a page?")).toBeVisible();
+    await expect(page.getByText("Already have a site?")).toBeVisible();
     await expect(page.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
   });
@@ -65,9 +68,20 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     expect(primary).toEqual({ h: 48, bg: "rgb(28, 27, 26)", color: "rgb(255, 255, 255)" });
   });
 
-  test("M1-10 tab order and a 2px brass focus outline with 2px offset", async ({ page }) => {
+  test("M1-10 tab order and a 2px brass focus outline with 2px offset", async ({
+    page,
+    context,
+  }) => {
+    await routeGoogleScript(context);
     await page.goto(SIGNUP);
     await page.getByRole("heading", { level: 1 }).waitFor();
+    // Wait for Google's button to be drawn: until then a disabled placeholder holds its space, and
+    // it is not focusable. With no handle yet it is covered by an aria-disabled "Continue with
+    // Google" button (M1-30), which only exists once the placeholder is gone.
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
     const seen: string[] = [];
     for (let i = 0; i < 9; i++) {
       await page.keyboard.press("Tab");
@@ -103,6 +117,8 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     expect(seen[1]).toBe("input:su-handle"); // handle
     expect(seen[2]).toBe("input:su-email"); // email
     expect(seen[3]).toBe("button:Email me a sign-in link");
+    // With no handle yet Google's button is covered by an aria-disabled "Continue with Google"
+    // button (M1-30), and that cover is the focus stop: the iframe under it is inert.
     expect(seen[4]).toBe("button:Continue with Google");
     expect(seen[5]).toBe("a:Terms");
     expect(seen[6]).toBe("a:Privacy Policy");
@@ -113,9 +129,13 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
     test.skip(({ isMobile }) => !isMobile, "phone project only");
     test("M1-10 at 390x844: no scroll, 44px targets, slim logo-only bar, form directly beneath with 20px padding", async ({
       page,
+      context,
     }) => {
+      // Google's real script draws its own 40px button when it loads in time (CI); the stub keeps
+      // the page's own 44px cover the thing under test, as the other tests in this file do.
+      await routeGoogleScript(context);
       await page.goto(SIGNUP);
-      await expect(page.getByRole("heading", { level: 1, name: "Create your page" })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Create your site" })).toBeVisible();
       await expectNoHorizontalScroll(page);
       await expectTapTargets(page);
       const bar = await page.locator("aside").boundingBox();
@@ -124,7 +144,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       for (const text of [
         "Claim your name.",
         "Free forever. No card required.",
-        "Every block and the full theme system",
+        "Every block, theme and design option",
       ]) {
         await expect(page.getByText(text)).toBeHidden();
       }
@@ -151,7 +171,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       expect(await css(page, "aside", "background-color")).toBe("rgb(28, 27, 26)");
 
       const logo = panel.getByRole("link", { name: "HYDLNK home" });
-      await expect(logo).toHaveAttribute("href", "http://localhost:3000/");
+      await expect(logo).toHaveAttribute("href", url(null, "/"));
       const wordmark = await logo.getByText("HYDLNK", { exact: true }).evaluate((el) => {
         const s = getComputedStyle(el);
         return { size: s.fontSize, weight: s.fontWeight, spacing: s.letterSpacing };
@@ -172,7 +192,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
         })),
       ).toEqual({ size: "44px", weight: "700" });
 
-      const pill = panel.getByText("yourname", { exact: true });
+      const pill = panel.getByText("you", { exact: true });
       await expect(pill).toBeVisible();
       expect(await pill.evaluate((el) => getComputedStyle(el).color)).toBe("rgb(217, 184, 119)");
       const suffix = panel.getByText(".hydlnk.com", { exact: true });
@@ -183,7 +203,7 @@ test.describe("M1-10 signup page layout with brand panel and form", () => {
       await expect(panel.locator("svg").first()).toBeVisible(); // lock icon
 
       for (const text of [
-        "Every block and the full theme system",
+        "Every block, theme and design option",
         "Per-link analytics from day one",
         "Bring your own domain whenever you\u2019re ready",
         "Free forever. No card required.",
@@ -215,6 +235,6 @@ test.describe("M1-10 brand pill follows the handle", () => {
     await page.getByLabel("Handle").fill("Cool Name_9");
     await expect(page.locator("aside").getByText("coolname9", { exact: true })).toBeVisible();
     await page.getByLabel("Handle").fill("");
-    await expect(page.locator("aside").getByText("yourname", { exact: true })).toBeVisible();
+    await expect(page.locator("aside").getByText("you", { exact: true })).toBeVisible();
   });
 });

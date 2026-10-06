@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { ImageResponse } from "next/og";
+import sharp from "sharp";
 import {
   IMAGE_PATH_PATTERN,
   codePointLength,
@@ -9,13 +10,17 @@ import {
 } from "@/lib/document";
 import { initialsOf } from "@/components/page/initials";
 import type { ImageRef, PublishDoc } from "@/lib/document";
-import { mediaOrigin, mediaUrl } from "@/lib/media/url";
+import { mediaOrigin, storageUrl } from "@/lib/media/url";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
 import { loadOgFont, type OgFont } from "./og-font";
+import { shareImagePng } from "./share-og";
 import { pageTag } from "./tags";
 
-/** Bump when the layout changes: it is part of the cache key, so a deploy never serves the old one. */
-const OG_TEMPLATE_VERSION = "1";
+/**
+ * Bump when the layout changes: it is part of the cache key, so a deploy never serves the old one.
+ * "2": a page's share image (M6-32) can replace the generated card.
+ */
+export const OG_TEMPLATE_VERSION = "2";
 
 export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
@@ -60,23 +65,33 @@ export function drawable(text: string, font: Pick<OgFont, "has">): string {
  * The avatar as a data URI, or null (initials are drawn instead). Only an image reference that
  * matches the schema is followed, and only to the configured Supabase Storage origin: a `path`
  * that does not match is never fetched (SSRF guard), a redirect is an error, and anything that is
- * not a small PNG or JPEG falls back to initials. Never throws.
+ * not a small PNG, JPEG or WebP falls back to initials. Every upload is a WebP since M5-11 and the
+ * renderer cannot draw one, so a WebP is redrawn as a PNG first (at most 400 pixels: that is all the
+ * pipeline ever stores). Never throws.
  */
 export async function avatarDataUri(photo: ImageRef | null): Promise<string | null> {
   if (!photo) return null;
   const ref = imageRefSchema.safeParse(photo);
   if (!ref.success || !IMAGE_PATH_PATTERN.test(ref.data.path)) return null;
   try {
-    const url = mediaUrl(ref.data.path);
+    const url = storageUrl(ref.data.path);
     if (new URL(url).origin !== mediaOrigin()) return null;
     const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(4000) });
     if (!response.ok) return null;
     const type = (response.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
-    if (type !== "image/png" && type !== "image/jpeg") return null;
+    if (type !== "image/png" && type !== "image/jpeg" && type !== "image/webp") return null;
     const declared = Number(response.headers.get("content-length") ?? "0");
     if (declared > AVATAR_MAX_BYTES) return null;
     const bytes = Buffer.from(await response.arrayBuffer());
     if (bytes.length === 0 || bytes.length > AVATAR_MAX_BYTES) return null;
+    if (type === "image/webp") {
+      // Not a real image (or a bomb past the pixel cap): sharp throws and the initials are drawn.
+      const png = await sharp(bytes, { limitInputPixels: 16_000_000 })
+        .resize({ width: 400, height: 400, fit: "inside", withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      return `data:image/png;base64,${png.toString("base64")}`;
+    }
     return `data:${type};base64,${bytes.toString("base64")}`;
   } catch {
     return null;
@@ -206,10 +221,32 @@ export async function renderOgPng(input: OgInput): Promise<Buffer> {
 }
 
 /**
+ * The key of the cached image: the template version, the page, its publish time and the share card
+ * (M6-32), so a new publish or a changed share card is never answered with an old image. The
+ * share fields are empty for a page without a share card.
+ */
+export function ogCacheKey(page: {
+  pageId: string;
+  publishedAt: string | null;
+  share?: unknown;
+}): string[] {
+  return [
+    "og-image",
+    OG_TEMPLATE_VERSION,
+    page.pageId,
+    page.publishedAt ?? "",
+    page.share === undefined ? "" : JSON.stringify(page.share),
+  ];
+}
+
+/**
  * The page's OG image through the page's cache tag (same tag as the page and the public query),
  * so Publish refreshes it together with the page and a draft edit never changes it. The publish
  * time is part of the key as well: a new publish can never be answered with the old image.
  * `next dev` renders every time (see published-page.ts).
+ *
+ * A page whose share card has a picture serves that picture (M6-32); when it cannot be loaded the
+ * generated card below is drawn instead, so this never fails because of it.
  */
 export async function getOgPng(page: {
   pageId: string;
@@ -219,8 +256,12 @@ export async function getOgPng(page: {
   host: string;
 }): Promise<Buffer> {
   const { document } = page;
-  const build = async () =>
-    (
+  const build = async () => {
+    if (document.share?.image) {
+      const picture = await shareImagePng(document.share.image);
+      if (picture) return picture.toString("base64");
+    }
+    return (
       await renderOgPng({
         name: document.profile.name,
         bio: document.profile.bio,
@@ -230,13 +271,18 @@ export async function getOgPng(page: {
         tokens: document.tokens,
       })
     ).toString("base64");
+  };
 
   const base64 =
     process.env.NODE_ENV !== "production"
       ? await build()
       : await unstable_cache(
           build,
-          ["og-image", OG_TEMPLATE_VERSION, page.pageId, page.publishedAt ?? ""],
+          ogCacheKey({
+            pageId: page.pageId,
+            publishedAt: page.publishedAt,
+            share: document.share,
+          }),
           {
             tags: [pageTag(page.pageId)],
           },

@@ -8,6 +8,13 @@
  *   media        mediaUrl
  *   publishing   publishPage (a Server Action)
  */
+import { EmbedFacade } from "@/components/page/embed-facade";
+import { provideEmbedFacade } from "@/components/page/embed-slot";
+
+// Every importer of this seam is a client module (the workspace, the preview, the block forms). Their
+// previews draw embeds with the React facade, which mounts the same iframe the live page's script does.
+provideEmbedFacade(EmbedFacade);
+
 export { PageRenderer } from "@/components/page/page-renderer";
 export type { PageChrome } from "@/components/page/page-renderer";
 export { BLOCK_FORMS, type BlockFormProps } from "@/components/blocks/forms";

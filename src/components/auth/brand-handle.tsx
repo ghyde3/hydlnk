@@ -1,6 +1,8 @@
 "use client";
 
+import { Lock } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Icon } from "@/components/app/icon";
 
 /** Lowercase letters, digits and hyphens only: what the pill shows for whatever was typed. */
 export function cleanHandle(raw: string): string {
@@ -15,7 +17,7 @@ interface BrandHandleValue {
 const BrandHandleContext = createContext<BrandHandleValue | null>(null);
 
 /**
- * Shares the handle being typed with the brand panel's pill ("yourname.hydlnk.com"). AuthLayout
+ * Shares the handle being typed with the brand panel's pill ("you.hydlnk.com"). AuthLayout
  * mounts the provider around the panel and the form column, so a form inside it can call
  * useBrandHandle().setHandle(value) on every keystroke and the pill follows.
  */
@@ -57,18 +59,9 @@ export function BrandHandlePill() {
   const { handle } = useBrandHandle();
   return (
     <div className="mt-6 inline-flex max-w-full items-center gap-2.5 rounded-md border border-ink-line bg-ink-raised px-3.5 py-3">
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        className="size-[15px] flex-none fill-none stroke-on-ink-muted stroke-[1.8]"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="5" y="11" width="14" height="9" rx="2" />
-        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-      </svg>
+      <Icon icon={Lock} size={15} className="text-on-ink-muted" />
       <span className="font-mono text-lg [overflow-wrap:anywhere]">
-        <span className="text-ink-link">{handle || "yourname"}</span>
+        <span className="text-ink-link">{handle || "you"}</span>
         <span className="text-on-ink-muted">.hydlnk.com</span>
       </span>
     </div>

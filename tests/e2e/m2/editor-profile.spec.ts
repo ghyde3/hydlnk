@@ -15,7 +15,10 @@ import {
   saveIndicator,
   seededUser,
 } from "./editor-helpers";
-import { makeJpegHeader, makePng, padTo } from "./editor-images";
+import { confirmPhoto } from "../m6/position-dialog-helpers";
+import { makeJpeg } from "../m5/images-fixtures";
+import { makePng } from "./editor-images";
+import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /** M2-07 (display name and bio) and M2-09 (profile photo upload, replace, remove). */
 
@@ -25,12 +28,14 @@ const NAME = (page: Page) => page.getByLabel("Display name", { exact: true });
 const BIO = (page: Page) => page.getByLabel("Bio", { exact: true });
 const card = (page: Page) => page.getByRole("region", { name: "Profile", exact: true });
 const avatar = (page: Page) => card(page).getByRole("img", { name: /^Profile photo/ });
-const fileInput = (page: Page) => card(page).locator("input[type=file]");
+// The Profile card holds two uploads since M9-24 (the photo and the logo): the photo's is in its own row.
+const fileInput = (page: Page) =>
+  card(page).getByTestId("profile-photo-row").locator("input[type=file]");
 const counter = (page: Page) => card(page).getByText(/^\d+ \/ 160$/);
 
 /** On a phone the preview is on its own tab. */
 async function showPreview(page: Page, info: { project: { name: string } }) {
-  if (info.project.name === "phone") await page.getByRole("tab", { name: "Preview" }).click();
+  if (info.project.name === "phone") await showPreviewSheet(page);
 }
 
 test.describe("M2-07 display name and bio", () => {
@@ -118,7 +123,7 @@ test.describe("M2-07 display name and bio", () => {
     await showPreview(page, info);
     await expect(previewScreen(page).locator("h1")).toHaveText(name);
     await expect(previewScreen(page)).toContainText(bio);
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     await expect(saveIndicator(page)).toHaveText("Saved");
     const stored = await expectDraft(user.pageId, (d) => d.profile.bio === bio);
@@ -211,7 +216,8 @@ test.describe("M2-07 display name and bio", () => {
     test.skip(!desktopOnly(info), "desktop layout");
     await seededUser(context, "pr8");
     await openEditor(page);
-    const column = (await page.getByRole("region", { name: "Blocks", exact: true }).boundingBox())!;
+    // M7-02: the block column is the workspace's tab panel.
+    const column = (await page.getByRole("tabpanel").boundingBox())!;
     const box = (await card(page).boundingBox())!;
     expect(box.width).toBeLessThanOrEqual(720);
     expect(Math.abs(box.width - column.width)).toBeLessThanOrEqual(1);
@@ -255,8 +261,9 @@ test.describe("M2-09 profile photo", () => {
     await fileInput(page).setInputFiles({
       name: "first.jpg",
       mimeType: "image/jpeg",
-      buffer: makeJpegHeader(400, 400),
+      buffer: await makeJpeg({ width: 400, height: 400 }),
     });
+    await confirmPhoto(page);
     const busy = card(page).getByRole("button", { name: "Uploading..." });
     await expect(busy).toBeVisible();
     await expect(busy).toBeDisabled();
@@ -279,7 +286,8 @@ test.describe("M2-09 profile photo", () => {
     const first = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     expect(first.width).toBe(400);
     expect(first.height).toBe(400);
-    expect(first.path).toMatch(/^[0-9a-f-]{36}\/[a-z0-9-]{8,64}\.jpg$/);
+    // M5-11: the avatar is stored as a 400px WebP named by its content hash.
+    expect(first.path).toMatch(/^[0-9a-f-]{36}\/avatar-[0-9a-f]{32}\.webp$/);
     expect(Object.keys(first).sort()).toEqual(["height", "path", "width"]);
 
     await showPreview(page, info);
@@ -287,7 +295,7 @@ test.describe("M2-09 profile photo", () => {
       "src",
       new RegExp(first.path.replace(/[.]/g, "\\.")),
     );
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     // Before Publish, the live page does not know the new image; after Publish it does.
     const before = await rawRequest(`${user.handle}.localhost:3000`, "/");
@@ -299,14 +307,15 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(300, 200),
     });
+    await confirmPhoto(page);
     const second = (
       await expectDraft(
         user.pageId,
         (d) => d.profile.photo !== null && d.profile.photo.path !== first.path,
       )
     ).profile.photo!;
-    expect(second.path).toMatch(/\.png$/);
-    expect([second.width, second.height]).toEqual([300, 200]);
+    expect(second.path).toMatch(/\.webp$/);
+    expect([second.width, second.height]).toEqual([200, 200]); // a square crop, never enlarged
 
     // Remove: the initials come back, the draft photo is null.
     await card(page).getByRole("button", { name: "Remove" }).click();
@@ -315,7 +324,7 @@ test.describe("M2-09 profile photo", () => {
     await expectDraft(user.pageId, (d) => d.profile.photo === null);
     await showPreview(page, info);
     await expect(previewScreen(page).locator("header img")).toHaveCount(0);
-    if (phoneOnly(info)) await page.getByRole("tab", { name: "Blocks" }).click();
+    if (phoneOnly(info)) await hidePreviewSheet(page);
 
     // No Storage write or delete from the page, and both objects are still readable.
     expect(storageCalls).toEqual([]);
@@ -336,12 +345,13 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(400, 400),
     });
+    await confirmPhoto(page);
     const photo = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
     const before = await rawRequest(`${user.handle}.localhost:3000`, "/");
     expect(before.body).not.toContain(photo.path);
 
     await page
-      .locator("main > header")
+      .getByTestId("workspace-toolbar")
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
@@ -369,18 +379,20 @@ test.describe("M2-09 profile photo", () => {
       buffer: Buffer.from("this is only text, not an image"),
     });
     await expect(
-      card(page).getByText("That file isn’t a JPG, PNG or WebP image. Choose another."),
+      card(page).getByText("That file type isn’t supported. Use JPEG, PNG or WebP."),
     ).toBeVisible();
 
+    // M5-11: a big photo the browser can read is downsized and sent; one it cannot read (a PNG
+    // header, then 5 MB of nothing) stays 5 MB and is refused before anything is sent.
     await fileInput(page).setInputFiles({
       name: "huge.png",
       mimeType: "image/png",
-      buffer: padTo(makePng(10, 10), 5 * 1024 * 1024),
+      buffer: Buffer.concat([makePng(10, 10).subarray(0, 40), Buffer.alloc(5 * 1024 * 1024, 7)]),
     });
     await expect(
-      card(page).getByText("That image is over 4 MB. Choose a smaller one."),
+      card(page).getByText("That file is too big. Use an image under 4 MB."),
     ).toBeVisible();
-    await expect(card(page).getByText("That file isn’t a JPG")).toHaveCount(0);
+    await expect(card(page).getByText("That file type isn’t supported")).toHaveCount(0);
 
     await page.waitForTimeout(1500);
     expect(uploads).toBe(0); // refused before anything was sent
@@ -398,8 +410,9 @@ test.describe("M2-09 profile photo", () => {
     await openEditor(page);
     // A GIF passes no client sniff either, so force the server answers with a stubbed route.
     for (const [status, text] of [
-      [413, "That image is over 4 MB. Choose a smaller one."],
-      [415, "That file isn’t a JPG, PNG or WebP image. Choose another."],
+      [413, "That file is too big. Use an image under 4 MB."],
+      [415, "That file type isn’t supported. Use JPEG, PNG or WebP."],
+      [422, "We couldn’t read that image. Try a different file."],
     ] as const) {
       await page.route("**/api/media", (route) =>
         route.fulfill({
@@ -413,6 +426,7 @@ test.describe("M2-09 profile photo", () => {
         mimeType: "image/png",
         buffer: makePng(8, 8),
       });
+      await confirmPhoto(page);
       await expect(card(page).getByText(text)).toBeVisible();
       await page.unroute("**/api/media");
     }
@@ -432,6 +446,7 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(64, 64),
     });
+    await confirmPhoto(page);
     await expect(card(page).getByRole("button", { name: "Replace photo" })).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page, "[aria-labelledby]");
@@ -454,6 +469,7 @@ test.describe("M2-09 profile photo", () => {
       mimeType: "image/png",
       buffer: makePng(64, 64),
     });
+    await confirmPhoto(page);
     const upload = (await card(page).getByRole("button", { name: "Replace photo" }).boundingBox())!;
     const remove = (await card(page).getByRole("button", { name: "Remove" }).boundingBox())!;
     const face = (await avatar(page).boundingBox())!;

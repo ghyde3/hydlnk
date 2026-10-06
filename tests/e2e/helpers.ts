@@ -1,7 +1,10 @@
 import { expect, type Page } from "@playwright/test";
 
-/** Port the local dev server listens on. Matches baseURL in playwright.config.ts. */
-export const DEV_PORT = 3000;
+/**
+ * Port the local dev server listens on: 3000, or HL_DEV_PORT when set. Matches baseURL in
+ * playwright.config.ts.
+ */
+export const DEV_PORT = Number(process.env.HL_DEV_PORT ?? 3000);
 
 /**
  * Builds a local dev URL.
@@ -60,7 +63,8 @@ const INTERACTIVE = 'a, button, input, [role="button"]';
  *
  * `selector` optionally scopes the check to descendants of matching containers (or the matching
  * elements themselves); omit it to check the whole page.
- * Skipped: hidden inputs, elements with no box, 1px visually-hidden elements (skip links), and
+ * Skipped: hidden inputs, elements with no box, 1px visually-hidden elements (skip links), the
+ * 20px "+" slot between blocks where hover exists on a desktop-width layout (M6-04), and
  * inline links that sit inside running text, i.e. next to non-blank text (the WCAG 2.5.8 inline
  * exception). An inline link on its own, such as a padded nav item, is measured.
  */
@@ -78,6 +82,15 @@ export async function expectTapTargets(page: Page, selector?: string, min = 44):
         if (el instanceof HTMLInputElement && el.type === "hidden") continue;
         const style = getComputedStyle(el);
         if (style.display === "none" || style.visibility === "hidden") continue;
+        // M6-04 step 7: where there is a mouse and the layout is the desktop one, the "+" between
+        // two blocks is a 20px hairline (its circle shows on hover and on focus). It keeps 44px
+        // wherever `(hover: none)` applies, and on the phone layout, so those are still measured.
+        if (
+          el.parentElement?.hasAttribute("data-add-slot") &&
+          window.matchMedia("(hover: hover) and (min-width: 760px)").matches
+        ) {
+          continue;
+        }
         if (el.tagName === "A" && style.display === "inline") {
           // WCAG 2.5.8 inline exception: only a link inside running text. A bare inline link
           // (a nav item with padding, say) is a real target and is measured like any other.
