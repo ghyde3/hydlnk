@@ -340,7 +340,13 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       const versionsBefore = await versionsOf(a);
 
       const result = await restore(a, v1!.id);
-      expect(result).toEqual({ ok: true, restored: 1, missingImages: 0 });
+      expect(result).toEqual({
+        ok: true,
+        restored: 1,
+        missingImages: 0,
+        pagesRestored: 0,
+        notRestored: [],
+      });
 
       const after = await draftOfPage(a);
       // pages.published and published_at are exactly as they were: the live page does not change
@@ -457,7 +463,13 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       });
       const [version] = await versionsOf(a);
       const result = await restore(a, version!.id);
-      expect(result).toEqual({ ok: true, restored: 1, missingImages: 2 });
+      expect(result).toEqual({
+        ok: true,
+        restored: 1,
+        missingImages: 2,
+        pagesRestored: 0,
+        notRestored: [],
+      });
       const draft = draftDocSchema.parse((await draftOfPage(a)).draft);
       expect(draft.profile.photo).toBeNull();
       expect(draft.theme.overrides.bgImage).toBeNull();

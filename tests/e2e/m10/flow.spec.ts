@@ -28,7 +28,7 @@ import { prepareFlowUser, runEveryTool, tenantHtml, type FlowUser } from "./mcp-
  * page whose draft differs from the live page; a client that finds the server from a bare POST /mcp,
  * registers with a loopback redirect, opens the authorization URL in a signed-out browser, signs in,
  * sees the consent screen of the SAME request and clicks Allow; the loopback listener gets code, state
- * and iss; the exchange gives the tokens; and the token works on all twelve tools. Then the other ends
+ * and iss; the exchange gives the tokens; and the token works on all fourteen tools. Then the other ends
  * of the connection: a downgrade at consent, a refresh and its reuse, revocation at the endpoint and
  * from the Connected apps card, an account deletion, a replayed code and Deny.
  *
@@ -212,7 +212,7 @@ test("M10-33 the whole dance on registration, then every tool with the token it 
   expect(connection.refresh).toMatch(/^hl_rt_[A-Za-z0-9_-]{43}$/);
 
   const grant = await grantOf(user.userId, connection.clientId);
-  // The twelve tools through the official MCP client (Streamable HTTP transport, bearer token).
+  // The fourteen tools through the official MCP client (Streamable HTTP transport, bearer token).
   const mcp = new OfficialMcpClient(connection.access);
   try {
     await runEveryTool({
@@ -230,7 +230,7 @@ test("M10-33 the whole dance on registration, then every tool with the token it 
   // A second protocol generation with the same token (hand-rolled: the wire envelope is the point): server/discover and a tools/list with the envelope.
   const modern = new McpClient(connection.access, { era: "2026" });
   expect((await modern.rpc("server/discover")).status).toBe(200);
-  expect(await modern.listTools()).toHaveLength(12);
+  expect(await modern.listTools()).toHaveLength(14);
 
   // The token was used: the grant says so (the Connected apps card shows it as "Last used").
   expect((await grantOf(user.userId, connection.clientId)).id).toBe(grant.id);

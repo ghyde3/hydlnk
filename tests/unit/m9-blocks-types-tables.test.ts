@@ -53,12 +53,12 @@ const ORIGINAL_NINE = [
   "divider",
 ];
 const WAVE_K = ["faq", "contact", "discount", "book", "apps", "map"];
-const WAVE_M = ["page_link"];
+const WAVE_M = ["page_link", "items", "hours"];
 const FULL_ORDER = [...ORIGINAL_NINE, ...WAVE_K, ...WAVE_M];
 /**
  * Types whose document layer exists but whose renderer, editor form, stylesheet family or add-block
- * chip is not built yet; an entry turns the checks below off for the type. Empty since M11-07 landed
- * the page link's form, chip and renderer.
+ * chip is not built yet; an entry turns the checks below off for the type. Empty since M12-01 and
+ * M12-02 landed.
  */
 const PENDING_UI = new Set<string>();
 const PLURALS: Record<string, string> = {

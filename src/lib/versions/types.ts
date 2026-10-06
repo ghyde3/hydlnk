@@ -1,4 +1,4 @@
-import type { PublishDoc } from "@/lib/document";
+import type { PublishDoc, SubPagePublish } from "@/lib/document";
 
 /**
  * What the two version actions (M6-49) answer, in one client-safe module (no server-only import), so
@@ -19,9 +19,33 @@ import type { PublishDoc } from "@/lib/document";
 export type VersionFailureReason =
   "unauthorized" | "forbidden" | "account_suspended" | "plan_required" | "not_found" | "error";
 
+/** One sub-page of a stored version, as the preview draws it (M12-04). */
+export interface PreviewSubPage {
+  id: string;
+  path: string;
+  title: string;
+  /** The stored published form, parsed, with the images that are gone replaced by null. */
+  doc: SubPagePublish;
+}
+
+/** Why a page of a version was left as it is by a restore (M12-04). */
+export type NotRestoredReason = "deleted" | "changed" | "blocked_link" | "error";
+
+/** A page of the restored version that the restore did not write, and why. */
+export interface NotRestoredPage {
+  id: string;
+  path: string;
+  title: string;
+  reason: NotRestoredReason;
+  /** `blocked_link` only: the hosts that are listed now. */
+  hosts?: string[];
+}
+
 export type PreviewResult =
   | {
       ok: true;
+      /** The version's sub-pages (the live ones when it was published), ordered by path. Empty for a version from before M2. */
+      subPages: PreviewSubPage[];
       /** The stored publish form, parsed, with every image that is no longer stored replaced by null. */
       doc: PublishDoc;
       /** How many images (photo, card and image blocks, link thumbnails, the share image, the background) were removed. */
@@ -35,6 +59,10 @@ export type RestoreResult =
       /** The version number that was restored. */
       restored: number;
       missingImages: number;
+      /** How many sub-page drafts were written (Home's always is). */
+      pagesRestored: number;
+      /** Pages of the version that were not written: deleted since, changed meanwhile, blocked or unreadable. */
+      notRestored: NotRestoredPage[];
     }
   | { ok: false; reason: VersionFailureReason | "conflict" }
   | { ok: false; reason: "blocked_link"; hosts: string[] };

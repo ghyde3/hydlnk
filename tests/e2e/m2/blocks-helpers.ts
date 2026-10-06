@@ -39,6 +39,8 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   apps: "App store",
   map: "Map",
   page_link: "Page link",
+  items: "Items",
+  hours: "Hours",
 };
 
 export interface TestPage {

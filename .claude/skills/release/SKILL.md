@@ -7,7 +7,7 @@ description: "The only path to production. Confirms verify and CI are green, sho
 
 Merging to `main` deploys production. Gary gave standing approval (2026-10-03) for the orchestrator to run this skill for each green wave in an interactive session: tell him before starting and report after. Anything destructive in a migration, or anything touching live Stripe, still needs his explicit yes first. If this is not an interactive session with Gary, stop now: unattended sessions never touch production. The full browser suite (`pnpm test:e2e`) is deferred until Waves E–H and marketing v3 have landed (Gary, 2026-10-03); until then step 2 is `pnpm verify` + CI. Migrations go through the `release-migrations.yml` workflow (`gh workflow run release-migrations.yml -f ref=<branch> -f apply=false`, then `apply=true`) instead of a local `supabase db push`, which hangs on the Mac keychain.
 
-Production is Supabase project ref `pzcinnkzrlyrqkgyetqx`, Vercel project `hydlnk`, Stripe HYDLNK sandbox only. Never print or handle secret keys. Never run `vercel deploy --prod`; deployment happens only by merging to `main`.
+Production is Supabase project ref `pzcinnkzrlyrqkgyetqx`, Vercel project `hydlnk`, Stripe live (a release never touches Stripe itself). Never print or handle secret keys. Never run `vercel deploy --prod`; deployment happens only by merging to `main`.
 
 ## Steps
 

@@ -58,6 +58,21 @@ export function makeDeps(over: Partial<ToolDeps> = {}) {
       calls.push("page");
       return { ok: true, page: ownedPage({ id: pageId ?? PAGE_A }) };
     },
+    loadSubPage: async (_userId, siteId, subPageId) => {
+      calls.push("subpage");
+      return {
+        ok: true,
+        subPage: {
+          id: subPageId,
+          siteId,
+          createdAt: "2026-10-01T00:00:00Z",
+          updatedAt: "2026-10-01T00:00:00Z",
+          rev: Date.parse("2026-10-01T00:00:00Z"),
+          publishedAt: null,
+          livePath: null,
+        },
+      };
+    },
     recordActivity: async (row) => {
       calls.push("activity");
       activity.push(row);

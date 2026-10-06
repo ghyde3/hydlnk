@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { PagesCard } from "@/components/site/pages-card";
+import { SiteTemplatesCard } from "@/components/site/site-templates-card";
 import { SubPageEdit } from "@/components/site/sub-page-edit";
 import { PageTokensProvider } from "@/components/themes";
 import { StartFromTemplate } from "@/components/templates";
@@ -85,6 +86,7 @@ export function EditTab() {
   return (
     <>
       <PagesCard />
+      {draft.blocks.length === 0 ? <SiteTemplatesCard /> : null}
       <ProfileCard
         name={draft.profile.name}
         bio={draft.profile.bio}

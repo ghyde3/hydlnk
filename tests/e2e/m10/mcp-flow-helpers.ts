@@ -8,7 +8,7 @@ import { url } from "../helpers";
 
 /**
  * The shared part of the Wave L end-to-end flows (M10-24 to M10-33): a fixture user with a page whose
- * draft differs from what is live, and `runEveryTool`, which works that page through all twelve tools
+ * draft differs from what is live, and `runEveryTool`, which works that page through all fourteen tools
  * the way an AI would and checks every result for the documented shape and for nothing internal. The
  * minted-token spec and the real OAuth dance (flow.spec.ts) run the very same steps.
  */
@@ -32,7 +32,8 @@ export async function uploadImage(
 }
 
 const UUID_ANYWHERE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
-const INTERNAL = /owner_id|stripe|sb_|hl_at_|hl_rt_|hl_ac_|page-media|"path"/;
+// A storage path is `{user id}/{file}`; a page's own `path` ("/specials") is documented output (M12-05).
+const INTERNAL = /owner_id|stripe|sb_|hl_at_|hl_rt_|hl_ac_|page-media|"path":"[0-9a-f-]{36}\//;
 
 /** A result must hold no uuid but the ones a tool documents (the page's own id, a domain's page id). */
 export function expectNothingInternal(result: unknown, userId: string, allowed: string[]) {
@@ -47,8 +48,8 @@ export function expectNothingInternal(result: unknown, userId: string, allowed: 
   }
 }
 
-export async function tenantHtml(handle: string): Promise<string> {
-  const response = await fetch(`http://${handle}.localhost:3000/`);
+export async function tenantHtml(handle: string, path = ""): Promise<string> {
+  const response = await fetch(`http://${handle}.localhost:3000/${path}`);
   return response.text();
 }
 
@@ -90,7 +91,7 @@ export interface FlowEnv {
 }
 
 /**
- * Works the page through all twelve tools in the order an AI would, publishes, and sees the new
+ * Works the page through all fourteen tools in the order an AI would, publishes, and sees the new
  * content live on the very next request. At the end the activity log holds exactly one row per call
  * and none carries the canary text planted in the page.
  */
@@ -111,8 +112,12 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     const outcome = await mcp.callTool(name, args);
     expect(outcome.isError, `${name}: ${JSON.stringify(outcome.structured.error)}`).toBe(false);
     expect(outcome.structured.ok).toBe(true);
-    expectNothingInternal(outcome.raw, user.userId, documentedIds);
     const answer = (outcome.json ?? {}) as Record<string, unknown>;
+    // A new page's id is documented output of create_page; from then on it may appear anywhere.
+    if (name === "create_page" && typeof answer.subPageId === "string") {
+      documentedIds.push(answer.subPageId);
+    }
+    expectNothingInternal(outcome.raw, user.userId, documentedIds);
     transcript.push(
       `${name}(${Object.keys(args).join(", ")}) -> ok; keys: ${Object.keys(answer).join(", ")}` +
         (typeof answer.rev === "number" ? `; rev ${answer.rev}` : "") +
@@ -135,6 +140,8 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     "update_block",
     "move_block",
     "remove_block",
+    "create_page",
+    "update_page_settings",
     "set_theme",
     "create_preview_link",
     "publish_page",
@@ -276,12 +283,105 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
   rev = removed.rev;
   expect(removed.removedType).toBe("image");
 
+  // A second page of the site (M12-05): create it, fill it, link to it from Home, set its settings. All
+  // of it is draft, so the live site shows none of it until the one publish below takes the whole site.
+  const SUB_CANARY = `SUBCANARY-${rand(8)}`;
+  const created = await call<any>("create_page", {
+    pageId: user.pageId,
+    title: "Specials",
+    path: "specials",
+  });
+  expect(created).toMatchObject({ title: "Specials", path: "/specials", inMenu: true });
+  rev = created.homeRev;
+  let subRev: number = created.rev;
+  const sub = { pageId: user.pageId, subPageId: created.subPageId };
+  const items = await call<any>("add_block", {
+    ...sub,
+    ifRev: subRev,
+    type: "items",
+    fields: {
+      heading: "This week",
+      layout: "grid",
+      items: [
+        { name: `Lamp ${SUB_CANARY}`, price: "$5", description: "Works fine" },
+        { name: "Chair", price: "Free", image: user.image.imageId, sold: true },
+      ],
+    },
+  });
+  subRev = items.rev;
+  expect(items.block.items[1].image).toEqual({ imageId: user.image.imageId, width: 1, height: 1 });
+  const hours = await call<any>("add_block", {
+    ...sub,
+    ifRev: subRev,
+    type: "hours",
+    fields: {
+      timezone: "America/Chicago",
+      days: {
+        mon: { ranges: [{ open: "09:00", close: "17:00" }] },
+        tue: { ranges: [{ open: "09:00", close: "17:00" }] },
+        wed: { ranges: [{ open: "09:00", close: "17:00" }] },
+        thu: { ranges: [{ open: "09:00", close: "17:00" }] },
+        fri: { ranges: [{ open: "09:00", close: "17:00" }] },
+        sat: { closed: true },
+        sun: { closed: true },
+      },
+    },
+  });
+  subRev = hours.rev;
+  const moved2 = await call<any>("move_block", {
+    ...sub,
+    ifRev: subRev,
+    blockId: hours.blockId,
+    position: "first",
+  });
+  subRev = moved2.rev;
+  expect(moved2.order.map((item: { type: string }) => item.type)).toEqual(["hours", "items"]);
+  const settings = await call<any>("update_page_settings", {
+    ...sub,
+    ifRev: subRev,
+    description: `Deals ${SUB_CANARY}`,
+  });
+  subRev = settings.rev;
+  const linkToPage = await call<any>("add_block", {
+    ...ifRev(),
+    type: "page_link",
+    fields: { label: "See the specials", target: created.subPageId },
+  });
+  rev = linkToPage.rev;
+  expect(linkToPage.block).toMatchObject({ type: "page_link", target: created.subPageId });
+  const readSub = await call<any>("get_page", sub);
+  expect(readSub.page).toMatchObject({
+    subPageId: created.subPageId,
+    title: "Specials",
+    path: "/specials",
+    inMenu: true,
+    live: false,
+    rev: subRev,
+  });
+  expect(readSub.blocks.map((block: { type: string }) => block.type)).toEqual(["hours", "items"]);
+  expect(readSub.publishIssues).toEqual([]);
+  const withPages = await call<any>("list_pages");
+  expect(withPages.pages[0].pages).toEqual([
+    { id: "home", title: "Home", path: "/", inMenu: true, live: true },
+    { id: created.subPageId, title: "Specials", path: "/specials", inMenu: true, live: false },
+  ]);
+  // Not live yet: neither the page nor the link to it.
+  expect((await fetch(`http://${user.handle}.localhost:3000/specials`)).status).toBe(404);
+  expect(await tenantHtml(user.handle)).not.toContain("See the specials");
+
   // Publish: the old content is live until the call, the new content is live on the very next request.
   const before = await tenantHtml(user.handle);
   expect(before).not.toContain("A paragraph written by an assistant.");
   const published = await call<any>("publish_page", { pageId: user.pageId });
   expect(published).toMatchObject({ published: true, url: `http://${user.handle}.localhost:3000` });
   const after = await tenantHtml(user.handle);
+  // The whole site went live: the new page, and the link from Home to it.
+  const specials = await tenantHtml(user.handle, "specials");
+  expect(specials).toContain(`Lamp ${SUB_CANARY}`);
+  expect(specials).toContain("This week");
+  expect(after).toContain("See the specials");
+  const liveList = await call<any>("list_pages");
+  expect(liveList.pages[0].pages[1]).toMatchObject({ id: created.subPageId, live: true });
   expect(after).toContain("A paragraph written by an assistant.");
   expect(after).toContain(CANARY);
   expect(after).toContain("Is this live?");
@@ -301,6 +401,7 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     rows.every((item) => item.client_id === env.clientId && item.grant_id === env.grantId),
   ).toBe(true);
   expect(JSON.stringify(rows)).not.toContain(CANARY);
+  expect(JSON.stringify(rows)).not.toContain(SUB_CANARY);
   expect(rows.filter((item) => item.page_id === user.pageId).length).toBeGreaterThan(8);
 
   const summary = [

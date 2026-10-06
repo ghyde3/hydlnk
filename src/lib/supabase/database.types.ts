@@ -163,6 +163,32 @@ export type Database = {
           },
         ]
       }
+      daily_site_stats: {
+        Row: {
+          day: string
+          page_id: string
+          uniques: number
+        }
+        Insert: {
+          day: string
+          page_id: string
+          uniques?: number
+        }
+        Update: {
+          day?: string
+          page_id?: string
+          uniques?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_site_stats_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_stats: {
         Row: {
           block_id: string
@@ -626,6 +652,7 @@ export type Database = {
           id: string
           page_id: string
           published_at: string
+          sub_pages: Json
           version_no: number
         }
         Insert: {
@@ -634,6 +661,7 @@ export type Database = {
           id?: string
           page_id: string
           published_at: string
+          sub_pages?: Json
           version_no: number
         }
         Update: {
@@ -642,6 +670,7 @@ export type Database = {
           id?: string
           page_id?: string
           published_at?: string
+          sub_pages?: Json
           version_no?: number
         }
         Relationships: [

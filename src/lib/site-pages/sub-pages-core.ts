@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { emptySubPageDraft, resolveNav, suggestPath, type SubPageDraft } from "@/lib/document";
+import {
+  draftSubPageSchema,
+  emptySubPageDraft,
+  resolveNav,
+  suggestPath,
+  type SubPageDraft,
+} from "@/lib/document";
 import { pagesPerSiteMessage, toPlanId } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -25,6 +31,7 @@ export type SubPageError =
   | "storage_full"
   | "path_invalid"
   | "path_taken"
+  | "doc_invalid"
   | "create_failed"
   | "delete_failed";
 
@@ -43,6 +50,7 @@ export const SUB_PAGE_STATUS: Record<SubPageError, number> = {
   storage_full: 403,
   path_invalid: 422,
   path_taken: 409,
+  doc_invalid: 422,
   create_failed: 500,
   delete_failed: 500,
 };
@@ -55,6 +63,7 @@ export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
   storage_full: STORAGE_FULL_MESSAGE,
   path_invalid: "Choose a valid path.",
   path_taken: "Another page of this site already uses that path.",
+  doc_invalid: "That page’s content isn’t valid.",
   create_failed: "Couldn’t add the page. Try again.",
   delete_failed: "Couldn’t delete the page. Try again.",
 };
@@ -99,7 +108,15 @@ async function ownedSite(admin: Admin, userId: string, siteId: unknown) {
 
 export async function createSubPageWithClient(
   admin: Admin,
-  input: { userId: string; siteId: unknown; title?: unknown; path?: unknown },
+  input: {
+    userId: string;
+    siteId: unknown;
+    title?: unknown;
+    path?: unknown;
+    /** Optional starting content (a template page, a duplicate): checked with the draft schema. */
+    description?: unknown;
+    blocks?: unknown;
+  },
 ): Promise<CreateSubPageResult> {
   const account = await activeAccountPlan(admin, input.userId);
   if (account.kind === "error") return failure("create_failed");
@@ -136,7 +153,16 @@ export async function createSubPageWithClient(
     path = suggestPath(title, taken);
   }
 
-  const draft = emptySubPageDraft(path, title);
+  let draft = emptySubPageDraft(path, title);
+  if (input.description !== undefined || input.blocks !== undefined) {
+    const parsed = draftSubPageSchema.safeParse({
+      ...draft,
+      description: input.description ?? "",
+      blocks: input.blocks ?? [],
+    });
+    if (!parsed.success) return failure("doc_invalid");
+    draft = parsed.data;
+  }
   const inserted = await admin
     .from("site_pages")
     .insert({ page_id: site.id, draft: draft as unknown as Json })

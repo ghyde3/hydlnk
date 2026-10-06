@@ -2,7 +2,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { checkBlocklist, readBlockedLinkError } from "@/lib/blocklist";
-import { LIMITS, draftDocSchema, publishedDocSchema, type PublishDoc } from "@/lib/document";
+import {
+  LIMITS,
+  draftDocSchema,
+  draftSubPageSchema,
+  publishedDocSchema,
+  type PublishDoc,
+} from "@/lib/document";
 import { jsonbTextBytes } from "@/lib/editor/size";
 import { PLAN_LIMITS, toPlanId } from "@/lib/limits";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
@@ -13,12 +19,21 @@ import { tokenSetSchema, type TokenSet } from "@/lib/theme";
 import {
   nextRev,
   nullMissingImages,
+  nullMissingSubPageImages,
   ownedImagePaths,
   restoredTheme,
   versionToDraft,
+  versionToSubPageDraft,
   type CheckedImages,
 } from "./restore";
-import type { PreviewResult, RestoreResult, VersionFailureReason } from "./types";
+import { parseStoredSubPages } from "./site";
+import type {
+  NotRestoredPage,
+  PreviewResult,
+  PreviewSubPage,
+  RestoreResult,
+  VersionFailureReason,
+} from "./types";
 
 /**
  * Preview and restore of a published version (M6-49), everything except what a Server Action alone
@@ -76,7 +91,7 @@ interface OpenVersion {
   /** `pages.draft` as stored, and its rev as Postgres reads it (`draft->>rev`); restore only. */
   draft: unknown;
   draftRev: string | null;
-  version: { id: string; versionNo: number; document: unknown };
+  version: { id: string; versionNo: number; document: unknown; subPages: unknown };
 }
 
 type Opened = { ok: true; value: OpenVersion } | { ok: false; reason: VersionFailureReason };
@@ -136,7 +151,7 @@ async function openVersion(
   if (!versionId.success) return fail("not_found");
   const found = await admin
     .from("page_versions")
-    .select("id, version_no, document")
+    .select("id, version_no, document, sub_pages")
     .eq("id", versionId.data)
     .eq("page_id", pageId.data)
     .maybeSingle();
@@ -158,6 +173,7 @@ async function openVersion(
         id: found.data.id,
         versionNo: found.data.version_no,
         document: found.data.document,
+        subPages: found.data.sub_pages,
       },
     },
   };
@@ -187,24 +203,49 @@ function storageExists(admin: SupabaseClient<Database>) {
   };
 }
 
+/** The version as stored, every image check applied: Home and each sub-page, parsed and cleaned. */
+interface CheckedVersion {
+  parsed: PublishDoc;
+  checked: CheckedImages;
+  /** The sub-pages of the version (M12-04), ordered by path, with their missing images taken out. */
+  subPages: PreviewSubPage[];
+  /** Missing images over Home and every sub-page. */
+  missingImages: number;
+}
+
 /**
- * The stored document, parsed with the strict published schema, with every image that cannot be
- * shown replaced by null. A document that does not parse is `null` (the raw JSON is never returned).
- * Throws when Storage cannot be asked.
+ * The stored document and sub-pages, parsed with the strict published schemas, with every image
+ * that cannot be shown replaced by null. A version that does not parse (Home or any sub-page) is
+ * `null` (the raw JSON is never returned). Throws when Storage cannot be asked.
  */
 async function checkedVersion(
   open: OpenVersion,
   deps: VersionDeps,
-): Promise<{ parsed: PublishDoc; checked: CheckedImages } | null> {
+): Promise<CheckedVersion | null> {
   const parsed = publishedDocSchema.safeParse(open.version.document);
   if (!parsed.success) return null;
+  const stored = parseStoredSubPages(open.version.subPages);
+  if (stored === null) return null;
   const origin = mediaOrigin();
   const exists = deps.mediaExists ?? storageExists(open.admin);
-  const present = await presentPaths(ownedImagePaths(parsed.data, open.ownerId, origin), exists);
-  return {
-    parsed: parsed.data,
-    checked: nullMissingImages(parsed.data, open.ownerId, origin, (path) => present.has(path)),
-  };
+  const present = await presentPaths(
+    ownedImagePaths(
+      parsed.data,
+      open.ownerId,
+      origin,
+      stored.map((page) => page.doc),
+    ),
+    exists,
+  );
+  const isPresent = (path: string) => present.has(path);
+  const checked = nullMissingImages(parsed.data, open.ownerId, origin, isPresent);
+  let missingImages = checked.missingImages;
+  const subPages = stored.map((page): PreviewSubPage => {
+    const result = nullMissingSubPageImages(page.doc, open.ownerId, isPresent);
+    missingImages += result.missingImages;
+    return { id: page.id, path: page.path, title: page.title, doc: result.page };
+  });
+  return { parsed: parsed.data, checked, subPages, missingImages };
 }
 
 /**
@@ -254,11 +295,24 @@ export async function loadVersionPreviewCore(
     logFailure("preview", "error", { page: open.pageId, version: open.version.id });
     return { ok: false, reason: "error" };
   }
-  return { ok: true, doc: result.checked.doc, missingImages: result.checked.missingImages };
+  return {
+    ok: true,
+    doc: result.checked.doc,
+    missingImages: result.missingImages,
+    subPages: result.subPages,
+  };
 }
 
 /**
- * Restore (M6-49): writes the version into the DRAFT and nothing else. `pages.published`,
+ * Restore (M6-49, M12-04): writes the version into the DRAFT and nothing else. From M2 a version
+ * holds Home, the menu and every live sub-page, so Home's draft is written first (with its rev
+ * guard, the one that stops everything) and then the draft of each of the version's pages that
+ * still exists, each guarded by the `updated_at` it was read with. A page deleted since, saved
+ * meanwhile, listed on the blocklist now or unreadable is returned in `notRestored` with the
+ * reason and left as it is. Sub-page drafts have no rev, so a stale editor tab with unsaved
+ * sub-page edits can still overwrite a restore on its next save (a known limit; fixing it
+ * would need a rev on `site_pages`).
+ * `pages.published`,
  * `published_at`, `page_versions`, the themes and Storage are untouched and no cache tag is
  * expired, so the live page does not change; the owner reviews the draft in the editor and
  * publishes when ready.
@@ -323,6 +377,41 @@ export async function restorePageVersionCore(
     return failed("error");
   }
 
+  // The sub-pages (M12-04): which of the version's pages still exist, and what each draft will be.
+  // A page that is gone, or whose draft cannot be written, is listed, never a reason to stop.
+  let siteRows: { id: string; updated_at: string }[];
+  try {
+    siteRows = await loadSiteRows(open);
+  } catch {
+    return failed("error");
+  }
+  const notRestored: NotRestoredPage[] = [];
+  const plans: { page: PreviewSubPage; rowUpdatedAt: string; draft: unknown }[] = [];
+  for (const page of result.subPages) {
+    const row = siteRows.find((candidate) => candidate.id === page.id);
+    const base = { id: page.id, path: page.path, title: page.title };
+    if (!row) {
+      notRestored.push({ ...base, reason: "deleted" });
+      continue;
+    }
+    const subDraft = draftSubPageSchema.safeParse(versionToSubPageDraft(page.doc));
+    if (!subDraft.success || jsonbTextBytes(subDraft.data) > LIMITS.draftBytes) {
+      notRestored.push({ ...base, reason: "error" });
+      continue;
+    }
+    try {
+      const blocked = await checkBlocklist(open.admin, subDraft.data);
+      if (blocked.hosts.length > 0) {
+        notRestored.push({ ...base, reason: "blocked_link", hosts: blocked.hosts });
+        continue;
+      }
+    } catch {
+      return failed("error");
+    }
+    plans.push({ page, rowUpdatedAt: row.updated_at, draft: subDraft.data });
+  }
+
+  // Home first, guarded by its rev: a conflict stops everything, nothing is written.
   const update = open.admin
     .from("pages")
     .update({ draft: draft.data as unknown as Json })
@@ -350,5 +439,60 @@ export async function restorePageVersionCore(
     logFailure("restore", "conflict", ids);
     return { ok: false, reason: "conflict" };
   }
-  return { ok: true, restored: open.version.versionNo, missingImages: checked.missingImages };
+
+  // Then each page that still exists, guarded by the `updated_at` it had when it was read (sub-page
+  // drafts carry no rev). A page saved in between matches no row and is listed as changed.
+  let pagesRestored = 0;
+  for (const plan of plans) {
+    const base = { id: plan.page.id, path: plan.page.path, title: plan.page.title };
+    const res = await open.admin
+      .from("site_pages")
+      .update({ draft: plan.draft as Json })
+      .eq("id", plan.page.id)
+      .eq("page_id", open.pageId)
+      .eq("updated_at", plan.rowUpdatedAt)
+      .select("id");
+    if (res.error) {
+      const refusal = readBlockedLinkError(res.error);
+      if (refusal) {
+        notRestored.push({ ...base, reason: "blocked_link", hosts: refusal.hosts });
+      } else {
+        console.error(
+          `[versions] restore error write=${res.error.code ?? "unknown"} page=${open.pageId} version=${open.version.id}`,
+        );
+        notRestored.push({ ...base, reason: "error" });
+      }
+      continue;
+    }
+    if (res.data && res.data.length > 0) {
+      pagesRestored += 1;
+      continue;
+    }
+    // No row matched: deleted since it was read, or saved since.
+    let stillThere = true;
+    try {
+      stillThere = (await loadSiteRows(open)).some((row) => row.id === plan.page.id);
+    } catch {
+      // Cannot tell: "changed" is the safe word, the page was not written either way.
+    }
+    notRestored.push({ ...base, reason: stillThere ? "changed" : "deleted" });
+  }
+  if (notRestored.length > 0) logFailure("restore", "partial", ids);
+  return {
+    ok: true,
+    restored: open.version.versionNo,
+    missingImages: result.missingImages,
+    pagesRestored,
+    notRestored: notRestored.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+  };
+}
+
+/** The site's sub-pages as they are now: the ids and the exact `updated_at` strings (never parsed as dates). */
+async function loadSiteRows(open: OpenVersion): Promise<{ id: string; updated_at: string }[]> {
+  const { data, error } = await open.admin
+    .from("site_pages")
+    .select("id, updated_at")
+    .eq("page_id", open.pageId);
+  if (error) throw new Error(`reading the site's pages failed (${error.code ?? "unknown"})`);
+  return data;
 }

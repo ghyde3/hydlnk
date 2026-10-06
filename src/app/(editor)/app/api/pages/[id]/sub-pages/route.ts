@@ -18,7 +18,8 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  *   401  no session (nothing is written)
  *   403  forbidden_origin, `page_limit` (the plan's message, HL008), or `account_suspended` (code too)
  *   404  not_found: another account's site, an unknown id and a malformed id all read the same
- *   409  path_taken      422  path_invalid (the rule or the reserved list)
+ *   409  path_taken      422  path_invalid (the rule or the reserved list), doc_invalid (`blocks` or
+ *        `description` fail the draft schema; both are optional starting content)
  *   400/415  not JSON
  *   201  {id, draft, createdAt}: the title is "New page" unless given and the path is suggested from
  *        it against the site's other paths unless one is given
@@ -40,11 +41,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
   let title: unknown;
   let path: unknown;
+  let description: unknown;
+  let blocks: unknown;
   try {
     const body: unknown = await request.json();
     if (body && typeof body === "object") {
       title = "title" in body ? body.title : undefined;
       path = "path" in body ? body.path : undefined;
+      description = "description" in body ? body.description : undefined;
+      blocks = "blocks" in body ? body.blocks : undefined;
     }
   } catch {
     return NextResponse.json({ error: "invalid_body" }, { status: 400, headers: NO_STORE });
@@ -52,7 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const { id } = await params;
   try {
-    const result = await createSubPage(user.id, id, { title, path });
+    const result = await createSubPage(user.id, id, { title, path, description, blocks });
     if (!result.ok) {
       return NextResponse.json(
         {

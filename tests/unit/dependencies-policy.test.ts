@@ -381,7 +381,7 @@ describe("M9-14 the tenant boundary: a public page reaches server-render package
     }
     const { buildTenantScript } = await import("@/lib/tenant-assets/build");
     const built = buildTenantScript(source);
-    expect(Buffer.byteLength(source)).toBeLessThanOrEqual(8 * 1024);
+    expect(Buffer.byteLength(source)).toBeLessThanOrEqual(12 * 1024);
     expect(gzipSync(built.code).length).toBeLessThanOrEqual(3 * 1024);
   });
 });

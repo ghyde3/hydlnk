@@ -33,6 +33,8 @@ import { inkFor, isHexColor } from "./color";
  *   discount "Color"         accent and border (code, Copy button, box)
  *   book     "Color"         buttonBg and accent = the color, buttonText = its ink (as a link)
  *   apps     "Color"         text and border (every badge's fill and line)
+ *   items    "Color"         accent, text and border (Sold mark, names, lines)
+ *   hours    "Color"         accent, text and border (Open now mark, table, lines)
  *   map      "Border color"  border (the card's line, drawn once it has a thickness)
  *
  * Every function is pure and returns the same block object when nothing changes.
@@ -167,6 +169,26 @@ export const STYLE_SPECS: Readonly<Record<StyleBlockType, StyleSpec>> = Object.f
       label: "Color",
       keys: ["buttonBg", "accent", "buttonText"],
       source: "buttonBg",
+      border: false,
+    },
+  },
+  // M12-01: the item names and prices (text), the Sold mark (accent) and the lines (border).
+  items: {
+    controls: ["color", "radius"],
+    color: {
+      label: "Color",
+      keys: ["accent", "text", "border"],
+      source: "accent",
+      border: false,
+    },
+  },
+  // M12-02: the table's text, the Open now mark (accent) and the lines (border).
+  hours: {
+    controls: ["color"],
+    color: {
+      label: "Color",
+      keys: ["accent", "text", "border"],
+      source: "accent",
       border: false,
     },
   },

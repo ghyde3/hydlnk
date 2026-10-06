@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Icon } from "./primitives";
 
 /**
- * The fifteen block types (src/lib/document/schema.ts BLOCK_TYPES, in the same order) as the
+ * Every block type (src/lib/document/schema.ts BLOCK_TYPES, in the same order; a unit test holds the two together) as the
  * marketing site describes them. `short` is the home page line; `detail` adds the limits for /features.
  */
 export interface BlockInfo {
@@ -31,8 +31,7 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
     id: "card",
     name: "Card",
     short: "A link with a picture, a title and a caption, for the things that deserve more room.",
-    detail:
-      "An image banner with a title over it and a caption below. The whole card is the link.",
+    detail: "An image banner with a title over it and a caption below. The whole card is the link.",
     icon: (
       <Icon>
         <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
@@ -146,7 +145,8 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
   {
     id: "contact",
     name: "Contact details",
-    short: "Your name, phone, email and opening hours, with a button that saves you to a phone’s contacts.",
+    short:
+      "Your name, phone, email and opening hours, with a button that saves you to a phone’s contacts.",
     detail:
       "Phone and email are tappable. Save contact gives the visitor a contact card (a vCard file) they can add to their address book.",
     icon: (
@@ -208,4 +208,80 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
       </Icon>
     ),
   },
+  {
+    id: "page_link",
+    name: "Page link",
+    short: "A button to another page of your site: the menu, the shop, the bookings page.",
+    detail:
+      "Pick Home or any of your pages and it stays right if you rename the page or change its address. It takes the page’s button style, or its own.",
+    icon: (
+      <Icon>
+        <rect x="3.5" y="4.5" width="10" height="13" rx="2" />
+        <path d="M10.5 7.5h10v13h-10z" className="opacity-60" />
+        <path d="M14 14h4M16.5 11.5l2.5 2.5-2.5 2.5" />
+      </Icon>
+    ),
+  },
+  {
+    id: "items",
+    name: "Items",
+    short:
+      "A price list or a menu: a name, a price, a short description and a photo for each item.",
+    detail:
+      "Up to 100 items as a list or a grid. Prices are shown exactly as you type them, an item can link out, and one tap marks it sold out.",
+    icon: (
+      <Icon>
+        <path d="M4 7h10M4 12h10M4 17h10M17.5 7h2.5M17.5 12h2.5M17.5 17h2.5" />
+      </Icon>
+    ),
+  },
+  {
+    id: "hours",
+    name: "Opening hours",
+    short: "Seven days of opening times in your time zone, with today marked.",
+    detail:
+      "Up to two time ranges a day, or closed. Today is marked in the visitor’s browser, so the page stays fast and cached; with JavaScript off the table shows the week and marks no day.",
+    icon: (
+      <Icon>
+        <circle cx="12" cy="12" r="8.5" />
+        <path d="M12 7.5V12l3 2" />
+      </Icon>
+    ),
+  },
 ];
+
+const NUMBER_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+  "twenty",
+  "twenty-one",
+  "twenty-two",
+  "twenty-three",
+  "twenty-four",
+  "twenty-five",
+] as const;
+
+/** How many block types there are, as a word ("eighteen"), derived from the catalog so copy never goes stale. */
+export const BLOCK_COUNT_WORD: string =
+  NUMBER_WORDS[BLOCK_CATALOG.length] ?? String(BLOCK_CATALOG.length);
+/** The same with a capital, for the start of a sentence. */
+export const BLOCK_COUNT_WORD_CAP: string =
+  BLOCK_COUNT_WORD.charAt(0).toUpperCase() + BLOCK_COUNT_WORD.slice(1);

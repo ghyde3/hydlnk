@@ -5267,6 +5267,124 @@
       "passes": false
     },
     {
+      "id": "M12-01",
+      "milestone": 12,
+      "area": "blocks",
+      "title": "Item and price list block",
+      "acceptance": [
+        "An `items` block per docs/PLAN.md 'Sites with pages (Wave M)', M2: an optional heading and up to 100 items (name 1 to 80 characters, price text up to 20 shown exactly as typed, description up to 200, optional photo, optional http or https link, Sold switch), list or two-column grid; added through the add-block-type steps (schema, limits, defaults, toPublishForm, renderer, editor form) with unit tests.",
+        "Each item has its own id, unique across the site like block ids (publish refuses a repeat); an item's link goes through `/r` and its click counts for that item and that page.",
+        "A sold item shows 'Sold' and its price struck through; all text is escaped; prices are display only (no checkout, no fees).",
+        "An e2e test adds the block with three items (one sold, one linked), publishes and checks the live page and a counted click; At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-02",
+      "milestone": 12,
+      "area": "blocks",
+      "title": "Hours block",
+      "acceptance": [
+        "An `hours` block: seven days, each closed or one or two ranges (a range may pass midnight), a time zone from a fixed list, a note up to 140 characters; added through the add-block-type steps with unit tests.",
+        "The live page renders the table without JavaScript with today marked; the tenant script adds 'Open now' or 'Closed now' computed with the browser's `Intl` in the block's time zone, and tenant pages still ship no library JavaScript.",
+        "Unit tests for open-now across a midnight range and a time zone with a different date than UTC; an e2e test with a fixed clock checks both states; At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-03",
+      "milestone": 12,
+      "area": "editor",
+      "title": "Site templates: garage sale, small business, musician",
+      "acceptance": [
+        "Creating a site and an empty Home offer three templates (Garage sale: Home, Items, Directions; Small business: Home, Menu or services, Visit; Musician: Home, Shows, Merch), each exactly Home and two pages so it fits the Free plan.",
+        "Choosing one fills Home's draft, creates the two sub-pages as drafts with their blocks, menu and theme, and publishes nothing; sample text is clearly sample text and there are no stock photos.",
+        "An e2e test applies each template on a Free account, publishes, and opens all three pages live; At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-04",
+      "milestone": 12,
+      "area": "publish",
+      "title": "Whole-site versions",
+      "acceptance": [
+        "Supersedes, in this respect only, M11-05 step 4: from M2 a published version holds Home, the menu and every live sub-page (migration with pgTAP).",
+        "Version history previews a version with its pages; restore writes the drafts of Home and of each page that still exists, publishes nothing, and lists pages deleted since as not restored.",
+        "A site's versions are pruned to the last 25 and further, oldest first, so they never hold more than 32 MiB (pgTAP).",
+        "Unit and e2e tests at 390x844 and 1440x900 for preview and restore across two sub-pages."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-05",
+      "milestone": 12,
+      "area": "mcp",
+      "title": "MCP tools for sub-pages",
+      "acceptance": [
+        "`list_pages` returns each site with its pages (id, title, path, in the menu, live); `get_page`, `add_block`, `update_block`, `move_block` and `remove_block` take an optional `subPageId` and act on that page's draft with the same limits, blocklist and revision guard as Home.",
+        "New tools `create_page` (title, optional path; the pages-per-site limit and path rules apply) and `update_page_settings` (title, description, path, menu) under `hydlnk.write`; `add_block` can add `page_link`, `items` and `hours`; deleting a page is not a tool.",
+        "The activity log records the new tools without content; unit tests per tool and the scripted official-client e2e flow (tests/e2e/m10/) gains a sub-page edit and a publish of the whole site."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-06",
+      "milestone": 12,
+      "area": "sharing",
+      "title": "Share previews of sub-pages",
+      "acceptance": [
+        "Supersedes, in this respect only, M11-07 step 1's plain-text menu in the share preview: the private share link previews Home and every sub-page draft with a working menu inside the preview (`/share/{token}/{path}`), on the app host only, never on tenant hosts.",
+        "The same token rules hold (expiry, turning off, rate limits, no indexing); an unknown or reserved path under a valid token is the share preview's 404; tests for both and an e2e at 390x844 and 1440x900."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-07",
+      "milestone": 12,
+      "area": "analytics",
+      "title": "Exact site-wide unique visitors",
+      "acceptance": [
+        "A daily site-level uniques rollup (migration with pgTAP) counts a visitor once a day however many pages they saw; 'All pages' reads it and per-page numbers are unchanged.",
+        "Unit and pgTAP tests for a visitor on two pages the same day counted once under All pages and once on each page."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-08",
+      "milestone": 12,
+      "area": "editor",
+      "title": "Pages panel polish",
+      "acceptance": [
+        "Each page in the panel shows its state: Live, Not published yet, or Changes not published.",
+        "Duplicate a page (a new draft with fresh block and item ids, a free path, within the plan limit); drag to reorder the menu in addition to the up and down controls (keyboard accessible).",
+        "An e2e test for the states, duplicate and drag at 390x844 and 1440x900."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-09",
+      "milestone": 12,
+      "area": "marketing",
+      "title": "Marketing: sites with pages, the new blocks and templates",
+      "acceptance": [
+        "The features page and the FAQ describe sites with pages (Home and pages, the menu, pages per plan from the limits table), the item and price list and hours blocks, and the three templates; American spelling and the marketing copy tests pass.",
+        "The pages are in the sitemap and every new section passes the marketing smoke at 390x844 and 1440x900 (no horizontal scroll, 44px targets)."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-10",
+      "milestone": 12,
+      "area": "security",
+      "title": "Wave M2 security review",
+      "acceptance": [
+        "`security-reviewer` runs over the wave (the new blocks' rendering and escaping, item links through /r, the hours script, template creation, versions and restore, the MCP tools and scopes, the share preview routes), and every finding is fixed or recorded in docs/PLAN.md with Gary's decision.",
+        "A user cannot read, write or restore another user's sub-pages or versions, or reach another site's draft through a share link, by any route, tool or the publishable key (tests)."
+      ],
+      "passes": true
+    },
+    {
       "id": "M13-01",
       "milestone": 13,
       "area": "marketing",
@@ -5276,6 +5394,28 @@
         "Each guide links to the provider's own help articles it is based on and shows 'Checked October 2026'; no provider logos.",
         "The four guides are in the Learn index and the sitemap, and the 'Connecting a domain' guide and the app's Domains screen link to them.",
         "At 390x844 and 1440x900 each guide answers 200 with one h1, no horizontal scroll and links at least 44px tall (one smoke spec; content pages skip the full browser suite, Gary 2026-10-06)."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-11",
+      "milestone": 12,
+      "area": "blocks",
+      "title": "Hours block without JavaScript: no day marked on a cached page",
+      "acceptance": [
+        "Supersedes, in this respect only, M12-02 step 2's 'with today marked' for visitors without JavaScript: a live page is cached for up to a day, so the server cannot know today in the block's time zone, and a marked day could be wrong. Without JavaScript the hours table shows every day with none marked; with JavaScript the tenant script marks today and adds 'Open now' or 'Closed now'. Every other step of M12-02 stands.",
+        "Tested: the no-JavaScript render marks no day (tests/e2e/m12/blocks-hours.spec.ts) and the script marks today in the block's time zone (tests/unit/m12-hours-script.test.ts)."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M12-12",
+      "milestone": 12,
+      "area": "sharing",
+      "title": "Share links: an extra path is a sub-page of the same site",
+      "acceptance": [
+        "Supersedes, in this respect only, M6-10 step 6's 'extra path ... ignored': since M12-06 an extra path under a valid share token names a page of the same site's draft. A path that is a sub-page of that site draws its draft; any other path (unknown, reserved, two segments deep) is the share preview's 404. A query string and a `?page=` parameter are still ignored, and a token for one site never draws another site's page. Every other step of M6-10 stands.",
+        "tests/e2e/m6/pages-share.spec.ts asserts the new rule (an unknown extra path is the 404, a sub-page path of the same site draws it, another site's page never appears) alongside tests/e2e/m12/share-subpages.spec.ts."
       ],
       "passes": true
     }

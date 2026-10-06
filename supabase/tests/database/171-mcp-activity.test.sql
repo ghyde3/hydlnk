@@ -181,26 +181,27 @@ reset role;
 -- Cascades and survivors
 -- ---------------------------------------------------------------------------
 
-select is((select count(*)::int from public.mcp_activity), 2, 'two rows so far');
+-- Counts are scoped to this file's own person (other suites may leave rows in the table).
+select is((select count(*)::int from public.mcp_activity where user_id = (select a from ids)), 2, 'two rows so far');
 
 delete from public.pages where id = '00000000-0000-4000-8000-000000171002';
 select is(
-  (select count(*)::int from public.mcp_activity where tool = 'add_block' and page_id is null),
+  (select count(*)::int from public.mcp_activity where user_id = (select a from ids) and tool = 'add_block' and page_id is null),
   1,
   'deleting a page sets page_id to null and keeps the row'
 );
-select is((select count(*)::int from public.mcp_activity), 2, 'deleting a page removes no row');
+select is((select count(*)::int from public.mcp_activity where user_id = (select a from ids)), 2, 'deleting a page removes no row');
 
 delete from public.oauth_grants where id = '00000000-0000-4000-8000-000000171001';
 select is(
-  (select count(*)::int from public.mcp_activity where grant_id is null),
+  (select count(*)::int from public.mcp_activity where user_id = (select a from ids) and grant_id is null),
   2,
   'deleting a grant sets grant_id to null and keeps the rows'
 );
 
 delete from public.oauth_clients where client_id = 'hlc_' || repeat('a', 32);
 select is(
-  (select count(*)::int from public.mcp_activity where client_id = 'hlc_' || repeat('a', 32)),
+  (select count(*)::int from public.mcp_activity where user_id = (select a from ids) and client_id = 'hlc_' || repeat('a', 32)),
   2,
   'deleting a client leaves the rows: client_id is plain text'
 );
@@ -234,7 +235,7 @@ select is(
   'the job''s command holds no secret'
 );
 
-delete from public.mcp_activity;
+delete from public.mcp_activity where user_id = (select b from ids);
 insert into public.mcp_activity (user_id, client_id, tool, ok, at)
   select b, 'x', 'list_pages', true, now() - interval '91 days' from ids
   union all select b, 'x', 'get_page', true, now() - interval '89 days' from ids
@@ -244,7 +245,7 @@ select lives_ok(
   'the job''s command runs'
 );
 select set_eq(
-  $$ select tool from public.mcp_activity $$,
+  $$ select tool from public.mcp_activity where user_id = (select b from ids) $$,
   $$ values ('get_page'), ('get_analytics') $$,
   'it deletes rows over 90 days old and keeps younger ones'
 );

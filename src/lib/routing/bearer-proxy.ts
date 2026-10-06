@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SHARE_TOKEN_HEADER } from "@/lib/previews/share-headers";
+import { SHARE_PATH_HEADER, SHARE_TOKEN_HEADER } from "@/lib/previews/share-headers";
 import type { BearerPathKind } from "./app-paths";
 
 /**
@@ -24,6 +24,7 @@ export function bearerPathProxy(
   const headers = new Headers(request.headers);
   headers.delete("cookie");
   headers.delete(SHARE_TOKEN_HEADER);
+  headers.delete(SHARE_PATH_HEADER);
   const response = NextResponse.rewrite(destination, { request: { headers } });
   response.headers.set("Cache-Control", kind === "metadata" ? "public, max-age=300" : "no-store");
   response.headers.set("X-Content-Type-Options", "nosniff");

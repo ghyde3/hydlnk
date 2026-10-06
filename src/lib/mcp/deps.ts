@@ -6,7 +6,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { protectedResourceMetadataUrl } from "@/lib/oauth/metadata";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { recordActivityRow } from "./activity";
-import { loadOwnedPage } from "./page-access";
+import { loadOwnedPage, loadOwnedSubPage } from "./page-access";
 import type { AdminClient, ToolDeps } from "./types";
 
 /**
@@ -43,6 +43,8 @@ export function createToolDeps(): ToolDeps {
     limit: rateLimit,
     isSuspended: isAccountSuspended,
     loadPage: (userId, pageId, options) => loadOwnedPage(client, userId, pageId, options),
+    loadSubPage: (userId, siteId, subPageId, options) =>
+      loadOwnedSubPage(client, userId, siteId, subPageId, { docs: options.withDraft }),
     recordActivity: (row) => recordActivityRow(client, row),
     defer,
     now: () => new Date(),

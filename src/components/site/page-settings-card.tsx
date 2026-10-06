@@ -5,6 +5,7 @@ import { useId, useRef, useState } from "react";
 import { Icon } from "@/components/app/icon";
 import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
 import { TextField } from "@/components/blocks/text-field";
+import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { useWorkspace } from "@/components/workspace/workspace-context";
 import { NAV_MAX_ITEMS, NAV_MESSAGES, SUB_PAGE_LIMITS } from "@/lib/document";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
@@ -136,6 +137,7 @@ export function PageSettingsCard() {
         ) : null}
       </div>
 
+      <DuplicatePage id={id} />
       <DeletePage id={id} title={item.title} />
     </section>
   );
@@ -218,5 +220,45 @@ function DeletePage({ id, title }: { id: string; title: string }) {
         </div>
       </dialog>
     </>
+  );
+}
+
+/** Duplicate: a new draft page from a copy of this one, with fresh ids; hidden at the plan's limit. */
+function DuplicatePage({ id }: { id: string }) {
+  const { site } = useWorkspace();
+  const suspended = useAccountSuspended();
+  const [pending, setPending] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  if (site.limit.atLimit) {
+    return (
+      <p role="status" data-testid="duplicate-page-limit" className="m-0 text-[13px] text-text-2">
+        {site.limitMessage}
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        data-testid="duplicate-page"
+        disabled={pending || suspended}
+        title={suspended ? SUSPENDED_REASON : undefined}
+        onClick={async () => {
+          setPending(true);
+          setFailure(null);
+          const result = await site.duplicate(id);
+          setPending(false);
+          if (!result.ok) setFailure(result.message);
+        }}
+        className={`${FORM_BUTTON} self-start`}
+      >
+        {pending ? "Duplicating…" : "Duplicate page"}
+      </button>
+      {failure ? (
+        <p role="alert" className="m-0 text-[13px] text-bad">
+          {failure}
+        </p>
+      ) : null}
+    </div>
   );
 }

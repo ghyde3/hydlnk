@@ -8,6 +8,7 @@ import type {
   BookLink,
   DraftDoc,
   FaqItem,
+  ListItem,
   GridCell,
   ImageBlock,
   SocialBlock,
@@ -51,6 +52,11 @@ export function newGridCell(): GridCell {
 /** A new, empty FAQ question with a fresh id (M9-16). */
 export function newFaqItem(): FaqItem {
   return { id: newBlockId(), question: "", answer: "" };
+}
+
+/** A new, empty item of an items block, with a fresh id (M12-01). */
+export function newListItem(): ListItem {
+  return { id: newBlockId(), name: "", price: "", description: "", sold: false };
 }
 
 /**
@@ -145,6 +151,37 @@ export const blockDefaults: Record<BlockType, () => Block> = {
     label: "New page link",
     target: "home",
   }),
+  // Two sample items to overwrite (M12-01).
+  items: () => ({
+    id: newBlockId(),
+    type: "items",
+    visible: true,
+    layout: "list",
+    items: [
+      { id: newBlockId(), name: "Sample item", price: "10", description: "", sold: false },
+      { id: newBlockId(), name: "Another item", price: "20", description: "", sold: false },
+    ],
+  }),
+  // Monday to Friday 09:00 to 17:00, the weekend closed (M12-02).
+  hours: () => {
+    const weekday = () => ({ closed: false, ranges: [{ open: "09:00", close: "17:00" }] });
+    const closed = () => ({ closed: true, ranges: [] });
+    return {
+      id: newBlockId(),
+      type: "hours",
+      visible: true,
+      timezone: "America/New_York",
+      days: {
+        mon: weekday(),
+        tue: weekday(),
+        wed: weekday(),
+        thu: weekday(),
+        fri: weekday(),
+        sat: closed(),
+        sun: closed(),
+      },
+    };
+  },
 };
 
 /**

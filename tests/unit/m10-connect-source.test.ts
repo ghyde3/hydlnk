@@ -262,7 +262,8 @@ describe("M10-35 the privacy policy", () => {
       'export const LEGAL_UPDATED = { iso: "2026-10-02", label: "October 2, 2026" }',
     );
     expect(legal).toContain(
-      'export const TERMS_UPDATED = { iso: "2026-10-03", label: "October 3, 2026" }',
+      // Terms changed on 2026-10-06 (plan limits may be adjusted, Gary); M10-35 left them as they were.
+      'export const TERMS_UPDATED = { iso: "2026-10-06", label: "October 6, 2026" }',
     );
   });
 });

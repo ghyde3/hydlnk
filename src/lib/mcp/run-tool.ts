@@ -33,7 +33,7 @@ import type { AnyToolDefinition, ToolCall, ToolDeps, ToolIdentity } from "./type
  *   2. the rate limits (per person, per token, and the publish limit);
  *   3. the account is not suspended (read fresh, closed on a failed read);
  *   4. the input parses with the tool's schema;
- *   5. the page is loaded and checked for ownership;
+ *   5. the page is loaded and checked for ownership (and the sub-page it names, under that page);
  *   6. the handler runs (cut off after 25 seconds);
  *   7. one activity row is written, after the response (a rate_limited refusal at most once a minute
  *      per token);
@@ -260,11 +260,29 @@ export async function runTool(
       pageId = page.id;
     }
 
+    // 5b. The sub-page a tool names with `subPageId` (M12-05), looked up under the site just loaded:
+    // a page of another site or account, a random id and a malformed id are one `not_found`.
+    // "home" is Home, which is the page itself.
+    let subPage: ToolCall["subPage"] = null;
+    if (page && typeof args.subPageId === "string" && args.subPageId.toLowerCase() !== "home") {
+      let loaded;
+      try {
+        loaded = await deps.loadSubPage(identity.userId, page.id, args.subPageId, {
+          withDraft: tool.needsDraft === true,
+        });
+      } catch {
+        return refuse(serverFailure());
+      }
+      if (!loaded.ok) return refuse(loaded.failure);
+      subPage = loaded.subPage;
+    }
+
     // 6. The handler, cut off after the timeout.
     const call: ToolCall = {
       ...identity,
       admin: deps.admin,
       page,
+      subPage,
       deps,
       defer: deps.defer,
       now: deps.now,

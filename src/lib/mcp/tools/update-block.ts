@@ -1,17 +1,26 @@
 import { z } from "zod";
 import { publishFormsEqual, type Block, type BlockType } from "@/lib/document";
 import { MCP_SCOPES } from "../constants";
-import { commitDraft } from "../commit";
-import { blockPhrase, blockView, imageIdsIn, patchBlock, validateBlock } from "../doc-view";
+import { commitBlocks } from "../commit";
+import {
+  blockPhrase,
+  blockView,
+  cleanPageTarget,
+  imageIdsIn,
+  patchBlock,
+  validateBlock,
+} from "../doc-view";
 import { parseBlockFields } from "../block-fields";
 import { MESSAGES, ToolFailure } from "../errors";
 import { createImageResolver } from "../images";
 import type { ToolDefinition } from "../types";
-import { DRAFT_ONLY, WRITE_IDEMPOTENT, ifRevField, pageIdField } from "./common";
+import { DRAFT_ONLY, WRITE_IDEMPOTENT, ifRevField, pageIdField, subPageIdField } from "./common";
+import { assertPageLinkTarget } from "./page-link-target";
 
 const input = z
   .strictObject({
     pageId: pageIdField,
+    subPageId: subPageIdField,
     ifRev: ifRevField,
     blockId: z.string().max(40).describe("The block's id from get_page."),
     fields: z
@@ -36,7 +45,7 @@ function findBlock(blocks: unknown, blockId: string): Block | undefined {
 export const updateBlock: ToolDefinition<typeof input> = {
   name: "update_block",
   title: "Update a block",
-  description: `Changes fields of one block and leaves everything else as it is. The type cannot change. ${DRAFT_ONLY} Send only the fields to change, with the names add_block takes for that type; null clears an optional field. A list field replaces the list, and each item you send with its own id keeps its id, so its click history stays; an item you drop loses its click counts. Changing a text block's text clears its formatting. Sending the same values twice changes nothing. Showing a block that is incomplete is refused. Errors: block_not_found, invalid_input, blocked_link, image_not_found, conflict.`,
+  description: `Changes fields of one block and leaves everything else as it is. The type cannot change. ${DRAFT_ONLY} Send only the fields to change, with the names add_block takes for that type; null clears an optional field. A list field replaces the list, and each item you send with its own id keeps its id, so its click history stays; an item you drop loses its click counts. Changing a text block's text clears its formatting. Pass subPageId for a block on another page of the site. Sending the same values twice changes nothing. Showing a block that is incomplete is refused. Errors: block_not_found, invalid_input, blocked_link, image_not_found, conflict.`,
   scope: MCP_SCOPES.write,
   annotations: WRITE_IDEMPOTENT,
   input,
@@ -45,7 +54,7 @@ export const updateBlock: ToolDefinition<typeof input> = {
   async handler(args, call) {
     // The block's type decides which fields it takes, so find it in the draft first.
     const current = findBlock(
-      (call.page?.draft as { blocks?: unknown } | undefined)?.blocks,
+      ((call.subPage ?? call.page)?.draft as { blocks?: unknown } | undefined)?.blocks,
       args.blockId,
     );
     if (!current) throw new ToolFailure("block_not_found", MESSAGES.block_not_found);
@@ -57,12 +66,15 @@ export const updateBlock: ToolDefinition<typeof input> = {
         issues: parsed.issues.slice(0, 10),
       });
     }
+    if (type === "page_link" && typeof parsed.fields.target === "string") {
+      await assertPageLinkTarget(call, cleanPageTarget(parsed.fields.target));
+    }
     const resolve = createImageResolver(call.admin, call.userId);
     const images = new Map();
     for (const id of imageIdsIn(type, parsed.fields)) images.set(id, await resolve(id));
 
     const touched = Object.keys(parsed.fields);
-    const result = await commitDraft(call, args.ifRev, (doc) => {
+    const result = await commitBlocks(call, args.ifRev, (doc) => {
       const index = doc.blocks.findIndex((item) => item.id === args.blockId);
       if (index === -1) throw new ToolFailure("block_not_found", MESSAGES.block_not_found);
       const before = doc.blocks[index]!;

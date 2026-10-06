@@ -102,7 +102,12 @@ describe("M9-11 old documents render byte for byte as before", () => {
   });
 
   it("the full fixture page has no new markup", () => {
-    const html = render(toPublishForm(fullDraft, noirTokens));
+    // An old document: none of the blocks added after M9-11 (items has a struck sold price).
+    const old = {
+      ...fullDraft,
+      blocks: fullDraft.blocks.filter((b) => !["items", "hours", "page_link"].includes(b.type)),
+    };
+    const html = render(toPublishForm(old, noirTokens));
     expect(html).not.toContain("pg-text-line");
     expect(html).not.toMatch(/<s>|<u>/);
   });

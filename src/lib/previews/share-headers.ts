@@ -15,6 +15,13 @@ import { INACTIVE_LINK_MESSAGE } from "./messages";
 /** The request header the proxy sets to the first path segment after /share/; the page reads it. */
 export const SHARE_TOKEN_HEADER = "x-hl-share-token";
 
+/**
+ * The request header the proxy sets to everything after the token ("" for Home, "items" for a page
+ * of the site, M12-06). Like the token header it is replaced on every request and stripped
+ * wherever else a request is rewritten.
+ */
+export const SHARE_PATH_HEADER = "x-hl-share-path";
+
 /** The longest segment passed on: longer ones are malformed anyway (a token has 43 characters). */
 const MAX_SEGMENT = 64;
 
@@ -52,6 +59,20 @@ export function shareSegment(pathname: string): string {
   const rest = pathname.slice("/share/".length);
   const segment = (rest.split("/", 1)[0] ?? "").slice(0, MAX_SEGMENT);
   return /^[\x21-\x7E]*$/.test(segment) ? segment : "";
+}
+
+/**
+ * What follows the token in /share/{token}/{rest} ("" when nothing does, or it is not plain printable
+ * ASCII, or too long to be a page path). The page checks it with the sub-page path rule: a nested path,
+ * a reserved word or a page that is not there is the share preview's one 404.
+ */
+export function sharePath(pathname: string): string {
+  const rest = pathname.slice("/share/".length);
+  const slash = rest.indexOf("/");
+  if (slash === -1) return "";
+  const path = rest.slice(slash + 1).replace(/\/$/, "");
+  if (path.length > MAX_SEGMENT || !/^[\x21-\x7E]*$/.test(path)) return "~";
+  return path;
 }
 
 /**

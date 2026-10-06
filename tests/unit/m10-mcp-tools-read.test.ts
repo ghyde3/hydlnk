@@ -126,7 +126,12 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
       const out = await rt.call("list_pages", {}, who(a));
       expect(out.isError).toBe(false);
       const { account, pages } = out.json!;
-      expect(account).toEqual({ plan: "pro", pagesUsed: 3, pagesAllowed: PLAN_LIMITS.pro.pages });
+      expect(account).toEqual({
+        plan: "pro",
+        pagesUsed: 3,
+        pagesAllowed: PLAN_LIMITS.pro.pages,
+        pagesPerSiteAllowed: PLAN_LIMITS.pro.pagesPerSite,
+      });
       expect(pages.map((page: { id: string }) => page.id)).toEqual([
         a.pageId,
         second.pageId,
@@ -152,6 +157,8 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
         "handle",
         "id",
         "name",
+        "pageCount",
+        "pages",
         "publishStatus",
         "publishedAt",
         "updatedAt",

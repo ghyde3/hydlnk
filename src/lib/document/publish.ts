@@ -15,6 +15,7 @@ import { publishLinkUtm, publishPageUtm } from "./utm";
 import {
   publishDocSchema,
   type Block,
+  type HoursBlock,
   type DraftDoc,
   type ImageRef,
   type LinkBlock,
@@ -301,6 +302,52 @@ export function publishBlock(block: Block): Block | null {
         target: block.target.trim(),
         ...cleanOverrides(block.overrides),
       };
+    case "items": {
+      const heading = block.heading?.trim() ?? "";
+      return {
+        ...base,
+        type: "items",
+        ...(heading ? { heading } : {}),
+        layout: block.layout,
+        items: block.items.map((item) => {
+          const link = item.url?.trim() ?? "";
+          return {
+            id: item.id,
+            name: item.name.trim(),
+            price: item.price.trim(),
+            description: item.description.trim(),
+            // A plain reference: no focus (it is always cropped from its middle).
+            ...(item.image ? { image: imageRef(item.image)! } : {}),
+            ...(link ? { url: link } : {}),
+            sold: item.sold,
+          };
+        }),
+        ...cleanOverrides(block.overrides),
+      };
+    }
+    case "hours": {
+      const note = block.note?.trim() ?? "";
+      const day = (d: HoursBlock["days"]["mon"]) =>
+        d.closed
+          ? { closed: true, ranges: [] }
+          : { closed: false, ranges: d.ranges.map((r) => ({ open: r.open, close: r.close })) };
+      return {
+        ...base,
+        type: "hours",
+        timezone: block.timezone,
+        days: {
+          mon: day(block.days.mon),
+          tue: day(block.days.tue),
+          wed: day(block.days.wed),
+          thu: day(block.days.thu),
+          fri: day(block.days.fri),
+          sat: day(block.days.sat),
+          sun: day(block.days.sun),
+        },
+        ...(note ? { note } : {}),
+        ...cleanOverrides(block.overrides),
+      };
+    }
     default:
       // Not a block this version knows (only reachable with unparsed data): never published.
       return null;
@@ -350,6 +397,9 @@ export function collectImageRefs(doc: {
     if (block.type === "link" && block.icon?.type === "image") refs.push(block.icon.image);
     // A book's cover (M9-20) is an image of the owner's folder like a card's.
     if (block.type === "book" && block.cover) refs.push(block.cover);
+    // An item's photo (M12-01) is an image of the owner's folder too.
+    if (block.type === "items")
+      for (const item of block.items) if (item.image) refs.push(item.image);
   }
   if (doc.share?.image) refs.push(doc.share.image);
   return refs;

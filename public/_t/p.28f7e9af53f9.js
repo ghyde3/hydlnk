@@ -106,6 +106,78 @@ if (copyButton) copy(copyButton);
 });
 var blocks = doc.querySelectorAll(".pg-discount");
 for (var i = 0; i < blocks.length; i++) blocks[i].setAttribute("data-js", "");
+var DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+var TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+function minutesOf(value) {
+return TIME.test(value) ? Number(value.slice(0, 2)) * 60 + Number(value.slice(3)) : null;
+}
+function localParts(date, zone) {
+var options = { weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+var parts;
+try {
+options.timeZone = zone;
+parts = new Intl.DateTimeFormat("en-US", options).formatToParts(date);
+} catch {
+options.timeZone = "UTC";
+parts = new Intl.DateTimeFormat("en-US", options).formatToParts(date);
+}
+var found = {};
+for (var p = 0; p < parts.length; p++) found[parts[p].type] = parts[p].value;
+var day = DAYS.indexOf(String(found.weekday || "").toLowerCase());
+return {
+day: day < 0 ? 0 : day,
+minute: (Number(found.hour) % 24) * 60 + Number(found.minute)
+};
+}
+function rangesOf(text) {
+var out = [];
+var items = String(text || "").split(",");
+for (var r = 0; r < items.length; r++) {
+var pair = items[r].split("-");
+var open = minutesOf(pair[0]);
+var close = minutesOf(pair[1]);
+if (pair.length === 2 && open !== null && close !== null && open !== close) out.push([open, close]);
+}
+return out;
+}
+function insideAny(ranges, test) {
+for (var r = 0; r < ranges.length; r++) if (test(ranges[r][0], ranges[r][1])) return true;
+return false;
+}
+function isOpen(days, day, minute) {
+var today = insideAny(days[day], function (open, close) {
+return open < close ? minute >= open && minute < close : minute >= open;
+});
+return today || insideAny(days[(day + 6) % 7], function (open, close) {
+return close < open && minute < close;
+});
+}
+function markHours(block, now) {
+var rows = block.querySelectorAll("[data-day]");
+var days = [[], [], [], [], [], [], []];
+for (var r = 0; r < rows.length; r++) {
+var index = DAYS.indexOf(rows[r].getAttribute("data-day"));
+if (index >= 0) days[index] = rangesOf(rows[r].getAttribute("data-ranges"));
+}
+var at = localParts(now, block.getAttribute("data-tz") || "UTC");
+for (var q = 0; q < rows.length; q++) {
+if (rows[q].getAttribute("data-day") === DAYS[at.day]) rows[q].setAttribute("aria-current", "date");
+else rows[q].removeAttribute("aria-current");
+}
+var open = isOpen(days, at.day, at.minute);
+block.setAttribute("data-open", open ? "true" : "false");
+var status = block.querySelector("[data-hours-status]");
+if (status) status.textContent = open ? "Open now" : "Closed now";
+}
+var hours = doc.querySelectorAll(".pg-hours");
+function markAllHours() {
+var now = new Date();
+for (var h = 0; h < hours.length; h++) markHours(hours[h], now);
+}
+if (hours.length > 0) {
+markAllHours();
+setInterval(markAllHours, 60000);
+}
 var pageId = doc.currentScript && doc.currentScript.getAttribute("data-page-id");
 var subPageId = doc.currentScript && doc.currentScript.getAttribute("data-sub-page-id");
 function beacon() {

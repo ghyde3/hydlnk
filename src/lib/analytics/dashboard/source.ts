@@ -151,6 +151,20 @@ export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
       );
     },
 
+    async dailySiteUniques(pageId, fromDay, toDay) {
+      const rows = await readAll<{ day: string; uniques: number }>("daily_site_stats", (from, to) =>
+        db
+          .from("daily_site_stats")
+          .select("day, uniques")
+          .eq("page_id", pageId)
+          .gte("day", fromDay)
+          .lte("day", toDay)
+          .order("day")
+          .range(from, to),
+      );
+      return new Map(rows.map((row) => [row.day, row.uniques]));
+    },
+
     async dailyDims(pageId, fromDay, toDay, filter = PAGE_FILTER_ALL) {
       const rows = await readAll<{
         day: string;

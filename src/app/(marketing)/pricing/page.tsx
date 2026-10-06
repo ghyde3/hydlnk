@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { BLOCK_COUNT_WORD } from "@/components/marketing/block-catalog";
 import type { Metadata } from "next";
 import { CtaBand } from "@/components/marketing/cta-band";
 import { FaqList } from "@/components/marketing/faq";
@@ -33,7 +34,7 @@ function breakBeforeDomain(value: string): ReactNode {
 }
 
 const EVERY_PLAN = [
-  "All fifteen blocks",
+  `All ${BLOCK_COUNT_WORD} blocks`,
   "Every design option and every theme",
   "Live phone preview and autosaved drafts",
   "you.hydlnk.com over https",

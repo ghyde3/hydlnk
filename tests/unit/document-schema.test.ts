@@ -48,6 +48,8 @@ describe("block types (M2-01)", () => {
       "apps",
       "map",
       "page_link",
+      "items",
+      "hours",
     ];
     expect(BLOCK_TYPES.length).toBeGreaterThanOrEqual(12);
     expect([...BLOCK_TYPES]).toEqual(order.slice(0, BLOCK_TYPES.length));

@@ -78,6 +78,8 @@ export interface WorkspaceValue {
 
   // What is published, and Publish.
   status: PublishStatus;
+  /** Home's own state (the pages list shows it beside each page's). */
+  homeStatus: PublishStatus;
   /** The published document as it was last published or loaded, or null (M9-32: the Share tab says what the live page does). */
   publishedForm: PublishDoc | null;
   hasPublished: boolean;

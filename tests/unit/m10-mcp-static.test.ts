@@ -57,8 +57,8 @@ function code(file: string): string {
 }
 
 describe("the tools share code and never reach the database client themselves", () => {
-  it("scans the twelve tools and the registry", () => {
-    expect(toolFiles.length).toBeGreaterThanOrEqual(14);
+  it("scans the fourteen tools and the registry", () => {
+    expect(toolFiles.length).toBeGreaterThanOrEqual(16);
   });
 
   it("no module under tools/ imports the secret-key client or supabase-js", () => {
@@ -101,6 +101,31 @@ describe("the draft is read in one place and written in one", () => {
         expect(chain).toMatch(/\.eq\("owner_id", userId\)/);
     }
     expect(source).toContain('.eq("owner_id", userId)');
+  });
+
+  it("every site_pages read in page-access joins the site and filters on its owner in the same query (M12-05)", () => {
+    const source = code(`${MCP_DIR}/page-access.ts`);
+    const chains = source
+      .split("admin\n")
+      .slice(1)
+      .filter((chain) => /\.from\("site_pages"\)/.test(chain.slice(0, 40)));
+    expect(chains.length).toBeGreaterThanOrEqual(3);
+    for (const chain of chains) {
+      const query = chain.slice(0, 600);
+      expect(query).toMatch(/\.eq\("site\.owner_id", userId\)/);
+    }
+    expect(source).toMatch(
+      /SITE_JOIN = `site:pages\$\{String\.fromCharCode\(33\)\}inner\(owner_id\)`/,
+    );
+  });
+
+  it("the draft writer reads and writes a sub-page only under the site it just owner-checked", () => {
+    const source = code(DRAFT_WRITER);
+    expect(source).toMatch(
+      /\.from\("site_pages"\)[\s\S]*?\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/,
+    );
+    expect(source).toMatch(/base\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/);
+    expect(source).toMatch(/\.eq\("updated_at", subRow\.updated_at\)/);
   });
 
   it("the draft writer's update sets the draft column and nothing else, filtered on id, owner and rev", () => {

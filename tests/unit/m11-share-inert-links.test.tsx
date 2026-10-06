@@ -57,10 +57,10 @@ describe("M11-12 the private share preview draws page links as text", () => {
     expect(document.querySelectorAll('a[href="/items"]').length).toBe(0);
   });
 
-  it("the shared preview page turns it on", async () => {
+  it("the shared preview page no longer turns it on: its page links are real links inside the preview (M12-06)", async () => {
     const { readFileSync } = await import("node:fs");
-    expect(readFileSync("src/app/(share)/app/shared-draft/page.tsx", "utf8")).toMatch(
-      /<PageRenderer[\s\S]*?inertLinks[\s\S]*?\/>/,
-    );
+    const page = readFileSync("src/app/(share)/app/shared-draft/page.tsx", "utf8");
+    expect(page).not.toMatch(/<PageRenderer[\s\S]*?inertLinks[\s\S]*?\/>/);
+    expect(page).toMatch(/subPage/);
   });
 });

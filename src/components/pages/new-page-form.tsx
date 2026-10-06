@@ -6,6 +6,8 @@ import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspen
 import { HandleField, type ServerHandleResult } from "@/components/auth/handle-field";
 import { normalizeHandle } from "@/lib/handles/rules";
 import { isHandleStatus } from "@/lib/handles/status";
+import { SITE_TEMPLATES, isSiteTemplateId } from "@/lib/site-templates/catalog";
+import { setPendingTemplate } from "@/lib/site-templates/pending";
 
 const SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again to create a site.";
 const FAILED_MESSAGE = "Couldn’t create that site. Try again.";
@@ -30,6 +32,8 @@ export function NewPageForm() {
     if (pending) return;
     const raw = new FormData(event.currentTarget).get("handle");
     const handle = normalizeHandle(typeof raw === "string" ? raw : "");
+    const chosen = new FormData(event.currentTarget).get("template");
+    const template = isSiteTemplateId(chosen) ? chosen : null;
     setPending(true);
     setProblem(null);
     setServerResult(null);
@@ -42,7 +46,8 @@ export function NewPageForm() {
       if (response.status === 201) {
         // A full navigation, on purpose: the cookie the route just set decides which page every
         // screen shows, and a client-side push could render from the previous page.
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+        // The choice travels as a one-shot flag in this tab, not in the address (M12-03).
+        if (template) setPendingTemplate(template);
         window.location.assign("/editor");
         return;
       }
@@ -69,6 +74,26 @@ export function NewPageForm() {
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <HandleField id="np-handle" serverResult={serverResult} />
+      <fieldset
+        data-testid="new-site-templates"
+        className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0"
+      >
+        <legend className="mb-1 p-0 text-sm font-semibold">Start with</legend>
+        <TemplateChoice
+          value=""
+          label="A blank page"
+          detail="Add your own blocks."
+          defaultChecked
+        />
+        {SITE_TEMPLATES.map((template) => (
+          <TemplateChoice
+            key={template.id}
+            value={template.id}
+            label={template.name}
+            detail={template.pages.join(", ")}
+          />
+        ))}
+      </fieldset>
       <button
         type="submit"
         disabled={pending || suspended}
@@ -93,5 +118,35 @@ export function NewPageForm() {
         </div>
       ) : null}
     </form>
+  );
+}
+
+/** One radio card of the "Start with" choice: a 44px-tall label around the native radio. */
+function TemplateChoice({
+  value,
+  label,
+  detail,
+  defaultChecked,
+}: {
+  value: string;
+  label: string;
+  detail: string;
+  defaultChecked?: boolean;
+}) {
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-line-3 bg-surface px-3 py-2 has-[:checked]:border-ink has-[:checked]:bg-page has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brass">
+      <input
+        type="radio"
+        name="template"
+        value={value}
+        defaultChecked={defaultChecked}
+        data-testid="new-site-template"
+        className="peer sr-only"
+      />
+      <span className="flex min-w-0 flex-col">
+        <span className="text-sm font-semibold text-ink">{label}</span>
+        <span className="text-xs text-text-2">{detail}</span>
+      </span>
+    </label>
   );
 }

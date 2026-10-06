@@ -339,8 +339,14 @@ describe("block defaults (M2-10)", () => {
         blocks: [blockDefaults[type]()],
       }).success;
       // page_link defaults to Home, a target that is always there (M11-07).
+      // items and hours defaults carry sample content and a valid schedule (M12-01, M12-02).
       expect(ok, type).toBe(
-        type === "header" || type === "text" || type === "divider" || type === "page_link",
+        type === "header" ||
+          type === "text" ||
+          type === "divider" ||
+          type === "page_link" ||
+          type === "items" ||
+          type === "hours",
       );
     }
   });

@@ -115,12 +115,12 @@ for (const { path, title, current } of PAGES) {
   });
 }
 
-test("features: the block catalog shows all fifteen blocks and nothing scrolls sideways", async ({
+test("features: the block catalog shows all eighteen blocks and nothing scrolls sideways", async ({
   page,
 }) => {
   await page.goto(url(null, "/features"));
   const cards = page.locator("#blocks ul > li");
-  await expect(cards).toHaveCount(15);
+  await expect(cards).toHaveCount(18);
   for (const name of [
     "FAQ",
     "Contact details",
@@ -128,11 +128,23 @@ test("features: the block catalog shows all fifteen blocks and nothing scrolls s
     "Book links",
     "App store buttons",
     "Map location",
+    "Page link",
+    "Items",
+    "Opening hours",
   ]) {
     await expect(page.locator("#blocks h3", { hasText: name })).toBeVisible();
   }
-  await expect(page.locator("#blocks")).toContainText("Fifteen blocks");
+  await expect(page.locator("#blocks")).toContainText("Eighteen blocks");
   await expect(page.locator("#links")).toContainText("Redirect mode on Pro and Studio");
+  await expectNoHorizontalScroll(page);
+});
+
+test("features: the pages section is visible and nothing scrolls sideways", async ({ page }) => {
+  await page.goto(url(null, "/features"));
+  const section = page.locator("#pages");
+  await section.scrollIntoViewIfNeeded();
+  await expect(section).toBeVisible();
+  await expect(section.getByRole("heading").first()).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
 
@@ -141,7 +153,7 @@ test("legal pages: last-updated date, a column no wider than 70 characters, link
 }) => {
   for (const [path, label, iso] of [
     ["/privacy", "October 4, 2026", "2026-10-04"],
-    ["/terms", "October 3, 2026", "2026-10-03"],
+    ["/terms", "October 6, 2026", "2026-10-06"],
   ] as const) {
     const requests: string[] = [];
     page.on("request", (request) => requests.push(request.url()));

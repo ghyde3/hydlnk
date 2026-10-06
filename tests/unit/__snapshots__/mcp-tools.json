@@ -36,6 +36,12 @@
           "maxLength": 64,
           "format": "uuid"
         },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
         "blockId": {
           "description": "Return only this block, in full. Leave it out to get the whole page.",
           "type": "string",
@@ -117,7 +123,7 @@
           "format": "uuid"
         },
         "ifRev": {
-          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict.",
+          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -217,8 +223,14 @@
           "maxLength": 64,
           "format": "uuid"
         },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
         "ifRev": {
-          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict.",
+          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -240,12 +252,15 @@
             "discount",
             "book",
             "apps",
-            "map"
+            "map",
+            "page_link",
+            "items",
+            "hours"
           ],
           "description": "The kind of block to add."
         },
         "fields": {
-          "description": "The block's content, using only the field names listed in this tool's description for that type. Images are imageIds from get_page. A social icon platform is one of instagram, tiktok, youtube, x, facebook, linkedin, github, threads, reddit, snapchat, pinterest, discord, twitch, spotify, email, website. A book store is amazon, apple or bookshop. An app store is appstore or googleplay. A divider needs no fields.",
+          "description": "The block's content, using only the field names listed for that type in this tool's description and here. Images are imageIds from get_page. A social icon platform is one of instagram, tiktok, youtube, x, facebook, linkedin, github, threads, reddit, snapchat, pinterest, discord, twitch, spotify, email, website. A book store is amazon, apple or bookshop. An app store is appstore or googleplay. A divider needs no fields. page_link: label, target (home, or the id of another page of the site from list_pages). items: heading, layout (list or grid), items 1-100 of {name, price shown exactly as typed, description, image, url, sold}. hours: timezone (one of UTC, America/Anchorage, America/Argentina/Buenos_Aires, America/Bogota, America/Chicago, America/Denver, America/Halifax, America/Los_Angeles, America/Mexico_City, America/New_York, America/Phoenix, America/Santiago, America/Sao_Paulo, America/Toronto, America/Vancouver, Pacific/Honolulu, Europe/Amsterdam, Europe/Athens, Europe/Berlin, Europe/Dublin, Europe/Istanbul, Europe/Lisbon, Europe/London, Europe/Madrid, Europe/Moscow, Europe/Paris, Europe/Rome, Europe/Stockholm, Africa/Cairo, Africa/Johannesburg, Africa/Lagos, Africa/Nairobi, Asia/Bangkok, Asia/Dhaka, Asia/Dubai, Asia/Hong_Kong, Asia/Jakarta, Asia/Karachi, Asia/Kolkata, Asia/Manila, Asia/Seoul, Asia/Shanghai, Asia/Singapore, Asia/Tokyo, Australia/Melbourne, Australia/Perth, Australia/Sydney, Pacific/Auckland), days {mon, tue, wed, thu, fri, sat, sun}, each {closed: true} or {ranges: [{open, close}]} as 24-hour HH:MM, note.",
           "type": "object",
           "properties": {},
           "additionalProperties": {}
@@ -315,8 +330,14 @@
           "maxLength": 64,
           "format": "uuid"
         },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
         "ifRev": {
-          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict.",
+          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -363,8 +384,14 @@
           "maxLength": 64,
           "format": "uuid"
         },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
         "ifRev": {
-          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict.",
+          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -420,8 +447,14 @@
           "maxLength": 64,
           "format": "uuid"
         },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
         "ifRev": {
-          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict.",
+          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -434,6 +467,111 @@
       },
       "required": [
         "blockId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_page",
+    "title": "Add a page to a site",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The page's title, 1 to 60 characters. It is the menu label."
+        },
+        "path": {
+          "description": "The address of the page on the site, one lower-case word such as items or our-story (letters, digits and hyphens). Leave it out to get one made from the title.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "inMenu": {
+          "description": "Add the page to the site menu. Defaults to true, as the editor does.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_page_settings",
+    "title": "Change a page's settings",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "subPageId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The page to change: its id from list_pages. Home is changed with update_profile."
+        },
+        "ifRev": {
+          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "description": "The page's title, 1 to 60 characters.",
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "description": "The page's description for search results, up to 160 characters. An empty string clears it.",
+          "type": "string",
+          "maxLength": 1000
+        },
+        "path": {
+          "description": "The address of the page on the site, one lower-case word. A page that is already live keeps its old address until the next publish.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "inMenu": {
+          "description": "Put the page in the site menu or take it out.",
+          "type": "boolean"
+        },
+        "menuPosition": {
+          "description": "Where the page goes in the menu, counting from 0 (the first item below Home). Goes with inMenu true, or for a page already in the menu.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "subPageId"
       ],
       "additionalProperties": false
     }
@@ -459,7 +597,7 @@
           "format": "uuid"
         },
         "ifRev": {
-          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict.",
+          "description": "The rev from get_page. Pass it so a change made in the app after you read the page is not overwritten. If it no longer matches, the write is refused with conflict. Each page has its own rev: pass the one get_page gave for the page you are changing.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991

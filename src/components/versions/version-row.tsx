@@ -3,14 +3,28 @@
 import Link from "next/link";
 import { useEffect, useId, useRef } from "react";
 import type { HistoryRow } from "@/lib/versions/load";
-import { RESTORING, UNPUBLISHED_WARNING, confirmQuestion } from "@/lib/versions/messages";
+import {
+  RESTORING,
+  UNPUBLISHED_WARNING,
+  confirmPagesLine,
+  confirmQuestion,
+} from "@/lib/versions/messages";
 import { LiveChip } from "./live-chip";
 import { LocalTime } from "./local-time";
 
 /** What a row shows under itself after a restore was tried, undone or refused. */
 export type RowOutcome =
   | { kind: "failed"; message: string; retry: boolean }
-  | { kind: "done"; message: string; canUndo: boolean; undoing: boolean }
+  | {
+      kind: "done";
+      message: string;
+      canUndo: boolean;
+      undoing: boolean;
+      /** Pages of the version the restore did not write (M12-04): a heading and one line each. */
+      notRestored?: { heading: string; lines: { id: string; text: string }[] };
+      /** Why there is no Undo, when there is none because other pages were restored. */
+      note?: string;
+    }
   | { kind: "undone"; message: string }
   | { kind: "undo-failed"; message: string };
 
@@ -132,6 +146,11 @@ export function VersionRow({
             <p id={questionId} className="m-0 text-sm leading-relaxed">
               {confirmQuestion(n)}
             </p>
+            {row.subPageCount > 0 ? (
+              <p data-testid="restore-pages" className="m-0 text-sm leading-relaxed">
+                {confirmPagesLine(row.subPageCount)}
+              </p>
+            ) : null}
             {hasUnpublished ? (
               <p
                 data-testid="restore-unpublished"
@@ -202,6 +221,23 @@ function Outcome({
         className="flex flex-col gap-2 border-t border-line p-3.5 hl:p-4"
       >
         <p className="m-0 text-sm leading-relaxed">{outcome.message}</p>
+        {outcome.notRestored ? (
+          <div data-testid="restore-not-restored" className="flex flex-col gap-1">
+            <p className="m-0 text-sm leading-relaxed font-semibold text-brass-soft-text">
+              {outcome.notRestored.heading}
+            </p>
+            <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-sm leading-relaxed">
+              {outcome.notRestored.lines.map((line) => (
+                <li key={line.id}>{line.text}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {outcome.note ? (
+          <p data-testid="restore-no-undo" className="m-0 text-sm leading-relaxed text-text-2">
+            {outcome.note}
+          </p>
+        ) : null}
         <div className="flex flex-col gap-2 hl:flex-row">
           <Link href="/editor" className={`${PRIMARY} w-full no-underline hl:w-auto`}>
             Open editor

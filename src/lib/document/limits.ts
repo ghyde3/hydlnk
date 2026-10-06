@@ -48,6 +48,15 @@ export const LIMITS = {
   /** Map location block (M9-22): a one-line place name and address. */
   mapName: 60,
   mapAddress: 160,
+  /** Items block (M12-01): up to 100 items, each a name, a price shown as typed and a description. */
+  itemsMax: 100,
+  itemsHeading: 80,
+  itemName: 80,
+  itemPrice: 20,
+  itemDescription: 200,
+  /** Hours block (M12-02): up to two ranges a day and a note under the table. */
+  hoursRanges: 2,
+  hoursNote: 140,
   /** Most visible featured links (`featured` on a link block, M6-22) one page may publish. */
   featuredLinks: 3,
   /** The share card's title and description (M6-32): one line each, in code points. */

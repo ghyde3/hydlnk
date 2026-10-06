@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LIMITS } from "@/lib/document";
 import { handleAddress } from "@/lib/pages/plans";
+import { resolveNav } from "@/lib/document";
 import { MCP_SCOPES } from "../constants";
 import {
   alsoSetInTheApp,
@@ -10,15 +11,19 @@ import {
   publishIssues,
   publishStatusOf,
   readDraft,
+  readSubPageDraft,
+  subPagePublishIssues,
+  subPageStatusOf,
   themeView,
 } from "../doc-view";
 import { MESSAGES, ToolFailure } from "../errors";
 import { loadThemeTokens, PageReadError } from "../page-access";
-import type { ToolDefinition } from "../types";
-import { READ_ONLY, pageIdField } from "./common";
+import type { ToolCall, ToolDefinition } from "../types";
+import { READ_ONLY, pageIdField, subPageIdField } from "./common";
 
 const input = z.strictObject({
   pageId: pageIdField,
+  subPageId: subPageIdField,
   blockId: z
     .string()
     .max(40)
@@ -26,11 +31,65 @@ const input = z.strictObject({
     .describe("Return only this block, in full. Leave it out to get the whole page."),
 });
 
+/** One page of the site other than Home: its own draft, rev and state; the profile and theme are Home's. */
+async function readSubPage(
+  args: { blockId?: string | undefined },
+  subPage: NonNullable<ToolCall["subPage"]>,
+  site: NonNullable<ToolCall["page"]>,
+) {
+  const draft = readSubPageDraft(subPage.draft);
+  if (!draft) throw new ToolFailure("server_error", MESSAGES.draftUnreadable);
+  const home = readDraft(site.draft);
+  const inMenu = home ? resolveNav(home.nav).items.includes(subPage.id) : false;
+  const publishStatus = subPageStatusOf({ draft, published: subPage.published });
+  const header = {
+    id: site.id,
+    subPageId: subPage.id,
+    address: handleAddress(site.handle),
+    title: draft.title,
+    description: draft.description,
+    path: `/${draft.path}`,
+    inMenu,
+    live: subPage.livePath !== null,
+    publishStatus,
+    hasUnpublishedChanges: publishStatus !== "published",
+    publishedAt: subPage.publishedAt,
+    rev: subPage.rev,
+  };
+  if (args.blockId !== undefined) {
+    const block = draft.blocks.find((item) => item.id === args.blockId);
+    if (!block) throw new ToolFailure("block_not_found", MESSAGES.block_not_found);
+    return {
+      sentence: `Here is ${blockPhrase(block.type)}.`,
+      data: {
+        page: { id: site.id, subPageId: subPage.id, rev: subPage.rev },
+        block: blockView(block),
+      },
+    };
+  }
+  const blocks = draft.blocks.map(blockView);
+  const words =
+    publishStatus === "published"
+      ? "The draft matches the live page."
+      : publishStatus === "not-published"
+        ? "The page isn’t published yet."
+        : "The draft has changes that aren’t live.";
+  return {
+    sentence: `Read the draft of the page “${draft.title}” at /${draft.path}: ${blocks.length} ${blocks.length === 1 ? "block" : "blocks"}. ${words}`,
+    data: {
+      page: header,
+      blocks,
+      limits: { blocks: { used: blocks.length, max: LIMITS.blocks } },
+      publishIssues: subPagePublishIssues(subPage.draft),
+    },
+  };
+}
+
 export const getPage: ToolDefinition<typeof input> = {
   name: "get_page",
   title: "Get a page",
   description:
-    "Reads the draft of one page, which can differ from what is live. Returns page (id, rev, publishStatus, hasUnpublishedChanges, publishedAt), profile, theme (including how the page looks now), blocks in order, limits, publishIssues (what Publish would refuse, in plain words) and alsoSetInTheApp (settings no tool can change). Each block has an id, a type, visible and the same fields add_block takes. This is the only way to learn block ids and image ids. Pass blockId to read one block in full. Pass rev as ifRev to later writes. Errors: not_found, block_not_found.",
+    "Reads the draft of one page, which can differ from what is live. Pass subPageId (from list_pages) to read another page of the site: you get its title, path, rev, inMenu, blocks and publishIssues, and the profile and theme stay on Home. Otherwise returns page (id, rev, publishStatus, hasUnpublishedChanges, publishedAt), profile, theme (including how the page looks now), blocks in order, limits, publishIssues (what Publish would refuse, in plain words) and alsoSetInTheApp (settings no tool can change). Each block has an id, a type, visible and the same fields add_block takes. This is the only way to learn block ids and image ids. Pass blockId to read one block in full. Pass rev as ifRev to later writes. Errors: not_found, block_not_found.",
   scope: MCP_SCOPES.read,
   annotations: READ_ONLY,
   input,
@@ -38,6 +97,7 @@ export const getPage: ToolDefinition<typeof input> = {
   needsDraft: true,
   async handler(args, call) {
     const page = call.page!;
+    if (call.subPage) return readSubPage(args, call.subPage, page);
     const draft = readDraft(page.draft);
     if (!draft) throw new ToolFailure("server_error", MESSAGES.draftUnreadable);
 

@@ -444,7 +444,13 @@ describe("M6-49 the work", () => {
       { pageId: PAGE, versionId: VERSION, userId: OWNER },
       { admin: client, mediaExists: async () => true },
     );
-    expect(result).toEqual({ ok: true, restored: 8, missingImages: 0 });
+    expect(result).toEqual({
+      ok: true,
+      restored: 8,
+      missingImages: 0,
+      pagesRestored: 0,
+      notRestored: [],
+    });
     const written = writes(calls);
     expect(written).toHaveLength(1);
     expect(written[0]!.table).toBe("pages");
@@ -495,7 +501,13 @@ describe("M6-49 the work", () => {
       { pageId: PAGE, versionId: VERSION, userId: OWNER },
       { admin: client, mediaExists: async () => false },
     );
-    expect(result).toEqual({ ok: true, restored: 8, missingImages: 5 });
+    expect(result).toEqual({
+      ok: true,
+      restored: 8,
+      missingImages: 5,
+      pagesRestored: 0,
+      notRestored: [],
+    });
     const draft = (
       writes(calls)[0]!.payload as {
         draft: { profile: { photo: unknown }; theme: { overrides: Record<string, unknown> } };
@@ -548,7 +560,13 @@ describe("M6-49 the work", () => {
         },
       },
     );
-    expect(result).toEqual({ ok: true, restored: 8, missingImages: 2 });
+    expect(result).toEqual({
+      ok: true,
+      restored: 8,
+      missingImages: 2,
+      pagesRestored: 0,
+      notRestored: [],
+    });
     expect(asked).toEqual(expect.arrayContaining([THUMB, SHARE_PIC]));
     const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
     const link = draft.blocks.find((b) => b.id === "link-thumb-1")!;
@@ -565,7 +583,13 @@ describe("M6-49 the work", () => {
       { pageId: PAGE, versionId: VERSION, userId: OWNER },
       { admin: client, mediaExists: async () => true },
     );
-    expect(result).toEqual({ ok: true, restored: 8, missingImages: 0 });
+    expect(result).toEqual({
+      ok: true,
+      restored: 8,
+      missingImages: 0,
+      pagesRestored: 0,
+      notRestored: [],
+    });
     const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
     expect(draft.blocks.find((b) => b.id === "link-thumb-1")?.icon).toEqual({
       type: "image",

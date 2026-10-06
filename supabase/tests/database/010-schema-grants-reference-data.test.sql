@@ -54,6 +54,8 @@ select tables_are(
     'mcp_activity',
     -- Wave G: published versions, Pro and Studio (131)
     'page_versions',
+    -- Wave M2: exact site-wide unique visitors (180)
+    'daily_site_stats',
     -- Wave M1: sub-pages of a site and the owner byte total (175, 178)
     'account_site_bytes',
     'site_pages'
@@ -116,6 +118,7 @@ select set_eq(
       ('domains|authenticated|SELECT|*'),
       ('daily_stats|authenticated|SELECT|*'),
       ('daily_dim_stats|authenticated|SELECT|*'),
+      ('daily_site_stats|authenticated|SELECT|*'),
       ('accounts|service_role|SELECT|*'),
       ('accounts|service_role|INSERT|*'),
       ('accounts|service_role|UPDATE|*'),
@@ -136,6 +139,7 @@ select set_eq(
       ('events|service_role|INSERT|*'),
       ('daily_stats|service_role|SELECT|*'),
       ('daily_dim_stats|service_role|SELECT|*'),
+      ('daily_site_stats|service_role|SELECT|*'),
       ('traffic_flags|service_role|SELECT|*'),
       ('traffic_flags|service_role|UPDATE|reviewed_at'),
       ('reserved_handles|service_role|SELECT|*'),

@@ -20,7 +20,7 @@ import { openEditor, pageRow, saveIndicator } from "../m2/editor-helpers";
 import { prepareFlowUser, runEveryTool } from "./mcp-flow-helpers";
 
 /**
- * Wave L, an AI client working a page through all twelve tools (M10-24 to M10-32), end to end: the
+ * Wave L, an AI client working a page through all fourteen tools (M10-24 to M10-32), end to end: the
  * real server, the real database, the real publish gate and the real cache. A minted token stands in
  * for the OAuth dance (flow.spec.ts is the dance). Every result is checked for the documented shape
  * and for nothing internal; at the end the activity log holds exactly one row per call.
@@ -34,7 +34,7 @@ test.beforeEach(({}, info) =>
   test.skip(!desktopOnly(info), "pure HTTP and API rows: desktop only"),
 );
 
-test("M10-33 the twelve tools in the order an AI would use them, on a Pro page, then publish and see it live at once", async ({
+test("M10-33 the fourteen tools in the order an AI would use them, on a Pro page, then publish and see it live at once", async ({
   context,
   page,
 }) => {
@@ -158,7 +158,7 @@ test("M10-22 scopes, suspension and the limits, over the wire", async () => {
     .from("accounts")
     .update({ suspended_at: new Date().toISOString() })
     .eq("id", user.id);
-  expect(await writer.listTools()).toHaveLength(12);
+  expect(await writer.listTools()).toHaveLength(14);
   for (const [tool, args] of [
     ["list_pages", {}],
     ["get_page", { pageId }],
@@ -197,7 +197,7 @@ test("M10-22 rate limits: 60 list_pages calls a minute for one person, the 61st 
   await second.initialize();
   expect((await second.callTool("list_pages")).isError).toBe(false);
   // initialize and tools/list are never counted.
-  expect(await one.listTools()).toHaveLength(12);
+  expect(await one.listTools()).toHaveLength(14);
 });
 
 test("M10-32 the activity log: rows per token with their own client, a deleted page leaves null, deleting the person removes them", async () => {

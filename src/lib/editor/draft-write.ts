@@ -1,6 +1,14 @@
 import "server-only";
 import { readBlockedLinkError } from "@/lib/blocklist/error";
-import { LIMITS, draftDocSchema, publishFormsEqual, type DraftDoc } from "@/lib/document";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  LIMITS,
+  draftDocSchema,
+  draftSubPageSchema,
+  publishFormsEqual,
+  type DraftDoc,
+  type SubPageDraft,
+} from "@/lib/document";
 import { jsonbTextBytes } from "@/lib/editor/size";
 import type { Json } from "@/lib/supabase/database.types";
 import { collectRefsByPath } from "@/lib/mcp/images";
@@ -27,29 +35,40 @@ import type { AdminClient } from "@/lib/mcp/types";
  *      editor's autosave, or another tool call): `conflict`, with no retry and no merge, so a save
  *      made in the editor is never written over silently.
  *
+ * A sub-page (M12-05) goes through the same seven steps with `subPageId`: the site row is still read
+ * and owner-filtered first, the sub-page is read under that site, the stored document is checked with
+ * `draftSubPageSchema`, and the guard is the row's `updated_at` (a sub-page document has no `rev`; the
+ * database bumps `updated_at` on every write, so it is the revision: `rev` here is its milliseconds).
+ *
  * It sets the `draft` column and nothing else: `published`, `published_at`, `handle`, `name` and
  * `owner_id` are never in the statement. The database walls (the link blocklist trigger, the size
  * check) fire under the secret key too and become `blocked_link` and `too_large`.
  */
 
-export type ChangeOutcome<T> =
-  { kind: "write"; doc: DraftDoc; value: T } | { kind: "unchanged"; value: T };
+/** What a tool that edits blocks can do to either kind of draft: Home's or a sub-page's. */
+export type BlocksDoc = DraftDoc | SubPageDraft;
 
-export interface WriteDraftInput<T> {
+export type ChangeOutcome<T, D extends BlocksDoc = DraftDoc> =
+  { kind: "write"; doc: D; value: T } | { kind: "unchanged"; value: T };
+
+export interface WriteDraftInput<T, D extends BlocksDoc = DraftDoc> {
   admin: AdminClient;
   userId: string;
+  /** The site (the `pages` row), also when the write is to one of its sub-pages. */
   pageId: string;
+  /** Write this sub-page of the site instead of Home. */
+  subPageId?: string | undefined;
   ifRev?: number | undefined;
   /** Gets a private copy of the stored draft. Returns the new draft, or says nothing changed, or throws a `ToolFailure`. */
-  change: (doc: DraftDoc) => ChangeOutcome<T> | Promise<ChangeOutcome<T>>;
+  change: (doc: D) => ChangeOutcome<T, D> | Promise<ChangeOutcome<T, D>>;
 }
 
-export interface WriteDraftResult<T> {
+export interface WriteDraftResult<T, D extends BlocksDoc = DraftDoc> {
   /** The rev now stored (the same as before when `unchanged`). */
   rev: number;
   unchanged: boolean;
   /** The draft now stored, with its rev. */
-  doc: DraftDoc;
+  doc: D;
   value: T;
   /** An image reference left the draft: the caller runs the media cleanup after the response. */
   droppedImages: boolean;
@@ -57,6 +76,8 @@ export interface WriteDraftResult<T> {
 
 /** SQLSTATE of "the draft is too large": the size CHECK and the 200-block trigger. */
 const TOO_LARGE_CODE = "23514";
+/** SQLSTATE HL009: a sub-page write would pass the account's 64 MiB cap on sub-page documents. */
+const STORAGE_FULL_CODE = "HL009";
 
 function issuesOf(error: { issues: { path: PropertyKey[]; message: string }[] }) {
   return error.issues.slice(0, 10).map((issue) => ({
@@ -65,8 +86,15 @@ function issuesOf(error: { issues: { path: PropertyKey[]; message: string }[] })
   }));
 }
 
-export async function writeDraft<T>(input: WriteDraftInput<T>): Promise<WriteDraftResult<T>> {
-  const { admin, userId, pageId } = input;
+/** An untyped handle, so one code path can write `pages` or `site_pages` (the columns used are the same). */
+type LooseAdmin = SupabaseClient;
+
+export async function writeDraft<T, D extends BlocksDoc = DraftDoc>(
+  input: WriteDraftInput<T, D>,
+): Promise<WriteDraftResult<T, D>> {
+  const { admin, userId, pageId, subPageId } = input;
+  const isSub = subPageId !== undefined;
+  const loose = admin as unknown as LooseAdmin;
 
   // 1. The page, filtered on its owner in the query and compared again.
   const read = await admin
@@ -79,6 +107,21 @@ export async function writeDraft<T>(input: WriteDraftInput<T>): Promise<WriteDra
   if (read.error) throw new ToolFailure("server_error", MESSAGES.serverError);
   if (!read.data || read.data.owner_id !== userId) {
     throw new ToolFailure("not_found", MESSAGES.not_found);
+  }
+  // A sub-page of that site (never of another one: the site id is in the filter).
+  let subRow: { id: string; draft: unknown; updated_at: string } | null = null;
+  if (isSub) {
+    const sub = await loose
+      .from("site_pages")
+      .select("id, page_id, draft, updated_at")
+      .eq("id", subPageId)
+      .eq("page_id", pageId)
+      .maybeSingle();
+    if (sub.error) throw new ToolFailure("server_error", MESSAGES.serverError);
+    if (!sub.data || sub.data.page_id !== pageId) {
+      throw new ToolFailure("not_found", MESSAGES.not_found);
+    }
+    subRow = sub.data as { id: string; draft: unknown; updated_at: string };
   }
 
   // 2. Suspension.
@@ -93,10 +136,12 @@ export async function writeDraft<T>(input: WriteDraftInput<T>): Promise<WriteDra
   }
 
   // 3. The stored draft must read. It is never repaired and never overwritten.
-  const stored = draftDocSchema.safeParse(read.data.draft);
+  const storedRaw: unknown = subRow ? subRow.draft : read.data.draft;
+  const stored = (isSub ? draftSubPageSchema : draftDocSchema).safeParse(storedRaw);
   if (!stored.success) throw new ToolFailure("server_error", MESSAGES.draftUnreadable);
-  const rawStored = read.data.draft as unknown as DraftDoc;
-  const oldRev = stored.data.rev;
+  const rawStored = storedRaw as D;
+  // Home's rev is in the document; a sub-page's is its `updated_at`, in milliseconds.
+  const oldRev: number = subRow ? Date.parse(subRow.updated_at) : (stored.data as DraftDoc).rev;
   const revKey: string | null = (read.data as { draft_rev?: string | null }).draft_rev ?? null;
 
   // 4. The extra, explicit check.
@@ -105,32 +150,24 @@ export async function writeDraft<T>(input: WriteDraftInput<T>): Promise<WriteDra
   }
 
   // 5. The change, on a private copy of exactly what is stored (keys the schema does not know stay).
+  const unchanged = (value: T): WriteDraftResult<T, D> => ({
+    rev: oldRev,
+    unchanged: true,
+    doc: rawStored,
+    value,
+    droppedImages: false,
+  });
   const outcome = await input.change(structuredClone(rawStored));
-  if (outcome.kind === "unchanged") {
-    return {
-      rev: oldRev,
-      unchanged: true,
-      doc: rawStored,
-      value: outcome.value,
-      droppedImages: false,
-    };
-  }
-  const next: DraftDoc = { ...outcome.doc, rev: oldRev + 1 };
-  if (publishFormsEqual({ ...next, rev: oldRev }, rawStored)) {
-    return {
-      rev: oldRev,
-      unchanged: true,
-      doc: rawStored,
-      value: outcome.value,
-      droppedImages: false,
-    };
-  }
+  if (outcome.kind === "unchanged") return unchanged(outcome.value);
+  const next: D = subRow ? outcome.doc : ({ ...outcome.doc, rev: oldRev + 1 } as unknown as D);
+  const sameAs = subRow ? next : { ...next, rev: oldRev };
+  if (publishFormsEqual(sameAs, rawStored)) return unchanged(outcome.value);
 
   // 6. The whole draft must still be a draft, and fit.
   if (next.blocks.length > LIMITS.blocks) {
     throw new ToolFailure("block_limit", MESSAGES.block_limit);
   }
-  const check = draftDocSchema.safeParse(next);
+  const check = (isSub ? draftSubPageSchema : draftDocSchema).safeParse(next);
   if (!check.success) {
     const issues = issuesOf(check.error);
     throw new ToolFailure("invalid_input", issues[0]?.message ?? "That change isn’t valid.", {
@@ -142,14 +179,18 @@ export async function writeDraft<T>(input: WriteDraftInput<T>): Promise<WriteDra
   }
 
   // 7. The conditional update: the draft column only, guarded by the rev the change started from.
-  const update = admin
-    .from("pages")
-    .update({ draft: next as unknown as Json })
-    .eq("id", pageId)
-    .eq("owner_id", userId);
-  const guarded =
-    revKey === null ? update.is("draft->>rev", null) : update.eq("draft->>rev", revKey);
-  const written = await guarded.select("id");
+  const base = loose
+    .from(isSub ? "site_pages" : "pages")
+    .update({ draft: next as unknown as Json });
+  const scoped = subRow
+    ? base.eq("id", subPageId).eq("page_id", pageId)
+    : base.eq("id", pageId).eq("owner_id", userId);
+  const guarded = subRow
+    ? scoped.eq("updated_at", subRow.updated_at)
+    : revKey === null
+      ? scoped.is("draft->>rev", null)
+      : scoped.eq("draft->>rev", revKey);
+  const written = await guarded.select("id, updated_at");
   if (written.error) {
     const blocked = readBlockedLinkError(written.error);
     if (blocked) {
@@ -161,15 +202,20 @@ export async function writeDraft<T>(input: WriteDraftInput<T>): Promise<WriteDra
         })),
       });
     }
-    if (written.error.code === TOO_LARGE_CODE)
+    // The size CHECK and, for a sub-page, the account's 64 MiB cap (HL009).
+    if (written.error.code === TOO_LARGE_CODE || written.error.code === STORAGE_FULL_CODE) {
       throw new ToolFailure("too_large", MESSAGES.too_large);
+    }
     throw new ToolFailure("server_error", MESSAGES.serverError);
   }
   if (!written.data || written.data.length === 0)
     throw new ToolFailure("conflict", MESSAGES.conflict);
 
+  const newRev = subRow
+    ? Date.parse((written.data[0] as { updated_at: string }).updated_at)
+    : (next as unknown as DraftDoc).rev;
   const before = new Set(collectRefsByPath(rawStored).keys());
   const after = new Set(collectRefsByPath(next).keys());
   const droppedImages = [...before].some((path) => !after.has(path));
-  return { rev: next.rev, unchanged: false, doc: next, value: outcome.value, droppedImages };
+  return { rev: newRev, unchanged: false, doc: next, value: outcome.value, droppedImages };
 }

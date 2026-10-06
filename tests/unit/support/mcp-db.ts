@@ -39,7 +39,7 @@ export interface Outcome {
 export async function makeRuntime(admin: SupabaseClient, over: Partial<ToolDeps> = {}) {
   const { runTool } = await import("@/lib/mcp/run-tool");
   const { toolByName } = await import("@/lib/mcp/tools");
-  const { loadOwnedPage } = await import("@/lib/mcp/page-access");
+  const { loadOwnedPage, loadOwnedSubPage } = await import("@/lib/mcp/page-access");
   const { recordActivityRow } = await import("@/lib/mcp/activity");
   const deferred: Array<() => unknown> = [];
   const logs: string[] = [];
@@ -57,6 +57,8 @@ export async function makeRuntime(admin: SupabaseClient, over: Partial<ToolDeps>
       return !data || data.suspended_at !== null;
     },
     loadPage: (userId, pageId, options) => loadOwnedPage(admin as never, userId, pageId, options),
+    loadSubPage: (userId, siteId, subPageId, options) =>
+      loadOwnedSubPage(admin as never, userId, siteId, subPageId, { docs: options.withDraft }),
     recordActivity: async (row) => {
       activity.push(row);
       await recordActivityRow(admin, row);

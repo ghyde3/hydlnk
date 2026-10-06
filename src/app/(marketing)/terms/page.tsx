@@ -234,6 +234,11 @@ export default function TermsPage() {
         feature you pay for, or stop offering HYDLNK, we’ll give you reasonable notice and a
         prorated refund for any period you’ve paid for and can’t use.
       </p>
+      <p>
+        Plan limits, such as how many pages a site can hold, how many published versions we keep
+        and how much storage they use, may be adjusted as HYDLNK grows. The current limits are on
+        the pricing page and in the help guides.
+      </p>
 
       <h2 id="third-parties">Other services</h2>
       <p>

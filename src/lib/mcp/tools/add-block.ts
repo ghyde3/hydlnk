@@ -1,24 +1,38 @@
 import { z } from "zod";
 import { BLOCK_TYPES, LIMITS, type Block, type BlockType } from "@/lib/document";
 import { MCP_SCOPES } from "../constants";
-import { commitDraft } from "../commit";
-import { blockPhrase, blockView, buildBlock, imageIdsIn, validateBlock } from "../doc-view";
-import { parseBlockFields } from "../block-fields";
+import { commitBlocks } from "../commit";
+import {
+  blockPhrase,
+  blockView,
+  buildBlock,
+  cleanPageTarget,
+  imageIdsIn,
+  validateBlock,
+} from "../doc-view";
+import { HOURS_TIMEZONE_LIST, parseBlockFields } from "../block-fields";
 import { MESSAGES, ToolFailure } from "../errors";
 import { createImageResolver } from "../images";
 import type { ToolDefinition } from "../types";
-import { DRAFT_ONLY, WRITE_NOT_IDEMPOTENT, ifRevField, pageIdField } from "./common";
+import {
+  DRAFT_ONLY,
+  WRITE_NOT_IDEMPOTENT,
+  ifRevField,
+  pageIdField,
+  subPageIdField,
+} from "./common";
+import { assertPageLinkTarget } from "./page-link-target";
 
 const input = z.strictObject({
   pageId: pageIdField,
+  subPageId: subPageIdField,
   ifRev: ifRevField,
-  // M11-07: page_link is excluded until MCP sub-page support (M2).
-  type: z.enum(BLOCK_TYPES).exclude(["page_link"]).describe("The kind of block to add."),
+  type: z.enum(BLOCK_TYPES).describe("The kind of block to add."),
   fields: z
     .looseObject({})
     .optional()
     .describe(
-      "The block's content, using only the field names listed in this tool's description for that type. Images are imageIds from get_page. A social icon platform is one of instagram, tiktok, youtube, x, facebook, linkedin, github, threads, reddit, snapchat, pinterest, discord, twitch, spotify, email, website. A book store is amazon, apple or bookshop. An app store is appstore or googleplay. A divider needs no fields.",
+      `The block's content, using only the field names listed for that type in this tool's description and here. Images are imageIds from get_page. A social icon platform is one of instagram, tiktok, youtube, x, facebook, linkedin, github, threads, reddit, snapchat, pinterest, discord, twitch, spotify, email, website. A book store is amazon, apple or bookshop. An app store is appstore or googleplay. A divider needs no fields. page_link: label, target (home, or the id of another page of the site from list_pages). items: heading, layout (list or grid), items 1-${LIMITS.itemsMax} of {name, price shown exactly as typed, description, image, url, sold}. hours: timezone (one of ${HOURS_TIMEZONE_LIST}), days {mon, tue, wed, thu, fri, sat, sun}, each {closed: true} or {ranges: [{open, close}]} as 24-hour HH:MM, note.`,
     ),
   visible: z
     .boolean()
@@ -46,7 +60,7 @@ const input = z.strictObject({
 export const addBlock: ToolDefinition<typeof input> = {
   name: "add_block",
   title: "Add a block",
-  description: `Adds one block to the draft and returns its id. ${DRAFT_ONLY} Fields by type (limits are characters): link: label ${LIMITS.linkLabel}, url, icon, featured; card: title ${LIMITS.cardTitle}, caption ${LIMITS.cardCaption}, url, image; header: text ${LIMITS.headerText}; text: text ${LIMITS.text}; image: image, alt ${LIMITS.imageAlt}, url, shape; social: icons ${LIMITS.socialIconsMin}-${LIMITS.socialIconsMax} of {platform, url or address}; embed: url, caption ${LIMITS.embedCaption}; grid: cells ${LIMITS.gridCellsMin}-${LIMITS.gridCellsMax} of {title ${LIMITS.cellTitle}, subtitle ${LIMITS.cellSubtitle}, url}; divider; faq: items ${LIMITS.faqItemsMin}-${LIMITS.faqItemsMax} of {question ${LIMITS.faqQuestion}, answer ${LIMITS.faqAnswer}}; contact: name ${LIMITS.contactName}, phone, email, hours ${LIMITS.contactHours}; discount: code ${LIMITS.discountCode}, description ${LIMITS.discountDescription}, url; book: title ${LIMITS.bookTitle}, author ${LIMITS.bookAuthor}, cover, links 1-${LIMITS.bookLinks} of {store, url}; apps: links 1-${LIMITS.appLinks} of {store, url}; map: name ${LIMITS.mapName}, address ${LIMITS.mapAddress}. All types also take overrides. Max ${LIMITS.blocks} blocks. Errors: invalid_input, blocked_link, block_limit, image_not_found, conflict.`,
+  description: `Adds one block to the draft and returns its id. ${DRAFT_ONLY} Fields by type (limits are characters): link: label ${LIMITS.linkLabel}, url, icon, featured; card: title ${LIMITS.cardTitle}, caption ${LIMITS.cardCaption}, url, image; header: text ${LIMITS.headerText}; text: text ${LIMITS.text}; image: image, alt ${LIMITS.imageAlt}, url, shape; social: icons ${LIMITS.socialIconsMin}-${LIMITS.socialIconsMax} of {platform, url or address}; embed: url, caption ${LIMITS.embedCaption}; grid: cells ${LIMITS.gridCellsMin}-${LIMITS.gridCellsMax} of {title ${LIMITS.cellTitle}, subtitle ${LIMITS.cellSubtitle}, url}; divider; faq: items ${LIMITS.faqItemsMin}-${LIMITS.faqItemsMax} of {question ${LIMITS.faqQuestion}, answer ${LIMITS.faqAnswer}}; contact: name ${LIMITS.contactName}, phone, email, hours ${LIMITS.contactHours}; discount: code ${LIMITS.discountCode}, description ${LIMITS.discountDescription}, url; book: title ${LIMITS.bookTitle}, author ${LIMITS.bookAuthor}, cover, links 1-${LIMITS.bookLinks} of {store, url}; apps: links 1-${LIMITS.appLinks} of {store, url}; map: name ${LIMITS.mapName}, address ${LIMITS.mapAddress} All types also take overrides. Max ${LIMITS.blocks} blocks. For page_link, items and hours see fields. Errors: invalid_input, blocked_link, block_limit, image_not_found, conflict.`,
   scope: MCP_SCOPES.write,
   annotations: WRITE_NOT_IDEMPOTENT,
   input,
@@ -59,6 +73,8 @@ export const addBlock: ToolDefinition<typeof input> = {
         issues: parsed.issues.slice(0, 10),
       });
     }
+    if (type === "page_link")
+      await assertPageLinkTarget(call, cleanPageTarget(String(parsed.fields.target ?? "")));
     const resolve = createImageResolver(call.admin, call.userId);
     const images = new Map();
     for (const id of imageIdsIn(type, parsed.fields)) images.set(id, await resolve(id));
@@ -68,7 +84,7 @@ export const addBlock: ToolDefinition<typeof input> = {
     // The document's own rules, so the AI learns about a problem now and not at Publish.
     validateBlock(block, { visible });
 
-    const result = await commitDraft(call, args.ifRev, (doc) => {
+    const result = await commitBlocks(call, args.ifRev, (doc) => {
       if (doc.blocks.length >= LIMITS.blocks) {
         throw new ToolFailure("block_limit", MESSAGES.block_limit);
       }
