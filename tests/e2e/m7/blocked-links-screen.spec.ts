@@ -90,16 +90,22 @@ test.describe("M7-13 the screen", () => {
     await page.goto(url("app", "/admin"));
     const tile = page.getByRole("main").getByRole("link", { name: /Blocked links/ });
     await expect(tile).toBeVisible();
-    const total = await adminClient()
-      .from("blocked_domains")
-      .select("domain", { count: "exact", head: true });
-    await expect(tile).toContainText(String(total.count));
+    // The list is shared with specs running at the same time: compare against the count read just
+    // before each load, and load again until they agree.
+    await expect(async () => {
+      await page.goto(url("app", "/admin"));
+      const total = await adminClient()
+        .from("blocked_domains")
+        .select("domain", { count: "exact", head: true });
+      await expect(tile).toContainText(String(total.count), { timeout: 2000 });
+    }).toPass();
     await tile.click();
     await expect(page).toHaveURL(SCREEN);
 
     // The sidebar has the section, after Traffic, and it is current.
     const nav = page.locator("aside").getByRole("navigation", { name: "Admin" });
-    await expect(nav.getByRole("link")).toHaveText([
+    // Wave N (M13) added sections after these four: the first four are still in this order.
+    expect((await nav.getByRole("link").allTextContents()).slice(0, 4)).toEqual([
       "Reports",
       "Pages",
       "Traffic",
@@ -433,7 +439,8 @@ test.describe("M7-13 layout", () => {
     await open(page);
 
     const nav = page.getByRole("navigation", { name: "Admin sections" });
-    await expect(nav.getByRole("link")).toHaveText([
+    // Wave N (M13) added sections after these four: the first four are still in this order.
+    expect((await nav.getByRole("link").allTextContents()).slice(0, 4)).toEqual([
       "Reports",
       "Pages",
       "Traffic",
