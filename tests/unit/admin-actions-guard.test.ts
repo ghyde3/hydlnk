@@ -63,19 +63,24 @@ const validInput = (action: AdminAction): unknown =>
       ? { handle: "nobrand" }
       : action.name === "set_announcement"
         ? { message: "Hello", ends_at: "2099-01-01T00:00:00Z" }
-        : action.name === "block_domain"
-          ? { domain: "example.test", reason: "spam" }
-          : action.name === "unblock_domain"
-            ? { domain: "example.test" }
-            : action.name === "gift_plan"
-        ? { id: TARGET, plan: "pro", until: null, reason: "support" }
-        : { id: TARGET };
+        : action.name === "block_app"
+          ? { client_id: "hlc_" + "a".repeat(32), reason: "abuse" }
+          : action.name === "unblock_app"
+            ? { client_id: "hlc_" + "a".repeat(32) }
+            : action.name === "block_domain"
+              ? { domain: "example.test", reason: "spam" }
+              : action.name === "unblock_domain"
+                ? { domain: "example.test" }
+                : action.name === "gift_plan"
+                  ? { id: TARGET, plan: "pro", until: null, reason: "support" }
+                  : { id: TARGET };
 
 describe("M5-04 the registry", () => {
   it("lists the admin mutations, with unique names", () => {
     const names = ADMIN_ACTIONS.map((action) => action.name);
     expect(names.sort()).toEqual([
       "add_reserved_handle",
+      "block_app",
       "block_domain",
       "clear_announcement",
       "dismiss_report",
@@ -86,6 +91,7 @@ describe("M5-04 the registry", () => {
       "review_traffic_flag",
       "set_announcement",
       "suspend_account",
+      "unblock_app",
       "unblock_domain",
       "unsuspend_account",
     ]);
