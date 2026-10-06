@@ -1,7 +1,7 @@
 # HYDLNK
 
 Multi-tenant link-in-bio platform (a Linktree alternative) that wins on design control: block layouts, a tenant theme-token system, saved themes. Open but unadvertised signup; most users are on phones.
-Stack: Next.js 16 App Router + TypeScript on Vercel, Supabase (Auth, Postgres + RLS, Storage, pg_cron), Stripe Checkout + hosted portal (sandbox only), Zod, dnd-kit, pnpm 10, Node 24.
+Stack: Next.js 16 App Router + TypeScript on Vercel, Supabase (Auth, Postgres + RLS, Storage, pg_cron), Stripe Checkout + hosted portal (live in production; the sandbox locally and in CI), Zod, dnd-kit, pnpm 10, Node 24.
 Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`): read `node_modules/next/dist/docs/` before writing Next code (see AGENTS.md).
 
 ## Commands
@@ -76,7 +76,7 @@ Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds thes
 - `server-only` 0.0.1: marks modules that must never reach the browser
 - `sharp` 0.35.5: image resizing and WebP on upload
 - `simple-icons` 16.34.0: real brand marks as SVG paths
-- `stripe` 23.0.0: billing (sandbox only)
+- `stripe` 23.0.0: billing (live in production, the sandbox locally and in CI)
 - `tailwind-merge` 3.7.0: class name merging (with clsx, in `cn`)
 - `zod` 4.6.5: schemas for documents, env and inputs
 Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@modelcontextprotocol/client` 2.3.0, `@playwright/test` 1.63.0, `@tailwindcss/postcss` 4.3.3, `@types/node` 24.19.0, `@types/nodemailer` 8.0.2, `@types/react` 19.3.0, `@types/react-dom` 19.3.0, `eslint` 9.39.5, `eslint-config-next` 16.3.8, `eslint-config-prettier` 10.1.8, `jsdom` 30.1.1, `jsqr` 1.4.0, `prettier` 3.9.9, `tailwindcss` 4.3.3, `tsx` 4.23.15, `typescript` 6.0.3, `vitest` 5.0.3
@@ -115,7 +115,7 @@ Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@modelcontextprotoco
 - `.claude/rules/` load by path: `supabase-migrations.md` (`supabase/**`), `tenant-pages.md` (`src/app/(tenant)/**`, `src/lib/theme/**`), `editor-app.md` (`src/app/(editor)/**`), `routing.md` (`src/proxy.ts`, `src/lib/routing/**`), `mcp-oauth.md` (`src/lib/mcp/**`, `src/lib/oauth/**` and their routes under `src/app/(editor)/app/`).
 - Agents: `reviewer` (correctness against acceptance), `security-reviewer` (auth, data, routing, payments), `design-verifier` (screens vs mockups).
 - Skills: `/feature-loop`, `/release`, `/add-block-type`, `/db-change`.
-- Stripe: HYDLNK sandbox only; the Stripe CLI always takes `--project-name hydlnk`. Never read or print `.env*` or secret keys. If a bare `supabase` command stalls on a docker image, run `source scripts/lib/docker-env.sh` first (it works around Docker Desktop's hanging credential helper; init.sh and `pnpm db:types` already do).
+- Stripe: production runs on live keys (Gary, 2026-10-06). Local runs, CI and every Claude session use the HYDLNK sandbox only, the Stripe CLI always takes `--project-name hydlnk`, and nothing touches live Stripe without Gary's explicit yes. Never read or print `.env*` or secret keys. If a bare `supabase` command stalls on a docker image, run `source scripts/lib/docker-env.sh` first (it works around Docker Desktop's hanging credential helper; init.sh and `pnpm db:types` already do).
 
 ## Where to look
 - `docs/PLAN.md`: scope, architecture, data model and access rules, tenant tokens, analytics, milestones. Decides scope and behavior.
