@@ -35,7 +35,14 @@ const previewOrder = (page: Page) =>
   previewScreen(page)
     .locator("[data-block-id]")
     .evaluateAll((els) => els.map((el) => el.getAttribute("data-block-id")));
-const liveRegion = (page: Page) => page.locator('[id^="DndLiveRegion"]');
+// Each DndContext (the block builder, M12-08's pages panel) has its own live region, and dnd-kit
+// numbers their ids in mount order (an explicit `id` on DndContext does not reach them). Only the
+// block builder's ever carries text here, so the one with text is the one under test.
+const liveRegion = (page: Page) => page.locator('[id^="DndLiveRegion"]').filter({ hasText: /\S/ });
+const said = (page: Page) =>
+  page
+    .locator('[id^="DndLiveRegion"]')
+    .evaluateAll((els) => els.map((el) => (el as HTMLElement).innerText).join(" "));
 
 /** Puts the list in the middle of the viewport, away from the edges where dnd-kit auto-scrolls. */
 async function centerList(page: Page) {
@@ -130,7 +137,7 @@ test.describe("M2-14 drag handles", () => {
     // The lift can be lost when the page has only just hydrated: press again until it is announced
     // (never once it has been, a second Space would drop the block).
     await expect(async () => {
-      if (!(await liveRegion(page).innerText()).includes("Picked up One")) {
+      if (!(await said(page)).includes("Picked up One")) {
         await h.focus();
         await page.keyboard.press("Space");
       }
@@ -141,8 +148,8 @@ test.describe("M2-14 drag handles", () => {
     // is announced, but never once the announcement is there.
     for (const position of [2, 3]) {
       await expect(async () => {
-        const said = await liveRegion(page).innerText();
-        if (!said.includes(`One moved to position ${position} of 5`)) {
+        const heard = await said(page);
+        if (!heard.includes(`One moved to position ${position} of 5`)) {
           await page.keyboard.press("ArrowDown");
         }
         await expect(liveRegion(page)).toContainText(`One moved to position ${position} of 5`, {

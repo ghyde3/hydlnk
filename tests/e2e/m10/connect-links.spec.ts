@@ -147,6 +147,7 @@ test.describe("M10-35 the Features section", () => {
       "ai-apps",
       "safety",
       "links",
+      "pages",
     ]);
     const heading = page.locator("section#ai-apps h2");
     await expect(heading).toHaveAttribute("id", "ai-apps-title");

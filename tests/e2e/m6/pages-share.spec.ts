@@ -3,6 +3,7 @@ import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, desktopOnly, signedInUser } from "../fixtures/data";
 import { NEVER_STORED, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { ITEMS, makeLiveSite } from "../m11/tenant-helpers";
 import {
   INACTIVE,
   expireLink,
@@ -235,7 +236,7 @@ test.describe("M6-10 the shared page, over HTTP", () => {
     expect((await getShare(link.token, ip)).status).toBe(404);
   });
 
-  test("M6-10 a token for page A never draws page B: an extra path, a query string and a ?page= parameter are ignored", async ({
+  test("M6-10 a token for page A never draws page B: a query string and a ?page= parameter are ignored, an extra path is a sub-page or the 404 (M12-12)", async ({
     context,
   }, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
@@ -251,18 +252,29 @@ test.describe("M6-10 the shared page, over HTTP", () => {
     const linkB = await makeLink(b.userId, b.pageId);
     const ip = randomIp();
 
-    for (const rest of [
-      `?page=${b.pageId}`,
-      `/extra/path`,
-      `/${linkB.token}`,
-      `?token=${linkB.token}&page=${b.pageId}`,
-    ]) {
+    // Query strings and ?page= are ignored: the token's own page is drawn, never B's.
+    for (const rest of [`?page=${b.pageId}`, `?token=${linkB.token}&page=${b.pageId}`]) {
       const res = await getShare(linkA.token, ip, { rest });
       expect(res.status, rest).toBe(200);
       const text = visibleText(res.body);
       expect(text, rest).toContain(DRAFT_ONLY);
       expect(text, rest).not.toContain("Page B Only");
     }
+    // M12-12 supersedes "an extra path is ignored": an extra path names a sub-page of the same site,
+    // so an unknown or two-segment path (or another site's token) is the share preview's 404.
+    for (const rest of [`/extra/path`, `/extra`, `/${linkB.token}`, `/${b.pageId}`]) {
+      const res = await getShare(linkA.token, ip, { rest });
+      expect(res.status, rest).toBe(404);
+      expect(visibleText(res.body), rest).not.toContain("Page B Only");
+      expect(visibleText(res.body), rest).not.toContain(DRAFT_ONLY);
+    }
+    // A real sub-page path of the same site draws that site's draft, and still never page B.
+    const site = await makeLiveSite("shs", { live: false });
+    const siteLink = await makeLink(site.user.id, site.pageId);
+    const sub = await getShare(siteLink.token, ip, { rest: `/${ITEMS.path}` });
+    expect(sub.status).toBe(200);
+    expect(visibleText(sub.body)).toContain(ITEMS.title);
+    expect(visibleText(sub.body)).not.toContain("Page B Only");
     const viewB = visibleText((await getShare(linkB.token, ip)).body);
     expect(viewB).toContain("Page B only bio");
     expect(viewB).not.toContain(DRAFT_ONLY);
