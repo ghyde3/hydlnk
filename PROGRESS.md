@@ -2,6 +2,19 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — Wave M2 built and proven: blocks, templates, whole-site versions, MCP sub-pages
+
+On `m13-sites-m2` (PR #24), resumed after the pause. Flipped to `passes: true`: M12-01 to M12-09, M12-11, M12-12. M12-10 (security review) stays false until Gary confirms the one accepted item (version storage up to about 0.5 GiB for a 15-site Studio account; PLAN Decided, "Sites with pages M2 security review").
+
+- **Built:** items and hours blocks with the open-now script and item clicks (M12-01, M12-02), site templates applied by a click (M12-03), whole-site versions: preview and restore every page, deleted pages listed, the menu kept, Undo withheld after a multi-page restore (M12-04, ce3becd), MCP tools for sub-pages: `create_page`, `update_page_settings` (all or nothing), `subPageId` on the block tools, the new block types, fourteen tools (M12-05, b8483bf, 585587e), share previews of sub-pages (M12-06), exact site uniques (M12-07), pages panel states, duplicate and drag (M12-08), marketing with eighteen blocks (M12-09).
+- **New rows:** M12-11 (without JavaScript the hours table marks no day: a cached page can't know today) and M12-12 (an extra path under a share token is a sub-page of the same site; supersedes M6-10 step 6's "ignored").
+- **Migrations (not yet in production):** 20261012000001_site_versions, 20261012000002_site_uniques, 20261012000003_item_click_pairs, 20261012000004_items_blocklist.
+- **Reviews:** `reviewer` (item links skipped the blocklist at save, publish and in the editor; update_page_settings could save half a call; stale block count; thin tests: all fixed) and `security-reviewer` (no critical or high; item photos skipped the publish owner check, a `?template=` link applied a template without a click: fixed; version storage per account: accepted, recorded in PLAN).
+- **Evidence:** full browser suite green on the production build, 8 shards (run 37498464704, head 9942415); `pnpm test --retry 2` 398 files, 10,128 tests; `pnpm test:db` 49 files PASS (after `db:reset`); typecheck and lint clean. Along the way: duplicating an items block kept item ids (fixed with one shared id helper for every nested-id block), sample prices without dollar signs, the old-document render fixture, scoped pgTAP counts (171 mcp_activity), a CI timeout on the week-long open-now test, the features section order, scoped dnd live regions, the share extra-path test.
+- **For Gary:** confirm the version-storage acceptance (closes M12-10); the tenant script's unminified cap is 12 KB (gzip 3 KB unchanged); the Musician template's embeds start hidden and empty.
+
+Next: release Wave M2 with Gary's go (PR #24 out of draft).
+
 ## 2026-10-06 — Release: Stripe go-live kit (PR #5)
 
 - PR #5 merged, merge commit 5780d4f, after main was merged into it (PLAN.md kept main's prices; one Billing line now points to the kit). No migrations, no app code: `docs/stripe-go-live.md`, `scripts/stripe/catalog.json`, `scripts/stripe/setup-live.sh`.
