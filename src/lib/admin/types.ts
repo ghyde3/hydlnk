@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DomainDeps } from "@/lib/domains/deps";
 import type { Database } from "@/lib/supabase/database.types";
 
 /** What an admin action answers: an HTTP status and a JSON body, never a thrown error. */
@@ -22,6 +23,8 @@ export interface AdminDeps {
   /** Admins cannot be suspended: true for an id in ADMIN_USER_IDS (or a local test admin). */
   isProtectedAccount: (accountId: string) => Promise<boolean>;
   now: () => Date;
+  /** The domain logic's dependencies (Vercel client, caches, email), for the Re-check now action (M13-04). */
+  domainDeps?: () => DomainDeps;
 }
 
 export interface AdminActionContext {

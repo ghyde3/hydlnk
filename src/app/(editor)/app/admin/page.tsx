@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { OverviewNumbersSection } from "@/components/admin/overview-numbers";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
 import { requireAdmin } from "@/lib/admin/auth";
+import { readHealth, readOverviewNumbers, readSignups } from "@/lib/admin/overview-queries";
 import { countOpenReports, countSuspendedAccounts } from "@/lib/admin/queries";
 import { countBlockedDomains } from "@/lib/blocklist/admin-queries";
 
@@ -12,16 +14,21 @@ const TILE =
 
 export default async function AdminOverview() {
   await requireAdmin();
-  const [open, suspended, blocked] = await Promise.all([
+  const [open, suspended, blocked, numbers, signups, health] = await Promise.all([
     countOpenReports().catch(() => null),
     countSuspendedAccounts().catch(() => null),
     countBlockedDomains().catch(() => null),
+    readOverviewNumbers().catch(() => null),
+    readSignups().catch(() => null),
+    readHealth().catch(() => null),
   ]);
+  // Red when a job failed or is late; unknown (a dash) when the jobs could not be read.
+  const unhealthy = health !== null && !health.healthy;
   return (
     <>
       <ScreenHeader breadcrumb="admin / overview" title="Admin" />
       <ScreenBody>
-        <div className="grid gap-3 hl:grid-cols-2 min-[1100px]:grid-cols-4">
+        <div className="grid gap-3 hl:grid-cols-2 min-[1100px]:grid-cols-5">
           <Link href="/admin/reports" className={TILE}>
             <span className="font-mono text-xs text-text-2">Open reports</span>
             <span className="font-mono text-[22px] font-semibold">{open ?? "—"}</span>
@@ -38,7 +45,25 @@ export default async function AdminOverview() {
             <span className="font-mono text-xs text-text-2">Blocked links</span>
             <span className="font-mono text-[22px] font-semibold">{blocked ?? "—"}</span>
           </Link>
+          <Link
+            href="/admin/health"
+            data-testid="health-tile"
+            data-health={health === null ? "unknown" : unhealthy ? "bad" : "ok"}
+            className={`${TILE} ${unhealthy ? "!border-bad bg-bad-line/30" : ""}`}
+          >
+            <span className="font-mono text-xs text-text-2">Health</span>
+            <span
+              className={`text-sm font-semibold ${unhealthy ? "text-bad" : health ? "text-good" : "text-text-2"}`}
+            >
+              {health === null
+                ? "Couldn’t be read"
+                : unhealthy
+                  ? `${health.failed} failed, ${health.late} late`
+                  : "All jobs on time"}
+            </span>
+          </Link>
         </div>
+        <OverviewNumbersSection numbers={numbers} signups={signups} />
         <Card>
           <p className="text-sm leading-relaxed text-text-2">
             Reports come from the link on every public page. Suspending an account takes all of its

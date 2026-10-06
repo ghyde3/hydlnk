@@ -1,4 +1,5 @@
 import "server-only";
+import { createDomainDeps } from "@/lib/domains/deps-server";
 import { clientEnv } from "@/lib/env/client";
 import { invalidateAccountPages, invalidateHandle } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
@@ -27,5 +28,6 @@ export function createAdminDeps(): AdminDeps {
       return data.user?.app_metadata?.[LOCAL_ADMIN_CLAIM] === true;
     },
     now: () => new Date(),
+    domainDeps: () => ({ ...createDomainDeps(), admin: db }),
   };
 }

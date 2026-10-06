@@ -256,6 +256,12 @@ test.describe("M5-04 admin shell layout", () => {
       "Pages",
       "Traffic",
       "Blocked links",
+      "Domains",
+      "Health",
+      "Reserved handles",
+      "Announcement",
+      "Connected apps",
+      "Audit log",
     ]);
     await expectNoHorizontalScroll(page);
     await expectTapTargets(page);
@@ -294,6 +300,12 @@ test.describe("M5-04 admin shell layout", () => {
       "Pages",
       "Traffic",
       "Blocked links",
+      "Domains",
+      "Health",
+      "Reserved handles",
+      "Announcement",
+      "Connected apps",
+      "Audit log",
     ]);
     await expect(nav.getByRole("link", { name: "Reports" })).toHaveAttribute(
       "aria-current",

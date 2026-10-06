@@ -64,11 +64,12 @@ const validInput = (action: AdminAction): unknown =>
       : { id: TARGET };
 
 describe("M5-04 the registry", () => {
-  it("lists the six admin mutations, with unique names", () => {
+  it("lists the admin mutations, with unique names", () => {
     const names = ADMIN_ACTIONS.map((action) => action.name);
     expect(names.sort()).toEqual([
       "block_domain",
       "dismiss_report",
+      "recheck_domain",
       "review_traffic_flag",
       "suspend_account",
       "unblock_domain",

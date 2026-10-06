@@ -3,6 +3,7 @@ import { z } from "zod";
 import { reviewTrafficFlagAction } from "@/lib/analytics/admin/review-flag-action";
 import { blockDomainAction, unblockDomainAction } from "@/lib/blocklist/admin-actions";
 import type { Json } from "@/lib/supabase/database.types";
+import { recheckDomainAction } from "./recheck-domain-action";
 import { fail, type ActionResult, type AdminAction, type AdminActionContext } from "./types";
 
 /**
@@ -267,6 +268,8 @@ export const dismissReportAction = defineAction("dismiss_report", async (context
 });
 
 export { reviewTrafficFlagAction };
+/** Re-check now on /admin/domains (M13-04): defined beside the admin library, listed here. */
+export { recheckDomainAction };
 /** Block and remove a domain at /admin/blocked-links (M7-12): defined beside the blocklist, listed here. */
 export { blockDomainAction, unblockDomainAction };
 
@@ -278,4 +281,5 @@ export const ADMIN_ACTIONS: readonly AdminAction[] = [
   reviewTrafficFlagAction,
   blockDomainAction,
   unblockDomainAction,
+  recheckDomainAction,
 ];
