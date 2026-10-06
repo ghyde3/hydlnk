@@ -5382,7 +5382,7 @@
         "`security-reviewer` runs over the wave (the new blocks' rendering and escaping, item links through /r, the hours script, template creation, versions and restore, the MCP tools and scopes, the share preview routes), and every finding is fixed or recorded in docs/PLAN.md with Gary's decision.",
         "A user cannot read, write or restore another user's sub-pages or versions, or reach another site's draft through a share link, by any route, tool or the publishable key (tests)."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-01",

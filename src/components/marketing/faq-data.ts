@@ -177,7 +177,7 @@ export const FAQ_GROUPS: readonly FaqGroup[] = [
       {
         question: "Can I go back to an earlier version of my page?",
         answer:
-          "On Pro and Studio, yes. Your recent published versions are kept, so you can preview an earlier one and restore it. Your live page doesn’t change until you publish again. Free doesn’t include version history.",
+          "On Pro and Studio, yes. Each site keeps its last 25 published versions, every page of the site included, so you can preview an earlier one and restore it. A site’s versions can hold up to 32 MB together; past that, the oldest go first. Your live page doesn’t change until you publish again. Free doesn’t include version history. These limits may be adjusted over time.",
       },
       {
         question: "Do you take a cut of sales?",
