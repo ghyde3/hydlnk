@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { expireDomainHost } from "@/lib/domains/expire-host";
 import { verifyDomain } from "@/lib/domains/verify";
 import type { Json } from "@/lib/supabase/database.types";
 import { fail, type ActionResult, type AdminAction } from "./types";
@@ -48,6 +49,8 @@ export const recheckDomainAction: AdminAction = {
         .eq("id", id)
         .eq("status", "error");
       if (reset.error) throw new Error(`Resetting the domain failed: ${reset.error.message}`);
+      // Every write to domains drops the cached hostname lookup (M8-11), even one that changes no serving.
+      expireDomainHost(found.data.hostname);
     }
     const outcome = await verifyDomain(domainDeps(), id, { withRecords: false });
     if (!outcome) return fail(404, "not_found", "That domain doesn’t exist any more.");
