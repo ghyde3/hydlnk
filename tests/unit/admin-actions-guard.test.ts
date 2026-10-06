@@ -57,20 +57,30 @@ function untouchedDeps() {
  * for the blocked-links actions (M7-12) the domain, and the reason when there is one.
  */
 const validInput = (action: AdminAction): unknown =>
-  action.name === "block_domain"
-    ? { domain: "example.test", reason: "spam" }
-    : action.name === "unblock_domain"
-      ? { domain: "example.test" }
-      : { id: TARGET };
+  action.name === "add_reserved_handle"
+    ? { handle: "nobrand", reason: "test" }
+    : action.name === "remove_reserved_handle"
+      ? { handle: "nobrand" }
+      : action.name === "set_announcement"
+        ? { message: "Hello", ends_at: "2099-01-01T00:00:00Z" }
+        : action.name === "block_domain"
+          ? { domain: "example.test", reason: "spam" }
+          : action.name === "unblock_domain"
+            ? { domain: "example.test" }
+            : { id: TARGET };
 
 describe("M5-04 the registry", () => {
   it("lists the admin mutations, with unique names", () => {
     const names = ADMIN_ACTIONS.map((action) => action.name);
     expect(names.sort()).toEqual([
+      "add_reserved_handle",
       "block_domain",
+      "clear_announcement",
       "dismiss_report",
       "recheck_domain",
+      "remove_reserved_handle",
       "review_traffic_flag",
+      "set_announcement",
       "suspend_account",
       "unblock_domain",
       "unsuspend_account",

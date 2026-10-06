@@ -9,6 +9,7 @@ import { SidebarNav, TabBar } from "./app-nav";
 import { PageSwitcher, type SwitcherPage } from "./page-switcher";
 import { PlanCard } from "./plan-card";
 import { AccountMenu } from "./account-menu";
+import { AnnouncementBanner } from "./announcement-banner";
 
 /**
  * The signed-in app chrome (DESIGN.md -> Layout and responsive rules), shared by every screen:
@@ -63,6 +64,7 @@ export async function AppShellFrame({
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col pb-[calc(84px+env(safe-area-inset-bottom))] hl:pb-0">
+        <AnnouncementBanner />
         {suspended ? <SuspendedBanner /> : null}
         <SuspensionProvider suspended={suspended}>{children}</SuspensionProvider>
       </main>

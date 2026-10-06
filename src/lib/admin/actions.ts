@@ -3,6 +3,8 @@ import { z } from "zod";
 import { reviewTrafficFlagAction } from "@/lib/analytics/admin/review-flag-action";
 import { blockDomainAction, unblockDomainAction } from "@/lib/blocklist/admin-actions";
 import type { Json } from "@/lib/supabase/database.types";
+import { clearAnnouncementAction, setAnnouncementAction } from "./announcement-actions";
+import { addReservedHandleAction, removeReservedHandleAction } from "./reserved-actions";
 import { recheckDomainAction } from "./recheck-domain-action";
 import { fail, type ActionResult, type AdminAction, type AdminActionContext } from "./types";
 
@@ -273,6 +275,10 @@ export { recheckDomainAction };
 /** Block and remove a domain at /admin/blocked-links (M7-12): defined beside the blocklist, listed here. */
 export { blockDomainAction, unblockDomainAction };
 
+/** Reserved handles, the announcement and the connected apps watch (M13-08 to M13-10): defined beside this file, listed here. */
+export { addReservedHandleAction, removeReservedHandleAction };
+export { clearAnnouncementAction, setAnnouncementAction };
+
 /** Every admin mutation. Adding an action here is what makes the guard test cover it. */
 export const ADMIN_ACTIONS: readonly AdminAction[] = [
   suspendAccountAction,
@@ -282,4 +288,8 @@ export const ADMIN_ACTIONS: readonly AdminAction[] = [
   blockDomainAction,
   unblockDomainAction,
   recheckDomainAction,
+  addReservedHandleAction,
+  removeReservedHandleAction,
+  setAnnouncementAction,
+  clearAnnouncementAction,
 ];
