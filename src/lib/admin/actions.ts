@@ -295,4 +295,6 @@ export const ADMIN_ACTIONS: readonly AdminAction[] = [
   removeReservedHandleAction,
   setAnnouncementAction,
   clearAnnouncementAction,
+  giftPlanAction,
+  endGiftAction,
 ];
