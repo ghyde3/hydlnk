@@ -2,6 +2,12 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — Release: Stripe go-live kit (PR #5)
+
+- PR #5 merged, merge commit 5780d4f, after main was merged into it (PLAN.md kept main's prices; one Billing line now points to the kit). No migrations, no app code: `docs/stripe-go-live.md`, `scripts/stripe/catalog.json`, `scripts/stripe/setup-live.sh`.
+- Gary set up live Stripe by hand; his live dry run on 2026-10-06 (`setup-live.sh --profile hydlnk-live --live`, account HYDLNK acct_1ULlViAMuc2pWDjB) found both products, the four prices, the customer portal and the webhook already matching the catalog: no changes needed. The webhook endpoint sends API version 2026-08-26.dahlia while the SDK pins 2026-09-30.endive (harmless; the app reads event fields defensively).
+- Checks: CI Verify green (run 37488675329); Vercel production deploy success; `pnpm test:e2e:prod` 12/12.
+
 ## 2026-10-06 — Release: registrar setup guides (PR #26)
 
 - PR #26 merged, merge commit 2082049 (Gary's "release 26"). No migrations (dry run 37487065892: remote database up to date). Deployment https://vercel.com/ghyde3s-projects/hydlnk/9zvRTtZ2nHoK1DYsXQvDct5Uvs2W (success).
