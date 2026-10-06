@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { classifyJob, type CronJobRow } from "@/lib/admin/health";
+import { classifyJob, healthTile, summarizeHealth, type CronJobRow } from "@/lib/admin/health";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
@@ -84,14 +84,18 @@ test.describe("M13-03 admin overview numbers", () => {
     await expect(tile).toBeVisible();
     await expect(tile).toHaveAttribute("href", "/admin/health");
     const now = new Date();
-    const bad = ((data ?? []) as CronJobRow[]).some((row) => {
+    const rows = (data ?? []) as CronJobRow[];
+    // The tile's own rule (src/lib/admin/health.ts): no job history is neutral, never green.
+    const expected = healthTile(summarizeHealth(rows, now)).state;
+    const bad = rows.some((row) => {
       const state = classifyJob(row, now).state;
       return state === "failed" || state === "late";
     });
     // A job may cross its limit between the two reads: only the stable cases are asserted.
     const attribute = await tile.getAttribute("data-health");
-    expect(["ok", "bad"]).toContain(attribute);
-    if (bad) expect(attribute).toBe("bad");
+    expect(["ok", "bad", "none"]).toContain(attribute);
+    if (expected === "none") expect(attribute).toBe("none");
+    else if (bad) expect(attribute).toBe("bad");
     await expectNoHorizontalScroll(page);
   });
 });
