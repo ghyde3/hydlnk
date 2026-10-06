@@ -5277,7 +5277,7 @@
         "The four guides are in the Learn index and the sitemap, and the 'Connecting a domain' guide and the app's Domains screen link to them.",
         "At 390x844 and 1440x900 each guide answers 200 with one h1, no horizontal scroll and links at least 44px tall (one smoke spec; content pages skip the full browser suite, Gary 2026-10-06)."
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
