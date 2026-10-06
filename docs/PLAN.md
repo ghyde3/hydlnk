@@ -126,6 +126,22 @@ Gary decided (2026-10-04) that what the app has called a page becomes a **site**
   - **Pages panel polish (M12-08).** Each page shows its state (Live, Not published yet, Changes not published); duplicate a page; drag to reorder the menu as well as the up and down controls.
   - **Marketing (M12-09).** The features page and FAQ describe sites with pages and the new blocks and templates.
 
+## Admin tools (Wave N, admin)
+
+Gary picked all ten tools in the Admin Plan review (2026-10-06), with reserved handles pre-filled with reserved names and brands. Everything lives at `app.hydlnk.com/admin` behind the existing `requireAdmin()` and `adminRoute()` guards (`ADMIN_USER_IDS`); reads and writes use the secret key in server-only code; every action writes a row to `admin_audit`. The orchestrator's calls, 2026-10-06: the details below.
+
+- **Account details (M13-02).** `/admin/accounts/{id}`, opened from Pages search: email, plan (and a gifted plan with its end), signup and last sign-in, suspended or not; each site with its pages (live or draft) and custom domains with status; storage used against the plan (uploads) and the 64 MiB sub-page total; connected AI apps; reports; the account's audit history; buttons to suspend or unsuspend, open the live site, and open the customer in the Stripe dashboard.
+- **Numbers at a glance (M13-03).** The Overview gains signups per day for 30 days (a small chart), accounts by plan, paying accounts, live sites, sub-pages, connected custom domains and page views across all sites in the last 7 days. Exact revenue stays in Stripe (a link).
+- **Domains that need help (M13-04).** Every custom domain unverified after 24 hours or failing, with owner, age, the last check's result, a Re-check now that runs the same verification as the cron, and a copyable link to the matching registrar guide.
+- **Audit log (M13-05).** A read-only screen over `admin_audit`, filterable by account and action; the account page shows its own history. The allowed actions grow with this wave's actions.
+- **System health (M13-06).** Each pg_cron job: last run, duration, success or failure, and late when it hasn't run within its schedule; a failed or late job turns its Overview tile red. Read through one service-role SQL function over the `cron` schema.
+- **Gift a plan (M13-07).** An admin can give Pro or Studio with an optional end date and a reason. `accounts.plan` stays the one plan everything reads and becomes the effective plan: `paid_plan` holds what Stripe says, gift columns hold the gift, and a database function recomputes `plan` as the higher of the two (on change and by an expiry job; existing rows backfilled `paid_plan = plan`). The Stripe webhook writes `paid_plan` only, so it never undoes a gift, and a gift never touches Stripe; when a gift ends the account returns to its paid plan or Free with nothing deleted (the existing downgrade rules). Paying accounts in the admin numbers are `paid_plan` Pro or Studio, never gifts. Tested like payments.
+- **Reserved handles (M13-08).** List, add and remove reserved handles with a reason; system names (app, www, api and the like) stay locked; adding one that is already taken shows who holds it and changes nothing for them (a reservation only stops new claims). A migration pre-fills a curated list of well-known brands and platforms and impersonation-prone words (Gary, 2026-10-06), which he can edit on the screen.
+- **App announcement (M13-09).** One short message (plain text and at most one https link) at the top of the editor for every signed-in owner, between a start and an end time, dismissible per browser; never on public pages.
+- **Connected AI apps watch (M13-10).** Apps by active connections and tool calls in the last 7 days; Revoke for everyone ends every grant of that app and refuses new authorizations until an admin lifts it.
+- **See a draft for support (M13-11).** A read-only view of any site's draft (Home and its pages) on the app host, with the same inert rendering as the share preview; each opening is written to the audit log; the Privacy Policy says staff may view an unpublished draft to help with a support request or a report, and that each view is logged.
+- **Housekeeping.** M5-08, M5-09 and M7-13 (built earlier, not fully proven) get the tests that prove them.
+
 ## Milestones
 
 Each ends in something you can click. The gate to opening signup is running Gary's own brands on it.
