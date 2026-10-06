@@ -89,6 +89,7 @@ function oauthError(
 const invalidRequest = (description: string) => oauthError(400, "invalid_request", description);
 const invalidGrant = () =>
   oauthError(400, "invalid_grant", "The code or the refresh token isn’t valid.");
+const blockedClient = () => oauthError(400, "invalid_grant", "HYDLNK has blocked this app.");
 const invalidClient = () => oauthError(400, "invalid_client", "The app isn’t recognized.");
 const invalidTarget = () =>
   oauthError(400, "invalid_target", "That resource isn’t one this server issues tokens for.");
@@ -176,6 +177,11 @@ export async function handleTokenRequest(input: TokenInput, deps: TokenDeps): Pr
   try {
     const client = await deps.store.getClient(clientId);
     if (!client) return invalidClient();
+    // An app an admin blocked (M13-10) can neither exchange a code nor refresh: its tokens and
+    // codes were ended when it was blocked, and a request that still arrives is refused here. The
+    // error is invalid_grant, the one a client answers by sending the person through authorize again,
+    // where the block is shown.
+    if (client.blocked_at !== null) return blockedClient();
 
     const resource = params.get("resource");
     if (resource !== undefined && !resourceMatches(resource, deps.resource)) return invalidTarget();

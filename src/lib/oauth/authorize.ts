@@ -84,6 +84,7 @@ export type MessageKind =
   | "answered"
   | "someone_else"
   | "app_changed"
+  | "app_blocked"
   | "grant_limit"
   | "rate_limited"
   | "forbidden";
@@ -209,6 +210,10 @@ async function run(input: AuthorizeInput, deps: AuthorizeDeps): Promise<Authoriz
     );
   }
   const client = resolved.client;
+
+  // 3b. an app an admin has blocked (M13-10) is refused before anything else is read from the
+  // request, and never redirected: its return address is not trusted, whoever it is.
+  if (client.blocked_at !== null) return errorPage("app_blocked");
 
   // 4. the return address.
   if (
@@ -414,6 +419,7 @@ async function resumeConsent(input: AuthorizeInput, deps: AuthorizeDeps): Promis
 
   const client = await deps.store.getClient(row.client_id);
   if (!client) return { kind: "invalid_resume" };
+  if (client.blocked_at !== null) return errorPage("app_blocked");
   return consentFor(row.id, client, input.user, deps);
 }
 

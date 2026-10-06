@@ -110,8 +110,40 @@ export class FakeOauthStore implements OauthStore {
     if (!row) return null;
     return options?.withLogo ? { ...row } : { ...row, logo_png: null };
   }
+  /** admin_block_oauth_client (20261013000005): block, end every grant and token, drop open requests. */
+  blockClient(clientId: string, adminId = "99999999-9999-4999-8999-999999999999", reason = "") {
+    const row = this.clients.get(clientId);
+    if (!row) return "missing";
+    row.blocked_at ??= this.iso(this.clock);
+    row.blocked_by ??= adminId;
+    row.blocked_reason ??= reason || null;
+    const grantIds = new Set(this.grants.filter((g) => g.clientId === clientId).map((g) => g.id));
+    for (const token of this.tokens) {
+      if (grantIds.has(token.grantId) && token.revokedAt === null) token.revokedAt = this.clock;
+    }
+    for (const grant of this.grants) {
+      if (grant.clientId === clientId && grant.revokedAt === null) grant.revokedAt = this.clock;
+    }
+    for (const [id, request] of this.requests) {
+      if (request.client_id === clientId && ["pending", "issued"].includes(request.status)) {
+        this.requests.delete(id);
+      }
+    }
+    return "blocked";
+  }
+  /** admin_unblock_oauth_client: clears the block only (grants stay ended). */
+  unblockClient(clientId: string) {
+    const row = this.clients.get(clientId);
+    if (!row) return "missing";
+    row.blocked_at = null;
+    row.blocked_by = null;
+    row.blocked_reason = null;
+    return "unblocked";
+  }
   async upsertCimdClient(client: NewClient) {
     this.count("upsertCimdClient");
+    // Like the real upsert: the blocked columns are never written, so a re-fetch keeps a block.
+    const before = this.clients.get(client.client_id);
     this.clients.set(client.client_id, {
       client_id: client.client_id,
       kind: "cimd",
@@ -122,9 +154,9 @@ export class FakeOauthStore implements OauthStore {
       expires_at: client.expires_at ?? this.iso(this.clock),
       created_at: this.iso(this.clock),
       last_seen_at: this.iso(this.clock),
-      blocked_at: null,
-      blocked_by: null,
-      blocked_reason: null,
+      blocked_at: before?.blocked_at ?? null,
+      blocked_by: before?.blocked_by ?? null,
+      blocked_reason: before?.blocked_reason ?? null,
     });
   }
   async insertDcrClient(client: NewClient) {
