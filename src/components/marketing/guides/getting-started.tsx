@@ -28,8 +28,8 @@ export const gettingStarted: GuideBody = {
       <p>Then sign in one of two ways:</p>
       <ul>
         <li>
-          <strong>Email link.</strong> Enter your email address and we send you a sign-in link. Open
-          it and you’re in. There’s no password to create.
+          <strong>Email link.</strong> Enter your email address and we send you a sign-in link.
+          Open it and you’re in. There’s no password to create.
         </li>
         <li>
           <strong>Google.</strong> Continue with your Google account.
@@ -68,64 +68,48 @@ export const gettingStarted: GuideBody = {
         help:
       </p>
       <ul>
-        <li>
-          Start with three to five links. The fewer there are, the easier each one is to find.
-        </li>
-        <li>
-          Put the one thing you most want people to do first, and consider a card for it: a picture
-          earns attention.
-        </li>
+        <li>Start with three to five links. The fewer there are, the easier each one is to find.</li>
+        <li>Put the one thing you most want people to do first, and consider a card for it: a picture earns attention.</li>
         <li>Use a header to group related links, such as “Shop” and “Classes”.</li>
         <li>Drag blocks to reorder them, with a mouse, a finger or the keyboard.</li>
         <li>Switch a block off to hide it without deleting it, for things that come and go.</li>
-        <li>
-          Add a block anywhere with the plus between blocks, duplicate one with a tap, and use undo
-          and redo if you change your mind.
-        </li>
-        <li>
-          Not sure where to begin? Start from a template for musicians, podcasters, artists, shops,
-          coaches or streamers, then change anything you like.
-        </li>
+        <li>Add a block anywhere with the plus between blocks, duplicate one with a tap, and use undo and redo if you change your mind.</li>
+        <li>Not sure where to begin? Start from a template for musicians, podcasters, artists, shops, coaches or streamers, then change anything you like.</li>
       </ul>
       <p>
-        Every change is saved to your draft as you work, and the preview shows exactly what the page
-        will look like. On a phone, a small live preview stays docked while you edit, and tapping
-        something in it opens that part for editing. You can also open the preview full size, and
-        share a private preview link that works for 7 days.
+        Every change is saved to your draft as you work, and the preview shows exactly what the
+        page will look like. On a phone, a small live preview stays docked while you edit, and
+        tapping something in it opens that part for editing. You can also open the preview full
+        size, and share a private preview link that works for 7 days.
       </p>
 
       <h2 id="look">Pick a look</h2>
       <p>
-        Open Design and pick one of the 16 system themes. You can preview it on your own page before
-        you apply it. Then change whatever you like: accent color, fonts, button style, corner
-        radius, spacing or background. Change any of them and the whole page follows.{" "}
-        <Link href="/learn/designing-your-page">Designing your page</Link> covers every option.
+        Open Design and pick one of the 16 system themes. You can preview it on your own page before you apply it. Then change whatever you like: accent
+        color, fonts, button style, corner radius, spacing or background. Change any of them and
+        the whole page follows. <Link href="/learn/designing-your-page">Designing your page</Link>{" "}
+        covers every option.
       </p>
 
       <h2 id="publish">Publish</h2>
       <p>
-        Nothing you do in the editor reaches your live page until you press Publish. Until then the
-        editor shows Unpublished changes, and visitors keep seeing the last version you published.
+        Nothing you do in the editor reaches your live page until you press Publish. Until then
+        the editor shows Unpublished changes, and visitors keep seeing the last version you
+        published.
       </p>
       <p>
         Publish checks the page first: every link needs a complete address starting with
-        <code>http://</code> or <code>https://</code>, and every visible block needs its content. If
-        something is missing, it tells you what and where. Once it’s published, your page is live at
-        your handle’s address.
+        <code>http://</code> or <code>https://</code>, and every visible block needs its content.
+        If something is missing, it tells you what and where. Once it’s published, your page is
+        live at your handle’s address.
       </p>
 
       <h2 id="share">Share your link</h2>
       <ul>
         <li>Put it in the bio of your social profiles: that’s what a link in bio is for.</li>
         <li>Add it to your email signature, your newsletter footer and your printed cards.</li>
-        <li>
-          When someone shares it, the link shows the title, description and image you chose, or your
-          page’s own preview image.
-        </li>
-        <li>
-          Download a QR code for your page, in your own colors and with your logo if you like, as a
-          PNG or an SVG, for flyers and printed cards.
-        </li>
+        <li>When someone shares it, the link shows the title, description and image you chose, or your page’s own preview image.</li>
+        <li>Download a QR code for your page, in your own colors and with your logo if you like, as a PNG or an SVG, for flyers and printed cards.</li>
       </ul>
 
       <h2 id="next">What to do next</h2>
@@ -134,10 +118,12 @@ export const gettingStarted: GuideBody = {
           Check <Link href="/learn/understanding-analytics">your analytics</Link> after a few days
           to see which links get tapped.
         </li>
-        <li>Save your design as a theme, so you can reuse it on another page.</li>
         <li>
-          On Pro and Studio, version history keeps your recent published versions, so you can
-          restore an earlier one.
+          Save your design as a theme, so you can reuse it on another page.
+        </li>
+        <li>
+          On Pro and Studio, version history keeps your recent published versions, so you can restore
+          an earlier one.
         </li>
         <li>
           On Pro, <Link href="/learn/connecting-a-domain">connect your own domain</Link>.

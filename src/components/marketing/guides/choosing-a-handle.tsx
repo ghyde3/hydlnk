@@ -35,13 +35,15 @@ export const choosingAHandle: GuideBody = {
         <li>First come, first served: one handle, one owner.</li>
       </ul>
       <p>
-        You don’t have to type it perfectly. Capitals become lowercase and anything else is dropped,
-        so <code>Wrenhaven_Roasters</code> becomes <code>wrenhavenroasters</code>. The sign-up page
-        shows you the result and checks it as you type.
+        You don’t have to type it perfectly. Capitals become lowercase and anything else is
+        dropped, so <code>Wrenhaven_Roasters</code> becomes <code>wrenhavenroasters</code>.
+        The sign-up page shows you the result and checks it as you type.
       </p>
 
       <h2 id="reserved">Reserved names</h2>
-      <p>Some handles can’t be claimed by anyone. They fall into two groups:</p>
+      <p>
+        Some handles can’t be claimed by anyone. They fall into two groups:
+      </p>
       <ul>
         <li>
           <strong>Names HYDLNK needs,</strong> such as <code>www</code>, <code>app</code>,{" "}
@@ -78,10 +80,7 @@ export const choosingAHandle: GuideBody = {
       </ul>
 
       <h2 id="try">Try yours</h2>
-      <p>
-        Type a handle and press Claim it. The sign-up page tells you straight away whether it’s
-        free.
-      </p>
+      <p>Type a handle and press Claim it. The sign-up page tells you straight away whether it’s free.</p>
       <div className="not-prose">
         <ClaimForm id="guide-handle" rootDomain={clientEnv.NEXT_PUBLIC_ROOT_DOMAIN} />
       </div>
