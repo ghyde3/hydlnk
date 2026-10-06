@@ -158,8 +158,8 @@ export const blockDefaults: Record<BlockType, () => Block> = {
     visible: true,
     layout: "list",
     items: [
-      { id: newBlockId(), name: "Sample item", price: "$10", description: "", sold: false },
-      { id: newBlockId(), name: "Another item", price: "$20", description: "", sold: false },
+      { id: newBlockId(), name: "Sample item", price: "10", description: "", sold: false },
+      { id: newBlockId(), name: "Another item", price: "20", description: "", sold: false },
     ],
   }),
   // Monday to Friday 09:00 to 17:00, the weekend closed (M12-02).

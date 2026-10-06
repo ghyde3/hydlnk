@@ -2,6 +2,8 @@ import {
   HOME_TARGET,
   NAV_MAX_ITEMS,
   PATH_MESSAGES,
+  blockIdsOf,
+  freshenBlockIds,
   newBlockId,
   publishFormsEqual,
   resolveNav,
@@ -228,41 +230,10 @@ export function duplicatedPageContent(
     `${source.title.trim() || "Untitled page"} copy`,
     SUB_PAGE_LIMITS.title,
   );
-  const blocks = (JSON.parse(JSON.stringify(source.blocks)) as Block[]).map((block) => {
-    const copy = block as unknown as Record<string, unknown> & { id: string };
-    copy.id = fresh();
-    for (const key of ["icons", "cells", "items", "links"]) {
-      const list = copy[key];
-      if (Array.isArray(list)) for (const entry of list as { id: string }[]) entry.id = fresh();
-    }
-    if (Array.isArray(copy.marks)) {
-      for (const mark of copy.marks as { type: string; id?: string }[]) {
-        if (mark.type === "link") mark.id = fresh();
-      }
-    }
-    if (typeof copy.googleId === "string") copy.googleId = fresh();
-    if (typeof copy.appleId === "string") copy.appleId = fresh();
-    return copy as unknown as Block;
-  });
+  const blocks = (JSON.parse(JSON.stringify(source.blocks)) as Block[]).map((block) =>
+    freshenBlockIds(block, fresh),
+  );
   return { title, path: suggestPath(title, takenPaths), description: source.description, blocks };
 }
 
-/** Every id a list of blocks uses (block, nested, mark and map button ids): what a duplicate must not reuse. */
-export function blockIdsOf(blocks: readonly Block[]): string[] {
-  const ids: string[] = [];
-  for (const block of blocks as unknown as (Record<string, unknown> & { id: string })[]) {
-    ids.push(block.id);
-    for (const key of ["icons", "cells", "items", "links"]) {
-      const list = block[key];
-      if (Array.isArray(list)) for (const entry of list as { id: string }[]) ids.push(entry.id);
-    }
-    if (Array.isArray(block.marks)) {
-      for (const mark of block.marks as { type: string; id?: string }[]) {
-        if (mark.type === "link" && mark.id) ids.push(mark.id);
-      }
-    }
-    if (typeof block.googleId === "string") ids.push(block.googleId);
-    if (typeof block.appleId === "string") ids.push(block.appleId);
-  }
-  return ids;
-}
+export { blockIdsOf };

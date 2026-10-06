@@ -1,4 +1,4 @@
-import { newBlockId, type Block, type DraftDoc } from "@/lib/document";
+import { blockIdsOf, freshenBlockIds, newBlockId, type Block, type DraftDoc } from "@/lib/document";
 
 /** Every block, social icon, grid cell, FAQ question and text link id in a draft: the ids a new copy must not reuse. */
 export function collectIds(
@@ -6,20 +6,7 @@ export function collectIds(
 ): Set<string> {
   // The support banner's link is counted by its own id (M9-23): a new copy must not reuse it.
   const ids = new Set<string>(doc.banner ? [doc.banner.id] : []);
-  for (const block of doc.blocks) {
-    ids.add(block.id);
-    if (block.type === "social") for (const icon of block.icons) ids.add(icon.id);
-    else if (block.type === "grid") for (const cell of block.cells) ids.add(cell.id);
-    else if (block.type === "faq") for (const item of block.items) ids.add(item.id);
-    else if (block.type === "book" || block.type === "apps") {
-      for (const link of block.links) ids.add(link.id);
-    } else if (block.type === "map") {
-      ids.add(block.googleId);
-      ids.add(block.appleId);
-    } else if (block.type === "text") {
-      for (const mark of block.marks ?? []) if (mark.type === "link") ids.add(mark.id);
-    }
-  }
+  for (const id of blockIdsOf(doc.blocks)) ids.add(id);
   return ids;
 }
 
@@ -40,21 +27,7 @@ export function duplicateBlock(block: Block, taken: Set<string>): Block {
     taken.add(id);
     return id;
   };
-  const copy = JSON.parse(JSON.stringify(block)) as Block;
-  copy.id = fresh();
-  if (copy.type === "social") for (const icon of copy.icons) icon.id = fresh();
-  else if (copy.type === "grid") for (const cell of copy.cells) cell.id = fresh();
-  else if (copy.type === "faq") for (const item of copy.items) item.id = fresh();
-  else if (copy.type === "book" || copy.type === "apps") {
-    // Each store button is clicked and counted by its own id (M9-20, M9-21).
-    for (const link of copy.links) link.id = fresh();
-  } else if (copy.type === "map") {
-    // The map's two buttons, Google Maps and Apple Maps (M9-22).
-    copy.googleId = fresh();
-    copy.appleId = fresh();
-  } else if (copy.type === "text") {
-    // The links inside the text are clicked and counted by id too (M6-28).
-    for (const mark of copy.marks ?? []) if (mark.type === "link") mark.id = fresh();
-  }
+  // One shared helper (with Duplicate page, M12-08) covers every nested id, items blocks included.
+  const copy = freshenBlockIds(JSON.parse(JSON.stringify(block)) as Block, fresh);
   return copy;
 }

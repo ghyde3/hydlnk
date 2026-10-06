@@ -128,9 +128,13 @@ describe("one price table: no component spells a price amount", () => {
     });
   const COMMENTS = /\/\*[\s\S]*?\*\/|\/\/.*$/gm;
 
+  // One narrow exemption: the site-template catalog holds sample content for a tenant's own
+  // items block (a garage sale's "$5"), not a HYDLNK plan price.
+  const EXEMPT = [join("lib", "billing", "prices.ts"), join("lib", "site-templates", "catalog.ts")];
+
   it("src/ writes a dollar amount only in src/lib/billing/prices.ts", () => {
     const offenders = walk(root)
-      .filter((path) => relative(root, path) !== join("lib", "billing", "prices.ts"))
+      .filter((path) => !EXEMPT.includes(relative(root, path)))
       .filter((path) => /\$\d/.test(readFileSync(path, "utf8").replace(COMMENTS, "")))
       .map((path) => relative(root, path));
     expect(offenders).toEqual([]);

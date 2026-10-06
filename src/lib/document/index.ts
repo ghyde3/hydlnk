@@ -130,7 +130,7 @@ export {
   type ProfileOptionKey,
   type ProfileOptions,
 } from "./profile-options";
-export { BLOCK_ID_PATTERN, newBlockId } from "./ids";
+export { BLOCK_ID_PATTERN, blockIdsOf, freshenBlockIds, newBlockId } from "./ids";
 export {
   EMAIL_ERROR_MESSAGE,
   MAX_EMAIL_LENGTH,

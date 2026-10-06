@@ -142,7 +142,7 @@ export function ItemsForm({ block, onChange, errors }: BlockFormProps) {
                 field="price"
                 max={LIMITS.itemPrice}
                 value={item.price}
-                hint="Shown exactly as typed, like $12 or Free."
+                hint="Shown exactly as typed, like 12 or Free."
                 error={fieldError(errors, list.id, "price", item.id)}
                 onChange={(price) => patch(item.id, { price })}
                 className="w-40 flex-none"

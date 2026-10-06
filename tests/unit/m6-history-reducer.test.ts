@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  blockIdsOf,
   BLOCK_ID_PATTERN,
   BLOCK_TYPES,
   LIMITS,
@@ -32,14 +33,7 @@ const idsOf = (state: EditorState) => state.draft.blocks.map((block) => block.id
 const three = () => [blocks.link, blocks.header, blocks.text] as Block[];
 
 /** Every id in a block: the block's own, then its icons' or cells'. */
-const allIds = (block: Block): string[] => [
-  block.id,
-  ...(block.type === "social" ? block.icons.map((icon) => icon.id) : []),
-  ...(block.type === "grid" ? block.cells.map((cell) => cell.id) : []),
-  ...(block.type === "faq" ? block.items.map((item) => item.id) : []),
-  ...(block.type === "book" || block.type === "apps" ? block.links.map((link) => link.id) : []),
-  ...(block.type === "map" ? [block.googleId, block.appleId] : []),
-];
+const allIds = (block: Block): string[] => blockIdsOf([block]);
 
 function deepFreeze<T>(value: T): T {
   if (typeof value === "object" && value !== null) {
@@ -170,10 +164,11 @@ describe("M6-05 duplicate a block", () => {
     const strip = (block: Block): unknown => {
       const clone = JSON.parse(JSON.stringify(block));
       clone.id = "x";
-      if (clone.icons) for (const icon of clone.icons) icon.id = "x";
-      if (clone.cells) for (const cell of clone.cells) cell.id = "x";
-      if (type === "faq") for (const item of clone.items) item.id = "x";
-      if (type === "book" || type === "apps") for (const link of clone.links) link.id = "x";
+      // Every nested id (icons, cells, items, store links) is a fresh one in a copy.
+      for (const key of ["icons", "cells", "items", "links"]) {
+        if (Array.isArray(clone[key])) for (const entry of clone[key]) entry.id = "x";
+      }
+      for (const mark of clone.marks ?? []) if (mark.type === "link") mark.id = "x";
       if (type === "map") {
         clone.googleId = "x";
         clone.appleId = "x";
