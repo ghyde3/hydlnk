@@ -5396,6 +5396,17 @@
         "At 390x844 and 1440x900 each guide answers 200 with one h1, no horizontal scroll and links at least 44px tall (one smoke spec; content pages skip the full browser suite, Gary 2026-10-06)."
       ],
       "passes": true
+    },
+    {
+      "id": "M12-11",
+      "milestone": 12,
+      "area": "blocks",
+      "title": "Hours block without JavaScript: no day marked on a cached page",
+      "acceptance": [
+        "Supersedes, in this respect only, M12-02 step 2's 'with today marked' for visitors without JavaScript: a live page is cached for up to a day, so the server cannot know today in the block's time zone, and a marked day could be wrong. Without JavaScript the hours table shows every day with none marked; with JavaScript the tenant script marks today and adds 'Open now' or 'Closed now'. Every other step of M12-02 stands.",
+        "Tested: the no-JavaScript render marks no day (tests/e2e/m12/blocks-hours.spec.ts) and the script marks today in the block's time zone (tests/unit/m12-hours-script.test.ts)."
+      ],
+      "passes": false
     }
   ]
 }
