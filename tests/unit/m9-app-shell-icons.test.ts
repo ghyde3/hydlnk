@@ -226,6 +226,8 @@ describe("M9-02 the clean-up", () => {
     const ALLOWED: Record<string, string> = {
       "src/components/workspace/share/qr-card.tsx":
         "the QR code itself: modules drawn as one path, not an icon",
+      "src/components/admin/signups-chart.tsx":
+        "the admin Overview's 30-day signups chart (M13-03): a data drawing, not an icon",
     };
     // src/components except the marketing site, the public page and the tenant panels, plus the
     // editor route group. (src/lib/qr/generate.ts writes the downloadable QR file, not UI.)
