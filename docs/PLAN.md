@@ -152,7 +152,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 | Scheduled links (not in v1) | — | Later | Later |
 | Team access | — | — | Invite editors per page |
 
-- **Billing.** Stripe Checkout for upgrades, one webhook (`/api/stripe/webhook` on `app.hydlnk.com`) that writes `plan` to `accounts`, Stripe's hosted customer portal behind "Manage billing". No billing UI to build. Stripe stays in the HYDLNK sandbox while Vercel is on Hobby (no commercial use); switch to live with the move to Pro.
+- **Billing.** The products, prices, customer portal and webhook are kept as data in `scripts/stripe/catalog.json` and checked or applied with `scripts/stripe/setup-live.sh` (runbook: `docs/stripe-go-live.md`; a live dry run on 2026-10-06 found Stripe already matching). Stripe Checkout for upgrades, one webhook (`/api/stripe/webhook` on `app.hydlnk.com`) that writes `plan` to `accounts`, Stripe's hosted customer portal behind "Manage billing". No billing UI to build. Stripe stays in the HYDLNK sandbox while Vercel is on Hobby (no commercial use); switch to live with the move to Pro.
 - **Limits** are enforced server-side on write (page count, domain count, upload bytes), never only hidden in the UI.
 
 ## Bandwidth and cost control
