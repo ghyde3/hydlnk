@@ -223,3 +223,26 @@ describe("M8-02 a tenant page answers GET and HEAD only", () => {
     expect(response.headers.get("content-security-policy")).toBe(TENANT_PAGE_CSP);
   });
 });
+
+describe("M12-06 /share/{token}/{path} exists on the app host only", () => {
+  const PLAIN_404_PATH = "/sites/unknown";
+  const TOKEN = "A".repeat(43);
+  const rewritten = (response: Response) =>
+    new URL(response.headers.get("x-middleware-rewrite") ?? "http://x/").pathname;
+
+  it("a tenant host answers the one plain 404 for the share paths, with no tenant page behind them", async () => {
+    for (const path of [`/share/${TOKEN}`, `/share/${TOKEN}/items`, `/share/${TOKEN}/a/b`]) {
+      const response = await proxy(request("mara.localhost:3000", path));
+      expect(rewritten(response), path).toBe(PLAIN_404_PATH);
+      expect(response.headers.get("x-frame-options")).toBe("DENY");
+    }
+  });
+
+  it("a verified custom-domain host answers the same plain 404", async () => {
+    resolveCustomDomain.mockResolvedValue("page-1");
+    for (const path of [`/share/${TOKEN}`, `/share/${TOKEN}/items`]) {
+      const response = await proxy(request("links.example.org", path));
+      expect(rewritten(response), path).toBe(PLAIN_404_PATH);
+    }
+  });
+});

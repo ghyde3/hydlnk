@@ -22,7 +22,7 @@ import { publishFromEditor, settled } from "../m9/blocks-fcd-helpers";
 test.afterAll(cleanupUsers);
 test.describe.configure({ timeout: 120_000 });
 
-test("M12-02 add an hours block, publish it, and see the table and Open now or Closed now with a fixed clock", async ({
+test("M12-02 M12-11 add an hours block, publish it, and see the table and Open now or Closed now with a fixed clock; without JavaScript no day is marked", async ({
   page,
   context,
   browser,
@@ -104,7 +104,8 @@ test("M12-02 add an hours block, publish it, and see the table and Open now or C
   await expect(late.locator("[aria-current] th")).toHaveText("Tuesday");
   await late.close();
 
-  // Without JavaScript: the whole table, nothing marked, no status line.
+  // M12-11, without JavaScript: the whole table, no day marked (a cached page cannot know today in
+  // the block's time zone), no status line.
   const plain = await browser.newContext({ javaScriptEnabled: false });
   const bare = await plain.newPage();
   await bare.goto(url(user.handle));
@@ -112,5 +113,6 @@ test("M12-02 add an hours block, publish it, and see the table and Open now or C
   await expect(bareHours.locator("tr")).toHaveCount(7);
   await expect(bareHours.locator("[aria-current]")).toHaveCount(0);
   await expect(bareHours.locator(".pg-hours-status")).toBeHidden();
+  await expect(bareHours).not.toHaveAttribute("data-open", /.*/);
   await plain.close();
 });

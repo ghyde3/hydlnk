@@ -112,7 +112,7 @@ const CASES: Array<[string, typeof ny, string]> = [
   ["summer time shifts the offset", ny, "2026-07-06T13:00:00Z"],
 ];
 
-describe("M12-02 the tenant script's open-now rule equals hoursStatusAt", () => {
+describe("M12-02 M12-11 the tenant script marks today in the block's time zone, and its open-now rule equals hoursStatusAt", () => {
   it.each(CASES)("%s", (_name, block, iso) => {
     const expected = hoursStatusAt(block, at(iso));
     const seen = run(block, iso);

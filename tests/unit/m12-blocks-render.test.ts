@@ -162,7 +162,7 @@ describe("M12-02 hours markup", () => {
     expect(html).toContain("Closed on public holidays.");
   });
 
-  it("is neutral: no day is marked and the status line is empty, so a cached page is right for everyone", () => {
+  it("M12-11 is neutral: no day is marked and the status line is empty, so a cached page is right for everyone", () => {
     const html = draw(blocks.hours);
     expect(html).not.toContain("aria-current");
     expect(html).not.toContain("data-open");

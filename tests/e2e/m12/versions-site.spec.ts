@@ -192,3 +192,43 @@ test("M12-04 restore writes Home and the page that still exists, lists the delet
   const rows = await admin.from("site_pages").select("id").eq("page_id", site.pageId);
   expect(rows.data!.map((r) => r.id)).toEqual([site.itemsId]);
 });
+
+test("M12-04 restore writes two sub-page drafts when both pages still exist, and publishes nothing", async ({
+  page,
+  context,
+}) => {
+  const site = await siteWithTwoVersions(context, "vs3");
+  const admin = adminClient();
+  const liveBefore = await pageState(site.pageId);
+
+  // after the second publish both pages are edited in the draft only
+  const itemsEdit = subDoc("items", "Items edited", "vsItemsLink01", "Open items edited");
+  const dirEdit = subDoc("directions", "Directions edited", "vsDirLink0001", "Open dir edited");
+  await admin.from("site_pages").update({ draft: itemsEdit }).eq("id", site.itemsId);
+  await admin.from("site_pages").update({ draft: dirEdit }).eq("id", site.directionsId);
+
+  await openHistory(page);
+  await rowFor(page, 1).getByRole("button", { name: "Restore version 1", exact: true }).click();
+  const confirm = rowFor(page, 1).getByTestId("restore-confirm");
+  await confirm.getByRole("button", { name: "Restore version 1", exact: true }).click();
+  const done = rowFor(page, 1).getByTestId("restore-done");
+  await expect(done).toContainText("Restored version 1 and 2 other pages to your draft.");
+  await expect(rowFor(page, 1).getByTestId("restore-not-restored")).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+
+  // both drafts are version 1's, and nothing was published
+  const rows = await admin
+    .from("site_pages")
+    .select("id, draft, published")
+    .eq("page_id", site.pageId);
+  const byId = new Map((rows.data ?? []).map((r) => [r.id as string, r]));
+  expect((byId.get(site.itemsId)!.draft as { title: string }).title).toBe("Items one");
+  expect((byId.get(site.directionsId)!.draft as { title: string }).title).toBe("Find the studio");
+  expect((byId.get(site.itemsId)!.published as { title: string }).title).toBe("Items two");
+  expect((byId.get(site.directionsId)!.published as { title: string }).title).toBe(
+    "Find the studio",
+  );
+  const after = await pageState(site.pageId);
+  expect(after.published).toEqual(liveBefore.published);
+  expect(after.published_at).toBe(liveBefore.published_at);
+});
