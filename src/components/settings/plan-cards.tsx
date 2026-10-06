@@ -39,10 +39,14 @@ export function PlanCards({
   current,
   paidPlansOpen = true,
   confirming = false,
+  gift,
 }: {
+  /** What the account pays for. A gift never changes the buttons: they stay real upgrades. */
   current: PlanId;
   paidPlansOpen?: boolean;
   confirming?: boolean;
+  /** A gift raising the plan: its card says so ("Gifted until Nov 1, 2026."). */
+  gift?: { plan: PlanId; note: string } | undefined;
 }) {
   const blocked: UpgradeBlock | undefined = !paidPlansOpen
     ? "closed"
@@ -135,12 +139,18 @@ export function PlanCards({
                   {versionHistoryCell(PLAN_LIMITS[plan].versionsKept)}
                 </span>
               </p>
+              {gift && gift.plan === plan ? (
+                <p data-gift-note className="text-[13px] leading-normal font-semibold text-ink">
+                  {gift.note}
+                </p>
+              ) : null}
               <div className="mt-auto flex flex-col pt-1">
                 <PlanCardAction
                   card={plan}
                   current={current}
                   interval={interval}
                   blocked={blocked}
+                  gifted={gift !== undefined}
                 />
               </div>
             </div>

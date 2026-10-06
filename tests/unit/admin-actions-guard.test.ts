@@ -67,7 +67,9 @@ const validInput = (action: AdminAction): unknown =>
           ? { domain: "example.test", reason: "spam" }
           : action.name === "unblock_domain"
             ? { domain: "example.test" }
-            : { id: TARGET };
+            : action.name === "gift_plan"
+        ? { id: TARGET, plan: "pro", until: null, reason: "support" }
+        : { id: TARGET };
 
 describe("M5-04 the registry", () => {
   it("lists the admin mutations, with unique names", () => {
@@ -77,6 +79,8 @@ describe("M5-04 the registry", () => {
       "block_domain",
       "clear_announcement",
       "dismiss_report",
+      "end_gift",
+      "gift_plan",
       "recheck_domain",
       "remove_reserved_handle",
       "review_traffic_flag",

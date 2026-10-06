@@ -29,7 +29,8 @@ export async function ensureStripeCustomer(
       .update({ stripe_customer_id: null })
       .eq("id", account.id)
       .eq("stripe_customer_id", stale);
-    if (cleared.error) throw new Error(`Clearing the Stripe customer failed: ${cleared.error.message}`);
+    if (cleared.error)
+      throw new Error(`Clearing the Stripe customer failed: ${cleared.error.message}`);
   }
   const customer = await getStripe().customers.create(
     { email: email || undefined, metadata: { account_id: account.id } },
@@ -295,7 +296,7 @@ export async function startCheckout(
   if (!readPaidPlansOpen()) return failure(403, "plans_closed");
   const account = await readBillingAccount(user.id);
   if (!account) return failure(404, "no_account");
-  if (account.plan !== "free") return failure(409, "already_subscribed");
+  if (account.paid_plan !== "free") return failure(409, "already_subscribed");
 
   const env = readBillingEnv();
   const customerId = await ensureStripeCustomer(account, user.email);

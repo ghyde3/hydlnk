@@ -10,13 +10,17 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
  */
 export interface BillingAccount {
   id: string;
-  plan: string;
+  /**
+   * What Stripe says the account pays for (`paid_plan`), never the effective `plan`: a gift (M13-07)
+   * raises `plan` and must not count as a subscription here.
+   */
+  paid_plan: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   billing_interval: string | null;
 }
 
-const COLUMNS = "id, plan, stripe_customer_id, stripe_subscription_id, billing_interval";
+const COLUMNS = "id, paid_plan, stripe_customer_id, stripe_subscription_id, billing_interval";
 
 /** An untyped admin client for the billing tables and the apply_subscription_state function. */
 export function billingDb(): SupabaseClient {

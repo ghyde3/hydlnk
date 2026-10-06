@@ -156,7 +156,10 @@ export async function signInAs(
     .upsert({ id: userId }, { onConflict: "id", ignoreDuplicates: true });
   if (account.error) throw new Error(`accounts upsert failed: ${account.error.message}`);
   if (opts.plan) {
-    const { error } = await admin.from("accounts").update({ plan: opts.plan }).eq("id", userId);
+    const { error } = await admin
+      .from("accounts")
+      .update({ paid_plan: opts.plan })
+      .eq("id", userId);
     if (error) throw new Error(`setting plan failed: ${error.message}`);
   }
   const pageId = opts.handle ? await ensurePage(admin, userId, opts.handle) : undefined;

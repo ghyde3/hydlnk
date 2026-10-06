@@ -38,6 +38,10 @@ const FIELD_VALUE =
  * the plan, the subscription columns and the usage numbers are keyed by the verified session user.
  * Over a plan's limits (after a downgrade) the meters say so and nothing is removed.
  *
+ * A gifted account (M13-07) shows the gift in the band and on its plan card; the plan cards and the
+ * portal buttons follow what it pays for (`paidPlan`), so it still gets a real upgrade, and Manage
+ * billing shows only when a Stripe customer exists.
+ *
  * The Upgrade buttons are off in two cases, both decided here on the server: paid plans are not
  * open (PAID_PLANS_OPEN=false) and a Free account has just come back from Checkout
  * (`?checkout=success`, the "Confirming your upgrade" wait). The URL only ever turns a button off.
@@ -48,25 +52,36 @@ export default async function SettingsScreen({ searchParams }: PageProps<"/app/s
   await failIfInjected("route-throw");
   const query = await searchParams;
   const checkoutParam = query[CHECKOUT_PARAM];
-  const confirming =
-    parseCheckoutReturn(Array.isArray(checkoutParam) ? checkoutParam[0] : checkoutParam) ===
-      "success" && plan === "free";
   const [summary, usage] = await Promise.all([
     loadBillingSummary(user.id),
     loadAccountUsage(user.id),
   ]);
   // The plan on this screen is the one the rest of the shell shows (read once, with the session).
   const account = { ...summary, plan };
+  // The wait after Checkout is for the webhook to write what the account PAYS for: a gift raises
+  // the plan to Pro without Checkout having finished, so the effective plan cannot answer it.
+  const confirming =
+    parseCheckoutReturn(Array.isArray(checkoutParam) ? checkoutParam[0] : checkoutParam) ===
+      "success" && account.paidPlan === "free";
   const cardLast4 = wantsCardLookup(account) ? await lookupCardLast4(account) : null;
 
   return (
     <>
       <ScreenHeader breadcrumb="Account" title="Settings & billing" />
       <ScreenBody maxWidth="max-w-[920px]">
-        <CheckoutReturnNotice plan={plan} supportEmail={readSupportEmail()} />
+        <CheckoutReturnNotice plan={account.paidPlan} supportEmail={readSupportEmail()} />
         <PlanBand summary={account} text={describeBand(account, cardLast4)} />
         <UsageCard meters={buildMeters(plan, usage)} plan={plan} />
-        <PlanCards current={plan} paidPlansOpen={readPaidPlansOpen()} confirming={confirming} />
+        <PlanCards
+          current={account.paidPlan}
+          paidPlansOpen={readPaidPlansOpen()}
+          confirming={confirming}
+          gift={
+            account.gift
+              ? { plan: account.gift.plan, note: describeBand(account, cardLast4).gift ?? "" }
+              : undefined
+          }
+        />
         <PagesCard
           pages={pages.map((page) => ({
             id: page.id,

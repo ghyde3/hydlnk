@@ -25,6 +25,9 @@ const PERIOD_END = new Date("2026-11-01T12:00:00Z");
 
 const summary = (patch: Partial<BillingSummary> = {}): BillingSummary => ({
   plan: "pro",
+  // Without a gift the effective plan is what the account pays for.
+  paidPlan: patch.plan ?? "pro",
+  gift: null,
   interval: "month",
   periodEnd: PERIOD_END,
   cancelAtPeriodEnd: false,

@@ -31,7 +31,11 @@ vi.mock("@/lib/billing/account", () => ({
   billingDb: () => {
     throw new Error("the database must not be written here");
   },
-  readBillingAccount: async () => ({ id: ACCOUNT, plan: "free", stripe_customer_id: CUSTOMER }),
+  readBillingAccount: async () => ({
+    id: ACCOUNT,
+    paid_plan: "free",
+    stripe_customer_id: CUSTOMER,
+  }),
 }));
 
 interface FakeSession {

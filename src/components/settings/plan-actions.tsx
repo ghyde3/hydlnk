@@ -16,20 +16,20 @@ import type { PlanId } from "@/lib/limits";
  */
 
 /** The inert tile that replaces the button on the card matching the account's plan. */
-export function CurrentPlanTile() {
+export function CurrentPlanTile({ label = "Current plan" }: { label?: string }) {
   return (
     <span
       data-current-plan-tile
       className="flex min-h-11 items-center justify-center rounded-md bg-track text-[13px] font-semibold text-ink"
     >
-      Current plan
+      {label}
     </span>
   );
 }
 
 /**
  * The action at the foot of one plan card.
- *   the account's own plan   an inert "Current plan" tile
+ *   the account's own plan   an inert "Current plan" tile ("Your paid plan" while a gift raises the plan)
  *   Free account             "Upgrade to Pro" / "Upgrade to Studio" (Checkout, at the chosen interval),
  *                            disabled when `blocked` says why (see UpgradeButton)
  *   Pro account              Free: "Downgrade" (cancel in the portal); Studio: "Upgrade to Studio" (portal)
@@ -40,13 +40,17 @@ export function PlanCardAction({
   current,
   interval,
   blocked,
+  gifted = false,
 }: {
   card: PlanId;
+  /** What the account pays for (never the gifted plan: the buttons below are real purchases). */
   current: PlanId;
   interval: BillingInterval;
   blocked?: UpgradeBlock | undefined;
+  gifted?: boolean;
 }) {
-  if (card === current) return <CurrentPlanTile />;
+  if (card === current)
+    return <CurrentPlanTile label={gifted ? "Your paid plan" : "Current plan"} />;
   if (current === "free") {
     return card === "free" ? null : (
       <UpgradeButton plan={card} interval={interval} blocked={blocked} />

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { reviewTrafficFlagAction } from "@/lib/analytics/admin/review-flag-action";
 import { blockDomainAction, unblockDomainAction } from "@/lib/blocklist/admin-actions";
+import { endGiftAction, giftPlanAction } from "@/lib/billing/gift-actions";
 import type { Json } from "@/lib/supabase/database.types";
 import { clearAnnouncementAction, setAnnouncementAction } from "./announcement-actions";
 import { addReservedHandleAction, removeReservedHandleAction } from "./reserved-actions";
@@ -274,6 +275,8 @@ export { reviewTrafficFlagAction };
 export { recheckDomainAction };
 /** Block and remove a domain at /admin/blocked-links (M7-12): defined beside the blocklist, listed here. */
 export { blockDomainAction, unblockDomainAction };
+/** Give a plan and end the gift at /admin/accounts/{id}/gift (M13-07): defined beside the billing code, listed here. */
+export { endGiftAction, giftPlanAction };
 
 /** Reserved handles, the announcement and the connected apps watch (M13-08 to M13-10): defined beside this file, listed here. */
 export { addReservedHandleAction, removeReservedHandleAction };
