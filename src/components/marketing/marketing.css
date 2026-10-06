@@ -200,6 +200,13 @@
   text-decoration-color: var(--hl-ink);
 }
 
+/* A list that is only links (provider guides, a guide's sources): each link is a 44px touch target. */
+.prose-hl .link-list a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .prose-hl code {
   padding: 0.1em 0.35em;
   border-radius: var(--hl-radius-sm);

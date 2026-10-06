@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { SUPPORT_EMAIL } from "../site-map";
+import { SUPPORT_EMAIL, guideHref } from "../site-map";
 import type { GuideBody } from "./types";
 
 export const connectingADomain: GuideBody = {
@@ -14,9 +14,9 @@ export const connectingADomain: GuideBody = {
   content: (
     <>
       <p>
-        Your page always has its free address, <code>you.hydlnk.com</code>. On Pro and
-        Studio you can also serve it from a domain you already own. It takes one DNS record, and
-        the rest, including SSL, happens on its own.
+        Your page always has its free address, <code>you.hydlnk.com</code>. On Pro and Studio you
+        can also serve it from a domain you already own. It takes one DNS record, and the rest,
+        including SSL, happens on its own.
       </p>
 
       <h2 id="before">Before you start</h2>
@@ -41,32 +41,36 @@ export const connectingADomain: GuideBody = {
         <tbody>
           <tr>
             <td>A subdomain</td>
-            <td><code>links.yourbrand.com</code></td>
+            <td>
+              <code>links.yourbrand.com</code>
+            </td>
             <td>CNAME</td>
           </tr>
           <tr>
             <td>The root domain</td>
-            <td><code>yourbrand.com</code></td>
+            <td>
+              <code>yourbrand.com</code>
+            </td>
             <td>A</td>
           </tr>
         </tbody>
       </table>
       <p>
         If your website already lives at <code>yourbrand.com</code>, use a subdomain such as{" "}
-        <code>links</code>, <code>go</code> or <code>hello</code>, so the website keeps working.
-        If the domain is only for your link page, the root domain is fine.
+        <code>links</code>, <code>go</code> or <code>hello</code>, so the website keeps working. If
+        the domain is only for your link page, the root domain is fine.
       </p>
 
       <h2 id="steps">Step by step</h2>
       <ol>
         <li>
-          <strong>Add the domain.</strong> In the editor, open Domains and enter the domain you
-          want to use.
+          <strong>Add the domain.</strong> In the editor, open Domains and enter the domain you want
+          to use.
         </li>
         <li>
           <strong>Copy the record.</strong> The editor shows the exact record to add: its type, its
-          name and its value. The value is specific to your setup, so copy it from the editor,
-          not from a screenshot or another guide.
+          name and its value. The value is specific to your setup, so copy it from the editor, not
+          from a screenshot or another guide.
         </li>
         <li>
           <strong>Add it at your DNS provider.</strong> Sign in where your domain’s DNS is managed,
@@ -79,9 +83,8 @@ export const connectingADomain: GuideBody = {
           Press Check DNS now to look again straight away.
         </li>
         <li>
-          <strong>Let SSL arrive.</strong> After verification a certificate is issued
-          automatically, and your page loads over https at your domain. Certificates renew on
-          their own.
+          <strong>Let SSL arrive.</strong> After verification a certificate is issued automatically,
+          and your page loads over https at your domain. Certificates renew on their own.
         </li>
       </ol>
 
@@ -104,6 +107,25 @@ export const connectingADomain: GuideBody = {
           <strong>TTL</strong>: leave the default.
         </li>
       </ul>
+      <h3>Step by step at your provider</h3>
+      <ul className="link-list">
+        <li>
+          <Link href={guideHref("connect-a-domain-godaddy")}>Connect a domain at GoDaddy</Link>
+        </li>
+        <li>
+          <Link href={guideHref("connect-a-domain-namecheap")}>Connect a domain at Namecheap</Link>
+        </li>
+        <li>
+          <Link href={guideHref("connect-a-domain-squarespace")}>
+            Connect a domain at Squarespace
+          </Link>
+        </li>
+        <li>
+          <Link href={guideHref("connect-a-domain-cloudflare")}>
+            Connect a domain at Cloudflare
+          </Link>
+        </li>
+      </ul>
 
       <h2 id="trouble">If it doesn’t verify</h2>
       <ul>
@@ -120,8 +142,8 @@ export const connectingADomain: GuideBody = {
           network, switch that off for this record.
         </li>
         <li>
-          <strong>Give it time.</strong> Changes can take up to 48 hours to reach every DNS
-          server, though most are much faster.
+          <strong>Give it time.</strong> Changes can take up to 48 hours to reach every DNS server,
+          though most are much faster.
         </li>
         <li>
           <strong>CAA records.</strong> If verification succeeds but https doesn’t start working,
@@ -136,9 +158,9 @@ export const connectingADomain: GuideBody = {
       <h2 id="remove">Changing or removing a domain</h2>
       <p>
         Remove the domain in the editor’s Domains tab whenever you like. Your page stays live at{" "}
-        <code>you.hydlnk.com</code>. Then delete the record at your DNS provider so the name
-        doesn’t point anywhere unexpected. To switch to a different domain, remove the old one and
-        add the new one. For background on how DNS works, see{" "}
+        <code>you.hydlnk.com</code>. Then delete the record at your DNS provider so the name doesn’t
+        point anywhere unexpected. To switch to a different domain, remove the old one and add the
+        new one. For background on how DNS works, see{" "}
         <Link href="/custom-domains#dns">DNS in plain words</Link>.
       </p>
     </>

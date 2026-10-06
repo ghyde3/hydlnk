@@ -14,8 +14,8 @@ export const understandingAnalytics: GuideBody = {
   content: (
     <>
       <p>
-        Analytics tell you which parts of your page work. You don’t need to check them daily: once
-        a week, or after you change something, is plenty.
+        Analytics tell you which parts of your page work. You don’t need to check them daily: once a
+        week, or after you change something, is plenty.
       </p>
 
       <h2 id="where">Where to find them</h2>
@@ -47,8 +47,8 @@ export const understandingAnalytics: GuideBody = {
       <p>The clicks-by-link table is where the useful decisions are:</p>
       <ul>
         <li>
-          <strong>Order matters.</strong> Links near the top usually get more taps. If an
-          important link sits low and underperforms, move it up and compare the next weeks.
+          <strong>Order matters.</strong> Links near the top usually get more taps. If an important
+          link sits low and underperforms, move it up and compare the next weeks.
         </li>
         <li>
           <strong>Words matter.</strong> “Book a class” tells people what happens next; “Classes”
@@ -95,18 +95,16 @@ export const understandingAnalytics: GuideBody = {
           Known bots and crawlers are filtered out, so link previews and search engines don’t
           inflate your views.
         </li>
-        <li>
-          Unique visitors are estimated per day without cookies, so they’re approximate.
-        </li>
+        <li>Unique visitors are estimated per day without cookies, so they’re approximate.</li>
       </ul>
 
       <h2 id="privacy">How your visitors stay private</h2>
       <p>
-        HYDLNK sets no cookies on your page and loads no tracking scripts. Visitor IP addresses
-        are never stored: unique visitors come from a scrambled, one-way code made from the IP
-        address and browser, mixed with a value that changes every day. Individual views and
-        clicks are kept for {RAW_EVENT_RETENTION_DAYS} days and then combined into daily totals. The details are in the{" "}
-        <Link href="/privacy">privacy policy</Link>.
+        HYDLNK sets no cookies on your page and loads no tracking scripts. Visitor IP addresses are
+        never stored: unique visitors come from a scrambled, one-way code made from the IP address
+        and browser, mixed with a value that changes every day. Individual views and clicks are kept
+        for {RAW_EVENT_RETENTION_DAYS} days and then combined into daily totals. The details are in
+        the <Link href="/privacy">privacy policy</Link>.
       </p>
     </>
   ),

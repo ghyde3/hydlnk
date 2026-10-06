@@ -93,9 +93,9 @@ export const plansAndBilling: GuideBody = {
 
       <h2 id="limits">How limits work</h2>
       <p>
-        Plan limits (sites, pages per site, saved themes, custom domains and upload storage) are checked on our side
-        whenever you create or upload something. If you reach one, you’ll see a message when you try
-        to add more.
+        Plan limits (sites, pages per site, saved themes, custom domains and upload storage) are
+        checked on our side whenever you create or upload something. If you reach one, you’ll see a
+        message when you try to add more.
       </p>
 
       <h2 id="delete">Deleting your account</h2>
