@@ -265,6 +265,82 @@ test.describe("M7-13 adding a domain", () => {
     await expect(panel(page).getByRole("link", { name: "View page" })).toHaveCount(0);
   });
 
+  test("M7-13 a failed save (the server's 500 when its audit write fails) shows 'That didn’t work. Try again.' under the form, and a retry works", async ({
+    page,
+    context,
+  }) => {
+    const domain = newDomain("blfail");
+    await signInAsAdmin(context, "blfail");
+    await open(page);
+    // The server answers exactly this when the change or its audit row cannot be written
+    // (executeAdminAction): the first request is answered with it without reaching the server.
+    let failures = 1;
+    await page.route("**/api/admin/blocked-links", async (route) => {
+      if (route.request().method() === "POST" && failures > 0) {
+        failures -= 1;
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ok: false,
+            error: "action_failed",
+            message: "That didn’t work. Try again.",
+          }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+    await add(page, domain, "e2e fail");
+    await expect(form(page).getByRole("alert")).toContainText("That didn’t work. Try again.");
+    expect(await domainRow(domain)).toBeNull();
+    await expect(panel(page)).toHaveCount(0);
+    // The form keeps what was typed, so the retry is one click.
+    await expect(domainInput(page)).toHaveValue(domain);
+    await blockButton(page).click();
+    await expect(panel(page)).toContainText(`Blocked ${domain}.`);
+    expect(await domainRow(domain)).not.toBeNull();
+    await expectNoHorizontalScroll(page);
+  });
+
+  test("M7-13 more pages than the list holds says 'Showing the first 100 of 140.' and the 100 rows fit", async ({
+    page,
+    context,
+  }) => {
+    const domain = newDomain("blmany");
+    await signInAsAdmin(context, "blmany");
+    await open(page);
+    // 140 live pages is too many accounts to seed: the real response is replaced by one the server
+    // sends in that case (a list capped at 100, the total beside it), the screen being what is proved.
+    await page.route("**/api/admin/blocked-links", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          changed: true,
+          domain,
+          pages: 140,
+          drafts: 0,
+          list: Array.from({ length: 100 }, (_, i) => ({
+            handle: `zq-many-${String(i).padStart(3, "0")}`,
+            hosts: [`shop.${domain}`],
+            links: 1 + (i % 3),
+          })),
+        }),
+      });
+    });
+    await add(page, domain, "e2e many");
+    await expect(panel(page)).toContainText(
+      `Blocked ${domain}. 140 live pages already link to it. Nothing was unpublished.`,
+    );
+    await expect(panel(page).getByRole("link", { name: "View page" })).toHaveCount(100);
+    await expect(panel(page)).toContainText("Showing the first 100 of 140.");
+    await expectNoHorizontalScroll(page);
+    await expectTapTargets(page, "[role=status]");
+  });
+
   test("M7-13 each refusal shows under its field with role=alert, and nothing is added", async ({
     page,
     context,

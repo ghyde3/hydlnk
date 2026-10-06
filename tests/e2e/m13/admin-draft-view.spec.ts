@@ -4,7 +4,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { NEVER_STORED, appRaw } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
-import { signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
+import { sessionCookie, signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
 
 /**
  * M13-11: an admin's read-only view of a site's draft at /admin-draft/{pageId}, under the share
@@ -210,5 +210,54 @@ test.describe("M13-11 admin draft view", () => {
     } finally {
       await adminClient().from("admin_audit").delete().eq("account_id", owner.userId);
     }
+  });
+  test("M13-11 other spellings of the route never render a draft without the share preview's headers", async ({
+    context,
+    browser,
+  }, info) => {
+    test.skip(!desktopOnly(info), "no layout involved");
+    const owner = await seedOwner(browser);
+    await signInAsAdmin(context, "m13dvv");
+    const cookie = await sessionCookie(context);
+    try {
+      for (const path of [
+        `/admin%2Ddraft/${owner.pageId}`,
+        `/admin%2ddraft/${owner.pageId}`,
+        `/Admin-draft/${owner.pageId}`,
+        `/ADMIN-DRAFT/${owner.pageId}`,
+        `/admin-draft%2F${owner.pageId}`,
+        `/%61dmin-draft/${owner.pageId}`,
+        `/admin%252Ddraft/${owner.pageId}`,
+        `/admin-draft/${owner.pageId}%2Fitems`,
+        `//admin-draft/${owner.pageId}`,
+      ]) {
+        const raw = await appRaw(path, { cookie });
+        const csp = String(raw.headers["content-security-policy"] ?? "");
+        const guarded =
+          /'nonce-[^']+'/.test(csp) &&
+          NEVER_STORED.test(String(raw.headers["cache-control"] ?? ""));
+        // The plain not-found, a redirect that renders nothing (Next folds `//`), or the draft only
+        // under the same headers as the real route.
+        const redirected = raw.status >= 300 && raw.status < 400;
+        expect(raw.status === 404 || redirected || guarded, `${path} -> ${raw.status}`).toBe(true);
+        if (!guarded) expect(raw.body, path).not.toContain(SECRET_NAME);
+      }
+      expect(await viewRows(owner.userId!)).toHaveLength(0);
+    } finally {
+      await adminClient().from("admin_audit").delete().eq("account_id", owner.userId);
+    }
+  });
+
+  test("M13-11 the privacy policy tells visitors that staff may view an unpublished draft, and that each view is logged", async ({
+    page,
+  }, info) => {
+    test.skip(!desktopOnly(info), "no layout involved");
+    await page.goto(url(null, "/privacy"));
+    await expect(
+      page.getByText(
+        "HYDLNK staff may view an unpublished draft to help with a support request or to investigate a report, and each view is logged.",
+        { exact: true },
+      ),
+    ).toBeVisible();
   });
 });

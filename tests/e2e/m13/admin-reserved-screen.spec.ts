@@ -66,7 +66,7 @@ test.describe("M13-08 reserved handles screen", () => {
     page,
     context,
   }) => {
-    await signInAsAdmin(context, "rvadm");
+    const admin = await signInAsAdmin(context, "rvadm");
     await open(page);
     const handle = handleName();
     await reserve(page, handle, "a brand");
@@ -77,6 +77,8 @@ test.describe("M13-08 reserved handles screen", () => {
     await expect(row).toBeVisible();
     await expect(row).toContainText("a brand");
     await expect(row).toContainText("Added");
+    // Who added it: the admin's email.
+    await expect(row.locator("[data-added-by]")).toHaveText(admin.email);
 
     // A new signup with it is refused (the claim path is the signup's handle step).
     const newcomer = await makeUser("rvnew");
@@ -103,6 +105,7 @@ test.describe("M13-08 reserved handles screen", () => {
     const www = rowOf(page, "www");
     await expect(www).toBeVisible();
     await expect(www.locator("[data-locked]")).toBeVisible();
+    await expect(www.locator("[data-added-by]")).toHaveText("Built in");
     await expect(www.getByRole("button")).toHaveCount(0);
 
     await reserve(page, "a b", "");

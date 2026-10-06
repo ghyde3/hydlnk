@@ -3,6 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { appRaw, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { getShare, makeLink } from "../m6/pages-helpers";
 import { postApp, sessionCookie, signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
 
 /**
@@ -92,9 +93,9 @@ test("M13-09 set, shown in the editor, escaped, dismissed per browser, replaced,
     "Maintenance <b>tonight</b> & more",
   );
   await expect(banner(ownerPage).locator("b")).toHaveCount(0);
-  const link = banner(ownerPage).getByRole("link", { name: "Read more" });
-  await expect(link).toHaveAttribute("href", "https://example.com/status");
-  await expect(link).toHaveAttribute("rel", /noopener/);
+  const more = banner(ownerPage).getByRole("link", { name: "Read more" });
+  await expect(more).toHaveAttribute("href", "https://example.com/status");
+  await expect(more).toHaveAttribute("rel", /noopener/);
 
   // At 390x844 it fits and its controls are touchable.
   await ownerPage.setViewportSize({ width: 390, height: 844 });
@@ -109,6 +110,12 @@ test("M13-09 set, shown in the editor, escaped, dismissed per browser, replaced,
   const marketing = await rawRequest("localhost:3000", "/");
   expect(marketing.body).not.toContain("Maintenance");
   expect((await appRaw("/login")).body).not.toContain("Maintenance");
+  // ... nor on a private share preview, which is served from the app host.
+  const link = await makeLink(owner.userId, owner.pageId!);
+  const share = await getShare(link.token, "203.0.113.77");
+  expect(share.status).toBe(200);
+  expect(share.body).not.toContain("Maintenance");
+  expect(share.body).not.toContain("data-announcement");
 
   // Dismiss: gone now, still gone after a reload, remembered by the announcement's id.
   const id = (await banner(ownerPage).getAttribute("data-announcement"))!;
