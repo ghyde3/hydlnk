@@ -8,9 +8,15 @@ export const ADMIN_SECTIONS = [
   { segment: "pages", href: "/admin/pages", label: "Pages" },
   { segment: "traffic", href: "/admin/traffic", label: "Traffic" },
   { segment: "blocked-links", href: "/admin/blocked-links", label: "Blocked links" },
+  { segment: "domains", href: "/admin/domains", label: "Domains" },
+  { segment: "health", href: "/admin/health", label: "Health" },
+  { segment: "reserved", href: "/admin/reserved", label: "Reserved handles" },
+  { segment: "announcement", href: "/admin/announcement", label: "Announcement" },
+  { segment: "apps", href: "/admin/apps", label: "Connected apps" },
+  { segment: "audit", href: "/admin/audit", label: "Audit log" },
 ] as const;
 
-/** Desktop sidebar navigation (>= 760px): Reports, Pages, Traffic, Blocked links. */
+/** Desktop sidebar navigation (>= 760px): every admin section. */
 export function AdminSidebarNav() {
   const current = useSelectedLayoutSegment();
   return (
