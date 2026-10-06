@@ -5407,6 +5407,17 @@
         "Tested: the no-JavaScript render marks no day (tests/e2e/m12/blocks-hours.spec.ts) and the script marks today in the block's time zone (tests/unit/m12-hours-script.test.ts)."
       ],
       "passes": false
+    },
+    {
+      "id": "M12-12",
+      "milestone": 12,
+      "area": "sharing",
+      "title": "Share links: an extra path is a sub-page of the same site",
+      "acceptance": [
+        "Supersedes, in this respect only, M6-10 step 6's 'extra path ... ignored': since M12-06 an extra path under a valid share token names a page of the same site's draft. A path that is a sub-page of that site draws its draft; any other path (unknown, reserved, two segments deep) is the share preview's 404. A query string and a `?page=` parameter are still ignored, and a token for one site never draws another site's page. Every other step of M6-10 stands.",
+        "tests/e2e/m6/pages-share.spec.ts asserts the new rule (an unknown extra path is the 404, a sub-page path of the same site draws it, another site's page never appears) alongside tests/e2e/m12/share-subpages.spec.ts."
+      ],
+      "passes": false
     }
   ]
 }
