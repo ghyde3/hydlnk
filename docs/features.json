@@ -5265,6 +5265,19 @@
         "A user cannot read, write, publish or delete another user's sub-pages through any route or with the publishable key (pgTAP and route tests)."
       ],
       "passes": false
+    },
+    {
+      "id": "M13-01",
+      "milestone": 13,
+      "area": "marketing",
+      "title": "Registrar setup guides: GoDaddy, Namecheap, Squarespace and Cloudflare",
+      "acceptance": [
+        "Four Learn guides at /learn/connect-a-domain-godaddy, /learn/connect-a-domain-namecheap, /learn/connect-a-domain-squarespace and /learn/connect-a-domain-cloudflare walk through checking where the domain's DNS is managed, adding the CNAME for a subdomain and the A record for the root domain with the exact values HYDLNK shows (never hard-coded addresses), removing the provider's default or conflicting records, the provider's own gotchas, how long changes take, and checking the domain in HYDLNK.",
+        "Each guide links to the provider's own help articles it is based on and shows 'Checked October 2026'; no provider logos.",
+        "The four guides are in the Learn index and the sitemap, and the 'Connecting a domain' guide and the app's Domains screen link to them.",
+        "At 390x844 and 1440x900 each guide answers 200 with one h1, no horizontal scroll and links at least 44px tall (one smoke spec; content pages skip the full browser suite, Gary 2026-10-06)."
+      ],
+      "passes": true
     }
   ]
 }
