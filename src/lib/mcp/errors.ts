@@ -55,6 +55,8 @@ export class ToolFailure extends Error {
 
 export const MESSAGES = {
   not_found: "We couldn’t find that page. Call list_pages to see your pages.",
+  pageIdContradiction:
+    "The pageId you sent is already a page of a site, and subPageId names a different page. Send only pageId, or the site id with subPageId.",
   block_not_found: "No block with that id on this page. Call get_page.",
   conflict: "This page changed while I was working on it. Call get_page again and redo the change.",
   blocked_link: "That site is blocked. Use a different link.",

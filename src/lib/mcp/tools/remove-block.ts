@@ -22,7 +22,7 @@ const input = z.strictObject({
 export const removeBlock: ToolDefinition<typeof input> = {
   name: "remove_block",
   title: "Remove a block",
-  description: `Removes one block from the draft and nothing else. This cannot be undone from here, and the app's undo does not cover changes made by tools. ${DRAFT_ONLY} Its past clicks stay in the analytics. Pass subPageId for a block on another page of the site. Calling it again for the same id answers block_not_found. Returns how many blocks are left. Errors: block_not_found, conflict.`,
+  description: `Removes one block from the draft and nothing else. This cannot be undone from here, and the app's undo does not cover changes made by tools. ${DRAFT_ONLY} Its past clicks stay in the analytics. Pass subPageId for a block on another page of the site. Calling it again for the same id answers block_not_found. Returns how many blocks are left. A page id from list_pages also works as pageId. Errors: block_not_found, conflict.`,
   scope: MCP_SCOPES.write,
   annotations: DESTRUCTIVE_IDEMPOTENT,
   input,

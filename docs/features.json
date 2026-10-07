@@ -5553,6 +5553,19 @@
         "No admin screen, route or SQL function is reachable without an admin session, and no client role can read or write the new tables or columns (pgTAP and route tests)."
       ],
       "passes": true
+    },
+    {
+      "id": "M13-14",
+      "milestone": 13,
+      "area": "mcp",
+      "title": "MCP tools accept a page's id where a site id is expected",
+      "acceptance": [
+        "When an AI app passes a page id from list_pages (a sub-page of one of the caller's sites) as `pageId`, every tool resolves it to that site and, for get_page, add_block, update_block, move_block and remove_block, to that page (as if `subPageId` were given); site-level tools (publish_page, set_theme, update_profile, get_analytics, create_preview_link, get_domains) act on its site. A sub-page id of another account, a deleted page and a random id give the same not_found as today; a `subPageId` that contradicts the resolved page is a clear invalid_request.",
+        "list_pages gives each page an explicit target (Home: the site id; a sub-page: the site id and the page id as subPageId), and the tool descriptions say a page id from list_pages is accepted as pageId.",
+        "The /connect page tells people to refresh the HYDLNK plugin at chatgpt.com/plugins (and start a new chat) when HYDLNK adds new abilities, and to start a new conversation in Claude.",
+        "Unit tests for the resolution, ownership and the contradiction; the scripted official-client e2e flow adds a block to a sub-page by passing its page id as pageId."
+      ],
+      "passes": true
     }
   ]
 }

@@ -89,7 +89,7 @@ export const getPage: ToolDefinition<typeof input> = {
   name: "get_page",
   title: "Get a page",
   description:
-    "Reads the draft of one page, which can differ from what is live. Pass subPageId (from list_pages) to read another page of the site: you get its title, path, rev, inMenu, blocks and publishIssues, and the profile and theme stay on Home. Otherwise returns page (id, rev, publishStatus, hasUnpublishedChanges, publishedAt), profile, theme (including how the page looks now), blocks in order, limits, publishIssues (what Publish would refuse, in plain words) and alsoSetInTheApp (settings no tool can change). Each block has an id, a type, visible and the same fields add_block takes. This is the only way to learn block ids and image ids. Pass blockId to read one block in full. Pass rev as ifRev to later writes. Errors: not_found, block_not_found.",
+    "Reads the draft of one page, which can differ from what is live. Pass subPageId (from list_pages) to read another page of the site: you get its title, path, rev, inMenu, blocks and publishIssues, and the profile and theme stay on Home. Otherwise returns page (id, rev, publishStatus, hasUnpublishedChanges, publishedAt), profile, theme (including how the page looks now), blocks in order, limits, publishIssues (what Publish would refuse, in plain words) and alsoSetInTheApp (settings no tool can change). Each block has an id, a type, visible and the same fields add_block takes. This is the only way to learn block ids and image ids. Pass blockId to read one block in full. Pass rev as ifRev to later writes. A page id from list_pages also works as pageId. Errors: not_found, block_not_found.",
   scope: MCP_SCOPES.read,
   annotations: READ_ONLY,
   input,

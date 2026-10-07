@@ -160,7 +160,8 @@ export default function ConnectPage() {
               </ol>
               <p>
                 To switch HYDLNK on or off in a single chat, choose the plus button in the chat,
-                then Connectors.
+                then Connectors. When HYDLNK adds new abilities, start a new conversation in Claude
+                so it picks them up.
               </p>
               <h3>Good to know about Claude</h3>
               <ul>
@@ -231,6 +232,10 @@ export default function ConnectPage() {
               <p>
                 You do not need to enable Developer mode for this Plugins setup. ChatGPT may ask you
                 to confirm actions that change or publish content.
+              </p>
+              <p>
+                When HYDLNK adds new abilities, open chatgpt.com/plugins, choose HYDLNK and select
+                Refresh. Then start a new chat.
               </p>
 
               <h2 id="privacy">Your privacy</h2>
