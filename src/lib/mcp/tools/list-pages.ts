@@ -30,7 +30,7 @@ export const listPages: ToolDefinition<typeof input> = {
   name: "list_pages",
   title: "List your pages",
   description:
-    "Lists the sites in this HYDLNK account: id, name, handle, public address and url, custom domains with their status, publishStatus of Home (published, unpublished-changes or not-published) and when it was last published. Each site also lists its pages: Home first (id home), then the others in menu order, each with id, title, path, inMenu and live (it has been published). Use a page's id as subPageId in get_page and the block tools; leave subPageId out for Home. Also returns the plan and how many sites and how many pages per site it allows. Call this first to get a pageId for the other tools. It reads only and changes nothing. Errors: account_suspended, rate_limited.",
+    "Lists the sites in this HYDLNK account: id, name, handle, public address and url, custom domains with their status, publishStatus of Home (published, unpublished-changes or not-published) and when it was last published. Each site also lists its pages: Home first (id home), then the others in menu order, each with id, title, path, inMenu and live (it has been published). Each page has a target: pass it as pageId (and subPageId) to get_page and the block tools; a page's id alone also works as pageId. Also returns the plan and how many sites and how many pages per site it allows. Call this first to get a pageId for the other tools. It reads only and changes nothing. Errors: account_suspended, rate_limited.",
   scope: MCP_SCOPES.read,
   annotations: READ_ONLY,
   input,
@@ -95,6 +95,7 @@ export const listPages: ToolDefinition<typeof input> = {
               path: "/",
               inMenu: true,
               live: page.publishedAt !== null,
+              target: { pageId: page.id },
             }
           : {
               id: item.id,
@@ -102,6 +103,7 @@ export const listPages: ToolDefinition<typeof input> = {
               path: item.path,
               inMenu: inMenuIds.has(item.id),
               live: liveIds.has(item.id),
+              target: { pageId: page.id, subPageId: item.id },
             },
       );
       return {

@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — MCP: a page's id works where a site id is expected (M13-14)
+
+On `fix/mcp-page-ids` (PR #29), off main. Flipped M13-14 to `passes: true`.
+
+- Why: ChatGPT kept its cached tool list (no `subPageId`, no `create_page`) and passed the Services page's id from list_pages as `pageId`, getting not_found. The fix works with any client: `loadOwnedPage` resolves a sub-page id the caller owns to its site and page; block tools act on that page, site-level tools on its site; every miss is the same not_found; a contradicting `subPageId` is `invalid_input`; list_pages gives each page an explicit `target`; /connect tells people to refresh the plugin at chatgpt.com/plugins and start a new chat.
+- Evidence: tests/unit/m13-mcp-page-ids.test.ts, tests/unit/m13-mcp-takes-subpage.test.ts (guard from the review), the scripted official-client flow (tests/e2e/m10/mcp-flow-helpers.ts adds a block to a sub-page by page id); `pnpm test --retry 2` 412 files, 10,300 tests; `pnpm test:db` 55 files, 2,333 tests; typecheck and lint clean. `security-reviewer`: no critical, high or medium findings; the low one (shape-based detection) is now guarded by a test.
+
 ## 2026-10-06 — Admin wave built and proven: ten admin tools
 
 On `m14-admin` (PR #27). Flipped to `passes: true`: M13-02 to M13-13, and M5-08, M5-09, M7-13 (proved by M13-12's tests). Features: 302 of 331.

@@ -28,8 +28,12 @@ export interface OwnedPage {
   published?: unknown;
 }
 
+/**
+ * `subPageId` is set when the id the caller sent as `pageId` was a sub-page of one of its sites
+ * (M13-14): `page` is then that sub-page's site.
+ */
 export type LoadPageResult =
-  { ok: true; page: OwnedPage } | { ok: false; failure: ToolFailureInfo };
+  { ok: true; page: OwnedPage; subPageId?: string } | { ok: false; failure: ToolFailureInfo };
 
 /**
  * A sub-page of one of the caller's sites (M12-05). `rev` is the page's `updated_at` as milliseconds:

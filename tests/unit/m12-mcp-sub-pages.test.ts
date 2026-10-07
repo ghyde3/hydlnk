@@ -104,10 +104,38 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       expect(site.id).toBe(o.pageId);
       expect(site.pageCount).toBe(4);
       expect(site.pages).toEqual([
-        { id: "home", title: "Home", path: "/", inMenu: true, live: false },
-        { id: b, title: "Visit", path: "/visit", inMenu: true, live: false },
-        { id: a, title: "Items", path: "/items", inMenu: true, live: true },
-        { id: c, title: "Extra", path: "/extra", inMenu: false, live: false },
+        {
+          id: "home",
+          title: "Home",
+          path: "/",
+          inMenu: true,
+          live: false,
+          target: { pageId: o.pageId },
+        },
+        {
+          id: b,
+          title: "Visit",
+          path: "/visit",
+          inMenu: true,
+          live: false,
+          target: { pageId: o.pageId, subPageId: b },
+        },
+        {
+          id: a,
+          title: "Items",
+          path: "/items",
+          inMenu: true,
+          live: true,
+          target: { pageId: o.pageId, subPageId: a },
+        },
+        {
+          id: c,
+          title: "Extra",
+          path: "/extra",
+          inMenu: false,
+          live: false,
+          target: { pageId: o.pageId, subPageId: c },
+        },
       ]);
     });
 
@@ -119,7 +147,14 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       expect(JSON.stringify(out.json)).not.toContain("Their secret page");
       expect(out.json!.pages).toHaveLength(1);
       expect(out.json!.pages[0].pages).toEqual([
-        { id: "home", title: "Home", path: "/", inMenu: true, live: false },
+        {
+          id: "home",
+          title: "Home",
+          path: "/",
+          inMenu: true,
+          live: false,
+          target: { pageId: mine.pageId },
+        },
       ]);
     });
   });
