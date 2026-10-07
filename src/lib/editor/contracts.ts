@@ -6,7 +6,7 @@
  *   renderer     PageRenderer (src/components/page/page-renderer.tsx)
  *   block forms  BLOCK_FORMS, BlockFormProps, blockRowSummary
  *   media        mediaUrl
- *   publishing   publishPage (a Server Action)
+ *   publishing   publishPage and unpublishSite (Server Actions)
  */
 import { EmbedFacade } from "@/components/page/embed-facade";
 import { provideEmbedFacade } from "@/components/page/embed-slot";
@@ -21,3 +21,4 @@ export { BLOCK_FORMS, type BlockFormProps } from "@/components/blocks/forms";
 export { blockRowSummary } from "@/components/blocks/summary";
 export { mediaUrl } from "@/lib/media/url";
 export { publishPage } from "@/lib/publish/actions";
+export { unpublishSite } from "@/lib/publish/unpublish-action";

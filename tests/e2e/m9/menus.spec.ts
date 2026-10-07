@@ -49,7 +49,8 @@ const CASES: MenuCase[] = [
   {
     name: "More actions",
     trigger: moreButton,
-    items: ["QR code", "Version history"],
+    // Unpublish (M14-02) is there because the test users have published pages.
+    items: ["QR code", "Version history", "Unpublish"],
     letter: "v",
     jumpsTo: 1,
   },

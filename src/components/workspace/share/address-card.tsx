@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { UnpublishDialog } from "../unpublish-dialog";
 import { useWorkspace } from "../workspace-context";
-import { CARD, CARD_TITLE, SECONDARY_BUTTON } from "./styles";
+import { CARD, CARD_TITLE, DANGER_BUTTON, SECONDARY_BUTTON } from "./styles";
 
 export const NOT_PUBLISHED_ADDRESS_NOTE = "Not published yet. Publish to turn this address on.";
 
@@ -21,6 +22,8 @@ export function AddressCard() {
   const addressRef = useRef<HTMLParagraphElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const unpublishRef = useRef<HTMLButtonElement>(null);
 
   useEffect(
     () => () => {
@@ -67,7 +70,25 @@ export function AddressCard() {
             Open page
           </a>
         ) : null}
+        {hasPublished ? (
+          // The toolbar's More actions menu holds Unpublish from 760px up; on a phone the menus
+          // are not drawn, so the Share tab carries it.
+          <button
+            ref={unpublishRef}
+            type="button"
+            data-testid="address-unpublish"
+            onClick={() => setConfirming(true)}
+            className={`${DANGER_BUTTON} hl:hidden`}
+          >
+            Unpublish
+          </button>
+        ) : null}
       </div>
+      <UnpublishDialog
+        open={confirming}
+        onClose={() => setConfirming(false)}
+        onCloseFocus={() => unpublishRef.current?.focus()}
+      />
       <span role="status" aria-live="polite" className="sr-only">
         {copied ? "Link copied." : ""}
       </span>

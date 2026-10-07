@@ -14,6 +14,7 @@ import {
 } from "../fixtures/stripe-stub";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { SERVER_PORT, rawBuffer, tenantGet } from "../m2/publish-helpers";
+import { addDomainRow, hostnameFor } from "./domains-core-helpers";
 
 /**
  * M4-08: the "Made with HYDLNK" badge follows a plan change without a republish. The webhook
@@ -29,8 +30,8 @@ import { SERVER_PORT, rawBuffer, tenantGet } from "../m2/publish-helpers";
  *   NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm start -p 3100
  *   HL_PROD_PORT=3100 pnpm test:e2e tests/e2e/m4/billing-badge.spec.ts
  *
- * Custom-host variant (the same flips on a verified custom domain) waits for the domain lookup in
- * src/lib/routing/custom-domain.ts: the tag the webhook expires is the page's, whichever host serves it.
+ * The custom-host variant (the same flips on a verified custom domain) runs in both blocks: the
+ * tag the webhook expires is the page's, whichever host serves it.
  */
 
 test.afterAll(cleanupUsers);
@@ -137,6 +138,31 @@ test.describe("M4-08 the badge follows the plan (dev server)", () => {
 
     // Nothing was republished: the stored page is exactly what it was.
     expect(await publishedOf(fx.pageId)).toBe(before);
+  });
+
+  test("M4-08 the same flips show on a verified custom host on the very next request", async ({}, info) => {
+    test.skip(!desktopOnly(info), "a data flow");
+    const fx = await freeUserWithPage("bd-cust");
+    const host = hostnameFor("bdc");
+    const custom = () => rawBuffer(`${host}:3000`, "/");
+
+    // A custom domain needs a paid plan to be added: the signed webhook is what makes the account Pro.
+    const created = create(fx, "proMonthly");
+    expect((await deliver(created)).status).toBe(200);
+    await addDomainRow({ pageId: fx.pageId, hostname: host, status: "verified" });
+    const pro = await custom();
+    expect(pro.status).toBe(200);
+    expect(pro.text).not.toContain(BADGE);
+    expect(pro.text).toContain(REPORT);
+    expect((await dev(fx.handle)).body).not.toContain(BADGE);
+
+    // A deleted subscription brings the badge back on both hosts, with no republish.
+    expect((await deliver(remove(fx, created.data.object.id, created.created + 1))).status).toBe(200);
+    const free = await custom();
+    expect(free.status).toBe(200);
+    expect(free.text).toContain(BADGE);
+    expect(free.text).toContain(REPORT);
+    expect((await dev(fx.handle)).body).toContain(BADGE);
   });
 
   test("M4-08 abuse: an unsigned POST claiming a Pro subscription is a 400 and the badge stays", async ({}, info) => {
@@ -289,6 +315,33 @@ test.describe("M4-08 the cache follows the plan (production build)", () => {
     expect(back.text).toContain(BADGE);
     expect(await queryCount(fx.handle)).toBe(countFx + 2);
     expect(cacheState(await tenantGet(fx.handle))).toBe("HIT");
+  });
+
+  test("M4-08 on a verified custom host the badge follows the plan too: one regeneration, then a HIT with no query", async () => {
+    const fx = await freeUserWithPage("bd-ccache");
+    const host = hostnameFor("bdcc");
+    const custom = () => rawBuffer(`${host}:${SERVER_PORT}`, "/");
+    const created = create(fx, "proMonthly");
+    expect((await deliverProd(created)).status).toBe(200);
+    await addDomainRow({ pageId: fx.pageId, hostname: host, status: "verified" });
+    const first = await custom();
+    expect(first.status).toBe(200);
+    expect(first.text).not.toContain(BADGE);
+    expect(cacheState(await custom())).toBe("HIT");
+    const count = await queryCount(fx.handle);
+
+    expect((await deliverProd(remove(fx, created.data.object.id, created.created + 1))).status).toBe(200);
+    const back = await custom();
+    expect(back.status).toBe(200);
+    expect(back.text).toContain(BADGE);
+    expect(cacheState(back)).not.toBe("HIT");
+    expect(await queryCount(fx.handle)).toBe(count + 1);
+    const again = await custom();
+    expect(cacheState(again)).toBe("HIT");
+    expect(again.text).toContain(BADGE);
+    expect(await queryCount(fx.handle)).toBe(count + 1);
+    // The handle host shows the same plan.
+    expect((await tenantGet(fx.handle)).text).toContain(BADGE);
   });
 
   test("M4-08 a redelivery of the same event expires nothing and runs no query", async () => {

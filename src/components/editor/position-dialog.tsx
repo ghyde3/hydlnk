@@ -18,10 +18,12 @@ import {
   ZOOM_STEP,
   cropToFile,
   nudgePan,
+  areaToCrop,
   panToCrop,
   restrictPan,
   scalePan,
   zoomAnnouncement,
+  type CroppedArea,
   type Pan,
   type PositionPhoto,
 } from "@/lib/media/position-crop";
@@ -96,8 +98,8 @@ const clampZoom = (zoom: number): number =>
  * change nothing.
  *
  * The dialog owns the library's `crop` (a pan in screen pixels) and `zoom`, so the keys, the slider
- * and Reset drive the same state a drag does, and the file it draws comes from that state
- * (`panToCrop`), not from what the library last reported. No crop, focus or zoom value is stored or
+ * and Reset drive the same state a drag does, and the file it draws comes from the
+ * `croppedAreaPixels` the library reports for that state (`areaToCrop`). No crop, focus or zoom value is stored or
  * sent: only the picture that "Use photo" draws.
  *
  * A native modal `<dialog>`: the page behind is inert and does not scroll, Escape asks to cancel,
@@ -112,6 +114,8 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
   const zoomId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const finderRef = useRef<HTMLDivElement>(null);
+  // The square the library last reported (`croppedAreaPixels`): it follows drags, keys, the slider and Reset.
+  const areaRef = useRef<CroppedArea | null>(null);
   const { width, height } = photo;
   const [view, setView] = useState<{ pan: Pan; zoom: number }>({ pan: CENTERED, zoom: MIN_ZOOM });
   const [ready, setReady] = useState(false);
@@ -196,7 +200,8 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
     setError(null);
     let file: File | null = null;
     try {
-      const crop = panToCrop(view.pan, view.zoom, width, height, finderSize());
+      const reported = areaRef.current ? areaToCrop(areaRef.current, width, height) : null;
+      const crop = reported ?? panToCrop(view.pan, view.zoom, width, height, finderSize());
       file = await cropToFile(photo, crop, copy.file);
     } catch {
       file = null;
@@ -268,6 +273,9 @@ export function PositionDialog({ photo, variant = "photo", onUse, onCancel }: Po
             keyboardStep={NUDGE_PX}
             onCropChange={(pan) => setView((current) => ({ ...current, pan }))}
             onZoomChange={(zoom) => setView((current) => ({ ...current, zoom: clampZoom(zoom) }))}
+            onCropAreaChange={(_percent, pixels) => {
+              areaRef.current = pixels;
+            }}
             onMediaLoaded={() => setReady(true)}
             style={{
               cropAreaStyle: variant === "photo" ? OUTLINE_STYLE : SQUARE_OUTLINE_STYLE,

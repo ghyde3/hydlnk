@@ -54,6 +54,7 @@ vi.mock("@/lib/env/client", () => ({
   },
 }));
 vi.mock("@/lib/publish/actions", () => ({ publishPage: vi.fn() }));
+vi.mock("@/lib/publish/unpublish-action", () => ({ unpublishSite: vi.fn() }));
 
 const { renderLivePage } = await import("@/lib/tenant-render/live-page");
 const { provideEmbedFacade } = await import("@/components/page/embed-slot");

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { cleanupUsers, rand } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import {
   armFailure,
   bodyOf,
@@ -24,7 +24,9 @@ import {
  *   NEXT_PUBLIC_ROOT_DOMAIN=localhost:3100 HYDLNK_QUERY_COUNTER=1 pnpm exec next start -p 3100 &
  *   HL_PROD_PORT=3100 pnpm exec playwright test tests/e2e/m8/render-cache.spec.ts --workers=2
  *
- * Publish, the plan webhook, suspend, claim and delete keep their own specs (tests/e2e/m2/publish-cache,
+ * Unpublish (M14-02, step 4's "unpublish: page to placeholder" row) is the last test of the first block
+ * below: it drives the real editor on the production server, so the Server Action's own
+ * invalidation is what is under test. Publish, the plan webhook, suspend, claim and delete keep their own specs (tests/e2e/m2/publish-cache,
  * m4/billing-badge, m5/suspend-cache), which run unchanged against the new routes.
  */
 
@@ -90,6 +92,83 @@ test.describe("M8-04 the routes are static and cached", () => {
     }
     // One read for the page, however it was asked for.
     expect(await queryCount(user.handle)).toBe(1);
+  });
+
+  test("M8-04 unpublish: the page becomes the placeholder (handle host) and the 404 (custom host) on the very next request, with nothing of the page left, and Publish brings it back", async ({
+    page,
+    context,
+  }, info) => {
+    test.skip(!desktopOnly(info), "drives the More actions menu, which a phone does not draw");
+    const marker = `Bio of ${rand(6)}`;
+    const user = await liveUser(context, "cc7", { plan: "studio", bio: marker });
+    const host = await customHostOf(user.pageId);
+    const APP = `http://app.localhost:${SERVER_PORT}`;
+    const placeholder = "Nothing published here yet.";
+    const hasPage = (text: string) => text.includes(marker) || text.includes("Book now");
+
+    // Warm both hosts: a HIT on each, the page in the body, one read of the database.
+    await getTenant(user.handle);
+    await getCustom(host);
+    const warmHandle = await getTenant(user.handle);
+    const warmCustom = await getCustom(host);
+    expect([cacheState(warmHandle), cacheState(warmCustom)]).toEqual(["HIT", "HIT"]);
+    expect(hasPage(warmHandle.text)).toBe(true);
+    expect(hasPage(warmCustom.text)).toBe(true);
+    const warmCount = await queryCount(user.handle);
+    expect(warmCount).toBe(1);
+
+    // Unpublish through the editor. The share preview's OG image would be a second reader of the
+    // cache entry (see publish-cache.spec.ts), so the browser is kept off it.
+    await page.route(/\/og\?v=/, (route) => route.abort());
+    await page.goto(`${APP}/editor`);
+    await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "More actions" }).click();
+    await page.getByRole("menuitem", { name: "Unpublish" }).click();
+    await page.getByTestId("unpublish-confirm").click();
+    await expect(page.locator("[data-publish-status]")).toHaveAttribute(
+      "data-publish-status",
+      "not-published",
+      { timeout: 30_000 },
+    );
+
+    // The very next request, no waiting: the placeholder on the handle host, the 404 on the custom
+    // host (what the routing gives an unpublished site), nothing of the page in either body.
+    const handleNow = await getTenant(user.handle);
+    expect(handleNow.status).toBe(200);
+    expect(handleNow.text).toContain(placeholder);
+    expect(hasPage(handleNow.text)).toBe(false);
+    expect(handleNow.text).not.toContain("Zq cc7");
+    const customNow = await getCustom(host);
+    expect(customNow.status).toBe(404);
+    expect(hasPage(customNow.text)).toBe(false);
+    expect(customNow.text).not.toContain("Zq cc7");
+    // The entry was regenerated from the database, and only once for the two hosts together.
+    const afterCount = await queryCount(user.handle);
+    expect(afterCount).toBeGreaterThan(warmCount);
+    expect(afterCount).toBeLessThanOrEqual(warmCount + 2);
+
+    // And it is cached again: a second round reads nothing.
+    expect(await getTenant(user.handle).then((res) => res.text)).toContain(placeholder);
+    expect((await getCustom(host)).status).toBe(404);
+    expect(await queryCount(user.handle)).toBe(afterCount);
+
+    // Publish again: the page is back at once on both hosts.
+    await page
+      .getByRole("button", { name: /^Publish/ })
+      .first()
+      .click();
+    await expect(page.locator("[data-publish-status]")).toHaveAttribute(
+      "data-publish-status",
+      "published",
+      { timeout: 30_000 },
+    );
+    const backHandle = await getTenant(user.handle);
+    expect(backHandle.status).toBe(200);
+    expect(backHandle.text).not.toContain(placeholder);
+    expect(hasPage(backHandle.text)).toBe(true);
+    const backCustom = await getCustom(host);
+    expect(backCustom.status).toBe(200);
+    expect(hasPage(backCustom.text)).toBe(true);
   });
 
   test("M8-04 one document for every visitor: user agent, language, Authorization, cookie and address change nothing, and the counter stays at one", async ({
