@@ -26,6 +26,7 @@ import {
   BLOCKED_PUBLISH_NOTE,
   PUBLISH_FAILED_MESSAGE,
   PUBLISH_RATE_LIMITED_MESSAGE,
+  UNPUBLISH_RATE_LIMITED_MESSAGE,
   STORAGE_FULL_MESSAGE,
   UNPUBLISH_FAILED_MESSAGE,
   UNPUBLISH_SIGNED_OUT_MESSAGE,
@@ -367,7 +368,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
               ? UNPUBLISH_SIGNED_OUT_MESSAGE
               : result.reason === "account_suspended"
                 ? UNPUBLISH_SUSPENDED_MESSAGE
-                : UNPUBLISH_FAILED_MESSAGE,
+                : result.reason === "rate_limited"
+                  ? UNPUBLISH_RATE_LIMITED_MESSAGE
+                  : UNPUBLISH_FAILED_MESSAGE,
         };
       }
       markSiteUnpublished();

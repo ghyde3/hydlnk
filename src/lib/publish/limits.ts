@@ -8,6 +8,11 @@ export const PUBLISH_RATE_LIMIT = 60;
 export const PUBLISH_RATE_WINDOW_SECONDS = 3600;
 export const publishRateKey = (userId: string) => `publish:${userId}`;
 
+/** Unpublish expires the whole site's cache like Publish does, so it is capped the same way (M14-02). */
+export const UNPUBLISH_RATE_LIMIT = 60;
+export const UNPUBLISH_RATE_WINDOW_SECONDS = 3600;
+export const unpublishRateKey = (userId: string) => `unpublish:${userId}`;
+
 export const CLEANUP_RATE_LIMIT = 20;
 export const CLEANUP_RATE_WINDOW_SECONDS = 60;
 export const cleanupRateKey = (userId: string) => `media-cleanup:${userId}`;

@@ -10,6 +10,8 @@ export type UnpublishFailureReason =
   | "forbidden"
   /** The owner's account is suspended (M5-09): an admin decides what is live until it is lifted. */
   | "account_suspended"
+  /** Past UNPUBLISH_RATE_LIMIT in the window: refused before anything is read or written. */
+  | "rate_limited"
   | "error";
 
 export type UnpublishResult =

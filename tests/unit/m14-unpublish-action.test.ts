@@ -12,6 +12,9 @@ vi.mock("next/cache", () => ({ revalidateTag, updateTag, unstable_cache: vi.fn()
 const getSessionUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({ getSessionUser }));
 
+const rateLimit = vi.fn();
+vi.mock("@/lib/rate-limit", () => ({ rateLimit }));
+
 const unpublishSiteCore = vi.fn();
 vi.mock("@/lib/publish/unpublish", () => ({ unpublishSiteCore }));
 
@@ -25,6 +28,8 @@ beforeEach(() => {
   updateTag.mockReset();
   getSessionUser.mockReset();
   unpublishSiteCore.mockReset();
+  rateLimit.mockReset();
+  rateLimit.mockResolvedValue({ allowed: true });
 });
 
 describe("M14-02 unpublishSite (the Server Action)", () => {
@@ -64,4 +69,20 @@ describe("M14-02 unpublishSite (the Server Action)", () => {
       expect(updateTag).not.toHaveBeenCalled();
     });
   }
+
+  it("past 60 unpublishes an hour per account it is refused before the core runs, touching no cache", async () => {
+    getSessionUser.mockResolvedValue({ id: USER, email: "a@example.com" });
+    rateLimit.mockResolvedValue({ allowed: false });
+    expect(await unpublishSite(PAGE)).toEqual({ ok: false, reason: "rate_limited" });
+    expect(rateLimit).toHaveBeenCalledWith(`unpublish:${USER}`, 60, 3600);
+    expect(unpublishSiteCore).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it("a site that was not published still has its tag expired (a retry repairs a crash between commit and expiry)", async () => {
+    getSessionUser.mockResolvedValue({ id: USER, email: "a@example.com" });
+    unpublishSiteCore.mockResolvedValue({ ok: true, wasPublished: false });
+    expect(await unpublishSite(PAGE)).toEqual({ ok: true, wasPublished: false });
+    expect(revalidateTag).toHaveBeenCalledWith(`page:${PAGE.toLowerCase()}`, { expire: 0 });
+  });
 });
