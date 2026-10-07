@@ -123,8 +123,8 @@ describe("M9-08 areaToCrop turns the library's croppedAreaPixels into the square
 
   it("the whole shorter side is 1x, and the square stays inside the picture", () => {
     const crop = areaToCrop({ x: -3, y: 0, width: 3000, height: 3000 }, 4000, 3000);
-    expect(crop.zoom).toBe(1);
-    expect(crop.cx).toBe(1500);
+    expect(crop!.zoom).toBe(1);
+    expect(crop!.cx).toBe(1500);
   });
 
   it("bad numbers (NaN, Infinity, zero or negative sizes) come back null, so the caller falls back", () => {
