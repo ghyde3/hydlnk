@@ -5565,7 +5565,7 @@
         "The /connect page tells people to refresh the HYDLNK plugin at chatgpt.com/plugins (and start a new chat) when HYDLNK adds new abilities, and to start a new conversation in Claude.",
         "Unit tests for the resolution, ownership and the contradiction; the scripted official-client e2e flow adds a block to a sub-page by passing its page id as pageId."
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
