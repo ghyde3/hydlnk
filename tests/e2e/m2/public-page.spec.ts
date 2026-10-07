@@ -451,8 +451,9 @@ test.describe("M2-28 Made with HYDLNK", () => {
     const hostile = {
       ...current,
       badge: false,
-      settings: { hideBadge: true, hideReport: true },
-      profile: { ...(current.profile as object), badge: false },
+      showBadge: false,
+      settings: { hideBadge: true, hideReport: true, showBadge: false },
+      profile: { ...(current.profile as object), badge: false, showBadge: false },
     };
     const write = await patch(`/pages?id=eq.${user.pageId}`, { draft: hostile });
     expect(write.status).toBe(200);
@@ -472,7 +473,7 @@ test.describe("M2-28 Made with HYDLNK", () => {
       .eq("id", user.pageId)
       .single();
     expect(stored.data?.published).not.toBeNull();
-    expect(JSON.stringify(stored.data?.published)).not.toMatch(/hideBadge|hideReport|"badge"/);
+    expect(JSON.stringify(stored.data?.published)).not.toMatch(/hideBadge|showBadge|hideReport|"badge"/);
     const page = await context.newPage();
     await page.goto(url(user.handle));
     await expect(badge(page)).toHaveCount(1);
