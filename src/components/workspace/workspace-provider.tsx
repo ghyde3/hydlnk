@@ -20,13 +20,16 @@ import { useUndoRedo } from "@/components/editor/use-undo-redo";
 import { useSitePages, type SubPageInit } from "@/components/site/use-site-pages";
 import { useThemeLibrary, useThemePreview } from "@/components/themes";
 import { toPublishForm, type DraftDoc, type PublishDoc } from "@/lib/document";
-import { publishPage, type PageChrome } from "@/lib/editor/contracts";
+import { publishPage, unpublishSite, type PageChrome } from "@/lib/editor/contracts";
 import {
   BLOCKED_PUBLISH_DISABLED_REASON,
   BLOCKED_PUBLISH_NOTE,
   PUBLISH_FAILED_MESSAGE,
   PUBLISH_RATE_LIMITED_MESSAGE,
   STORAGE_FULL_MESSAGE,
+  UNPUBLISH_FAILED_MESSAGE,
+  UNPUBLISH_SIGNED_OUT_MESSAGE,
+  UNPUBLISH_SUSPENDED_MESSAGE,
 } from "@/lib/editor/messages";
 import { initialEditorState } from "@/lib/editor/state";
 import { computePublishStatus } from "@/lib/editor/status";
@@ -153,6 +156,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const {
     flush: flushSite,
     markPublished: markSitePublished,
+    markUnpublished: markSiteUnpublished,
     applyPublishErrors: applySiteErrors,
     clearPublishErrors: clearSiteErrors,
   } = site;
@@ -345,6 +349,40 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     router,
   ]);
 
+  // Unpublish (M14-02): the site goes back to its placeholder, the draft stays. Nothing here
+  // flushes: the draft is untouched by it, so edits in flight keep saving as they do.
+  const [unpublishing, setUnpublishing] = useState(false);
+  const unpublish = useCallback(async (): Promise<
+    { ok: true } | { ok: false; message: string }
+  > => {
+    if (unpublishing) return { ok: false, message: UNPUBLISH_FAILED_MESSAGE };
+    setUnpublishing(true);
+    try {
+      const result = await unpublishSite(pageId);
+      if (!result.ok) {
+        return {
+          ok: false,
+          message:
+            result.reason === "unauthorized"
+              ? UNPUBLISH_SIGNED_OUT_MESSAGE
+              : result.reason === "account_suspended"
+                ? UNPUBLISH_SUSPENDED_MESSAGE
+                : UNPUBLISH_FAILED_MESSAGE,
+        };
+      }
+      markSiteUnpublished();
+      setPublished({ has: false, doc: null });
+      setPublishedAt(null);
+      setPublishNote(null);
+      router.refresh();
+      return { ok: true };
+    } catch {
+      return { ok: false, message: UNPUBLISH_FAILED_MESSAGE };
+    } finally {
+      setUnpublishing(false);
+    }
+  }, [unpublishing, pageId, markSiteUnpublished, router]);
+
   // A "Couldn’t publish. A link points to a blocked site" note belongs to the refusal it was shown
   // for: once a save has gone through (the refusal is gone) it is stale and is not shown.
   const shownNote =
@@ -447,6 +485,8 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       liveOgUrl,
       publishing,
       publish: () => void publish(),
+      unpublish,
+      unpublishing,
       publishNote: shownNote,
       publishedToken,
       publishDisabledReason,
@@ -493,6 +533,8 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       liveOgUrl,
       publishing,
       publish,
+      unpublish,
+      unpublishing,
       shownNote,
       publishedToken,
       publishDisabledReason,

@@ -214,8 +214,9 @@ test.describe("M7-05 the Preview and ⋯ menus", () => {
     await openTab(page, "Design");
     await moreButton(page).click();
     const items = menu(page, "More actions").getByRole("menuitem");
-    await expect(items).toHaveCount(2);
-    for (let i = 0; i < 2; i++) expect((await box(items.nth(i))).height).toBeGreaterThanOrEqual(44);
+    // QR code, Version history and, because the page is published, Unpublish (M14-02).
+    await expect(items).toHaveCount(3);
+    for (let i = 0; i < 3; i++) expect((await box(items.nth(i))).height).toBeGreaterThanOrEqual(44);
     await items.filter({ hasText: "QR code" }).click();
     await expect(page).toHaveURL(/\/share#qr$/);
     // The QR card's first control is its 'Download PNG' (M9-25: the Style group comes before it in the DOM).

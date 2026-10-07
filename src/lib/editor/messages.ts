@@ -24,6 +24,9 @@ export const BLOCKED_PUBLISH_NOTE =
 /** A page that cannot be read: the editor and Design show this card with Retry (M5-15, M5-16). */
 export const LOAD_FAILED_MESSAGE = "We couldn’t load your page. Try again.";
 /** Publish failed on the way (a 5xx or no network): the draft is stored, the live page is as it was (M5-15). */
+export const UNPUBLISH_FAILED_MESSAGE = "Couldn’t unpublish. Your draft is safe. Try again.";
+export const UNPUBLISH_SIGNED_OUT_MESSAGE = "Couldn’t unpublish. Sign in again, then try again.";
+export const UNPUBLISH_SUSPENDED_MESSAGE = "Couldn’t unpublish. Your account is suspended.";
 export const PUBLISH_FAILED_MESSAGE = "Couldn’t publish. Your draft is safe. Try again.";
 /** Publish refused by the rate limit (60 an hour per account, M11-12): the draft is safe. */
 export const PUBLISH_RATE_LIMITED_MESSAGE =
