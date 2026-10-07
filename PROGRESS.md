@@ -2,6 +2,19 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — Release: MCP page ids (PR #29) and the admin release log (PR #28)
+
+- PR #29 merged, merge commit 7850c61 (Gary's "Release 29 + 28"). No migrations (dry run 37569109700: remote database up to date). Deployment https://vercel.com/ghyde3s-projects/hydlnk/92iaxSgP9QAnb5QW5mmhTJhkezxX (success). CI Verify green (run 37568258971). `pnpm test:e2e:prod` 12/12. Live: /connect tells people to refresh the plugin at chatgpt.com/plugins. ChatGPT with a cached tool list can now edit a sub-page by passing its id as `pageId`; creating pages still needs the plugin refresh.
+- PR #28 (this log) merged after main was merged into it.
+- Next: the proving pass wave (the built-but-unproven rows that need no third party).
+
+## 2026-10-06 — Release: admin wave (PR #27)
+
+- PR #27 merged, merge commit c4391f5 (Gary approved the reserved list and the Privacy sentence; release under standing approval). Migrations applied through release-migrations.yml (dry run 37561699289, apply 37562246989): 20261013000001_admin_audit_actions to 20261013000009_gift_expiry_job (gift columns and `paid_plan` with the plan recompute trigger, reserved handles admin columns and the 274-handle pre-fill, announcements, app blocking and blocked hosts, admin readers, accounts column grants hiding `gifted_by`, the gift expiry job; no data removed). Deployment https://vercel.com/ghyde3s-projects/hydlnk/711jqAgrvj4W5vxtsG49bUL1Xf1A (success).
+- Known window: migration 20261013000008 replaced the table-level SELECT on accounts with a column list, so the old deploy's Settings billing summary (`select("*")`) failed for the few minutes between the migration and the new deploy; the new code names its columns.
+- Checks: full browser suite green on the production build (run 37521693204, head cfbc2aa); the release head 188387e ran Verify only, green (run 37561696774). `pnpm test:e2e:prod` 12/12. Live: /privacy has the staff-draft sentence and is dated October 6, 2026; app.hydlnk.com/admin redirects signed-out visitors to /login; POST /api/cron/end-expired-gifts without the secret answers 401.
+- Open: M11-12 (Gary's call on a Vercel WAF rate rule for tenant hosts); a flaky `wave-g-done` M6-34 test offered as a separate task. Features: 302 of 331.
+
 ## 2026-10-06 — MCP: a page's id works where a site id is expected (M13-14)
 
 On `fix/mcp-page-ids` (PR #29), off main. Flipped M13-14 to `passes: true`.
