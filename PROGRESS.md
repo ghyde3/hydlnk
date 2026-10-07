@@ -2,6 +2,18 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — Admin wave built and proven: ten admin tools
+
+On `m14-admin` (PR #27). Flipped to `passes: true`: M13-02 to M13-13, and M5-08, M5-09, M7-13 (proved by M13-12's tests). Features: 302 of 331.
+
+- **Built:** account details (M13-02), Overview numbers with a 30-day signups chart (M13-03), domains that need help with Re-check now, an error row reset to pending first (M13-04), the audit log screen (M13-05), system health with a late rule table and a neutral tile before any job history (M13-06), gift a plan: `paid_plan` from Stripe, gift columns, `plan` recomputed by trigger on any write, expiry through an app cron route that refreshes the account's pages, the billing screen showing the gift (M13-07), reserved handles with 274 pre-filled by category and who added each (M13-08), the editor announcement (M13-09), connected apps with revoke for everyone: authorize, consent and both token grants refuse a blocked app, and its return hosts are blocked so it can't re-register (M13-10), the read-only draft view reusing the share preview's renderer and headers, logged per opening, and the Privacy sentence (M13-11).
+- **Migrations (not yet in production):** 20261013000001_admin_audit_actions to 20261013000009 (gift plan, reserved handles admin, announcements, app blocking, admin readers, blocked hosts, plan recompute and accounts column grants, gift expiry route).
+- **Reviews:** `reviewer` (gift expiry left pages cached, reserved handles didn't show who added them, M7-13's two states unit-only, error re-check, Stripe link mode, health tile with no jobs, thin tests: all fixed) and `security-reviewer` (no critical or high; re-registration defeated a block: return hosts now blocked; plan recompute on any write; `gifted_by` hidden from owners by column grants; draft bar paths validated and lookalike routes 404; two audit repairs; the "blocked" token error accepted as a documented exception).
+- **Evidence:** full browser suite green on the production build, 8 shards (run 37521693204, head cfbc2aa; shard 7 passed on rerun after `wave-g-done` M6-34 timed out, a known flake now offered as a separate task); `pnpm test --retry 2` 411 files, 10,295 tests; `pnpm test:db` 55 files, 2,333 tests; typecheck and lint clean.
+- **Gary approved before release:** the 274 reserved handles as they are, and the Privacy sentence as written.
+
+Next: release the admin wave (PR #27).
+
 ## 2026-10-06 — Release: Wave M2 (blocks, templates, whole-site versions, MCP sub-pages)
 
 - PR #24 merged, merge commit 948b158 (Gary's "Release 24"). Migrations applied through release-migrations.yml (dry run 37505636381, apply 37506421245): 20261012000001_site_versions, 20261012000002_site_uniques, 20261012000003_item_click_pairs, 20261012000004_items_blocklist (a `page_versions.sub_pages` column and the version trigger replaced, a new `daily_site_stats` table backfilled from kept events, `site_click_pairs` and `blocked_links_in` replaced; no data removed, nothing in auth). Deployment https://vercel.com/ghyde3s-projects/hydlnk/7RTmvxJS4BTYXv4MSQyMve1iaQXo (success).

@@ -2145,7 +2145,7 @@
         "At 1440x900 on the same URL: it uses HYDLNK UI tokens (Main.dc.html charcoal and brass), never tenant tokens."
       ],
       "mockup": "Main.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-09",
@@ -2161,7 +2161,7 @@
         "At 1440x900 on the same URL: the banner sits above the page header inside the main column per Editor.dc.html."
       ],
       "mockup": "Editor.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M5-10",
@@ -3527,7 +3527,7 @@
         "Supersedes: M5-04 step 2 (the admin sections 'Reports, Pages and Traffic' and the sidebar nav: a fourth section is added) and step 1 where it lists the admin paths that answer 404 for a non-admin (/admin/blocked-links joins them); the Admin overview's three tiles (M5-04, M5-07, M5-10) become four."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M7-14",
@@ -5429,7 +5429,7 @@
         "Buttons: suspend or unsuspend (the existing actions), open the live site, and open the customer in the Stripe dashboard (a link built from the stored customer id; no Stripe call). Admins only: a signed-in non-admin gets the 404 and a signed-out visitor the sign-in page, and every mutation goes through adminRoute (Origin, admin, JSON) and writes one admin_audit row.",
         "Unit tests for the account read (one query path, server-only, another id is just another account); an e2e at both projects opens an account from search. At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-03",
@@ -5440,7 +5440,7 @@
         "The Overview shows signups per day for the last 30 days (a small chart), accounts by plan, paying accounts (a `paid_plan` of Pro or Studio; gifts don't count), live sites, sub-pages, connected custom domains and page views across all sites in the last 7 days, read in one service-role SQL function or one server module; exact revenue stays in Stripe behind a link.",
         "Unit or pgTAP tests for the numbers on a seeded set; an e2e at both projects renders the Overview. At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-04",
@@ -5452,7 +5452,7 @@
         "Re-check now runs the same verification as the 5-minute cron for that one domain and shows the new result. Admins only: a signed-in non-admin gets the 404 and a signed-out visitor the sign-in page, and every mutation goes through adminRoute (Origin, admin, JSON) and writes one admin_audit row.",
         "Tests for the list and the re-check (Vercel calls stubbed as in the existing domain tests); At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-05",
@@ -5463,7 +5463,7 @@
         "/admin/audit shows admin_audit newest first, filterable by account and by action, read only; the account details page shows the same rows for its account. The allowed actions include this wave's new actions (gift and end gift, reserve and unreserve handle, re-check domain, view draft, set announcement, revoke and restore an app).",
         "pgTAP: admin_audit stays append-only and unreadable to clients; an e2e at both projects filters by action. At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-06",
@@ -5474,7 +5474,7 @@
         "/admin/health lists each pg_cron job with its last run, duration and outcome, marked late when it hasn't run within its expected gap, taken from a small table in code (job name to longest normal gap) rather than parsed from the cron schedule, read through one service-role SQL function over the cron schema; a failed or late job turns the Overview's health tile red.",
         "pgTAP for the function's privileges and its late rule; an e2e at both projects renders the list. At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-07",
@@ -5486,7 +5486,7 @@
         "The Stripe webhook writes `paid_plan` and never `plan` directly, so it never removes a gift, and a gift never creates or changes anything in Stripe; ending a gift (by date via a scheduled job, or by an admin) returns the account to its paid plan or Free with nothing deleted, under the existing downgrade rules. The Settings billing screen of a gifted account shows the gift (plan and end), still offers a real upgrade, and shows Manage billing only when a Stripe customer exists.",
         "Tests like payments: pgTAP for the effective plan, the webhook with and without a gift, expiry, and a client unable to write any gift column; unit tests for the routes; Admins only: a signed-in non-admin gets the 404 and a signed-out visitor the sign-in page, and every mutation goes through adminRoute (Origin, admin, JSON) and writes one admin_audit row. At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-08",
@@ -5497,7 +5497,7 @@
         "/admin/reserved lists reserved handles with their reason and who added them; an admin adds or removes one; system names (app, www, api and the other routing names) are locked; adding a handle someone already holds shows the holder and changes nothing for them (a reservation only stops new claims). Admins only: a signed-in non-admin gets the 404 and a signed-out visitor the sign-in page, and every mutation goes through adminRoute (Origin, admin, JSON) and writes one admin_audit row.",
         "A migration pre-fills a curated list of well-known brands, platforms and impersonation-prone words (Gary, 2026-10-06), kept in one clearly delimited block by category with its count, editable on the screen and shown to Gary before release; signup and the handle rule refuse every reserved handle (pgTAP and unit tests); At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-09",
@@ -5508,7 +5508,7 @@
         "An admin sets one message (plain text up to 200 characters and at most one https link) with a start and an end; between them it shows at the top of the editor for every signed-in owner, can be dismissed per browser, and never appears on public pages, the marketing site or a share preview. Admins only: a signed-in non-admin gets the 404 and a signed-out visitor the sign-in page, and every mutation goes through adminRoute (Origin, admin, JSON) and writes one admin_audit row.",
         "Tests for the time window, escaping and the dismissal; At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-10",
@@ -5519,7 +5519,7 @@
         "/admin/apps lists connected apps by active connections and tool calls in the last 7 days (from mcp_activity, no content). Revoke for everyone ends every grant and token of that app and marks the app blocked (`oauth_clients.blocked_at`), checked by both the authorize and the token endpoints so it can neither authorize nor refresh, until an admin restores it (see .claude/rules/mcp-oauth.md). Admins only: a signed-in non-admin gets the 404 and a signed-out visitor the sign-in page, and every mutation goes through adminRoute (Origin, admin, JSON) and writes one admin_audit row.",
         "Tests: a revoked app's tokens stop working at once and its new authorization requests are refused; restore lets it authorize again; At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-11",
@@ -5531,7 +5531,7 @@
         "The Privacy Policy says HYDLNK staff may view an unpublished draft to help with a support request or to investigate a report, and that each view is logged; its Last updated date moves; the sentence is shown to Gary before release.",
         "Tests: a non-admin gets the 404, the view is logged once per opening, nothing is written to the draft; At 390x844 and 1440x900: no horizontal scroll and every control at least 44px tall."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-12",
@@ -5541,7 +5541,7 @@
       "acceptance": [
         "The rows built in earlier waves and not fully proven (M5-08 suspended pages stop serving, M5-09 the suspended owner's banner and blocked writes, M7-13 the blocked links screen) get the tests their acceptance steps name, and are flipped in the same change once they pass."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M13-13",
@@ -5552,7 +5552,7 @@
         "security-reviewer runs over the wave (admin guards, the gift and the effective plan, the webhook, reserved handles in signup, the announcement's escaping, app revocation in the OAuth server, the draft view and its logging), and every finding is fixed or recorded in docs/PLAN.md with Gary's decision.",
         "No admin screen, route or SQL function is reachable without an admin session, and no client role can read or write the new tables or columns (pgTAP and route tests)."
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
