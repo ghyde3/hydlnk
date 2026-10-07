@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { imageRefSchema } from "@/lib/document";
+import { areaToCrop } from "@/lib/media/position-crop";
 import { listFiles, stripComments, walk } from "./support/module-graph";
 
 /**
@@ -104,9 +105,33 @@ describe("M9-08 the viewfinder is the library's", () => {
     expect(source).toMatch(/tabIndex: undefined/);
   });
 
-  it("the file comes from the dialog's own state (panToCrop), not from what the library last reported", () => {
+  it("the file is drawn from the croppedAreaPixels the library reports (onCropAreaChange, which also fires on a slider-only zoom), with panToCrop only as the fallback", () => {
+    expect(source).toMatch(/onCropAreaChange=/);
+    expect(source).toMatch(/areaToCrop\(/);
     expect(source).toMatch(/panToCrop\(view\.pan, view\.zoom, width, height, finderSize\(\)\)/);
-    expect(source).not.toMatch(/onCropComplete|onCropAreaChange|croppedAreaPixels/);
+  });
+});
+
+describe("M9-08 areaToCrop turns the library's croppedAreaPixels into the square to draw", () => {
+  it("a 4000x3000 picture at 2x, area (500, 250, 1500, 1500): center and zoom follow", () => {
+    expect(areaToCrop({ x: 500, y: 250, width: 1500, height: 1500 }, 4000, 3000)).toEqual({
+      cx: 1250,
+      cy: 1000,
+      zoom: 2,
+    });
+  });
+
+  it("the whole shorter side is 1x, and the square stays inside the picture", () => {
+    const crop = areaToCrop({ x: -3, y: 0, width: 3000, height: 3000 }, 4000, 3000);
+    expect(crop.zoom).toBe(1);
+    expect(crop.cx).toBe(1500);
+  });
+
+  it("bad numbers (NaN, Infinity, zero or negative sizes) come back null, so the caller falls back", () => {
+    expect(areaToCrop({ x: NaN, y: 0, width: 10, height: 10 }, 100, 100)).toBeNull();
+    expect(areaToCrop({ x: 0, y: 0, width: Infinity, height: 10 }, 100, 100)).toBeNull();
+    expect(areaToCrop({ x: 0, y: 0, width: 0, height: 0 }, 100, 100)).toBeNull();
+    expect(areaToCrop({ x: 0, y: 0, width: -5, height: -5 }, 100, 100)).toBeNull();
   });
 });
 
