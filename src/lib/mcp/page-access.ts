@@ -94,8 +94,24 @@ export async function loadOwnedPage(
     .maybeSingle();
   if (found.error) throw new PageReadError("reading the page failed");
   const row = found.data as unknown as PageRow | null;
-  if (!row || row.owner_id !== userId) return { ok: false, failure: { ...NOT_FOUND } };
-  return { ok: true, page: toOwnedPage(row, withDraft) };
+  if (row && row.owner_id === userId) return { ok: true, page: toOwnedPage(row, withDraft) };
+  if (pageId === undefined) return { ok: false, failure: { ...NOT_FOUND } };
+
+  // Not one of the caller's sites: an AI app with a stale tool list sends a page id from
+  // list_pages as pageId (M13-14). Look it up as a sub-page of one of the caller's sites; the answer
+  // for every miss (another account, deleted, random) stays the same `not_found`.
+  const sub = await admin
+    .from("site_pages")
+    .select(`id, page_id, ${SITE_JOIN}`)
+    .eq("id", id.toLowerCase())
+    .eq("site.owner_id", userId)
+    .maybeSingle();
+  if (sub.error) throw new PageReadError("reading the page failed");
+  const subRow = sub.data as unknown as SubPageRow | null;
+  if (!subRow || siteOwnerOf(subRow) !== userId) return { ok: false, failure: { ...NOT_FOUND } };
+  const site = await loadOwnedPage(admin, userId, subRow.page_id, options);
+  if (!site.ok) return site;
+  return { ok: true, page: site.page, subPageId: subRow.id };
 }
 
 /** Every page the caller owns, oldest first, drafts and published documents included. */

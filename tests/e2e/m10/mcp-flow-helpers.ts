@@ -362,9 +362,41 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
   expect(readSub.publishIssues).toEqual([]);
   const withPages = await call<any>("list_pages");
   expect(withPages.pages[0].pages).toEqual([
-    { id: "home", title: "Home", path: "/", inMenu: true, live: true },
-    { id: created.subPageId, title: "Specials", path: "/specials", inMenu: true, live: false },
+    {
+      id: "home",
+      title: "Home",
+      path: "/",
+      inMenu: true,
+      live: true,
+      target: { pageId: user.pageId },
+    },
+    {
+      id: created.subPageId,
+      title: "Specials",
+      path: "/specials",
+      inMenu: true,
+      live: false,
+      target: { pageId: user.pageId, subPageId: created.subPageId },
+    },
   ]);
+  // An AI app with an old tool list passes a page's id from list_pages as pageId and nothing else
+  // (M13-14): the block lands on that page, not on Home.
+  const byPageId = await call<any>("add_block", {
+    pageId: created.subPageId,
+    type: "link",
+    fields: { label: "Added by page id", url: "https://google.com" },
+  });
+  const readByPageId = await call<any>("get_page", { pageId: created.subPageId });
+  expect(readByPageId.page).toMatchObject({ subPageId: created.subPageId, id: user.pageId });
+  expect(readByPageId.blocks.map((block: { label?: string }) => block.label)).toContain(
+    "Added by page id",
+  );
+  await call<any>("remove_block", { pageId: created.subPageId, blockId: byPageId.blockId });
+  expect(
+    (await call<any>("get_page", { pageId: created.subPageId })).blocks.map(
+      (block: { type: string }) => block.type,
+    ),
+  ).toEqual(["hours", "items"]);
   // Not live yet: neither the page nor the link to it.
   expect((await fetch(`http://${user.handle}.localhost:3000/specials`)).status).toBe(404);
   expect(await tenantHtml(user.handle)).not.toContain("See the specials");

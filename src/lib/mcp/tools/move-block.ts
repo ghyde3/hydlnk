@@ -37,7 +37,7 @@ const input = z
 export const moveBlock: ToolDefinition<typeof input> = {
   name: "move_block",
   title: "Move a block",
-  description: `Moves one block to a new place in the page's order. Send exactly one of toIndex (0 is first), afterBlockId, or position (first or last). Only the order changes. ${DRAFT_ONLY} Returns the new order as block ids and types. Pass subPageId for a block on another page of the site. Moving a block to where it already is changes nothing. Errors: block_not_found, invalid_input, conflict.`,
+  description: `Moves one block to a new place in the page's order. Send exactly one of toIndex (0 is first), afterBlockId, or position (first or last). Only the order changes. ${DRAFT_ONLY} Returns the new order as block ids and types. Pass subPageId for a block on another page of the site. Moving a block to where it already is changes nothing. A page id from list_pages also works as pageId. Errors: block_not_found, invalid_input, conflict.`,
   scope: MCP_SCOPES.write,
   annotations: WRITE_IDEMPOTENT,
   input,

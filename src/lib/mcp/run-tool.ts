@@ -245,6 +245,7 @@ export async function runTool(
 
     // 5. The page.
     let page: ToolCall["page"] = null;
+    let resolvedSubPageId: string | undefined;
     if (tool.page === "one") {
       const requested = typeof args.pageId === "string" ? args.pageId : undefined;
       let loaded;
@@ -258,6 +259,22 @@ export async function runTool(
       if (!loaded.ok) return refuse(loaded.failure);
       page = loaded.page;
       pageId = page.id;
+      resolvedSubPageId = loaded.subPageId;
+    }
+
+    // 5a. A page id sent as `pageId` (M13-14) means that page for a tool that takes `subPageId`
+    // and its site for every other tool. A `subPageId` naming another page contradicts it.
+    const takesSubPage = "shape" in tool.input && "subPageId" in (tool.input.shape as object);
+    if (page && resolvedSubPageId !== undefined && takesSubPage) {
+      const named = args.subPageId;
+      if (typeof named === "string" && named.toLowerCase() !== resolvedSubPageId) {
+        return refuse({
+          code: "invalid_input",
+          message: MESSAGES.pageIdContradiction,
+          issues: [{ path: "subPageId", message: MESSAGES.pageIdContradiction }],
+        });
+      }
+      args.subPageId = resolvedSubPageId;
     }
 
     // 5b. The sub-page a tool names with `subPageId` (M12-05), looked up under the site just loaded:
