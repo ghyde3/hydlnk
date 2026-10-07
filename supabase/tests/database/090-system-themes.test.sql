@@ -11,8 +11,8 @@ select tests.create_supabase_user('b', 'b@example.test');   -- free
 select tests.create_supabase_user('c', 'c@example.test');   -- pro
 select tests.create_supabase_user('d', 'd@example.test');   -- studio
 
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('c');
-update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('d');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('c');
+update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('d');
 
 insert into public.themes (id, owner_id, name, tokens) values
   ('00000000-0000-4000-8000-0000000009e1', tests.get_supabase_uid('b'), 'B private', '{"accent":"#FF00AA"}'),

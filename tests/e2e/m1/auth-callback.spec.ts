@@ -194,7 +194,7 @@ test.describe("M1-05 account row is created server-side on first sign-in", () =>
 
     // Idempotent: sign out, set the plan with the secret key, sign in again with another link.
     await context.clearCookies();
-    await adminClient().from("accounts").update({ plan: "pro" }).eq("id", userId);
+    await adminClient().from("accounts").update({ paid_plan: "pro" }).eq("id", userId);
     const before = (await accountRows(userId))[0];
     const { hashedToken } = await generateTokenHash(email);
     await openCallback(context, hashedToken);
@@ -277,10 +277,14 @@ test.describe("M1-05 account row is created server-side on first sign-in", () =>
     ).toBe(true);
     expect((await accountRows(userId))[0]).toEqual(baseline);
 
-    const own = await restAs(token, "/accounts?select=*");
+    // Named columns: since M13-13 a client may not read accounts.gifted_by (an admin's id), so
+    // `select=*` and `select=gifted_by` are refused outright, and reads name the columns they need.
+    const own = await restAs(token, "/accounts?select=id,plan");
     expect(own.status).toBe(200);
     expect((own.body as { id: string }[]).map((r) => r.id)).toEqual([userId]);
-    const foreign = await restAs(token, `/accounts?select=*&id=eq.${other}`);
+    const foreign = await restAs(token, `/accounts?select=id,plan&id=eq.${other}`);
     expect(foreign).toEqual({ status: 200, body: [] });
+    expect((await restAs(token, "/accounts?select=*")).status).toBe(403);
+    expect((await restAs(token, "/accounts?select=gifted_by")).status).toBe(403);
   });
 });

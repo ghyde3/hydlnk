@@ -71,7 +71,7 @@ export async function makeOwner(
   if (created.error || !created.data.user) throw new Error(`createUser: ${created.error?.message}`);
   const userId = created.data.user.id;
   if (plan !== "free") {
-    const { error } = await admin.from("accounts").update({ plan }).eq("id", userId);
+    const { error } = await admin.from("accounts").update({ paid_plan: plan }).eq("id", userId);
     if (error) throw new Error(`plan: ${error.message}`);
   }
   const handle = `zq-${label}-${tag}`;

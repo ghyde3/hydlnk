@@ -82,7 +82,7 @@ describe.skipIf(!haveEnv || !stackUp)("M1-05 ensureAccount (integration, local S
 
   it("is idempotent: an existing row (plan pro) is left exactly as it was", async () => {
     const id = await newUser();
-    await admin.from("accounts").update({ plan: "pro" }).eq("id", id);
+    await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", id);
     const before = await rows(id);
 
     await ensureAccount(id);

@@ -30,7 +30,12 @@ const ENV: Record<string, string> = {
 // The client env module reads these when it is first imported, so they are set before the imports below.
 Object.assign(process.env, ENV);
 
-let account: { id: string; plan: string; stripe_customer_id: string | null } | null;
+let account: {
+  id: string;
+  plan?: string;
+  paid_plan: string;
+  stripe_customer_id: string | null;
+} | null;
 const accountReads = vi.fn();
 /** Customer ids the fake Stripe does not know (a sandbox id after the switch to live). */
 let missingCustomers: string[] = [];
@@ -145,7 +150,7 @@ beforeEach(() => {
   Object.assign(process.env, ENV);
   delete process.env.PAID_PLANS_OPEN;
   delete process.env.VERCEL_ENV;
-  account = { id: ACCOUNT, plan: "free", stripe_customer_id: CUSTOMER };
+  account = { id: ACCOUNT, paid_plan: "free", stripe_customer_id: CUSTOMER };
   subscriptionPages = [[]];
   openSessions = [];
   expireFailure = undefined;
@@ -262,7 +267,20 @@ describe("M4-06 a second subscription cannot be started", () => {
   });
 
   it("a paid account is a 409 without asking Stripe anything", async () => {
-    account = { id: ACCOUNT, plan: "pro", stripe_customer_id: CUSTOMER };
+    account = { id: ACCOUNT, paid_plan: "pro", stripe_customer_id: CUSTOMER };
+    expect(await startCheckout(user, "studio", "month")).toMatchObject({ ok: false, status: 409 });
+    expect(log).toEqual([]);
+  });
+
+  it("M13-07 a gifted account that pays for nothing can still start a real checkout (the gift is not a subscription)", async () => {
+    // accounts.plan is the effective plan (the gift); the billing code reads paid_plan.
+    account = { id: ACCOUNT, plan: "pro", paid_plan: "free", stripe_customer_id: CUSTOMER };
+    expect(await startCheckout(user, "pro", "month")).toMatchObject({ ok: true });
+    expect(stripe.checkout.sessions.create).toHaveBeenCalled();
+  });
+
+  it("M13-07 a paying Pro account under a Studio gift is still refused a second subscription", async () => {
+    account = { id: ACCOUNT, plan: "studio", paid_plan: "pro", stripe_customer_id: CUSTOMER };
     expect(await startCheckout(user, "studio", "month")).toMatchObject({ ok: false, status: 409 });
     expect(log).toEqual([]);
   });

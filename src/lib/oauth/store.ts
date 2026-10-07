@@ -132,6 +132,8 @@ export interface OauthStore {
   /** Inserts or replaces the cache row of a client-metadata client (one row per client id). */
   upsertCimdClient(client: NewClient): Promise<void>;
   insertDcrClient(client: NewClient): Promise<void>;
+  /** True when any of the (lower-case) hosts is a return-address host of a blocked app (M13-10 review). */
+  anyHostBlocked(hosts: readonly string[]): Promise<boolean>;
   /** `last_seen_at`, when an authorize request names the client. */
   touchClient(clientId: string): Promise<void>;
   /** Deletes the oldest unused registrations past the cap; returns how many went. */

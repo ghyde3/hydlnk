@@ -16,8 +16,8 @@ select tests.create_supabase_user('pro', 'pro-tf113@example.test');       -- pro
 select tests.create_supabase_user('studio', 'studio-tf113@example.test'); -- studio, 500,000 in each
 select tests.create_supabase_user('out', 'out-tf113@example.test');       -- free, a lot of views, all outside the two months
 
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('pro');
-update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('studio');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('pro');
+update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('studio');
 
 insert into public.pages (id, owner_id, handle, draft, published, published_at) values
   ('00000000-0000-4000-8000-0000000113a1', tests.get_supabase_uid('hot'),    'tf113-hot',    '{"version":1}', '{"version":1,"marker":"served"}', now()),
@@ -177,13 +177,13 @@ select results_eq(
 
 -- A page that moved to Pro is no longer flagged
 update public.traffic_flags set reviewed_at = now() - interval '40 days' where page_id = '00000000-0000-4000-8000-0000000113a1';
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('hot');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('hot');
 select lives_ok($$ select public.flag_high_traffic_pages() $$, 'a run after the owner upgraded to Pro');
 select is(
   (select count(*)::int from public.traffic_flags where page_id = '00000000-0000-4000-8000-0000000113a1'),
   2, 'adds nothing for the Pro owner'
 );
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('hot');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('hot');
 
 -- The threshold is a parameter, strictly greater than
 select cmp_ok(public.flag_high_traffic_pages(99998), '>=', 2, 'a lower threshold flags the 99,999 and 100,000 pages (over it in both months)');

@@ -34,7 +34,10 @@ test.afterAll(async () => {
 const box = async (locator: Locator) => (await locator.boundingBox())!;
 
 async function setBilling(userId: string, patch: Record<string, unknown>) {
-  const { error } = await adminClient().from("accounts").update(patch).eq("id", userId);
+  // `plan` means what the account pays for: the database derives the effective plan from paid_plan (M13-07).
+  const { plan, ...rest } = patch;
+  const row = plan === undefined ? rest : { ...rest, paid_plan: plan };
+  const { error } = await adminClient().from("accounts").update(row).eq("id", userId);
   if (error) throw new Error(`setBilling failed: ${error.message}`);
 }
 

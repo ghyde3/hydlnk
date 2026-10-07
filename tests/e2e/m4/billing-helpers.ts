@@ -95,7 +95,8 @@ export async function billingUser(
     const patch: Record<string, unknown> = { stripe_customer_id: customer };
     if (plan !== "free" && subscription) {
       Object.assign(patch, {
-        plan,
+        // paid_plan: the database derives the effective plan from it (M13-07).
+        paid_plan: plan,
         stripe_subscription_id: subscription,
         billing_interval: interval,
         current_period_end: new Date(Date.now() + 20 * 86_400_000).toISOString(),

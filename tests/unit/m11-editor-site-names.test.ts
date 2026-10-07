@@ -34,7 +34,7 @@ describe.skipIf(!run)("M11-11 new sites are named by the server (local Supabase)
     });
     const userId = created.data.user!.id;
     owners.push({ userId, email: "", pageId: "", handle: "" });
-    await admin.from("accounts").update({ plan: "pro" }).eq("id", userId);
+    await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", userId);
 
     const ids: string[] = [];
     for (const n of [1, 2, 3]) {

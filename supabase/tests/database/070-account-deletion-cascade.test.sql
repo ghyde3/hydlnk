@@ -56,7 +56,7 @@ select tests.create_supabase_user('heir', 'heir@example.test');
 -- get_supabase_uid() only finds the user while it exists, so remember the ids.
 create temp table ids as
   select tests.get_supabase_uid('doomed') as doomed, tests.get_supabase_uid('heir') as heir;
-update public.accounts set plan = 'pro' where id = (select doomed from ids);
+update public.accounts set paid_plan = 'pro' where id = (select doomed from ids);
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000000d1', (select doomed from ids), 'zq-doomed-1',

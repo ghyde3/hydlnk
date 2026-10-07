@@ -2,7 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { reviewTrafficFlagAction } from "@/lib/analytics/admin/review-flag-action";
 import { blockDomainAction, unblockDomainAction } from "@/lib/blocklist/admin-actions";
+import { endGiftAction, giftPlanAction } from "@/lib/billing/gift-actions";
 import type { Json } from "@/lib/supabase/database.types";
+import { clearAnnouncementAction, setAnnouncementAction } from "./announcement-actions";
+import { blockAppAction, unblockAppAction } from "./app-actions";
+import { addReservedHandleAction, removeReservedHandleAction } from "./reserved-actions";
+import { recheckDomainAction } from "./recheck-domain-action";
 import { fail, type ActionResult, type AdminAction, type AdminActionContext } from "./types";
 
 /**
@@ -267,8 +272,17 @@ export const dismissReportAction = defineAction("dismiss_report", async (context
 });
 
 export { reviewTrafficFlagAction };
+/** Re-check now on /admin/domains (M13-04): defined beside the admin library, listed here. */
+export { recheckDomainAction };
 /** Block and remove a domain at /admin/blocked-links (M7-12): defined beside the blocklist, listed here. */
 export { blockDomainAction, unblockDomainAction };
+/** Give a plan and end the gift at /admin/accounts/{id}/gift (M13-07): defined beside the billing code, listed here. */
+export { endGiftAction, giftPlanAction };
+
+/** Reserved handles, the announcement and the connected apps watch (M13-08 to M13-10): defined beside this file, listed here. */
+export { addReservedHandleAction, removeReservedHandleAction };
+export { clearAnnouncementAction, setAnnouncementAction };
+export { blockAppAction, unblockAppAction };
 
 /** Every admin mutation. Adding an action here is what makes the guard test cover it. */
 export const ADMIN_ACTIONS: readonly AdminAction[] = [
@@ -278,4 +292,13 @@ export const ADMIN_ACTIONS: readonly AdminAction[] = [
   reviewTrafficFlagAction,
   blockDomainAction,
   unblockDomainAction,
+  giftPlanAction,
+  endGiftAction,
+  recheckDomainAction,
+  addReservedHandleAction,
+  removeReservedHandleAction,
+  setAnnouncementAction,
+  clearAnnouncementAction,
+  blockAppAction,
+  unblockAppAction,
 ];

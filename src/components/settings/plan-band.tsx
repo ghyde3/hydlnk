@@ -27,6 +27,11 @@ export function PlanBand({ summary, text }: { summary: BillingSummary; text: Ban
               {text.price}
             </span>
           </div>
+          {text.gift ? (
+            <p data-band-gift className="mt-2 text-sm font-semibold text-ink">
+              {text.gift}
+            </p>
+          ) : null}
           {text.renewal ? (
             <p data-band-renewal className="mt-2 text-sm text-text-2">
               {text.renewal}
@@ -34,7 +39,7 @@ export function PlanBand({ summary, text }: { summary: BillingSummary; text: Ban
           ) : null}
         </div>
         <BandActions
-          plan={summary.plan}
+          plan={summary.paidPlan}
           interval={summary.interval}
           hasCustomer={summary.customerId !== null}
         />

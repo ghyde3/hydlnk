@@ -31,7 +31,7 @@ async function owner(
   const user = await signedInUser(context, { label, plan: "pro" });
   const versions = await makeVersions(user.pageId, 3, { label: `${label}-bio` });
   if (plan === "free") {
-    await adminClient().from("accounts").update({ plan: "free" }).eq("id", user.userId);
+    await adminClient().from("accounts").update({ paid_plan: "free" }).eq("id", user.userId);
   }
   return { ...user, jwt: await accessTokenFor(user.email), versions };
 }
@@ -98,12 +98,12 @@ test.describe("M6-48 the read gate over the API", () => {
     const get = async () =>
       rows((await restAs(a.jwt, `/page_versions?page_id=eq.${a.pageId}`)).body).length;
     expect(await get()).toBe(3);
-    await admin.from("accounts").update({ plan: "free" }).eq("id", a.userId);
+    await admin.from("accounts").update({ paid_plan: "free" }).eq("id", a.userId);
     expect(await get()).toBe(0);
     expect(await versionRows(a.pageId)).toHaveLength(3);
-    await admin.from("accounts").update({ plan: "studio" }).eq("id", a.userId);
+    await admin.from("accounts").update({ paid_plan: "studio" }).eq("id", a.userId);
     expect(await get()).toBe(3);
-    await admin.from("accounts").update({ plan: "pro" }).eq("id", a.userId);
+    await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", a.userId);
     expect(await get()).toBe(3);
   });
 });

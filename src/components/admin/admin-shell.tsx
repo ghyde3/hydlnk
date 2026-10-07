@@ -7,7 +7,7 @@ import { AdminSegmentedNav, AdminSidebarNav } from "./admin-nav";
 /**
  * The admin chrome (DESIGN.md -> Layout and responsive rules), the same shape as the app shell but
  * with its own sections and no page switcher or plan card:
- *   >= 760px  a 240px charcoal sidebar (logo, Reports / Pages / Traffic / Blocked links, a link back to the app, the
+ *   >= 760px  a 240px charcoal sidebar (logo, every admin section, a link back to the app, the
  *             signed-in admin) beside <main>
  *   <  760px  a charcoal top bar (logo and "Admin") with the sections as a segmented control under it
  * Screens render their own header and content inside <main>.
@@ -27,7 +27,7 @@ export function AdminShell({ email, children }: { email: string; children: React
         <div className="flex flex-col gap-1.5">
           <Link
             href="/admin"
-            className="px-2 font-mono text-[11px] tracking-[0.08em] text-on-ink-muted uppercase no-underline hover:text-on-ink"
+            className="flex min-h-11 items-center px-2 font-mono text-[11px] tracking-[0.08em] text-on-ink-muted uppercase no-underline hover:text-on-ink"
           >
             Admin
           </Link>

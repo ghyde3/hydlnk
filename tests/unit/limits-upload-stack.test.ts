@@ -158,7 +158,7 @@ describe.skipIf(!run)("M4-31 / M4-32 upload quota and usage (local Supabase)", (
     const a = await owner("qp");
     await seed(a.userId, 9);
     expect(await upload(a.userId, 2 * MIB)).toMatchObject({ ok: false, status: 413 });
-    const flip = await admin.from("accounts").update({ plan: "pro" }).eq("id", a.userId);
+    const flip = await admin.from("accounts").update({ paid_plan: "pro" }).eq("id", a.userId);
     expect(flip.error).toBeNull();
     expect((await upload(a.userId, 2 * MIB)).ok).toBe(true);
     expect(await stored(a.userId)).toBe(11 * MIB);
@@ -253,7 +253,7 @@ describe.skipIf(!run)("M4-31 / M4-32 upload quota and usage (local Supabase)", (
     const before = await loadAccountUsage(a.userId, admin);
     expect(before).toMatchObject({ pages: 3, uploadBytes: 12 * MIB });
 
-    const flip = await admin.from("accounts").update({ plan: "free" }).eq("id", a.userId);
+    const flip = await admin.from("accounts").update({ paid_plan: "free" }).eq("id", a.userId);
     expect(flip.error).toBeNull();
 
     // Nothing is deleted.

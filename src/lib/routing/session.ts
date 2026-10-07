@@ -26,11 +26,14 @@ const OAUTH_DECISION_PATHS: ReadonlySet<string> = new Set(["/oauth/authorize", "
 export async function rewriteWithSession(
   request: NextRequest,
   destination: URL,
+  /** Request headers the page renders with, set after the client's own are copied (the admin draft view's nonce policy). */
+  requestHeaders: Readonly<Record<string, string>> = {},
 ): Promise<NextResponse> {
   const rewrite = () => {
     const headers = new Headers(request.headers);
     headers.delete(SHARE_TOKEN_HEADER);
     headers.delete(SHARE_PATH_HEADER);
+    for (const [name, value] of Object.entries(requestHeaders)) headers.set(name, value);
     return NextResponse.rewrite(destination, { request: { headers } });
   };
   let response = rewrite();

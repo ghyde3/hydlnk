@@ -11,9 +11,24 @@ import {
  * row in, the three lines out. Pure, so the copy rules are testable without Stripe or a browser.
  */
 
+/**
+ * The columns the band selects, by name: `authenticated` cannot read `gifted_by` (an admin's id), so
+ * `select *` is refused (20261013000008). Never add `gifted_by`.
+ */
+export const BILLING_COLUMNS =
+  "plan, paid_plan, gift_plan, gift_until, billing_interval, current_period_end, cancel_at_period_end, stripe_customer_id, stripe_subscription_id";
+
 /** The billing columns of `accounts` the band reads (all server-written, owner-readable). */
 export interface BillingSummary {
+  /** The effective plan: the higher of `paidPlan` and an active gift (limits and features read it). */
   plan: PlanId;
+  /**
+   * What Stripe says the account pays for (`paid_plan`). The real upgrade buttons, the interval and
+   * the renewal line follow this one, never a gift (M13-07).
+   */
+  paidPlan: PlanId;
+  /** A gift that is raising the plan right now (plan and end, null = no end date), else null. */
+  gift: GiftSummary | null;
   /** 'month' or 'year' for a subscriber, null on Free (or when the row holds none). */
   interval: BillingInterval | null;
   /** End of the current period; null on Free. */
@@ -24,20 +39,46 @@ export interface BillingSummary {
   subscriptionId: string | null;
 }
 
+export interface GiftSummary {
+  plan: Exclude<PlanId, "free">;
+  /** When the gift ends; null = no end date. */
+  until: Date | null;
+}
+
+const RANK: Record<PlanId, number> = { free: 0, pro: 1, studio: 2 };
+
 const text = (value: unknown): string | null =>
   typeof value === "string" && value !== "" ? value : null;
 
 /**
- * Reads the billing columns from an `accounts` row fetched with `select *`. A column that does not
+ * Reads the billing columns from an `accounts` row fetched with the named billing columns. A column that does not
  * exist (the migration has not run) or holds something unexpected reads as "none", so the band
  * degrades to the plan name instead of failing the screen.
  */
-export function parseBillingRow(row: Record<string, unknown> | null | undefined): BillingSummary {
+export function parseBillingRow(
+  row: Record<string, unknown> | null | undefined,
+  now: Date = new Date(),
+): BillingSummary {
   const record = row ?? {};
+  const plan = toPlanId(record.plan);
+  const paidPlan = text(record.paid_plan) ? toPlanId(record.paid_plan) : plan;
+  const giftPlan = toPlanId(record.gift_plan);
+  const giftUntilText = text(record.gift_until);
+  const giftUntil = giftUntilText ? new Date(giftUntilText) : null;
+  const giftEnds = giftUntil && !Number.isNaN(giftUntil.getTime()) ? giftUntil : null;
+  // Active: a Pro or Studio gift that has not ended and is higher than what the account pays for.
+  const giftActive =
+    giftPlan !== "free" &&
+    RANK[giftPlan] > RANK[paidPlan] &&
+    (giftEnds === null || giftEnds.getTime() > now.getTime());
   const periodEnd = text(record.current_period_end);
   const parsedEnd = periodEnd ? new Date(periodEnd) : null;
   return {
-    plan: toPlanId(record.plan),
+    // A gift whose end has passed counts as ended before the expiry job runs: until then `plan` still
+    // holds the gift's value, so the plan is what the account pays for.
+    plan: giftActive || giftPlan === "free" ? plan : paidPlan,
+    paidPlan,
+    gift: giftActive ? { plan: giftPlan, until: giftEnds } : null,
     interval: isBillingInterval(record.billing_interval) ? record.billing_interval : null,
     periodEnd: parsedEnd && !Number.isNaN(parsedEnd.getTime()) ? parsedEnd : null,
     cancelAtPeriodEnd: record.cancel_at_period_end === true,
@@ -63,6 +104,8 @@ export interface BandText {
   price: string;
   /** "Renews Nov 1, 2026 on the card ending 4242." and friends; null on Free. */
   renewal: string | null;
+  /** Only while a gift raises the plan: "A gift from HYDLNK, until Nov 1, 2026." (absent otherwise). */
+  gift?: string;
 }
 
 /**
@@ -72,6 +115,21 @@ export interface BandText {
  * instead of "Renews", and names the plan the customer keeps until then.
  */
 export function describeBand(summary: BillingSummary, cardLast4: string | null): BandText {
+  if (summary.gift) {
+    // The name is the effective (gifted) plan; the price and renewal lines are what the account
+    // itself pays, so a gift never reads as a charge and a subscription under it still shows.
+    const paid = describeBand({ ...summary, plan: summary.paidPlan, gift: null }, cardLast4);
+    const gift = summary.gift.until
+      ? `A gift from HYDLNK, until ${formatPeriodDate(summary.gift.until)}.`
+      : "A gift from HYDLNK, with no end date.";
+    return {
+      name: PLAN_LABELS[summary.gift.plan],
+      price:
+        summary.paidPlan === "free" ? "Gifted · no charge" : `Gifted · you pay for ${paid.name}`,
+      renewal: paid.renewal,
+      gift,
+    };
+  }
   const name = PLAN_LABELS[summary.plan];
   if (summary.plan === "free") {
     return { name, price: `${formatFreePrice()} · free forever`, renewal: null };
@@ -92,7 +150,7 @@ export function describeBand(summary: BillingSummary, cardLast4: string | null):
 /** Whether the band needs the card lookup: only a renewing paid subscription shows the card. */
 export function wantsCardLookup(summary: BillingSummary): boolean {
   return (
-    summary.plan !== "free" &&
+    summary.paidPlan !== "free" &&
     summary.customerId !== null &&
     summary.periodEnd !== null &&
     !summary.cancelAtPeriodEnd

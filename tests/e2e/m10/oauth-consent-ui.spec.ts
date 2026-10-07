@@ -178,7 +178,7 @@ test.describe("M10-13 what the screen says", () => {
 
   test("M10-13 the same screen for every plan", async ({ page, context }) => {
     const free = await signedIn(context, "ui6");
-    await adminClient().from("accounts").update({ plan: "studio" }).eq("id", free.userId);
+    await adminClient().from("accounts").update({ paid_plan: "studio" }).eq("id", free.userId);
     const client = await registerClient();
     await page.goto(authorizeUrl(client.client_id, pkcePair().challenge));
     await expect(page.getByRole("checkbox")).toHaveCount(3);

@@ -10,8 +10,8 @@ select tests.create_supabase_user('p', 'p@example.test');   -- pro
 select tests.create_supabase_user('s', 's@example.test');   -- studio
 select tests.create_supabase_user('z', 'z@example.test');   -- free, no page at all
 
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('p');
-update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('s');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('s');
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000092a1', tests.get_supabase_uid('a'), 'lim-alpha', '{"version":1}'),
@@ -58,17 +58,17 @@ select throws_ok(
 -- ---------------------------------------------------------------------------
 
 select throws_ok(
-  $$ update public.accounts set plan = 'enterprise' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = 'enterprise' where id = tests.get_supabase_uid('a') $$,
   '23514', null,
   'accounts.plan rejects ''enterprise'''
 );
 select throws_ok(
-  $$ update public.accounts set plan = 'Pro' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = 'Pro' where id = tests.get_supabase_uid('a') $$,
   '23514', null,
   'accounts.plan rejects ''Pro'' (case matters)'
 );
 select throws_ok(
-  $$ update public.accounts set plan = null where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = null where id = tests.get_supabase_uid('a') $$,
   '23502', null,
   'accounts.plan is never null'
 );
@@ -307,7 +307,7 @@ select is(
   3,
   'setup: the Pro account holds 3 pages'
 );
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('p');
 select is(
   (select count(*)::int from public.pages where owner_id = tests.get_supabase_uid('p')),
   3,

@@ -130,10 +130,13 @@ function routePatterns(): RegExp[] {
     // Catch-alls are the 404 pages: they do not make a path "exist".
     if (parts.some((part) => part.startsWith("[..."))) continue;
     if (parts[0] === "t" || parts[0] === "sites" || parts[0] === "shared-draft") continue;
+    // An optional catch-all (`[[...path]]`, the admin draft view) matches zero or more segments.
+    const optional = parts.at(-1)?.startsWith("[[...") ? "(?:/[^/]+)*" : "";
+    if (optional) parts = parts.slice(0, -1);
     const source = parts
       .map((part) => (part.startsWith("[") ? "[^/]+" : part.replace(/[.*+?^${}()|\\]/g, "\\$&")))
       .join("/");
-    patterns.push(new RegExp(`^/${source}/?$`));
+    patterns.push(new RegExp(`^/${source}${optional}/?$`));
   }
   return patterns;
 }

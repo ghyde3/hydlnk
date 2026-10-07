@@ -37,7 +37,11 @@ async function loadSubscription(
   if (account.stripe_subscription_id) {
     subscription = await stripe.subscriptions.retrieve(account.stripe_subscription_id);
   } else {
-    const list = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 10 });
+    const list = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 10,
+    });
     subscription = list.data.find((candidate) => LIVE_STATUSES.has(candidate.status)) ?? null;
   }
   if (!subscription) return null;
@@ -48,7 +52,7 @@ async function loadSubscription(
   if (!item) return null;
 
   const fromPrice = planForPriceId(prices, item.price?.id);
-  const plan = isBillablePlan(account.plan) ? account.plan : fromPrice?.plan;
+  const plan = isBillablePlan(account.paid_plan) ? account.paid_plan : fromPrice?.plan;
   const interval = isBillingInterval(account.billing_interval)
     ? account.billing_interval
     : fromPrice?.interval;
@@ -108,7 +112,7 @@ export async function openPortal(
   }
 
   // Every other intent changes the subscription: the account must be on a paid plan.
-  if (!isBillablePlan(account.plan)) return failure(409, "no_subscription");
+  if (!isBillablePlan(account.paid_plan)) return failure(409, "no_subscription");
   const env = readBillingEnv();
   const subscription = await loadSubscription(account, customerId, env.prices);
   if (!subscription) return failure(409, "no_subscription");
@@ -121,11 +125,17 @@ export async function openPortal(
       break;
     case "upgrade_studio":
       if (subscription.plan === "studio") return failure(409, "already_studio");
-      flow = updateFlow(subscription, priceIdFor(env.prices, "studio", subscription.interval), returnUrl);
+      flow = updateFlow(
+        subscription,
+        priceIdFor(env.prices, "studio", subscription.interval),
+        returnUrl,
+      );
       break;
     case "downgrade": {
-      const target: DowngradeTarget = downgradeTo ?? (subscription.plan === "studio" ? "pro" : "free");
-      if (target === "pro" && subscription.plan !== "studio") return failure(409, "not_downgradable");
+      const target: DowngradeTarget =
+        downgradeTo ?? (subscription.plan === "studio" ? "pro" : "free");
+      if (target === "pro" && subscription.plan !== "studio")
+        return failure(409, "not_downgradable");
       flow =
         target === "free"
           ? {
@@ -133,7 +143,11 @@ export async function openPortal(
               subscription_cancel: { subscription: subscription.id },
               after_completion: { type: "redirect", redirect: { return_url: returnUrl } },
             }
-          : updateFlow(subscription, priceIdFor(env.prices, "pro", subscription.interval), returnUrl);
+          : updateFlow(
+              subscription,
+              priceIdFor(env.prices, "pro", subscription.interval),
+              returnUrl,
+            );
       break;
     }
   }

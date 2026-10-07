@@ -96,7 +96,8 @@ export async function makeUser(
   if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
   trackUser(data.user.id);
   const patch: Record<string, unknown> = {};
-  if (opts.plan) patch.plan = opts.plan;
+  // paid_plan, not plan: the database derives the effective plan from it (M13-07).
+  if (opts.plan) patch.paid_plan = opts.plan;
   if (opts.suspended) patch.suspended_at = new Date().toISOString();
   if (Object.keys(patch).length > 0) {
     const update = await admin.from("accounts").update(patch).eq("id", data.user.id);
@@ -203,7 +204,10 @@ export async function pageCountForHandle(handle: string): Promise<number> {
 }
 
 export async function setPlan(userId: string, plan: Plan): Promise<void> {
-  const { error } = await adminClient().from("accounts").update({ plan }).eq("id", userId);
+  const { error } = await adminClient()
+    .from("accounts")
+    .update({ paid_plan: plan })
+    .eq("id", userId);
   if (error) throw new Error(`setPlan failed: ${error.message}`);
 }
 

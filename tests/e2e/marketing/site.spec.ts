@@ -152,7 +152,7 @@ test("legal pages: last-updated date, a column no wider than 70 characters, link
   page,
 }) => {
   for (const [path, label, iso] of [
-    ["/privacy", "October 4, 2026", "2026-10-04"],
+    ["/privacy", "October 6, 2026", "2026-10-06"],
     ["/terms", "October 6, 2026", "2026-10-06"],
   ] as const) {
     const requests: string[] = [];

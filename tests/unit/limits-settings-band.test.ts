@@ -6,6 +6,7 @@ import { formatBandPrice, formatFreePrice } from "@/lib/billing/prices";
 import {
   describeBand,
   formatPeriodDate,
+  BILLING_COLUMNS,
   parseBillingRow,
   wantsCardLookup,
   type BillingSummary,
@@ -25,6 +26,9 @@ const PERIOD_END = new Date("2026-11-01T12:00:00Z");
 
 const summary = (patch: Partial<BillingSummary> = {}): BillingSummary => ({
   plan: "pro",
+  // Without a gift the effective plan is what the account pays for.
+  paidPlan: patch.plan ?? "pro",
+  gift: null,
   interval: "month",
   periodEnd: PERIOD_END,
   cancelAtPeriodEnd: false,
@@ -105,6 +109,38 @@ describe("M4-05 the band's lines", () => {
     expect(wantsCardLookup(summary({ customerId: null }))).toBe(false);
     expect(wantsCardLookup(summary({ periodEnd: null }))).toBe(false);
     expect(wantsCardLookup(summary({ cancelAtPeriodEnd: true }))).toBe(false);
+  });
+
+  it("M13-07 a gift whose end has passed counts as ended before the expiry job runs", () => {
+    const now = new Date("2026-10-06T12:00:00Z");
+    const row = {
+      plan: "pro", // still the gift's value: the job has not run
+      paid_plan: "free",
+      gift_plan: "pro",
+      gift_until: "2026-10-06T11:59:00Z",
+    };
+    const expired = parseBillingRow(row, now);
+    expect(expired).toMatchObject({ plan: "free", paidPlan: "free", gift: null });
+    expect(describeBand(expired, null)).toEqual({
+      name: "Free",
+      price: "$0 · free forever",
+      renewal: null,
+    });
+    // One minute earlier it was still a gift.
+    const live = parseBillingRow(row, new Date("2026-10-06T11:58:00Z"));
+    expect(live).toMatchObject({ plan: "pro", gift: { plan: "pro" } });
+    // An expired gift over a paid Pro stays Pro (what the account pays for).
+    expect(
+      parseBillingRow({ ...row, plan: "studio", paid_plan: "pro", gift_plan: "studio" }, now),
+    ).toMatchObject({ plan: "pro", gift: null });
+  });
+
+  it("M13-07 the band names its columns and never asks for gifted_by or *", () => {
+    expect(BILLING_COLUMNS).not.toContain("*");
+    expect(BILLING_COLUMNS).not.toContain("gifted_by");
+    expect(BILLING_COLUMNS.split(", ")).toEqual(
+      expect.arrayContaining(["plan", "paid_plan", "gift_plan", "gift_until"]),
+    );
   });
 
   it("M4-05 an account row is read defensively: a missing or odd column reads as none", () => {

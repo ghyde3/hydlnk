@@ -178,7 +178,7 @@ describe.skipIf(!run)("M4-02 plan_limits() parity (local Supabase)", () => {
     const id = created.data.user!.id;
     userIds.push(id);
     for (const plan of ["enterprise", "Pro", "", "gold"]) {
-      const { error } = await admin.from("accounts").update({ plan }).eq("id", id);
+      const { error } = await admin.from("accounts").update({ paid_plan: plan }).eq("id", id);
       expect(error?.code, `plan ${JSON.stringify(plan)}`).toBe("23514");
     }
     const row = await admin.from("accounts").select("plan").eq("id", id).single();

@@ -5,6 +5,7 @@ import { HTML_DOCTYPE } from "@/lib/oauth/http";
 import { renderStatic } from "@/lib/tenant-render/static-markup";
 import type { ConsentView, MessageKind } from "@/lib/oauth/authorize";
 import {
+  APP_BLOCKED,
   APP_CHANGED,
   AUTHORIZE_ERROR_TITLE,
   CONSENT_FORBIDDEN,
@@ -74,6 +75,7 @@ const MESSAGE_TEXT: Record<MessageKind, string> = {
   answered: REQUEST_ANSWERED,
   someone_else: REQUEST_SOMEONE_ELSE,
   app_changed: APP_CHANGED,
+  app_blocked: APP_BLOCKED,
   grant_limit: GRANT_LIMIT,
   rate_limited: CONSENT_RATE_LIMITED,
   forbidden: CONSENT_FORBIDDEN,

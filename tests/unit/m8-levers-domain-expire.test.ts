@@ -439,6 +439,7 @@ describe("M8-11 static scan of src/", () => {
 
   it("finds the writers this feature knows about (a new one has to be added to this test on purpose)", () => {
     expect([...new Set(writers.map((w) => w.file))].sort()).toEqual([
+      "src/lib/admin/recheck-domain-action.ts",
       "src/lib/domains/core.ts",
       "src/lib/domains/verify.ts",
       "src/lib/pages/delete-account.ts",
@@ -463,9 +464,10 @@ describe("M8-11 static scan of src/", () => {
     expect([...verify.matchAll(/\bexpireDomainHost\(/g)]).toHaveLength(2);
   });
 
-  it("expireDomainHost is called only from those four modules (and defined in expire-host.ts)", () => {
+  it("expireDomainHost is called only from the writer modules (and defined in expire-host.ts)", () => {
     const callers = SOURCES.filter((file) => /\bexpireDomainHost\(/.test(read(file)));
     expect(callers.sort()).toEqual([
+      "src/lib/admin/recheck-domain-action.ts",
       "src/lib/domains/core.ts",
       "src/lib/domains/expire-host.ts",
       "src/lib/domains/verify.ts",

@@ -246,12 +246,12 @@ test.describe("M6-50 locked states", () => {
   }, info) => {
     const user = await signedInUser(context, { label: "vh8", plan: "pro" });
     await makeVersions(user.pageId, 2);
-    await adminClient().from("accounts").update({ plan: "free" }).eq("id", user.userId);
+    await adminClient().from("accounts").update({ paid_plan: "free" }).eq("id", user.userId);
     await page.goto(HISTORY_URL);
     await expectLocked(page, info);
     expect(await versionRows(user.pageId)).toHaveLength(2);
     // and an upgrade shows them again with no data change
-    await adminClient().from("accounts").update({ plan: "pro" }).eq("id", user.userId);
+    await adminClient().from("accounts").update({ paid_plan: "pro" }).eq("id", user.userId);
     await page.goto(HISTORY_URL);
     await expect(allRows(page)).toHaveCount(2);
   });
@@ -263,7 +263,7 @@ test.describe("M6-50 locked states", () => {
     const user = await signedInUser(context, { label: "vh9", plan: "pro" });
     await makeVersions(user.pageId, 2);
     await openHistory(page);
-    await adminClient().from("accounts").update({ plan: "free" }).eq("id", user.userId);
+    await adminClient().from("accounts").update({ paid_plan: "free" }).eq("id", user.userId);
     await rowFor(page, 2).getByRole("button", { name: "Preview version 2" }).click();
     await expect(page.getByTestId("history-locked")).toBeVisible();
     await expect(allRows(page)).toHaveCount(0);

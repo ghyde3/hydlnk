@@ -142,6 +142,10 @@ async function decide(
     return message(403, "app_changed");
   }
 
+  // Blocked by an admin since the screen was drawn (M13-10): nothing is issued, not even a denial
+  // redirect to an address the app chose.
+  if (client.blocked_at !== null) return message(403, "app_blocked", true);
+
   const denyOutcome = (): ConsentResult => ({
     kind: "redirect",
     location: buildClientRedirect(

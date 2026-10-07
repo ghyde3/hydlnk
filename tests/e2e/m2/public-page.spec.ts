@@ -400,13 +400,13 @@ test.describe("M2-28 Made with HYDLNK", () => {
 
     // A production build serves the cached page until its tag expires; the Stripe webhook expires it
     // (M4-08), and here the plan is set straight in the database, so expire it the way the webhook does.
-    const up = await adminClient().from("accounts").update({ plan: "pro" }).eq("id", fx.userId);
+    const up = await adminClient().from("accounts").update({ paid_plan: "pro" }).eq("id", fx.userId);
     expect(up.error).toBeNull();
     await expireOwnerPages(browser, fx.userId);
     await page.goto(url(fx.handle));
     await expect(badge(page)).toHaveCount(0);
 
-    await adminClient().from("accounts").update({ plan: "free" }).eq("id", fx.userId);
+    await adminClient().from("accounts").update({ paid_plan: "free" }).eq("id", fx.userId);
     await expireOwnerPages(browser, fx.userId);
     await page.goto(url(fx.handle));
     await expect(badge(page)).toHaveCount(1);

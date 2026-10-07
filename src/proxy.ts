@@ -19,6 +19,11 @@ import {
   isSharePath,
 } from "@/lib/previews/share-headers";
 import { shareProxy } from "@/lib/previews/share-proxy";
+import {
+  adminDraftProxy,
+  isAdminDraftLookalike,
+  isAdminDraftPath,
+} from "@/lib/previews/admin-draft-proxy";
 import { classifyAppPath } from "@/lib/routing/app-paths";
 import { bearerPathProxy } from "@/lib/routing/bearer-proxy";
 import { rewriteWithSession } from "@/lib/routing/session";
@@ -133,6 +138,16 @@ export async function proxy(request: NextRequest) {
       // proxy rate limits it, sets its headers and only rewrites (see src/lib/previews/share-proxy.ts).
       if (isSharePath(pathname)) {
         return shareProxy(request, rewriteTo(appRewritePath(SHARE_INTERNAL_PATH)));
+      }
+      // The admin's read-only view of a draft (M13-11) needs the session (admin only) and the share
+      // preview's response headers: see src/lib/previews/admin-draft-proxy.ts.
+      if (isAdminDraftPath(pathname)) {
+        return adminDraftProxy(request, rewriteTo(appRewritePath(pathname)));
+      }
+      // Another spelling of that route (case, percent-encoding) is the plain 404: it must never
+      // reach the draft page without the share headers above.
+      if (isAdminDraftLookalike(pathname)) {
+        return rewriteWithSession(request, rewriteTo(appRewritePath(NOT_FOUND_PATH)));
       }
       // That internal route is a rewrite target only. Asked for directly it would skip the rate
       // limit, the share headers and the nonce policy above and read a token from a request header

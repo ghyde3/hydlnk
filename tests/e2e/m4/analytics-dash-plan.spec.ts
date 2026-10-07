@@ -34,7 +34,7 @@ let fe: Owner;
 let pe: Owner;
 
 const setPlan = async (owner: Owner, plan: "free" | "pro" | "studio") => {
-  const { error } = await adminClient().from("accounts").update({ plan }).eq("id", owner.userId);
+  const { error } = await adminClient().from("accounts").update({ paid_plan: plan }).eq("id", owner.userId);
   if (error) throw new Error(`setting the plan failed: ${error.message}`);
 };
 

@@ -14,7 +14,7 @@ select plan(37);
 
 select tests.create_supabase_user('r', 'r-ev150@example.test');
 select tests.create_supabase_user('f', 'f-ev150@example.test');
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('r');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('r');
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000150a1', tests.get_supabase_uid('r'), 'ev150-purge', '{"version":1}'),

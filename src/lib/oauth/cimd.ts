@@ -37,6 +37,7 @@ import { defaultOauthStore } from "./store-supabase";
  *   4. the fetch (safe-fetch.ts: public addresses only, no redirects, 5 KB, 3 seconds), the document
  *      validated (client-document.ts), the name cleaned, a safe logo fetched and re-encoded or skipped;
  *   5. one upsert on `client_id`: the fetch time and the lifetime from the response's Cache-Control.
+ *      The upsert never writes `blocked_at` (M13-10): a re-fetch cannot lift an admin's block.
  *
  * A failure is never stored, never cached and never explained to the browser: the result says only
  * "cannot verify" (or "too many"), and the log line carries a reason code and the host.
@@ -53,7 +54,7 @@ export const CIMD_ALL_PER_MINUTE = 300;
 export const CIMD_UNUSED_CAP = 5000;
 
 export interface CimdDeps {
-  store: Pick<OauthStore, "upsertCimdClient" | "trimUnusedCimd">;
+  store: Pick<OauthStore, "upsertCimdClient" | "trimUnusedCimd" | "getClient">;
   limit: LimitFn;
   now: () => number;
   fetchDeps: SafeFetchDeps;
@@ -167,6 +168,9 @@ export async function loadCimdClientWith(
       expires_at: new Date(expiresAt).toISOString(),
       created_at: new Date(fetchedAt).toISOString(),
       last_seen_at: new Date(fetchedAt).toISOString(),
+      blocked_at: null,
+      blocked_by: null,
+      blocked_reason: null,
     };
     try {
       if (!known) await deps.store.trimUnusedCimd(CIMD_UNUSED_CAP, KNOWN_CLIENT_IDS);
@@ -179,6 +183,14 @@ export async function loadCimdClientWith(
         fetched_at: row.fetched_at,
         expires_at: row.expires_at,
       });
+      // The upsert never writes the blocked columns (an admin's block survives a re-fetch), so the
+      // row handed back says what the table says, not "not blocked" (M13-10).
+      const stored = await deps.store.getClient(clientId);
+      if (stored) {
+        row.blocked_at = stored.blocked_at;
+        row.blocked_by = stored.blocked_by;
+        row.blocked_reason = stored.blocked_reason;
+      }
     } catch (error) {
       logOauthFailure("clientDocument", error);
       return { ok: false, reason: "cannot_verify", transient: true };

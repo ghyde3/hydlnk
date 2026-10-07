@@ -391,7 +391,7 @@ test.describe("M6-50 failures keep the draft and say what to do", () => {
     const { user } = await pageWithVersions(context, "vr12");
     const before = await pageState(user.pageId);
     await openHistory(page);
-    await adminClient().from("accounts").update({ plan: "free" }).eq("id", user.userId);
+    await adminClient().from("accounts").update({ paid_plan: "free" }).eq("id", user.userId);
     await restoreButton(page, 2).click();
     await confirmButton(page, 2).click();
     await expect(page.getByTestId("history-locked")).toBeVisible();

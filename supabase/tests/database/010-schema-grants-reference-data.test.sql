@@ -58,7 +58,11 @@ select tables_are(
     'daily_site_stats',
     -- Wave M1: sub-pages of a site and the owner byte total (175, 178)
     'account_site_bytes',
-    'site_pages'
+    'site_pages',
+    -- Wave N: the app announcement (184)
+    'announcements',
+    -- Wave N: hosts of blocked OAuth apps, server only (187)
+    'oauth_blocked_hosts'
   ],
   'public holds exactly the contract tables'
 );
@@ -107,7 +111,7 @@ select set_eq(
   $$,
   $$
     values
-      ('accounts|authenticated|SELECT|*'),
+      ('accounts|authenticated|SELECT|billing_interval,cancel_at_period_end,created_at,current_period_end,gift_plan,gift_reason,gift_until,gifted_at,id,paid_plan,plan,stripe_customer_id,stripe_event_created_at,stripe_subscription_id,suspended_at,updated_at'),
       ('pages|authenticated|SELECT|*'),
       ('pages|authenticated|UPDATE|draft,name'),
       ('themes|anon|SELECT|*'),
@@ -197,7 +201,13 @@ select set_eq(
       ('site_pages|service_role|SELECT|*'),
       ('site_pages|service_role|INSERT|*'),
       ('site_pages|service_role|UPDATE|*'),
-      ('site_pages|service_role|DELETE|*')
+      ('site_pages|service_role|DELETE|*'),
+      -- Wave N: the announcement. Owners read the active row, five columns (no created_by); only the server writes.
+      ('announcements|authenticated|SELECT|ends_at,id,link,message,starts_at'),
+      ('announcements|service_role|SELECT|*'),
+      ('announcements|service_role|INSERT|*'),
+      ('announcements|service_role|UPDATE|*'),
+      ('announcements|service_role|DELETE|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );

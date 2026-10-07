@@ -12,7 +12,7 @@ export const AUTHORIZE_ERROR_TITLE = "This sign-in request isn’t valid.";
 export const AUTHORIZE_ERROR_NEXT = "Go back to the app and try again.";
 
 export type AuthorizeErrorClass =
-  "unknown_app" | "bad_redirect" | "cannot_verify" | "too_many" | "invalid";
+  "unknown_app" | "bad_redirect" | "cannot_verify" | "too_many" | "invalid" | "app_blocked";
 
 export const AUTHORIZE_ERROR_REASON: Readonly<Record<AuthorizeErrorClass, string>> = {
   unknown_app: "We don’t recognize this app.",
@@ -20,6 +20,7 @@ export const AUTHORIZE_ERROR_REASON: Readonly<Record<AuthorizeErrorClass, string
   cannot_verify: "We couldn’t verify this app.",
   too_many: "Too many requests. Try again in a minute.",
   invalid: "The request has something we can’t read.",
+  app_blocked: "HYDLNK has blocked this app.",
 };
 
 /** The consent screen. */
@@ -91,6 +92,7 @@ export const REQUEST_ANSWERED = "This request was already answered.";
 export const REQUEST_SOMEONE_ELSE =
   "This request was started by someone else. Go back to the app and start again.";
 export const APP_CHANGED = "This app changed its settings. Go back to the app and try again.";
+export const APP_BLOCKED = "HYDLNK has blocked this app, so it can’t connect.";
 export const GRANT_LIMIT = "You have 20 connected apps. Remove one in Settings, then try again.";
 export const OPEN_SETTINGS = "Open Settings";
 export const CONSENT_RATE_LIMITED = "Too many tries. Try again in a while.";

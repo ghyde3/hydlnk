@@ -16,8 +16,8 @@ select tests.create_supabase_user('a', 'a-an111@example.test');
 select tests.create_supabase_user('b', 'b-an111@example.test');
 select tests.create_supabase_user('c', 'c-an111@example.test');
 
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('a');
-update public.accounts set plan = 'studio' where id = tests.get_supabase_uid('c');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('c');
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000001a1', tests.get_supabase_uid('r1'), 'an111-rollup-one', '{"version":1}'),
@@ -459,7 +459,7 @@ select is(
 
 -- Plan flips apply on the next query (the webhook updates accounts.plan)
 reset role;
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('b');
+update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('b');
 select tests.authenticate_as('b');
 select is(
   (select count(*)::int from public.daily_stats where page_id = '00000000-0000-4000-8000-0000000001b2'),
@@ -470,7 +470,7 @@ select is(
   3, 'upgrade: and the breakdowns'
 );
 reset role;
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('a');
 select tests.authenticate_as('a');
 select is(
   (select count(*)::int from public.daily_stats where page_id = '00000000-0000-4000-8000-0000000001b1'),

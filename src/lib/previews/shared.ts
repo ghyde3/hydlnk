@@ -82,6 +82,41 @@ export async function loadSharedPreview(
   const page = data.pages;
   if (page.accounts.suspended_at !== null) return { kind: "inactive" };
 
+  return loadDraftPreview(
+    admin,
+    {
+      id: page.id,
+      handle: page.handle,
+      ownerId: page.owner_id,
+      draft: page.draft,
+      plan: page.accounts.plan,
+    },
+    { path, base: `/share/${token as string}`, expiresAt: data.expires_at },
+  );
+}
+
+/** A page row as `loadDraftPreview` needs it. */
+export interface DraftPreviewPage {
+  id: string;
+  handle: string;
+  ownerId: string;
+  draft: unknown;
+  plan: string;
+}
+
+/**
+ * The part of a preview that does not depend on how the caller got to the page: the draft's theme,
+ * the cleaned document, and the rest of the site (menu and page links) with every address under
+ * `base`. The share link calls it after its token checks (`base` = `/share/{token}`); the admin
+ * draft view (M13-11) calls it with its own base, so the two draw the same thing the same way.
+ * `path` was already checked by the caller (`""` for Home, else one valid sub-page path).
+ */
+export async function loadDraftPreview(
+  admin: SupabaseClient<Database>,
+  page: DraftPreviewPage,
+  options: { path: string; base: string; expiresAt: string },
+): Promise<SharedPreview> {
+  const { path, base, expiresAt } = options;
   const { draft } = loadDraft(page.draft, page.handle);
 
   // The draft's theme row: a system theme or one of the owner's own (what the editor's own read
@@ -93,7 +128,7 @@ export async function loadSharedPreview(
       .from("themes")
       .select("tokens")
       .eq("id", ref)
-      .or(`owner_id.is.null,owner_id.eq.${page.owner_id}`)
+      .or(`owner_id.is.null,owner_id.eq.${page.ownerId}`)
       .maybeSingle();
     if (theme.error) throw new Error(`Loading theme ${ref} failed: ${theme.error.message}`);
     const parsed = tokenSetSchema.partial().safeParse(theme.data?.tokens);
@@ -108,7 +143,6 @@ export async function loadSharedPreview(
   // the address names a page, or Home draws a menu or a page link: named columns, never whole drafts.
   let site: SiteContext | undefined;
   let subPage: { title: string; blocks: readonly Block[] } | undefined;
-  const base = `/share/${token as string}`;
   if (path !== "" || homeUsesSiteIndex(doc)) {
     const rows = await admin
       .from("site_pages")
@@ -171,8 +205,8 @@ export async function loadSharedPreview(
     kind: "active",
     pageId: page.id,
     doc,
-    plan: page.accounts.plan,
-    expiresAt: data.expires_at,
+    plan: page.plan,
+    expiresAt,
     ...(site ? { site } : {}),
     ...(subPage ? { subPage } : {}),
   };
