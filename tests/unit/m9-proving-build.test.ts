@@ -17,7 +17,12 @@ import { describe, expect, it } from "vitest";
 
 const buildDir = resolve(process.env.HL_BUILD_DIR ?? join(process.cwd(), ".next"));
 const appDir = join(buildDir, "server", "app");
-const haveBuild = existsSync(join(buildDir, "static", "chunks")) && existsSync(appDir);
+// A complete build only: CI restores a partial `.next` (its cache) before building, so the directories
+// alone are not enough. BUILD_ID is written last by `next build`.
+const haveBuild =
+  existsSync(join(buildDir, "BUILD_ID")) &&
+  existsSync(join(buildDir, "static", "chunks")) &&
+  existsSync(appDir);
 
 function manifests(dir: string, suffix: RegExp): string[] {
   const out: string[] = [];
