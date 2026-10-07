@@ -5566,6 +5566,29 @@
         "Unit tests for the resolution, ownership and the contradiction; the scripted official-client e2e flow adds a block to a sub-page by passing its page id as pageId."
       ],
       "passes": true
+    },
+    {
+      "id": "M14-01",
+      "milestone": 14,
+      "area": "platform",
+      "title": "Before-and-after screenshot steps replaced by today's tests; build-time Google Fonts accepted",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-07): M9-02 step 9's 'a screenshot of each screen differs from the commit before only where an icon's shape changed', M9-05 step 10's 'a screenshot of each open menu matches the commit before', M9-06 step 9's 'a screenshot matches the commit before', M9-07 step 8's 'a screenshot matches the commit before except for the swatch and the panel', M9-08 step 9's 'the same fixture images give the same outputs as before this feature', and M9-14 steps 7 and 8's 'no difference from the commit before'. Those comparisons only made sense the day each feature shipped; they are replaced by today's tests that pin each screen's sizes, colors and behavior (tests/e2e/m9/proving-app-shell.spec.ts, menus.spec.ts, template-dialog.spec.ts, color-picker-coverage.spec.ts, position-crop.spec.ts and tests/e2e/m6/images-position.spec.ts, with the M6-24 fixtures). Every other part of those steps stands.",
+        "Supersedes, in this respect only (Gary, 2026-10-07): M9-14 step 2(d) allows the source files that name fonts.googleapis.com or fonts.gstatic.com for next/font/google, because next/font downloads those fonts when the site is built and serves them from HYDLNK's own domain, so visitors never contact Google; each such file is listed in tests/unit/dependencies-policy.test.ts with its reason, and any other remote library or font URL still fails."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M14-02",
+      "milestone": 14,
+      "area": "publishing",
+      "title": "Unpublish a site back to its placeholder",
+      "acceptance": [
+        "The editor offers Unpublish for a published site (in the More actions menu), with a confirmation that says the site goes back to its placeholder at its address and that the draft stays. After it, on the very next request, the handle host shows the placeholder, a verified custom domain shows the same placeholder or plain 404 the routing already gives an unpublished site, sub-pages answer 404, the site leaves its sitemap, and analytics history is kept; publishing again brings it back.",
+        "Server: one transaction (a service-role SQL function) clears the published document and published time of the site and every sub-page, after checking ownership with the secret key and refusing a suspended owner; the site's cache tag is expired so nothing stale is served; the draft and version history are untouched. pgTAP for the function (owner only, suspended refused, sub-pages cleared, nothing else changed).",
+        "M8-04 step 4's unpublish row is proven with it (the cache matrix's 'unpublish (page to placeholder)' case on the handle host and a custom host). Unit tests for the action; an e2e at 390x844 and 1440x900 unpublishes, checks the live hosts and republishes; no horizontal scroll and 44px targets."
+      ],
+      "passes": false
     }
   ]
 }
