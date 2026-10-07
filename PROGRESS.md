@@ -2,6 +2,13 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-06 — Release: admin wave (PR #27)
+
+- PR #27 merged, merge commit c4391f5 (Gary approved the reserved list and the Privacy sentence; release under standing approval). Migrations applied through release-migrations.yml (dry run 37561699289, apply 37562246989): 20261013000001_admin_audit_actions to 20261013000009_gift_expiry_job (gift columns and `paid_plan` with the plan recompute trigger, reserved handles admin columns and the 274-handle pre-fill, announcements, app blocking and blocked hosts, admin readers, accounts column grants hiding `gifted_by`, the gift expiry job; no data removed). Deployment https://vercel.com/ghyde3s-projects/hydlnk/711jqAgrvj4W5vxtsG49bUL1Xf1A (success).
+- Known window: migration 20261013000008 replaced the table-level SELECT on accounts with a column list, so the old deploy's Settings billing summary (`select("*")`) failed for the few minutes between the migration and the new deploy; the new code names its columns.
+- Checks: full browser suite green on the production build (run 37521693204, head cfbc2aa); the release head 188387e ran Verify only, green (run 37561696774). `pnpm test:e2e:prod` 12/12. Live: /privacy has the staff-draft sentence and is dated October 6, 2026; app.hydlnk.com/admin redirects signed-out visitors to /login; POST /api/cron/end-expired-gifts without the secret answers 401.
+- Open: M11-12 (Gary's call on a Vercel WAF rate rule for tenant hosts); a flaky `wave-g-done` M6-34 test offered as a separate task. Features: 302 of 331.
+
 ## 2026-10-06 — Admin wave built and proven: ten admin tools
 
 On `m14-admin` (PR #27). Flipped to `passes: true`: M13-02 to M13-13, and M5-08, M5-09, M7-13 (proved by M13-12's tests). Features: 302 of 331.
