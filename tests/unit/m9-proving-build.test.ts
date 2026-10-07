@@ -73,9 +73,10 @@ describe.skipIf(!haveBuild)("M9-02 / M9-06 the production build's chunks", () =>
   const editorRoutes = ["editor", "design", "share"].map((name) =>
     join(appDir, "(editor)", "app", "(screens)", "(workspace)", name),
   );
-  const editorTexts = chunkTexts(
-    editorRoutes.flatMap((dir) => manifests(dir, /client-reference-manifest\.js$/)),
-  );
+  // Vitest runs a skipped describe's body to collect its tests: without a build there is nothing to read.
+  const editorTexts = haveBuild
+    ? chunkTexts(editorRoutes.flatMap((dir) => manifests(dir, /client-reference-manifest\.js$/)))
+    : new Map<string, string>();
 
   it("the editor draws its icons from the library and ships none that nothing imports", () => {
     const all = [...editorTexts.values()];
