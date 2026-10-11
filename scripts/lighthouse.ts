@@ -166,6 +166,9 @@ function isRootHostOf(host: string, tenantHost: string): boolean {
   return tenantHost.endsWith(`.${host}`);
 }
 
+/** HYDLNK's own root hosts: a custom domain's images come from here too, not from the custom host. */
+const ROOT_HOSTS = new Set(["hydlnk.com", "localhost:3000"]);
+
 function sameSite(requestUrl: string, pageUrl: string): boolean {
   return new URL(requestUrl).origin === new URL(pageUrl).origin;
 }
@@ -210,8 +213,13 @@ async function checkPage(browser: Browser, url: string): Promise<PageReport> {
     const u = new URL(requestUrl);
     if (/\/(rest|auth)\/v1(\/|$)/.test(u.pathname)) failures.push(`request to ${u.pathname}`);
     else if (u.pathname.includes("/storage/v1/object/public/")) continue;
-    // Uploaded images are served from the root host's /media/ path (one CDN cache key per image).
-    else if (u.pathname.startsWith("/media/") && isRootHostOf(u.host, origin.host)) continue;
+    // Uploaded images are served from the root host's /media/ path (one CDN cache key per image),
+    // on a handle host and on a custom domain alike.
+    else if (
+      u.pathname.startsWith("/media/") &&
+      (isRootHostOf(u.host, origin.host) || ROOT_HOSTS.has(u.host))
+    )
+      continue;
     else if (u.host.startsWith("app.")) failures.push(`request to the app host: ${requestUrl}`);
     else if (!sameSite(requestUrl, url)) failures.push(`third-party request: ${requestUrl}`);
   }
