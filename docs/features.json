@@ -5589,6 +5589,46 @@
         "M8-04 step 4's unpublish row is proven with it (the cache matrix's 'unpublish (page to placeholder)' case on the handle host and a custom host). Unit tests for the action; an e2e at 390x844 and 1440x900 unpublishes, checks the live hosts and republishes; no horizontal scroll and 44px targets."
       ],
       "passes": false
+    },
+    {
+      "id": "M14-03",
+      "milestone": 14,
+      "area": "auth",
+      "title": "Google redirect-button rows retired in favour of Google's own button",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-11): M1-08 and M1-13 were written for a 'Continue with Google' button that started Supabase's PKCE authorize request; that flow was replaced by Google's own button handing the page an ID token (M1-29 on /login, M1-30 on /signup). Their redirect-specific assertions (the authorize request, its redirect_to, the callback code exchange for Google) no longer apply. Every intent they carried is proven by M1-29 and M1-30 instead: Google's button sits below the 'or' rule at 390x844 and 1440x900, an unusable handle never reaches Google, the account is created exactly as the email path does, and Gary's production sign-in and sign-up with Google (M1-29 step 8, M1-30 step 6). M1-08 and M1-13 pass when M1-29 and M1-30 do."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M14-04",
+      "milestone": 14,
+      "area": "billing",
+      "title": "Stripe proving after go-live: sandbox halves run locally, the live upgrade is the production evidence",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-11): production runs on live Stripe keys since 2026-10-06, so 'the production sandbox run' in M4-06 step 2 and M4-07 step 2 cannot happen on production. It runs locally against the HYDLNK sandbox instead (Stripe CLI with --project-name hydlnk): pressing Upgrade to Pro on Monthly lands the browser on checkout.stripe.com in test mode showing the plan's amount, and Manage billing lands on billing.stripe.com for that account's customer. No card is entered and nothing touches live Stripe. Gary's own live upgrade, which flipped his plan through the signed webhook, is recorded in PROGRESS.md as the production evidence. Every other part of those steps stands."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M14-05",
+      "milestone": 14,
+      "area": "platform",
+      "title": "The custom-domain done-when proven on Gary's real domain and upgrade",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-11): M4-35 step 5's 'production sandbox run ... with the test card 4242 4242 4242 4242' becomes Gary's real upgrade on live Stripe (a test card cannot be used on live keys), and its test hostname is Gary's real domain links.hyde-co.com; step 8's cleanup does not apply, because the domain and the plan are real and stay (no domain removed, no return to Free). Steps 6 and 7 stand, on links.hyde-co.com: curl over HTTPS answers 200 with a certificate that verifies, the page renders at 390x844 and 1440x900, a link redirects through /r/<pageId>/<blockId>, the events row is visible via SQL, and after the next nightly rollup app.hydlnk.com/analytics shows the click, with the cron.job_run_details row recorded in PROGRESS.md."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M14-06",
+      "milestone": 14,
+      "area": "routing",
+      "title": "Vercel preview addresses keep working",
+      "acceptance": [
+        "Supersedes, in this respect only (Gary, 2026-10-11): M4-09 step 3's 'a *.vercel.app host' returning 404 is dropped, because Gary keeps Vercel's preview and deployment addresses working. A *.vercel.app host serves the HYDLNK site as it does today and never a tenant page or tenant data: the proxy treats it as the marketing host, never as a handle or a custom domain (a unit test on the host classification holds this). Every other part of M4-09 step 3 stands."
+      ],
+      "passes": false
     }
   ]
 }
