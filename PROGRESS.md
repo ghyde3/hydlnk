@@ -19,6 +19,7 @@ Session log, newest first. Every session reads the top entry before starting and
   | links.hyde-co.com | desktop | 100/100/100/100 | 330 ms | 0 | 0 ms | PASS |
 
   scrollWidth/innerWidth is 390/390 and 1440/1440 on both; first-load JS is 2.4 KB gzipped.
+- Correction to the proving-pass entry's M5-22 note: Resend's records are on the sending subdomain, not hydlnk.com. SPF is at `send.send.hydlnk.com`, DKIM at `resend._domainkey.send.hydlnk.com`, and hydlnk.com has DMARC `p=none`, so the DNS is in place. Still needed: real message headers from three non-team addresses and the email rate limit (Owner Checklist).
 - Open: M5-21 stays false until a design check confirms step 7 ("at 1440x900 the page still matches Public.dc.html"), which the script does not assert. The waiting rows are listed in the proving-pass entry below. Next: the CMS evolution, feature 1.
 
 ## 2026-10-11 — Proving pass (PR #30): 20 rows proven, Unpublish, Lighthouse
