@@ -1873,6 +1873,7 @@ export type Database = {
         Returns: string
       }
       purge_old_events: { Args: never; Returns: number }
+      purge_trashed_entries: { Args: never; Returns: number }
       rate_limit_hit: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: {
@@ -1895,6 +1896,10 @@ export type Database = {
       }
       requeue_media: {
         Args: { p_owner: string; p_paths: string[] }
+        Returns: number
+      }
+      restore_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
         Returns: number
       }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
@@ -1924,6 +1929,10 @@ export type Database = {
           p_reason: string
         }
         Returns: string
+      }
+      trash_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
       }
       unpublish_entry: {
         Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
