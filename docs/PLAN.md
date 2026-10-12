@@ -226,7 +226,7 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
   - `/` for Home.
 - It refuses:
   - a clash between any two claims;
-  - a reserved word (the list in `src/lib/site-pages/path.ts` and the SQL check, kept as one list).
+  - a reserved word (the list in `src/lib/document/path.ts` and the SQL check, kept as one list).
 - Maintained by triggers on `content_entries` and `content_types`.
 - A draft path that clashes is refused at save time (HL012), not only at publish. That is new compared with today's sub-pages.
 - Ordering, instead of a cross-table check: no user can enable a post type before stage 1b ships, because the editor and MCP expose it only in stages 3 and 4. So until then, `site_paths` only needs to watch the content tables.
@@ -297,6 +297,12 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
    - The old Home route reads Home's entry.
 5. Before any switch, do a dry run on a copy of production data, with a per-site comparison of the live HTML before and after.
 6. `site_pages` stays read-only until production checks pass. It is dropped in a later release with Gary's explicit yes.
+
+**Rules for the move** (orchestrator decisions, 2026-10-12, from the M15-02 review):
+- **Bytes.** The move marks each copied `site_pages` row as moved (`moved_at`), and moved rows stop counting toward `account_site_bytes`, so nothing counts twice. The rows stay read-only for rollback. The move runs inside a service-role-only SQL function that sets a transaction-local flag. The HL009 trigger honors that flag only for the move, so an account already near its cap is not blocked mid-move. Afterwards it simply cannot add more until it is under its cap, as after a downgrade.
+- **Draft paths.** A sub-page draft path that the new registry refuses (reserved, malformed, `/` or a clash) becomes its live path if that path is valid and free, otherwise `suggestPath(title, taken)`. The original draft is kept in the entry's first revision (source `system`), so nothing is lost.
+- **Counting pages.** During the transition, HL008 counts Home plus a site's `page` entries (trash included) and ignores `site_pages` rows. After the move, no new `site_pages` rows are created.
+- **Links in Markdown.** Only the server writer writes content entries, so `src/lib/content` checks the links in a Markdown body against the blocklist (`blocked_links_in`) at save and publish. The database check stays on block documents.
 
 1a's schema must accept steps 1 to 3 without another DDL change. That means:
 - an explicit entry id;
