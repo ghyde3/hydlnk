@@ -173,6 +173,267 @@ export type Database = {
         }
         Relationships: []
       }
+      content_entries: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          draft: Json
+          first_published_at: string | null
+          id: string
+          live_path: string | null
+          live_slug: string | null
+          published: Json | null
+          published_at: string | null
+          rev: number
+          scheduled_at: string | null
+          site_id: string
+          type_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          draft: Json
+          first_published_at?: string | null
+          id?: string
+          live_path?: string | null
+          live_slug?: string | null
+          published?: Json | null
+          published_at?: string | null
+          rev?: number
+          scheduled_at?: string | null
+          site_id: string
+          type_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          draft?: Json
+          first_published_at?: string | null
+          id?: string
+          live_path?: string | null
+          live_slug?: string | null
+          published?: Json | null
+          published_at?: string | null
+          rev?: number
+          scheduled_at?: string | null
+          site_id?: string
+          type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entries_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entries_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_entry_revisions: {
+        Row: {
+          created_at: string
+          entry_id: string
+          id: string
+          rev: number
+          site_id: string
+          snapshot: Json
+          source: string
+          was_published: boolean
+        }
+        Insert: {
+          created_at?: string
+          entry_id: string
+          id?: string
+          rev: number
+          site_id: string
+          snapshot: Json
+          source: string
+          was_published?: boolean
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string
+          id?: string
+          rev?: number
+          site_id?: string
+          snapshot?: Json
+          source?: string
+          was_published?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entry_revisions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entry_revisions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_entry_terms: {
+        Row: {
+          entry_id: string
+          term_id: string
+        }
+        Insert: {
+          entry_id: string
+          term_id: string
+        }
+        Update: {
+          entry_id?: string
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entry_terms_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entry_terms_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "content_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_terms: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_id: string | null
+          position: number
+          site_id: string
+          slug: string
+          taxonomy: string
+          type_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          position?: number
+          site_id: string
+          slug: string
+          taxonomy: string
+          type_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          position?: number
+          site_id?: string
+          slug?: string
+          taxonomy?: string
+          type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_terms_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "content_terms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_terms_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_terms_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_types: {
+        Row: {
+          archive_path: string | null
+          body_format: string
+          created_at: string
+          enabled: boolean
+          field_schema: Json
+          id: string
+          key: string
+          kind: string
+          label: string
+          label_plural: string
+          position: number
+          settings: Json
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          archive_path?: string | null
+          body_format: string
+          created_at?: string
+          enabled?: boolean
+          field_schema?: Json
+          id?: string
+          key: string
+          kind: string
+          label: string
+          label_plural: string
+          position?: number
+          settings?: Json
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          archive_path?: string | null
+          body_format?: string
+          created_at?: string
+          enabled?: boolean
+          field_schema?: Json
+          id?: string
+          key?: string
+          kind?: string
+          label?: string
+          label_plural?: string
+          position?: number
+          settings?: Json
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_types_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_dim_stats: {
         Row: {
           clicks: number
@@ -993,6 +1254,49 @@ export type Database = {
             columns: ["page_id"]
             isOneToOne: false
             referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_paths: {
+        Row: {
+          entry_id: string | null
+          path: string
+          site_id: string
+          type_id: string | null
+        }
+        Insert: {
+          entry_id?: string | null
+          path: string
+          site_id: string
+          type_id?: string | null
+        }
+        Update: {
+          entry_id?: string | null
+          path?: string
+          site_id?: string
+          type_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_paths_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_paths_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_paths_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
             referencedColumns: ["id"]
           },
         ]

@@ -62,7 +62,10 @@ select tables_are(
     -- Wave N: the app announcement (184)
     'announcements',
     -- Wave N: hosts of blocked OAuth apps, server only (187)
-    'oauth_blocked_hosts'
+    'oauth_blocked_hosts',
+    -- Wave N: the content model, owners read, the server writes (189)
+    'content_types', 'content_entries', 'content_entry_revisions', 'content_terms', 'content_entry_terms',
+    'site_paths'
   ],
   'public holds exactly the contract tables'
 );
@@ -202,6 +205,37 @@ select set_eq(
       ('site_pages|service_role|INSERT|*'),
       ('site_pages|service_role|UPDATE|*'),
       ('site_pages|service_role|DELETE|*'),
+      -- Wave N: the content model. Owners read; the server writes.
+      ('content_types|authenticated|SELECT|*'),
+      ('content_types|service_role|SELECT|*'),
+      ('content_types|service_role|INSERT|*'),
+      ('content_types|service_role|UPDATE|*'),
+      ('content_types|service_role|DELETE|*'),
+      ('content_entries|authenticated|SELECT|*'),
+      ('content_entries|service_role|SELECT|*'),
+      ('content_entries|service_role|INSERT|*'),
+      ('content_entries|service_role|UPDATE|*'),
+      ('content_entries|service_role|DELETE|*'),
+      ('content_entry_revisions|authenticated|SELECT|*'),
+      ('content_entry_revisions|service_role|SELECT|*'),
+      ('content_entry_revisions|service_role|INSERT|*'),
+      ('content_entry_revisions|service_role|UPDATE|*'),
+      ('content_entry_revisions|service_role|DELETE|*'),
+      ('content_terms|authenticated|SELECT|*'),
+      ('content_terms|service_role|SELECT|*'),
+      ('content_terms|service_role|INSERT|*'),
+      ('content_terms|service_role|UPDATE|*'),
+      ('content_terms|service_role|DELETE|*'),
+      ('content_entry_terms|authenticated|SELECT|*'),
+      ('content_entry_terms|service_role|SELECT|*'),
+      ('content_entry_terms|service_role|INSERT|*'),
+      ('content_entry_terms|service_role|UPDATE|*'),
+      ('content_entry_terms|service_role|DELETE|*'),
+      ('site_paths|authenticated|SELECT|*'),
+      ('site_paths|service_role|SELECT|*'),
+      ('site_paths|service_role|INSERT|*'),
+      ('site_paths|service_role|UPDATE|*'),
+      ('site_paths|service_role|DELETE|*'),
       -- Wave N: the announcement. Owners read the active row, five columns (no created_by); only the server writes.
       ('announcements|authenticated|SELECT|ends_at,id,link,message,starts_at'),
       ('announcements|service_role|SELECT|*'),
