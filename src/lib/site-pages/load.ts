@@ -16,6 +16,8 @@ export interface LoadedSubPage {
   published: SubPagePublish | null;
   livePath: string | null;
   createdAt: string;
+  /** The row's `updated_at` as stored: the revision the editor's saves are checked against (M15-01). */
+  updatedAt: string;
 }
 
 /** Keeps what a stored draft still holds when it does not validate: the strings that are strings. */
@@ -48,7 +50,7 @@ export async function loadSubPages(siteId: string): Promise<LoadedSubPage[]> {
   const supabase = await createServerSupabase();
   const { data, error } = await supabase
     .from("site_pages")
-    .select("id, draft, published, live_path, created_at")
+    .select("id, draft, published, live_path, created_at, updated_at")
     .eq("page_id", siteId)
     .order("created_at", { ascending: true });
   if (error) throw new Error(`Loading the pages of site ${siteId} failed: ${error.message}`);
@@ -61,6 +63,7 @@ export async function loadSubPages(siteId: string): Promise<LoadedSubPage[]> {
       published: published?.success ? published.data : null,
       livePath: row.live_path,
       createdAt: row.created_at,
+      updatedAt: row.updated_at,
     };
   });
 }

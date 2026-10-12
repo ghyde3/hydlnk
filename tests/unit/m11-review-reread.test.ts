@@ -52,8 +52,10 @@ describe("HL009 in the sub-page autosave", () => {
       createBrowserSupabase: () => ({ from: () => builder }),
     }));
     vi.doMock("@/lib/media/cleanup-client", () => ({ scheduleMediaCleanup: () => {} }));
-    const { createSubPageSaveFn } = await import("@/lib/site-pages/save-client");
-    expect(await createSubPageSaveFn()("x", emptySubPageDraft("items", "A"))).toEqual({
+    const { createSubPageRevisions, createSubPageSaveFn } =
+      await import("@/lib/site-pages/save-client");
+    const revisions = createSubPageRevisions({ x: "2026-10-11T10:00:00+00:00" });
+    expect(await createSubPageSaveFn(revisions)("x", emptySubPageDraft("items", "A"))).toEqual({
       kind: "storage-full",
     });
     vi.doUnmock("@/lib/supabase/browser");

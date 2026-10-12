@@ -36,7 +36,7 @@ export type SubPageError =
   | "delete_failed";
 
 export type CreateSubPageResult =
-  | { ok: true; id: string; draft: SubPageDraft; createdAt: string }
+  | { ok: true; id: string; draft: SubPageDraft; createdAt: string; updatedAt: string }
   | { ok: false; status: number; error: SubPageError; message: string };
 
 export type DeleteSubPageResult =
@@ -166,7 +166,7 @@ export async function createSubPageWithClient(
   const inserted = await admin
     .from("site_pages")
     .insert({ page_id: site.id, draft: draft as unknown as Json })
-    .select("id, created_at")
+    .select("id, created_at, updated_at")
     .single();
   if (inserted.error) {
     if (inserted.error.code === "HL008") {
@@ -180,7 +180,13 @@ export async function createSubPageWithClient(
     console.error("[site-pages] create failed", inserted.error.code, inserted.error.message);
     return failure("create_failed");
   }
-  return { ok: true, id: inserted.data.id, draft, createdAt: inserted.data.created_at };
+  return {
+    ok: true,
+    id: inserted.data.id,
+    draft,
+    createdAt: inserted.data.created_at,
+    updatedAt: inserted.data.updated_at,
+  };
 }
 
 /**

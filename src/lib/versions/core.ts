@@ -309,9 +309,9 @@ export async function loadVersionPreviewCore(
  * guard, the one that stops everything) and then the draft of each of the version's pages that
  * still exists, each guarded by the `updated_at` it was read with. A page deleted since, saved
  * meanwhile, listed on the blocklist now or unreadable is returned in `notRestored` with the
- * reason and left as it is. Sub-page drafts have no rev, so a stale editor tab with unsaved
- * sub-page edits can still overwrite a restore on its next save (a known limit; fixing it
- * would need a rev on `site_pages`).
+ * reason and left as it is. A stale editor tab with unsaved sub-page edits cannot
+ * overwrite a restore: its save is checked against the row's `updated_at` (M15-01) and becomes
+ * a conflict.
  * `pages.published`,
  * `published_at`, `page_versions`, the themes and Storage are untouched and no cache tag is
  * expired, so the live page does not change; the owner reviews the draft in the editor and

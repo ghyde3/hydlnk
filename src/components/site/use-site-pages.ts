@@ -43,7 +43,7 @@ import {
   type SubPageSummary,
 } from "@/lib/site-pages/pages";
 import { SubPageSaver, type SubBlocked, type SubSaveStatus } from "@/lib/site-pages/saver";
-import { createSubPageSaveFn } from "@/lib/site-pages/save-client";
+import { createSubPageRevisions, createSubPageSaveFn } from "@/lib/site-pages/save-client";
 import {
   instantiateSiteTemplate,
   siteTemplateById,
@@ -60,6 +60,8 @@ export interface SubPageInit {
   published: SubPagePublish | null;
   livePath: string | null;
   createdAt: string;
+  /** The row's `updated_at`: the revision this page's saves are checked against (M15-01). */
+  updatedAt: string;
 }
 
 export type SiteAddResult = { ok: true; id: string } | { ok: false; message: string };
@@ -173,9 +175,13 @@ export function useSitePages(args: {
   const [saveStatus, setSaveStatus] = useState<SubSaveStatus>("idle");
   const [blocked, setBlocked] = useState<Record<string, SubBlocked>>({});
   const saverRef = useRef<SubPageSaver | null>(null);
+  // The revision (`updated_at`) each page was last loaded or saved at: every save is checked against it.
+  const [revisions] = useState(() =>
+    createSubPageRevisions(Object.fromEntries(initial.map((page) => [page.id, page.updatedAt]))),
+  );
   useEffect(() => {
     const saver = new SubPageSaver({
-      save: createSubPageSaveFn(),
+      save: createSubPageSaveFn(revisions),
       onStatus: setSaveStatus,
       onBlocked: (id, refusal) =>
         setBlocked((current) => {
@@ -205,7 +211,7 @@ export function useSitePages(args: {
       void saver.flush().finally(() => saver.dispose());
       saverRef.current = null;
     };
-  }, []);
+  }, [revisions]);
 
   // Edits not stored yet: the browser asks before the tab closes, as it does for Home's.
   useEffect(() => {
@@ -382,12 +388,14 @@ export function useSitePages(args: {
           id?: string;
           draft?: SubPageDraft;
           createdAt?: string;
+          updatedAt?: string;
           message?: string;
         } | null;
         if (!response.ok || !body?.id || !body.draft) {
           return { ok: false, message: body?.message ?? "Couldn’t add the page. Try again." };
         }
         const id = body.id;
+        if (body.updatedAt) revisions.set(id, body.updatedAt);
         setCreatedAt((current) =>
           new Map(current).set(id, body.createdAt ?? new Date().toISOString()),
         );
@@ -404,7 +412,7 @@ export function useSitePages(args: {
         };
       }
     },
-    [siteId, setNav],
+    [siteId, setNav, revisions],
   );
 
   const remove = useCallback<SiteValue["remove"]>(
@@ -417,6 +425,7 @@ export function useSitePages(args: {
         }
         // Gone on the server: stop writing it, leave the menu and go home if it was open.
         saverRef.current?.drop(id);
+        revisions.delete(id);
         dispatch({ type: "remove", id });
         setNav((current) => removeFromNav(current, id));
         setPublishedForms((current) => {
@@ -433,7 +442,7 @@ export function useSitePages(args: {
         };
       }
     },
-    [siteId, setNav],
+    [siteId, setNav, revisions],
   );
 
   const applyTemplate = useCallback<SiteValue["applyTemplate"]>(
@@ -523,12 +532,15 @@ export function useSitePages(args: {
     const current = formsRef.current;
     setPublishedForms(new Map(current));
     setLivePaths(new Map([...current].map(([id, form]) => [id, form.path])));
-  }, []);
+    // Publish wrote every sub-page row (`published`), which moved `updated_at`: adopt the new revisions.
+    void revisions.refresh(siteId);
+  }, [revisions, siteId]);
 
   const markUnpublished = useCallback(() => {
     setPublishedForms(new Map());
     setLivePaths(new Map());
-  }, []);
+    void revisions.refresh(siteId);
+  }, [revisions, siteId]);
 
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({

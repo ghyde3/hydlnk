@@ -24,6 +24,8 @@ const SAVE_TEXT: Record<SubSaveStatus, string> = {
   invalid: "This page can’t be saved yet. Fix the field with an error.",
   "signed-out": "You’re signed out. Sign in again to save.",
   blocked: "A link on this page points to a blocked site. Change it to save.",
+  conflict:
+    "This page changed somewhere else (another tab or a connected app). Reload to keep editing.",
   missing: "This page was deleted somewhere else. Reload to continue.",
 };
 
