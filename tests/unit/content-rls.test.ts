@@ -176,7 +176,12 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
   };
 
   async function count(table: Table): Promise<number> {
-    const { count: n, error } = await admin.from(table).select("*", { count: "exact", head: true });
+    // Scoped to the two sites (and their entries) this test creates, so other tests writing to the
+    // content tables at the same time cannot change the count.
+    const q = admin.from(table).select("*", { count: "exact", head: true });
+    const { count: n, error } = await (table === "content_entry_terms"
+      ? q.in("entry_id", [ids.entry, ids.pageEntry])
+      : q.in("site_id", [a.pageId, b.pageId]));
     if (error) throw new Error(error.message);
     return n ?? 0;
   }
