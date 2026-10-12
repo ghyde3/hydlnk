@@ -283,6 +283,12 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
   - Until stage 2 adds the per-entry and per-type tags, the writer expires the site's existing `page:<id>` tag after a publish.
 - Trash clears the live copy at once and keeps the draft. Restore works for 30 days. A daily job purges older trash.
 
+**Post bodies are untrusted Markdown** (orchestrator decision, 2026-10-12, from the M15-03 checks):
+- Publish refuses any link or image whose scheme is not http, https, `mailto:` or `tel:` (for example `javascript:` and `data:`), with a typed issue the author can act on.
+- The writer also checks every link and image host against the blocklist: in tables, in raw HTML and behind HTML character references. It fails closed on URLs it cannot parse.
+- Stage 2 renders with `marked` with raw HTML escaped as text, never passed through, and only http(s) links. Images come only from HYDLNK media, and embeds only from the existing allowlist, on a line of their own.
+- The post schemas, limits and list enums live in `@/lib/content/schemas`. That module is free of server-only imports, so the editor and MCP use the same rules as the writer.
+
 ### Moving pages in (stage 1b), in this order
 
 1. For each `site_pages` row, insert a `page` entry with the same id. Copy the draft, published copy and `published_at`, and register its paths.
