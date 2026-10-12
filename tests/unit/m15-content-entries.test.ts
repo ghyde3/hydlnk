@@ -145,7 +145,10 @@ describe.skipIf(!run)("create and update an entry", () => {
   });
 
   it("a suspended owner gives account_suspended", async () => {
-    await admin.from("accounts").update({ suspended_at: new Date().toISOString() }).eq("id", b.userId);
+    await admin
+      .from("accounts")
+      .update({ suspended_at: new Date().toISOString() })
+      .eq("id", b.userId);
     await enablePost(admin, b.pageId);
     expect(await create(b, "post", { title: "x" })).toMatchObject({
       ok: false,

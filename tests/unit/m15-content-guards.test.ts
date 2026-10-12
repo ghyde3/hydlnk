@@ -80,7 +80,10 @@ describe.skipIf(!run)("guards against the local stack", () => {
 
   it("a suspended account is refused, an active one passes", async () => {
     expect(await activeAccount(admin, a.userId)).toMatchObject({ ok: true });
-    await admin.from("accounts").update({ suspended_at: new Date().toISOString() }).eq("id", a.userId);
+    await admin
+      .from("accounts")
+      .update({ suspended_at: new Date().toISOString() })
+      .eq("id", a.userId);
     expect(await activeAccount(admin, a.userId)).toMatchObject({
       ok: false,
       error: "account_suspended",
