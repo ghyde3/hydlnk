@@ -2,6 +2,25 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-11 — Release: proving pass (PR #30)
+
+- PR #30 merged, merge commit 8dc4680 (Gary: "PR 30 is good to go").
+- Migration applied through release-migrations.yml (dry run 38190136499, apply 38190579335): `20261013000010_unpublish_site`. It adds a function; nothing is dropped or changed; `config.toml` is untouched.
+- Deployment: https://vercel.com/ghyde3s-projects/hydlnk/8dhYrSDC19NwbJPmm3QEmbTX373g (success).
+- Checks: full browser suite green on head 4837979 (run 38174641944); the final head 4f779c8 ran Verify only, green (later commits were the features flips and a skipped manual spec). `pnpm test:e2e:prod` 12/12.
+- Live: Unpublish in More actions, and on the Share tab on phones; Home pages carry a canonical link.
+- M5-21 step 6, `pnpm lighthouse --url` after the deploy (perf / a11y / best practices / SEO):
+
+  | Page | Preset | Scores | LCP | CLS | TBT | Checks |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | garyhyde.hydlnk.com | mobile | 100/100/100/100 | 923 ms | 0 | 0 ms | PASS |
+  | garyhyde.hydlnk.com | desktop | 100/100/100/100 | 436 ms | 0 | 0 ms | PASS |
+  | links.hyde-co.com | mobile | 100/100/100/100 | 1246 ms | 0 | 30 ms | PASS |
+  | links.hyde-co.com | desktop | 100/100/100/100 | 330 ms | 0 | 0 ms | PASS |
+
+  scrollWidth/innerWidth is 390/390 and 1440/1440 on both; first-load JS is 2.4 KB gzipped.
+- Open: M5-21 stays false until a design check confirms step 7 ("at 1440x900 the page still matches Public.dc.html"), which the script does not assert. The waiting rows are listed in the proving-pass entry below. Next: the CMS evolution, feature 1.
+
 ## 2026-10-11 — Proving pass (PR #30): 20 rows proven, Unpublish, Lighthouse
 
 On `m15-proving` (PR #30). Flipped to `passes: true`: M4-21, M7-06, M7-07, M4-08, M9-02, M9-05, M9-06, M9-07, M9-08, M9-14, M14-01, M14-02, M14-03, M1-08, M1-13, M1-29, M1-30, M4-03, M4-09, M14-06. Features: 323 of 338.
