@@ -1851,6 +1851,17 @@ export type Database = {
           versions_kept: number
         }[]
       }
+      publish_entry: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+          p_published_at?: string
+          p_source?: string
+        }
+        Returns: number
+      }
       publish_site: {
         Args: {
           p_home: Json
@@ -1868,6 +1879,15 @@ export type Database = {
           allowed: boolean
           retry_after: number
         }[]
+      }
+      record_entry_revision: {
+        Args: {
+          p_entry_id: string
+          p_max_age?: string
+          p_source: string
+          p_was_published?: boolean
+        }
+        Returns: boolean
       }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
@@ -1904,6 +1924,10 @@ export type Database = {
           p_reason: string
         }
         Returns: string
+      }
+      unpublish_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
       }
       unpublish_site: {
         Args: { p_owner_id: string; p_page_id: string }
