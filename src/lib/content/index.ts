@@ -25,6 +25,7 @@ import {
   renameTermWithClient,
   setEntryTermsWithClient,
 } from "./terms-core";
+import { listRevisionsWithClient, restoreRevisionWithClient } from "./revisions-core";
 import { enableTypeWithClient, updateTypeWithClient } from "./types-core";
 import type { ContentActor } from "./types";
 
@@ -125,4 +126,14 @@ export function deleteTerm(input: Parameters<typeof deleteTermWithClient>[1]) {
 /** Set an entry's categories and tags in its draft at `expectedRev`; publish rebuilds the links. */
 export function setEntryTerms(input: Parameters<typeof setEntryTermsWithClient>[1]) {
   return setEntryTermsWithClient(createAdminSupabase(), input);
+}
+
+/** An entry's revisions, newest first, without snapshots. */
+export function listRevisions(input: Parameters<typeof listRevisionsWithClient>[1]) {
+  return listRevisionsWithClient(createAdminSupabase(), input);
+}
+
+/** Save a revision's snapshot as the draft at `expectedRev`; it does not publish. */
+export function restoreRevision(input: Parameters<typeof restoreRevisionWithClient>[1]) {
+  return restoreRevisionWithClient(createAdminSupabase(), input);
 }
