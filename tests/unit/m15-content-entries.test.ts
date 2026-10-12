@@ -61,6 +61,21 @@ describe.skipIf(!run)("create and update an entry", () => {
     });
   });
 
+  it("text Postgres can't store gives invalid, not a 500", async () => {
+    await enablePost(admin, a.pageId);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await create(a, "post", { title: "a\u0000b" })).toMatchObject({
+      ok: false,
+      error: "invalid",
+      status: 422,
+    });
+    expect(await create(a, "post", { title: "t", body: "x\ud800y" })).toMatchObject({
+      ok: false,
+      error: "invalid",
+    });
+    spy.mockRestore();
+  });
+
   it("create, then update at rev 1 gives rev 2; a stale rev conflicts and writes nothing", async () => {
     await enablePost(admin, a.pageId);
     const made = await create(a, "post", { title: "First" });
@@ -214,5 +229,17 @@ describe.skipIf(!run)("create and update an entry", () => {
       draft: { title: "Rev 3" },
     });
     expect(await count()).toBe(1);
+    // The newest revision is now older than 10 minutes: the next save records again.
+    await admin
+      .from("content_entry_revisions")
+      .update({ created_at: new Date(Date.now() - 11 * 60_000).toISOString() })
+      .eq("entry_id", made.id);
+    await updateEntryWithClient(admin, {
+      actor: actor(a),
+      entryId: made.id,
+      expectedRev: 3,
+      draft: { title: "Rev 4" },
+    });
+    expect(await count()).toBe(2);
   });
 });

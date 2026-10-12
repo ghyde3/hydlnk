@@ -109,8 +109,12 @@ describe("src/lib/content is the only writer", () => {
     expect(outside.filter((file) => DEEP_IMPORT.test(code(file)))).toEqual([]);
   });
   it("the cores and their helpers import server-only", () => {
-    for (const name of ["entries-core", "publish-core", "guards", "blocklist"]) {
-      expect(readFileSync(resolve(ROOT, CONTENT_DIR, `${name}.ts`), "utf8"), name).toMatch(
+    const files = readdirSync(resolve(ROOT, CONTENT_DIR)).filter((name) =>
+      /(?:-core|^guards|^blocklist|^images)\.ts$/.test(name),
+    );
+    expect(files.length).toBeGreaterThanOrEqual(10);
+    for (const name of files) {
+      expect(readFileSync(resolve(ROOT, CONTENT_DIR, name), "utf8"), name).toMatch(
         /^(?:\s*\/\*[\s\S]*?\*\/)?\s*import ["']server-only["'];/,
       );
     }

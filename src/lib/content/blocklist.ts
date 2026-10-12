@@ -1,10 +1,14 @@
 import "server-only";
 import { marked, type Token, type Tokens } from "marked";
 import { findBlockedLinks, type BlocklistRpc } from "@/lib/blocklist/check";
+import { MAX_URL_LENGTH } from "@/lib/document/url";
 import { failure } from "./errors";
 import type { ContentFailure } from "./types";
 
-const HTML_URL = /\b(?:href|src)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+const HTML_URL =
+  /\b(?:href|src|poster|action|formaction|data|background)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+/** `srcset` holds a comma-separated list of candidates, each an address and an optional descriptor. */
+const HTML_SRCSET = /\bsrcset\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
 /** The database reads at most 600 URLs per call; stay well under it. */
 const CHUNK = 500;
 
@@ -27,10 +31,10 @@ const NAMED: Record<string, string> = {
   bsol: "\\",
 };
 
-/** HTML character references in an address, as a browser decodes them in an attribute. */
+/** HTML character references in an address, as a browser decodes them in an attribute (a numeric one needs no `;`). */
 function decodeReferences(value: string): string {
   return value.replace(
-    /&(?:#(\d{1,7})|#[xX]([0-9a-fA-F]{1,6})|([A-Za-z][A-Za-z0-9]{1,31}));/g,
+    /&(?:#(\d{1,7});?|#[xX]([0-9a-fA-F]{1,6});?|([A-Za-z][A-Za-z0-9]{1,31});)/g,
     (whole, dec, hex, name) => {
       if (name) return NAMED[name] ?? whole;
       const code = dec ? Number(dec) : parseInt(hex, 16);
@@ -65,18 +69,22 @@ export function markdownUrls(body: string): string[] {
       for (const match of token.raw.matchAll(HTML_URL)) {
         urls.push(match[1] ?? match[2] ?? match[3] ?? "");
       }
+      for (const match of token.raw.matchAll(HTML_SRCSET)) {
+        const list = decodeReferences(match[1] ?? match[2] ?? match[3] ?? "");
+        for (const candidate of list.split(",")) urls.push(candidate.trim().split(/\s+/)[0] ?? "");
+      }
     }
   });
   return [...new Set(urls.filter(Boolean).map(normalizeUrl))];
 }
 
 /**
- * An address whose host still holds a character reference this code cannot decode (`&copy;`): a
- * browser would decode it to something else, so it cannot be judged and is refused.
+ * An address whose host still holds an `&` after decoding (a reference this code cannot decode,
+ * like `&copy;`): a browser would decode it to something else, so it cannot be judged and is refused.
  */
 function opaqueHost(url: string): string | null {
   const authority = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i.exec(url)?.[1];
-  return authority && /&[A-Za-z#][A-Za-z0-9]*;/.test(authority) ? authority : null;
+  return authority && authority.includes("&") ? authority : null;
 }
 
 /**
@@ -90,6 +98,10 @@ export async function blockedBodyLinks(
   const body = (draft as { body?: unknown } | null)?.body;
   if (typeof body !== "string" || body === "") return null;
   const urls = markdownUrls(body);
+  // The database judges no host in an address over the cap, so a longer one cannot be judged: refuse it.
+  if (urls.some((url) => url.length > MAX_URL_LENGTH)) {
+    return { ...failure("blocked_link"), hosts: [] };
+  }
   const opaque = urls.map(opaqueHost).filter((host): host is string => host !== null);
   if (opaque.length > 0) return { ...failure("blocked_link"), hosts: opaque };
   try {

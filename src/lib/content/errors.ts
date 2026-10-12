@@ -61,6 +61,9 @@ const BY_CODE: Record<string, ContentErrorCode> = {
   "23505": "slug_taken",
   P0002: "not_found",
   "22023": "conflict",
+  // Text jsonb refuses (U+0000, a lone surrogate): the caller sent an unstorable string.
+  "22P05": "invalid",
+  PGRST102: "invalid",
 };
 
 /**

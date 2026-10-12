@@ -7,6 +7,7 @@ import { blockedBodyLinks, blockedPageLinks } from "./blocklist";
 import { failure, mapDbError } from "./errors";
 import { activeAccount, enabledType, ownedEntry } from "./guards";
 import { checkOwnImages, postImages, type ImageUse } from "./images";
+import { pruneTerms } from "./prune-terms";
 import { issuesOf, schemaForType, untrimmedPathIssue } from "./schemas";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
 
@@ -31,7 +32,7 @@ async function refused(
 }
 
 /** The checks both operations share, before anything is written. */
-async function prepare(admin: Admin, input: Input) {
+async function prepare(admin: Admin, input: Input, opts: { allowDisabledType?: boolean } = {}) {
   const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
   if (!owned.ok) return owned;
   const account = await activeAccount(admin, input.actor.userId);
@@ -41,12 +42,13 @@ async function prepare(admin: Admin, input: Input) {
   if (!Number.isSafeInteger(input.expectedRev) || input.expectedRev < 1) {
     return failure("invalid", "Send the revision you are editing.");
   }
+  // Taking content down always works, even for a type switched off since.
   const type = await enabledType(admin, entry.site_id, entry.type_id);
-  if (!type.ok) return type;
+  if (!type.ok && !(opts.allowDisabledType && type.error === "type_disabled")) return type;
   if (Number(entry.rev) !== input.expectedRev) {
     return failure("conflict", undefined, Number(entry.rev));
   }
-  return { ok: true as const, entry, type: type.type };
+  return { ok: true as const, entry, type: type.ok ? type.type : null };
 }
 
 /** Publish the entry's draft, strictly validated, stored exactly as it is. */
@@ -57,7 +59,9 @@ export async function publishEntryWithClient(
 ): Promise<ContentResult<{ rev: number; publishedAt: string; siteId: string }>> {
   const ready = await prepare(admin, input);
   if (!ready.ok) return ready;
-  const { entry, type } = ready;
+  const { entry } = ready;
+  const { type } = ready;
+  if (!type) return failure("type_disabled");
 
   const schema = schemaForType(type.key, "publish");
   if (!schema) return failure("invalid", "That content type can’t be published yet.");
@@ -72,6 +76,14 @@ export async function publishEntryWithClient(
   if (type.key === "post") {
     const blocked = await blockedBodyLinks(admin, entry.draft);
     if (blocked) return blocked;
+    // A term deleted since the last save does not go into the published copy.
+    const pruned = await pruneTerms(
+      admin,
+      { siteId: entry.site_id, typeId: entry.type_id },
+      entry.draft,
+    );
+    if (!pruned.ok) return pruned;
+    published = pruned.draft;
     images = postImages(entry.draft);
   } else if (type.key === "page") {
     const form = toSubPagePublishForm(parsed.data as Parameters<typeof toSubPagePublishForm>[0]);
@@ -106,7 +118,7 @@ export async function unpublishEntryWithClient(
   admin: Admin,
   input: Input,
 ): Promise<ContentResult<{ rev: number; siteId: string }>> {
-  const ready = await prepare(admin, input);
+  const ready = await prepare(admin, input, { allowDisabledType: true });
   if (!ready.ok) return ready;
   const { entry } = ready;
   const { data, error } = await admin.rpc("unpublish_entry", {

@@ -1,7 +1,7 @@
 -- M15-03 T4: publish_entry, unpublish_entry, record_entry_revision.
 
 begin;
-select plan(25);
+select plan(26);
 
 select tests.create_supabase_user('a', 'a-196@example.test');
 select tests.create_supabase_user('b', 'b-196@example.test');
@@ -111,6 +111,10 @@ select ok(public.record_entry_revision('00000000-0000-4000-8000-00000196a0e2', '
 update public.content_entries set rev = 2 where id = '00000000-0000-4000-8000-00000196a0e2';
 select ok(not public.record_entry_revision('00000000-0000-4000-8000-00000196a0e2', 'editor', interval '1 hour', false),
   'max age: skips when the newest revision is younger');
+update public.content_entry_revisions set created_at = now() - interval '11 minutes'
+  where entry_id = '00000000-0000-4000-8000-00000196a0e2';
+select ok(public.record_entry_revision('00000000-0000-4000-8000-00000196a0e2', 'editor', interval '10 minutes', false),
+  'max age: records when the newest revision is older');
 
 -- pruning: Free keeps 10
 do $$

@@ -154,6 +154,15 @@ describe.skipIf(!run)("trash and restore an entry", () => {
     expect(await trash(made.id, 1)).toMatchObject({ ok: false, error: "account_suspended" });
     await admin.from("accounts").update({ suspended_at: null }).eq("id", a.userId);
     expect((await row(made.id)).deleted_at).toBeNull();
+    // A trashed entry can't be restored while suspended either.
+    expect(await trash(made.id, 1)).toMatchObject({ ok: true });
+    await admin
+      .from("accounts")
+      .update({ suspended_at: new Date().toISOString() })
+      .eq("id", a.userId);
+    expect(await restore(made.id, 2)).toMatchObject({ ok: false, error: "account_suspended" });
+    await admin.from("accounts").update({ suspended_at: null }).eq("id", a.userId);
+    expect((await row(made.id)).deleted_at).not.toBeNull();
   });
 
   it("restoring a page whose path was taken meanwhile gives path_taken", async () => {

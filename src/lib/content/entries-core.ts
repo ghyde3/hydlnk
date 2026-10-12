@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { blockedBodyLinks } from "./blocklist";
 import { failure, mapDbError } from "./errors";
+import { pruneTerms } from "./prune-terms";
 import { activeAccount, enabledType, ownedEntry, ownedSite } from "./guards";
 import {
   MAX_DRAFT_BYTES,
@@ -95,16 +96,23 @@ export async function updateEntryWithClient(
   if (!type.ok) return type;
   const refused = await checkDraft(admin, type.type.key, input.draft);
   if (refused) return refused;
+  // A term deleted since the last save is dropped from the draft here.
+  let draft = input.draft;
+  if (type.type.key === "post") {
+    const pruned = await pruneTerms(admin, { siteId: entry.site_id, typeId: entry.type_id }, draft);
+    if (!pruned.ok) return pruned;
+    draft = pruned.draft;
+  }
 
   const currentRev = Number(entry.rev);
   if (currentRev !== expectedRev) return failure("conflict", undefined, currentRev);
-  if (canonical(entry.draft) === canonical(input.draft)) {
+  if (canonical(entry.draft) === canonical(draft)) {
     return { ok: true, rev: currentRev, unchanged: true };
   }
 
   const updated = await admin
     .from("content_entries")
-    .update({ draft: input.draft as Json, rev: expectedRev + 1 })
+    .update({ draft: draft as Json, rev: expectedRev + 1 })
     .eq("id", entry.id)
     .eq("site_id", entry.site_id)
     .eq("rev", expectedRev)
