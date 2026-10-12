@@ -78,6 +78,37 @@ export function markdownUrls(body: string): string[] {
   return [...new Set(urls.filter(Boolean).map(normalizeUrl))];
 }
 
+/** The schemes a post body may link to. A link with no scheme is relative and stays on the site. */
+const SAFE_SCHEMES = new Set(["http", "https", "mailto", "tel"]);
+const MAX_SHOWN = 100;
+const MAX_ISSUES = 10;
+
+/**
+ * Strict publish: refuses a link or image in the body whose scheme is not http, https, mailto or tel
+ * (`javascript:`, `data:`, `vbscript:` and the like). It reuses `markdownUrls`, so tables, raw HTML and
+ * character references are covered the same way as the blocklist. Returns null when clean.
+ */
+export function unsafeBodySchemes(draft: unknown): ContentFailure | null {
+  const body = (draft as { body?: unknown } | null)?.body;
+  if (typeof body !== "string" || body === "") return null;
+  // A browser drops tabs and newlines inside a scheme, so judge the address without them.
+  const bad = markdownUrls(body)
+    .map((url) => url.replace(/[\t\n\r]/g, ""))
+    .filter((url) => {
+      const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url)?.[1];
+      return scheme !== undefined && !SAFE_SCHEMES.has(scheme.toLowerCase());
+    });
+  if (bad.length === 0) return null;
+  const shown = (url: string) => (url.length > MAX_SHOWN ? `${url.slice(0, MAX_SHOWN)}…` : url);
+  return {
+    ...failure("invalid"),
+    issues: [...new Set(bad)].slice(0, MAX_ISSUES).map((url) => ({
+      path: "body",
+      message: `This link can’t be published: only http, https, mailto and tel links are allowed (${shown(url)}).`,
+    })),
+  };
+}
+
 /**
  * An address whose host still holds an `&` after decoding (a reference this code cannot decode,
  * like `&copy;`): a browser would decode it to something else, so it cannot be judged and is refused.

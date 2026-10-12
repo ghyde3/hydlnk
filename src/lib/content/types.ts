@@ -19,6 +19,7 @@ export type ContentErrorCode =
   | "page_limit"
   | "path_taken"
   | "slug_taken"
+  | "slug_reserved"
   | "too_large"
   | "error";
 

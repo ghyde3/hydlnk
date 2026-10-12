@@ -82,6 +82,14 @@ describe.skipIf(!run)("publish and unpublish an entry", () => {
     expect((await row(made.id)).published).toBeNull();
   });
 
+  it("a body link with an unsafe scheme is invalid with the offending text, never a 500", async () => {
+    const made = await post({ title: "Bad", slug: "bad-link", body: "[x](javascript:alert(1))" });
+    const out = await publish(made.id, 1);
+    expect(out).toMatchObject({ ok: false, error: "invalid", status: 422 });
+    expect(out.ok ? "" : out.issues?.[0]?.message).toContain("javascript:alert(1)");
+    expect((await row(made.id)).published).toBeNull();
+  });
+
   it("a stale expectedRev gives conflict with currentRev", async () => {
     const made = await post({ title: "Stale", slug: "stale" });
     expect(await publish(made.id, 5)).toMatchObject({

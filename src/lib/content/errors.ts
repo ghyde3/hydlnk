@@ -15,6 +15,7 @@ export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
   page_limit: 403,
   path_taken: 409,
   slug_taken: 409,
+  slug_reserved: 409,
   too_large: 413,
   error: 500,
 };
@@ -33,6 +34,7 @@ export const CONTENT_MESSAGES: Record<ContentErrorCode, string> = {
   page_limit: "This site is at its limit of pages.",
   path_taken: "That address is already used or reserved.",
   slug_taken: "Another entry of this type already uses that slug.",
+  slug_reserved: "That address is reserved. Try another.",
   too_large: "That is too large to save. Shorten it and try again.",
   error: "Something went wrong. Try again.",
 };
@@ -82,6 +84,10 @@ export function mapDbError(err: {
   // The 1 MiB cap on a draft (a CHECK), for a draft the schemas could not bound.
   if (err.code === "23514" && err.message?.includes("content_entries_draft_integrity")) {
     return failure("too_large");
+  }
+  // HL012 covers a path and a slug, reserved or taken; the message says which (`slug "…" is reserved`).
+  if (err.code === "HL012" && err.message?.startsWith("slug ")) {
+    return failure(/ is reserved$/.test(err.message) ? "slug_reserved" : "slug_taken");
   }
   const mapped = err.code ? BY_CODE[err.code] : undefined;
   if (mapped) return failure(mapped);

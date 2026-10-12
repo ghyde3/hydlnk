@@ -4,15 +4,14 @@ import type { Database } from "@/lib/supabase/database.types";
 import { decodeCursor, encodeCursor } from "./cursor";
 import { failure } from "./errors";
 import { ownedEntry, ownedSite } from "./guards";
+import { LIST_SORTS, LIST_STATUSES } from "./schemas/enums";
+import type { EntryStatus, ListSort, ListStatus } from "./schemas/enums";
 import type { ContentActor, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
 
-export const LIST_SORTS = ["published_at", "updated_at", "title"] as const;
-export const LIST_STATUSES = ["draft", "published", "trashed", "all"] as const;
-export type ListSort = (typeof LIST_SORTS)[number];
-export type ListStatus = (typeof LIST_STATUSES)[number];
-export type EntryStatus = "draft" | "published" | "trashed";
+export { LIST_SORTS, LIST_STATUSES } from "./schemas/enums";
+export type { EntryStatus, ListSort, ListStatus } from "./schemas/enums";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;

@@ -57,7 +57,8 @@ const WRITE_CALL = /\.(?:insert|update|upsert|delete)\(/;
 /** Files outside the writer that may name a content table (generated types hold no calls). */
 const TABLE_NAME_ALLOWED = new Set(["src/lib/supabase/database.types.ts"]);
 /** An import that reaches into the writer's files instead of its index. */
-export const DEEP_IMPORT = /from\s+["'](?:@\/lib\/content\/|(?:\.\.?\/)+(?:lib\/)?content\/)/;
+export const DEEP_IMPORT =
+  /from\s+["'](?:@\/lib\/content\/(?!schemas(?:\/|["']))|(?:\.\.?\/)+(?:lib\/)?content\/(?!schemas(?:\/|["'])))/;
 
 const outside = walk("src").filter((file) => !file.startsWith(`${CONTENT_DIR}/`));
 const inside = walk(CONTENT_DIR);
@@ -82,6 +83,9 @@ describe("the scan patterns", () => {
     expect(WRITER_RPC.test(`admin.rpc('claim_site_path', {})`)).toBe(true);
     expect(DEEP_IMPORT.test(`import { x } from "@/lib/content/publish-core";`)).toBe(true);
     expect(DEEP_IMPORT.test(`import { x } from "@/lib/content";`)).toBe(false);
+    expect(DEEP_IMPORT.test(`import { x } from "@/lib/content/schemas";`)).toBe(false);
+    expect(DEEP_IMPORT.test(`import { x } from "@/lib/content/schemas/post";`)).toBe(false);
+    expect(DEEP_IMPORT.test(`import { x } from "@/lib/content/schemas-evil";`)).toBe(true);
   });
   it("ignores a comment that names the rule", () => {
     expect(TABLE_WRITE.test(strip(`// admin.from('content_entries').update(`))).toBe(false);
@@ -136,5 +140,36 @@ describe("src/lib/content is the only writer", () => {
         ),
     );
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("the shared schemas module", () => {
+  const schemaFiles = walk(`${CONTENT_DIR}/schemas`);
+  it("holds the post schemas, limits and list enums", () => {
+    expect(schemaFiles.length).toBeGreaterThanOrEqual(4);
+    const index = readFileSync(resolve(ROOT, CONTENT_DIR, "schemas/index.ts"), "utf8");
+    expect(index).toMatch(/POST_LIMITS/);
+    expect(index).toMatch(/LIST_SORTS/);
+  });
+  it("nothing under it imports server-only, the admin client or next/cache", () => {
+    const offenders = schemaFiles.filter((file) =>
+      /server-only|@\/lib\/supabase\/admin|next\/cache|@\/lib\/publish\/invalidate/.test(
+        code(file),
+      ),
+    );
+    expect(offenders).toEqual([]);
+  });
+  it("imports only from itself, zod and the document modules, none of which are server-only", () => {
+    for (const file of schemaFiles) {
+      const imports = [...code(file).matchAll(/from\s+["']([^"']+)["']/g)].map((m) => m[1]);
+      for (const spec of imports) {
+        if (spec === undefined) continue;
+        expect(spec, file).toMatch(/^(?:zod|\.\/.*|@\/lib\/document\/.*)$/);
+        if (spec.startsWith("@/lib/document/")) {
+          const target = `src/${spec.slice(2)}.ts`;
+          expect(code(target), target).not.toMatch(/server-only|supabase\/admin|next\/cache/);
+        }
+      }
+    }
   });
 });

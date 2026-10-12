@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { publishedSubPageSchema, toSubPagePublishForm } from "@/lib/document/sub-page";
 import { placedBlockImages } from "@/lib/publish/placed-images";
-import { blockedBodyLinks, blockedPageLinks } from "./blocklist";
+import { blockedBodyLinks, blockedPageLinks, unsafeBodySchemes } from "./blocklist";
 import { failure, mapDbError } from "./errors";
 import { activeAccount, enabledType, ownedEntry } from "./guards";
 import { checkOwnImages, postImages, type ImageUse } from "./images";
@@ -21,8 +21,6 @@ async function refused(
   entryId: string,
   err: { code?: string | null; message?: string | null },
 ): Promise<ContentFailure> {
-  // HL012 from the slug trigger reads `slug "…"`; a path clash reads `path "…"`.
-  if (err.code === "HL012" && err.message?.startsWith("slug ")) return failure("slug_taken");
   const mapped = mapDbError(err);
   if (mapped.error !== "conflict") return mapped;
   const reread = await admin.from("content_entries").select("rev").eq("id", entryId).maybeSingle();
@@ -74,6 +72,8 @@ export async function publishEntryWithClient(
   let published: unknown = entry.draft;
   let images: ImageUse[] = [];
   if (type.key === "post") {
+    const unsafe = unsafeBodySchemes(entry.draft);
+    if (unsafe) return unsafe;
     const blocked = await blockedBodyLinks(admin, entry.draft);
     if (blocked) return blocked;
     // A term deleted since the last save does not go into the published copy.
