@@ -1223,6 +1223,7 @@ export type Database = {
           draft: Json
           id: string
           live_path: string | null
+          moved_at: string | null
           page_id: string
           published: Json | null
           published_at: string | null
@@ -1233,6 +1234,7 @@ export type Database = {
           draft: Json
           id?: string
           live_path?: string | null
+          moved_at?: string | null
           page_id: string
           published?: Json | null
           published_at?: string | null
@@ -1243,6 +1245,7 @@ export type Database = {
           draft?: Json
           id?: string
           live_path?: string | null
+          moved_at?: string | null
           page_id?: string
           published?: Json | null
           published_at?: string | null
