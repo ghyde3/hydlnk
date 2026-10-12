@@ -17,6 +17,7 @@ import { invalidatePage } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
+import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
 import type { ContentActor } from "./types";
 
 /** Create an entry of an enabled type. The draft is validated leniently and stored as given. */
@@ -60,6 +61,20 @@ export async function publishEntry(input: EntryWrite) {
 /** Take an entry off the site at `expectedRev`, then expire the site's page tag. */
 export async function unpublishEntry(input: EntryWrite) {
   const out = await unpublishEntryWithClient(createAdminSupabase(), input);
+  if (out.ok) expireSite(out.siteId);
+  return out;
+}
+
+/** Move an entry to the trash at `expectedRev`, then expire the site's page tag (the live copy is gone). */
+export async function trashEntry(input: EntryWrite) {
+  const out = await trashEntryWithClient(createAdminSupabase(), input);
+  if (out.ok) expireSite(out.siteId);
+  return out;
+}
+
+/** Restore a trashed entry (within 30 days) as a draft at `expectedRev`, then expire the site's page tag. */
+export async function restoreEntry(input: EntryWrite) {
+  const out = await restoreEntryWithClient(createAdminSupabase(), input);
   if (out.ok) expireSite(out.siteId);
   return out;
 }
