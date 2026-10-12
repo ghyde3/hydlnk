@@ -2,6 +2,37 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-11 — Proving pass (PR #30): 20 rows proven, Unpublish, Lighthouse
+
+On `m15-proving` (PR #30). Flipped to `passes: true`: M4-21, M7-06, M7-07, M4-08, M9-02, M9-05, M9-06, M9-07, M9-08, M9-14, M14-01, M14-02, M14-03, M1-08, M1-13, M1-29, M1-30, M4-03, M4-09, M14-06. Features: 323 of 338.
+
+- **Built:** Unpublish (M14-02; migration `20261013000010_unpublish_site`; native `<dialog>` confirmation, kept out of the editor's first load by M9-06; 60 an hour per account after the security review). `pnpm lighthouse` (M5-21; `lighthouse` 13.5.0, dev only, approved 2026-10-07). Home's canonical link. The M9-08 crop fix (`areaToCrop`). Proving tests for M4-08, M4-21, M7-06, M7-07, M9-02, M9-05, M9-06, M9-07, M9-08 and M9-14. A manual Stripe sandbox spec, `tests/e2e/manual/stripe-sandbox.spec.ts`, skipped unless `STRIPE_SANDBOX=1`.
+- **Evidence:**
+  - CI run 38174641944 (head 4837979): Verify and all 8 browser shards green. That includes the production-build cache checks:
+    - M8-04 unpublish on the handle host and a custom host (`render-cache.spec.ts:97`);
+    - M4-08 on a verified custom host (`billing-badge.spec.ts:320`);
+    - M4-21 (`analytics-ingest-beacon.spec.ts`);
+    - `tests/e2e/m14/unpublish.spec.ts` on phone and desktop.
+  - Local `pnpm verify`: typecheck clean, lint 0 errors, unit 10,324 passed (3 known `createUser` flakes passed alone), db 56 files and 2,355 tests. Routing tests: 121 passed (M14-06).
+- **Production evidence, from Gary and read-only checks (2026-10-11):**
+  - M1-29 step 8 and M1-30 step 6: Gary signed in and signed up with Google on app.hydlnk.com. The production database shows 2 accounts using Google, 1 with both Google and email, and 0 duplicate emails.
+  - M4-03 step 6: `stripe listen --project-name hydlnk` plus `stripe trigger customer.subscription.updated` against the local app returned `[200]` (evt_1UPTt7PPBBbR7vbmxjRrlMhA).
+  - links.hyde-co.com answers 200 with a verified certificate, and its `/r/` link answers 302 with no cookie.
+- **Security review (Unpublish):** no critical, high or medium findings. The rate limit was added. Two known low findings are accepted:
+  - a stale re-population race, shared with Publish;
+  - the OG card's `s-maxage=300`.
+- **Lighthouse:** a local production build scored 100/100/100/100 on 5 pages × 2 presets. Live garyhyde.hydlnk.com and links.hyde-co.com also score 100s; each fails only the canonical check, which this PR fixes. M5-21 flips after a rerun on the release.
+- **Waiting, not flipped:**
+  - M8-04 step 6: expiry after a failed render, provable only on Vercel; Gary's call.
+  - M14-04, M4-06 and M4-07: the sandbox key in `.env.local`.
+  - M14-05 and M4-35: next-day Analytics screenshots of the links.hyde-co.com click.
+  - M1-06 step 8: the auth cookie's Domain value.
+  - M1-28 step 9: whether the throwaway account was deleted.
+  - M5-22: SMTP. No DKIM record was found for hydlnk.com, and SPF lists only ImprovMX. Needs the message headers and the email rate limit.
+  - M5-25: the Audience screenshot and a Google user who was not on the test list.
+  - M11-12, M5-26, M9-10 and M5-27.
+- **Next:** release PR #30, then the CMS evolution (feature 1: shared content model, pages and posts). The plan and decisions are in the Claude Doc "HYDLNK Next Evolution Plan": https://claude.ai/artifact/UgmZ2dAtAoinuQTCcWdv5b. `tmp/orchestrating` was removed.
+
 ## 2026-10-06 — Release: MCP page ids (PR #29) and the admin release log (PR #28)
 
 - PR #29 merged, merge commit 7850c61 (Gary's "Release 29 + 28"). No migrations (dry run 37569109700: remote database up to date). Deployment https://vercel.com/ghyde3s-projects/hydlnk/92iaxSgP9QAnb5QW5mmhTJhkezxX (success). CI Verify green (run 37568258971). `pnpm test:e2e:prod` 12/12. Live: /connect tells people to refresh the plugin at chatgpt.com/plugins. ChatGPT with a cached tool list can now edit a sub-page by passing its id as `pageId`; creating pages still needs the plugin refresh.
