@@ -289,6 +289,20 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
 - Stage 2 renders with `marked` with raw HTML escaped as text, never passed through, and only http(s) links. Images come only from HYDLNK media, and embeds only from the existing allowlist, on a line of their own.
 - The post schemas, limits and list enums live in `@/lib/content/schemas`. That module is free of server-only imports, so the editor and MCP use the same rules as the writer.
 
+**Content model security review (M15-04, 2026-10-12): decisions and known items**
+- **Stage 2 must not trust the publish check alone.** The post-body scheme check is an allowlist: http, https, `mailto:`, `tel:`, or a plain relative reference. The renderer must still allowlist its own final `href` and `src`, escape raw HTML, and never reuse the publish check as its only filter.
+- **Revision storage.** Revision snapshots count against the plan's `content_bytes` by pruning: the oldest are dropped first, silently, so history is bounded at about one extra cap per account.
+- **Fixed in the same wave:**
+  - the `hydlnk.content_move` flag is honored only for privileged roles, never `authenticated` or `anon`;
+  - moved `site_pages` rows are read-only under RLS.
+- **Known items, to settle before the writer is reachable from the editor (stage 3) or MCP (stage 4):**
+  - a per-type cap on terms;
+  - body images restricted to the owner's own media (stage 2 renders only those);
+  - custom `fields` validated by type (stage 5);
+  - trashed page entries and the Home exemption under HL008;
+  - the editor adopting new sub-page revisions after Publish (an MCP edit made during that window goes unnoticed);
+  - revisions pruned when a plan drops or a gift ends (accepted, as with versions).
+
 ### Moving pages in (stage 1b), in this order
 
 1. For each `site_pages` row, insert a `page` entry with the same id. Copy the draft, published copy and `published_at`, and register its paths.
