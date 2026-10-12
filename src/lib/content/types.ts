@@ -28,6 +28,8 @@ export interface ContentFailure {
   message: string;
   /** Set on `conflict`: the entry's current rev, re-read after a stale write. */
   currentRev?: number;
+  /** Set on `invalid`: at most ten `{path, message}` rows from the schema. */
+  issues?: Array<{ path: string; message: string }>;
 }
 
 export type ContentResult<T extends object = object> = ({ ok: true } & T) | ContentFailure;

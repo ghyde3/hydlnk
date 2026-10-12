@@ -12,3 +12,27 @@ export type {
   ContentResult,
   ContentSource,
 } from "./types";
+
+import { createAdminSupabase } from "@/lib/supabase/admin";
+import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
+import type { ContentActor } from "./types";
+
+/** Create an entry of an enabled type. The draft is validated leniently and stored as given. */
+export function createEntry(input: {
+  actor: ContentActor;
+  siteId: string;
+  typeKey: string;
+  draft: unknown;
+}) {
+  return createEntryWithClient(createAdminSupabase(), input);
+}
+
+/** Save an entry's draft at `expectedRev`. A stale rev returns `conflict` with `currentRev`. */
+export function updateEntry(input: {
+  actor: ContentActor;
+  entryId: string;
+  expectedRev: number;
+  draft: unknown;
+}) {
+  return updateEntryWithClient(createAdminSupabase(), input);
+}
