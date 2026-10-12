@@ -1,0 +1,33 @@
+export type ContentSource = "editor" | "mcp" | "builder";
+
+/** Who is writing: a verified session or token user (never request input) and where the call came from. */
+export interface ContentActor {
+  userId: string;
+  source: ContentSource;
+}
+
+export type ContentErrorCode =
+  | "not_found"
+  | "conflict"
+  | "account_suspended"
+  | "type_disabled"
+  | "invalid"
+  | "blocked_link"
+  | "storage_full"
+  | "entry_limit"
+  | "type_limit"
+  | "page_limit"
+  | "path_taken"
+  | "slug_taken"
+  | "error";
+
+export interface ContentFailure {
+  ok: false;
+  status: number;
+  error: ContentErrorCode;
+  message: string;
+  /** Set on `conflict`: the entry's current rev, re-read after a stale write. */
+  currentRev?: number;
+}
+
+export type ContentResult<T extends object = object> = ({ ok: true } & T) | ContentFailure;
