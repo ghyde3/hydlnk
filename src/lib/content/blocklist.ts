@@ -84,20 +84,37 @@ const MAX_SHOWN = 100;
 const MAX_ISSUES = 10;
 
 /**
- * Strict publish: refuses a link or image in the body whose scheme is not http, https, mailto or tel
- * (`javascript:`, `data:`, `vbscript:` and the like). It reuses `markdownUrls`, so tables, raw HTML and
+ * What a browser judges the scheme on: C0 controls and spaces trimmed from both ends, then every tab,
+ * newline and carriage return removed (the URL parser drops them wherever they sit).
+ */
+function cleanForScheme(url: string): string {
+  // eslint-disable-next-line no-control-regex
+  return url.replace(/^[\u0000-\u0020]+|[\u0000-\u0020]+$/g, "").replace(/[\t\n\r]/g, "");
+}
+
+/** Allowlist test: a safe absolute scheme, or a relative reference that cannot be read as a scheme. */
+function isSafeBodyUrl(url: string): boolean {
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url)?.[1];
+  if (scheme !== undefined) return SAFE_SCHEMES.has(scheme.toLowerCase());
+  const head = url.split(/[/?#]/, 1)[0] ?? "";
+  // A colon, or a character reference this code could not decode, ahead of the first "/", "?" or "#"
+  // could hide a scheme from this check and not from a browser.
+  return !head.includes(":") && !/&[A-Za-z][A-Za-z0-9]*;/.test(head);
+}
+
+/**
+ * Strict publish: refuses a link or image in the body whose address is not an allowed one: http, https, mailto or tel,
+ * or a plain relative reference (`javascript:`, `data:`, `vbscript:` and anything unparseable is refused). It reuses `markdownUrls`, so tables, raw HTML and
  * character references are covered the same way as the blocklist. Returns null when clean.
  */
 export function unsafeBodySchemes(draft: unknown): ContentFailure | null {
   const body = (draft as { body?: unknown } | null)?.body;
   if (typeof body !== "string" || body === "") return null;
-  // A browser drops tabs and newlines inside a scheme, so judge the address without them.
+  // Allowlist, fail closed: only an absolute http, https, mailto or tel address, or a relative
+  // reference with no ":" before its first "/", "?" or "#", passes. Anything else is refused.
   const bad = markdownUrls(body)
-    .map((url) => url.replace(/[\t\n\r]/g, ""))
-    .filter((url) => {
-      const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(url)?.[1];
-      return scheme !== undefined && !SAFE_SCHEMES.has(scheme.toLowerCase());
-    });
+    .map(cleanForScheme)
+    .filter((url) => !isSafeBodyUrl(url));
   if (bad.length === 0) return null;
   const shown = (url: string) => (url.length > MAX_SHOWN ? `${url.slice(0, MAX_SHOWN)}…` : url);
   return {

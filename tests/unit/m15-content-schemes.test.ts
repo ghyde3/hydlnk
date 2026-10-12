@@ -39,6 +39,24 @@ describe("unsafe link schemes in a post body", () => {
     expect(issues[0]?.message).toContain(offending);
   });
 
+  it.each([
+    ["&Tab; in the scheme", "[x](java&Tab;script:alert(1))"],
+    ["&NewLine; in the scheme", "[x](java&NewLine;script:alert(1))"],
+    ["a reference definition", "[x][a]\n\n[a]: java&Tab;script:alert(1)"],
+    ["a raw anchor", '<a href="java&Tab;script:alert(1)">x</a>'],
+    ["an unknown reference in the scheme", "[x](java&bogus;script:alert(1))"],
+    ["leading control characters", '<a href="\u0001 javascript:alert(1)">x</a>'],
+    ["a colon before any slash in a relative-looking address", "[x](foo:bar)"],
+  ])("fails closed on %s", (_name, body) => {
+    expect(refused(body)).toMatchObject({ ok: false, error: "invalid", status: 422 });
+  });
+
+  it("still allows relative references and a colon after the first slash, query or fragment", () => {
+    const body =
+      "[a](/a:b) [b](a/b:c) [c](?q=a:b) [d](#x:y) [e](page.html) [f](https://x.example/?a=1&b=2) [g](mailto:a@b.example)";
+    expect(refused(body)).toBeNull();
+  });
+
   it("reports each distinct offender, at most ten, and cuts a long one", () => {
     const many = Array.from({ length: 15 }, (_, i) => `[x](javascript:a${i})`).join(" ");
     expect(refused(many)?.issues).toHaveLength(10);
