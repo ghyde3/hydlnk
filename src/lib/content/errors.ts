@@ -1,3 +1,4 @@
+import { readBlockedLinkError } from "@/lib/blocklist/error";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
 import type { ContentErrorCode, ContentFailure } from "./types";
 
@@ -14,6 +15,7 @@ export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
   page_limit: 403,
   path_taken: 409,
   slug_taken: 409,
+  too_large: 413,
   error: 500,
 };
 
@@ -31,6 +33,7 @@ export const CONTENT_MESSAGES: Record<ContentErrorCode, string> = {
   page_limit: "This site is at its limit of pages.",
   path_taken: "That address is already used or reserved.",
   slug_taken: "Another entry of this type already uses that slug.",
+  too_large: "That is too large to save. Shorten it and try again.",
   error: "Something went wrong. Try again.",
 };
 
@@ -64,7 +67,19 @@ const BY_CODE: Record<string, ContentErrorCode> = {
  * One mapping for what the database raises. 22023 (a stale rev) arrives as `conflict` without a
  * `currentRev`: the caller that knows the entry re-reads the rev and adds it.
  */
-export function mapDbError(err: { code?: string | null; message?: string | null }): ContentFailure {
+export function mapDbError(err: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+}): ContentFailure {
+  const blocked = readBlockedLinkError(err);
+  if (blocked)
+    return { ...failure("blocked_link"), hosts: blocked.hosts, blockIds: blocked.blockIds };
+  // The 1 MiB cap on a draft (a CHECK), for a draft the schemas could not bound.
+  if (err.code === "23514" && err.message?.includes("content_entries_draft_integrity")) {
+    return failure("too_large");
+  }
   const mapped = err.code ? BY_CODE[err.code] : undefined;
   if (mapped) return failure(mapped);
   console.error("[content] database error", err.code, err.message);

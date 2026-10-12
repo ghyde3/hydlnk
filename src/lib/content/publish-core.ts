@@ -1,9 +1,13 @@
+import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/supabase/database.types";
-import { blockedBodyLinks } from "./blocklist";
+import { publishedSubPageSchema, toSubPagePublishForm } from "@/lib/document/sub-page";
+import { placedBlockImages } from "@/lib/publish/placed-images";
+import { blockedBodyLinks, blockedPageLinks } from "./blocklist";
 import { failure, mapDbError } from "./errors";
 import { activeAccount, enabledType, ownedEntry } from "./guards";
-import { issuesOf, schemaForType } from "./schemas";
+import { checkOwnImages, postImages, type ImageUse } from "./images";
+import { issuesOf, schemaForType, untrimmedPathIssue } from "./schemas";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -59,17 +63,37 @@ export async function publishEntryWithClient(
   if (!schema) return failure("invalid", "That content type can’t be published yet.");
   const parsed = schema.safeParse(entry.draft);
   if (!parsed.success) return { ...failure("invalid"), issues: issuesOf(parsed.error) };
+  const spaced = untrimmedPathIssue(type.key, entry.draft);
+  if (spaced) return { ...failure("invalid"), issues: [spaced] };
+
+  // What is stored: a post as it is; a page as its publish form (hidden blocks dropped, text trimmed).
+  let published: unknown = entry.draft;
+  let images: ImageUse[] = [];
   if (type.key === "post") {
     const blocked = await blockedBodyLinks(admin, entry.draft);
     if (blocked) return blocked;
+    images = postImages(entry.draft);
+  } else if (type.key === "page") {
+    const form = toSubPagePublishForm(parsed.data as Parameters<typeof toSubPagePublishForm>[0]);
+    const checked = publishedSubPageSchema.safeParse(form);
+    if (!checked.success) return { ...failure("invalid"), issues: issuesOf(checked.error) };
+    const blocked = await blockedPageLinks(admin, form);
+    if (blocked) return blocked;
+    published = form;
+    images = placedBlockImages(form.blocks).map((p) => ({
+      path: p.ref.path,
+      field: `${p.blockId ?? "page"}.${p.field}`,
+    }));
   }
+  const unplaced = await checkOwnImages(admin, input.actor.userId, images);
+  if (unplaced) return unplaced;
 
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
   const { data, error } = await admin.rpc("publish_entry", {
     p_entry_id: entry.id,
     p_owner_id: input.actor.userId,
     p_expected_rev: input.expectedRev,
-    p_published: entry.draft as Json,
+    p_published: published as Json,
     p_published_at: publishedAt,
     p_source: input.actor.source,
   });

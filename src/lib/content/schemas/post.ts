@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { imageRefSchema } from "@/lib/document/schema";
+import { imageRefSchema, text } from "@/lib/document/schema";
 import { draftEntrySlug, strictEntrySlug } from "./slug";
 
 export const POST_LIMITS = {
@@ -37,43 +37,60 @@ const draftImage = z
   })
   .nullable();
 
-function shape(image: z.ZodType) {
+/**
+ * A short text field. A draft keeps any string; publish uses the page document's `text` rule: no
+ * control or bidi characters, and a required one must hold more than spaces. Used to validate only,
+ * the stored text is never changed.
+ */
+function line(publish: boolean, max: number, required?: string): z.ZodString {
+  return publish ? text("publish", { max, required }) : z.string().max(max);
+}
+
+function shape(image: z.ZodType, publish: boolean) {
   return {
-    title: z.string().max(POST_LIMITS.title),
-    excerpt: z.string().max(POST_LIMITS.excerpt),
+    title: line(publish, POST_LIMITS.title),
+    excerpt: publish
+      ? text("publish", { max: POST_LIMITS.excerpt, multiline: true })
+      : z.string().max(POST_LIMITS.excerpt),
     body,
     featuredImage: image,
-    seo: z.object({
-      title: z.string().max(POST_LIMITS.seoTitle).optional(),
-      description: z.string().max(POST_LIMITS.seoDescription).optional(),
-      ogImage: image.optional(),
-      noindex: z.boolean().optional(),
-    }),
+    seo: z
+      .object({
+        title: line(publish, POST_LIMITS.seoTitle).optional(),
+        description: line(publish, POST_LIMITS.seoDescription).optional(),
+        ogImage: image.optional(),
+        noindex: z.boolean().optional(),
+      })
+      .strict(),
     terms,
     fields,
   };
 }
 
-const draftShape = shape(draftImage);
-const publishShape = shape(imageRefSchema.nullable());
+const draftShape = shape(draftImage, false);
+const publishShape = shape(imageRefSchema.nullable(), true);
 
 /** The post draft: every field optional, the slug may be empty. Never transforms. */
-export const postDraftSchema = z.object({
-  ...Object.fromEntries(Object.entries(draftShape).map(([k, v]) => [k, v.optional()])),
-  slug: draftEntrySlug.optional(),
-} as { [K in keyof typeof draftShape]: z.ZodOptional<(typeof draftShape)[K]> } & {
-  slug: z.ZodOptional<typeof draftEntrySlug>;
-});
+export const postDraftSchema = z
+  .object({
+    ...Object.fromEntries(Object.entries(draftShape).map(([k, v]) => [k, v.optional()])),
+    slug: draftEntrySlug.optional(),
+  } as { [K in keyof typeof draftShape]: z.ZodOptional<(typeof draftShape)[K]> } & {
+    slug: z.ZodOptional<typeof draftEntrySlug>;
+  })
+  .strict();
 
 /** The post publish gate: a non-empty title and a valid slug; everything else optional but valid. */
-export const postPublishSchema = z.object({
-  ...Object.fromEntries(Object.entries(publishShape).map(([k, v]) => [k, v.optional()])),
-  title: publishShape.title.min(1, { error: "Add a title." }),
-  slug: strictEntrySlug,
-} as { [K in keyof typeof publishShape]: z.ZodOptional<(typeof publishShape)[K]> } & {
-  title: z.ZodString;
-  slug: typeof strictEntrySlug;
-});
+export const postPublishSchema = z
+  .object({
+    ...Object.fromEntries(Object.entries(publishShape).map(([k, v]) => [k, v.optional()])),
+    title: line(true, POST_LIMITS.title, "Add a title."),
+    slug: strictEntrySlug,
+  } as { [K in keyof typeof publishShape]: z.ZodOptional<(typeof publishShape)[K]> } & {
+    title: z.ZodString;
+    slug: typeof strictEntrySlug;
+  })
+  .strict();
 
 export type PostDraft = z.infer<typeof postDraftSchema>;
 export type PostPublish = z.infer<typeof postPublishSchema>;

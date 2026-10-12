@@ -1,3 +1,4 @@
+import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure } from "./errors";
@@ -76,9 +77,8 @@ export async function enabledType(
   typeIdOrKey: string,
 ): Promise<{ ok: true; type: Row<"content_types"> } | ContentFailure> {
   const query = admin.from("content_types").select("*").eq("site_id", siteId);
-  const found = await (UUID.test(typeIdOrKey)
-    ? query.eq("id", typeIdOrKey)
-    : query.eq("key", typeIdOrKey)
+  const found = await (
+    UUID.test(typeIdOrKey) ? query.eq("id", typeIdOrKey) : query.eq("key", typeIdOrKey)
   ).maybeSingle();
   if (found.error) {
     console.error("[content] reading the type failed", found.error.message);

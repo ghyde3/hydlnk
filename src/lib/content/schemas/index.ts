@@ -30,3 +30,42 @@ export function issuesOf(error: z.ZodError): ContentIssue[] {
     .slice(0, MAX_ISSUES)
     .map((issue) => ({ path: issue.path.join("."), message: issue.message }));
 }
+
+/**
+ * A page path with spaces around it. The schemas validate a trimmed copy and never transform, so the
+ * stored path would differ from the validated one (and so would the path it claims): refuse it.
+ */
+export function untrimmedPathIssue(typeKey: string, draft: unknown): ContentIssue | null {
+  if (typeKey !== "page") return null;
+  const path = (draft as { path?: unknown } | null)?.path;
+  return typeof path === "string" && path !== path.trim()
+    ? { path: "path", message: "Remove the spaces around the address." }
+    : null;
+}
+
+/** The size of a draft as Postgres counts it for the 1 MiB cap: jsonb text puts a space after `:` and `,`. */
+export function draftBytes(value: unknown): number {
+  const encoder = new TextEncoder();
+  const size = (v: unknown): number => {
+    if (Array.isArray(v))
+      return 2 + v.reduce<number>((n, x) => n + size(x), 0) + Math.max(0, v.length - 1) * 2;
+    if (v && typeof v === "object") {
+      const entries = Object.entries(v as Record<string, unknown>).filter(
+        ([, x]) => x !== undefined,
+      );
+      return (
+        2 +
+        entries.reduce(
+          (n, [k, x]) => n + encoder.encode(JSON.stringify(k)).length + 2 + size(x),
+          0,
+        ) +
+        Math.max(0, entries.length - 1) * 2
+      );
+    }
+    return encoder.encode(JSON.stringify(v) ?? "null").length;
+  };
+  return size(value);
+}
+
+/** The most a draft may weigh (the CHECK on content_entries.draft). */
+export const MAX_DRAFT_BYTES = 1024 * 1024;

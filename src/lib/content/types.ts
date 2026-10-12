@@ -19,6 +19,7 @@ export type ContentErrorCode =
   | "page_limit"
   | "path_taken"
   | "slug_taken"
+  | "too_large"
   | "error";
 
 export interface ContentFailure {
@@ -30,6 +31,9 @@ export interface ContentFailure {
   currentRev?: number;
   /** Set on `invalid`: at most ten `{path, message}` rows from the schema. */
   issues?: Array<{ path: string; message: string }>;
+  /** Set on `blocked_link`: the distinct blocked hosts, lower case, and the ids of the blocks holding them. */
+  hosts?: string[];
+  blockIds?: string[];
 }
 
 export type ContentResult<T extends object = object> = ({ ok: true } & T) | ContentFailure;

@@ -59,7 +59,7 @@ describe.skipIf(!run)("publish and unpublish an entry", () => {
   });
 
   it("a valid publish stores the draft as published and bumps rev", async () => {
-    const draft = { title: "Hello", slug: "hello", extra: "kept" };
+    const draft = { title: "Hello", slug: "hello", fields: { k: "kept" } };
     const made = await post(draft);
     const out = await publish(made.id, 1);
     expect(out).toMatchObject({ ok: true, rev: 2, siteId: a.pageId });

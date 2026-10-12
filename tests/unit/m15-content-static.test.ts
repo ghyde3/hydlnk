@@ -48,7 +48,16 @@ const code = (file: string) => strip(readFileSync(resolve(ROOT, file), "utf8"), 
 export const TABLE_WRITE =
   /\.from\(\s*["'`](?:content_(?:types|entries|entry_revisions|terms|entry_terms)|site_paths)["'`]\s*\)\s*\.(?:insert|update|upsert|delete)\b/;
 export const WRITER_RPC =
-  /\.rpc\(\s*["'`](?:(?:publish|unpublish|trash|restore)_entry|record_entry_revision)["'`]/;
+  /\.rpc\(\s*["'`](?:(?:publish|unpublish|trash|restore)_entry|record_entry_revision|purge_trashed_entries|claim_site_path)["'`]/;
+/** Any `.from(` of a content table that is not directly a read; catches `const t = admin.from(...)`. */
+export const TABLE_FROM_NOT_READ =
+  /\.from\(\s*["'`](?:content_(?:types|entries|entry_revisions|terms|entry_terms)|site_paths)["'`]\s*\)(?!\s*\.select\b)/;
+const TABLE_NAME = /content_(?:types|entries|entry_revisions|terms|entry_terms)|site_paths/;
+const WRITE_CALL = /\.(?:insert|update|upsert|delete)\(/;
+/** Files outside the writer that may name a content table (generated types hold no calls). */
+const TABLE_NAME_ALLOWED = new Set(["src/lib/supabase/database.types.ts"]);
+/** An import that reaches into the writer's files instead of its index. */
+export const DEEP_IMPORT = /from\s+["'](?:@\/lib\/content\/|(?:\.\.?\/)+(?:lib\/)?content\/)/;
 
 const outside = walk("src").filter((file) => !file.startsWith(`${CONTENT_DIR}/`));
 const inside = walk(CONTENT_DIR);
@@ -64,6 +73,16 @@ describe("the scan patterns", () => {
     expect(WRITER_RPC.test(`admin.rpc("record_entry_revision")`)).toBe(true);
     expect(WRITER_RPC.test(`admin.rpc('publish_site')`)).toBe(false);
   });
+  it("flags a write made through a variable or a constant", () => {
+    expect(
+      TABLE_FROM_NOT_READ.test(`const t = admin.from("content_entries");\nawait t.update({})`),
+    ).toBe(true);
+    expect(TABLE_FROM_NOT_READ.test(`admin.from('content_entries').select('id')`)).toBe(false);
+    expect(WRITER_RPC.test(`admin.rpc('purge_trashed_entries')`)).toBe(true);
+    expect(WRITER_RPC.test(`admin.rpc('claim_site_path', {})`)).toBe(true);
+    expect(DEEP_IMPORT.test(`import { x } from "@/lib/content/publish-core";`)).toBe(true);
+    expect(DEEP_IMPORT.test(`import { x } from "@/lib/content";`)).toBe(false);
+  });
   it("ignores a comment that names the rule", () => {
     expect(TABLE_WRITE.test(strip(`// admin.from('content_entries').update(`))).toBe(false);
   });
@@ -72,6 +91,29 @@ describe("the scan patterns", () => {
 describe("src/lib/content is the only writer", () => {
   it("no other file under src writes a content table or the path registry", () => {
     expect(outside.filter((file) => TABLE_WRITE.test(code(file)))).toEqual([]);
+  });
+  it("no other file under src takes a content table for anything but a read", () => {
+    expect(outside.filter((file) => TABLE_FROM_NOT_READ.test(code(file)))).toEqual([]);
+  });
+  it("no other file names a content table next to a write call", () => {
+    expect(
+      outside.filter(
+        (file) =>
+          !TABLE_NAME_ALLOWED.has(file) &&
+          TABLE_NAME.test(code(file)) &&
+          WRITE_CALL.test(code(file)),
+      ),
+    ).toEqual([]);
+  });
+  it("no other file imports past the index of the writer", () => {
+    expect(outside.filter((file) => DEEP_IMPORT.test(code(file)))).toEqual([]);
+  });
+  it("the cores and their helpers import server-only", () => {
+    for (const name of ["entries-core", "publish-core", "guards", "blocklist"]) {
+      expect(readFileSync(resolve(ROOT, CONTENT_DIR, `${name}.ts`), "utf8"), name).toMatch(
+        /^(?:\s*\/\*[\s\S]*?\*\/)?\s*import ["']server-only["'];/,
+      );
+    }
   });
   it("no other file under src calls the entry functions", () => {
     expect(outside.filter((file) => WRITER_RPC.test(code(file)))).toEqual([]);

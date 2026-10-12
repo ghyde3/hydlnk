@@ -1,9 +1,16 @@
+import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { blockedBodyLinks } from "./blocklist";
 import { failure, mapDbError } from "./errors";
 import { activeAccount, enabledType, ownedEntry, ownedSite } from "./guards";
-import { issuesOf, schemaForType } from "./schemas";
+import {
+  MAX_DRAFT_BYTES,
+  draftBytes,
+  issuesOf,
+  schemaForType,
+  untrimmedPathIssue,
+} from "./schemas";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -23,6 +30,9 @@ async function checkDraft(
   if (!parsed.success) {
     return { ...failure("invalid"), issues: issuesOf(parsed.error) };
   }
+  const spaced = untrimmedPathIssue(typeKey, draft);
+  if (spaced) return { ...failure("invalid"), issues: [spaced] };
+  if (draftBytes(draft) > MAX_DRAFT_BYTES) return failure("too_large");
   if (typeKey === "post") return blockedBodyLinks(admin, draft);
   return null;
 }
@@ -101,7 +111,11 @@ export async function updateEntryWithClient(
     .select("rev");
   if (updated.error) return mapDbError(updated.error);
   if (updated.data.length === 0) {
-    const reread = await admin.from("content_entries").select("rev").eq("id", entry.id).maybeSingle();
+    const reread = await admin
+      .from("content_entries")
+      .select("rev")
+      .eq("id", entry.id)
+      .maybeSingle();
     if (reread.error) return mapDbError(reread.error);
     if (!reread.data) return failure("not_found");
     return failure("conflict", undefined, Number(reread.data.rev));
