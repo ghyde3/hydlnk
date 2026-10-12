@@ -1659,6 +1659,10 @@ export type Database = {
       }
       blocklist_pct_decode: { Args: { p_text: string }; Returns: string }
       blocklist_url_host: { Args: { p_url: string }; Returns: string }
+      charge_account_bytes: {
+        Args: { p_delta: number; p_owner: string }
+        Returns: undefined
+      }
       claim_domain_check: {
         Args: { p_cooldown_seconds?: number; p_id: string }
         Returns: boolean
@@ -1831,12 +1835,16 @@ export type Database = {
         Returns: {
           analytics_breakdowns: boolean
           analytics_history_days: number
+          content_bytes: number
+          custom_types: number
+          entries_per_type: number
           max_domains: number
           max_pages: number
           max_saved_themes: number
           max_upload_bytes: number
           pages_per_site: number
           redirect_mode: boolean
+          revisions_kept: number
           versions_kept: number
         }[]
       }

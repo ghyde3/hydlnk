@@ -1,6 +1,6 @@
 -- Wave M1 security review (M11-12), the database side:
 --
---   * the 64 MiB sub-page byte cap (HL009): account_site_bytes is server only, the running total follows
+--   * the sub-page byte cap (pro here: 1 GiB since M15-02) (HL009): account_site_bytes is server only, the running total follows
 --     insert, update (delta) and delete, a write over the cap is refused before it lands, a delete (and
 --     deleting the whole site) frees room, and the total accumulates across statements;
 --   * the reserved-path check on site_pages.live_path (publish_site with "og" or "hl-x" fails and rolls
@@ -80,19 +80,19 @@ select is(pg_temp.total('a'), pg_temp.actual('a'), 'a shrinking update lowers it
 -- ---------------------------------------------------------------------------
 
 -- Park the total 400 bytes under the cap (the test runs as the table owner, the only way in).
-update public.account_site_bytes set bytes = 67108864 - 400 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 - 400 where owner_id = tests.get_supabase_uid('a');
 
 select throws_ok(
   $$ insert into public.site_pages (id, page_id, draft)
      values ('00000000-0000-4000-8000-00000178a0a3', '00000000-0000-4000-8000-00000178a001',
              pg_temp.doc('three', 1000)) $$,
-  'HL009', null, 'an insert that would pass 64 MiB is refused with HL009'
+  'HL009', null, 'an insert that would pass the pro cap of 1 GiB is refused with HL009'
 );
 select is(
   (select count(*)::int from public.site_pages where id = '00000000-0000-4000-8000-00000178a0a3'),
   0, 'and the row was not written'
 );
-select is(pg_temp.total('a'), 67108864::bigint - 400, 'and the total did not move');
+select is(pg_temp.total('a'), 1073741824::bigint - 400, 'and the total did not move');
 
 select throws_ok(
   $$ update public.site_pages set draft = pg_temp.doc('one', 2000)
@@ -116,7 +116,7 @@ select lives_ok(
              pg_temp.doc('fits', 50)) $$,
   'a small page that fits is still accepted'
 );
-update public.account_site_bytes set bytes = 67108864 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 where owner_id = tests.get_supabase_uid('a');
 select lives_ok(
   $$ update public.site_pages set draft = pg_temp.doc('one', 1)
        where id = '00000000-0000-4000-8000-00000178a0a1' $$,
@@ -138,9 +138,9 @@ select lives_ok(
 );
 
 -- Delete frees room
-update public.account_site_bytes set bytes = 67108864 - 100 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 - 100 where owner_id = tests.get_supabase_uid('a');
 delete from public.site_pages where id = '00000000-0000-4000-8000-00000178a0a2';
-select ok(pg_temp.total('a') < 67108864 - 100 - 200, 'deleting a sub-page frees its bytes');
+select ok(pg_temp.total('a') < 1073741824 - 100 - 200, 'deleting a sub-page frees its bytes');
 select lives_ok(
   $$ insert into public.site_pages (id, page_id, draft)
      values ('00000000-0000-4000-8000-00000178a0a6', '00000000-0000-4000-8000-00000178a001',
@@ -149,7 +149,7 @@ select lives_ok(
 );
 
 -- The total accumulates across statements: each write fits alone, the pair does not.
-update public.account_site_bytes set bytes = 67108864 - 600 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 - 600 where owner_id = tests.get_supabase_uid('a');
 select lives_ok(
   $$ insert into public.site_pages (id, page_id, draft)
      values ('00000000-0000-4000-8000-00000178a0a7', '00000000-0000-4000-8000-00000178a001',

@@ -282,17 +282,17 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint) $$,
   'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint) $$,
   'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns, 25 versions'
 );
 select throws_ok(
