@@ -22,10 +22,13 @@ insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000189b001', tests.get_supabase_uid('b'), 'zq189-b',
    '{"version":1,"rev":1,"profile":{"name":"B","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');
 
-insert into public.content_types (id, site_id, key, label, label_plural, kind, body_format, archive_path) values
-  ('00000000-0000-4000-8000-00000189a0c1', '00000000-0000-4000-8000-00000189a001', 'post', 'Post', 'Posts', 'builtin', 'markdown', 'blog'),
-  ('00000000-0000-4000-8000-00000189a0c2', '00000000-0000-4000-8000-00000189a002', 'post', 'Post', 'Posts', 'builtin', 'markdown', 'blog'),
-  ('00000000-0000-4000-8000-00000189b0c1', '00000000-0000-4000-8000-00000189b001', 'post', 'Post', 'Posts', 'builtin', 'markdown', 'blog');
+-- Every site already has its built-in page and post types (slice 2 trigger); pin the post type ids.
+update public.content_types set id = '00000000-0000-4000-8000-00000189a0c1'
+  where site_id = '00000000-0000-4000-8000-00000189a001' and key = 'post';
+update public.content_types set id = '00000000-0000-4000-8000-00000189a0c2'
+  where site_id = '00000000-0000-4000-8000-00000189a002' and key = 'post';
+update public.content_types set id = '00000000-0000-4000-8000-00000189b0c1'
+  where site_id = '00000000-0000-4000-8000-00000189b001' and key = 'post';
 
 insert into public.content_entries (id, site_id, type_id, draft, published, published_at) values
   ('00000000-0000-4000-8000-00000189a0e1', '00000000-0000-4000-8000-00000189a001', '00000000-0000-4000-8000-00000189a0c1',
@@ -61,7 +64,7 @@ select is((select live_slug from public.content_entries where id = '00000000-000
 
 -- The owner reads their own rows.
 select tests.authenticate_as('a');
-select is((select count(*)::int from public.content_types), 2, 'owner reads their content_types');
+select is((select count(*)::int from public.content_types), 4, 'owner reads their content_types');
 select is((select count(*)::int from public.content_entries), 2, 'owner reads their content_entries');
 select is((select count(*)::int from public.content_entry_revisions), 1, 'owner reads their revisions');
 select is((select count(*)::int from public.content_terms), 2, 'owner reads their terms');
@@ -135,10 +138,10 @@ select throws_ok($$insert into public.content_entries (site_id, type_id, draft, 
   '23514', null, 'published without published_at is refused');
 select throws_ok($$insert into public.content_entries (site_id, type_id, draft, published, published_at)
   values ('00000000-0000-4000-8000-00000189a001', '00000000-0000-4000-8000-00000189a0c1', '{}', '{"slug":"one"}', now())$$,
-  '23505', null, 'a second live entry with the same slug in a type is refused');
+  'HL012', null, 'a second live entry with the same slug in a type is refused');
 select throws_ok($$insert into public.content_entries (site_id, type_id, draft, published, published_at)
   values ('00000000-0000-4000-8000-00000189a001', '00000000-0000-4000-8000-00000189a0c1', '{}', '{"slug":"feed.xml"}', now())$$,
-  '23514', null, 'a routed word is refused as a live slug');
+  'HL012', null, 'a routed word is refused as a live slug');
 select throws_ok($$insert into public.content_entries (site_id, type_id, draft)
   values ('00000000-0000-4000-8000-00000189a001', '00000000-0000-4000-8000-00000189a0c1', jsonb_build_object('body', repeat('x', 1048577)))$$,
   '23514', null, 'a draft over 1 MiB is refused');

@@ -1664,6 +1664,15 @@ export type Database = {
         Returns: boolean
       }
       claim_domain_live_email: { Args: { p_id: string }; Returns: boolean }
+      claim_site_path: {
+        Args: {
+          p_entry: string
+          p_path: string
+          p_site: string
+          p_type: string
+        }
+        Returns: undefined
+      }
       end_expired_gifts: {
         Args: never
         Returns: {
@@ -1671,6 +1680,8 @@ export type Database = {
         }[]
       }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
+      is_reserved_entry_slug: { Args: { p_slug: string }; Returns: boolean }
+      is_reserved_site_path: { Args: { p_path: string }; Returns: boolean }
       mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
       media_paths_in_use: {

@@ -33,6 +33,13 @@ export const RESERVED_PATHS: readonly string[] = [
 /** The reserved prefix: test hooks such as `hl-query-count`. */
 export const RESERVED_PATH_PREFIX = "hl-";
 
+/**
+ * Words a typed entry (a post) may not take as its slug: the routes served under an archive
+ * (`/blog/page/2`, `/blog/category/x`, `/blog/tag/x`, `/blog/feed.xml`). Kept beside the path list;
+ * `public.is_reserved_entry_slug` in SQL holds the same words (tests keep them equal).
+ */
+export const RESERVED_ENTRY_SLUGS: readonly string[] = ["page", "category", "tag", "feed.xml"];
+
 export const PATH_MESSAGES = {
   format:
     "Use 1 to 40 lowercase letters, digits or hyphens, starting and ending with a letter or digit.",
