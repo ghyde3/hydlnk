@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { rawBuffer, SERVER_PORT, tenantGet } from "../m2/publish-helpers";
+import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
 import { sessionCookie, signInAsAdmin, signInAsUser } from "./admin-helpers";
 
 /**
@@ -30,7 +31,11 @@ const cacheState = (res: { headers: Record<string, unknown> }) =>
 test("M5-08 a cached page is never served after Suspend, and is back at once after Unsuspend", async ({
   browser,
 }) => {
-  const owner = await signInAsUser(await browser.newContext(), "scache");
+  // Pro, so the page can have a verified custom host: M8-04 wants the same flips on both hosts.
+  const owner = await signInAsUser(await browser.newContext(), "scache", { plan: "pro" });
+  const customHost = hostnameFor("scache");
+  await addDomainRow({ pageId: owner.pageId!, hostname: customHost, status: "verified" });
+  const custom = () => rawBuffer(`${customHost}:${SERVER_PORT}`, "/");
   const adminContext = await browser.newContext();
   await signInAsAdmin(adminContext, "scacheadm");
   const cookie = await sessionCookie(adminContext);
@@ -58,6 +63,10 @@ test("M5-08 a cached page is never served after Suspend, and is back at once aft
   expect(cacheState(second)).toBe("HIT");
   expect(second.text).toContain(marker);
   expect((await tenantGet(owner.handle!, "/og")).status).toBe(200);
+  await custom();
+  const customWarm = await custom();
+  expect(customWarm.status).toBe(200);
+  expect(customWarm.text).toContain(marker);
 
   // Suspend, and read at once: the 404, never the cached 200.
   const suspended = await post(`/api/admin/accounts/${owner.userId}/suspend`);
@@ -67,6 +76,10 @@ test("M5-08 a cached page is never served after Suspend, and is back at once aft
   expect(gone.text).toContain("This page isn’t available.");
   expect(gone.text).not.toContain(marker);
   expect((await tenantGet(owner.handle!, "/og")).status).toBe(404);
+  const customGone = await custom();
+  expect(customGone.status).toBe(404);
+  expect(customGone.text).toContain("This page isn’t available.");
+  expect(customGone.text).not.toContain(marker);
   // Read it again (it may now be the short-lived cached 404): still the 404.
   expect((await tenantGet(owner.handle!)).status).toBe(404);
 
@@ -78,4 +91,7 @@ test("M5-08 a cached page is never served after Suspend, and is back at once aft
   expect(back.text).toContain(marker);
   expect(back.text).not.toContain("This page isn’t available.");
   expect((await tenantGet(owner.handle!, "/og")).status).toBe(200);
+  const customBack = await custom();
+  expect(customBack.status).toBe(200);
+  expect(customBack.text).toContain(marker);
 });

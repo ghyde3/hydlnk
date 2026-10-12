@@ -391,6 +391,38 @@ test.describe("M6-24 Use photo", () => {
     );
   });
 
+  test("M9-08 the file is drawn from the area the library reports: keys then a slider-only zoom still give the half in view", async ({
+    page,
+    context,
+  }) => {
+    const user = await setup(context, "pd8z");
+    watchUploads(page);
+    await openEditor(page);
+    await pick(page, await halves(1200, 1200));
+    await slider(page).fill("4");
+    // Keys move the picture left (the right, blue side comes into view) until it stops...
+    await finder(page).focus();
+    await page.keyboard.press("ArrowLeft", { delay: 5 });
+    for (let i = 0; i < 60; i += 1) await page.keyboard.press("ArrowLeft");
+    // ...then the zoom changes with the slider alone, with no drag after it: what the library
+    // reports must follow the zoom, so the file is still the right half, at 2x.
+    await slider(page).fill("2");
+    await useButton(page).click();
+    await expect(card(page).getByRole("button", { name: "Replace photo" })).toBeVisible();
+    const { bytes } = await storedAvatar(user.pageId);
+    const meta = await sharp(bytes).metadata();
+    expect([meta.width, meta.height]).toEqual([400, 400]);
+    for (const [x, y] of [
+      [200, 200],
+      [10, 10],
+      [390, 390],
+      [10, 390],
+      [390, 10],
+    ] as const) {
+      expect(isBlue(await pixelAt(bytes, x, y)), `pixel ${x},${y}`).toBe(true);
+    }
+  });
+
   test("M6-24 the left half in view gives a red avatar, and the request is the cropped JPEG, never the original", async ({
     page,
     context,

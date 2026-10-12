@@ -9,6 +9,7 @@ import { blocks, fullPublished, noirTokens } from "./fixtures/page-document";
 
 // The editor's contracts module re-exports the Publish server action, which needs the server.
 vi.mock("@/lib/publish/actions", () => ({ publishPage: vi.fn() }));
+vi.mock("@/lib/publish/unpublish-action", () => ({ unpublishSite: vi.fn() }));
 vi.mock("@/lib/media/url", () => ({
   mediaUrl: (path: string) => `https://media.test/page-media/${path}`,
 }));

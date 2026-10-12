@@ -144,6 +144,8 @@ describe("M2-03: the editor never uses the secret-key client", () => {
       GATE_OAUTH_RESUME,
       "src/lib/previews/actions.ts",
       "src/lib/publish/actions.ts",
+      // Unpublish (M14-02) is the fourth: the More actions menu and the Share tab call it.
+      "src/lib/publish/unpublish-action.ts",
     ]);
   });
 

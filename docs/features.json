@@ -135,7 +135,7 @@
         "At 1440x900 on the same URL: the Google button sits below the 'or' divider inside the 400px-max form column, same 48px height."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-09",
@@ -220,7 +220,7 @@
         "At 1440x900 on the same URL: the Google button sits below the 'or' divider in the form column."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-14",
@@ -491,7 +491,7 @@
         "Manual on production, after the Google Cloud, Supabase and Vercel steps: Gary signs in at https://app.hydlnk.com/login with a Google account, Google's popup names hydlnk.com, and he lands on /claim (new account) or /editor (existing account); a Google address that already has an email-link account lands on that same account (one auth.users row, one accounts row)."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M1-30",
@@ -507,7 +507,7 @@
         "Manual on production: Gary signs up with Google and a fresh handle; afterwards a pages row exists and https://<handle>.hydlnk.com returns 200 showing the placeholder."
       ],
       "mockup": "Signup.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M2-01",
@@ -1472,7 +1472,7 @@
         "With stripe listen --project-name hydlnk --forward-to http://app.localhost:3000/api/stripe/webhook running, stripe trigger customer.subscription.updated --project-name hydlnk shows a 200 response in the listener output (an event for a customer we do not know is acknowledged and ignored)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-04",
@@ -1560,7 +1560,7 @@
         "At 1440x900 on the same URL: the badge is centred inside the page's max-width column, or absent for Pro and Studio."
       ],
       "mockup": "Public.dc.html",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-09",
@@ -1578,7 +1578,7 @@
         "Domain lookup uses a server-only query on domains and pages.published with the secret key; a lookup that hits the database error path returns 404 rather than a 500 with details."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-10",
@@ -1779,7 +1779,7 @@
         "The public page document stays static: it sets no cookie and is identical for every visitor, the beacon being the only per-visit request, and no cookie banner appears."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M4-22",
@@ -3395,7 +3395,7 @@
         "Supersedes: M3-19 steps 1, 5 and 6 (the 'Saved themes' card with a grid of repeat(auto-fill, minmax(130px, 1fr)), 56px swatches, the hint 'Applying one replaces page-level tokens', two columns on a phone; the mockup grid); M3-21 steps 4 and 5 ('Save as theme' as a Design header button: it is in the Themes card); M3-23 step 1 (inline 'Rename' and 'Update' on the card: Rename is a menu item with a dialog, 'Update <name>' stays above the rows) and M3-24 (the 'Delete' button on the card: a menu item); M6-43 step 3 (the system themes in one grid); M6-44 steps 1 and 6 (the 'Preview' button under every card on its own row above Rename and Delete, and the two-column phone grid: Preview is the first item of the card's menu, with the same accessible name 'Preview Paper'); M5-16 step 1 (the 'Saved themes' row: the error text and Retry now sit in the Themes card)."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M7-07",
@@ -3415,7 +3415,7 @@
         "Supersedes: M6-40 step 1 where it says each card shows 'a strip of its theme’s background and accent colors' (the live preview replaces the strip; everything else in step 1 holds) and the layout steps' card heights. tests/unit and tests/e2e specs that read `data-testid='template-colors'` read the preview root's computed colors instead."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M7-08",
@@ -3815,7 +3815,7 @@
         "Supersedes: nothing in the steps; every step that names an icon's size or accessible name (M1-16, M1-17, M6-21, M7-05, M7-06) holds unchanged. The hand-drawn glyph shapes are no longer a requirement anywhere."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M9-03",
@@ -3878,7 +3878,7 @@
         "Supersedes: M7-05 step 3's 'Keyboard as the page switcher's menu' sentence (Radix is now the reference: Tab does not leave an open menu) and 'Tab leaves'; M7-01 step 2's 'Tab leaves it and closes it'. Everything else in M7-05 steps 3 and 4 and M7-01 steps 2 to 4 holds."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M9-06",
@@ -3898,7 +3898,7 @@
         "Supersedes: the implementation notes of M6-40 step 4 and M7-07 step 4 ('a native modal `<dialog>`'; 'focus starts on the first card's Use this template, Tab and Shift+Tab stay inside, Escape closes it' all hold, now through Radix). Nothing else."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M9-07",
@@ -3917,7 +3917,7 @@
         "Supersedes: M3-17 and M3-18 where they describe 'a color control is the swatch plus 16px hex field plus Theme default button' as a native color input, and M6-46 step 1's sentence of the same shape (the swatch now opens the picker); every other assertion of those steps holds. Specs that drove `input[type=color]` drive the hex field instead."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M9-08",
@@ -3937,7 +3937,7 @@
         "Supersedes: M6-24 step 2's internals ('pointer events, `touch-action: none` on the viewfinder' and 'a 'Zoom' slider' as hand-written code) and step 3's key handling as the dialog's own code; every outcome and copy in M6-24 holds, and pinch-to-zoom on phones is added."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M9-09",
@@ -4062,7 +4062,7 @@
         "Supersedes: nothing."
       ],
       "mockup": "",
-      "passes": false
+      "passes": true
     },
     {
       "id": "M9-15",
@@ -5564,6 +5564,69 @@
         "list_pages gives each page an explicit target (Home: the site id; a sub-page: the site id and the page id as subPageId), and the tool descriptions say a page id from list_pages is accepted as pageId.",
         "The /connect page tells people to refresh the HYDLNK plugin at chatgpt.com/plugins (and start a new chat) when HYDLNK adds new abilities, and to start a new conversation in Claude.",
         "Unit tests for the resolution, ownership and the contradiction; the scripted official-client e2e flow adds a block to a sub-page by passing its page id as pageId."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M14-01",
+      "milestone": 14,
+      "area": "platform",
+      "title": "Before-and-after screenshot steps replaced by today's tests; build-time Google Fonts accepted",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-07): M9-02 step 9's 'a screenshot of each screen differs from the commit before only where an icon's shape changed', M9-05 step 10's 'a screenshot of each open menu matches the commit before', M9-06 step 9's 'a screenshot matches the commit before', M9-07 step 8's 'a screenshot matches the commit before except for the swatch and the panel', M9-08 step 9's 'the same fixture images give the same outputs as before this feature', and M9-14 steps 7 and 8's 'no difference from the commit before'. Those comparisons only made sense the day each feature shipped; they are replaced by today's tests that pin each screen's sizes, colors and behavior (tests/e2e/m9/proving-app-shell.spec.ts, menus.spec.ts, template-dialog.spec.ts, color-picker-coverage.spec.ts, position-crop.spec.ts and tests/e2e/m6/images-position.spec.ts, with the M6-24 fixtures). Every other part of those steps stands.",
+        "Supersedes, in this respect only (Gary, 2026-10-07): M9-14 step 2(d) allows the source files that name fonts.googleapis.com or fonts.gstatic.com for next/font/google, because next/font downloads those fonts when the site is built and serves them from HYDLNK's own domain, so visitors never contact Google; each such file is listed in tests/unit/dependencies-policy.test.ts with its reason, and any other remote library or font URL still fails."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M14-02",
+      "milestone": 14,
+      "area": "publishing",
+      "title": "Unpublish a site back to its placeholder",
+      "acceptance": [
+        "The editor offers Unpublish for a published site (in the More actions menu), with a confirmation that says the site goes back to its placeholder at its address and that the draft stays. After it, on the very next request, the handle host shows the placeholder, a verified custom domain shows the same placeholder or plain 404 the routing already gives an unpublished site, sub-pages answer 404, the site leaves its sitemap, and analytics history is kept; publishing again brings it back.",
+        "Server: one transaction (a service-role SQL function) clears the published document and published time of the site and every sub-page, after checking ownership with the secret key and refusing a suspended owner; the site's cache tag is expired so nothing stale is served; the draft and version history are untouched. pgTAP for the function (owner only, suspended refused, sub-pages cleared, nothing else changed).",
+        "M8-04 step 4's unpublish row is proven with it (the cache matrix's 'unpublish (page to placeholder)' case on the handle host and a custom host). Unit tests for the action; an e2e at 390x844 and 1440x900 unpublishes, checks the live hosts and republishes; no horizontal scroll and 44px targets."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M14-03",
+      "milestone": 14,
+      "area": "auth",
+      "title": "Google redirect-button rows retired in favour of Google's own button",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-11): M1-08 and M1-13 were written for a 'Continue with Google' button that started Supabase's PKCE authorize request; that flow was replaced by Google's own button handing the page an ID token (M1-29 on /login, M1-30 on /signup). Their redirect-specific assertions (the authorize request, its redirect_to, the callback code exchange for Google) no longer apply. Every intent they carried is proven by M1-29 and M1-30 instead: Google's button sits below the 'or' rule at 390x844 and 1440x900, an unusable handle never reaches Google, the account is created exactly as the email path does, and Gary's production sign-in and sign-up with Google (M1-29 step 8, M1-30 step 6). M1-08 and M1-13 pass when M1-29 and M1-30 do."
+      ],
+      "passes": true
+    },
+    {
+      "id": "M14-04",
+      "milestone": 14,
+      "area": "billing",
+      "title": "Stripe proving after go-live: sandbox halves run locally, the live upgrade is the production evidence",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-11): production runs on live Stripe keys since 2026-10-06, so 'the production sandbox run' in M4-06 step 2 and M4-07 step 2 cannot happen on production. It runs locally against the HYDLNK sandbox instead (Stripe CLI with --project-name hydlnk): pressing Upgrade to Pro on Monthly lands the browser on checkout.stripe.com in test mode showing the plan's amount, and Manage billing lands on billing.stripe.com for that account's customer. No card is entered and nothing touches live Stripe. Gary's own live upgrade, which flipped his plan through the signed webhook, is recorded in PROGRESS.md as the production evidence. Every other part of those steps stands."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M14-05",
+      "milestone": 14,
+      "area": "platform",
+      "title": "The custom-domain done-when proven on Gary's real domain and upgrade",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-11): M4-35 step 5's 'production sandbox run ... with the test card 4242 4242 4242 4242' becomes Gary's real upgrade on live Stripe (a test card cannot be used on live keys), and its test hostname is Gary's real domain links.hyde-co.com; step 8's cleanup does not apply, because the domain and the plan are real and stay (no domain removed, no return to Free). Steps 6 and 7 stand, on links.hyde-co.com: curl over HTTPS answers 200 with a certificate that verifies, the page renders at 390x844 and 1440x900, a link redirects through /r/<pageId>/<blockId>, the events row is visible via SQL, and after the next nightly rollup app.hydlnk.com/analytics shows the click, with the cron.job_run_details row recorded in PROGRESS.md."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M14-06",
+      "milestone": 14,
+      "area": "routing",
+      "title": "Vercel preview addresses keep working",
+      "acceptance": [
+        "Supersedes, in this respect only (Gary, 2026-10-11): M4-09 step 3's 'a *.vercel.app host' returning 404 is dropped, because Gary keeps Vercel's preview and deployment addresses working. A *.vercel.app host serves the HYDLNK site as it does today and never a tenant page or tenant data: the proxy treats it as the marketing host, never as a handle or a custom domain (a unit test on the host classification holds this). Every other part of M4-09 step 3 stands."
       ],
       "passes": true
     }

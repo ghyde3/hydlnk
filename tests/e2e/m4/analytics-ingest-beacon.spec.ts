@@ -1,9 +1,10 @@
-import type { Request } from "@playwright/test";
+import { chromium, type Request } from "@playwright/test";
 import { PHONE, DESKTOP } from "../../../scripts/lib/viewports";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll } from "../helpers";
+import { addDomainRow, hostnameFor } from "./domains-core-helpers";
 import { openEditor, showView, userWithDraft, draftOf, previewScreen } from "../m2/blocks-helpers";
 import {
   DESKTOP_UA,
@@ -166,6 +167,59 @@ test.describe("M4-21 the beacon in the browser", () => {
     expect((await beacons[0]!.response())!.status()).toBe(204);
     expect(await settledCount(p.pageId)).toBe(0);
     await context.close();
+  });
+});
+
+test.describe("M4-21 the beacon on a custom host, in a browser", () => {
+  test("M4-21 a verified custom host loads the page, sends one beacon to its own host and records one view; a reload is a second", async ({}, info) => {
+    const p = await ingestPage("vc", { plan: "pro" });
+    const host = hostnameFor("vcb");
+    await addDomainRow({ pageId: p.pageId, hostname: host, status: "verified" });
+    // Chromium cannot resolve a reserved .test name by itself: map it to the local server, so the
+    // browser sends the custom host's own Host header and Origin, as a visitor's browser would.
+    const browser = await chromium.launch({ args: ["--host-resolver-rules=MAP *.example.test 127.0.0.1"] });
+    try {
+      const phone = info.project.name === "phone";
+      const context = await browser.newContext({
+        ...(phone ? PHONE : DESKTOP),
+        userAgent: phone ? IPHONE_UA : DESKTOP_UA,
+        extraHTTPHeaders: { "x-forwarded-for": randomIp() },
+      });
+      const page = await context.newPage();
+      const beacons: Request[] = [];
+      page.on("request", (request) => {
+        if (isBeacon(request)) beacons.push(request);
+      });
+      const origin = `http://${host}:${new URL(p.url).port}`;
+      const response = await page.goto(`${origin}/`);
+      expect(response!.status()).toBe(200);
+      expect(await response!.headerValue("set-cookie")).toBeNull();
+      await expect(page.locator("[data-page-root]")).toBeVisible();
+      await expect.poll(() => beacons.length).toBe(1);
+      expect(beacons[0]!.url()).toBe(`${origin}/api/e`);
+      expect(JSON.parse(beacons[0]!.postData() ?? "")).toEqual({ pageId: p.pageId, referrer: "" });
+      const answered = (await beacons[0]!.response())!;
+      expect(answered.status()).toBe(204);
+      expect(await answered.headerValue("cache-control")).toBe("no-store");
+      expect(await answered.headerValue("set-cookie")).toBeNull();
+
+      const [row] = await waitForEvents(p.pageId, 1);
+      expect(row).toMatchObject({
+        page_id: p.pageId,
+        type: "view",
+        referrer: null,
+        device: phone ? "mobile" : "desktop",
+      });
+
+      await page.reload();
+      await expect.poll(() => beacons.length).toBe(2);
+      await waitForEvents(p.pageId, 2);
+      expect(await context.cookies()).toEqual([]);
+      await expectNoHorizontalScroll(page);
+      await context.close();
+    } finally {
+      await browser.close();
+    }
   });
 });
 

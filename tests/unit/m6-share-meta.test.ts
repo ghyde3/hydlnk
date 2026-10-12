@@ -302,4 +302,9 @@ describe("M6-32 pageMetadata", () => {
     expect(pageMetadata(doc, urls).openGraph).toMatchObject({ url: urls.page });
     expect(pageMetadata(doc, urls).twitter).toMatchObject({ images: [urls.image] });
   });
+
+  it("names the page's own address as the canonical URL (M5-21)", () => {
+    const urls = { page: "https://mara.hydlnk.com/", image: "https://mara.hydlnk.com/og?v=1" };
+    expect(pageMetadata(docFor({}), urls).alternates).toEqual({ canonical: urls.page });
+  });
 });

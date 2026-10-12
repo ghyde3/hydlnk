@@ -123,6 +123,8 @@ export interface SiteValue {
   dirty: boolean;
   /** Called after a successful Publish with the sub-pages as they were saved. */
   markPublished: () => void;
+  /** Called after a successful Unpublish (M14-02): no sub-page is live any more, every draft stays. */
+  markUnpublished: () => void;
   preview: PreviewSite;
   /** What Publish refused on sub-pages: block errors go to that page's editor, field errors are kept here. Opens the first page named. */
   applyPublishErrors: (errors: readonly PublishError[]) => void;
@@ -523,6 +525,11 @@ export function useSitePages(args: {
     setLivePaths(new Map([...current].map(([id, form]) => [id, form.path])));
   }, []);
 
+  const markUnpublished = useCallback(() => {
+    setPublishedForms(new Map());
+    setLivePaths(new Map());
+  }, []);
+
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({
       id,
@@ -583,6 +590,7 @@ export function useSitePages(args: {
     saveStatus,
     dirty,
     markPublished,
+    markUnpublished,
     preview,
     applyPublishErrors,
     clearPublishErrors,

@@ -255,14 +255,14 @@ describe("M11-10 the head of a sub-page", () => {
     ).toThrow();
   });
 
-  it("Home's head is unchanged: no canonical link", () => {
+  it("Home names its own address as canonical (M5-21) and carries no sub-page id", () => {
     const html = renderLivePage({
       pageId: PAGE_ID,
       document: waveGPublished,
       plan: "free",
       urls: { page: "http://mara.localhost:3000/", image: "http://mara.localhost:3000/og" },
     });
-    expect(html).not.toContain('rel="canonical"');
+    expect(html).toContain('<link rel="canonical" href="http://mara.localhost:3000/">');
     expect(html).not.toContain("data-sub-page-id");
   });
 });

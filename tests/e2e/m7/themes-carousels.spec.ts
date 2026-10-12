@@ -747,6 +747,21 @@ test.describe("M7-06 messages and the Free limit", () => {
     const ownBox = (await ownRow(page).boundingBox())!;
     expect(limitBox.y + limitBox.height).toBeLessThanOrEqual(ownBox.y + 1);
     expect(limitBox.height).toBeGreaterThanOrEqual(44);
+    if (isPhone(page)) {
+      // The real Free limit message (not only the Applied one) is clear of the mini phone and of the
+      // bottom tab bar, measured against the mini phone itself.
+      const view = page.viewportSize()!;
+      const mini = page.getByTestId("mini-phone");
+      await expect(mini).toBeVisible();
+      const miniBox = (await mini.boundingBox())!;
+      const overlapsX =
+        limitBox.x < miniBox.x + miniBox.width && limitBox.x + limitBox.width > miniBox.x;
+      const overlapsY =
+        limitBox.y < miniBox.y + miniBox.height && limitBox.y + limitBox.height > miniBox.y;
+      expect(overlapsX && overlapsY, "the limit message overlaps the mini phone").toBe(false);
+      expect(limitBox.x + limitBox.width).toBeLessThanOrEqual(view.width + 0.5);
+      expect(limitBox.y + limitBox.height).toBeLessThanOrEqual(view.height - 68 + 0.5);
+    }
     await limit.getByRole("button", { name: "Dismiss" }).click();
     await expect(limit).toHaveCount(0);
 

@@ -14,8 +14,9 @@
  *
  * M9-08: the viewfinder is drawn by react-easy-crop, which keeps the picture's position as a pan in
  * screen pixels from the viewfinder's center (`Pan`). The dialog owns that pan and the zoom
- * (controlled `crop` and `zoom`), and the functions below turn them into the `Crop` above, so the
- * file that is uploaded never depends on what the library last reported.
+ * (controlled `crop` and `zoom`). The file is drawn from the `croppedAreaPixels` the library reports
+ * (`areaToCrop`); `panToCrop` turns the same pan and zoom into a `Crop` for the moment before the
+ * library has reported anything.
  */
 
 /** The zoom range of the slider. */
@@ -169,6 +170,31 @@ export function panToCrop(
       cy: height / 2 - (Number.isFinite(pan.y) ? pan.y : 0) * perPixel,
       zoom: z,
     },
+    width,
+    height,
+  );
+}
+
+/** What react-easy-crop reports as `croppedAreaPixels`: the visible square in the picture's own pixels. */
+export interface CroppedArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * The `Crop` for the square the library reports (`croppedAreaPixels`, M9-08). The side gives the zoom
+ * (the shorter side divided by it) and the middle of the area gives the center; the result is clamped
+ * into the picture. `null` for a non-finite or empty area, so the caller can fall back.
+ */
+export function areaToCrop(area: CroppedArea, width: number, height: number): Crop | null {
+  const { x, y } = area;
+  const side = (area.width + area.height) / 2;
+  if (![x, y, area.width, area.height].every(Number.isFinite) || !(side > 0)) return null;
+  if (!(width > 0) || !(height > 0)) return null;
+  return clampCrop(
+    { cx: x + area.width / 2, cy: y + area.height / 2, zoom: Math.min(width, height) / side },
     width,
     height,
   );

@@ -90,6 +90,9 @@ export interface WorkspaceValue {
   /** Writes pending edits, then publishes. Works from every tab; a refusal takes you to what failed. */
   publish: () => void;
   publishNote: PublishNote | null;
+  /** Unpublish (M14-02): the site goes back to its placeholder; the draft stays. `message` is set on a refusal. */
+  unpublish: () => Promise<{ ok: true } | { ok: false; message: string }>;
+  unpublishing: boolean;
   /** Changes with every successful Publish (the toast's key); null until the first one. */
   publishedToken: number | null;
   /** Why Publish is off (suspended owner, a link to a blocked site), or null. */

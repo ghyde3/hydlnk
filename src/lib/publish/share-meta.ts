@@ -12,6 +12,7 @@ import {
  *
  *   <title>             "{name} - links": the share card never changes it
  *   <meta description>  the bio, as before
+ *   <link canonical>    the page's own address (urls.page), absolute
  *   og:title, twitter:title                the share title, else the display name
  *   og:description, twitter:description    the share description, else the bio
  *   og:image, twitter:image                the page's own /og URL, passed in
@@ -30,6 +31,8 @@ export function pageMetadata(
   return {
     title: `${profile.name} - links`,
     description,
+    // The page's own address on the host it is served from (M5-21): an absolute canonical URL.
+    alternates: { canonical: urls.page },
     openGraph: {
       type: "website",
       title: cardTitle,

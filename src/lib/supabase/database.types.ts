@@ -1579,6 +1579,10 @@ export type Database = {
         }
         Returns: string
       }
+      unpublish_site: {
+        Args: { p_owner_id: string; p_page_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
