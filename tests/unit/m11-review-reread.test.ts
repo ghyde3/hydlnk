@@ -61,8 +61,9 @@ describe("HL009 in the sub-page autosave", () => {
     vi.doUnmock("@/lib/supabase/browser");
   });
 
-  it("the message names the 64 MB limit and what to do", () => {
-    expect(STORAGE_FULL_MESSAGE).toMatch(/64 MB/);
+  it("the message names the plan's storage limit (no fixed number) and what to do", () => {
+    expect(STORAGE_FULL_MESSAGE).toMatch(/storage limit/);
+    expect(STORAGE_FULL_MESSAGE).not.toMatch(/64 MB/);
     expect(STORAGE_FULL_MESSAGE).toMatch(/Remove some content or pages/);
     expect(STORAGE_FULL_MESSAGE).not.toMatch(/retry|try again/i);
   });

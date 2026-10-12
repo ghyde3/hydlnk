@@ -9,7 +9,7 @@
 --   * revisions are pruned per entry to the plan's revisions_kept, newest kept.
 
 begin;
-select plan(38);
+select plan(40);
 
 select tests.create_supabase_user('f', 'f-191@example.test');
 select tests.create_supabase_user('p', 'p-191@example.test');
@@ -71,11 +71,21 @@ select throws_ok(
     select '00000000-0000-4000-8000-00000191f001', f_post, '{"title":"trash counts"}' from t191$$,
   'HL010', null, 'a trashed post still counts toward the limit');
 
+-- Pages are not under entries_per_type; they keep pages_per_site (HL008), Home included: Free holds
+-- Home plus two more.
 select lives_ok(
   $$insert into public.content_entries (site_id, type_id, draft)
     select '00000000-0000-4000-8000-00000191f001', f_page, jsonb_build_object('title', 'pg' || g)
-    from t191, generate_series(1, 30) g$$,
-  'pages are exempt from entries_per_type (they keep pages_per_site)');
+    from t191, generate_series(1, 2) g$$,
+  'free: Home and two page entries fit (pages_per_site is 3)');
+select throws_ok(
+  $$insert into public.content_entries (site_id, type_id, draft)
+    select '00000000-0000-4000-8000-00000191f001', f_page, '{"title":"fourth page"}' from t191$$,
+  'HL008', null, 'free: the fourth page, Home included, is refused with HL008');
+select lives_ok(
+  $$insert into public.content_entries (site_id, type_id, draft)
+    select '00000000-0000-4000-8000-00000191f001', f_page, '{"title":"Home","path":"/"}' from t191$$,
+  'free: a page entry that is Home (path /) is never what tips the count');
 
 -- Pro: the limit is per type, 1,000.
 insert into public.content_entries (site_id, type_id, draft)
@@ -159,7 +169,7 @@ select is(pg_temp.total('s'), pg_temp.actual('s'), 'a delete frees the bytes');
 update public.account_site_bytes set bytes = 67108864 - 400 where owner_id = tests.get_supabase_uid('f');
 select throws_ok(
   $$insert into public.content_entries (site_id, type_id, draft)
-    select '00000000-0000-4000-8000-00000191f001', f_page, jsonb_build_object('title', repeat('y', 1000)) from t191$$,
+    select '00000000-0000-4000-8000-00000191f001', f_page, jsonb_build_object('title', repeat('y', 1000), 'path', '/') from t191$$,
   'HL009', null, 'free: an entry that would pass 64 MiB is refused with HL009');
 select is(pg_temp.total('f'), 67108864::bigint - 400, 'and the total did not move');
 
@@ -199,6 +209,7 @@ select is(pg_temp.total('p'), pg_temp.actual('p'), 'deleting a site frees its en
 -- Revision pruning
 -- ---------------------------------------------------------------------------
 
+delete from public.content_entries where type_id = (select f_page from t191);
 insert into public.content_entries (id, site_id, type_id, draft)
   select '00000000-0000-4000-8000-00000191f0e2'::uuid, '00000000-0000-4000-8000-00000191f001'::uuid, f_page, '{"title":"rev"}'::jsonb from t191
   union all

@@ -233,8 +233,6 @@ select set_eq(
       ('content_entry_terms|service_role|DELETE|*'),
       ('site_paths|authenticated|SELECT|*'),
       ('site_paths|service_role|SELECT|*'),
-      ('site_paths|service_role|INSERT|*'),
-      ('site_paths|service_role|UPDATE|*'),
       ('site_paths|service_role|DELETE|*'),
       -- Wave N: the announcement. Owners read the active row, five columns (no created_by); only the server writes.
       ('announcements|authenticated|SELECT|ends_at,id,link,message,starts_at'),

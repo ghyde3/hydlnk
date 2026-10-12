@@ -8,7 +8,7 @@
 --     never a routed word, an explicit id accepted, exactly one owner of a site_paths row.
 
 begin;
-select plan(39);
+select plan(56);
 
 select tests.create_supabase_user('a', 'a-189@example.test');
 select tests.create_supabase_user('b', 'b-189@example.test');
@@ -93,6 +93,17 @@ select is((select count(*)::int from public.content_entry_terms where entry_id =
 select is((select count(*)::int from public.site_paths where site_id = '00000000-0000-4000-8000-00000189a001'), 0, 'nor site_paths');
 select throws_ok($$update public.content_entries set draft = '{}'$$, '42501', null, 'another user cannot update an entry');
 select throws_ok($$delete from public.content_types$$, '42501', null, 'another user cannot delete a type');
+select throws_ok($$insert into public.content_types (site_id, key, label, label_plural, kind, body_format)
+  values ('00000000-0000-4000-8000-00000189a001', 'recipes', 'R', 'Rs', 'custom', 'markdown')$$, '42501', null, 'another user cannot insert a type');
+select throws_ok($$insert into public.content_entries (site_id, type_id, draft)
+  values ('00000000-0000-4000-8000-00000189a001', '00000000-0000-4000-8000-00000189a0c1', '{}')$$, '42501', null, 'another user cannot insert an entry');
+select throws_ok($$delete from public.content_entries$$, '42501', null, 'another user cannot delete an entry');
+select throws_ok($$insert into public.content_entry_revisions (entry_id, site_id, rev, snapshot, source)
+  values ('00000000-0000-4000-8000-00000189a0e1', '00000000-0000-4000-8000-00000189a001', 9, '{}', 'mcp')$$, '42501', null, 'another user cannot insert a revision');
+select throws_ok($$update public.content_entry_revisions set snapshot = '{}'$$, '42501', null, 'another user cannot update a revision');
+select throws_ok($$delete from public.content_terms$$, '42501', null, 'another user cannot delete a term');
+select throws_ok($$delete from public.content_entry_terms$$, '42501', null, 'another user cannot delete an entry-term link');
+select throws_ok($$delete from public.site_paths$$, '42501', null, 'another user cannot delete a site_paths row');
 
 -- anon gets nothing.
 select tests.clear_authentication();
@@ -100,9 +111,17 @@ set local role anon;
 select throws_ok($$select 1 from public.content_entries$$, '42501', null, 'anon cannot read entries');
 select throws_ok($$select 1 from public.content_types$$, '42501', null, 'anon cannot read types');
 select throws_ok($$select 1 from public.site_paths$$, '42501', null, 'anon cannot read site_paths');
+select throws_ok($$select 1 from public.content_entry_revisions$$, '42501', null, 'anon cannot read revisions');
+select throws_ok($$select 1 from public.content_terms$$, '42501', null, 'anon cannot read terms');
+select throws_ok($$select 1 from public.content_entry_terms$$, '42501', null, 'anon cannot read entry-term links');
 select throws_ok($$insert into public.content_terms (site_id, type_id, taxonomy, slug, name)
   values ('00000000-0000-4000-8000-00000189a001', '00000000-0000-4000-8000-00000189a0c1', 'tag', 'q', 'Q')$$,
   '42501', null, 'anon cannot write terms');
+select throws_ok($$update public.content_entries set draft = '{}'$$, '42501', null, 'anon cannot write entries');
+select throws_ok($$delete from public.content_types$$, '42501', null, 'anon cannot write types');
+select throws_ok($$update public.content_entry_revisions set snapshot = '{}'$$, '42501', null, 'anon cannot write revisions');
+select throws_ok($$delete from public.content_entry_terms$$, '42501', null, 'anon cannot write entry-term links');
+select throws_ok($$delete from public.site_paths$$, '42501', null, 'anon cannot write site_paths');
 reset role;
 
 -- Same-site integrity (as the table owner; the server writer is subject to the same triggers).
@@ -126,6 +145,11 @@ select throws_ok($$insert into public.site_paths (site_id, path, entry_id)
   '23514', null, 'a path claim on the wrong site is refused');
 select throws_ok($$update public.content_entries set site_id = '00000000-0000-4000-8000-00000189b001'
   where id = '00000000-0000-4000-8000-00000189a0e2'$$, '23514', null, 'moving an entry to another site is refused');
+
+-- The real move: site and type together pass the same-site check, and site_id is immutable.
+select throws_ok($$update public.content_entries set site_id = '00000000-0000-4000-8000-00000189b001',
+  type_id = '00000000-0000-4000-8000-00000189b0c1' where id = '00000000-0000-4000-8000-00000189a0e2'$$,
+  '23000', null, 'moving an entry to another site with its type is refused (site_id is immutable)');
 
 select throws_ok($$insert into public.content_terms (site_id, type_id, taxonomy, slug, name, parent_id)
   values ('00000000-0000-4000-8000-00000189a001', '00000000-0000-4000-8000-00000189a0c1', 'category', 'kid', 'Kid',

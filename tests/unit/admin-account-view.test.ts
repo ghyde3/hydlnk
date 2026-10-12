@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIT_ACTIONS,
   AUDIT_PAGE_SIZE,
-  SITE_BYTES_CAP,
+  siteBytesCap,
   auditLabel,
   formatDate,
   isUuid,
@@ -115,8 +115,11 @@ describe("small helpers", () => {
     expect(formatDate(null)).toBe("");
     expect(formatDate("garbage")).toBe("");
   });
-  it("the sub-page cap is 64 MiB", () => {
-    expect(SITE_BYTES_CAP).toBe(64 * 1024 * 1024);
+  it("the pages-and-entries byte cap follows the plan (HL009)", () => {
+    expect(siteBytesCap("free")).toBe(64 * 1024 * 1024);
+    expect(siteBytesCap("pro")).toBe(1024 * 1024 * 1024);
+    expect(siteBytesCap("studio")).toBe(5 * 1024 * 1024 * 1024);
+    expect(siteBytesCap("unknown")).toBe(64 * 1024 * 1024);
   });
 });
 
