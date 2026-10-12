@@ -16,8 +16,16 @@ export type {
 import { invalidatePage } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
+import { getEntryWithClient, listEntriesWithClient } from "./query-core";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
+import {
+  createTermWithClient,
+  deleteTermWithClient,
+  renameTermWithClient,
+  setEntryTermsWithClient,
+} from "./terms-core";
+import { enableTypeWithClient, updateTypeWithClient } from "./types-core";
 import type { ContentActor } from "./types";
 
 /** Create an entry of an enabled type. The draft is validated leniently and stored as given. */
@@ -77,4 +85,44 @@ export async function restoreEntry(input: EntryWrite) {
   const out = await restoreEntryWithClient(createAdminSupabase(), input);
   if (out.ok) expireSite(out.siteId);
   return out;
+}
+
+/** One entry with its draft, published copy, rev, status and dates. Reads check ownership only. */
+export function getEntry(input: { actor: ContentActor; entryId: string }) {
+  return getEntryWithClient(createAdminSupabase(), input);
+}
+
+/** Page through a site's entries of one type (filters, sort, keyset cursor, at most 100 a page). */
+export function listEntries(input: Parameters<typeof listEntriesWithClient>[1]) {
+  return listEntriesWithClient(createAdminSupabase(), input);
+}
+
+/** Turn a built-in type on or off. */
+export function enableType(input: Parameters<typeof enableTypeWithClient>[1]) {
+  return enableTypeWithClient(createAdminSupabase(), input);
+}
+
+/** Change a type's labels or archive path. */
+export function updateType(input: Parameters<typeof updateTypeWithClient>[1]) {
+  return updateTypeWithClient(createAdminSupabase(), input);
+}
+
+/** Add a category (one level) or a tag to an enabled type. */
+export function createTerm(input: Parameters<typeof createTermWithClient>[1]) {
+  return createTermWithClient(createAdminSupabase(), input);
+}
+
+/** Change a term's name or slug. */
+export function renameTerm(input: Parameters<typeof renameTermWithClient>[1]) {
+  return renameTermWithClient(createAdminSupabase(), input);
+}
+
+/** Delete a term; its children become top-level and its entry links go. */
+export function deleteTerm(input: Parameters<typeof deleteTermWithClient>[1]) {
+  return deleteTermWithClient(createAdminSupabase(), input);
+}
+
+/** Set an entry's categories and tags in its draft at `expectedRev`; publish rebuilds the links. */
+export function setEntryTerms(input: Parameters<typeof setEntryTermsWithClient>[1]) {
+  return setEntryTermsWithClient(createAdminSupabase(), input);
 }
