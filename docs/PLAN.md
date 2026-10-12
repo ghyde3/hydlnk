@@ -142,6 +142,168 @@ Gary picked all ten tools in the Admin Plan review (2026-10-06), with reserved h
 - **See a draft for support (M13-11).** A read-only view of any site's draft (Home and its pages) on the app host, with the same inert rendering as the share preview; each opening is written to the audit log; the Privacy Policy says staff may view an unpublished draft to help with a support request or a report, and that each view is logged.
 - **Housekeeping.** M5-08, M5-09 and M7-13 (built earlier, not fully proven) get the tests that prove them.
 
+## Content model (feature 1, Wave N)
+
+Decided by Gary on 2026-10-11 in the plan doc "HYDLNK Next Evolution Plan" (https://claude.ai/artifact/UgmZ2dAtAoinuQTCcWdv5b, section 7). HYDLNK becomes a small CMS:
+- Pages, posts and, later, user-defined types are entries in one table.
+- Each entry publishes on its own.
+- The site row (`pages`) keeps only site-wide design.
+
+Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home into them. Stage 2 serves posts publicly. Stage 3 is the editor UI. Stage 4 is the MCP tools.
+
+### Tables (stage 1a)
+
+**`content_types`**
+- Columns:
+  - `id`
+  - `site_id` → `pages.id`, on delete cascade
+  - `key`: `page`, `post`, or a custom key matching `^[a-z][a-z0-9-]{1,30}$`
+  - `label`, `label_plural`
+  - `kind`: `builtin` or `custom`
+  - `body_format`: `blocks` or `markdown`
+  - `archive_path`: null for `page`, `blog` for `post`
+  - `enabled`
+  - `field_schema` (jsonb, default `[]`)
+  - `settings` (jsonb: page size, sort)
+  - `position`, `created_at`, `updated_at`
+- `key` is unique per site.
+- Every site has a built-in `page` type (enabled, blocks) and a built-in `post` type (Markdown, archive `blog`). The `post` type starts disabled; "Add → Blog" enables it.
+- A trigger on `pages` insert creates both rows. The migration backfills every existing site.
+
+**`content_entries`**
+- Columns:
+  - `id`: default `gen_random_uuid()`, but an explicit id is accepted (stage 1b keeps sub-page ids)
+  - `site_id`
+  - `type_id` → `content_types`, on delete restrict
+  - `draft` (jsonb, not null)
+  - `published` (jsonb, null)
+  - `published_at`, `first_published_at`
+  - `scheduled_at` (null until stage 5)
+  - `rev` (bigint, starts at 1)
+  - `deleted_at`, `created_at`, `updated_at`
+  - Generated: `live_path` (a page's published path), `live_slug` (a typed entry's published slug)
+- `live_slug` is unique per site and type (a partial unique index where it is not null). A slug may not be one of the words stage 2 routes under an archive: `page`, `category`, `tag`, `feed.xml`. That list sits beside the path reserved words, as one list.
+- Same-site integrity: a trigger refuses an entry whose type belongs to another site. The same rule covers `content_terms.type_id` and both halves of `content_entry_terms`. This is tested in pgTAP.
+- Checks:
+  - `published` and `published_at` are null together.
+  - `draft` is an object of at most 1 MiB; `published` is at most 2 MiB.
+  - The document shape is validated by the writer (Zod), not the database.
+- A page's draft is today's sub-page document (`path`, `title`, `description`, `blocks`). Home is the page whose path is `/`.
+- A post's draft holds:
+  - `title`, `slug`, `excerpt`
+  - `body` (Markdown)
+  - `featuredImage` (a media reference)
+  - `seo`: `title`, `description`, `ogImage`, `noindex`
+  - `terms`: category and tag ids
+  - `fields`
+
+**`content_entry_revisions`**
+- Columns:
+  - `id`, `entry_id` (cascade), `site_id`
+  - `rev`
+  - `snapshot` (the draft at that rev)
+  - `was_published`
+  - `source`: `editor`, `mcp`, `builder` or `system`
+  - `created_at`
+- Unique on (`entry_id`, `rev`).
+- A revision is recorded at every publish, and on a save when the newest revision is older than 10 minutes.
+- Pruned per entry to the plan's `revisions_kept`, keeping the newest.
+
+**`content_terms`**
+- Columns: `id`, `site_id`, `type_id`, `taxonomy` (`category` or `tag`), `slug`, `name`, `parent_id`, `position`, `created_at`.
+- Unique on (`site_id`, `type_id`, `taxonomy`, `slug`).
+- A category nests at most one level; tags are flat.
+
+**`content_entry_terms`**
+- Columns: (`entry_id`, `term_id`).
+- The live membership, rebuilt from the published copy at publish and cleared at unpublish.
+
+**`site_paths`**
+- Columns: (`site_id`, `path`) as primary key, plus `entry_id` or `type_id`. Exactly one of them is set.
+- The registry of every claimed URL root on a site:
+  - a page's draft path and live path;
+  - an enabled type's archive path;
+  - `/` for Home.
+- It refuses:
+  - a clash between any two claims;
+  - a reserved word (the list in `src/lib/site-pages/path.ts` and the SQL check, kept as one list).
+- Maintained by triggers on `content_entries` and `content_types`.
+- A draft path that clashes is refused at save time (HL012), not only at publish. That is new compared with today's sub-pages.
+- Ordering, instead of a cross-table check: no user can enable a post type before stage 1b ships, because the editor and MCP expose it only in stages 3 and 4. So until then, `site_paths` only needs to watch the content tables.
+
+**Deferred:**
+- `redirects` arrives with stage 2, which serves the redirects.
+- `content_relations` arrives in stage 5.
+
+**Access rules**
+- RLS is on for every table.
+- A signed-in user may SELECT rows of their own sites (`exists` on `pages.owner_id = auth.uid()`). `anon` gets nothing.
+- No INSERT, UPDATE or DELETE grant goes to `anon` or `authenticated`. Writes go through the server writer (service role), which checks ownership itself.
+- Public reads (stage 2) are server-only queries that return published copies only.
+
+**Limits** (new `plan_limits` columns, mirrored in `src/lib/limits/table.ts` under the parity test):
+
+| Limit | Free | Pro | Studio | Code |
+|---|---|---|---|---|
+| `entries_per_type`: every non-page type, posts first; pages keep `pages_per_site` | 25 | 1,000 | 100,000 (shown as Unlimited) | HL010 |
+| `custom_types` | 0 | 3 | 100 (shown as Unlimited) | HL011, enforced now by a count trigger on custom types |
+| `revisions_kept` | 10 | 50 | 200 | Pruning, not an error |
+| `content_bytes` per account (drafts and published copies of entries and sub-pages) | 64 MiB (today's HL009 value) | 1 GiB | 5 GiB | HL009, now by plan |
+
+- A path claim refused by `site_paths` raises HL012 (taken or reserved).
+- Trashed entries count toward the limits until purged, so trash is never free overflow.
+- A downgrade deletes nothing: existing entries stay live, and new ones over the limit are refused.
+
+**Media**
+- `media_paths_in_use` also text-scans `content_entries.draft` and `.published`, and `content_entry_revisions.snapshot`.
+- An image used only by an entry is never queued for deletion.
+
+### The writer (stage 1a)
+
+- `src/lib/content` is server-only and the only module that writes the content tables. A static test holds this, as `m10-mcp-static` does for MCP.
+- Callers pass an actor: user id plus source (`editor`, `mcp` or `builder`).
+- The writer checks:
+  - the site's owner;
+  - suspension;
+  - the type is enabled.
+- Another user's entry answers the same not-found as a missing one.
+- Every write carries `expectedRev`. A stale one returns `conflict` with the current revision and changes nothing.
+- Validation is Zod: lenient for drafts, strict for publish. The built-in `post` schema is in code. Custom types compile from `field_schema` in stage 5.
+- Operations:
+  - enable and update a type (archive path, labels);
+  - create, update, publish, unpublish, trash and restore an entry;
+  - list entries (type, status, term, title search; sort; keyset cursor; at most 100 per call);
+  - get an entry;
+  - list and restore revisions;
+  - create, rename and delete terms;
+  - set an entry's terms.
+- Publish and unpublish are single SQL functions (service role only, empty `search_path`), so each one is atomic.
+  - Publish copies the draft, sets the dates, rebuilds the term links, updates `site_paths` and records a revision.
+  - Publish never touches `pages`, `site_pages` or `page_versions`.
+  - Until stage 2 adds the per-entry and per-type tags, the writer expires the site's existing `page:<id>` tag after a publish.
+- Trash clears the live copy at once and keeps the draft. Restore works for 30 days. A daily job purges older trash.
+
+### Moving pages in (stage 1b), in this order
+
+1. For each `site_pages` row, insert a `page` entry with the same id. Copy the draft, published copy and `published_at`, and register its paths.
+2. For each site, insert Home as a `page` entry with a new id and path `/`:
+   - its draft blocks come from `pages.draft.blocks`, and its published blocks from `pages.published.blocks`;
+   - the site document then keeps only theme, menu, profile, share card, banner, UTM and redirect.
+3. Convert `page_versions`:
+   - each version's Home blocks and `sub_pages` snapshots become `content_entry_revisions` (source `system`), up to the plan's `revisions_kept`;
+   - its design part stays as a design version.
+4. Move every reader of `site_pages` to entries: the renderer, share links, `site_click_pairs`, MCP, the sitemap and the publish path.
+   - `events.sub_page_id` already holds these ids, so analytics history is kept.
+   - The old Home route reads Home's entry.
+5. Before any switch, do a dry run on a copy of production data, with a per-site comparison of the live HTML before and after.
+6. `site_pages` stays read-only until production checks pass. It is dropped in a later release with Gary's explicit yes.
+
+1a's schema must accept steps 1 to 3 without another DDL change. That means:
+- an explicit entry id;
+- today's sub-page document as a draft;
+- `/` in `site_paths`;
+- `system` revisions.
+
 ## Milestones
 
 Each ends in something you can click. The gate to opening signup is running Gary's own brands on it.
@@ -230,6 +392,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Admin wave content approved (Gary, 2026-10-06): the 274 pre-filled reserved handles are kept as they are, including first names and everyday words (max, stan, chase, later, target, square and the like), removable one by one on /admin/reserved; the Privacy Policy sentence "HYDLNK staff may view an unpublished draft to help with a support request or to investigate a report, and each view is logged." ships as written.
 - Proving pass decisions (Gary, 2026-10-07): `lighthouse` approved as a dev-only dependency for M5-21; the 'matches the commit before' screenshot steps of M9-02, M9-05, M9-06, M9-07, M9-08 and M9-14 are replaced by today's tests (M14-01); next/font/google's build-time font download is accepted under the no-remote-fonts rule (M14-01); a site can be unpublished back to its placeholder (M14-02, new).
 - Proving pass decisions, production evidence (Gary, 2026-10-11): M1-08 and M1-13 (the replaced Google redirect button) pass with M1-29 and M1-30 (M14-03); with production on live Stripe, the sandbox halves of M4-06 and M4-07 run locally and Gary's live upgrade is the production evidence (M14-04); M4-35 is proven on Gary's real domain links.hyde-co.com and real upgrade, with no cleanup (M14-05); *.vercel.app preview and deployment addresses keep serving the HYDLNK site, never a tenant page (M14-06, replacing M4-09 step 3's 404 for them). Gary confirmed on production: Google sign-in and sign-up, the Google app published, custom SMTP configured and delivering to a non-team address, the HYDLNK sign-in email template, and a live upgrade that flipped the plan.
+- Content model, feature 1 (Gary, 2026-10-11; the plan doc "HYDLNK Next Evolution Plan", section 7): one shared table for pages, posts and later custom types, with sub-pages and Home moved in now; Home is the page at `/`; every page and post publishes on its own, with Publish design and Publish all changes; menu links to unpublished pages hidden; posts written in rich text and stored as Markdown; URLs `/{archive path}/{slug}`; categories and tags in v1; scheduling in stage 5; no byline; simple comments later; import after the MVP; posts Free 25, Pro 1,000, Studio unlimited (100,000 safety cap); custom types Pro 3, Studio unlimited; revisions Free 10, Pro 50, Studio 200; the larger MCP and page limits approved. See "Content model (feature 1, Wave N)".
 
 ## Open
 

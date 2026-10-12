@@ -5629,6 +5629,62 @@
         "Supersedes, in this respect only (Gary, 2026-10-11): M4-09 step 3's 'a *.vercel.app host' returning 404 is dropped, because Gary keeps Vercel's preview and deployment addresses working. A *.vercel.app host serves the HYDLNK site as it does today and never a tenant page or tenant data: the proxy treats it as the marketing host, never as a handle or a custom domain (a unit test on the host classification holds this). Every other part of M4-09 step 3 stands."
       ],
       "passes": true
+    },
+    {
+      "id": "M15-01",
+      "milestone": 15,
+      "area": "editor",
+      "title": "Sub-page saves check the revision, so an AI edit is never overwritten",
+      "acceptance": [
+        "The editor's sub-page save is conditional on the revision it last loaded (the sub-page's updated_at, the same revision MCP's writer uses); the browser still writes under RLS with the publishable key.",
+        "A save against a newer revision changes nothing: the editor shows the same conflict notice Home autosave shows, stops saving and asks to reload.",
+        "Playwright at 390x844 and 1440x900: with a sub-page open in the editor, a write to the same sub-page through MCP's writer (or the secret-key client) lands, then typing in the editor shows the conflict notice, and the database still holds the MCP change.",
+        "Unit test for the conditional save; the sub-page and autosave specs touched still pass."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-02",
+      "milestone": 15,
+      "area": "data",
+      "title": "Content tables: types, entries, revisions, terms and the path registry",
+      "acceptance": [
+        "Migrations create content_types, content_entries, content_entry_revisions, content_terms, content_entry_terms and site_paths as docs/PLAN.md \"Content model\" describes. RLS is on for every table; a signed-in owner may SELECT rows of their own sites; anon gets nothing; no INSERT, UPDATE or DELETE grant goes to anon or authenticated.",
+        "pgTAP per table: the owner reads their own rows; another signed-in user reads none and can write none; anon reads and writes none. An integration probe with the publishable key confirms another user can neither read nor write any of the six tables.",
+        "Every site has a built-in page type (enabled, blocks) and post type (Markdown, archive path blog, disabled until enabled): the migration backfills existing sites and a trigger adds both for a new site.",
+        "site_paths refuses, with HL012 and unique per site, a clash between a page path (draft or live), an enabled type's archive path, Home's / and a reserved word (one list shared with src/lib/site-pages/path.ts and the SQL check); a typed entry's live slug is unique per site and type and may not be page, category, tag or feed.xml (the words stage 2 routes under an archive).",
+        "Limits by plan in plan_limits and src/lib/limits/table.ts (parity test): entries_per_type for every non-page type, Free 25, Pro 1,000, Studio 100,000 shown as Unlimited (HL010; trashed entries count until purged); custom_types 0, 3, 100 enforced now by a count trigger (HL011); revisions_kept 10, 50, 200 (pruning, newest kept); content_bytes per account 64 MiB, 1 GiB, 5 GiB across entries and sub-pages (HL009, now by plan). A downgrade deletes nothing.",
+        "Same-site integrity: a trigger refuses an entry whose type belongs to another site, a term whose type belongs to another site, and an entry-term link that joins two sites (pgTAP).",
+        "media_paths_in_use also scans content_entries drafts and published copies and content_entry_revisions snapshots; a test proves the cleanup queue keeps an image used only by an entry.",
+        "The schema accepts stage 1b's data without another DDL change: an entry inserted with a given id, a page entry whose draft is today's sub-page document, Home's path / registered, and revisions with source system."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-03",
+      "milestone": 15,
+      "area": "data",
+      "title": "The content writer: one server module for every write",
+      "acceptance": [
+        "src/lib/content is server-only and the only code that writes the content tables (a static test holds this). Callers pass an actor (user id and source: editor, mcp or builder); the writer checks the site's owner, suspension and that the type is enabled; another user's entry answers the same not-found as a missing one.",
+        "Every write takes expectedRev; a stale one returns conflict with the current revision and changes nothing.",
+        "Zod validates drafts leniently and publishing strictly for the built-in post type (title, slug, excerpt, Markdown body up to 512 KiB, featured image reference, SEO, terms, fields); a slug another entry of the same type holds, or a reserved one, is refused at publish; a clashing draft path is refused at save; limit errors (HL009, HL010, HL011, HL012) come back as typed refusals.",
+        "Publish and unpublish are single service-role SQL functions with an empty search_path: publish copies the draft, sets published_at and first_published_at, rebuilds content_entry_terms from the published copy, updates site_paths and records a revision; neither touches pages, site_pages or page_versions. After a publish the writer expires the site's page:<id> tag.",
+        "Trash clears the live copy at once and keeps the draft; restore works for 30 days; a daily job purges older trash. Revisions are recorded at every publish and on a save when the newest is older than 10 minutes, pruned to the plan's revisions_kept.",
+        "List entries filters by type, status, term and title search, sorts by published date, updated date or title, pages with a keyset cursor and returns at most 100; terms support categories one level deep and flat tags.",
+        "Unit tests for the writer and integration tests against local Supabase cover each rule above, including a concurrent publish and update."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-04",
+      "milestone": 15,
+      "area": "security",
+      "title": "Content model security review (stages 0 and 1a)",
+      "acceptance": [
+        "security-reviewer runs over M15-01 to M15-03 (RLS and grants, the service-role writer's ownership checks, the SQL functions, the path registry, limits and media cleanup) and every finding is fixed or recorded in docs/PLAN.md with Gary's decision."
+      ],
+      "passes": false
     }
   ]
 }
