@@ -42,6 +42,8 @@ describe("HL009 in the sub-page autosave", () => {
   it("the browser write maps the route's storage-full answer", async () => {
     vi.resetModules();
     vi.doMock("@/lib/media/cleanup-client", () => ({ scheduleMediaCleanup: () => {} }));
+    // The browser client reads the public env at import; CI has no .env.local.
+    vi.doMock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => ({}) }));
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -77,6 +79,8 @@ describe("HL009 creating a page", () => {
         message: "full",
       }),
     }));
+    // Module-scope env reads (the admin client) must not run: CI has no .env.local.
+    vi.doMock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => ({}) }));
     const { createSubPageWithClient } = await import("@/lib/site-pages/sub-pages-core");
     vi.doUnmock("@/lib/content/entries-core");
     const table = (name: string) => {

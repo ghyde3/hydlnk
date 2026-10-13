@@ -200,6 +200,8 @@ describe("the entry save client maps path and suspended answers", () => {
 
   it("a path answer is terminal for a sub-page, not a generic retried error", async () => {
     answer(409, { kind: "path", message: "That address is already used or reserved." });
+    // The browser client reads the public env at import; CI has no .env.local.
+    vi.doMock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => ({}) }));
     const { createSubPageSaveFn, createSubPageRevisions } = await import(
       "@/lib/site-pages/save-client"
     );
@@ -210,6 +212,8 @@ describe("the entry save client maps path and suspended answers", () => {
 
   it("a suspension answer stops the queue like a lost session", async () => {
     answer(403, { kind: "suspended", code: "x", message: "Suspended" });
+    // The browser client reads the public env at import; CI has no .env.local.
+    vi.doMock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => ({}) }));
     const { createSubPageSaveFn, createSubPageRevisions } = await import(
       "@/lib/site-pages/save-client"
     );
