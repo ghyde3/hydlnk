@@ -5835,6 +5835,16 @@
         "M13-02 step 1's '64 MiB sub-page total' is the plan's `content_bytes` cap since M15-02 (Gary, 2026-10-11, decision 13: 64 MiB Free, 1 GiB Pro, 5 GiB Studio). The admin account page shows the account's own plan cap."
       ],
       "passes": false
+    },
+    {
+      "id": "M15-16",
+      "milestone": 15,
+      "area": "security",
+      "title": "Block style overrides written by a browser after the cutover",
+      "acceptance": [
+        "Supersedes, in the same respect as M15-14 (Gary, 2026-10-13): M3-18 step 6, where it describes the owner's browser writing block overrides into `pages.draft` through PostgREST. After the cutover a browser write of Home's blocks is refused (HL013). The test asserts that refusal, plants the same overrides (fontHeading 'Geist', bg '#000000', color '#C46A4F', radius -5 and colour 'red') with a direct database write to the Home entry, and keeps every downstream promise of the step: Publish stores only the accepted override, the live page shows it, and the invalid values never reach the live page. Every other part of M3-18 step 6 stands."
+      ],
+      "passes": false
     }
   ]
 }
