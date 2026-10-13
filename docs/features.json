@@ -5823,6 +5823,18 @@
         "Each affected test asserts that refusal, then plants the same hostile draft with a direct database write to the Home entry and keeps every downstream promise of its step: the database's own checks, Publish refusing with the same messages and naming the same blocks, nothing published, other users' rows unchanged, and for a template apply no request to /rest/v1/themes and no Storage call."
       ],
       "passes": false
+    },
+    {
+      "id": "M15-15",
+      "milestone": 15,
+      "area": "security",
+      "title": "The remaining browser draft-write steps after the cutover",
+      "acceptance": [
+        "Supersedes, in the same respect as M15-14 (Gary, 2026-10-13): further steps that describe the owner's browser (publishable key with the owner's or another user's JWT) writing Home's blocks to `pages.draft` as raw JSON. These are M2-03 step 6 (the corrupted draft), M5-03 step 5, M6-20 step 5, M6-29 step 6, M6-34 step 5, M6-45 step 5, M7-08 step 3 ('one PATCH of `draft` only': an apply now writes design fields by that PATCH and Home's blocks through the server save route), M7-12 step 5, M9-03 step 3, M9-11 step 6, M9-17 step 5, M9-20 step 6, M9-21 step 6 and M9-22 step 6. Each test asserts that the browser write of Home's blocks is refused (HL013), plants the same draft with a direct database write to the Home entry, and keeps every downstream promise of its step. For M5-03 step 5 and M7-12 step 5, the blocked link is refused at the entry write with HL005 'blocked_link' and the stored entry is unchanged. For M2-03 step 6, the editor still loads a corrupted Home entry draft, repairs what it can and shows its notice. Every other part of those steps stands.",
+        "Where M2-12 step 4 and M6-45 step 5 say `pages.published`, they mean the live published copy, which after the cutover is Home's published entry together with the site design. The frozen pre-move blocks kept in `pages.published` for rollback are never served, and are removed in the later cleanup release.",
+        "M13-02 step 1's '64 MiB sub-page total' is the plan's `content_bytes` cap since M15-02 (Gary, 2026-10-11, decision 13: 64 MiB Free, 1 GiB Pro, 5 GiB Studio). The admin account page shows the account's own plan cap."
+      ],
+      "passes": false
     }
   ]
 }
