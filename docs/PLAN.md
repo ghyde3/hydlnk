@@ -343,6 +343,7 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
 - **New sites** get their Home entry at claim time; publishing also moves a site that has none.
 - **Known risk, the migration push:** publishing breaks if the production push stops between `20261015000001` and `000008`. The runbook says to run `supabase/rollback/content-move-rollback.sql` at once if the push fails.
 - **Known risk, upload quota:** frozen copies keep removed images counting toward the upload quota until the old copies are removed in the later cleanup release.
+- **Known low item:** the editor's client size check tests the merged Home draft against 256 KiB. The database caps Home's entry at 256 KiB minus the design size minus 64 bytes, so a Home draft within about 100 bytes of the limit passes the client check and is then refused by the server with the usual too-large message. Nothing is lost. Tighten the client check with the stage 3 editor work.
 - **Checking the move:** after the production migrations, the move's counts are checked read-only before the merge (one `/` entry per site, ids kept, `moved_at` on every row). No audit table is added.
 
 1a's schema must accept steps 1 to 3 without another DDL change. That means:
