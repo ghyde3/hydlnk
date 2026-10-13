@@ -10,6 +10,9 @@
 --   * the total is kept by an AFTER ROW trigger: `on conflict do nothing` counts nothing, and
 --     site_pages.page_id cannot change;
 --   * requeue_media (atomic, service_role only) and site_click_pairs (the click index ids).
+-- Since M15-05 (1b1-23) a moved site's pages are page entries: the publish_site, admin impact and
+-- site_click_pairs sections below read and write content_entries, and the running total counts the
+-- site_pages rows not yet moved plus the entries.
 -- Lock order (pages row, then site_pages rows, then the total: the first BEFORE DELETE trigger on pages
 -- locks the sub-page rows) and non-blocking of event inserts are two-session properties, and pgTAP
 -- runs in one session (no dblink), so tests/unit/m11-review-fixes-sql.test.ts asserts the lock
@@ -33,9 +36,14 @@ insert into public.pages (id, owner_id, handle, draft) values
 create function pg_temp.total(p_who text) returns bigint language sql as
   $$ select coalesce((select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid(p_who)), -1) $$;
 create function pg_temp.actual(p_who text) returns bigint language sql as
-  $$ select coalesce(sum(octet_length(s.draft::text) + coalesce(octet_length(s.published::text), 0)), 0)::bigint
-       from public.site_pages s join public.pages p on p.id = s.page_id
-       where p.owner_id = tests.get_supabase_uid(p_who) $$;
+  $$ select (
+       (select coalesce(sum(octet_length(s.draft::text) + coalesce(octet_length(s.published::text), 0)), 0)
+          from public.site_pages s join public.pages p on p.id = s.page_id
+          where p.owner_id = tests.get_supabase_uid(p_who) and s.moved_at is null)
+       + (select coalesce(sum(public.site_page_doc_bytes(e.draft, e.published)), 0)
+          from public.content_entries e join public.pages p on p.id = e.site_id
+          where p.owner_id = tests.get_supabase_uid(p_who))
+     )::bigint $$;
 create function pg_temp.doc(p_path text, p_pad int) returns jsonb language sql as
   $$ select jsonb_build_object('path', p_path, 'title', repeat('x', p_pad), 'description', '', 'blocks', '[]'::jsonb) $$;
 
@@ -182,28 +190,28 @@ select public.publish_site(
   null);
 select is(pg_temp.total('a'), pg_temp.actual('a'), 'publishing adds the published copy to the total');
 select ok(
-  (select published is not null from public.site_pages where id = '00000000-0000-4000-8000-00000178a0b1'),
-  'and the page is live'
+  (select published is not null from public.content_entries where id = '00000000-0000-4000-8000-00000178a0b1'),
+  'and the page is live (the first publish moved the site to page entries)'
 );
 
 select throws_ok(
   $$ select public.publish_site('00000000-0000-4000-8000-00000178a002', tests.get_supabase_uid('a'), '{"version":1,"m":"og"}'::jsonb,
        jsonb_build_array(jsonb_build_object('id', '00000000-0000-4000-8000-00000178a0b1', 'published', pg_temp.doc('og', 10))), null) $$,
-  '23514', null, 'publish_site with the reserved path "og" fails the check'
+  '23505', null, 'publish_site with the reserved path "og" is refused (a path clash, rolled back)'
 );
 select throws_ok(
   $$ select public.publish_site('00000000-0000-4000-8000-00000178a002', tests.get_supabase_uid('a'), '{"version":1}'::jsonb,
        jsonb_build_array(jsonb_build_object('id', '00000000-0000-4000-8000-00000178a0b1', 'published', pg_temp.doc('hl-x', 10))), null) $$,
-  '23514', null, 'and so does an hl- path'
+  '23505', null, 'and so is an hl- path'
 );
 select is(
-  (select live_path from public.site_pages where id = '00000000-0000-4000-8000-00000178a0b1'),
+  (select live_path from public.content_entries where id = '00000000-0000-4000-8000-00000178a0b1'),
   'items', 'a refused publish changed nothing'
 );
 select throws_ok(
-  $$ update public.site_pages set published = pg_temp.doc('sitemap', 10), published_at = now()
+  $$ update public.content_entries set published = pg_temp.doc('sitemap', 10), published_at = now()
        where id = '00000000-0000-4000-8000-00000178a0b1' $$,
-  '23514', null, 'a direct write of another reserved path is refused as well'
+  'HL012', null, 'a direct write of another reserved path is refused as well'
 );
 
 -- ---------------------------------------------------------------------------
@@ -215,13 +223,17 @@ insert into public.pages (id, owner_id, handle, draft, published, published_at) 
    '{"version":1,"blocks":[]}', '{"version":1,"blocks":[]}', now()),
   ('00000000-0000-4000-8000-00000178c002', tests.get_supabase_uid('b'), 'zq178-d',
    '{"version":1,"blocks":[]}', null, null);
-insert into public.site_pages (id, page_id, draft, published, published_at) values
+insert into public.content_entries (id, site_id, type_id, draft, published, published_at)
+select e.id::uuid, e.site::uuid, t.id, e.draft::jsonb, e.published::jsonb, case when e.published is null then null else now() end
+from (values
   ('00000000-0000-4000-8000-00000178c0a1', '00000000-0000-4000-8000-00000178c001',
    '{"path":"shop","title":"S","description":"","blocks":[]}',
-   '{"path":"shop","title":"S","description":"","blocks":[{"id":"L1","type":"link","url":"https://sub178.test/x"},{"id":"L2","type":"link","url":"https://www.sub178.test/y"}]}', now()),
+   '{"path":"shop","title":"S","description":"","blocks":[{"id":"L1","type":"link","url":"https://sub178.test/x"},{"id":"L2","type":"link","url":"https://www.sub178.test/y"}]}'),
   ('00000000-0000-4000-8000-00000178c0a2', '00000000-0000-4000-8000-00000178c002',
    '{"path":"draft","title":"D","description":"","blocks":[{"id":"L1","type":"link","url":"https://sub178.test/z"}]}',
-   null, null);
+   null)
+) as e(id, site, draft, published)
+join public.content_types t on t.site_id = e.site::uuid and t.key = 'page';
 -- (the draft above was accepted before the domain is listed)
 insert into public.blocked_domains (domain, reason, added_by) values ('sub178.test', 'test', null);
 
@@ -243,20 +255,24 @@ select is(
 -- ---------------------------------------------------------------------------
 
 update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = tests.get_supabase_uid('a');
+-- (site a001 is not moved: its rows are still counted as site_pages)
 insert into public.site_pages (id, page_id, draft)
-  values ('00000000-0000-4000-8000-00000178a0b1', '00000000-0000-4000-8000-00000178a002', pg_temp.doc('dup', 9000))
+  values ('00000000-0000-4000-8000-00000178a0d1', '00000000-0000-4000-8000-00000178a001', pg_temp.doc('one', 20));
+update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = tests.get_supabase_uid('a');
+insert into public.site_pages (id, page_id, draft)
+  values ('00000000-0000-4000-8000-00000178a0d1', '00000000-0000-4000-8000-00000178a001', pg_temp.doc('dup', 9000))
   on conflict (id) do nothing;
 select is(pg_temp.total('a'), pg_temp.actual('a'), 'insert ... on conflict do nothing counts the bytes of a row that never landed');
 
 select throws_ok(
-  $$ update public.site_pages set page_id = '00000000-0000-4000-8000-00000178a001'
-       where id = '00000000-0000-4000-8000-00000178a0b1' $$,
+  $$ update public.site_pages set page_id = '00000000-0000-4000-8000-00000178a002'
+       where id = '00000000-0000-4000-8000-00000178a0d1' $$,
   '23000', null, 'moving a sub-page to another site is refused'
 );
 select is(pg_temp.total('a'), pg_temp.actual('a'), 'and the total did not move');
 select is(
-  (select page_id from public.site_pages where id = '00000000-0000-4000-8000-00000178a0b1'),
-  '00000000-0000-4000-8000-00000178a002'::uuid, 'the page is still on its site'
+  (select page_id from public.site_pages where id = '00000000-0000-4000-8000-00000178a0d1'),
+  '00000000-0000-4000-8000-00000178a001'::uuid, 'the page is still on its site'
 );
 
 -- ---------------------------------------------------------------------------
@@ -291,13 +307,17 @@ select ok(
 -- site_click_pairs
 -- ---------------------------------------------------------------------------
 
-insert into public.site_pages (id, page_id, draft, published, published_at) values
-  ('00000000-0000-4000-8000-00000178a0c1', '00000000-0000-4000-8000-00000178a002',
+insert into public.content_entries (id, site_id, type_id, draft, published, published_at)
+select e.id::uuid, '00000000-0000-4000-8000-00000178a002', t.id, e.draft::jsonb, e.published::jsonb,
+       case when e.published is null then null else now() end
+from (values
+  ('00000000-0000-4000-8000-00000178a0c1',
    '{"path":"pairs","title":"P","description":"","blocks":[{"id":"DRAFTONLY"}]}',
-   '{"path":"pairs","title":"P","description":"","blocks":[{"id":"B1","type":"grid","items":[{"id":"G1"}]},{"id":"B2","googleId":"gg","appleId":"aa","n":[[{"id":"deep"}]],"id2":"nope","t":{"id":5}}]}',
-   now()),
-  ('00000000-0000-4000-8000-00000178a0c2', '00000000-0000-4000-8000-00000178a002',
-   '{"path":"unpub","title":"U","description":"","blocks":[{"id":"UNPUB"}]}', null, null);
+   '{"path":"pairs","title":"P","description":"","blocks":[{"id":"B1","type":"grid","items":[{"id":"G1"}]},{"id":"B2","googleId":"gg","appleId":"aa","n":[[{"id":"deep"}]],"id2":"nope","t":{"id":5}}]}'),
+  ('00000000-0000-4000-8000-00000178a0c2',
+   '{"path":"unpub","title":"U","description":"","blocks":[{"id":"UNPUB"}]}', null)
+) as e(id, draft, published)
+join public.content_types t on t.site_id = '00000000-0000-4000-8000-00000178a002' and t.key = 'page';
 select is(
   (select array_agg(block_id order by block_id collate "C") from public.site_click_pairs('00000000-0000-4000-8000-00000178a002')
      where sub_page_id = '00000000-0000-4000-8000-00000178a0c1'),

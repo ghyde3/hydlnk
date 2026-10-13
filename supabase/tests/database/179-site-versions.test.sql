@@ -1,6 +1,7 @@
 -- Wave M2 (M12-04): whole-site versions. A version holds Home and every live sub-page; a sub-page
 -- deleted later stays in old versions; versions are pruned to 32 MiB per site; Free keeps none.
--- "Publish" is a postgres-role write of the sub-pages, then of the pages row (what publish_site does).
+-- "Publish" is a postgres-role write of the page entries, then of the pages row (what publish_site
+-- does). Since M15-05 (1b1-23) the sub-pages are page entries, not site_pages rows.
 
 begin;
 select plan(15);
@@ -18,10 +19,24 @@ insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000179c001', tests.get_supabase_uid('x'), 'zq179-x',
    '{"version":1,"rev":1,"profile":{"name":"X","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');
 
-insert into public.site_pages (id, page_id, draft) values
+-- Page entries as the move would make them (a Home entry and the sub-pages).
+create temp table t179 as
+select s.id as site_id, t.id as page_type
+from public.pages s join public.content_types t on t.site_id = s.id and t.key = 'page'
+where s.handle like 'zq179-%';
+grant select on t179 to public;
+
+insert into public.content_entries (id, site_id, type_id, draft)
+select e.id::uuid, e.site::uuid, t.page_type, e.draft::jsonb
+from (values
+  ('00000000-0000-4000-8000-00000179a0e0', '00000000-0000-4000-8000-00000179a001', '{"path":"/","title":"","description":"","blocks":[]}'),
   ('00000000-0000-4000-8000-00000179a0a1', '00000000-0000-4000-8000-00000179a001', '{"path":"items","title":"Items","description":"","blocks":[]}'),
   ('00000000-0000-4000-8000-00000179a0a2', '00000000-0000-4000-8000-00000179a001', '{"path":"visit","title":"Visit","description":"","blocks":[]}'),
-  ('00000000-0000-4000-8000-00000179b0a1', '00000000-0000-4000-8000-00000179b001', '{"path":"items","title":"Items","description":"","blocks":[]}');
+  ('00000000-0000-4000-8000-00000179b0e0', '00000000-0000-4000-8000-00000179b001', '{"path":"/","title":"","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-00000179b0a1', '00000000-0000-4000-8000-00000179b001', '{"path":"items","title":"Items","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-00000179c0e0', '00000000-0000-4000-8000-00000179c001', '{"path":"/","title":"","description":"","blocks":[]}')
+) as e(id, site, draft)
+join t179 t on t.site_id = e.site::uuid;
 
 create function pg_temp.home(p_rev integer) returns jsonb language sql as $$
   select jsonb_build_object('version', 1, 'rev', p_rev, 'blocks', '[]'::jsonb, 'nav', '{"links":[]}'::jsonb)
@@ -32,9 +47,9 @@ select columns_are('public', 'page_versions',
   'page_versions gains sub_pages');
 
 -- Publish one: both sub-pages first, the pages row last.
-update public.site_pages set published = jsonb_build_object('path', 'items', 'title', 'Items', 'description', '', 'blocks', '[]'::jsonb),
+update public.content_entries set published = jsonb_build_object('path', 'items', 'title', 'Items', 'description', '', 'blocks', '[]'::jsonb),
   published_at = '2026-10-01 10:00:00+00' where id = '00000000-0000-4000-8000-00000179a0a1';
-update public.site_pages set published = jsonb_build_object('path', 'visit', 'title', 'Visit', 'description', '', 'blocks', '[]'::jsonb),
+update public.content_entries set published = jsonb_build_object('path', 'visit', 'title', 'Visit', 'description', '', 'blocks', '[]'::jsonb),
   published_at = '2026-10-01 10:00:00+00' where id = '00000000-0000-4000-8000-00000179a0a2';
 update public.pages set published = pg_temp.home(1), published_at = '2026-10-01 10:00:00+00'
   where id = '00000000-0000-4000-8000-00000179a001';
@@ -58,14 +73,14 @@ select is((select count(*)::int from public.page_versions where page_id = '00000
   'an identical republish adds no version');
 
 -- Only a sub-page changed: a new version.
-update public.site_pages set published = jsonb_build_object('path', 'visit', 'title', 'Visit us', 'description', '', 'blocks', '[]'::jsonb)
+update public.content_entries set published = jsonb_build_object('path', 'visit', 'title', 'Visit us', 'description', '', 'blocks', '[]'::jsonb)
   where id = '00000000-0000-4000-8000-00000179a0a2';
 update public.pages set published_at = '2026-10-01 12:00:00+00' where id = '00000000-0000-4000-8000-00000179a001';
 select is((select count(*)::int from public.page_versions where page_id = '00000000-0000-4000-8000-00000179a001'), 2,
   'a change in a sub-page alone records a version');
 
 -- A page deleted later stays in the old versions.
-delete from public.site_pages where id = '00000000-0000-4000-8000-00000179a0a1';
+update public.content_entries set deleted_at = now() where id = '00000000-0000-4000-8000-00000179a0a1';
 update public.pages set published = pg_temp.home(2), published_at = '2026-10-01 13:00:00+00' where id = '00000000-0000-4000-8000-00000179a001';
 select is((select jsonb_array_length(sub_pages) from public.page_versions where page_id = '00000000-0000-4000-8000-00000179a001' and version_no = 3), 1,
   'the new version holds only the pages that are live');
@@ -82,7 +97,7 @@ select tests.clear_authentication();
 reset role;
 
 -- Free keeps none.
-update public.site_pages set published = jsonb_build_object('path', 'items', 'title', 'Items', 'description', '', 'blocks', '[]'::jsonb),
+update public.content_entries set published = jsonb_build_object('path', 'items', 'title', 'Items', 'description', '', 'blocks', '[]'::jsonb),
   published_at = '2026-10-01 10:00:00+00' where id = '00000000-0000-4000-8000-00000179b0a1';
 update public.pages set published = pg_temp.home(1), published_at = '2026-10-01 10:00:00+00' where id = '00000000-0000-4000-8000-00000179c001';
 update public.pages set published = pg_temp.home(1), published_at = '2026-10-01 10:00:00+00' where id = '00000000-0000-4000-8000-00000179b001';
@@ -90,18 +105,19 @@ select is((select count(*)::int from public.page_versions where page_id = '00000
 
 -- 32 MiB: nine sub-pages of about 500 KB each make a version of about 4.5 MB; eight publishes
 -- leave the newest seven (7 x 4.5 MB fits, 8 does not).
-insert into public.site_pages (id, page_id, draft)
+insert into public.content_entries (id, site_id, type_id, draft)
 select ('00000000-0000-4000-8000-00000179c1' || lpad(g::text, 2, '0'))::uuid, '00000000-0000-4000-8000-00000179c001',
+  (select page_type from t179 where site_id = '00000000-0000-4000-8000-00000179c001'),
   jsonb_build_object('path', 'p' || g, 'title', 'P', 'description', '', 'blocks', '[]'::jsonb)
 from generate_series(1, 9) g;
 do $$
 declare r integer;
 begin
   for r in 1..8 loop
-    update public.site_pages set published = jsonb_build_object('path', draft ->> 'path', 'title', 'P', 'description', '',
+    update public.content_entries set published = jsonb_build_object('path', draft ->> 'path', 'title', 'P', 'description', '',
         'blocks', '[]'::jsonb, 'pad', repeat('x', 500000)),
       published_at = '2026-10-02 10:00:00+00'
-      where page_id = '00000000-0000-4000-8000-00000179c001';
+      where site_id = '00000000-0000-4000-8000-00000179c001' and draft ->> 'path' <> '/';
     update public.pages set published = pg_temp.home(10 + r), published_at = ('2026-10-02 10:00:00+00'::timestamptz + r * interval '1 minute')
       where id = '00000000-0000-4000-8000-00000179c001';
   end loop;
