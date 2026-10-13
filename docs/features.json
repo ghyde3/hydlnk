@@ -5685,6 +5685,122 @@
         "security-reviewer runs over M15-01 to M15-03 (RLS and grants, the service-role writer's ownership checks, the SQL functions, the path registry, limits and media cleanup) and every finding is fixed or recorded in docs/PLAN.md with Gary's decision."
       ],
       "passes": true
+    },
+    {
+      "id": "M15-05",
+      "milestone": 15,
+      "area": "data",
+      "title": "The move: sub-pages and Home copied into page entries in one migration, versions converted, with a reverse for rollback",
+      "acceptance": [
+        "One migration moves every site: move_all_content() (service role only, empty search_path, inside hydlnk.content_move) copies each site_pages row to a page entry with the same id (draft, published, published_at), inserts Home as a page entry with a new id at / (draft blocks from pages.draft.blocks, published blocks from pages.published.blocks, title and description empty), registers every path in site_paths and then stamps site_pages.moved_at. Nothing is stripped or deleted: site_pages content, pages.draft and pages.published blocks and page_versions are byte-equal before and after.",
+        "A draft path the registry refuses becomes the live path if valid and free, else suggest_site_path(title, taken), whose output equals suggestPath for 200 sample titles; the original draft is kept in the entry's first system revision.",
+        "page_versions convert additively: each version's Home blocks and sub_pages snapshots become system revisions (was_published) below the entry's current rev, at most revisions_kept per entry, newest kept; page_versions are unchanged.",
+        "publish_site keeps its signature and writes page entries; record_page_version records design plus live page entries in today's version shape.",
+        "Frozen copies: after the move, any write that changes the blocks in pages.draft or pages.published, inserts a site_pages row or updates a moved row is refused with HL013 for every role unless the move flag is on for a privileged role; a design save that omits blocks keeps the frozen blocks; the pages link blocklist runs only when blocks change.",
+        "reverse_all_content() copies every entry's draft, published copy and published_at back to site_pages (pages made after the move become rows, trashed ones unpublished rows and reported), overwrites the blocks in pages.draft and pages.published from Home's entry, clears moved_at and deletes the page entries; supabase/rollback/content-move-rollback.sql runs it and restores the previous function bodies.",
+        "pgTAP 204: ids kept, one / entry per site, bytes change only by Home's entry and first revisions, the media queue unchanged, a downgraded over-limit site and a since-blocklisted draft both move, a rerun is a no-op, anon and authenticated cannot execute.",
+        "pgTAP 205: 12 versions on a Free site give at most 10 revisions per entry; deleted pages skipped; a rerun adds nothing.",
+        "pgTAP 206: move, edit Home and a sub-page, add and trash a page, reverse: the legacy rows carry every edit, account_site_bytes equals the pre-move value plus the edits, no page entries remain, and a second move succeeds.",
+        "pgTAP 201, 202 and 208: publish_site over entries (set mismatch, clash rollback, version shape, grants), the frozen-copy guards for authenticated and service_role, and the seeded sites moved after db:reset."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-06",
+      "milestone": 15,
+      "area": "publishing",
+      "title": "Every reader reads page entries; live HTML is unchanged",
+      "acceptance": [
+        "Live pages (Home, sub-pages, sitemap.xml, robots.txt, OG images), analytics ingest and the dashboard, shared draft links, the admin draft view and counts, the editor loaders and the MCP read tools read page entries plus the site design from pages; there is no per-account flag or source switch.",
+        "A static test fails if any file under src/ selects from site_pages or reads the blocks of pages.draft or pages.published.",
+        "PUBLIC_READ_CACHE_VERSION is bumped, so no pre-cutover cache entry is served by the new code.",
+        "An integration test renders Home, each sub-page, sitemap.xml and robots.txt for the seed sites from pre-move fixtures and from entries after the move, and the strings are byte-equal.",
+        "The beacon rejects the Home entry id and accepts moved sub-page ids; Home stays the nil uuid; pgTAP: daily_stats rows for moved ids are unchanged, site_click_pairs returns the same set with Home at null, and admin counts do not double count.",
+        "Playwright at 390x844: the seed site's Home and a sub-page render, a menu link opens the sub-page, the dashboard lists Home and the sub-page, a shared draft link renders, no horizontal scroll.",
+        "Playwright at 1440x900: the same four checks pass."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-07",
+      "milestone": 15,
+      "area": "editor",
+      "title": "Every writer writes page entries through the server writer",
+      "acceptance": [
+        "Supersedes, in this respect only (Gary's content model decisions, 2026-10-11 and 2026-10-12): M15-01 step 1's 'the browser still writes under RLS with the publishable key'. For content entries the editor saves through a server route that calls the content writer with expectedRev, and the entry's rev replaces updated_at as the revision. Home's design (theme, menu, profile) still saves to pages.draft under RLS. Every other part of that step stands.",
+        "Home's blocks and each sub-page save through POST /app/api/pages/[id]/entries/[entryId]/draft; a stale rev shows the existing conflict notice and changes nothing; HL005, HL009 and HL012 map to the existing notices; another user's entry answers not-found.",
+        "Sub-page create, delete (to trash) and site templates use the writer; HL008 counts Home plus page entries, trash included.",
+        "Publish and Unpublish read entry drafts and go through publish_site and unpublish_site over entries; version restore writes design to pages.draft and blocks to entries, and Undo returns the previous drafts.",
+        "MCP block tools, create_page and update_page_settings write entries with ifRev as the entry rev; set_theme, update_profile and the menu write the design; no tool returns the Home entry id, which resolves to home when passed in.",
+        "Unit tests for each rule; m10-mcp-static and m15-content-static pass.",
+        "Playwright at 390x844: edit a Home block, a theme value and a sub-page block, reload, all persist; a writer edit between saves shows the conflict notice; add a page and Publish, and it is live.",
+        "Playwright at 1440x900: the same, plus History restore and Undo."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-08",
+      "milestone": 15,
+      "area": "platform",
+      "title": "Dry run: byte-identical live HTML for every site on a local copy of production",
+      "acceptance": [
+        "scripts/content-move-dry-run.ts exits non-zero before any request when the database or app URL is not local, never reads .env.production and never connects to production (unit test).",
+        "snapshot stores, per site and on the handle and custom hosts, Home, each live sub-page, sitemap.xml, robots.txt and the OG image bytes plus the counts; diff compares byte for byte and count for count with no normalizing and names every site that differs (unit test with a one-byte change).",
+        "On a production copy restored locally, main's build before and the branch's build after `supabase migration up` give zero differences for every site, and check passes (one / entry per site, ids kept, moved_at on every row, every nav and page_link target resolves).",
+        "On the same copy, applying supabase/rollback/content-move-rollback.sql and rebuilding main gives zero differences from before.",
+        "PROGRESS.md carries the move and reverse reports, the migration's duration and both zero-difference summaries; the local copy is deleted afterwards."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-09",
+      "milestone": 15,
+      "area": "security",
+      "title": "Content model security review (stage 1b-1)",
+      "acceptance": [
+        "security-reviewer runs over M15-05 to M15-08 (the new SQL functions and their grants, the privileged-only flag in the HL008, blocklist, site-page-limit and frozen-copy guards, the entry save route's ownership checks, the beacon's Home id check, MCP id handling, the rollback SQL and the dry-run script's handling of the production copy), and every finding is fixed or recorded in docs/PLAN.md with Gary's decision."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-10",
+      "milestone": 15,
+      "area": "publishing",
+      "title": "Every page publishes on its own; Publish design; Publish all changes; History restores design",
+      "acceptance": [
+        "Publish page makes only that page's draft live, with other pages' live copies and published_at unchanged; Publish design makes theme, menu and profile live and leaves every page unchanged; Publish all changes publishes design and every changed page in one transaction, and unchanged pages keep their published_at.",
+        "pgTAP 209 and 210: publish_design writes design keys only, refuses a blocks or unknown key with 22023, records a version, and only service_role may execute it; publish_site skips unchanged entries.",
+        "Unit tests: a stale rev gets the conflict notice, another owner's page gets not-found, and Publish is never blocked by a link to an unpublished page.",
+        "The publish bar shows each page's status (Live, Unpublished changes, Draft), is built from DESIGN.md with touch targets of at least 44px, and design-verifier reports no gaps at 390 and 1440.",
+        "History restores the site design only; each page lists its own revisions and restores one into its draft, which goes live only on Publish.",
+        "MCP publish_page publishes all changes and its description says so; get_page reports each page's own status.",
+        "Playwright at 390x844: edit two pages and the theme; Publish page on one, and only it changes live; Publish design changes the theme only; Publish all changes publishes the rest; restore a page revision; no horizontal scroll.",
+        "Playwright at 1440x900: the same steps pass, plus History restore of design and Undo."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-11",
+      "milestone": 15,
+      "area": "publishing",
+      "title": "Menu links and page-link blocks to unpublished pages are hidden",
+      "acceptance": [
+        "On the live site, a menu item or page_link block whose target page has no live copy is not drawn, and the HTML contains neither that page's title, path nor id; publishing the page brings both links back.",
+        "Unit tests for the menu builder and the page_link renderer.",
+        "Playwright at 390x844: a new page linked from the menu and a page_link block stays hidden until it is published, then both links appear; no horizontal scroll.",
+        "Playwright at 1440x900: the same."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M15-12",
+      "milestone": 15,
+      "area": "security",
+      "title": "Content model security review (stage 1b-2)",
+      "acceptance": [
+        "security-reviewer runs over M15-10 and M15-11 (publish_design's input check and grants, ownership and rev in the three publish actions and the page revisions route, no cross-site publish, hidden links leak nothing, MCP publish scope), and every finding is fixed or recorded in docs/PLAN.md with Gary's decision."
+      ],
+      "passes": false
     }
   ]
 }
