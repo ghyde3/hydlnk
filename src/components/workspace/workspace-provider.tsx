@@ -152,6 +152,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     draft,
     initialRevKey: initial.revKey,
     home: initial.home,
+    repaired: initial.repaired,
   });
   const { flush, savedDraft, currentStatus, blocked } = autosave;
 

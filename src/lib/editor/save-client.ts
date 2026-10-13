@@ -1,5 +1,6 @@
 import { readBlockedLinkError } from "@/lib/blocklist/error";
 import { scheduleMediaCleanup } from "@/lib/media/cleanup-client";
+import { readEntryRevs } from "@/lib/site-pages/entry-revs-client";
 import { postEntryDraft } from "@/lib/site-pages/entry-save-client";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { Json } from "@/lib/supabase/database.types";
@@ -44,12 +45,24 @@ export function createDraftSaver(
   let storedBlocks: string | null =
     home && loadedBlocks !== undefined ? JSON.stringify(loadedBlocks) : null;
 
+  // Seeded with the loaded blocks, the first save may send none; until a block POST (checked under
+  // the entry rev) or this read has passed, the entry rev is confirmed so a tab whose Home blocks
+  // were written elsewhere (an MCP tool) still hits the stale-tab conflict.
+  let revConfirmed = !(home && loadedBlocks !== undefined);
+
   return async (doc, expectedRevKey) => {
     let design: unknown = doc;
     if (home) {
       const { blocks, ...rest } = doc;
       design = rest;
       const text = JSON.stringify(blocks);
+      if (text === storedBlocks && !revConfirmed) {
+        const revs = await readEntryRevs(pageId);
+        if (!revs) return { kind: "error" };
+        const entry = revs.find((row) => row.id === home.entryId);
+        if (!entry || entry.rev !== homeRev) return { kind: "conflict" };
+        revConfirmed = true;
+      }
       if (text !== storedBlocks) {
         const answer = await postEntryDraft(pageId, home.entryId, homeRev, {
           path: "/",
@@ -61,6 +74,7 @@ export function createDraftSaver(
         if (failed) return failed;
         if (answer.kind === "ok") homeRev = answer.rev;
         storedBlocks = text;
+        revConfirmed = true;
       }
     }
 

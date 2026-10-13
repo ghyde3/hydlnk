@@ -56,6 +56,15 @@ vi.mock("@/lib/supabase/browser", () => ({
   }),
 }));
 
+// The entry rev read that confirms a seeded first save (1b1-17).
+let storedEntryRev: number | null = 7;
+vi.mock("@/lib/site-pages/entry-revs-client", () => ({
+  readEntryRevs: async () =>
+    storedEntryRev === null
+      ? null
+      : [{ id: "22222222-2222-4222-8222-222222222222", rev: storedEntryRev }],
+}));
+
 // The entry route ---------------------------------------------------------------------------------
 interface Posted {
   url: string;
@@ -67,6 +76,7 @@ let routeAnswers: Array<{ status: number; body: unknown } | "throw">;
 beforeEach(() => {
   patches.length = 0;
   posts.length = 0;
+  storedEntryRev = 7;
   answer = { data: [{ id: "site" }], error: null, status: 200 };
   routeAnswers = [];
   vi.stubGlobal(
@@ -141,6 +151,17 @@ describe("Home's autosave on page entries", () => {
     await save(doc([link("lnk-aaaaaaaa", "Changed")], 6), "5");
     expect(posts).toHaveLength(1);
     expect(posts[0]!.body.rev).toBe(7);
+  });
+
+  it("a seeded design-only first save is a conflict when Home's entry moved since load (a tool wrote blocks)", async () => {
+    const blocks = [link("lnk-aaaaaaaa")];
+    const save = createDraftSaver(SITE, { entryId: HOME, rev: 7 }, blocks);
+    storedEntryRev = 8;
+    expect(await save(doc(blocks, 5, "mara 2"), "4")).toEqual({ kind: "conflict" });
+    expect(patches).toHaveLength(0);
+    storedEntryRev = null;
+    expect(await save(doc(blocks, 5, "mara 2"), "4")).toEqual({ kind: "error" });
+    expect(patches).toHaveLength(0);
   });
 
   it("a conflict on the blocks stops before the design is written", async () => {

@@ -49,8 +49,10 @@ export function useAutosave(args: {
   initialRevKey: string | null;
   /** Home's page entry, where Home's blocks are saved (1b1-17); null when the site has none. */
   home: HomeEntryRef | null;
+  /** The load dropped parts of the stored draft: the first save must write the repaired blocks. */
+  repaired?: boolean;
 }): Autosave {
-  const { pageId, draft, initialRevKey, home } = args;
+  const { pageId, draft, initialRevKey, home, repaired = false } = args;
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [blocked, setBlocked] = useState<BlockedSave | null>(null);
   const queueRef = useRef<AutosaveQueue | null>(null);
@@ -65,7 +67,7 @@ export function useAutosave(args: {
       save: createDraftSaver(
         pageId,
         home,
-        home && home.rev === loadedHomeRev ? loaded.blocks : undefined,
+        home && !repaired && home.rev === loadedHomeRev ? loaded.blocks : undefined,
       ),
       onStatus: setStatus,
       onBlocked: setBlocked,
@@ -92,7 +94,7 @@ export function useAutosave(args: {
       void queue.flush().finally(() => queue.dispose());
       queueRef.current = null;
     };
-  }, [pageId, initialRev, initialRevKey, home, loaded, loadedHomeRev]);
+  }, [pageId, initialRev, initialRevKey, home, repaired, loaded, loadedHomeRev]);
 
   useEffect(() => {
     if (draft === loaded) return;
