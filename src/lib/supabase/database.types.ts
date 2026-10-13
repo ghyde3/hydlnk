@@ -1681,6 +1681,8 @@ export type Database = {
         Returns: undefined
       }
       content_move_active: { Args: never; Returns: boolean }
+      convert_all_versions: { Args: never; Returns: Json }
+      convert_site_versions: { Args: { p_site: string }; Returns: Json }
       end_expired_gifts: {
         Args: never
         Returns: {
