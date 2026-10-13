@@ -5,7 +5,7 @@ import {
   type Page,
   type Request,
 } from "@playwright/test";
-import { publishableKey, supabaseUrl } from "../fixtures/auth";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import {
   accessToken,
   draftWith,
@@ -91,24 +91,18 @@ export const isDraftPatch = (request: Request): boolean =>
 export const status = (page: Page, text: string | RegExp): Locator =>
   page.getByRole("status").filter({ hasText: text });
 
-/** Writes `draft` into `pages.draft` the way any client can: PostgREST with the user's own token. */
+/**
+ * Hostile blocks reach the stored draft. A client's publishable-key write of pages.draft blocks is
+ * refused now (HL013, the frozen copy), so this asserts that refusal and then writes the blocks of
+ * `draft` into Home's entry with the secret key, as an attacker with database access would.
+ */
 export async function patchDraftAsUser(
   context: BrowserContext,
   pageId: string,
   draft: unknown,
 ): Promise<void> {
-  const token = await accessToken(context);
-  const write = await fetch(`${supabaseUrl()}/rest/v1/pages?id=eq.${pageId}`, {
-    method: "PATCH",
-    headers: {
-      apikey: publishableKey(),
-      Authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-      Prefer: "return=minimal",
-    },
-    body: JSON.stringify({ draft }),
-  });
-  expect(write.status, "PostgREST accepts the draft write").toBeLessThan(300);
+  const blocks = (draft as { blocks: unknown[] }).blocks;
+  await abuseHomeBlocks(await accessToken(context), pageId, blocks);
 }
 
 export { openEditor };

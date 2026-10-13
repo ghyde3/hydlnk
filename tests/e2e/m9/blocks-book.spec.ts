@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks, homeEntryOf } from "../fixtures/home-abuse";
 import { expireOwnerPages } from "../fixtures/expire";
 import {
   accessTokenFor,
@@ -508,17 +509,11 @@ test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT
     const user = await userWithDraft(context, "bk10", (handle) =>
       draftOf(handle, [bookOf(null, { links, title: "<img src=x onerror=alert(1)>" })]),
     );
-    // The publishable key and the owner's JWT, as curl would use them: RLS lets the owner write it.
-    const client = userClient(await accessTokenFor(user.email));
-    const write = await client
-      .from("pages")
-      .update({
-        draft: draftOf(user.handle, [
-          bookOf(null, { links, title: "<img src=x onerror=alert(1)>" }),
-        ]),
-      })
-      .eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    // The publishable key and the owner's JWT, as curl would use them: RLS refuses the frozen pages.draft
+    // blocks (HL013); the hostile draft goes into Home's entry with the secret key.
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, [
+      bookOf(null, { links, title: "<img src=x onerror=alert(1)>" }),
+    ]);
 
     await openEditor(page);
     await page.getByRole("button", { name: "Publish", exact: true }).first().click();
@@ -539,6 +534,7 @@ test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT
       .eq("id", user.pageId)
       .single();
     expect(stored.data).toEqual({ published: null, published_at: null });
+    expect((await homeEntryOf(user.pageId)).published).toBeNull();
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).not.toContain("pg-book");
     expect(body).not.toContain("data:text/html");
@@ -568,6 +564,7 @@ test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT
       .eq("id", user.pageId)
       .single();
     expect(stored.data).toEqual({ published: null, published_at: null });
+    expect((await homeEntryOf(user.pageId)).published).toBeNull();
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).not.toContain("pg-book");
     expect(body).not.toContain(other.id);

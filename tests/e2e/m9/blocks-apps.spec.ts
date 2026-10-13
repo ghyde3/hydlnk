@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks, homeEntryOf } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { draftWith, emptyUser, saveIndicator } from "../m2/editor-helpers";
@@ -401,13 +402,9 @@ test.describe("M9-21 abuse: a draft written as raw JSON with the owner's own JWT
     const user = await userWithDraft(context, "ap8", (handle) =>
       draftOf(handle, [appsOf({ links })]),
     );
-    // The publishable key and the owner's JWT, as curl would use them: RLS lets the owner write it.
-    const client = userClient(await accessTokenFor(user.email));
-    const write = await client
-      .from("pages")
-      .update({ draft: draftOf(user.handle, [appsOf({ links })]) })
-      .eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    // The publishable key and the owner's JWT, as curl would use them: RLS refuses the frozen pages.draft
+    // blocks (HL013); the hostile draft goes into Home's entry with the secret key.
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, [appsOf({ links })]);
     await openEditor(page);
     await page.getByRole("button", { name: "Publish", exact: true }).first().click();
     await expect(page.getByRole("alert").filter({ hasText: "before publishing" })).toBeVisible();
@@ -424,6 +421,7 @@ test.describe("M9-21 abuse: a draft written as raw JSON with the owner's own JWT
       .eq("id", user.pageId)
       .single();
     expect(stored.data).toEqual({ published: null, published_at: null });
+    expect((await homeEntryOf(user.pageId)).published).toBeNull();
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).not.toContain("pg-app");
     expect(body).not.toContain("evil.example");

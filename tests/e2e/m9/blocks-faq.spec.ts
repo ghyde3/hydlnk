@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks, homeEntryOf } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import {
@@ -453,12 +454,8 @@ test.describe("M9-16 the abuse cases", () => {
     user: { email: string; handle: string; pageId: string },
     blocks: unknown[],
   ) {
-    const client = userClient(await accessTokenFor(user.email));
-    const write = await client
-      .from("pages")
-      .update({ draft: draftOf(user.handle, blocks) })
-      .eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    // RLS refuses the frozen pages.draft blocks (HL013); the hostile blocks go into Home's entry.
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, blocks);
     await openEditor(page);
   }
 
@@ -489,6 +486,7 @@ test.describe("M9-16 the abuse cases", () => {
     await expect(alert).toBeVisible();
     await expect(alert).toContainText("Use up to 10 questions.");
     expect(await publishedOf(user.pageId)).toEqual({ published: null, published_at: null });
+    expect((await homeEntryOf(user.pageId)).published).toBeNull();
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).not.toContain("pg-faq");
     expect(body).not.toContain("Q0?");

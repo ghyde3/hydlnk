@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { abuseHomeBlocks, homeEntryOf, writeHomeDraft } from "../fixtures/home-abuse";
 import {
   cleanupUsers,
   desktopOnly,
@@ -43,13 +43,9 @@ const header = (id: string, text: string, overrides?: Record<string, unknown>) =
 /** Appends `blocks` to the owner's draft with the publishable key and the owner's JWT. */
 async function patchDraft(token: string, pageId: string, blocks: unknown[]): Promise<void> {
   const current = (await pageRow(pageId)).draft;
-  const { data, error } = await userClient(token)
-    .from("pages")
-    .update({ draft: { ...current, blocks: [...current.blocks, ...blocks] } })
-    .eq("id", pageId)
-    .select("id");
-  expect(error, "the database takes any draft").toBeNull();
-  expect(data).toHaveLength(1);
+  // The owner's publishable-key write of pages.draft blocks is refused (HL013); the hostile blocks
+  // go into Home's entry draft with the secret key, where Publish and the editor meet them.
+  await abuseHomeBlocks(token, pageId, [...current.blocks, ...blocks]);
 }
 
 async function liveLook(browser: Browser, handle: string, ids: string[]) {
@@ -106,7 +102,8 @@ test.describe("M6-45 direct-API abuse of block overrides", () => {
       timeout: 30_000,
     });
 
-    const published = (await pageRow(owner.pageId)).published as { blocks: Block[] };
+    // Home's blocks are published into its entry now: that is where the heading is read from.
+    const published = (await homeEntryOf(owner.pageId)).published as { blocks: Block[] };
     const kept = published.blocks.find((b) => b.id === "hdr-hostile-0001") as {
       overrides?: unknown;
     };
@@ -135,6 +132,8 @@ test.describe("M6-45 direct-API abuse of block overrides", () => {
     const picture = await uploadImage(context, await halves(40, 30));
     const before = await pageRow(owner.pageId);
     expect(before.published).not.toBeNull();
+    const entryBefore = await homeEntryOf(owner.pageId);
+    expect(entryBefore.published).not.toBeNull();
 
     const BAD = "bad-style-0001";
     const cases: {
@@ -197,7 +196,7 @@ test.describe("M6-45 direct-API abuse of block overrides", () => {
 
     for (const c of cases) {
       // Reset to the page's own draft, then write the bad block with the owner's JWT.
-      await adminClient().from("pages").update({ draft: before.draft }).eq("id", owner.pageId);
+      await writeHomeDraft(owner.pageId, before.draft.blocks);
       await patchDraft(token, owner.pageId, [c.block]);
 
       await openEditor(page);
@@ -218,6 +217,8 @@ test.describe("M6-45 direct-API abuse of block overrides", () => {
       const after = await pageRow(owner.pageId);
       expect(after.published, c.name).toEqual(before.published);
       expect(after.published_at, c.name).toBe(before.published_at);
+      // Nor did Home's entry take a publish.
+      expect((await homeEntryOf(owner.pageId)).published, c.name).toEqual(entryBefore.published);
 
       // The live page shows none of it.
       const html = (await tenantGet(owner.handle)).text;
