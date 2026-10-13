@@ -1,9 +1,18 @@
 import type { z } from "zod";
-import { draftSubPageSchema, publishSubPageSchema } from "@/lib/document/sub-page";
+import { pageDraftSchema, pagePublishSchema } from "./page";
 import { postDraftSchema, postPublishSchema } from "./post";
 
 export { postDraftSchema, postPublishSchema, POST_LIMITS } from "./post";
 export type { PostDraft, PostPublish } from "./post";
+export {
+  designDraftSchema,
+  designPublishSchema,
+  homeEntryDraftSchema,
+  homeEntryPublishSchema,
+  pageDraftSchema,
+  pagePublishSchema,
+  toHomeEntryPublishForm,
+} from "./page";
 export { entrySlugIssue } from "./slug";
 export { LIST_ORDERS, LIST_SORTS, LIST_STATUSES } from "./enums";
 export type { EntryStatus, ListOrder, ListSort, ListStatus } from "./enums";
@@ -14,13 +23,13 @@ export type EntrySchemaMode = "draft" | "publish";
 export const MAX_ISSUES = 10;
 
 /**
- * The schema for an entry type's content: 'post' (built in), 'page' (the sub-page document), or null
+ * The schema for an entry type's content: 'post' (built in), 'page' (a sub-page, or Home when the path is '/'), or null
  * for a type this stage cannot validate (the caller answers type_disabled or invalid). Custom types
  * arrive in stage 5.
  */
 export function schemaForType(typeKey: string, mode: EntrySchemaMode): z.ZodType | null {
   if (typeKey === "post") return mode === "draft" ? postDraftSchema : postPublishSchema;
-  if (typeKey === "page") return mode === "draft" ? draftSubPageSchema : publishSubPageSchema;
+  if (typeKey === "page") return mode === "draft" ? pageDraftSchema : pagePublishSchema;
   return null;
 }
 
