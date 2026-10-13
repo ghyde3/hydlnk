@@ -261,10 +261,11 @@ test.describe("M7-08 applying", () => {
     expect(writes.patches).toHaveLength(1);
     expect(Object.keys(writes.patches[0]!.body)).toEqual(["draft"]);
     // After the cutover Home's blocks save through the server save route (one POST), nothing else.
-    expect(writes.others).toHaveLength(1);
-    expect(writes.others[0]).toMatch(
-      new RegExp(`^POST http://[^/]+/api/pages/${user.pageId}/entries/[0-9a-f-]+/draft$`),
+    expect(writes.entryPosts).toHaveLength(1);
+    expect(writes.entryPosts[0]!.url).toMatch(
+      new RegExp(`^http://[^/]+/api/pages/${user.pageId}/entries/[0-9a-f-]+/draft$`),
     );
+    expect(writes.others).toEqual([]);
     expect(writes.serverActions).toEqual([]);
     expect(log.filter((entry) => entry.url.includes("/rest/v1/themes"))).toEqual([]);
     expect(log.filter((entry) => entry.url.includes("/storage/v1/"))).toEqual([]);
@@ -314,10 +315,11 @@ test.describe("M7-08 applying", () => {
     expect(writes.patches).toHaveLength(1);
     expect(Object.keys(writes.patches[0]!.body)).toEqual(["draft"]);
     // After the cutover Home's blocks save through the server save route (one POST), nothing else.
-    expect(writes.others).toHaveLength(1);
-    expect(writes.others[0]).toMatch(
-      new RegExp(`^POST http://[^/]+/api/pages/${user.pageId}/entries/[0-9a-f-]+/draft$`),
+    expect(writes.entryPosts).toHaveLength(1);
+    expect(writes.entryPosts[0]!.url).toMatch(
+      new RegExp(`^http://[^/]+/api/pages/${user.pageId}/entries/[0-9a-f-]+/draft$`),
     );
+    expect(writes.others).toEqual([]);
     expect(writes.serverActions).toEqual([]);
     expect(log.filter((entry) => entry.url.includes("/rest/v1/themes"))).toEqual([]);
     expect(log.filter((entry) => entry.url.includes("/storage/v1/"))).toEqual([]);
@@ -612,15 +614,19 @@ test.describe("M7-08 on a desktop", () => {
     // Tab and Shift+Tab never leave the dialog.
     for (let i = 0; i < 24; i++) {
       await page.keyboard.press("Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
-        true,
-      );
+      expect(
+        await page.evaluate(
+          () => document.activeElement?.closest("[data-testid=template-dialog]") !== null,
+        ),
+      ).toBe(true);
     }
     for (let i = 0; i < 24; i++) {
       await page.keyboard.press("Shift+Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
-        true,
-      );
+      expect(
+        await page.evaluate(
+          () => document.activeElement?.closest("[data-testid=template-dialog]") !== null,
+        ),
+      ).toBe(true);
     }
     await expectNoHorizontalScroll(page);
   });
