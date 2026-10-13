@@ -226,8 +226,10 @@ test.describe("M6-26 and M6-27 live embeds", () => {
     page,
   }) => {
     const { adminClient } = await import("../fixtures/auth");
+    const { homeEntryOf } = await import("../fixtures/home-abuse");
     const fx = await liveEmbeds("emevil", [CASES.find((c) => c.provider === "vimeo")!]);
-    // Written straight to `published` with the secret key (Publish would refuse every one of these).
+    // Written straight to Home's entry `published` with the secret key (Publish would refuse every one
+    // of these); the live page reads Home's blocks from there, the pages.published copy is frozen.
     const evil = [
       "https://vimeo.com.evil.example/123456",
       "https://evil.example/x",
@@ -244,7 +246,11 @@ test.describe("M6-26 and M6-27 live embeds", () => {
       url: u,
       caption: "Evil",
     })) as never;
-    const { error } = await adminClient().from("pages").update({ published }).eq("id", fx.pageId);
+    const home = await homeEntryOf(fx.pageId);
+    const { error } = await adminClient()
+      .from("content_entries")
+      .update({ published: { ...(home.published as object), blocks: published.blocks } })
+      .eq("id", home.id);
     expect(error).toBeNull();
     const response = await page.goto(url(fx.handle));
     expect(response?.status()).toBeLessThan(500);
