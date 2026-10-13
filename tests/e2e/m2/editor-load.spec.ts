@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
+import { homeEntryOf } from "../fixtures/home-abuse";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { appRaw, authCookies, cookieHeader, postgrest, restAs } from "../fixtures/http";
 import {
@@ -191,11 +192,33 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
       "Some content couldn’t be read and was reset in the editor. Nothing is saved until you edit.";
 
     for (const corrupted of [{}, { blocks: 5 }]) {
+      // M15-14: Home's blocks are not a browser write. The corrupted blocks go into Home's entry with
+      // the secret key (a browser write of them is refused, HL013); the rest of the document is
+      // corrupted in pages.draft, which a browser may still write.
+      const { blocks, ...design } = corrupted as { blocks?: unknown };
+      if (blocks !== undefined) {
+        const refused = await restAs(token, `/pages?id=eq.${user.pageId}`, {
+          method: "PATCH",
+          body: { draft: corrupted },
+        });
+        expect(refused.status, "a browser write of blocks is refused").toBeGreaterThanOrEqual(400);
+        expect(JSON.stringify(refused.body)).toContain("HL013");
+      }
       const patch = await restAs(token, `/pages?id=eq.${user.pageId}`, {
         method: "PATCH",
-        body: { draft: corrupted },
+        body: { draft: design },
       });
       expect(patch.status).toBe(200);
+      const home = await homeEntryOf(user.pageId);
+      const { blocks: _gone, ...entryRest } = home.draft;
+      const planted = await adminClient()
+        .from("content_entries")
+        .update({
+          draft: (blocks === undefined ? entryRest : { ...entryRest, blocks }) as never,
+          rev: Number(home.rev) + 1,
+        })
+        .eq("id", home.id);
+      expect(planted.error, "the corrupted Home entry draft is planted").toBeNull();
 
       const response = await page.goto(url("app", "/editor"));
       expect(response?.status()).toBe(200);

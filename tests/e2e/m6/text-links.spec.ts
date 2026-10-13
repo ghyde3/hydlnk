@@ -269,7 +269,7 @@ test.describe("M6-29 Clicks by link", () => {
   });
 });
 
-test.describe("M6-29 writes made straight through the publishable key", () => {
+test.describe("M6-29 writes made straight to the draft (the publishable key is refused, HL013; the Home entry takes the planted one)", () => {
   test("M6-29 700 link marks are accepted as a draft quickly and never published; and a 4000-character link fails Publish", async ({
     page,
     context,

@@ -497,7 +497,7 @@ test.describe("M9-20 the editor", () => {
   });
 });
 
-test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT", () => {
+test.describe("M9-20 abuse: a draft written as raw JSON (the owner's JWT is refused, HL013; the Home entry takes the planted one)", () => {
   test("M9-20 store 'evil', data: and credential URLs are refused at Publish, each field is named and nothing is published", async ({
     page,
     context,

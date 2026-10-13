@@ -75,7 +75,7 @@ async function expectBlockedEverywhere(o: { token: string; pageId: string }, nam
 }
 
 test.describe("M5-03 the draft write refuses a blocked link", () => {
-  test("M5-03 PATCH of a draft with a blocklisted URL answers 4xx blocked_link and the stored draft is unchanged; an allowed URL saves", async ({}, info) => {
+  test("M5-03 a PATCH of Home's blocks is refused (HL013), and a blocklisted URL planted in Home's entry answers blocked_link with the stored draft unchanged; an allowed URL saves", async ({}, info) => {
     test.skip(!desktopOnly(info), "no UI involved");
     const blocked = await listDomain();
     const o = await owner("bl-api");

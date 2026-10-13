@@ -5,6 +5,7 @@ import { newBlockId, type Block, type DraftDoc, type ImageRef } from "@/lib/docu
 import { makeJpeg } from "../m5/images-fixtures";
 import { downloadObject, sessionCookie, uploadMedia, uploaded } from "../m5/images-helpers";
 import { draftOf, userWithDraft, type TestPage } from "../m2/blocks-helpers";
+import { setDraft } from "../m2/editor-helpers";
 
 export { downloadObject, makeJpeg };
 
@@ -135,11 +136,8 @@ export async function userWithBlocks(
   let blocks: Block[] = [];
   const user = await userWithDraft(context, label, (handle) => draftOf(handle, []), opts);
   blocks = await make({ upload: (data, o) => uploadImage(context, data, o) });
-  const { error } = await adminClient()
-    .from("pages")
-    .update({ draft: draftOf(user.handle, blocks) })
-    .eq("id", user.pageId);
-  if (error) throw new Error(`could not set the draft: ${error.message}`);
+  // The design goes to pages.draft, the blocks to Home's entry (a moved site).
+  await setDraft(user.pageId, draftOf(user.handle, blocks));
   return { ...user, blocks };
 }
 

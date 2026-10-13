@@ -535,6 +535,10 @@ test.describe("M2-12 visibility toggle", () => {
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
 
+    // `row.published` is the live published document on a moved site (the Home entry's blocks over
+    // the design in pages.published). The pages.published row also holds a frozen pre-move copy of
+    // the blocks (PLAN.md, content model); it is never read, so it is not asserted here. The step's
+    // literal 'absent from pages.published' cannot hold for that copy without a product change.
     const row = await pageRow(user.pageId);
     const published = JSON.stringify(row.published);
     expect(published).not.toContain("Studio rental by the hour");

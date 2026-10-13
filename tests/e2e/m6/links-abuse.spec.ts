@@ -89,7 +89,7 @@ test("M6-20 a thumbnail from another account's folder and an icon name that is a
   }
 });
 
-test("M6-22 five featured links written with the publishable key are accepted as a draft, refused at Publish, and the live page keeps its own", async ({
+test("M6-22 five featured links written straight to the draft (the publishable key is refused, HL013; the Home entry takes them) are held as a draft, refused at Publish, and the live page keeps its own", async ({
   page,
   context,
 }) => {

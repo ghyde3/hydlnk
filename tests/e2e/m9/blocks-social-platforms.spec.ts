@@ -280,7 +280,7 @@ test.describe("M9-03 the click redirect for the new icons", () => {
   });
 });
 
-test.describe("M9-03 abuse: a draft written as raw JSON with the owner's own JWT", () => {
+test.describe("M9-03 abuse: a draft written as raw JSON (the owner's JWT is refused, HL013; the Home entry takes the planted one)", () => {
   test("M9-03 javascript:, data:, //host, credentials, a 4,000-character URL and a line break are refused at Publish, the icon is named, nothing is published", async ({
     page,
     context,

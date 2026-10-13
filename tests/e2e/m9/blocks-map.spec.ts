@@ -456,7 +456,7 @@ const livePart = (row: { published: unknown; published_at: string | null }) => (
   published_at: row.published_at,
 });
 
-test.describe("M9-22 abuse: a draft written as raw JSON with the owner's own JWT", () => {
+test.describe("M9-22 abuse: a draft written as raw JSON (the owner's JWT is refused, HL013; the Home entry takes the planted one)", () => {
   test("M9-22 a draft whose map holds equal ids is never published: the live page is as it was", async ({
     page,
     context,

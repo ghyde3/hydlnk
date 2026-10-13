@@ -73,8 +73,12 @@ export async function pageRow(pageId: string): Promise<PageRow> {
   if (home) {
     const blocks = (home.draft as { blocks?: unknown } | null)?.blocks;
     row.draft = { ...(row.draft as object), blocks } as unknown as DraftDoc;
-    // pages.published is a frozen copy on a moved site: the live form is the Home entry's.
-    if (home.published) row.published = home.published;
+    // On a moved site the live blocks are the Home entry's; the rest of the published document
+    // (profile, tokens, share, ...) stays in pages.published, so compose the two.
+    const liveBlocks = (home.published as { blocks?: unknown } | null)?.blocks;
+    if (home.published && row.published) {
+      row.published = { ...(row.published as object), blocks: liveBlocks };
+    }
   }
   return row;
 }
@@ -89,7 +93,10 @@ export async function setDraft(pageId: string, draft: unknown): Promise<void> {
     return;
   }
   const { blocks, ...design } = draft as Record<string, unknown>;
-  const set = await admin.from("pages").update({ draft: design as never }).eq("id", pageId);
+  const set = await admin
+    .from("pages")
+    .update({ draft: design as never })
+    .eq("id", pageId);
   if (set.error) throw new Error(`setDraft failed: ${set.error.message}`);
   if (blocks !== undefined) {
     const entry = await admin

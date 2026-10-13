@@ -388,7 +388,7 @@ test.describe("M9-21 the editor", () => {
   });
 });
 
-test.describe("M9-21 abuse: a draft written as raw JSON with the owner's own JWT", () => {
+test.describe("M9-21 abuse: a draft written as raw JSON (the owner's JWT is refused, HL013; the Home entry takes the planted one)", () => {
   test("M9-21 store 'huawei', javascript: and //host are refused at Publish, each badge is named, nothing is published and no anchor is drawn", async ({
     page,
     context,

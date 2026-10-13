@@ -306,7 +306,7 @@ test.describe("M7-12 unblock_domain", () => {
 });
 
 test.describe("M7-12 it takes effect at once, with no cache", () => {
-  test("M7-12 after a domain is added a draft that links to it is refused (HL005); after it is removed the same save goes through", async ({
+  test("M7-12 after a domain is added a draft that links to it is refused (HL005 on the Home entry write; the browser PATCH is HL013); after it is removed the same save goes through", async ({
     context,
   }, info) => {
     test.skip(!desktopOnly(info), "API only");

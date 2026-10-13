@@ -79,7 +79,12 @@ export async function prepareFlowUser(context: BrowserContext, label: string): P
   draft.profile.bio = "Bio from the draft";
   draft.rev += 1;
   await setDraft(user.pageId, draft);
-  return { ...user, image, rev: Number((await homeEntryOf(user.pageId)).rev), designRev: draft.rev };
+  return {
+    ...user,
+    image,
+    rev: Number((await homeEntryOf(user.pageId)).rev),
+    designRev: draft.rev,
+  };
 }
 
 export interface FlowEnv {
@@ -308,7 +313,12 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     path: "specials",
   });
   expect(created).toMatchObject({ title: "Specials", path: "/specials", inMenu: true });
-  rev = created.homeRev;
+  // create_page's homeRev is the design rev (the menu change is a design write), not the rev Home's
+  // block tools take; get_page names both.
+  const afterCreate = (await call<any>("get_page", { pageId: user.pageId })).page;
+  expect(created.homeRev).toBe(afterCreate.designRev);
+  designRev = created.homeRev;
+  rev = afterCreate.rev;
   let subRev: number = created.rev;
   const sub = { pageId: user.pageId, subPageId: created.subPageId };
   const items = await call<any>("add_block", {
@@ -358,8 +368,6 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     description: `Deals ${SUB_CANARY}`,
   });
   subRev = settings.rev;
-  // The sub-page's writes move Home's entry rev too, so the rev is read again before Home is written.
-  rev = (await call<any>("get_page", { pageId: user.pageId })).page.rev;
   const linkToPage = await call<any>("add_block", {
     ...ifRev(),
     type: "page_link",
