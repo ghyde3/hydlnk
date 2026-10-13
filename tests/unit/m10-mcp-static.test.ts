@@ -119,13 +119,15 @@ describe("the draft is read in one place and written in one", () => {
     );
   });
 
-  it("the draft writer reads and writes a sub-page only under the site it just owner-checked", () => {
+  it("the draft writer reads a sub-page entry only under the site it just owner-checked, and writes it only through the content writer (1b1-19)", () => {
     const source = code(DRAFT_WRITER);
     expect(source).toMatch(
-      /\.from\("site_pages"\)[\s\S]*?\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/,
+      /\.from\("content_entries"\)[\s\S]*?\.eq\("id", entryId\)\s*\.eq\("site_id", siteId\)/,
     );
-    expect(source).toMatch(/base\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/);
-    expect(source).toMatch(/\.eq\("updated_at", subRow\.updated_at\)/);
+    expect(source).toContain("readSubPageEntry(loose, pageId, subPageId)");
+    expect(source).toMatch(/updateEntryWithClient\(admin, \{\s*actor: \{ userId, source: "mcp" \}/);
+    expect(source).not.toMatch(/\.from\("site_pages"\)/);
+    expect(source).not.toMatch(/\.from\("content_entries"\)\s*\.update/);
   });
 
   it("the draft writer's update sets the draft column and nothing else, filtered on id, owner and rev", () => {
