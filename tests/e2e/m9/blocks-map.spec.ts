@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
-import { draftWith, emptyUser, saveIndicator } from "../m2/editor-helpers";
+import { draftWith, emptyUser, pageRow, saveIndicator, setDraft } from "../m2/editor-helpers";
 import {
   addBlock,
   box,
@@ -301,8 +302,7 @@ test.describe("M9-22 the click redirect for each button", () => {
         appleId: "map-e2e-drappl01",
       }),
     ]);
-    const write = await adminClient().from("pages").update({ draft }).eq("id", live.pageId);
-    expect(write.error).toBeNull();
+    await setDraft(live.pageId, draft);
     const other = await livePage("mp7b", () => [mapOf()]);
     const userAgent = await page.evaluate(() => navigator.userAgent);
     const ids = [
@@ -419,9 +419,7 @@ test.describe("M9-22 the editor", () => {
       `/r/${user.pageId}/${stored.googleId}`,
     );
     if (inPreview !== null) expect(await markupOf(page.locator("body"), id)).toBe(inPreview);
-    const published = (
-      await adminClient().from("pages").select("published").eq("id", user.pageId).single()
-    ).data!.published as PublishDoc;
+    const published = (await pageRow(user.pageId)).published as PublishDoc;
     expect(published.blocks.find((b) => b.id === id)).toMatchObject({
       type: "map",
       name: "Okafor Studio",
@@ -452,6 +450,12 @@ test.describe("M9-22 the editor", () => {
   });
 });
 
+/** The live part of a page row: what Publish would have to change. */
+const livePart = (row: { published: unknown; published_at: string | null }) => ({
+  published: row.published,
+  published_at: row.published_at,
+});
+
 test.describe("M9-22 abuse: a draft written as raw JSON with the owner's own JWT", () => {
   test("M9-22 a draft whose map holds equal ids is never published: the live page is as it was", async ({
     page,
@@ -468,48 +472,30 @@ test.describe("M9-22 abuse: a draft written as raw JSON with the owner's own JWT
         { timeout: 20_000 },
       )
       .not.toBeNull();
-    const before = (
-      await adminClient()
-        .from("pages")
-        .select("published, published_at")
-        .eq("id", user.pageId)
-        .single()
-    ).data;
+    const before = livePart(await pageRow(user.pageId));
 
-    // The publishable key and the owner's JWT, as curl would use them: RLS lets the owner write it.
-    const client = userClient(await accessTokenFor(user.email));
+    // The publishable key and the owner's JWT, as curl would use them: the database refuses the
+    // write (M15-14); the same hostile draft is then planted straight into Home's entry.
+    const token = await accessTokenFor(user.email);
     for (const bad of [
       mapOf({ appleId: GOOGLE_ID }), // equal ids
       mapOf({ googleId: "map-e2e-link-0001" }), // the id of a link block
       mapOf({ appleId: "map/slash/id-01" }), // not an id
     ]) {
-      const write = await client
-        .from("pages")
-        .update({
-          draft: draftOf(user.handle, [
-            {
-              id: "map-e2e-link-0001",
-              type: "link",
-              visible: true,
-              label: "Link",
-              url: "https://example.com/",
-            },
-            bad,
-          ]),
-        })
-        .eq("id", user.pageId);
-      expect(write.error).toBeNull();
+      await abuseHomeBlocks(token, user.pageId, [
+        {
+          id: "map-e2e-link-0001",
+          type: "link",
+          visible: true,
+          label: "Link",
+          url: "https://example.com/",
+        },
+        bad,
+      ]);
       await openEditor(page);
       await page.getByRole("button", { name: "Publish", exact: true }).first().click();
       await page.waitForTimeout(1500);
-      const after = (
-        await adminClient()
-          .from("pages")
-          .select("published, published_at")
-          .eq("id", user.pageId)
-          .single()
-      ).data;
-      expect(after).toEqual(before);
+      expect(livePart(await pageRow(user.pageId))).toEqual(before);
     }
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).toContain(`/r/${user.pageId}/${GOOGLE_ID}`);

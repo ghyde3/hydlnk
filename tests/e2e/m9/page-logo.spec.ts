@@ -412,7 +412,9 @@ test.describe("M9-24 abuse through the publishable key and the owner's JWT", () 
     page.on("request", (request) => requests.push(request.url()));
     for (const [name, bad] of Object.entries(cases)) {
       const row = await pageRow(user.pageId);
-      const draft = { ...row.draft, profile: { ...row.draft.profile, ...bad } };
+      // The blocks live in Home's entry (a write that changes them is refused), so only the design is written.
+      const { blocks: _blocks, ...design } = row.draft;
+      const draft = { ...design, profile: { ...row.draft.profile, ...bad } };
       const written = await client
         .from("pages")
         .update({ draft })

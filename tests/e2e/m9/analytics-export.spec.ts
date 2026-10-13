@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, phoneOnly, publishHome } from "../fixtures/data";
+import { pageRow } from "../m2/editor-helpers";
 import { authCookies, cookieHeader, rawRequest, type RawResponse } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
@@ -101,18 +102,20 @@ test.beforeAll(async () => {
   await seed(u.pageId, [...views(-1, ["u1"]), click(-1, "u1", LINKS.portrait.id)]);
 
   // A link whose label would be a formula in a spreadsheet, on P's published page.
-  const admin = adminClient();
-  const row = await admin.from("pages").select("published").eq("id", p.pageId).single();
-  if (row.error) throw new Error(row.error.message);
-  const doc = row.data.published as {
+  // The live document: the design half on the pages row, Home's blocks in its entry.
+  const pagesRow = await adminClient().from("pages").select("published").eq("id", p.pageId).single();
+  if (pagesRow.error) throw new Error(pagesRow.error.message);
+  const doc = {
+    ...(pagesRow.data.published as object),
+    blocks: ((await pageRow(p.pageId)).published as { blocks: unknown }).blocks,
+  } as {
     blocks: { id: string; type: string; label?: string; title?: string }[];
   };
   // Night Market is a card: its title is the name "Clicks by link" shows.
   const hostile = doc.blocks.find((block) => block.id === LINKS.night.id)!;
   expect(hostile.type).toBe("card");
   hostile.title = '=HYPERLINK("http://evil.example","x")';
-  const saved = await admin.from("pages").update({ published: doc }).eq("id", p.pageId);
-  if (saved.error) throw new Error(saved.error.message);
+  await publishHome(p.pageId, doc);
 });
 
 /** The signed-in user's cookie header, for plain HTTP. */

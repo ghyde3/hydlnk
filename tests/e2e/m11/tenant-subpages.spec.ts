@@ -344,6 +344,8 @@ test.describe("M11-06 redirect mode and a suspended owner apply to every page", 
   test("M11-06 redirect mode: a live sub-page sends the visitor through the click redirect, an invented path is still a 404", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("rd", { plan: "pro" });
+    // Home's live blocks are in its entry: the redirect is a design field, written to the pages row's
+    // published document with its blocks as they are.
     const admin = adminClient();
     const home = await admin.from("pages").select("published").eq("id", site.pageId).single();
     const published = home.data!.published as { blocks: { id: string; type: string }[] };

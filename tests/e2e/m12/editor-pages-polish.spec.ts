@@ -3,7 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { addPageEntry, seedHome, subPageEntries } from "../m15/entry-helpers";
-import { emptyUser, openEditor, pageRow } from "../m2/editor-helpers";
+import { emptyUser, openEditor, pageRow, setDraft } from "../m2/editor-helpers";
 
 /**
  * M12-08: each page shows Live, Not published yet or Changes not published; Duplicate page makes a
@@ -43,10 +43,7 @@ async function seed(siteId: string) {
   const ids: string[] = [];
   for (const r of rows) ids.push(await addPageEntry(siteId, { ...r, description: "" }));
   const draft = (await pageRow(siteId)).draft as unknown as Record<string, unknown>;
-  await admin
-    .from("pages")
-    .update({ draft: { ...draft, nav: { show: true, items: ids } } })
-    .eq("id", siteId);
+  await setDraft(siteId, { ...draft, nav: { show: true, items: ids } });
   return ids;
 }
 

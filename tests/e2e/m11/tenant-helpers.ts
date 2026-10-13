@@ -70,7 +70,8 @@ export async function makeLiveSite(label: string, opts: SiteOptions = {}): Promi
 
   const mara = await admin.from("pages").select("draft, published").eq("handle", "mara").single();
   if (mara.error) throw new Error(`seed page 'mara' missing: ${mara.error.message}`);
-  const pageId = await insertPage(user.id, handle, {});
+  // Built in the old layout (site_pages rows, blocks in pages); the mover below turns it into entries.
+  const pageId = await insertPage(user.id, handle, {}, { move: false });
 
   const sub = async (page: typeof ITEMS | typeof DIRECTIONS, extra: unknown[] = []) => {
     const doc = subDoc(page, extra);

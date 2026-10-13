@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
-import { emptyUser, openEditor, pageRow, previewScreen } from "../m2/editor-helpers";
+import { emptyUser, openEditor, pageRow, previewScreen, setDraft } from "../m2/editor-helpers";
 import { entry, seedHome } from "../m15/entry-helpers";
 
 /**
@@ -325,10 +325,7 @@ test("M11-07 the menu holds 20 pages: a 21st page is created outside it, and Sho
   expect(inserted.error).toBeNull();
   const ids = inserted.data!.map((row) => row.id as string);
   const draft = (await pageRow(user.pageId)).draft as unknown as Record<string, unknown>;
-  await admin
-    .from("pages")
-    .update({ draft: { ...draft, nav: { show: true, items: ids } } })
-    .eq("id", user.pageId);
+  await setDraft(user.pageId, { ...draft, nav: { show: true, items: ids } });
 
   await openEditor(page);
   await addPage(page, "Page 21", "p21");
