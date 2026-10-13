@@ -29,6 +29,8 @@ const fixed = [
   "hl-query-count",
   "hl-hl-x",
   "hl-",
+  "hl",
+  "HL",
   "HL-Test",
   "-lead",
   "trail---",
@@ -43,21 +45,30 @@ const fixed = [
 ];
 
 function makeTitles(): { title: string; taken: string[] }[] {
-  const words = ["blog", "shop", "api", "media", "r", "c", "t", "page", "links", "hl-x", "Åbo", "über", "q&a"];
+  const words = [
+    "blog",
+    "shop",
+    "api",
+    "media",
+    "r",
+    "c",
+    "t",
+    "page",
+    "links",
+    "hl-x",
+    "Åbo",
+    "über",
+    "q&a",
+  ];
   const out: { title: string; taken: string[] }[] = [];
   for (const title of fixed) {
     out.push({ title, taken: [] });
-    // suggestPath never returns for a taken 'hl' (every suffixed form is reserved); SQL falls back.
-    if (suggestPath(title) !== "hl") out.push({ title, taken: [suggestPath(title)] });
+    out.push({ title, taken: [suggestPath(title)] });
   }
   let i = 0;
   while (out.length < 200) {
     const title = `${words[i % words.length]} ${words[(i * 7 + 3) % words.length]} ${i % 4 === 0 ? "" : i}`;
     const base = suggestPath(title);
-    if (base === "hl") {
-      i += 1;
-      continue;
-    }
     const taken = [base, `${base}-2`, `${base}-3`].slice(0, (i % 3) + 1);
     if (i % 5 === 0) taken.push("page", "page-2");
     out.push({ title, taken });
@@ -86,7 +97,8 @@ describe.skipIf(!run)("suggest_site_path matches suggestPath", () => {
       });
       expect(error, JSON.stringify({ title, taken })).toBeNull();
       const want = suggestPath(title, taken);
-      if (data !== want) mismatches.push(`${JSON.stringify(title)} taken=${taken}: sql=${data} ts=${want}`);
+      if (data !== want)
+        mismatches.push(`${JSON.stringify(title)} taken=${taken}: sql=${data} ts=${want}`);
     }
     expect(mismatches).toEqual([]);
   }, 120_000);

@@ -97,6 +97,11 @@ export function suggestPath(title: string, taken: Iterable<string> = []): string
   base = base.replace(/^-+/, "") || FALLBACK_BASE;
   const fits = (candidate: string) => isValidSubPagePath(candidate) && !used.has(candidate);
   if (fits(base)) return base;
+  // Every suffixed form of 'hl' starts with the reserved `hl-`: fall back to 'page', as SQL does.
+  if (base === "hl") {
+    base = FALLBACK_BASE;
+    if (fits(base)) return base;
+  }
   for (let n = 2; ; n += 1) {
     const suffix = `-${n}`;
     const candidate = `${base.slice(0, 40 - suffix.length).replace(/-+$/g, "")}${suffix}`;

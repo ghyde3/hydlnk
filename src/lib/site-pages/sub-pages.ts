@@ -20,8 +20,8 @@ export function createSubPage(
 }
 
 /**
- * Server-only delete: the page entry goes to the trash (`purge` takes a page made a moment ago and
- * never published out for good). The live site changes at once: the page is gone, so its menu entry and the
+ * Server-only delete: the page entry and its revisions are purged at once (the `purge` option is
+ * kept for callers and no longer changes anything). The live site changes at once: the page is gone, so its menu entry and the
  * page links to it render nothing on the next request, which the cache tag expiry makes immediate.
  */
 export async function deleteSubPage(

@@ -88,9 +88,6 @@ export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** A page made less than this long ago, and never published, may be purged on delete. */
-const PURGE_WINDOW_MS = 10 * 60 * 1000;
-
 const actorOf = (userId: string): ContentActor => ({ userId, source: "editor" });
 
 const failure = (error: SubPageError, message?: string) => ({
@@ -311,22 +308,18 @@ export async function deleteSubPageWithClient(
   }
   if (!trashed) return failure("delete_failed");
 
-  // An undo of a page made a moment ago (a failed template apply) takes it out for good, so it does
-  // not keep a place in the limit. A page that is old or was ever published stays in the trash.
-  let purgedForGood = false;
-  if (
-    input.purge === true &&
-    entry.published === null &&
-    entry.first_published_at === null &&
-    Date.now() - new Date(entry.created_at).getTime() < PURGE_WINDOW_MS
-  ) {
-    const purged = await purgeEntryWithClient(admin, {
-      actor: actorOf(userId),
-      entryId: entry.id,
-    });
-    purgedForGood = purged.ok;
-    if (!purged.ok) console.error("[site-pages] purge failed", purged.error, purged.message);
+  // Deleting a sub-page is immediate and permanent: the entry and its revisions go for good, so the
+  // page limit frees at once. (Posts keep the 30-day trash; this door is for pages only.)
+  const purged = await purgeEntryWithClient(admin, {
+    actor: actorOf(userId),
+    entryId: entry.id,
+    includePublished: true,
+  });
+  if (!purged.ok) {
+    console.error("[site-pages] purge failed", purged.error, purged.message);
+    return failure("delete_failed");
   }
+  const purgedForGood = true;
 
   try {
     await removeFromHomeNav(admin, site.id, subPageId);

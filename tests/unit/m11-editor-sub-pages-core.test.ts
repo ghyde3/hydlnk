@@ -162,24 +162,25 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect(await count(o.pageId)).toBe(2);
   });
 
-  it("a trashed page still counts toward the limit until it is purged (1b1-18)", async () => {
+  it("deleting a page on a Free site with 3 pages frees its place at once; the entry and its revisions are gone", async () => {
     const o = await owner("lim-trash");
     const a = await create(o);
     expect((await create(o)).ok).toBe(true);
     if (!a.ok) throw new Error("setup");
+    expect((await create(o)).ok).toBe(false);
     const del = await core.deleteSubPageWithClient(admin as never, {
       userId: o.userId,
       siteId: o.pageId,
       subPageId: a.id,
     });
-    expect(del.ok).toBe(true);
+    expect(del).toMatchObject({ ok: true, id: a.id, purged: true });
     expect(await live(o.pageId)).toBe(1);
-    expect(await create(o)).toMatchObject({
-      ok: false,
-      status: 403,
-      error: "page_limit",
-      message: "Free includes 3 pages per site, Home and 2 more. Pro includes 10.",
-    });
+    expect(await create(o)).toMatchObject({ ok: true });
+    const entry = await admin.from("content_entries").select("id").eq("id", a.id);
+    expect(entry.data).toEqual([]);
+    const revs = await admin.from("content_entry_revisions").select("id").eq("entry_id", a.id);
+    expect(revs.error).toBeNull();
+    expect(revs.data).toEqual([]);
   });
 
   it("create returns the entry's rev and a path another page's draft holds is taken (1b1-18)", async () => {
@@ -193,7 +194,8 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
   });
 
   it("every site template's two pages fit a Free site and store exactly the drafts the schema yields (1b1-18)", async () => {
-    const { SITE_TEMPLATES, instantiateSiteTemplate } = await import("@/lib/site-templates/catalog");
+    const { SITE_TEMPLATES, instantiateSiteTemplate } =
+      await import("@/lib/site-templates/catalog");
     const { draftSubPageSchema, emptySubPageDraft } = await import("@/lib/document");
     for (const template of SITE_TEMPLATES) {
       const o = await owner(`tpl-${template.id}`.slice(0, 14));
@@ -211,7 +213,11 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
           blocks: page.blocks,
         });
         expect(result.draft).toEqual(expected);
-        const row = await admin.from("content_entries").select("draft").eq("id", result.id).single();
+        const row = await admin
+          .from("content_entries")
+          .select("draft")
+          .eq("id", result.id)
+          .single();
         expect(row.data!.draft).toEqual(JSON.parse(JSON.stringify(expected)));
       }
       expect(await live(o.pageId)).toBe(2);
@@ -280,16 +286,10 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
       siteId: o.pageId,
       subPageId: a.id,
     });
-    expect(del).toMatchObject({ ok: true, id: a.id, siteId: o.pageId, purged: false });
-    // The entry is in the trash, not gone, and no longer listed as a page.
+    expect(del).toMatchObject({ ok: true, id: a.id, siteId: o.pageId, purged: true });
+    // The entry is gone for good (not trashed).
     expect(await live(o.pageId)).toBe(1);
-    expect(await count(o.pageId)).toBe(2);
-    const trashed = await admin
-      .from("content_entries")
-      .select("deleted_at, published")
-      .eq("id", a.id)
-      .single();
-    expect(trashed.data!.deleted_at).not.toBeNull();
+    expect(await count(o.pageId)).toBe(1);
     const after = await admin.from("pages").select("draft").eq("id", o.pageId).single();
     expect(after.data!.draft).toMatchObject({ rev: 7, nav: { show: true, items: [b.id] } });
     expect((after.data!.draft as { profile: unknown }).profile).toEqual(
@@ -347,27 +347,15 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
         subPageId: home.data!.id,
       }),
     ).toMatchObject({ ok: false, status: 404, error: "not_found" });
-    const after = await admin.from("content_entries").select("deleted_at").eq("id", home.data!.id).single();
+    const after = await admin
+      .from("content_entries")
+      .select("deleted_at")
+      .eq("id", home.data!.id)
+      .single();
     expect(after.data!.deleted_at).toBeNull();
   });
 
-  it("purge removes a page made a moment ago for good, and frees its place in the limit (1b1-18)", async () => {
-    const o = await owner("purge");
-    const a = await create(o);
-    expect((await create(o)).ok).toBe(true);
-    if (!a.ok) throw new Error("setup");
-    const del = await core.deleteSubPageWithClient(admin as never, {
-      userId: o.userId,
-      siteId: o.pageId,
-      subPageId: a.id,
-      purge: true,
-    });
-    expect(del).toMatchObject({ ok: true, id: a.id, purged: true });
-    expect(await count(o.pageId)).toBe(1);
-    expect(await create(o)).toMatchObject({ ok: true });
-  });
-
-  it("purge only applies to a page that was never published and is new; otherwise it is trashed (1b1-18)", async () => {
+  it("delete purges an old, published page too, whatever the purge flag says (1b1-18)", async () => {
     const o = await owner("purge2", "pro");
     const old = await create(o);
     const live1 = await create(o);
@@ -379,7 +367,11 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect(aged.error).toBeNull();
     const pub = await admin
       .from("content_entries")
-      .update({ published: live1.draft as never, published_at: new Date().toISOString() })
+      .update({
+        published: live1.draft as never,
+        published_at: new Date().toISOString(),
+        first_published_at: new Date().toISOString(),
+      })
       .eq("id", live1.id);
     expect(pub.error).toBeNull();
     for (const id of [old.id, live1.id]) {
@@ -387,12 +379,10 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
         userId: o.userId,
         siteId: o.pageId,
         subPageId: id,
-        purge: true,
       });
-      expect(del).toMatchObject({ ok: true, purged: false });
+      expect(del).toMatchObject({ ok: true, purged: true });
     }
-    expect(await count(o.pageId)).toBe(2);
-    expect(await live(o.pageId)).toBe(0);
+    expect(await count(o.pageId)).toBe(0);
   });
 
   it("delete leaves a Home draft with no menu untouched", async () => {

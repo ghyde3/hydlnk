@@ -13,8 +13,8 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  * DELETE /api/pages/{id}/sub-pages/{subId} on the app host (M11-04, M11-08): deletes one page of the
  * signed-in account's site. Immediate, like deleting a site: the page leaves the live site now (its
  * menu entry and the page links to it render nothing), and its id leaves Home's draft menu. The page
- * entry goes to the trash; `?purge=1` also removes it for good when it was made a moment ago and never
- * published (the undo of a failed template). The one door: clients have no delete grant on entries.
+ * entry and its revisions are purged, not trashed, so the page limit frees at once (`?purge=1` is
+ * accepted and changes nothing). The one door: clients have no delete grant on entries.
  *
  *   401  no session (nothing is deleted)
  *   403  forbidden_origin, or `account_suspended` (code too)

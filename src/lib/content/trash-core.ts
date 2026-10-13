@@ -71,14 +71,14 @@ export async function restoreEntryWithClient(
 }
 
 /**
- * Delete a trashed entry for good, at once instead of after 30 days. For the owner's own undo of
- * something just made (a failed template apply): only a trashed entry that was never published, so
- * nothing live or restorable is lost. The cascade removes its revisions and links. The claim on its
+ * Delete a trashed entry for good, at once instead of after 30 days. By default only a trashed entry
+ * that was never published, so nothing live or restorable is lost. `includePublished` lifts that for
+ * an editor sub-page delete (the entry is trashed first, so its live copy is already gone). The cascade removes its revisions and links. The claim on its
  * path was released when it was trashed.
  */
 export async function purgeEntryWithClient(
   admin: Admin,
-  input: { actor: ContentActor; entryId: string },
+  input: { actor: ContentActor; entryId: string; includePublished?: boolean },
 ): Promise<ContentResult<{ siteId: string }>> {
   const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
   if (!owned.ok) return owned;
@@ -86,18 +86,23 @@ export async function purgeEntryWithClient(
   if (!account.ok) return account;
   const { entry } = owned;
   // trash_entry clears `published`, so "never published" is first_published_at, which is never cleared.
-  if (entry.deleted_at === null || entry.published !== null || entry.first_published_at !== null) {
+  const anyHistory = input.includePublished === true;
+  if (
+    entry.deleted_at === null ||
+    entry.published !== null ||
+    (!anyHistory && entry.first_published_at !== null)
+  ) {
     return failure("not_found");
   }
-  const deleted = await admin
+  let query = admin
     .from("content_entries")
     .delete()
     .eq("id", entry.id)
     .eq("site_id", entry.site_id)
     .not("deleted_at", "is", null)
-    .is("published", null)
-    .is("first_published_at", null)
-    .select("id");
+    .is("published", null);
+  if (!anyHistory) query = query.is("first_published_at", null);
+  const deleted = await query.select("id");
   if (deleted.error) return mapDbError(deleted.error);
   if (deleted.data.length === 0) return failure("not_found");
   return { ok: true, siteId: entry.site_id };
