@@ -948,6 +948,8 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       expect(home.draft.nav).toEqual({ show: true, items: [row.id] });
       expect(home.draft.rev).toBe(homeBefore.draft.rev + 1);
       expect(out.json!.homeRev).toBe(home.draft.rev);
+      expect(out.json!.designRev).toBe(home.draft.rev);
+      expect(out.json!.designRev).toBe(out.json!.homeRev);
       expect(home.published_at).toBeNull();
     });
 
@@ -961,6 +963,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       );
       expect(out.json).toMatchObject({ path: "/find-us", inMenu: false });
       expect(out.json!.homeRev).toBeUndefined();
+      expect(out.json!.designRev).toBeUndefined();
       expect(await homeRow(o)).toEqual(homeBefore);
     });
 
@@ -1182,7 +1185,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
 
       const r0 = (await menu()).rev;
       const first = await set(a, { inMenu: true });
-      expect(first.json).toMatchObject({ inMenu: true, menuPosition: 0, homeRev: r0 + 1 });
+      expect(first.json).toMatchObject({ inMenu: true, menuPosition: 0, homeRev: r0 + 1, designRev: r0 + 1 });
       await set(b, { inMenu: true });
       const front = await set(c, { inMenu: true, menuPosition: 0 });
       expect(front.json).toMatchObject({ menuPosition: 0 });
@@ -1193,6 +1196,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       const same = await set(b, { menuPosition: 1 });
       expect(same.json!.unchanged).toBe(true);
       expect(same.json!.homeRev).toBeUndefined();
+      expect(same.json!.designRev).toBeUndefined();
       const out = await set(c, { inMenu: false });
       expect(out.json).toMatchObject({ inMenu: false, menuPosition: null });
       expect((await menu()).nav.items).toEqual([b, a]);

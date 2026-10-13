@@ -44,7 +44,7 @@ const CODES: Record<SubPageError, ToolErrorCode> = {
 export const createPage: ToolDefinition<typeof input> = {
   name: "create_page",
   title: "Add a page to a site",
-  description: `Adds an empty page to a site, next to Home: a title and an address (path) such as /items. ${DRAFT_ONLY} It is saved as a draft and goes live with the next publish_page, which publishes the whole site. The plan limits the pages a site can hold (Free 3 with Home, Pro 10): at the limit the answer is plan_required. By default the page is added to the end of the site menu, which changes Home's draft and its rev; pass inMenu false to keep it out. A page cannot be deleted from here, only in the app. Fill the page with add_block and its subPageId. Errors: invalid_input (a bad title or path, or a path another page uses), plan_required, too_large, not_found.`,
+  description: `Adds an empty page to a site, next to Home: a title and an address (path) such as /items. ${DRAFT_ONLY} It goes live with the next publish_page. The plan limits the pages a site can hold (Free 3 with Home, Pro 10): at the limit the answer is plan_required. By default the page is added to the end of the site menu, which edits Home's design and returns designRev (also as homeRev): update_profile and set_theme take it, Home's block tools take rev from get_page; pass inMenu false to keep it out. Pages are deleted only in the app. Fill the page with add_block and its subPageId. Errors: invalid_input (a bad title or path, or a path another page uses), plan_required, too_large, not_found.`,
   scope: MCP_SCOPES.write,
   annotations: WRITE_NOT_IDEMPOTENT,
   input,
@@ -106,7 +106,7 @@ export const createPage: ToolDefinition<typeof input> = {
         path: `/${created.draft.path}`,
         rev: created.rev,
         inMenu,
-        ...(homeRev !== undefined ? { homeRev } : {}),
+        ...(homeRev !== undefined ? { homeRev, designRev: homeRev } : {}),
         ...(menuNote ? { menuNote } : {}),
       },
     };

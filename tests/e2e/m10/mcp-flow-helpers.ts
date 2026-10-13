@@ -313,11 +313,12 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     path: "specials",
   });
   expect(created).toMatchObject({ title: "Specials", path: "/specials", inMenu: true });
-  // create_page's homeRev is the design rev (the menu change is a design write), not the rev Home's
-  // block tools take; get_page names both.
+  // create_page's designRev (homeRev is the same number, kept for older clients) is the design rev (the
+  // menu change is a design write), not the rev Home's block tools take; get_page names both.
   const afterCreate = (await call<any>("get_page", { pageId: user.pageId })).page;
-  expect(created.homeRev).toBe(afterCreate.designRev);
-  designRev = created.homeRev;
+  expect(created.designRev).toBe(afterCreate.designRev);
+  expect(created.homeRev).toBe(created.designRev);
+  designRev = created.designRev;
   rev = afterCreate.rev;
   let subRev: number = created.rev;
   const sub = { pageId: user.pageId, subPageId: created.subPageId };
