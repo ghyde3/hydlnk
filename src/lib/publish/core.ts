@@ -17,6 +17,7 @@ import {
   type PublishDoc,
   type PublishError,
 } from "@/lib/document";
+import { listDraftPagesWithClient, getHomeDraftWithClient } from "@/lib/site/page-entries";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
 import { checkLinkRules, misplacedLockErrors } from "./link-rules";
 import { homeForSite, nameErrors, pageTitleOf, siteErrors, type SiteSubPage } from "./site-checks";
@@ -92,8 +93,12 @@ const refuse = (
  *      (`blockedLinksInPublished`: the authority, see src/lib/blocklist/published.ts);
  *   6. `pages.published` and `published_at` are written with the secret key, filtered on the owner.
  *
+ * Stage 1b: Home's blocks are the '/' page entry's draft and the design is `pages.draft` (its
+ * frozen blocks are ignored); the document the gate validates is the two joined, so every issue is the
+ * one the single-document draft gave.
+ *
  * Whole-site Publish (M11-05): the gate above runs for Home and then for every sub-page of the site
- * (`site_pages.draft`: the sub-page schema, images, the lock rule and the final blocklist check, the
+ * (the non-Home page entries' drafts: the sub-page schema, images, the lock rule and the final blocklist check, the
  * same rules as for Home), and the checks that span documents run once all of them passed
  * (`siteErrors`: one path per page, a block id used once in the whole site, `page_link` targets that
  * are pages of the site). Every error of a sub-page names the page. Step 6 is the `publish_site`
@@ -139,21 +144,26 @@ export async function publishPageCore(
   }
   if (!account.data || account.data.suspended_at !== null) return refuse("account_suspended");
 
-  const raw: unknown = page.data.draft;
-
-  // The sub-pages (M11-05): read after the ownership check, with the same secret key. The id is the
-  // site's own, so these rows are the owner's. A failed read refuses (closed).
-  const subRows = await admin
-    .from("site_pages")
-    .select("id, draft, created_at")
-    .eq("page_id", pageId.data);
-  if (subRows.error) {
-    console.error("[publish] reading the sub-pages failed", subRows.error.message);
+  // Stage 1b: the design is `pages.draft` (its frozen `blocks` are never read); Home's blocks are
+  // the '/' page entry and the sub-pages are the other page entries. Entry ids are the sub-page ids
+  // `publish_site` expects. Read after the ownership check with the same secret key; a failed read,
+  // or a site without a Home entry (not moved), refuses (closed).
+  let homeDraft;
+  let subDrafts;
+  try {
+    homeDraft = await getHomeDraftWithClient(admin, pageId.data);
+    subDrafts = await listDraftPagesWithClient(admin, pageId.data);
+  } catch (error) {
+    console.error("[publish] reading the page entries failed", error);
     return refuse("error");
   }
-  const subDrafts = [...(subRows.data ?? [])].sort((a, b) =>
-    a.created_at === b.created_at ? (a.id < b.id ? -1 : 1) : a.created_at < b.created_at ? -1 : 1,
-  );
+  if (!homeDraft) {
+    console.error("[publish] the site has no Home entry", pageId.data);
+    return refuse("error");
+  }
+  const { blocks: _frozen, ...design } = (page.data.draft ?? {}) as Record<string, unknown>;
+  void _frozen;
+  const raw: unknown = { ...design, blocks: homeDraft.draft.blocks };
 
   // The blocklist again, on the stored draft (M5-03): the trigger checks every save, but a domain
   // listed since then is only caught here. Nothing has been written yet.
@@ -443,7 +453,7 @@ function storageExists(admin: SupabaseClient<Database>) {
 
 interface SubDraftRow {
   id: string;
-  draft: Json;
+  draft: unknown;
 }
 
 /**

@@ -8,6 +8,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -52,6 +54,7 @@ describe.skipIf(!run)("M7-15 Publish and the stored form of a background image",
 
   async function stage(label: string, bgImage: (userId: string) => string) {
     const owner = await makeOwner(admin, label);
+    await moveHome(admin, owner.pageId);
     owners.push(owner);
     const draft = draftOf("A", [link()], {
       theme: {
@@ -59,10 +62,7 @@ describe.skipIf(!run)("M7-15 Publish and the stored form of a background image",
         overrides: { bgType: "image", bgImage: bgImage(owner.userId) },
       },
     });
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draft as never })
-      .eq("id", owner.pageId);
+    const { error } = await setPageDraft(admin, owner.pageId, draft);
     expect(error).toBeNull();
     return owner;
   }

@@ -9,6 +9,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -51,14 +53,12 @@ describe.skipIf(!run)("M5-03 Publish re-checks the blocklist (local Supabase)", 
   };
   const owner = async (label: string, blocks: Block[]) => {
     const made = await makeOwner(admin, label, (handle) => draftOf(handle, blocks));
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
   const setLinks = async (o: TestOwner, blocks: Block[]) => {
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draftOf("Alpha", blocks) as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, draftOf("Alpha", blocks));
     expect(error).toBeNull();
   };
 
@@ -84,8 +84,18 @@ describe.skipIf(!run)("M5-03 Publish re-checks the blocklist (local Supabase)", 
       link("lnk-aaaaaaaa", "https://ok.example"),
       link("lnk-bbbbbbbb", `https://www.${late}/x`),
     ]);
-    const stored = async () =>
-      (await admin.from("pages").select("draft").eq("id", o.pageId).single()).data!.draft;
+    // The stored document: the design of pages.draft with Home's blocks from its page entry.
+    const stored = async () => {
+      const design = (await admin.from("pages").select("draft").eq("id", o.pageId).single()).data!
+        .draft as object;
+      const home = await admin
+        .from("content_entries")
+        .select("draft")
+        .eq("site_id", o.pageId)
+        .eq("draft->>path", "/")
+        .single();
+      return { ...design, blocks: (home.data!.draft as { blocks: unknown }).blocks };
+    };
 
     expect(await checkBlocklist(admin, await stored())).toEqual({
       links: [],

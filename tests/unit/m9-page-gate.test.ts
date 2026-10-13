@@ -10,6 +10,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -65,6 +67,7 @@ describe.skipIf(!run)("M9-23 and M9-24 publish gate (local Supabase)", () => {
 
   const owner = async (label: string) => {
     const made = await makeOwner(admin, label, (handle) => draftOf(handle, [link("lnk-aaaaaaaa")]));
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
@@ -74,10 +77,11 @@ describe.skipIf(!run)("M9-23 and M9-24 publish gate (local Supabase)", () => {
     profile: Record<string, unknown> = {},
   ) => {
     const base = draftOf(o.handle, [link("lnk-aaaaaaaa")]);
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: { ...base, profile: { ...base.profile, ...profile }, ...extra } as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, {
+      ...base,
+      profile: { ...base.profile, ...profile },
+      ...extra,
+    });
     expect(error).toBeNull();
   };
   const publish = (o: TestOwner) =>

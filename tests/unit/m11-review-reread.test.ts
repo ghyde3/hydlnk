@@ -4,7 +4,7 @@ import { buildIndexShards, buildIndexShardsFromPairs } from "@/lib/analytics/ing
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
 import { emptySubPageDraft } from "@/lib/document";
 import { SubPageSaver, type SubSaveResult, type SubSaveStatus } from "@/lib/site-pages/saver";
-import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import { makeOwner, moveHome, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -114,6 +114,7 @@ describe.skipIf(!run)("HL009 in Publish and the click index (local Supabase)", (
 
   it("Publish answers storage_full when the database refuses with HL009", async () => {
     const o = await makeOwner(admin, "hl9", undefined, "pro");
+    await moveHome(admin, o.pageId);
     owners.push(o);
     const { publishPageCore } = await import("@/lib/publish/core");
     const refusing = new Proxy(admin, {

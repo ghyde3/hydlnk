@@ -10,6 +10,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -46,16 +48,15 @@ describe.skipIf(!run)("M6-32 the share card at Publish (local Supabase)", () => 
 
   const owner = async (label: string, plan?: "free" | "pro" | "studio") => {
     const made = await makeOwner(admin, label, (handle) => draftOf(handle), plan);
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
   const writeDraft = async (o: TestOwner, share: unknown) => {
-    const { error } = await admin
-      .from("pages")
-      .update({
-        draft: { ...draftOf(o.handle), ...(share === undefined ? {} : { share }) } as never,
-      })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, {
+      ...draftOf(o.handle),
+      ...(share === undefined ? {} : { share }),
+    });
     expect(error).toBeNull();
   };
   const publish = (o: TestOwner, userId = o.userId) =>

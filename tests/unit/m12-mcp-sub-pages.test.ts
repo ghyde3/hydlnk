@@ -1,7 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- a tool result is JSON whose shape each test checks */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { draftOf as publishableDraft, makeOwner, removeOwners, stackIsUp } from "./publish-support";
+import {
+  draftOf as publishableDraft,
+  makeOwner,
+  moveHome,
+  removeOwners,
+  stackIsUp,
+} from "./publish-support";
 import type { TestOwner } from "./publish-support";
 import { adminForTests, makeRuntime, type Outcome } from "./support/mcp-db";
 
@@ -1360,14 +1366,38 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
 
     it("publish_page names the sub-page that blocks the publish", async () => {
       const o = await owner("flow-refused");
-      const id = await addSubPage(o, "items", {
-        title: "Broken page",
-        blocks: [{ id: "blk-bad-0002", type: "link", visible: true, label: "", url: "" }],
-      });
+      // Publish reads the pages from page entries (the tools that write them move in 1b1-19).
+      await moveHome(admin, o.pageId);
+      const type = await admin
+        .from("content_types")
+        .select("id")
+        .eq("site_id", o.pageId)
+        .eq("key", "page")
+        .single();
+      const entry = await admin
+        .from("content_entries")
+        .insert({
+          site_id: o.pageId,
+          type_id: type.data!.id,
+          draft: {
+            path: "items",
+            title: "Broken page",
+            description: "",
+            blocks: [{ id: "blk-bad-0002", type: "link", visible: true, label: "", url: "" }],
+          } as never,
+        })
+        .select("id")
+        .single();
+      expect(entry.error).toBeNull();
       const out = await rt.call("publish_page", { pageId: o.pageId }, who(o));
       expect(out.error!.code).toBe("publish_refused");
       expect(JSON.stringify(out.error)).toContain("Broken page");
-      expect((await subRow(id)).published_at).toBeNull();
+      const after = await admin
+        .from("content_entries")
+        .select("published_at")
+        .eq("id", entry.data!.id)
+        .single();
+      expect(after.data!.published_at).toBeNull();
     });
 
     it("a refused call is recorded with its code and still holds no content", async () => {

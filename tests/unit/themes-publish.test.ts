@@ -10,6 +10,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -57,14 +59,12 @@ describe.skipIf(!run)("M3-05 / M3-18 publish gate for tokens, themes and overrid
 
   const owner = async (label: string, draft?: (handle: string) => DraftDoc) => {
     const made = await makeOwner(admin, label, draft);
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
   const writeDraft = async (o: TestOwner, draft: unknown) => {
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draft as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, draft);
     expect(error).toBeNull();
   };
   const publish = (
