@@ -338,6 +338,13 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
   - Home's own title and SEO description wait for stage 3; until then Home's title stays the profile name.
   - The publish bar is built from DESIGN.md and checked by design-verifier at 390 and 1440.
 
+**Stage 1b-1 build decisions (orchestrator, 2026-10-13, from the checkpoints):**
+- **Deleting a sub-page** stays immediate and permanent, as today. The entry and its revisions are purged, not trashed, until stage 3 brings trash to the editor, so the page limit frees at once.
+- **New sites** get their Home entry at claim time; publishing also moves a site that has none.
+- **Known risk, the migration push:** publishing breaks if the production push stops between `20261015000001` and `000008`. The runbook says to run `supabase/rollback/content-move-rollback.sql` at once if the push fails.
+- **Known risk, upload quota:** frozen copies keep removed images counting toward the upload quota until the old copies are removed in the later cleanup release.
+- **Checking the move:** after the production migrations, the move's counts are checked read-only before the merge (one `/` entry per site, ids kept, `moved_at` on every row). No audit table is added.
+
 1a's schema must accept steps 1 to 3 without another DDL change. That means:
 - an explicit entry id;
 - today's sub-page document as a draft;
