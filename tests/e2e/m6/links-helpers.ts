@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
+import { publishHome } from "../fixtures/data";
 import type { Block } from "@/lib/document";
 import { publishDocOf, publishedPage, uploadImage } from "../m2/blocks-helpers";
 import type { TokenOverrides } from "@/lib/theme";
@@ -49,11 +49,7 @@ export async function liveLinks(
   });
   const thumb = await uploadImage(stub.userId, 400, 400, [196, 106, 79]);
   const doc = publishDocOf(makeBlocks(thumb), { tokens: opts.tokens });
-  const { error } = await adminClient()
-    .from("pages")
-    .update({ published: doc, published_at: new Date().toISOString() })
-    .eq("id", stub.pageId);
-  if (error) throw new Error(`publish fixture failed: ${error.message}`);
+  await publishHome(stub.pageId, doc);
   return {
     userId: stub.userId,
     pageId: stub.pageId,

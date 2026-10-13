@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { expireOwnerPages } from "../fixtures/expire";
-import { cleanupUsers, makeUser, rand } from "../fixtures/data";
+import { cleanupUsers, makeUser, publishHome, rand } from "../fixtures/data";
 import { restAs } from "../fixtures/http";
 import { DAY_MS, dayAt, makeOwner, seed, signInOwner } from "../m4/analytics-dash-helpers";
 import { insertPage } from "../fixtures/data";
@@ -156,11 +156,7 @@ test.describe("M6-29 the click redirect for a link in text", () => {
       "https://user@host.example/",
     ]) {
       tampered.blocks[0]!.marks[0]!.url = hostile;
-      const { error } = await adminClient()
-        .from("pages")
-        .update({ published: tampered })
-        .eq("id", pageId);
-      expect(error).toBeNull();
+      await publishHome(pageId, tampered);
       // A production build reads the click target from the cache under the page's tag; this write
       // went straight to the database, so expire the tag the way an admin action does.
       await expireOwnerPages(browser, user.id);
@@ -235,11 +231,7 @@ test.describe("M6-29 Clicks by link", () => {
       null,
     );
     const publish = async (doc: unknown) => {
-      const { error } = await adminClient()
-        .from("pages")
-        .update({ published: doc, published_at: new Date().toISOString() })
-        .eq("id", owner.pageId);
-      expect(error).toBeNull();
+      await publishHome(owner.pageId, doc);
     };
     await publish(withLink);
     const day = dayAt(-3);

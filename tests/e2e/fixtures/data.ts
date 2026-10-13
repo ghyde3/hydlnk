@@ -239,18 +239,57 @@ export async function setPlan(userId: string, plan: Plan): Promise<void> {
   if (error) throw new Error(`setPlan failed: ${error.message}`);
 }
 
-/** published_at null (draft only) or now. */
+/**
+ * published_at null (draft only) or now. On a moved site this goes through publish_site /
+ * unpublish_site (Home's entry holds the blocks, the pages row the design), so the live page shows
+ * the draft exactly; a site kept in the old layout (`{ move: false }`) is updated in place.
+ */
 export async function setPublished(pageId: string, published: boolean): Promise<void> {
   const admin = adminClient();
-  const page = await admin.from("pages").select("draft").eq("id", pageId).single();
+  const page = await admin.from("pages").select("owner_id, draft").eq("id", pageId).single();
   if (page.error) throw new Error(page.error.message);
-  const { error } = await admin
-    .from("pages")
-    .update(
-      published
-        ? { published: page.data.draft, published_at: new Date().toISOString() }
-        : { published: null, published_at: null },
-    )
-    .eq("id", pageId);
-  if (error) throw new Error(`setPublished failed: ${error.message}`);
+  const entries = await admin
+    .from("content_entries")
+    .select("id, draft, published, content_types!inner(key)")
+    .eq("site_id", pageId)
+    .eq("content_types.key", "page")
+    .is("deleted_at", null);
+  if (entries.error) throw new Error(`setPublished lookup failed: ${entries.error.message}`);
+  const isHome = (e: { draft: unknown; published: unknown }) =>
+    (e.draft as { path?: string } | null)?.path === "/" ||
+    (e.published as { path?: string } | null)?.path === "/";
+  const home = entries.data.find(isHome);
+  if (!home) {
+    const { error } = await admin
+      .from("pages")
+      .update(
+        published
+          ? { published: page.data.draft, published_at: new Date().toISOString() }
+          : { published: null, published_at: null },
+      )
+      .eq("id", pageId);
+    if (error) throw new Error(`setPublished failed: ${error.message}`);
+    return;
+  }
+  if (!published) {
+    const done = await admin.rpc("unpublish_site", {
+      p_page_id: pageId,
+      p_owner_id: page.data.owner_id,
+    });
+    if (done.error) throw new Error(`unpublish_site failed: ${done.error.message}`);
+    return;
+  }
+  // Sub-pages keep their live copy as it is; only Home (and the design) go live from the draft.
+  const subPages = entries.data
+    .filter((e) => !isHome(e))
+    .map((e) => ({ id: e.id, published: e.published }));
+  const blocks = (home.draft as { blocks?: unknown[] }).blocks ?? [];
+  const done = await admin.rpc("publish_site", {
+    p_page_id: pageId,
+    p_owner_id: page.data.owner_id,
+    p_home: { ...(page.data.draft as object), blocks } as never,
+    p_sub_pages: subPages as never,
+    p_published_at: new Date().toISOString(),
+  });
+  if (done.error) throw new Error(`publish_site failed: ${done.error.message}`);
 }
