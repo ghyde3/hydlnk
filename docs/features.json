@@ -5812,6 +5812,17 @@
         "Tests: on a Free site with 3 pages, deleting one lets a new page be created at once; the entry and its revisions are gone; a failed purge leaves the page fully in place (still listed, still live) and answers delete_failed; another user's sub-page cannot be deleted."
       ],
       "passes": false
+    },
+    {
+      "id": "M15-14",
+      "milestone": 15,
+      "area": "security",
+      "title": "After the cutover, a browser cannot write Home's blocks to the database",
+      "acceptance": [
+        "Supersedes, in these respects only (Gary, 2026-10-13): the steps that describe the owner's browser writing Home's blocks to `pages.draft` through PostgREST with the publishable key, namely M2-10 step 4 ('a PostgREST update of draft with 51 blocks is accepted by the database'), M2-12 step 4 ('a PostgREST draft write that sets visible: false on every block'), M2-23 step 3 ('PATCH pages.draft through PostgREST to include a link URL'), M6-22 step 2 ('A direct PostgREST draft with 5 featured links ... is accepted by the database'), M6-40 step 8 and M7-08 step 5 ('an apply is one kind of write, the draft PATCH under the user's session and the publishable key'). After the cutover a browser cannot write Home's blocks to the database: a PostgREST write of `pages.draft` blocks is refused with HL013 and content entries have no client write grant; the editor, and applying a template, save Home's blocks through the server save route, and design fields stay a PATCH of `pages.draft`. Every other part of those steps stands.",
+        "Each affected test asserts that refusal, then plants the same hostile draft with a direct database write to the Home entry and keeps every downstream promise of its step: the database's own checks, Publish refusing with the same messages and naming the same blocks, nothing published, other users' rows unchanged, and for a template apply no request to /rest/v1/themes and no Storage call."
+      ],
+      "passes": false
     }
   ]
 }
