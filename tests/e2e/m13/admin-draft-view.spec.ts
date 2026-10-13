@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { emptyDraft, emptySubPageDraft } from "@/lib/document";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
+import { writeHomeDraft } from "../fixtures/home-abuse";
 import { NEVER_STORED, appRaw } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { sessionCookie, signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
@@ -33,12 +34,17 @@ async function seedOwner(browser: import("@playwright/test").Browser) {
       url: "https://example.com/book",
     },
   ];
+  // The design goes to pages.draft without `blocks`: the moved site's blocks there are a frozen copy
+  // (HL013 refuses a change), and Home's blocks live in its '/' entry.
+  const { blocks: _frozen, ...design } = draft;
   const saved = await db
     .from("pages")
-    .update({ draft: draft as never, published: null, published_at: null })
+    .update({ draft: design as never, published: null, published_at: null })
     .eq("id", owner.pageId!);
   expect(saved.error).toBeNull();
-  // Home's blocks and the sub-page are page entries (1b1-14).
+  const home = await writeHomeDraft(owner.pageId!, homeBlocks);
+  expect(home.error).toBeNull();
+  // The sub-page is a page entry (1b1-14); Home's entry exists from the move.
   const type = await db
     .from("content_types")
     .select("id")
@@ -49,10 +55,7 @@ async function seedOwner(browser: import("@playwright/test").Browser) {
   const entries = await db
     .from("content_entries")
     .insert(
-      [
-        { path: "/", title: "", description: "", blocks: homeBlocks },
-        emptySubPageDraft("items", SUB_TITLE),
-      ].map((entry) => ({ site_id: owner.pageId!, type_id: type.data!.id, draft: entry as never })),
+      [emptySubPageDraft("items", SUB_TITLE)].map((entry) => ({ site_id: owner.pageId!, type_id: type.data!.id, draft: entry as never })),
     );
   expect(entries.error).toBeNull();
   return owner;
