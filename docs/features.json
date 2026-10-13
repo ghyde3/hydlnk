@@ -5641,7 +5641,7 @@
         "Playwright at 390x844 and 1440x900: with a sub-page open in the editor, a write to the same sub-page through MCP's writer (or the secret-key client) lands, then typing in the editor shows the conflict notice, and the database still holds the MCP change.",
         "Unit test for the conditional save; the sub-page and autosave specs touched still pass."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-02",
@@ -5658,7 +5658,7 @@
         "media_paths_in_use also scans content_entries drafts and published copies and content_entry_revisions snapshots; a test proves the cleanup queue keeps an image used only by an entry.",
         "The schema accepts stage 1b's data without another DDL change: an entry inserted with a given id, a page entry whose draft is today's sub-page document, Home's path / registered, and revisions with source system."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-03",
@@ -5674,7 +5674,7 @@
         "List entries filters by type, status, term and title search, sorts by published date, updated date or title, pages with a keyset cursor and returns at most 100; terms support categories one level deep and flat tags.",
         "Unit tests for the writer and integration tests against local Supabase cover each rule above, including a concurrent publish and update."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-04",
@@ -5684,7 +5684,7 @@
       "acceptance": [
         "security-reviewer runs over M15-01 to M15-03 (RLS and grants, the service-role writer's ownership checks, the SQL functions, the path registry, limits and media cleanup) and every finding is fixed or recorded in docs/PLAN.md with Gary's decision."
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
