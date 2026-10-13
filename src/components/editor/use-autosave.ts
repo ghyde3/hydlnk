@@ -57,10 +57,16 @@ export function useAutosave(args: {
   // What the screen loaded with: the baseline for "has the user edited yet".
   const [loaded] = useState(() => draft);
   const initialRev = loaded.rev;
+  // The entry rev the blocks in `loaded` belong to: a later entry means they are no longer the stored ones.
+  const [loadedHomeRev] = useState(() => home?.rev ?? null);
 
   useEffect(() => {
     const queue = new AutosaveQueue({
-      save: createDraftSaver(pageId, home),
+      save: createDraftSaver(
+        pageId,
+        home,
+        home && home.rev === loadedHomeRev ? loaded.blocks : undefined,
+      ),
       onStatus: setStatus,
       onBlocked: setBlocked,
       initial: { rev: initialRev, revKey: initialRevKey },
@@ -86,7 +92,7 @@ export function useAutosave(args: {
       void queue.flush().finally(() => queue.dispose());
       queueRef.current = null;
     };
-  }, [pageId, initialRev, initialRevKey, home]);
+  }, [pageId, initialRev, initialRevKey, home, loaded, loadedHomeRev]);
 
   useEffect(() => {
     if (draft === loaded) return;

@@ -131,6 +131,18 @@ describe("Home's autosave on page entries", () => {
     expect(posts[1]!.body.rev).toBe(8);
   });
 
+  it("a design-only first save makes no entry POST when seeded with the loaded blocks", async () => {
+    const blocks = [link("lnk-aaaaaaaa")];
+    const save = createDraftSaver(SITE, { entryId: HOME, rev: 7 }, blocks);
+    expect(await save(doc(blocks, 5, "mara 2"), "4")).toEqual({ kind: "ok" });
+    expect(posts).toHaveLength(0);
+    expect(patches).toHaveLength(1);
+    // The first real block edit still goes out under the loaded rev.
+    await save(doc([link("lnk-aaaaaaaa", "Changed")], 6), "5");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.body.rev).toBe(7);
+  });
+
   it("a conflict on the blocks stops before the design is written", async () => {
     routeAnswers = [{ status: 409, body: { kind: "conflict", currentRev: 9 } }];
     const save = createDraftSaver(SITE, { entryId: HOME, rev: 7 });

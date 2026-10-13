@@ -33,10 +33,16 @@ export interface HomeEntryRef {
  * 400, M5-03) is `blocked`: permanent, with the hosts and block ids the database named. Everything
  * else (offline, 5xx) is a retryable `error`.
  */
-export function createDraftSaver(pageId: string, home: HomeEntryRef | null = null): SaveFn {
+export function createDraftSaver(
+  pageId: string,
+  home: HomeEntryRef | null = null,
+  /** Home's blocks as the editor loaded them: the first save then sends them only if they changed. */
+  loadedBlocks?: unknown,
+): SaveFn {
   let homeRev = home?.rev ?? 0;
   // The blocks as last stored (or sent and accepted), compared as text.
-  let storedBlocks: string | null = null;
+  let storedBlocks: string | null =
+    home && loadedBlocks !== undefined ? JSON.stringify(loadedBlocks) : null;
 
   return async (doc, expectedRevKey) => {
     let design: unknown = doc;
