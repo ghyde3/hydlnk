@@ -24,7 +24,7 @@ async function seedOwner(browser: import("@playwright/test").Browser) {
   const db = adminClient();
   const draft = emptyDraft(owner.handle!);
   draft.profile.name = SECRET_NAME;
-  draft.blocks = [
+  const homeBlocks = [
     {
       id: "lnk-zq000001",
       type: "link",
@@ -32,16 +32,29 @@ async function seedOwner(browser: import("@playwright/test").Browser) {
       label: "Book",
       url: "https://example.com/book",
     },
-  ] as never;
+  ];
   const saved = await db
     .from("pages")
     .update({ draft: draft as never, published: null, published_at: null })
     .eq("id", owner.pageId!);
   expect(saved.error).toBeNull();
-  const sub = await db
-    .from("site_pages")
-    .insert({ page_id: owner.pageId!, draft: emptySubPageDraft("items", SUB_TITLE) as never });
-  expect(sub.error).toBeNull();
+  // Home's blocks and the sub-page are page entries (1b1-14).
+  const type = await db
+    .from("content_types")
+    .select("id")
+    .eq("site_id", owner.pageId!)
+    .eq("key", "page")
+    .single();
+  expect(type.error).toBeNull();
+  const entries = await db
+    .from("content_entries")
+    .insert(
+      [
+        { path: "/", title: "", description: "", blocks: homeBlocks },
+        emptySubPageDraft("items", SUB_TITLE),
+      ].map((entry) => ({ site_id: owner.pageId!, type_id: type.data!.id, draft: entry as never })),
+    );
+  expect(entries.error).toBeNull();
   return owner;
 }
 
@@ -94,9 +107,10 @@ test.describe("M13-11 admin draft view", () => {
         .eq("id", owner.pageId!)
         .single();
       const subBefore = await db
-        .from("site_pages")
+        .from("content_entries")
         .select("draft, updated_at")
-        .eq("page_id", owner.pageId!);
+        .eq("site_id", owner.pageId!)
+        .order("id");
 
       await page.goto(url("app", `/admin/accounts/${owner.userId}`));
       // Opening the account page (and hovering the button) logs nothing.
@@ -168,9 +182,10 @@ test.describe("M13-11 admin draft view", () => {
         .single();
       expect(after.data).toEqual(before.data);
       const subAfter = await db
-        .from("site_pages")
+        .from("content_entries")
         .select("draft, updated_at")
-        .eq("page_id", owner.pageId!);
+        .eq("site_id", owner.pageId!)
+        .order("id");
       expect(subAfter.data).toEqual(subBefore.data);
 
       await expect(page.getByRole("link", { name: "Back to account" })).toHaveAttribute(

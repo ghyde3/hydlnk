@@ -12,6 +12,7 @@ import {
 import { loadDraft } from "@/lib/editor/load";
 import type { Database } from "@/lib/supabase/database.types";
 import { homeUsesSiteIndex } from "@/lib/site/live";
+import { getHomeDraftWithClient, listDraftPagesWithClient } from "@/lib/site/page-entries";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
 import { sanitizeSharedDoc } from "./sanitize";
@@ -117,7 +118,14 @@ export async function loadDraftPreview(
   options: { path: string; base: string; expiresAt: string },
 ): Promise<SharedPreview> {
   const { path, base, expiresAt } = options;
-  const { draft } = loadDraft(page.draft, page.handle);
+  // The design is the site row's; Home's blocks are its page entry's draft (the blocks frozen in
+  // `pages.draft` by the move are never read). A site with no Home entry has no blocks.
+  const home = await getHomeDraftWithClient(admin, page.id);
+  const homeBlocks = Array.isArray(home?.draft.blocks) ? home.draft.blocks : [];
+  const { draft } = loadDraft(
+    { ...(page.draft as Record<string, unknown>), blocks: homeBlocks },
+    page.handle,
+  );
 
   // The draft's theme row: a system theme or one of the owner's own (what the editor's own read
   // sees under RLS). Anything else, or a deleted row, reads as no theme.
@@ -144,19 +152,12 @@ export async function loadDraftPreview(
   let site: SiteContext | undefined;
   let subPage: { title: string; blocks: readonly Block[] } | undefined;
   if (path !== "" || homeUsesSiteIndex(doc)) {
-    const rows = await admin
-      .from("site_pages")
-      .select("id, path:draft->>path, title:draft->>title")
-      .eq("page_id", page.id);
-    if (rows.error)
-      throw new Error(`Loading the pages of a shared preview failed: ${rows.error.message}`);
-    const listed = (rows.data ?? []).map((row) => {
-      const { path: rowPath, title } = row as unknown as {
-        path: string | null;
-        title: string | null;
-      };
-      return { id: row.id, path: rowPath, title };
-    });
+    const entries = await listDraftPagesWithClient(admin, page.id);
+    const listed = entries.map((entry) => ({
+      id: entry.id,
+      path: entry.draft.path,
+      title: entry.draft.title,
+    }));
     const summaries = listed.flatMap((row): SitePageSummary[] => {
       if (typeof row.path !== "string" || typeof row.title !== "string") return [];
       const title = stripHiddenCharacters(row.title).trim();
@@ -168,16 +169,9 @@ export async function loadDraftPreview(
       // No page of this site at that path: the same 404 as an inactive link.
       if (!match) return { kind: "inactive" };
       currentId = match.id;
-      // That one page's whole draft, by its id (which came from this link's own site).
-      const full = await admin
-        .from("site_pages")
-        .select("draft")
-        .eq("id", match.id)
-        .eq("page_id", page.id)
-        .maybeSingle();
-      if (full.error)
-        throw new Error(`Loading a page of a shared preview failed: ${full.error.message}`);
-      const parsed = draftSubPageSchema.safeParse(full.data?.draft);
+      // That one page's whole draft (the entry came from this link's own site).
+      const full = entries.find((entry) => entry.id === match.id);
+      const parsed = draftSubPageSchema.safeParse(full?.draft);
       if (!parsed.success) return { kind: "inactive" };
       const publishForm = toSubPagePublishForm(parsed.data);
       // The same cleaning as Home: hidden characters out of every text.
