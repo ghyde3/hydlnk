@@ -104,7 +104,7 @@ export const createPage: ToolDefinition<typeof input> = {
         subPageId: created.id,
         title: created.draft.title,
         path: `/${created.draft.path}`,
-        rev: Date.parse(created.createdAt),
+        rev: created.rev,
         inMenu,
         ...(homeRev !== undefined ? { homeRev } : {}),
         ...(menuNote ? { menuNote } : {}),

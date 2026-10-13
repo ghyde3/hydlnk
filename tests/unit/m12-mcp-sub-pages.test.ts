@@ -48,20 +48,58 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
     siteId: string = o.pageId,
   ): Promise<string> {
     const draft = { path, title: `Page ${path}`, description: "", blocks: [], ...over };
+    const type = await admin
+      .from("content_types")
+      .select("id")
+      .eq("site_id", siteId)
+      .eq("key", "page")
+      .single();
     const { data, error } = await admin
-      .from("site_pages")
-      .insert({ page_id: siteId, draft: draft as never })
+      .from("content_entries")
+      .insert({ site_id: siteId, type_id: type.data!.id, draft: draft as never })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
     return data.id as string;
   }
-  const subRow = async (id: string) =>
-    (await admin.from("site_pages").select("*").eq("id", id).single()).data as any;
+  // A sub-page is a page entry (1b1-20): its rev is the entry rev, and the writer bumps it.
+  const subRow = async (id: string) => {
+    const row = (await admin.from("content_entries").select("*").eq("id", id).single()).data as any;
+    return { ...row, rev: Number(row.rev) };
+  };
+  /** What the editor's autosave does to an entry: a new draft and the next rev. */
+  async function editorSave(id: string, patch: Record<string, unknown>) {
+    const row = await subRow(id);
+    const { error } = await admin
+      .from("content_entries")
+      .update({ ...patch, rev: row.rev + 1 })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+  }
+  /** Marks an entry published (what Publish does), optionally with a new draft. */
+  async function markPublished(id: string, published: unknown, draft?: unknown) {
+    const { error } = await admin
+      .from("content_entries")
+      .update({
+        ...(draft ? { draft: draft as never } : {}),
+        published: published as never,
+        published_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+  }
+  const entryCount = async (siteId: string) =>
+    (
+      await admin
+        .from("content_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("site_id", siteId)
+        .neq("draft->>path", "/")
+    ).count;
   const homeRow = async (o: TestOwner) =>
     (await admin.from("pages").select("draft, published_at").eq("id", o.pageId).single())
       .data as any;
-  const rev = (row: { updated_at: string }) => Date.parse(row.updated_at);
+  const rev = (row: { rev: number }) => row.rev;
   const linkBlock = (id: string, label = "A link") => ({
     id,
     type: "link",
@@ -91,13 +129,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
         .from("pages")
         .update({ draft: { ...home.draft, nav: { show: true, items: [b, a] } } })
         .eq("id", o.pageId);
-      await admin
-        .from("site_pages")
-        .update({
-          published: { path: "items", title: "Items", description: "", blocks: [] },
-          published_at: new Date().toISOString(),
-        })
-        .eq("id", a);
+      await markPublished(a, { path: "items", title: "Items", description: "", blocks: [] });
 
       const out = await rt.call("list_pages", {}, who(o));
       expect(out.isError, JSON.stringify(out.error)).toBe(false);
@@ -306,10 +338,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       const first = await subRow(id);
       await new Promise((resolve) => setTimeout(resolve, 15));
       // The editor autosaves a title change.
-      await admin
-        .from("site_pages")
-        .update({ draft: { ...first.draft, title: "Renamed in the editor" } })
-        .eq("id", id);
+      await editorSave(id, { draft: { ...first.draft, title: "Renamed in the editor" } });
       const stale = await rt.call(
         "add_block",
         {
@@ -906,7 +935,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       expect(out.isError, JSON.stringify(out.error)).toBe(false);
       expect(out.json).toMatchObject({ title: "Our Story", path: "/our-story", inMenu: true });
       const row = await subRow(out.json!.subPageId);
-      expect(row.page_id).toBe(o.pageId);
+      expect(row.site_id).toBe(o.pageId);
       expect(row.draft).toEqual({
         path: "our-story",
         title: "Our Story",
@@ -947,10 +976,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       const out = await rt.call("create_page", { pageId: o.pageId, ...input }, who(o));
       expect(out.error!.code).toBe("invalid_input");
       expect(out.error!.issues![0]!.path).toBe(field);
-      const { count } = await admin
-        .from("site_pages")
-        .select("id", { count: "exact", head: true })
-        .eq("page_id", o.pageId);
+      const count = await entryCount(o.pageId);
       expect(count).toBe(0);
     });
 
@@ -958,14 +984,11 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       const o = await owner("cp-taken");
       await addSubPage(o, "items");
       const live = await addSubPage(o, "shop");
-      await admin
-        .from("site_pages")
-        .update({
-          draft: { path: "store", title: "Store", description: "", blocks: [] },
-          published: { path: "shop", title: "Shop", description: "", blocks: [] },
-          published_at: new Date().toISOString(),
-        })
-        .eq("id", live);
+      await markPublished(
+        live,
+        { path: "shop", title: "Shop", description: "", blocks: [] },
+        { path: "store", title: "Store", description: "", blocks: [] },
+      );
       for (const path of ["items", "shop", "store"]) {
         const out = await rt.call("create_page", { pageId: o.pageId, title: "Dup", path }, who(o));
         expect(out.error, path).toMatchObject({ code: "invalid_input" });
@@ -986,10 +1009,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       );
       expect(refused.error!.code).toBe("plan_required");
       expect(refused.error!.message).toMatch(/pages|limit/i);
-      const { count } = await admin
-        .from("site_pages")
-        .select("id", { count: "exact", head: true })
-        .eq("page_id", free.pageId);
+      const count = await entryCount(free.pageId);
       expect(count).toBe(2);
       // Pro has room for more.
       const pro = await owner("cp-limit-pro", "pro");
@@ -1028,10 +1048,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
         const out = await rt.call("create_page", { pageId, title: "Hijack" }, who(mine));
         expect(out.error, pageId).toMatchObject({ code: "not_found", message: NOT_FOUND });
       }
-      const { count } = await admin
-        .from("site_pages")
-        .select("id", { count: "exact", head: true })
-        .eq("page_id", theirs.pageId);
+      const count = await entryCount(theirs.pageId);
       expect(count).toBe(0);
     });
 
@@ -1052,10 +1069,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
         .eq("id", o.userId);
       const out = await rt.call("create_page", { pageId: o.pageId, title: "X" }, who(o));
       expect(out.error!.code).toBe("account_suspended");
-      const { count } = await admin
-        .from("site_pages")
-        .select("id", { count: "exact", head: true })
-        .eq("page_id", o.pageId);
+      const count = await entryCount(o.pageId);
       expect(count).toBe(0);
     });
   });
@@ -1109,14 +1123,11 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       const id = await addSubPage(o, "items");
       await addSubPage(o, "visit");
       const live = await addSubPage(o, "old");
-      await admin
-        .from("site_pages")
-        .update({
-          draft: { path: "renamed", title: "R", description: "", blocks: [] },
-          published: { path: "old", title: "R", description: "", blocks: [] },
-          published_at: new Date().toISOString(),
-        })
-        .eq("id", live);
+      await markPublished(
+        live,
+        { path: "old", title: "R", description: "", blocks: [] },
+        { path: "renamed", title: "R", description: "", blocks: [] },
+      );
       for (const path of [
         "visit",
         "old",
@@ -1164,7 +1175,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       const o = await owner("us-menu");
       const a = await addSubPage(o, "a");
       const b = await addSubPage(o, "b");
-      const c = await addSubPage(o, "c");
+      const c = await addSubPage(o, "pc");
       const menu = async () => (await homeRow(o)).draft;
       const set = (id: string, extra: Record<string, unknown>) =>
         rt.call("update_page_settings", { pageId: o.pageId, subPageId: id, ...extra }, who(o));
@@ -1236,10 +1247,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
       const id = await addSubPage(o, "a");
       const first = await subRow(id);
       await new Promise((resolve) => setTimeout(resolve, 15));
-      await admin
-        .from("site_pages")
-        .update({ draft: { ...first.draft, title: "Edited" } })
-        .eq("id", id);
+      await editorSave(id, { draft: { ...first.draft, title: "Edited" } });
       const homeBefore = await homeRow(o);
       for (const extra of [{ title: "Mine" }, { inMenu: true }]) {
         const out = await rt.call(
@@ -1295,6 +1303,7 @@ describe.skipIf(!run)("the sub-page tools (local Supabase)", () => {
   describe("the whole flow and the activity log", () => {
     it("create, fill, link, menu and publish the whole site; the activity log has the new tools and no content", async () => {
       const o = await owner("flow");
+      await moveHome(admin, o.pageId);
       const CANARY = `CANARY-${Math.random().toString(36).slice(2, 10)}`;
       const created = await rt.call(
         "create_page",

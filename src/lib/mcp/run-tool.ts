@@ -292,6 +292,8 @@ export async function runTool(
       }
       if (!loaded.ok) return refuse(loaded.failure);
       subPage = loaded.subPage;
+      // Home's entry id means Home.
+      if (!subPage) args.subPageId = "home";
     }
 
     // 6. The handler, cut off after the timeout.

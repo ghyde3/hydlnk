@@ -103,17 +103,24 @@ describe("the draft is read in one place and written in one", () => {
     expect(source).toContain('.eq("owner_id", userId)');
   });
 
-  it("every site_pages read in page-access joins the site and filters on its owner in the same query (M12-05)", () => {
+  it("every page-entry read in page-access joins the site and filters on its owner in the same query (M12-05, 1b1-20)", () => {
     const source = code(`${MCP_DIR}/page-access.ts`);
+    expect(source).not.toMatch(/site_pages/);
     const chains = source
       .split("admin\n")
       .slice(1)
-      .filter((chain) => /\.from\("site_pages"\)/.test(chain.slice(0, 40)));
-    expect(chains.length).toBeGreaterThanOrEqual(3);
-    for (const chain of chains) {
-      const query = chain.slice(0, 600);
+      .filter((chain) => /\.from\("content_entries"\)/.test(chain.slice(0, 40)));
+    const joined = chains.filter((chain) =>
+      /SITE_JOIN|ENTRY_BASE|ENTRY_WITH_DOCS/.test(chain.slice(0, 200)),
+    );
+    expect(joined.length).toBeGreaterThanOrEqual(4);
+    for (const chain of joined) {
+      const query = chain.slice(0, 700);
       expect(query).toMatch(/\.eq\("site\.owner_id", userId\)/);
+      expect(query).toMatch(/\.is\("deleted_at", null\)/);
     }
+    // The one read without the join is Home's entry of sites the caller has just owner-checked.
+    expect(chains.length - joined.length).toBe(1);
     expect(source).toMatch(
       /SITE_JOIN = `site:pages\$\{String\.fromCharCode\(33\)\}inner\(owner_id\)`/,
     );
