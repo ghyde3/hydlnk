@@ -5,7 +5,7 @@ import { newBlockId, type Block, type DraftDoc, type ImageRef } from "@/lib/docu
 import { makeJpeg } from "../m5/images-fixtures";
 import { downloadObject, sessionCookie, uploadMedia, uploaded } from "../m5/images-helpers";
 import { draftOf, userWithDraft, type TestPage } from "../m2/blocks-helpers";
-import { setDraft } from "../m2/editor-helpers";
+import { pageRow, setDraft } from "../m2/editor-helpers";
 
 export { downloadObject, makeJpeg };
 
@@ -141,15 +141,9 @@ export async function userWithBlocks(
   return { ...user, blocks };
 }
 
-export const draftOfPage = async (pageId: string): Promise<DraftDoc> => {
-  const { data, error } = await adminClient()
-    .from("pages")
-    .select("draft")
-    .eq("id", pageId)
-    .single();
-  if (error) throw new Error(error.message);
-  return data.draft as DraftDoc;
-};
+/** The page's draft: the design from the pages row, the blocks from Home's entry on a moved site. */
+export const draftOfPage = async (pageId: string): Promise<DraftDoc> =>
+  (await pageRow(pageId)).draft;
 
 export const panelOf = (page: Page, blockId: string): Locator =>
   page.locator(`#block-panel-${blockId}`);
