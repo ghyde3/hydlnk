@@ -5801,6 +5801,17 @@
         "security-reviewer runs over M15-10 and M15-11 (publish_design's input check and grants, ownership and rev in the three publish actions and the page revisions route, no cross-site publish, hidden links leak nothing, MCP publish scope), and every finding is fixed or recorded in docs/PLAN.md with Gary's decision."
       ],
       "passes": false
+    },
+    {
+      "id": "M15-13",
+      "milestone": 15,
+      "area": "editor",
+      "title": "Deleting a sub-page stays immediate after the cutover",
+      "acceptance": [
+        "Supersedes, in this respect only (Gary, 2026-10-04: \"deleting a page is immediate\"; recorded for stage 1b in docs/PLAN.md, \"Stage 1b-1 build decisions\"): M15-07 step 3's \"delete (to trash)\". Until stage 3 brings a trash screen to the editor, deleting a sub-page from the editor purges its page entry and revisions at once, so the page limit frees immediately; posts keep the trash. Every other part of M15-07 step 3 stands, including HL008 counting Home plus page entries, trash included, for entries trashed by other means.",
+        "Tests: on a Free site with 3 pages, deleting one lets a new page be created at once; the entry and its revisions are gone; a failed purge leaves the page fully in place (still listed, still live) and answers delete_failed; another user's sub-page cannot be deleted."
+      ],
+      "passes": false
     }
   ]
 }
