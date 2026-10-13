@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/lib/supabase/database.types";
 import { createEntryWithClient, updateEntryWithClient } from "@/lib/content/entries-core";
@@ -15,11 +16,13 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => adminMock.cu
 
 const { run } = await stackIsUp();
 describe.skipIf(!run)("publish and unpublish an entry", () => {
-  const admin = createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SECRET_KEY!,
-    { auth: { persistSession: false } },
-  );
+  const admin = run
+    ? createClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SECRET_KEY!,
+        { auth: { persistSession: false } },
+      )
+    : (undefined as unknown as SupabaseClient<Database>);
   const owners: TestOwner[] = [];
   let a: TestOwner;
   let b: TestOwner;

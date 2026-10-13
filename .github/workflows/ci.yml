@@ -131,6 +131,15 @@ jobs:
           tests/unit/limits-parity.test.ts
           tests/unit/limits-pages.test.ts
           tests/unit/content-rls.test.ts
+          tests/unit/m15-content-entries.test.ts
+          tests/unit/m15-content-fixes.test.ts
+          tests/unit/m15-content-guards.test.ts
+          tests/unit/m15-content-list.test.ts
+          tests/unit/m15-content-prune.test.ts
+          tests/unit/m15-content-publish.test.ts
+          tests/unit/m15-content-revisions.test.ts
+          tests/unit/m15-content-terms.test.ts
+          tests/unit/m15-content-trash.test.ts
           tests/unit/limits-upload-stack.test.ts
           tests/unit/blocklist-matching.test.ts
           tests/unit/blocklist-gate.test.ts
