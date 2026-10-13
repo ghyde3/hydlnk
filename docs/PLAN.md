@@ -324,6 +324,20 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
 - **Counting pages.** During the transition, HL008 counts Home plus a site's `page` entries (trash included) and ignores `site_pages` rows. After the move, no new `site_pages` rows are created.
 - **Links in Markdown.** Only the server writer writes content entries, so `src/lib/content` checks the links in a Markdown body against the blocklist (`blocked_links_in`) at save and publish. The database check stays on block documents.
 
+**Stage 1b shape and publishing decisions (Gary, 2026-10-12):**
+- **One cutover.** All accounts move in one release, once a dry run on a copy of production shows byte-identical live HTML for every site. There is no per-account flag and no dual code path.
+- **Copy only.** The move never strips or deletes: `site_pages` (marked moved), `pages.draft` and `pages.published` blocks, and `page_versions` stay as they are. So Vercel Instant Rollback restores the old site, and a reverse function copies back any entry edits made between the deploy and a rollback.
+- **Removing the old copies** is a later, separate release with Gary's explicit yes.
+- **1b-2: per-page publishing.**
+  - Each page and post publishes on its own.
+  - Publish design covers theme, menu and profile.
+  - Publish all changes publishes everything that changed.
+  - Menu links and page-link blocks to an unpublished page are hidden on the live site until it is published; Publish is never blocked for them.
+  - History restores the site design, and each page or post restores from its own revisions.
+  - MCP `publish_page` keeps meaning "publish all changes"; per-item and design publish tools come with the content tools in stage 4.
+  - Home's own title and SEO description wait for stage 3; until then Home's title stays the profile name.
+  - The publish bar is built from DESIGN.md and checked by design-verifier at 390 and 1440.
+
 1a's schema must accept steps 1 to 3 without another DDL change. That means:
 - an explicit entry id;
 - today's sub-page document as a draft;
@@ -420,6 +434,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Proving pass decisions, production evidence (Gary, 2026-10-11): M1-08 and M1-13 (the replaced Google redirect button) pass with M1-29 and M1-30 (M14-03); with production on live Stripe, the sandbox halves of M4-06 and M4-07 run locally and Gary's live upgrade is the production evidence (M14-04); M4-35 is proven on Gary's real domain links.hyde-co.com and real upgrade, with no cleanup (M14-05); *.vercel.app preview and deployment addresses keep serving the HYDLNK site, never a tenant page (M14-06, replacing M4-09 step 3's 404 for them). Gary confirmed on production: Google sign-in and sign-up, the Google app published, custom SMTP configured and delivering to a non-team address, the HYDLNK sign-in email template, and a live upgrade that flipped the plan.
 - Content model, feature 1 (Gary, 2026-10-11; the plan doc "HYDLNK Next Evolution Plan", section 7): one shared table for pages, posts and later custom types, with sub-pages and Home moved in now; Home is the page at `/`; every page and post publishes on its own, with Publish design and Publish all changes; menu links to unpublished pages hidden; posts written in rich text and stored as Markdown; URLs `/{archive path}/{slug}`; categories and tags in v1; scheduling in stage 5; no byline; simple comments later; import after the MVP; posts Free 25, Pro 1,000, Studio unlimited (100,000 safety cap); custom types Pro 3, Studio unlimited; revisions Free 10, Pro 50, Studio 200; the larger MCP and page limits approved. See "Content model (feature 1, Wave N)".
 - Content model security review, M15-04 (Gary, 2026-10-12): revision snapshots stay within the plan's content_bytes by pruning the oldest first (history is bounded at about one extra cap per account), and the six low known items in "Content model" are fixed before the writer is reachable from the editor (stage 3) or MCP (stage 4).
+- Stage 1b of the content model (Gary, 2026-10-12): one cutover after a byte-identical dry run on a copy of production (no per-account flag), copy-only move with Vercel Instant Rollback as the way back; per-page publishing with Publish design and Publish all changes; links to unpublished pages hidden; History restores design, pages restore from their own revisions; MCP publish_page = publish all changes until stage 4; Home's title stays the profile name until stage 3; publish bar from DESIGN.md, checked by design-verifier. See "Content model".
 
 ## Open
 
