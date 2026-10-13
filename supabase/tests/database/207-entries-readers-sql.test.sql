@@ -49,10 +49,18 @@ create temp table pairs_before207 as
     select jsonb_path_query(s.published, '$.blocks[*] ? (@.type == "items").items[*].id ? (@.type() == "string")') #>> '{}'
   ) as i
   where s.page_id = '00000000-0000-4000-8000-00000207a001' and s.published is not null;
+-- Global counts before the move, split into what the entries already hold (leftovers from other tests on a
+-- database that was not reset) and what only the legacy site_pages rows hold (those the move will turn into
+-- entries). The move must change the admin numbers by exactly the second part: sub-pages and live sub-pages
+-- by the site_pages rows not yet entries, live sites by nothing.
 create temp table overview_before207 as
-  select (select count(*) from public.site_pages) as sub_pages,
-         (select count(*) from public.site_pages where published is not null) as live_sub_pages,
-         (select count(*) from public.pages where published is not null) as live_sites;
+  select o.sub_pages as base_sub_pages, o.live_sub_pages as base_live_sub_pages, o.live_sites as base_live_sites,
+         (select count(*) from public.site_pages s
+            where not exists (select 1 from public.content_entries e where e.id = s.id)) as moved_sub_pages,
+         (select count(*) from public.site_pages s
+            where s.published is not null
+              and not exists (select 1 from public.content_entries e where e.id = s.id)) as moved_live_sub_pages
+  from public.admin_overview_numbers() o;
 create temp table detail_before207 as
   select (select count(*) from public.site_pages s join public.pages p on p.id = s.page_id
             where p.owner_id = tests.get_supabase_uid('a')) as sub_pages,
@@ -131,10 +139,10 @@ reset role;
 
 set local role service_role;
 select is(
-  (select (o.sub_pages, o.live_sub_pages, o.live_sites)::text
-     from public.admin_overview_numbers() o),
-  (select (b.sub_pages, b.live_sub_pages, b.live_sites)::text from overview_before207 b),
-  'admin_overview_numbers: sub-pages, live sub-pages and live sites equal the pre-move numbers');
+  (select (o.sub_pages - b.base_sub_pages, o.live_sub_pages - b.base_live_sub_pages, o.live_sites - b.base_live_sites)::text
+     from public.admin_overview_numbers() o, overview_before207 b),
+  (select (b.moved_sub_pages, b.moved_live_sub_pages, 0::bigint)::text from overview_before207 b),
+  'admin_overview_numbers: sub-pages, live sub-pages and live sites change by exactly the moved legacy sub-pages');
 select is(
   (select (d.sub_pages, d.sites, d.live_sites)::text
      from public.admin_account_detail(tests.get_supabase_uid('a')) d),
