@@ -1932,6 +1932,10 @@ export type Database = {
         }
         Returns: string
       }
+      suggest_site_path: {
+        Args: { p_taken?: string[]; p_title: string }
+        Returns: string
+      }
       trash_entry: {
         Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
         Returns: number
