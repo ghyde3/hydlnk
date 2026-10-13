@@ -4,6 +4,7 @@ import {
   accessTokenFor,
   cleanupUsers,
   desktopOnly,
+  moveSite,
   pageCountForHandle,
   rand,
   signedInUser,
@@ -62,6 +63,8 @@ async function addPublishedPage(userId: string, handle: string): Promise<string>
     .select("id")
     .single();
   if (inserted.error) throw new Error(inserted.error.message);
+  // Move the site into page entries: a page without a Home entry serves the placeholder.
+  await moveSite(inserted.data.id as string);
   return inserted.data.id as string;
 }
 
