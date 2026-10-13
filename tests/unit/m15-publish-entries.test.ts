@@ -211,4 +211,17 @@ describe.skipIf(!run)("1b1-15 publishPageCore over page entries (local Supabase)
     expect((await entry(a)).published).toBeNull();
     expect((await pageRow(o)).published).toBeNull();
   });
+
+  it("Unpublish takes Home's entry and every sub-page entry offline, with no code change", async () => {
+    const o = await owner("pe9", [link("home-link-001")]);
+    const a = await sub(o, "Items", "items", [link("a-link-00001")]);
+    expect(await publish(o)).toMatchObject({ ok: true });
+    expect((await entry(a)).published).not.toBeNull();
+    const { unpublishSiteCore } = await import("@/lib/publish/unpublish");
+    const out = await unpublishSiteCore({ pageId: o.pageId, userId: o.userId }, { admin });
+    expect(out).toMatchObject({ ok: true });
+    expect((await entry(homes.get(o.pageId)!)).published).toBeNull();
+    expect((await entry(a)).published).toBeNull();
+    expect((await pageRow(o)).published).toBeNull();
+  });
 });
