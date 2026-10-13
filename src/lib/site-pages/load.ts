@@ -6,6 +6,7 @@ import {
   type SubPageDraft,
   type SubPagePublish,
 } from "@/lib/document";
+import { listDraftPagesWithClient } from "@/lib/site/page-entries-core";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /** One sub-page as the editor opens it. */
@@ -16,8 +17,8 @@ export interface LoadedSubPage {
   published: SubPagePublish | null;
   livePath: string | null;
   createdAt: string;
-  /** The row's `updated_at` as stored: the revision the editor's saves are checked against (M15-01). */
-  updatedAt: string;
+  /** The page entry's `rev`: the revision the editor's saves are checked against (M15-01, 1b1-17). */
+  rev: number;
 }
 
 /** Keeps what a stored draft still holds when it does not validate: the strings that are strings. */
@@ -42,28 +43,26 @@ function repair(raw: unknown, fallbackPath: string): SubPageDraft {
 }
 
 /**
- * Every sub-page of a site, read with the signed-in user's own session under RLS (M11-08): the
- * owner reads their own rows and nobody else's. A stored draft that does not validate is repaired
- * to the nearest valid document, like Home's (nothing is written until the owner edits).
+ * Every sub-page of a site: its non-Home page entries that are not in the trash, read with the
+ * signed-in user's own session under RLS (M11-08, 1b1-17), so the owner reads their own entries and
+ * nobody else's. A stored draft that does not validate is repaired to the nearest valid document,
+ * like Home's (nothing is written until the owner edits).
  */
 export async function loadSubPages(siteId: string): Promise<LoadedSubPage[]> {
   const supabase = await createServerSupabase();
-  const { data, error } = await supabase
-    .from("site_pages")
-    .select("id, draft, published, live_path, created_at, updated_at")
-    .eq("page_id", siteId)
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(`Loading the pages of site ${siteId} failed: ${error.message}`);
-  return data.map((row) => {
+  const pages = await listDraftPagesWithClient(supabase, siteId);
+  return pages.map((row) => {
     const published =
-      row.published === null ? null : publishedSubPageSchema.safeParse(row.published);
+      row.published === null || row.published === undefined
+        ? null
+        : publishedSubPageSchema.safeParse(row.published);
     return {
       id: row.id,
-      draft: repair(row.draft, row.live_path ?? "page"),
+      draft: repair(row.draft, row.livePath ?? "page"),
       published: published?.success ? published.data : null,
-      livePath: row.live_path,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      livePath: row.livePath,
+      createdAt: row.createdAt,
+      rev: row.rev,
     };
   });
 }

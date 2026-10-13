@@ -39,26 +39,22 @@ describe("HL009 in the sub-page autosave", () => {
     vi.useRealTimers();
   });
 
-  it("the browser write maps HL009 to storage-full", async () => {
+  it("the browser write maps the route's storage-full answer", async () => {
     vi.resetModules();
-    const builder: Record<string, unknown> = {};
-    for (const name of ["update", "eq"]) builder[name] = vi.fn(() => builder);
-    builder.select = vi.fn(async () => ({
-      data: null,
-      error: { code: "HL009", message: "site storage limit reached" },
-      status: 400,
-    }));
-    vi.doMock("@/lib/supabase/browser", () => ({
-      createBrowserSupabase: () => ({ from: () => builder }),
-    }));
     vi.doMock("@/lib/media/cleanup-client", () => ({ scheduleMediaCleanup: () => {} }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ kind: "storage-full" }), { status: 403 }),
+      ),
+    );
     const { createSubPageRevisions, createSubPageSaveFn } =
       await import("@/lib/site-pages/save-client");
-    const revisions = createSubPageRevisions({ x: "2026-10-11T10:00:00+00:00" });
-    expect(await createSubPageSaveFn(revisions)("x", emptySubPageDraft("items", "A"))).toEqual({
-      kind: "storage-full",
-    });
-    vi.doUnmock("@/lib/supabase/browser");
+    const revisions = createSubPageRevisions({ x: 3 });
+    expect(
+      await createSubPageSaveFn(revisions, "site-1")("x", emptySubPageDraft("items", "A")),
+    ).toEqual({ kind: "storage-full" });
+    vi.unstubAllGlobals();
   });
 
   it("the message names the plan's storage limit (no fixed number) and what to do", () => {

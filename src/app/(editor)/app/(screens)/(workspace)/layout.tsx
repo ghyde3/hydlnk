@@ -96,6 +96,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
       chrome={pageChrome(plan, current.id)}
       draft={data.draft}
       revKey={data.revKey}
+      home={data.home}
       repaired={data.repaired}
       hasPublished={data.hasPublished}
       published={data.published}

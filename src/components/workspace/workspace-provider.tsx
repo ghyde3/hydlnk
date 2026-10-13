@@ -15,6 +15,7 @@ import {
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { checkTap, type PreviewTap } from "@/components/editor/preview-taps";
 import { useAutosave } from "@/components/editor/use-autosave";
+import type { HomeEntryRef } from "@/lib/editor/save-client";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { useUndoRedo } from "@/components/editor/use-undo-redo";
 import { useSitePages, type SubPageInit } from "@/components/site/use-site-pages";
@@ -69,6 +70,8 @@ export interface WorkspaceProviderProps {
   // layout's `key`) starts over.
   draft: DraftDoc;
   revKey: string | null;
+  /** Home's page entry (id and rev) when the site has one: Home's blocks are saved there (1b1-17). */
+  home: HomeEntryRef | null;
   repaired: boolean;
   hasPublished: boolean;
   published: PublishDoc | null;
@@ -111,6 +114,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const [initial] = useState(() => ({
     draft: props.draft,
     revKey: props.revKey,
+    home: props.home,
     repaired: props.repaired,
     hasPublished: props.hasPublished,
     published: props.published,
@@ -141,7 +145,12 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [editDraft],
   );
 
-  const autosave = useAutosave({ pageId, draft, initialRevKey: initial.revKey });
+  const autosave = useAutosave({
+    pageId,
+    draft,
+    initialRevKey: initial.revKey,
+    home: initial.home,
+  });
   const { flush, savedDraft, currentStatus, blocked } = autosave;
 
   // The site's sub-pages (M11-08): their own settings, block editors and save queue; the menu is

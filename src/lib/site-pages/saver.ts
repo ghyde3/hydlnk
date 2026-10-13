@@ -5,9 +5,9 @@ import { jsonbTextBytes } from "@/lib/editor/size";
 /**
  * The autosave of sub-pages (M11-08): one debounced queue for all the sub-pages of the open site.
  * Home's draft keeps its own `AutosaveQueue` (a stale-tab guard on `draft->>rev`); a sub-page has no
- * rev in its document, so its revision is the row's `updated_at` (M15-01, the notion MCP's writer
- * uses): `save-client.ts` updates the row only while `updated_at` is what the editor last loaded or
- * saved. A write that matches nothing on a page that still exists is a "conflict": saving stops, the
+ * rev in its document, so its revision is its page entry's `rev` (M15-01, 1b1-17, the notion MCP's
+ * writer uses): `save-client.ts` posts to the entry save route only while `rev` is what the editor
+ * last loaded or saved. A write that matches nothing on a page that still exists is a "conflict": saving stops, the
  * edits stay on screen and in the queue, the screen asks for a reload, and nothing is overwritten
  * (a change made through MCP, or in another tab, wins until the owner reloads). The queue
  * follows the same rules as Home's: about 800 ms after the last edit, a failed write is retried with
