@@ -1907,6 +1907,8 @@ export type Database = {
         Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
         Returns: number
       }
+      reverse_all_content: { Args: never; Returns: Json }
+      reverse_site_content: { Args: { p_site: string }; Returns: Json }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
       rollup_recent_days: { Args: { n: number }; Returns: number }
       run_domain_verification_sweep: { Args: never; Returns: undefined }
