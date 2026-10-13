@@ -185,7 +185,9 @@ select throws_ok(
     select '00000000-0000-4000-8000-00000191a001', p_page, jsonb_build_object('title', repeat('z', 1000)) from t191$$,
   'HL009', null, 'pro: passing 1 GiB is refused');
 
--- Sub-pages and entries share one total and one cap.
+-- Sub-pages and entries share one total and one cap. (Site f has a Home entry, so the stage 1b
+-- frozen-copy guard on site_pages is off for this check: it is about bytes, not about the move.)
+alter table public.site_pages disable trigger enforce_content_moved;
 insert into public.site_pages (id, page_id, draft)
   values ('00000000-0000-4000-8000-00000191f0a1', '00000000-0000-4000-8000-00000191f001', '{"path":"menu","title":"m"}');
 select is(pg_temp.total('f'), 67108864::bigint - 400 + public.site_page_doc_bytes('{"path":"menu","title":"m"}', null),
@@ -196,6 +198,7 @@ select throws_ok(
     values ('00000000-0000-4000-8000-00000191f0a2', '00000000-0000-4000-8000-00000191f001',
             jsonb_build_object('path', 'big', 'title', repeat('q', 1000)))$$,
   'HL009', null, 'a sub-page is held to the same cap');
+alter table public.site_pages enable trigger enforce_content_moved;
 
 -- Deleting a site frees what its entries hold.
 update public.account_site_bytes set bytes = pg_temp.actual('p')

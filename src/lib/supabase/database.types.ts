@@ -1680,6 +1680,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      content_move_active: { Args: never; Returns: boolean }
       end_expired_gifts: {
         Args: never
         Returns: {
@@ -1914,6 +1915,7 @@ export type Database = {
           sub_page_id: string
         }[]
       }
+      site_has_home_entry: { Args: { p_site: string }; Returns: boolean }
       site_page_doc_bytes: {
         Args: { p_draft: Json; p_published: Json }
         Returns: number

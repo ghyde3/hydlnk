@@ -53,9 +53,11 @@ join t201 t on t.site_id = e.site::uuid;
 update public.content_entries set deleted_at = now() where id = '00000000-0000-4000-8000-00000201a0e3';
 
 -- Home design: the row already holds a published copy with its own (frozen) blocks.
+select set_config('hydlnk.content_move', 'on', true);
 update public.pages
   set published = '{"version":1,"marker":"old","blocks":[{"id":"frozen"}]}', published_at = '2026-02-01 10:00:00+00'
   where id = '00000000-0000-4000-8000-00000201a001';
+select set_config('hydlnk.content_move', 'off', true);
 
 create temp table before201 as
 select (select published -> 'blocks' from public.pages where id = '00000000-0000-4000-8000-00000201a001')::text as frozen_blocks;
