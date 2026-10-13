@@ -1703,6 +1703,8 @@ export type Database = {
           retry_after: number
         }[]
       }
+      move_all_content: { Args: never; Returns: Json }
+      move_site_content: { Args: { p_site: string }; Returns: Json }
       oauth_bind_request: {
         Args: { p_csrf_hash: string; p_id: string; p_user: string }
         Returns: {
