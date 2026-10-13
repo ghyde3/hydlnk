@@ -198,3 +198,36 @@ export function mergeHomePublished(design: unknown, home: PublishedHome | null):
   const blocks = (home.published as { blocks?: unknown } | null)?.blocks;
   return { ...(design as Record<string, unknown>), blocks };
 }
+
+/** A page entry of the site with its place in the trash, for the readers that must see trashed pages too. */
+export interface PageEntryRow {
+  id: string;
+  rev: number;
+  deletedAt: string | null;
+  draft: unknown;
+}
+
+/**
+ * Every page entry of the site, Home and trashed ones included (a version restore needs to know which
+ * of its pages are live, in the trash or gone).
+ */
+export async function listAllPageEntriesWithClient(
+  client: Db,
+  siteId: string,
+): Promise<PageEntryRow[]> {
+  if (!UUID.test(siteId)) return [];
+  const typeId = await pageTypeId(client, siteId);
+  if (!typeId) return [];
+  const { data, error } = await client
+    .from("content_entries")
+    .select("id, rev, deleted_at, draft")
+    .eq("site_id", siteId)
+    .eq("type_id", typeId);
+  if (error) throw new Error(`Loading the pages of site ${siteId} failed: ${error.message}`);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    rev: Number(row.rev),
+    deletedAt: row.deleted_at,
+    draft: row.draft,
+  }));
+}

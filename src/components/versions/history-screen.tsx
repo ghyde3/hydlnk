@@ -6,6 +6,7 @@ import type { PageChrome } from "@/components/page/page-renderer";
 import { readDraft, undoRestore, type SavedDraft } from "@/lib/versions/client";
 import { loadVersionPreview, restorePageVersion } from "@/lib/versions/actions";
 import type { HistoryRow } from "@/lib/versions/load";
+import type { RestoredEntry } from "@/lib/versions/types";
 import {
   EMPTY_MESSAGE,
   UNDONE,
@@ -66,7 +67,12 @@ export function HistoryScreen({
   /** A restore is on its way: a second press (double click) sends nothing. */
   const running = useRef(false);
   /** The draft read just before the restore, and what `hasUnpublished` was then: what Undo puts back. */
-  const undoState = useRef<{ saved: SavedDraft; unpublished: boolean; id: string } | null>(null);
+  const undoState = useRef<{
+    saved: SavedDraft;
+    unpublished: boolean;
+    id: string;
+    entries: RestoredEntry[];
+  } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -119,7 +125,9 @@ export function HistoryScreen({
         const saved = await readDraft(pageId);
         const result = await restorePageVersion(pageId, row.id);
         if (result.ok) {
-          undoState.current = saved ? { saved, unpublished, id: row.id } : null;
+          undoState.current = saved
+            ? { saved, unpublished, id: row.id, entries: result.entries }
+            : null;
           // The draft is now this version: it differs from the live page unless this is the live one.
           setUnpublished(!row.live);
           const message = restoredMessage(
@@ -127,8 +135,8 @@ export function HistoryScreen({
             result.missingImages,
             result.pagesRestored,
           );
-          // Undo snapshots Home's draft only: after other pages were written it is not offered.
-          const canUndo = saved !== null && result.pagesRestored === 0;
+          // Undo puts drafts back: after a deleted page was brought back it is not offered.
+          const canUndo = saved !== null && result.recreated === 0;
           if (!canUndo) undoState.current = null;
           setRestore({
             phase: "finished",
@@ -138,7 +146,7 @@ export function HistoryScreen({
               message,
               canUndo,
               undoing: false,
-              ...(result.pagesRestored > 0 ? { note: UNDO_UNAVAILABLE_PAGES } : {}),
+              ...(result.recreated > 0 ? { note: UNDO_UNAVAILABLE_PAGES } : {}),
               ...(result.notRestored.length > 0
                 ? {
                     notRestored: {
@@ -197,7 +205,7 @@ export function HistoryScreen({
     );
     if (undoTimer.current) clearTimeout(undoTimer.current);
     try {
-      const outcome = await undoRestore(pageId, kept.saved);
+      const outcome = await undoRestore(pageId, kept.saved, kept.entries);
       if (outcome === "ok") {
         undoState.current = null;
         setUnpublished(kept.unpublished);

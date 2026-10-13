@@ -1,4 +1,4 @@
-export type ContentSource = "editor" | "mcp" | "builder";
+export type ContentSource = "editor" | "mcp" | "builder" | "system";
 
 /** Who is writing: a verified session or token user (never request input) and where the call came from. */
 export interface ContentActor {

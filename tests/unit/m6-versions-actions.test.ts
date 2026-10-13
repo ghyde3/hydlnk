@@ -449,6 +449,8 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 0,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const written = writes(calls);
@@ -506,6 +508,8 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 5,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const draft = (
@@ -565,6 +569,8 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 2,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     expect(asked).toEqual(expect.arrayContaining([THUMB, SHARE_PIC]));
@@ -588,6 +594,8 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 0,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;

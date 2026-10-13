@@ -8,11 +8,16 @@ import {
   draftSubPageSchema,
   publishedDocSchema,
   type PublishDoc,
+  type SubPageDraft,
 } from "@/lib/document";
 import { jsonbTextBytes } from "@/lib/editor/size";
 import { PLAN_LIMITS, toPlanId } from "@/lib/limits";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
 import { mediaOrigin } from "@/lib/media/url";
+import { createEntryWithClient, updateEntryWithClient } from "@/lib/content/entries-core";
+import { listAllPageEntriesWithClient, type PageEntryRow } from "@/lib/site/page-entries-core";
+import { restoreEntryWithClient } from "@/lib/content/trash-core";
+import type { ContentFailure } from "@/lib/content/types";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
@@ -31,6 +36,7 @@ import type {
   NotRestoredPage,
   PreviewResult,
   PreviewSubPage,
+  RestoredEntry,
   RestoreResult,
   VersionFailureReason,
 } from "./types";
@@ -304,18 +310,20 @@ export async function loadVersionPreviewCore(
 }
 
 /**
- * Restore (M6-49, M12-04): writes the version into the DRAFT and nothing else. From M2 a version
- * holds Home, the menu and every live sub-page, so Home's draft is written first (with its rev
- * guard, the one that stops everything) and then the draft of each of the version's pages that
- * still exists, each guarded by the `updated_at` it was read with. A page deleted since, saved
- * meanwhile, listed on the blocklist now or unreadable is returned in `notRestored` with the
- * reason and left as it is. A stale editor tab with unsaved sub-page edits cannot
- * overwrite a restore: its save is checked against the row's `updated_at` (M15-01) and becomes
- * a conflict.
- * `pages.published`,
- * `published_at`, `page_versions`, the themes and Storage are untouched and no cache tag is
- * expired, so the live page does not change; the owner reviews the draft in the editor and
- * publishes when ready.
+ * Restore (M6-49, M12-04, 1b1-21): writes the version into the DRAFTS and nothing else. A version
+ * keeps its shape (Home's document with its blocks, and every live sub-page), and Home is two stored
+ * documents since the content move: Home's blocks go to the '/' page entry through the content writer
+ * (source `system`, guarded by the rev read), then the design to `pages.draft` with its rev guard (the
+ * frozen blocks there stay as they are). A conflict on either stops everything before the pages. Then
+ * each of the version's pages: a live page takes the draft through the writer under its rev; a page in
+ * the trash is brought back first; a page removed for good is made again under its old id (the menu
+ * and page links name it). A page saved meanwhile, listed on the blocklist now or unreadable is
+ * returned in `notRestored` with the reason and left as it is. A stale editor tab with unsaved edits
+ * cannot overwrite a restore: its save is checked against the entry's rev (or `pages.draft`'s) and
+ * becomes a conflict. The result lists the revs the entries now have, for Undo.
+ * `pages.published`, the published copies of the entries, `published_at`, `page_versions`, the themes
+ * and Storage are untouched and no cache tag is expired, so the live page does not change; the owner
+ * reviews the draft in the editor and publishes when ready.
  *
  *   - the draft is the version's profile, blocks (ids kept, all visible, in order) and theme, with
  *     `rev` one past the stored one, so an editor tab open on the old draft meets the stale-tab
@@ -328,9 +336,10 @@ export async function loadVersionPreviewCore(
  *   - the draft is parsed with `draftDocSchema` and checked against the draft size cap
  *     (`LIMITS.draftBytes`, the database's own line), and the link blocklist is asked about it
  *     (`blocked_link` with the hosts) before anything is written;
- *   - the write is filtered on the page id, the owner id and the draft rev read at the start, and
- *     goes through the same `pages` triggers as any draft save: a draft that changed in between
- *     (another tab saved, or a second restore ran first) matches no row and is `conflict`.
+ *   - the design write is filtered on the page id, the owner id and the draft rev read at the start,
+ *     and goes through the same `pages` triggers as any draft save: a draft that changed in between
+ *     (another tab saved, or a second restore ran first) matches no row and is `conflict`. A site with
+ *     no Home entry (an old test layout) keeps the whole document in `pages.draft`.
  */
 export async function restorePageVersionCore(
   input: VersionInput,
@@ -340,7 +349,7 @@ export async function restorePageVersionCore(
   if (!opened.ok) return opened;
   const open = opened.value;
   const ids = { page: open.pageId, version: open.version.id };
-  const failed = (reason: VersionFailureReason): RestoreResult => {
+  const failed = (reason: VersionFailureReason | "conflict"): RestoreResult => {
     logFailure("restore", reason, ids);
     return { ok: false, reason };
   };
@@ -377,23 +386,21 @@ export async function restorePageVersionCore(
     return failed("error");
   }
 
-  // The sub-pages (M12-04): which of the version's pages still exist, and what each draft will be.
-  // A page that is gone, or whose draft cannot be written, is listed, never a reason to stop.
-  let siteRows: { id: string; updated_at: string }[];
+  // The page entries of the site (1b1-21): Home's '/' entry and every sub-page, trashed ones included.
+  let rows: PageEntryRow[];
   try {
-    siteRows = await loadSiteRows(open);
+    rows = await listAllPageEntriesWithClient(open.admin, open.pageId);
   } catch {
     return failed("error");
   }
+  const homeRow = rows.find((row) => row.deletedAt === null && isHomeDraft(row.draft)) ?? null;
+
+  // The sub-pages (M12-04): what each page's draft will be. A page whose draft cannot be written is
+  // listed, never a reason to stop.
   const notRestored: NotRestoredPage[] = [];
-  const plans: { page: PreviewSubPage; rowUpdatedAt: string; draft: unknown }[] = [];
+  const plans: { page: PreviewSubPage; draft: SubPageDraft }[] = [];
   for (const page of result.subPages) {
-    const row = siteRows.find((candidate) => candidate.id === page.id);
     const base = { id: page.id, path: page.path, title: page.title };
-    if (!row) {
-      notRestored.push({ ...base, reason: "deleted" });
-      continue;
-    }
     const subDraft = draftSubPageSchema.safeParse(versionToSubPageDraft(page.doc));
     if (!subDraft.success || jsonbTextBytes(subDraft.data) > LIMITS.draftBytes) {
       notRestored.push({ ...base, reason: "error" });
@@ -408,13 +415,42 @@ export async function restorePageVersionCore(
     } catch {
       return failed("error");
     }
-    plans.push({ page, rowUpdatedAt: row.updated_at, draft: subDraft.data });
+    plans.push({ page, draft: subDraft.data });
   }
 
-  // Home first, guarded by its rev: a conflict stops everything, nothing is written.
+  const actor = { userId: open.ownerId, source: "system" } as const;
+  const entries: RestoredEntry[] = [];
+
+  // Home's blocks first, to the '/' entry under the rev read: a refusal or a conflict stops
+  // everything and nothing else is written. Home keeps its own path, title and description.
+  if (homeRow) {
+    const stored = homeRow.draft as Record<string, unknown>;
+    const wrote = await updateEntryWithClient(open.admin, {
+      actor,
+      entryId: homeRow.id,
+      expectedRev: homeRow.rev,
+      draft: { ...stored, blocks: draft.data.blocks },
+    });
+    if (!wrote.ok) {
+      if (wrote.error === "blocked_link") {
+        logFailure("restore", "blocked_link", ids);
+        return { ok: false, reason: "blocked_link", hosts: wrote.hosts ?? [] };
+      }
+      if (wrote.error === "conflict") return failed("conflict");
+      if (wrote.error === "account_suspended") return failed("account_suspended");
+      console.error(`[versions] restore error write=${wrote.error} page=${open.pageId}`);
+      return failed("error");
+    }
+    entries.push({ id: homeRow.id, rev: wrote.rev });
+  }
+
+  // The design to `pages.draft`, guarded by its rev (the stale-tab guard). The blocks there are the
+  // frozen copy and stay as they are once Home is an entry.
+  const frozen = (open.draft as { blocks?: unknown } | null)?.blocks ?? [];
+  const designDraft = homeRow ? { ...draft.data, blocks: frozen } : draft.data;
   const update = open.admin
     .from("pages")
-    .update({ draft: draft.data as unknown as Json })
+    .update({ draft: designDraft as unknown as Json })
     .eq("id", open.pageId)
     .eq("owner_id", open.ownerId);
   const written = await (
@@ -440,42 +476,72 @@ export async function restorePageVersionCore(
     return { ok: false, reason: "conflict" };
   }
 
-  // Then each page that still exists, guarded by the `updated_at` it had when it was read (sub-page
-  // drafts carry no rev). A page saved in between matches no row and is listed as changed.
+  // Then each page: its entry when it is live, brought back from the trash when it is there, made
+  // again under its old id (menu entries and page links name it) when it is gone.
   let pagesRestored = 0;
+  let recreated = 0;
   for (const plan of plans) {
     const base = { id: plan.page.id, path: plan.page.path, title: plan.page.title };
-    const res = await open.admin
-      .from("site_pages")
-      .update({ draft: plan.draft as Json })
-      .eq("id", plan.page.id)
-      .eq("page_id", open.pageId)
-      .eq("updated_at", plan.rowUpdatedAt)
-      .select("id");
-    if (res.error) {
-      const refusal = readBlockedLinkError(res.error);
-      if (refusal) {
-        notRestored.push({ ...base, reason: "blocked_link", hosts: refusal.hosts });
+    const row = rows.find((candidate) => candidate.id === plan.page.id);
+    let rev: number | null = null;
+    let refusal: ContentFailure | null = null;
+
+    if (row && (row === homeRow || isHomeDraft(row.draft))) {
+      notRestored.push({ ...base, reason: "error" });
+      continue;
+    }
+    if (!row) {
+      const made = await createEntryWithClient(open.admin, {
+        actor,
+        siteId: open.pageId,
+        typeKey: "page",
+        draft: plan.draft,
+        id: plan.page.id,
+      });
+      if (made.ok) {
+        rev = made.rev;
+        recreated += 1;
+      } else refusal = made;
+    } else {
+      let expected = row.rev;
+      if (row.deletedAt !== null) {
+        const back = await restoreEntryWithClient(open.admin, {
+          actor,
+          entryId: row.id,
+          expectedRev: row.rev,
+        });
+        if (back.ok) {
+          expected = back.rev;
+          recreated += 1;
+        } else refusal = back;
+      }
+      if (!refusal) {
+        const wrote = await updateEntryWithClient(open.admin, {
+          actor,
+          entryId: row.id,
+          expectedRev: expected,
+          draft: plan.draft,
+        });
+        if (wrote.ok) rev = wrote.rev;
+        else refusal = wrote;
+      }
+    }
+
+    if (refusal || rev === null) {
+      if (refusal?.error === "blocked_link") {
+        notRestored.push({ ...base, reason: "blocked_link", hosts: refusal.hosts ?? [] });
+      } else if (refusal?.error === "conflict") {
+        notRestored.push({ ...base, reason: "changed" });
       } else {
         console.error(
-          `[versions] restore error write=${res.error.code ?? "unknown"} page=${open.pageId} version=${open.version.id}`,
+          `[versions] restore error write=${refusal?.error ?? "unknown"} page=${open.pageId} version=${open.version.id}`,
         );
         notRestored.push({ ...base, reason: "error" });
       }
       continue;
     }
-    if (res.data && res.data.length > 0) {
-      pagesRestored += 1;
-      continue;
-    }
-    // No row matched: deleted since it was read, or saved since.
-    let stillThere = true;
-    try {
-      stillThere = (await loadSiteRows(open)).some((row) => row.id === plan.page.id);
-    } catch {
-      // Cannot tell: "changed" is the safe word, the page was not written either way.
-    }
-    notRestored.push({ ...base, reason: stillThere ? "changed" : "deleted" });
+    entries.push({ id: plan.page.id, rev });
+    pagesRestored += 1;
   }
   if (notRestored.length > 0) logFailure("restore", "partial", ids);
   return {
@@ -483,16 +549,10 @@ export async function restorePageVersionCore(
     restored: open.version.versionNo,
     missingImages: result.missingImages,
     pagesRestored,
+    recreated,
+    entries,
     notRestored: notRestored.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
   };
 }
 
-/** The site's sub-pages as they are now: the ids and the exact `updated_at` strings (never parsed as dates). */
-async function loadSiteRows(open: OpenVersion): Promise<{ id: string; updated_at: string }[]> {
-  const { data, error } = await open.admin
-    .from("site_pages")
-    .select("id, updated_at")
-    .eq("page_id", open.pageId);
-  if (error) throw new Error(`reading the site's pages failed (${error.code ?? "unknown"})`);
-  return data;
-}
+const isHomeDraft = (draft: unknown): boolean => (draft as { path?: unknown } | null)?.path === "/";

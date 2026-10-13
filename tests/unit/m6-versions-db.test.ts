@@ -351,6 +351,8 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
         restored: 1,
         missingImages: 0,
         pagesRestored: 0,
+        recreated: 0,
+        entries: [],
         notRestored: [],
       });
 
@@ -474,6 +476,8 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
         restored: 1,
         missingImages: 2,
         pagesRestored: 0,
+        recreated: 0,
+        entries: [],
         notRestored: [],
       });
       const draft = draftDocSchema.parse((await draftOfPage(a)).draft);

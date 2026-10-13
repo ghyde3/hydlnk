@@ -52,7 +52,14 @@ function canonical(value: unknown): string {
 
 export async function createEntryWithClient(
   admin: Admin,
-  input: { actor: ContentActor; siteId: string; typeKey: string; draft: unknown },
+  input: {
+    actor: ContentActor;
+    siteId: string;
+    typeKey: string;
+    draft: unknown;
+    /** Make the entry under this id (a page brought back by a version restore keeps its old id). */
+    id?: string;
+  },
 ): Promise<ContentResult<{ id: string; rev: number; updatedAt: string }>> {
   const { actor } = input;
   const account = await activeAccount(admin, actor.userId);
@@ -66,7 +73,12 @@ export async function createEntryWithClient(
 
   const inserted = await admin
     .from("content_entries")
-    .insert({ site_id: site.site.id, type_id: type.type.id, draft: input.draft as Json })
+    .insert({
+      ...(input.id === undefined ? {} : { id: input.id }),
+      site_id: site.site.id,
+      type_id: type.type.id,
+      draft: input.draft as Json,
+    })
     .select("id, rev, updated_at")
     .single();
   if (inserted.error) return mapDbError(inserted.error);

@@ -65,9 +65,9 @@ export function restoredMessage(
   return `${head} ${tail}`;
 }
 
-/** Why Undo is not offered after a restore that wrote other pages (it only snapshots Home's draft). */
+/** Why Undo is not offered after a restore that brought deleted pages back (Undo only puts drafts back). */
 export const UNDO_UNAVAILABLE_PAGES =
-  "Undo isn’t available after other pages were restored. Open the editor to review them.";
+  "Undo isn’t available after deleted pages were brought back. Open the editor to review them.";
 
 export function notRestoredHeading(count: number): string {
   return count === 1 ? "1 page was not restored:" : `${count} pages were not restored:`;
