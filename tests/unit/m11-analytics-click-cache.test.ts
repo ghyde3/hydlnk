@@ -66,6 +66,8 @@ vi.mock("@/lib/supabase/admin", () => ({
       const chain: Record<string, unknown> = {
         select: () => chain,
         not: () => chain,
+        is: () => chain,
+        neq: () => chain,
         order: () => chain,
         eq: (column: string, value: unknown) => {
           filters.set(column, value);
@@ -73,6 +75,21 @@ vi.mock("@/lib/supabase/admin", () => ({
         },
         maybeSingle: async () => {
           if (table === "pages") return { data: state.pages, error: null };
+          // 1b1-13: the page entries. The page type first, then Home's entry (live_path "/") or one sub-page.
+          if (table === "content_types") return { data: { id: "type-page" }, error: null };
+          if (filters.get("live_path") === "/") {
+            const home = (state.pages as { published: { blocks: unknown } } | null)?.published;
+            return {
+              data: home
+                ? {
+                    id: "entry-home",
+                    published: { path: "/", title: "", description: "", blocks: home.blocks },
+                    published_at: "2026-10-01T00:00:00Z",
+                  }
+                : null,
+              error: null,
+            };
+          }
           const id = filters.get("id") as string;
           const published = state.subs.get(id);
           return {
@@ -123,7 +140,6 @@ function setSite(home: unknown, subs: Array<{ id: string; blocks: unknown[]; pad
     handle: "mara",
     accounts: { suspended_at: null },
     domains: [],
-    site_pages: [...state.subs].map(([id, published]) => ({ id, published, published_at: "x" })),
   };
 }
 

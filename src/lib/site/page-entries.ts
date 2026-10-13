@@ -192,6 +192,17 @@ export async function getHomeDraftWithClient(
   return { entryId: data.id, rev: Number(data.rev), draft: data.draft };
 }
 
+/**
+ * One site document for the readers that still think in `PublishDoc` terms: the site row's design
+ * (`pages.published`, whose frozen `blocks` are dropped) with the blocks of Home's published entry.
+ * Null when the site row or Home has nothing published.
+ */
+export function mergeHomePublished(design: unknown, home: PublishedHome | null): unknown {
+  if (design === null || design === undefined || !home) return null;
+  const blocks = (home.published as { blocks?: unknown } | null)?.blocks;
+  return { ...(design as Record<string, unknown>), blocks };
+}
+
 export async function getPublishedHome(siteId: string): Promise<PublishedHome | null> {
   return getPublishedHomeWithClient(await adminClient(), siteId);
 }
