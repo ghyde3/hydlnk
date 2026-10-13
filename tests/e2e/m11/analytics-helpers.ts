@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { adminClient } from "../fixtures/auth";
+import { addPageEntry } from "../m15/entry-helpers";
 import { dayAt, rollUp } from "../m4/analytics-dash-helpers";
 import {
   getClick,
@@ -24,7 +25,7 @@ export interface SubPage {
   id: string;
 }
 
-/** A sub-page row of `site`: published (live) or a draft only. */
+/** A sub-page entry of `site`: published (live) or a draft only. */
 export async function addSubPage(
   site: IngestPage,
   opts: { path: string; title?: string; live?: boolean; link?: boolean },
@@ -48,17 +49,7 @@ export async function addSubPage(
             },
           ],
   };
-  const { data, error } = await adminClient()
-    .from("site_pages")
-    .insert({
-      page_id: site.pageId,
-      draft: doc,
-      ...(live ? { published: doc, published_at: new Date().toISOString() } : {}),
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(`adding a sub-page failed: ${error.message}`);
-  return { id: data.id as string };
+  return { id: await addPageEntry(site.pageId, doc, { live }) };
 }
 
 /**

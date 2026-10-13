@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { addPageEntry, seedHome, subPageEntries } from "../m15/entry-helpers";
 import { emptyUser, openEditor, pageRow } from "../m2/editor-helpers";
 
 /**
@@ -38,14 +39,9 @@ async function seed(siteId: string) {
     { path: "beta", title: "Beta", blocks: [block("betahdr001", "Beta")] },
     { path: "gamma", title: "Gamma", blocks: [block("gammahdr01", "Gamma")] },
   ];
-  const inserted = await admin
-    .from("site_pages")
-    .insert(rows.map((r) => ({ page_id: siteId, draft: { ...r, description: "" } })))
-    .select("id, draft");
-  expect(inserted.error).toBeNull();
-  const ids = ["alpha", "beta", "gamma"].map(
-    (path) => inserted.data!.find((r) => (r.draft as { path: string }).path === path)!.id as string,
-  );
+  await seedHome(siteId);
+  const ids: string[] = [];
+  for (const r of rows) ids.push(await addPageEntry(siteId, { ...r, description: "" }));
   const draft = (await pageRow(siteId)).draft as unknown as Record<string, unknown>;
   await admin
     .from("pages")
@@ -92,21 +88,10 @@ test("M12-08 states, duplicate and drag to reorder", async ({ page, context }) =
   await expect(rowTitled(page, "Alpha copy")).toBeVisible();
   await expect(stateOf(page, "Alpha copy")).toHaveText("Not published yet");
   await expect(rowTitled(page, "Alpha copy")).toContainText("/alpha-copy");
-  await expect
-    .poll(async () => {
-      const { data } = await adminClient()
-        .from("site_pages")
-        .select("id, draft, published")
-        .eq("page_id", user.pageId);
-      return data!.length;
-    })
-    .toBe(4);
-  const { data: all } = await adminClient()
-    .from("site_pages")
-    .select("id, draft, published")
-    .eq("page_id", user.pageId);
-  const copy = all!.find((r) => (r.draft as { path: string }).path === "alpha-copy")!;
-  const original = all!.find((r) => r.id === ids[0])!;
+  await expect.poll(async () => (await subPageEntries(user.pageId)).length).toBe(4);
+  const all = await subPageEntries(user.pageId);
+  const copy = all.find((r) => (r.draft as { path: string }).path === "alpha-copy")!;
+  const original = all.find((r) => r.id === ids[0])!;
   type Doc = { blocks: { id: string; items?: { id: string }[] }[]; title: string };
   const copyDoc = copy.draft as Doc;
   const originalDoc = original.draft as Doc;
@@ -146,11 +131,9 @@ test("M12-08 states, duplicate and drag to reorder", async ({ page, context }) =
 
 test("M12-08 Duplicate page is not offered at the plan's limit", async ({ page, context }) => {
   const user = await emptyUser(context, "pol");
-  const admin = adminClient();
-  await admin.from("site_pages").insert([
-    { page_id: user.pageId, draft: { path: "one", title: "One", description: "", blocks: [] } },
-    { page_id: user.pageId, draft: { path: "two", title: "Two", description: "", blocks: [] } },
-  ]);
+  await seedHome(user.pageId);
+  await addPageEntry(user.pageId, { path: "one", title: "One" });
+  await addPageEntry(user.pageId, { path: "two", title: "Two" });
   await openEditor(page);
   await page.getByTestId("page-row").filter({ hasText: "One" }).first().click();
   await expect(page.getByTestId("duplicate-page-limit")).toBeVisible();

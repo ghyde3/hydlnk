@@ -5,6 +5,7 @@ import { rawRequest } from "../fixtures/http";
 import { setOwnerSuspended } from "../fixtures/expire";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
+import { addPageEntry, subPageEntries, writeEntry } from "../m15/entry-helpers";
 import { emptyUser, openEditor, pageRow } from "../m2/editor-helpers";
 import {
   BACK_PAGE_LINK,
@@ -51,10 +52,7 @@ test.describe("M11-05 a whole-site Publish from the editor", () => {
       .poll(async () => (await pageRow(site.pageId)).published !== null, { timeout: 30_000 })
       .toBe(true);
 
-    const { data } = await adminClient()
-      .from("site_pages")
-      .select("id, live_path, published_at")
-      .eq("page_id", site.pageId);
+    const data = await subPageEntries(site.pageId);
     expect(data?.map((row) => row.live_path).sort()).toEqual([DIRECTIONS.path, ITEMS.path]);
     expect(data?.every((row) => row.published_at !== null)).toBe(true);
 
@@ -117,8 +115,10 @@ test.describe("M11-08 deleting a page of the menu from the editor", () => {
 
     // Home's draft menu no longer lists it (the autosave of Home), and the row is gone.
     await expect.poll(navOf, { timeout: 15_000 }).toEqual([site.directionsId]);
-    const rows = await adminClient().from("site_pages").select("id").eq("page_id", site.pageId);
-    expect(rows.data?.map((row) => row.id)).toEqual([site.directionsId]);
+    const rows = await subPageEntries(site.pageId);
+    expect(rows.filter((row) => row.deleted_at === null).map((row) => row.id)).toEqual([
+      site.directionsId,
+    ]);
 
     // Live, on the very next request: the page is 404 and the menu lists only the other page.
     expect((await get(host, `/${ITEMS.path}`)).status).toBe(404);
@@ -207,15 +207,7 @@ test.describe("M11-06 a path that is not a live page answers the branded 404", (
   }, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("nf", { plan: "pro" });
-    const draftOnly = await adminClient()
-      .from("site_pages")
-      .insert({
-        page_id: site.pageId,
-        draft: { path: "later", title: "Later", description: "", blocks: [] },
-      })
-      .select("id")
-      .single();
-    expect(draftOnly.error).toBeNull();
+    await addPageEntry(site.pageId, { path: "later", title: "Later" });
 
     expect((await get(tenantHost(site), `/${ITEMS.path}`)).status).toBe(200);
     for (const path of [
@@ -375,12 +367,7 @@ test.describe("M11-10 sitemap, robots and the head", () => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("sm", { plan: "pro" });
     // A page that is not live stays out of the sitemap.
-    await adminClient()
-      .from("site_pages")
-      .insert({
-        page_id: site.pageId,
-        draft: { path: "later", title: "Later", description: "", blocks: [] },
-      });
+    await addPageEntry(site.pageId, { path: "later", title: "Later" });
     const sitemap = await get(tenantHost(site), "/sitemap.xml");
     expect(sitemap.status).toBe(200);
     expect(sitemap.headers["content-type"]).toContain("application/xml");
@@ -497,18 +484,12 @@ test.describe("M11-05 behaviour after a publish", () => {
   test("M11-05 editing a published page's draft changes nothing live; a page created later is not live", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("ed", { plan: "pro" });
-    const admin = adminClient();
-    await admin
-      .from("site_pages")
-      .update({ draft: { path: ITEMS.path, title: "Edited title", description: "", blocks: [] } })
-      .eq("id", site.itemsId);
+    await writeEntry(site.itemsId, {
+      draft: { path: ITEMS.path, title: "Edited title", description: "", blocks: [] },
+    });
     const items = (await get(tenantHost(site), `/${ITEMS.path}`)).body;
     expect(h1s(items)).toEqual([ITEMS.title]);
-    const created = await admin.from("site_pages").insert({
-      page_id: site.pageId,
-      draft: { path: "fresh", title: "Fresh", description: "", blocks: [] },
-    });
-    expect(created.error).toBeNull();
+    await addPageEntry(site.pageId, { path: "fresh", title: "Fresh" });
     expect((await get(tenantHost(site), "/fresh")).status).toBe(404);
   });
 
