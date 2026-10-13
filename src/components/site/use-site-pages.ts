@@ -545,12 +545,14 @@ export function useSitePages(args: {
     const current = formsRef.current;
     setPublishedForms(new Map(current));
     setLivePaths(new Map([...current].map(([id, form]) => [id, form.path])));
-  }, []);
+    void revisions.refresh(siteId);
+  }, [revisions, siteId]);
 
   const markUnpublished = useCallback(() => {
     setPublishedForms(new Map());
     setLivePaths(new Map());
-  }, []);
+    void revisions.refresh(siteId);
+  }, [revisions, siteId]);
 
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({

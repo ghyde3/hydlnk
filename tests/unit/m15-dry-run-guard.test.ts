@@ -1,8 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  countsSql,
   diffSnapshots,
   isLocalUrl,
   main,
@@ -42,7 +44,6 @@ function counts(site: string, extra: Record<string, unknown> = {}): string {
     navTargets: ["p-" + site],
     pageLinkTargets: [{ path: "/", target: "home" }],
     pageVersions: 3,
-    accountSiteBytes: 1234,
     pageTotal: 2,
     pagesPerSite: 3,
     ...extra,
@@ -54,6 +55,7 @@ function fakes(opts: {
   flipByte?: boolean;
   countsExtra?: Record<string, unknown>;
   violations?: string[];
+  bytes?: number;
 }): Fakes {
   const fetch = vi.fn(async (req: { host: string; path: string }) => {
     let body = Buffer.from(`body of ${req.host}${req.path}`);
@@ -74,6 +76,7 @@ function fakes(opts: {
       const site = text.includes(SITE_A) ? SITE_A : SITE_B;
       return counts(site, text.includes(SITE_B) ? opts.countsExtra : {});
     }
+    if (text.includes("-- bytes")) return String(opts.bytes ?? 1234);
     if (text.includes("-- check")) return JSON.stringify(opts.violations ?? []);
     throw new Error("unexpected sql: " + text);
   });
@@ -154,6 +157,15 @@ describe("dry run guard and diff", () => {
     expect(diffSnapshots(dir, "a", "b").differing).toEqual([SITE_B]);
   });
 
+  it("does not diff account_site_bytes, which the move changes on purpose", async () => {
+    await main(["snapshot", "--phase", "a"], LOCAL_ENV, fakes({ out: dir, bytes: 2050 }).deps);
+    await main(["snapshot", "--phase", "b"], LOCAL_ENV, fakes({ out: dir, bytes: 5717 }).deps);
+    expect(diffSnapshots(dir, "a", "b").differing).toEqual([]);
+    const written = JSON.parse(readFileSync(join(dir, "b", SITE_A, "account-bytes.json"), "utf8"));
+    expect(written).toEqual({ accountSiteBytes: 5717 });
+    expect(readFileSync(join(dir, "b", SITE_A, "counts.json"), "utf8")).not.toContain("accountSiteBytes");
+  });
+
   it("fails when a site or a file is missing from one side", async () => {
     await main(["snapshot", "--phase", "a"], LOCAL_ENV, fakes({ out: dir }).deps);
     await main(["snapshot", "--phase", "b"], LOCAL_ENV, fakes({ out: dir }).deps);
@@ -173,5 +185,45 @@ describe("dry run guard and diff", () => {
     expect(code).not.toBe(0);
     expect(logs.join("\n")).toContain(SITE_A);
     expect(await main(["check", "--phase", "before"], LOCAL_ENV, clean.deps)).not.toBe(0);
+  });
+});
+
+function dbUp(): boolean {
+  try {
+    execFileSync("docker", ["exec", "supabase_db_hydlnk", "true"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+describe.skipIf(!dbUp())("countsSql against the local database", () => {
+  const MARA = {
+    id: "00000000-0000-4000-8000-0000000000b1",
+    handle: "mara",
+    owner_id: "00000000-0000-4000-8000-0000000000a1",
+    plan: "free",
+    domains: [],
+  };
+  function psql(script: string): string {
+    return execFileSync(
+      "docker",
+      ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At", "-q"],
+      { input: script, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+    );
+  }
+
+  it("runs in legacy mode (state reversed inside a rolled-back transaction) and sees the live pages", () => {
+    const out = psql(`begin;
+select set_config('hydlnk.content_move', 'on', true);
+select 'R|reverse|' || (public.reverse_all_content() -> 'failed_sites')::text;
+select 'R|counts|' || (${countsSql(MARA, "legacy").replace(/;\s*$/, "")})::text;
+rollback;`);
+    const lines = out.split("\n");
+    expect(lines).toContain("R|reverse|{}");
+    const line = lines.find((l) => l.startsWith("R|counts|"));
+    expect(line).toBeTruthy();
+    const counts = JSON.parse(line!.slice("R|counts|".length));
+    expect(counts.livePages.some((p: { path: string }) => p.path === "/")).toBe(true);
   });
 });

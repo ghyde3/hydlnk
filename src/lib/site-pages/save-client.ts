@@ -1,17 +1,24 @@
 import { scheduleMediaCleanup } from "@/lib/media/cleanup-client";
+import { readEntryRevs } from "./entry-revs-client";
 import { postEntryDraft } from "./entry-save-client";
 import type { SubSaveFn } from "./saver";
 
 /**
  * The revision of every sub-page the editor holds (M15-01, 1b1-17): the page entry's `rev`, the same
  * notion MCP's writer uses. A save sends the rev it last loaded or saved and the route answers
- * `conflict` when another writer moved it. Publish does not change an entry's rev, so there is
- * nothing to re-read after it.
+ * `conflict` when another writer moved it. Publish moves the rev of a page whose first system revision
+ * kept the original draft (a page the content move rewrote), so the editor re-reads after it.
  */
 export interface SubPageRevisions {
   get(id: string): number | undefined;
   set(id: string, rev: number): void;
   delete(id: string): void;
+  /**
+   * Re-reads the revs of a site's pages (those the editor already holds). Publish and Unpublish can
+   * bump a page entry's rev without changing its draft; the editor has flushed first, so nothing of
+   * its own is unsaved.
+   */
+  refresh(siteId: string): Promise<void>;
 }
 
 export function createSubPageRevisions(initial: Readonly<Record<string, number>>): SubPageRevisions {
@@ -20,6 +27,11 @@ export function createSubPageRevisions(initial: Readonly<Record<string, number>>
     get: (id) => map.get(id),
     set: (id, rev) => void map.set(id, rev),
     delete: (id) => void map.delete(id),
+    async refresh(siteId) {
+      const rows = await readEntryRevs(siteId);
+      if (!rows) return;
+      for (const row of rows) if (map.has(row.id)) map.set(row.id, row.rev);
+    },
   };
 }
 

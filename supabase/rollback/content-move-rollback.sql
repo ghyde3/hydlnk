@@ -25,7 +25,18 @@
 -- 1. Copy the entry edits back
 -- ---------------------------------------------------------------------------
 
-select public.reverse_all_content();
+do $reverse$
+declare
+  v_report jsonb := public.reverse_all_content();
+begin
+  -- A site whose reverse failed keeps its post-cutover edits only in content_entries, which the old
+  -- code never reads. Abort before the guards are dropped, so a partial reverse cannot pass silently.
+  raise notice 'reverse_all_content report: %', v_report;
+  if coalesce(v_report -> 'failed_sites', '{}'::jsonb) <> '{}'::jsonb then
+    raise exception 'reverse_failed: %', v_report -> 'failed_sites' using errcode = 'P0001';
+  end if;
+end;
+$reverse$;
 
 -- ---------------------------------------------------------------------------
 -- 2. The pre-1b-1 function bodies
@@ -491,5 +502,7 @@ drop function public.enforce_pages_link_blocklist_update();
 
 drop trigger enforce_content_moved on public.pages;
 drop trigger enforce_content_moved on public.site_pages;
+drop trigger enforce_content_moved_delete on public.site_pages;
 drop function public.guard_frozen_page_blocks();
 drop function public.guard_moved_site_pages();
+drop function public.guard_moved_site_pages_delete();

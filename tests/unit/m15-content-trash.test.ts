@@ -5,7 +5,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import type { Database } from "@/lib/supabase/database.types";
 import { createEntryWithClient, updateEntryWithClient } from "@/lib/content/entries-core";
 import { publishEntryWithClient } from "@/lib/content/publish-core";
-import { restoreEntryWithClient, trashEntryWithClient } from "@/lib/content/trash-core";
+import {
+  purgeEntryWithClient,
+  restoreEntryWithClient,
+  trashEntryWithClient,
+} from "@/lib/content/trash-core";
 import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 import { enablePost } from "./content-support";
 
@@ -75,6 +79,28 @@ describe.skipIf(!run)("trash and restore an entry", () => {
       rev: 3,
     });
     expect((await row(made.id)).deleted_at).not.toBeNull();
+  });
+
+  it("purge refuses a trashed entry that was published once, and takes one that never was", async () => {
+    const live = await make("post", { title: "Was live", slug: "was-live" });
+    expect(
+      await publishEntryWithClient(admin, { actor: actor(a), entryId: live.id, expectedRev: 1 }),
+    ).toMatchObject({ ok: true });
+    expect(await trash(live.id, 2)).toMatchObject({ ok: true });
+    // trash_entry cleared published, so only first_published_at remembers it was live.
+    expect((await row(live.id)).published).toBeNull();
+    expect(await purgeEntryWithClient(admin, { actor: actor(a), entryId: live.id })).toMatchObject({
+      ok: false,
+      error: "not_found",
+    });
+    expect((await row(live.id)).id).toBe(live.id);
+
+    const fresh = await make("post", { title: "Never live", slug: "never-live" });
+    expect(await trash(fresh.id, 1)).toMatchObject({ ok: true });
+    expect(await purgeEntryWithClient(admin, { actor: actor(a), entryId: fresh.id })).toMatchObject({
+      ok: true,
+    });
+    expect((await admin.from("content_entries").select("id").eq("id", fresh.id)).data).toEqual([]);
   });
 
   it("updateEntry on a trashed entry gives not_found", async () => {

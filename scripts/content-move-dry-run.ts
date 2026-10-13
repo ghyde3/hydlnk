@@ -44,7 +44,7 @@ export interface DryRunDeps {
   log: (line: string) => void;
 }
 
-interface SiteRow {
+export interface SiteRow {
   id: string;
   handle: string;
   owner_id: string;
@@ -126,19 +126,19 @@ select case
   else 'entries' end;`;
 }
 
-function countsSql(site: SiteRow, mode: string): string {
+export function countsSql(site: SiteRow, mode: string): string {
   const home =
     mode === "entries"
       ? `select e.id, true as is_home, e.published as doc from public.content_entries e
          join public.site_paths sp on sp.entry_id = e.id and sp.path = '/' where e.site_id = '${site.id}'`
-      : `select p.id, true, p.published from public.pages p where p.id = '${site.id}'`;
+      : `select p.id, true as is_home, p.published as doc from public.pages p where p.id = '${site.id}'`;
   const subs =
     mode === "entries"
       ? `select e.id, false as is_home, e.published as doc from public.content_entries e
          join public.content_types t on t.id = e.type_id and t.key = 'page'
          where e.site_id = '${site.id}' and e.deleted_at is null
            and not exists (select 1 from public.site_paths sp where sp.entry_id = e.id and sp.path = '/')`
-      : `select s.id, false, s.published from public.site_pages s where s.page_id = '${site.id}'`;
+      : `select s.id, false as is_home, s.published as doc from public.site_pages s where s.page_id = '${site.id}'`;
   return `-- counts
 with home as (${home}), subs as (${subs}),
 pagesall as (select * from home union all select * from subs),
@@ -161,11 +161,19 @@ select json_build_object(
              jsonb_path_query(l.doc, '$.blocks[*] ? (@.type == "page_link").target') #>> '{}' as target
       from live l) z),
   'pageVersions', (select count(*) from public.page_versions where page_id = '${site.id}'),
-  'accountSiteBytes', coalesce((select b.bytes from public.account_site_bytes b where b.owner_id = '${site.owner_id}'), 0),
   'pageTotal', (select count(*) from pagesall),
   'pagesPerSite', (select l.pages_per_site from public.plan_limits('${site.plan}') l)
 );`;
 }
+
+/** The move charges Home's entry to account_site_bytes on purpose, so this never goes in the diffed counts. */
+export function accountBytesSql(site: SiteRow): string {
+  return `-- bytes
+select coalesce((select b.bytes from public.account_site_bytes b where b.owner_id = '${site.owner_id}'), 0);`;
+}
+
+/** Written per site, reported, and skipped by diff (the byte delta is expected to be Home's entry). */
+export const NOT_DIFFED = ["account-bytes.json"];
 
 const CHECK_SQL = `-- check
 with docs as (
@@ -250,6 +258,8 @@ async function snapshot(phase: string, env: Record<string, string | undefined>, 
     const siteDir = join(phaseDir, site.id);
     mkdirSync(siteDir, { recursive: true });
     writeFileSync(join(siteDir, "counts.json"), JSON.stringify(counts, null, 2) + "\n");
+    const bytes = Number(deps.sql(accountBytesSql(site)).trim() || "0");
+    writeFileSync(join(siteDir, "account-bytes.json"), JSON.stringify({ accountSiteBytes: bytes }, null, 2) + "\n");
 
     const hosts: { dir: string; host: string }[] = [
       { dir: "handle", host: `${site.handle}.localhost:${port}` },
@@ -306,7 +316,7 @@ export interface DiffReport {
   details: string[];
 }
 
-/** Every file byte for byte, counts.json included; a file or a site on one side only differs. */
+/** Every file byte for byte, counts.json included (account-bytes.json is reported, not diffed); a file or a site on one side only differs. */
 export function diffSnapshots(root: string, a: string, b: string): DiffReport {
   const dirA = join(root, a);
   const dirB = join(root, b);
@@ -323,6 +333,7 @@ export function diffSnapshots(root: string, a: string, b: string): DiffReport {
     }
     let differs = false;
     for (const file of [...new Set([...filesA, ...filesB])].sort()) {
+      if (NOT_DIFFED.includes(file)) continue;
       if (!filesA.includes(file) || !filesB.includes(file)) {
         differs = true;
         details.push(`${id}: ${file} only in ${filesA.includes(file) ? a : b}`);

@@ -119,11 +119,13 @@ export async function loadDraftPreview(
 ): Promise<SharedPreview> {
   const { path, base, expiresAt } = options;
   // The design is the site row's; Home's blocks are its page entry's draft (the blocks frozen in
-  // `pages.draft` by the move are never read). A site with no Home entry has no blocks.
+  // `pages.draft` by the move are never read). A site with no Home entry has not been moved: its
+  // `pages.draft` is the whole document, as the editor reads it.
   const home = await getHomeDraftWithClient(admin, page.id);
-  const homeBlocks = Array.isArray(home?.draft.blocks) ? home.draft.blocks : [];
   const { draft } = loadDraft(
-    { ...(page.draft as Record<string, unknown>), blocks: homeBlocks },
+    home
+      ? { ...(page.draft as Record<string, unknown>), blocks: home.draft.blocks }
+      : page.draft,
     page.handle,
   );
 

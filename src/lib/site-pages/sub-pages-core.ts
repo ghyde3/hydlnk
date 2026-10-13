@@ -294,7 +294,7 @@ export async function deleteSubPageWithClient(
   const read = async () => {
     const found = await admin
       .from("content_entries")
-      .select("id, rev, created_at, published, content_types!inner(key)")
+      .select("id, rev, created_at, published, first_published_at, content_types!inner(key)")
       .eq("id", subPageId)
       .eq("site_id", site.id)
       .eq("content_types.key", "page")
@@ -338,6 +338,7 @@ export async function deleteSubPageWithClient(
   if (
     input.purge === true &&
     entry.published === null &&
+    entry.first_published_at === null &&
     Date.now() - new Date(entry.created_at).getTime() < PURGE_WINDOW_MS
   ) {
     const purged = await purgeEntryWithClient(admin, {

@@ -2,12 +2,12 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { draftSubPageSchema, toPublishForm, toSubPagePublishForm } from "@/lib/document";
+import { blockDefaults, draftSubPageSchema, toPublishForm, toSubPagePublishForm } from "@/lib/document";
 import { loadDraft } from "@/lib/editor/load";
 import { sanitizeSharedDoc } from "@/lib/previews/sanitize";
 import { generatePreviewToken, hashPreviewToken } from "@/lib/previews/token";
 import type { Database, Json } from "@/lib/supabase/database.types";
-import { stackIsUp } from "./publish-support";
+import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
 
@@ -156,5 +156,41 @@ describe.skipIf(!run)("previews and admin views on page entries (seed mara)", ()
       const was = old!.find((o) => o.id === sub.id)!;
       expect(sub.live).toBe(was.published_at !== null);
     }
+  });
+});
+
+describe.skipIf(!run)("a site with no Home entry (not moved yet)", () => {
+  const admin = run
+    ? createClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SECRET_KEY!,
+        { auth: { persistSession: false } },
+      )
+    : (undefined as unknown as SupabaseClient<Database>);
+  let owner: TestOwner;
+  let token: string;
+  const homeBlock = blockDefaults.text();
+
+  beforeAll(async () => {
+    owner = await makeOwner(admin as never, "pv-nohome", (handle) => ({
+      ...loadDraft({}, handle).draft,
+      blocks: [homeBlock],
+    }));
+    token = generatePreviewToken();
+    const made = await admin
+      .from("preview_links")
+      .insert({ page_id: owner.pageId, token_hash: hashPreviewToken(token) });
+    if (made.error) throw new Error(made.error.message);
+  });
+  afterAll(async () => {
+    if (run) await removeOwners(admin as never, [owner]);
+  });
+
+  it("the share link draws the blocks of pages.draft, as the editor does", async () => {
+    const { loadSharedPreview } = await import("@/lib/previews/shared");
+    const result = await loadSharedPreview(admin, token);
+    expect(result.kind).toBe("active");
+    if (result.kind !== "active") return;
+    expect(result.doc.blocks.map((b) => b.id)).toEqual([homeBlock.id]);
   });
 });

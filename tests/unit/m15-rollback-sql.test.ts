@@ -86,11 +86,13 @@ describe("content-move-rollback.sql, static", () => {
   }
 
   it("runs the reverse first, then drops the guards and the new blocklist trigger", () => {
-    const reverse = sql.indexOf("select public.reverse_all_content()");
+    const reverse = sql.indexOf("public.reverse_all_content()");
     expect(reverse).toBeGreaterThan(-1);
     for (const needle of [
       "drop trigger enforce_content_moved on public.pages",
       "drop trigger enforce_content_moved on public.site_pages",
+      "drop trigger enforce_content_moved_delete on public.site_pages",
+      "drop function public.guard_moved_site_pages_delete()",
       "drop trigger enforce_link_blocklist_update on public.pages",
       "drop function public.guard_frozen_page_blocks()",
       "drop function public.guard_moved_site_pages()",
@@ -103,6 +105,13 @@ describe("content-move-rollback.sql, static", () => {
     expect(sql).toContain(
       "create trigger enforce_link_blocklist before insert or update of draft on public.pages",
     );
+  });
+
+  it("aborts before the guards are dropped when a site failed to reverse", () => {
+    const check = sql.indexOf("failed_sites");
+    expect(check).toBeGreaterThan(sql.indexOf("public.reverse_all_content()"));
+    expect(check).toBeLessThan(sql.indexOf("drop trigger enforce_content_moved on public.pages"));
+    expect(sql).toContain("raise exception 'reverse_failed");
   });
 
   it("is not a migration and drops no table", () => {
@@ -160,7 +169,7 @@ reset role;
 ${rollback}
 
 select 'R|entries|' || count(*) from public.content_entries where site_id = '${SITE}';
-select 'R|guards|' || count(*) from pg_trigger where tgname = 'enforce_content_moved' and not tgisinternal;
+select 'R|guards|' || count(*) from pg_trigger where tgname like 'enforce_content_moved%' and not tgisinternal;
 select 'R|home_draft_text|' || (draft -> 'blocks' -> 0 ->> 'text') from public.pages where id = '${SITE}';
 select 'R|alpha_draft_title|' || (draft ->> 'title') from public.site_pages where id = '${ALPHA}';
 

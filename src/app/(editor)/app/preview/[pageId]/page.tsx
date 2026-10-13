@@ -64,11 +64,9 @@ export default async function DraftPreviewPage({ params }: PageProps<"/app/previ
     getHomeDraftWithClient(supabase as never, owned.data.id),
     getPublishedHomeWithClient(supabase as never, owned.data.id),
   ]);
+  // A site with no Home entry has not been moved: pages.draft is the whole document.
   const draft = loadDraft(
-    {
-      ...data.draft,
-      blocks: Array.isArray(homeDraft?.draft.blocks) ? homeDraft.draft.blocks : [],
-    },
+    homeDraft ? { ...data.draft, blocks: homeDraft.draft.blocks } : data.draft,
     owned.data.handle,
   ).draft;
   const merged = data.published === null ? null : mergeHomePublished(data.published, homePublished);

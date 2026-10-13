@@ -85,7 +85,10 @@ export async function purgeEntryWithClient(
   const account = await activeAccount(admin, input.actor.userId);
   if (!account.ok) return account;
   const { entry } = owned;
-  if (entry.deleted_at === null || entry.published !== null) return failure("not_found");
+  // trash_entry clears `published`, so "never published" is first_published_at, which is never cleared.
+  if (entry.deleted_at === null || entry.published !== null || entry.first_published_at !== null) {
+    return failure("not_found");
+  }
   const deleted = await admin
     .from("content_entries")
     .delete()
@@ -93,6 +96,7 @@ export async function purgeEntryWithClient(
     .eq("site_id", entry.site_id)
     .not("deleted_at", "is", null)
     .is("published", null)
+    .is("first_published_at", null)
     .select("id");
   if (deleted.error) return mapDbError(deleted.error);
   if (deleted.data.length === 0) return failure("not_found");
