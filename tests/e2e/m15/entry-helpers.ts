@@ -50,6 +50,29 @@ export async function seedEntries(siteId: string): Promise<Seeded> {
   return { homeId, subId };
 }
 
+/** Only Home's '/' entry, with `blocks` (none by default): the moved layout of a site with no sub-pages yet. */
+export async function seedHome(siteId: string, blocks: unknown[] = []): Promise<string> {
+  const admin = adminClient();
+  const type = await admin
+    .from("content_types")
+    .select("id")
+    .eq("site_id", siteId)
+    .eq("key", "page")
+    .single();
+  if (type.error) throw new Error(type.error.message);
+  const made = await admin
+    .from("content_entries")
+    .insert({
+      site_id: siteId,
+      type_id: type.data.id,
+      draft: { path: "/", title: "", description: "", blocks } as never,
+    })
+    .select("id")
+    .single();
+  if (made.error) throw new Error(made.error.message);
+  return made.data.id as string;
+}
+
 export async function entry(id: string) {
   const { data, error } = await adminClient()
     .from("content_entries")

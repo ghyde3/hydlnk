@@ -20,18 +20,21 @@ export function createSubPage(
 }
 
 /**
- * Server-only delete. The live site changes at once: the page is gone, so its menu entry and the
+ * Server-only delete: the page entry goes to the trash (`purge` takes a page made a moment ago and
+ * never published out for good). The live site changes at once: the page is gone, so its menu entry and the
  * page links to it render nothing on the next request, which the cache tag expiry makes immediate.
  */
 export async function deleteSubPage(
   userId: string,
   siteId: string,
   subPageId: string,
+  options: { purge?: boolean } = {},
 ): Promise<DeleteSubPageResult> {
   const result = await deleteSubPageWithClient(createAdminSupabase(), {
     userId,
     siteId,
     subPageId,
+    purge: options.purge === true,
   });
   if (result.ok) {
     try {

@@ -58,9 +58,19 @@ describe.skipIf(!run)("M11-04 deleting a sub-page and the media cleanup (local S
     image: { path, width: 400, height: 400 },
   });
   const addSub = async (o: TestOwner, title: string, path: string, blocks: unknown[]) => {
+    const type = await admin
+      .from("content_types")
+      .select("id")
+      .eq("site_id", o.pageId)
+      .eq("key", "page")
+      .single();
     const { data, error } = await admin
-      .from("site_pages")
-      .insert({ page_id: o.pageId, draft: { path, title, description: "", blocks } })
+      .from("content_entries")
+      .insert({
+        site_id: o.pageId,
+        type_id: type.data!.id,
+        draft: { path, title, description: "", blocks } as never,
+      })
       .select("id")
       .single();
     expect(error).toBeNull();
@@ -71,7 +81,24 @@ describe.skipIf(!run)("M11-04 deleting a sub-page and the media cleanup (local S
       .map((row) => row.path as string)
       .sort();
 
-  it("the image only the deleted page used is queued and removed; the one another page still uses is kept", async () => {
+  it("a deleted page goes to the trash and its images stay in use, so none is queued (1b1-18)", async () => {
+    const o = await makeOwner(admin, "mc0", () => draftOf("Alpha"), "pro");
+    owners.push(o);
+    const mine = await upload(o);
+    const doomed = await addSub(o, "Gallery", "gallery", [imageBlock("g-img-000001", mine)]);
+    const deleted = await subPages.deleteSubPageWithClient(admin as never, {
+      userId: o.userId,
+      siteId: o.pageId,
+      subPageId: doomed,
+    });
+    expect(deleted).toMatchObject({ ok: true, purged: false });
+    expect(await queued(o)).toEqual([]);
+    const result = await cleanup.cleanupMediaFor(o.userId, admin);
+    expect(result.deleted).toEqual([]);
+    expect(await exists(mine)).toBe(true);
+  });
+
+  it("a purged page queues its images; the image only it used is removed, the one another page still uses is kept", async () => {
     const o = await makeOwner(admin, "mc1", () => draftOf("Alpha"), "pro");
     owners.push(o);
     const onlyHere = await upload(o);
@@ -87,8 +114,9 @@ describe.skipIf(!run)("M11-04 deleting a sub-page and the media cleanup (local S
       userId: o.userId,
       siteId: o.pageId,
       subPageId: doomed,
+      purge: true,
     });
-    expect(deleted).toMatchObject({ ok: true });
+    expect(deleted).toMatchObject({ ok: true, purged: true });
     // Both images the page named are queued by the delete.
     expect(await queued(o)).toEqual([onlyHere, shared].sort());
 

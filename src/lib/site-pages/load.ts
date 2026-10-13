@@ -66,3 +66,24 @@ export async function loadSubPages(siteId: string): Promise<LoadedSubPage[]> {
     };
   });
 }
+
+/**
+ * How many page entries of the site sit in the trash. A trashed page still counts toward the plan's
+ * pages per site until it is purged (HL008), so the editor's page limit adds them to the live pages.
+ * Read with the signed-in user's own session; a failed read counts none (the database still refuses).
+ */
+export async function countTrashedPages(siteId: string): Promise<number> {
+  const supabase = await createServerSupabase();
+  const { count, error } = await supabase
+    .from("content_entries")
+    .select("id, content_types!inner(key)", { count: "exact", head: true })
+    .eq("site_id", siteId)
+    .eq("content_types.key", "page")
+    .not("deleted_at", "is", null)
+    .neq("draft->>path", "/");
+  if (error) {
+    console.error("[workspace] counting trashed pages failed", error.message);
+    return 0;
+  }
+  return count ?? 0;
+}

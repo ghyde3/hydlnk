@@ -67,10 +67,21 @@ describe("HL009 in the sub-page autosave", () => {
 
 describe("HL009 creating a page", () => {
   it("is storage_full (403) with the message, not create_failed", async () => {
+    // The page entry insert is the content writer's: its HL009 answer is what the core must map.
+    vi.resetModules();
+    vi.doMock("@/lib/content/entries-core", () => ({
+      createEntryWithClient: async () => ({
+        ok: false,
+        status: 403,
+        error: "storage_full",
+        message: "full",
+      }),
+    }));
     const { createSubPageWithClient } = await import("@/lib/site-pages/sub-pages-core");
+    vi.doUnmock("@/lib/content/entries-core");
     const table = (name: string) => {
       const chain: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "insert"]) chain[m] = () => chain;
+      for (const m of ["select", "eq", "insert", "is", "neq"]) chain[m] = () => chain;
       chain.maybeSingle = async () =>
         name === "accounts"
           ? { data: { plan: "pro", suspended_at: null }, error: null }

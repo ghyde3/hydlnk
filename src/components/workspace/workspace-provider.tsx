@@ -83,6 +83,8 @@ export interface WorkspaceProviderProps {
   themesFailed: boolean;
   /** The site's sub-pages (M11-08), read once like the draft. */
   subPages: SubPageInit[];
+  /** Page entries in the trash: they still count toward the plan's pages per site (1b1-18). */
+  trashedPages?: number;
 
   children: ReactNode;
 }
@@ -159,6 +161,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     siteId: pageId,
     plan,
     initial: props.subPages,
+    trashedPages: props.trashedPages ?? 0,
     homeTitle: "Home",
     nav: draft.nav,
     editDraft,

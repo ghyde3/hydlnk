@@ -69,3 +69,32 @@ export async function restoreEntryWithClient(
   if (error) return refused(admin, entry.id, error);
   return { ok: true, rev: Number(data), siteId: entry.site_id };
 }
+
+/**
+ * Delete a trashed entry for good, at once instead of after 30 days. For the owner's own undo of
+ * something just made (a failed template apply): only a trashed entry that was never published, so
+ * nothing live or restorable is lost. The cascade removes its revisions and links. The claim on its
+ * path was released when it was trashed.
+ */
+export async function purgeEntryWithClient(
+  admin: Admin,
+  input: { actor: ContentActor; entryId: string },
+): Promise<ContentResult<{ siteId: string }>> {
+  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  if (!owned.ok) return owned;
+  const account = await activeAccount(admin, input.actor.userId);
+  if (!account.ok) return account;
+  const { entry } = owned;
+  if (entry.deleted_at === null || entry.published !== null) return failure("not_found");
+  const deleted = await admin
+    .from("content_entries")
+    .delete()
+    .eq("id", entry.id)
+    .eq("site_id", entry.site_id)
+    .not("deleted_at", "is", null)
+    .is("published", null)
+    .select("id");
+  if (deleted.error) return mapDbError(deleted.error);
+  if (deleted.data.length === 0) return failure("not_found");
+  return { ok: true, siteId: entry.site_id };
+}

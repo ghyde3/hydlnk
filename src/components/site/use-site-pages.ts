@@ -151,12 +151,16 @@ export function useSitePages(args: {
   siteId: string;
   plan: PlanId;
   initial: readonly SubPageInit[];
+  /** Page entries in the trash when the editor opened: they still count toward the limit. */
+  trashedPages?: number;
   homeTitle: string;
   nav: DraftDoc["nav"];
   editDraft: (update: (draft: DraftDoc) => DraftDoc, group?: string) => void;
 }): SiteValue {
   const { siteId, plan, homeTitle, nav, editDraft } = args;
   const [initial] = useState(() => args.initial);
+  // Trashed pages keep a place in the limit until they are purged; a delete here adds one.
+  const [trashed, setTrashed] = useState(() => args.trashedPages ?? 0);
   const [state, dispatch] = useReducer(siteReducer, initial, initSiteState);
   const [activeId, setActiveId] = useState<string>(HOME_PAGE_ID);
 
@@ -259,7 +263,7 @@ export function useSitePages(args: {
     [homeTitle, nav, summaries],
   );
   const resolvedNav = useMemo(() => resolveNav(nav), [nav]);
-  const limit = pageLimitState(plan, state.ids.length);
+  const limit = pageLimitState(plan, state.ids.length + trashed);
   const limitMessage = pagesPerSiteMessage(plan, limit.used);
 
   const select = useCallback(
@@ -415,13 +419,21 @@ export function useSitePages(args: {
     [siteId, setNav, revisions],
   );
 
-  const remove = useCallback<SiteValue["remove"]>(
-    async (id) => {
+  const removePage = useCallback(
+    async (id: string, purge: boolean): Promise<SiteDeleteResult> => {
       try {
-        const response = await fetch(`/api/pages/${siteId}/sub-pages/${id}`, { method: "DELETE" });
+        const response = await fetch(
+          `/api/pages/${siteId}/sub-pages/${id}${purge ? "?purge=1" : ""}`,
+          { method: "DELETE" },
+        );
         if (!response.ok && response.status !== 404) {
           const body = (await response.json().catch(() => null)) as { message?: string } | null;
           return { ok: false, message: body?.message ?? "Couldn’t delete the page. Try again." };
+        }
+        if (response.ok) {
+          const done = (await response.json().catch(() => null)) as { purged?: boolean } | null;
+          // The page went to the trash, where it still counts, unless it was purged.
+          if (done?.purged !== true) setTrashed((current) => current + 1);
         }
         // Gone on the server: stop writing it, leave the menu and go home if it was open.
         saverRef.current?.drop(id);
@@ -444,6 +456,7 @@ export function useSitePages(args: {
     },
     [siteId, setNav, revisions],
   );
+  const remove = useCallback<SiteValue["remove"]>((id) => removePage(id, false), [removePage]);
 
   const applyTemplate = useCallback<SiteValue["applyTemplate"]>(
     async (id) => {
@@ -476,7 +489,7 @@ export function useSitePages(args: {
         });
         if (!result.ok) {
           // All or nothing: a page that was made is taken back.
-          for (const pageId of created) await remove(pageId);
+          for (const pageId of created) await removePage(pageId, true);
           return { ok: false, message: result.message };
         }
         created.push(result.id);
@@ -485,7 +498,7 @@ export function useSitePages(args: {
       setActiveId(HOME_PAGE_ID);
       return { ok: true };
     },
-    [limit.max, limit.used, limitMessage, state.ids, state.editors, add, remove, editDraft],
+    [limit.max, limit.used, limitMessage, state.ids, state.editors, add, removePage, editDraft],
   );
 
   const duplicate = useCallback<SiteValue["duplicate"]>(
