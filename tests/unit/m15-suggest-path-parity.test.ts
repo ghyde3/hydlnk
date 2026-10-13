@@ -21,6 +21,10 @@ const fixed = [
   "😀 party 😀",
   "ＦＵＬＬ ｗｉｄｔｈ",
   "ﬁne ﬂour",
+  // Unicode 16+ compatibility letters, which Postgres 15.1 does not decompose.
+  "\u{1CCD6}\u{1CCD7}",
+  "Shop \u{1CCF1}",
+  "\u{1CCD7}\u{1CCDB}",
   "api",
   "API",
   "og",

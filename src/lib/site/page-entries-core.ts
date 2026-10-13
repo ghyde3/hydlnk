@@ -290,6 +290,21 @@ export async function countSubPageEntriesWithClient(client: Db, siteId: string):
   return count.count ?? 0;
 }
 
+/** The id of a sub-page entry of the site that is already in the trash (a delete whose purge failed). */
+export async function readTrashedSubPageIdWithClient(client: Db, siteId: string, entryId: string) {
+  const found = await client
+    .from("content_entries")
+    .select("id, content_types!inner(key)")
+    .eq("id", entryId)
+    .eq("site_id", siteId)
+    .eq("content_types.key", "page")
+    .neq("draft->>path", "/")
+    .not("deleted_at", "is", null)
+    .maybeSingle();
+  if (found.error) throw new Error(`Trashed sub-page lookup failed: ${found.error.message}`);
+  return found.data ? { id: found.data.id } : null;
+}
+
 /** The sub-page entry of the site that is not Home and not in the trash, with its rev and dates. */
 export async function readLiveSubPageWithClient(client: Db, siteId: string, entryId: string) {
   const found = await client

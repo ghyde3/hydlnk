@@ -10,6 +10,7 @@ import {
   countSubPageEntriesWithClient,
   listPagePathsWithClient,
   readLiveSubPageWithClient,
+  readTrashedSubPageIdWithClient,
 } from "@/lib/site/page-entries-core";
 import { createEntryWithClient, purgeEntryWithClient, trashEntryWithClient } from "@/lib/content";
 import type { ContentActor } from "@/lib/content";
@@ -283,9 +284,12 @@ export async function deleteSubPageWithClient(
 
   // A concurrent autosave moves the rev: read it again, a few times.
   let entry = await read();
-  if (!entry) return failure("not_found");
-  let trashed = false;
-  for (let attempt = 0; attempt < 3 && !trashed; attempt++) {
+  // Not live: a page whose trash went through but whose purge did not is still ours to finish.
+  const leftover = entry ? null : await readTrashedSubPageIdWithClient(admin, site.id, subPageId);
+  if (!entry && !leftover) return failure("not_found");
+  let trashed = leftover !== null;
+  let entryId = entry?.id ?? leftover!.id;
+  for (let attempt = 0; attempt < 3 && !trashed && entry; attempt++) {
     const out = await trashEntryWithClient(admin, {
       actor: actorOf(userId),
       entryId: entry.id,
@@ -293,6 +297,7 @@ export async function deleteSubPageWithClient(
     });
     if (out.ok) {
       trashed = true;
+      entryId = entry.id;
     } else if (out.error === "conflict") {
       const again = await read();
       if (!again) return failure("not_found");
@@ -312,14 +317,14 @@ export async function deleteSubPageWithClient(
   // page limit frees at once. (Posts keep the 30-day trash; this door is for pages only.)
   const purged = await purgeEntryWithClient(admin, {
     actor: actorOf(userId),
-    entryId: entry.id,
+    entryId,
     includePublished: true,
   });
-  if (!purged.ok) {
-    console.error("[site-pages] purge failed", purged.error, purged.message);
-    return failure("delete_failed");
-  }
-  const purgedForGood = true;
+  // The trash is the committed delete: the live copy and its paths are gone. A failed purge only
+  // leaves the row in the trash (the 30-day job takes it, a retry purges it), so the menu cleanup
+  // and the caller's cache expiry still run.
+  if (!purged.ok) console.error("[site-pages] purge failed", purged.error, purged.message);
+  const purgedForGood = purged.ok;
 
   try {
     await removeFromHomeNav(admin, site.id, subPageId);

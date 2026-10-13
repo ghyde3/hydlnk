@@ -128,8 +128,11 @@ describe("the draft is read in one place and written in one", () => {
 
   it("the draft writer reads a sub-page entry only under the site it just owner-checked, and writes it only through the content writer (1b1-19)", () => {
     const source = code(DRAFT_WRITER);
-    expect(source).toMatch(
-      /\.from\("content_entries"\)[\s\S]*?\.eq\("id", entryId\)\s*\.eq\("site_id", siteId\)/,
+    // The read is one shared function that filters on id and site; the writer only delegates to it.
+    expect(source).toContain("readSubPageEntryWithClient(loose, siteId, entryId)");
+    const reader = code("src/lib/site/page-entries-core.ts");
+    expect(reader).toMatch(
+      /readSubPageEntryWithClient[\s\S]*?\.from\("content_entries"\)[\s\S]*?\.eq\("id", entryId\)\s*\.eq\("site_id", siteId\)/,
     );
     expect(source).toContain("readSubPageEntry(loose, pageId, subPageId)");
     expect(source).toMatch(/updateEntryWithClient\(admin, \{\s*actor: \{ userId, source: "mcp" \}/);

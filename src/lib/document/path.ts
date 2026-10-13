@@ -74,6 +74,9 @@ const FALLBACK_BASE = "page";
 /** Lowercase ASCII slug of `title`: accents folded, other characters become hyphens, 40 at most. */
 function slugify(title: string): string {
   const slug = title
+    // Blocks Unicode 16 added (outlined letters and more): Postgres 15.1 does not decompose them,
+    // and `suggest_site_path` treats them as separators, so do the same before folding.
+    .replace(/[\u{1CC00}-\u{1CEBF}]/gu, "-")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()

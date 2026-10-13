@@ -168,6 +168,18 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect((await create(o)).ok).toBe(true);
     if (!a.ok) throw new Error("setup");
     expect((await create(o)).ok).toBe(false);
+    // The entry has a revision before the delete, so the empty list after it proves the cascade.
+    const rev = await admin.rpc("record_entry_revision", {
+      p_entry_id: a.id,
+      p_source: "editor",
+      p_max_age: "0 seconds",
+    });
+    expect(rev.error).toBeNull();
+    const before = await admin
+      .from("content_entry_revisions")
+      .select("id", { count: "exact", head: true })
+      .eq("entry_id", a.id);
+    expect(before.count).toBeGreaterThan(0);
     const del = await core.deleteSubPageWithClient(admin as never, {
       userId: o.userId,
       siteId: o.pageId,
@@ -374,15 +386,78 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
       })
       .eq("id", live1.id);
     expect(pub.error).toBeNull();
-    for (const id of [old.id, live1.id]) {
+    for (const [id, purge] of [
+      [old.id, true],
+      [live1.id, undefined],
+    ] as const) {
       const del = await core.deleteSubPageWithClient(admin as never, {
         userId: o.userId,
         siteId: o.pageId,
         subPageId: id,
+        purge,
       });
       expect(del).toMatchObject({ ok: true, purged: true });
     }
     expect(await count(o.pageId)).toBe(0);
+  });
+
+  it("a purge that fails after the trash still finishes the delete: menu cleaned, ok with purged false, and a retry purges", async () => {
+    const o = await owner("purgefail", "pro");
+    const a = await create(o);
+    const b = await create(o);
+    if (!a.ok || !b.ok) throw new Error("setup");
+    const home = await admin.from("pages").select("draft").eq("id", o.pageId).single();
+    const draft = home.data!.draft as Record<string, unknown>;
+    const nav = { show: true, items: [a.id, b.id] };
+    await admin
+      .from("pages")
+      .update({ draft: { ...draft, nav } as never })
+      .eq("id", o.pageId);
+    // An admin client whose entry DELETE fails the way a statement timeout does.
+    const failing = (target: SupabaseClient): SupabaseClient =>
+      new Proxy(target, {
+        get(t, prop) {
+          const value = Reflect.get(t, prop, t);
+          if (prop !== "from") return typeof value === "function" ? value.bind(t) : value;
+          return (table: string) => {
+            const builder = t.from(table);
+            if (table !== "content_entries") return builder;
+            return new Proxy(builder, {
+              get(bt, bprop) {
+                if (bprop !== "delete") {
+                  const v = Reflect.get(bt, bprop, bt);
+                  return typeof v === "function" ? v.bind(bt) : v;
+                }
+                const dead: unknown = new Proxy(() => dead, {
+                  get: (_x, p) =>
+                    p === "then"
+                      ? (resolve: (v: unknown) => void) =>
+                          resolve({ data: null, error: { code: "57014", message: "timeout" } })
+                      : () => dead,
+                });
+                return () => dead;
+              },
+            });
+          };
+        },
+      });
+    const first = await core.deleteSubPageWithClient(failing(admin) as never, {
+      userId: o.userId,
+      siteId: o.pageId,
+      subPageId: a.id,
+    });
+    expect(first).toMatchObject({ ok: true, id: a.id, purged: false });
+    const after = await admin.from("pages").select("draft").eq("id", o.pageId).single();
+    expect(after.data!.draft).toMatchObject({ nav: { show: true, items: [b.id] } });
+    // Retrying finds the trashed entry and purges it for good.
+    const retry = await core.deleteSubPageWithClient(admin as never, {
+      userId: o.userId,
+      siteId: o.pageId,
+      subPageId: a.id,
+    });
+    expect(retry).toMatchObject({ ok: true, id: a.id, purged: true });
+    const gone = await admin.from("content_entries").select("id").eq("id", a.id);
+    expect(gone.data).toEqual([]);
   });
 
   it("delete leaves a Home draft with no menu untouched", async () => {
