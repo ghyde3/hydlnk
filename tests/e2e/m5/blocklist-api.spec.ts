@@ -1,11 +1,15 @@
 import { expect, test } from "@playwright/test";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
+import { expectClientBlockWriteRefused, homeEntryOf, writeHomeDraft } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, insertPage, makeUser, rand } from "../fixtures/data";
 
 /**
- * M5-03 direct-API abuse: the draft is saved with the publishable key and the owner's JWT straight
- * to PostgREST, so the `pages` trigger is the only thing between a user and a phishing link. Each
- * test lists its own (random) blocked domain and removes it again; nothing here touches mara.
+ * M5-03 direct-API abuse, on the moved model (M15-14). Home's blocks live in the '/' page entry, so
+ * the owner's publishable-key write of `pages.draft` blocks is refused outright with HL013 and
+ * content entries have no client write grant. The hostile document is then written with the secret
+ * key straight into Home's entry, as an attacker with database access would, and the entry's blocklist
+ * trigger must still refuse it with blocked_link, leaving the stored entry unchanged. Each test lists
+ * its own (random) blocked domain and removes it again; nothing here touches mara.
  */
 
 test.describe.configure({ timeout: 120_000 });
@@ -53,39 +57,42 @@ async function owner(label: string) {
   return { ...user, handle, pageId, token };
 }
 
-const storedDraft = async (pageId: string) => {
-  const { data, error } = await adminClient().from("pages").select("draft").eq("id", pageId).single();
-  if (error) throw new Error(error.message);
-  return data.draft as { rev: number; blocks: { url?: string }[] };
+const storedEntry = async (pageId: string) => {
+  const home = await homeEntryOf(pageId);
+  return { rev: Number(home.rev), blocks: (home.draft.blocks ?? []) as { url?: string }[] };
 };
+
+/** The hostile blocks as the browser sends them (refused, HL013) and as the attacker writes them (refused, blocked_link). */
+async function expectBlockedEverywhere(o: { token: string; pageId: string }, name: string, blocks: unknown[]) {
+  const before = await storedEntry(o.pageId);
+  await expectClientBlockWriteRefused(o.token, o.pageId, blocks);
+  const { data, error } = await writeHomeDraft(o.pageId, blocks);
+  expect(error, `${name}: the entry's blocklist trigger refuses it`).not.toBeNull();
+  expect(error?.message, name).toContain("blocked_link");
+  expect(data ?? [], name).toHaveLength(0);
+  expect(await storedEntry(o.pageId), `${name}: the stored entry is unchanged`).toEqual(before);
+  return error!;
+}
 
 test.describe("M5-03 the draft write refuses a blocked link", () => {
   test("M5-03 PATCH of a draft with a blocklisted URL answers 4xx blocked_link and the stored draft is unchanged; an allowed URL saves", async ({}, info) => {
     test.skip(!desktopOnly(info), "no UI involved");
     const blocked = await listDomain();
     const o = await owner("bl-api");
+    const before = await storedEntry(o.pageId);
 
-    const bad = await rest(o.token, `/pages?id=eq.${o.pageId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ draft: draftOf(o.handle, 2, [linkBlock("lnk-aaaaaaaa", `https://${blocked}/x`)]) }),
-    });
-    expect(bad.status).toBeGreaterThanOrEqual(400);
-    expect(bad.status).toBeLessThan(500);
-    const body = (await bad.json()) as { code: string; message: string; details: string; hint: string };
-    expect(body.message).toContain("blocked_link");
-    expect(body.code).toBe("HL005");
-    expect(body.details).toBe(blocked);
-    expect(body.hint).toBe("lnk-aaaaaaaa");
-    const after = await storedDraft(o.pageId);
-    expect(after.rev).toBe(1);
+    const error = await expectBlockedEverywhere(o, "blocked link", [linkBlock("lnk-aaaaaaaa", `https://${blocked}/x`)]);
+    expect(error.code).toBe("HL005");
+    expect(error.details).toBe(blocked);
+    expect(error.hint).toBe("lnk-aaaaaaaa");
+    const after = await storedEntry(o.pageId);
+    expect(after.rev).toBe(before.rev);
     expect(after.blocks).toEqual([]);
 
-    const good = await rest(o.token, `/pages?id=eq.${o.pageId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ draft: draftOf(o.handle, 2, [linkBlock("lnk-aaaaaaaa", "https://ok.example")]) }),
-    });
-    expect(good.status).toBe(200);
-    expect((await storedDraft(o.pageId)).blocks[0]?.url).toBe("https://ok.example");
+    // An allowed URL saves: with the secret key into Home's entry (the browser has no write path to blocks).
+    const good = await writeHomeDraft(o.pageId, [linkBlock("lnk-aaaaaaaa", "https://ok.example")]);
+    expect(good.error).toBeNull();
+    expect((await storedEntry(o.pageId)).blocks[0]?.url).toBe("https://ok.example");
   });
 
   test("M5-03 subdomains, grid cells, social icons, upper case, trailing dots, credentials, ports and encoded hosts are all refused through the API", async ({}, info) => {
@@ -118,18 +125,8 @@ test.describe("M5-03 the draft write refuses a blocked link", () => {
       ["card", { id: "b-1", type: "card", visible: true, title: "T", caption: "", image: null, url: `https://${blocked}` }],
       ["embed", { id: "b-1", type: "embed", visible: true, caption: "", url: `https://${blocked}` }],
     ];
-    for (const [name, block] of attempts) {
-      const res = await rest(o.token, `/pages?id=eq.${o.pageId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ draft: draftOf(o.handle, 9, [block]) }),
-      });
-      const text = await res.text();
-      expect(res.status, `${name}: ${text}`).toBeGreaterThanOrEqual(400);
-      expect(res.status, name).toBeLessThan(500);
-      expect(text, name).toContain("blocked_link");
-    }
-    const after = await storedDraft(o.pageId);
-    expect(after.rev).toBe(1);
+    for (const [name, block] of attempts) await expectBlockedEverywhere(o, name, [block]);
+    const after = await storedEntry(o.pageId);
     expect(after.blocks).toEqual([]);
   });
 
@@ -137,16 +134,14 @@ test.describe("M5-03 the draft write refuses a blocked link", () => {
     test.skip(!desktopOnly(info), "no UI involved");
     const o = await owner("bl-builtin");
     for (const url of ["http://localhost:3000/x", "http://127.0.0.1/", "http://[::1]/", "http://2130706433/", "https://intranet/"]) {
-      const res = await rest(o.token, `/pages?id=eq.${o.pageId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ draft: draftOf(o.handle, 9, [linkBlock("b-1", url)]) }),
-      });
-      const text = await res.text();
-      expect(res.status, `${url}: ${text}`).toBe(400);
-      expect(text, url).toContain("blocked_link");
+      await expectBlockedEverywhere(o, url, [linkBlock("b-1", url)]);
     }
+    // A theme background image is a design field: it stays a PATCH of pages.draft and is not a link.
+    const { data: row } = await adminClient().from("pages").select("draft").eq("id", o.pageId).single();
+    const frozen = row!.draft as Record<string, unknown>;
     const withBackground = {
-      ...draftOf(o.handle, 2, [linkBlock("b-1", "https://ok.example")]),
+      ...frozen,
+      rev: Number(frozen.rev ?? 1) + 1,
       theme: {
         ref: null,
         overrides: { bgImage: `http://127.0.0.1:54321/storage/v1/object/public/page-media/${o.id}/bg-0123abcd.webp` },
@@ -160,21 +155,19 @@ test.describe("M5-03 the draft write refuses a blocked link", () => {
     test.skip(!desktopOnly(info), "no UI involved");
     const o = await owner("bl-late");
     const late = `blk-${rand(8)}.example`;
-    const saved = await rest(o.token, `/pages?id=eq.${o.pageId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ draft: draftOf(o.handle, 2, [linkBlock("b-1", `https://${late}/x`)]) }),
-    });
-    expect(saved.status).toBe(200);
+    const saved = await writeHomeDraft(o.pageId, [linkBlock("b-1", `https://${late}/x`)]);
+    expect(saved.error).toBeNull();
     const { error } = await adminClient().from("blocked_domains").insert({ domain: late, reason: "e2e" });
     expect(error).toBeNull();
     domains.push(late);
-    const edit = await rest(o.token, `/pages?id=eq.${o.pageId}`, {
-      method: "PATCH",
-      body: JSON.stringify({ draft: { ...draftOf(o.handle, 3, [linkBlock("b-1", `https://${late}/x`)]), profile: { name: "New name", bio: "", photo: null } } }),
+    const rev = (await storedEntry(o.pageId)).rev;
+    // The browser's attempt is refused at the door; the attacker's unrelated edit hits the entry trigger.
+    await expectClientBlockWriteRefused(o.token, o.pageId, [linkBlock("b-1", `https://${late}/x`)]);
+    const edit = await writeHomeDraft(o.pageId, [linkBlock("b-1", `https://${late}/x`)], {
+      profile: { name: "New name", bio: "", photo: null },
     });
-    expect(edit.status).toBe(400);
-    expect(await edit.text()).toContain("blocked_link");
-    expect((await storedDraft(o.pageId)).rev).toBe(2);
+    expect(edit.error?.message).toContain("blocked_link");
+    expect((await storedEntry(o.pageId)).rev).toBe(rev);
   });
 
   test("M5-03 another owner's page is untouched, and the list and the check function are closed to the publishable key", async ({}, info) => {
@@ -189,7 +182,7 @@ test.describe("M5-03 the draft write refuses a blocked link", () => {
       body: JSON.stringify({ draft: draftOf(b.handle, 9, [linkBlock("b-1", "https://ok.example")]) }),
     });
     expect(await cross.json()).toEqual([]);
-    expect((await storedDraft(b.pageId)).rev).toBe(1);
+    expect((await storedEntry(b.pageId)).blocks).toEqual([]);
 
     for (const [who, token] of [["anon", null], ["authenticated", a.token]] as const) {
       const list = await rest(token, "/blocked_domains?select=domain");
