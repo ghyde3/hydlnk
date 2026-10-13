@@ -2,7 +2,7 @@ import type { Request } from "@playwright/test";
 import { DESKTOP, PHONE } from "../../../scripts/lib/viewports";
 import { adminClient } from "../fixtures/auth";
 import { expireOwnerPages } from "../fixtures/expire";
-import { cleanupUsers, desktopOnly, rand } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, publishHome, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { DEV_PORT } from "../helpers";
 import { draftOf, openEditor, previewScreen, showView, userWithDraft } from "../m2/blocks-helpers";
@@ -285,8 +285,7 @@ test.describe("M4-22 the redirect on the wire", () => {
         ...p.doc,
         blocks: [{ id: IDS.link, type: "link", visible: true, label: "Bad", url: bad }, ...p.doc.blocks.filter((b) => b.id !== IDS.link)],
       };
-      const updated = await admin.from("pages").update({ published: doc }).eq("id", p.pageId);
-      expect(updated.error?.message).toBeUndefined();
+      await publishHome(p.pageId, doc);
       const res = await getClick(p, IDS.link);
       expect(res.status, bad).toBe(404);
       expect(res.location, bad).toBeNull();
@@ -302,7 +301,7 @@ test.describe("M4-22 the redirect on the wire", () => {
       ...p.doc,
       blocks: p.doc.blocks.map((b) => (b.id === IDS.link && b.type === "link" ? { ...b, url: "https://example.org/new" } : b)),
     };
-    await adminClient().from("pages").update({ published: doc, published_at: new Date().toISOString() }).eq("id", p.pageId);
+    await publishHome(p.pageId, doc);
     // Publish expires the page's tag, which a production build reads the click target under; this write
     // went straight to the database, so expire it the way an admin action does.
     await expireOwnerPages(browser, p.userId);

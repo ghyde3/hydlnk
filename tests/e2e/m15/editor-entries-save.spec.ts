@@ -55,8 +55,10 @@ test("1b1-17 a Home block, the name, a theme value and a sub-page block all pers
   await expect(page.locator("[data-save-problem]")).toHaveCount(0);
 
   // The frozen blocks in pages.draft are never written by the editor.
-  const row = await pageRow(user.pageId);
-  expect((row.draft.blocks ?? []).map((b: { id: string }) => b.id)).not.toContain("lnk-aaaaaaaa");
+  const frozen = await adminClient().from("pages").select("draft").eq("id", user.pageId).single();
+  if (frozen.error) throw new Error(frozen.error.message);
+  const frozenBlocks = (frozen.data.draft as { blocks?: Array<{ id: string }> }).blocks ?? [];
+  expect(frozenBlocks.map((b) => b.id)).not.toContain("lnk-aaaaaaaa");
 
   await reloadEditor(page);
   expect((await pageRow(user.pageId)).draft.theme.overrides.radius).toBe(20);

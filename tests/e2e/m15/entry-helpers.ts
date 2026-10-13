@@ -20,6 +20,16 @@ export async function seedEntries(siteId: string): Promise<Seeded> {
     .single();
   if (type.error) throw new Error(type.error.message);
   const insert = async (draft: unknown) => {
+    // A site made through insertPage already has its Home entry: Home's content goes into it.
+    if ((draft as { path?: string }).path === "/") {
+      const home = await seedHome(siteId);
+      const set = await admin
+        .from("content_entries")
+        .update({ draft: draft as never })
+        .eq("id", home);
+      if (set.error) throw new Error(set.error.message);
+      return home;
+    }
     const made = await admin
       .from("content_entries")
       .insert({ site_id: siteId, type_id: type.data.id, draft: draft as never })
@@ -54,6 +64,25 @@ export async function seedEntries(siteId: string): Promise<Seeded> {
 /** Only Home's '/' entry, with `blocks` (none by default): the moved layout of a site with no sub-pages yet. */
 export async function seedHome(siteId: string, blocks: unknown[] = []): Promise<string> {
   const admin = adminClient();
+  // A site made through insertPage is already moved and has its Home entry: reuse it.
+  const existing = await admin
+    .from("content_entries")
+    .select("id, draft")
+    .eq("site_id", siteId)
+    .eq("draft->>path", "/")
+    .limit(1);
+  if (existing.error) throw new Error(existing.error.message);
+  if (existing.data.length > 0) {
+    const row = existing.data[0]!;
+    if (blocks.length > 0) {
+      const set = await admin
+        .from("content_entries")
+        .update({ draft: { ...(row.draft as object), blocks } as never })
+        .eq("id", row.id);
+      if (set.error) throw new Error(set.error.message);
+    }
+    return row.id as string;
+  }
   const type = await admin
     .from("content_types")
     .select("id")

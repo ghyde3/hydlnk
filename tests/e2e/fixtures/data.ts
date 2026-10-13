@@ -5,6 +5,7 @@ import {
   adminClient,
   deleteUser,
   findUserId,
+  moveSite,
   publishableKey,
   signInAs,
   supabaseUrl,
@@ -156,11 +157,36 @@ export async function accessTokenFor(email: string): Promise<string> {
 // Pages and plans (secret key, test setup only)
 // ---------------------------------------------------------------------------------------------
 
-/** Direct page insert: an empty draft, unpublished, unless `extra` says otherwise. */
+export { moveSite };
+
+/**
+ * Publishes `doc` (a publish form with its blocks) on a moved site the way Publish does: Home's
+ * entry gets the blocks, the pages row the design. For a test that wants the live page to change
+ * "around" the validation; the site must have no sub-pages (publish_site is given none).
+ */
+export async function publishHome(pageId: string, doc: unknown, publishedAt?: string): Promise<void> {
+  const admin = adminClient();
+  const owner = await admin.from("pages").select("owner_id").eq("id", pageId).single();
+  if (owner.error) throw new Error(`publishHome lookup failed: ${owner.error.message}`);
+  const done = await admin.rpc("publish_site", {
+    p_page_id: pageId,
+    p_owner_id: owner.data.owner_id,
+    p_home: doc as never,
+    p_sub_pages: [],
+    p_published_at: publishedAt ?? new Date().toISOString(),
+  });
+  if (done.error) throw new Error(`publish_site failed: ${done.error.message}`);
+}
+
+/**
+ * Direct page insert: an empty draft, unpublished, unless `extra` says otherwise. The site is then
+ * moved into page entries (Home's '/' entry), as a claimed site is; `{ move: false }` keeps the old layout.
+ */
 export async function insertPage(
   ownerId: string,
   handle: string,
   extra: Record<string, unknown> = {},
+  opts: { move?: boolean } = {},
 ): Promise<string> {
   const { data, error } = await adminClient()
     .from("pages")
@@ -168,6 +194,7 @@ export async function insertPage(
     .select("id")
     .single();
   if (error) throw new Error(`insertPage(${handle}) failed: ${error.message}`);
+  if (opts.move !== false) await moveSite(data.id as string);
   return data.id as string;
 }
 
@@ -182,6 +209,7 @@ export async function addPage(userId: string, handle: string): Promise<string> {
     .select("id")
     .single();
   if (inserted.error) throw new Error(`addPage failed: ${inserted.error.message}`);
+  await moveSite(inserted.data.id as string);
   return inserted.data.id as string;
 }
 
