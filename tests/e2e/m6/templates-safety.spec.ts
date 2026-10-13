@@ -1,6 +1,7 @@
 import { expect, test, type Request } from "@playwright/test";
 import { cleanupUsers, desktopOnly, makeUser } from "../fixtures/data";
 import { restAs } from "../fixtures/http";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { accessToken } from "../m2/editor-helpers";
 import { emptyDraft, newBlockId, type Block, type DraftDoc } from "@/lib/document";
 import { applyTemplate, templateById } from "@/lib/templates";
@@ -65,9 +66,14 @@ test.describe("M6-40 what an apply writes", () => {
     await page.waitForTimeout(1_000);
 
     const writes = log.filter((entry) => !["GET", "HEAD", "OPTIONS"].includes(entry.method));
-    expect(writes.map((entry) => entry.method)).toEqual(["PATCH"]);
-    expect(writes[0]!.url).toContain("/rest/v1/pages");
-    expect(writes[0]!.url).toContain(`id=eq.${user.pageId}`);
+    // After the cutover (M15-14): Home's blocks go through the server save route (a POST), the design
+    // fields stay one draft PATCH of the pages row under the user's session.
+    expect(writes.map((entry) => entry.method).sort()).toEqual(["PATCH", "POST"]);
+    const patch = writes.find((entry) => entry.method === "PATCH")!;
+    expect(patch.url).toContain("/rest/v1/pages");
+    expect(patch.url).toContain(`id=eq.${user.pageId}`);
+    const post = writes.find((entry) => entry.method === "POST")!;
+    expect(post.url).toMatch(new RegExp(`/api/pages/${user.pageId}/entries/[0-9a-f-]+/draft$`));
     expect(log.filter((entry) => entry.url.includes("/rest/v1/themes"))).toEqual([]);
     expect(log.filter((entry) => entry.url.includes("/storage/v1/"))).toEqual([]);
     expect(log.filter((entry) => entry.action)).toEqual([]);
@@ -102,11 +108,8 @@ test.describe("M6-40 direct-API abuse", () => {
 
     // The same on the user's own page works (RLS lets a draft take anything it can hold) ...
     const fifty1 = draftWithBlocks(own.handle, dividers(51));
-    const accepted = await restAs(token, `/pages?id=eq.${own.pageId}`, {
-      method: "PATCH",
-      body: { draft: fifty1 },
-    });
-    expect(accepted.status).toBe(200);
+    // M15-14: the browser write is refused (HL013); the database takes the draft in Home's entry.
+    await abuseHomeBlocks(token, own.pageId, fifty1.blocks);
     expect((await pageRow(own.pageId)).draft.blocks).toHaveLength(51);
 
     // ... and Publish refuses it, with nothing published.

@@ -2,7 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly, publishHome } from "../fixtures/data";
-import { rawRequest, restAs } from "../fixtures/http";
+import { rawRequest } from "../fixtures/http";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { BLOCK_TYPES, BLOCK_TYPE_LABELS, LIMITS, draftDocSchema, newBlockId } from "@/lib/document";
 import {
   accessToken,
@@ -222,13 +223,11 @@ test.describe("M2-10 add a block", () => {
   test("M2-10 direct API: a draft of 51 blocks is accepted by the database", async ({
     context,
   }) => {
+    // M15-14: a browser's PostgREST write of Home's blocks is refused (HL013); the 51-block draft is
+    // planted in Home's entry with the secret key, and the database takes it.
     const user = await emptyUser(context, "ad4");
     const token = await accessToken(context);
-    const res = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      body: { draft: draftWith(user.handle, dividers(LIMITS.blocks + 1)) },
-    });
-    expect(res.status).toBe(200);
+    await abuseHomeBlocks(token, user.pageId, dividers(LIMITS.blocks + 1));
     expect((await pageRow(user.pageId)).draft.blocks).toHaveLength(51);
   });
 
@@ -555,11 +554,8 @@ test.describe("M2-12 visibility toggle", () => {
     const token = await accessToken(context);
     const draft = (await pageRow(user.pageId)).draft;
     const hiddenAll = { ...draft, blocks: draft.blocks.map((b) => ({ ...b, visible: false })) };
-    const res = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      body: { draft: hiddenAll },
-    });
-    expect(res.status).toBe(200);
+    // M15-14: the browser write is refused (HL013); the hostile draft goes into Home's entry.
+    await abuseHomeBlocks(token, user.pageId, hiddenAll.blocks);
     await openEditor(page);
     await page
       .getByTestId("workspace-toolbar")
@@ -569,6 +565,8 @@ test.describe("M2-12 visibility toggle", () => {
     const row = await pageRow(user.pageId);
     expect((row.published as { blocks: unknown[] }).blocks).toEqual([]);
     expect(row.draft.blocks).toHaveLength(10);
+    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    expect(live.body).not.toContain("Studio rental by the hour");
   });
 
   test("M2-12 phone: the hit area is 44px both ways and nothing overflows; desktop: the toggle sits at the right edge", async ({
