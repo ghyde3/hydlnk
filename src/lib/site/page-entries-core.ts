@@ -231,3 +231,76 @@ export async function listAllPageEntriesWithClient(
     draft: row.draft,
   }));
 }
+
+/** The live sub-page entry `entryId` of the site, never Home, as the draft writer reads it; or null. */
+export async function readSubPageEntryWithClient(
+  client: SupabaseClient,
+  siteId: string,
+  entryId: string,
+): Promise<{ id: string; rev: number; draft: unknown } | null> {
+  const type = await client
+    .from("content_types")
+    .select("id")
+    .eq("site_id", siteId)
+    .eq("key", "page")
+    .maybeSingle();
+  if (type.error) throw new Error(`Page type lookup failed: ${type.error.message}`);
+  if (!type.data) return null;
+  const found = await client
+    .from("content_entries")
+    .select("id, site_id, rev, draft")
+    .eq("id", entryId)
+    .eq("site_id", siteId)
+    .eq("type_id", (type.data as { id: string }).id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (found.error) throw new Error(`Page entry lookup failed: ${found.error.message}`);
+  const row = found.data as { id: string; site_id: string; rev: number; draft: unknown } | null;
+  if (!row || row.site_id !== siteId) return null;
+  if ((row.draft as { path?: unknown } | null)?.path === "/") return null;
+  return { id: row.id, rev: Number(row.rev), draft: row.draft };
+}
+
+/** The draft and live paths of every page entry of the site not in the trash (paths only, never drafts). */
+export async function listPagePathsWithClient(
+  client: Db,
+  siteId: string,
+): Promise<{ draftPath: string | null; livePath: string | null }[]> {
+  const existing = await client
+    .from("content_entries")
+    .select("path:draft->>path, live_path, content_types!inner(key)")
+    .eq("site_id", siteId)
+    .eq("content_types.key", "page")
+    .is("deleted_at", null);
+  if (existing.error) throw new Error(`Sub-page lookup failed: ${existing.error.message}`);
+  return (existing.data ?? []).map((row) => ({
+    draftPath: (row as unknown as { path: string | null }).path,
+    livePath: row.live_path,
+  }));
+}
+
+/** How many sub-page entries the site holds, trash included (what the page-limit trigger counted). */
+export async function countSubPageEntriesWithClient(client: Db, siteId: string): Promise<number> {
+  const count = await client
+    .from("content_entries")
+    .select("id, content_types!inner(key)", { count: "exact", head: true })
+    .eq("site_id", siteId)
+    .eq("content_types.key", "page")
+    .neq("draft->>path", "/");
+  return count.count ?? 0;
+}
+
+/** The sub-page entry of the site that is not Home and not in the trash, with its rev and dates. */
+export async function readLiveSubPageWithClient(client: Db, siteId: string, entryId: string) {
+  const found = await client
+    .from("content_entries")
+    .select("id, rev, created_at, published, first_published_at, content_types!inner(key)")
+    .eq("id", entryId)
+    .eq("site_id", siteId)
+    .eq("content_types.key", "page")
+    .neq("draft->>path", "/")
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (found.error) throw new Error(`Sub-page lookup failed: ${found.error.message}`);
+  return found.data;
+}

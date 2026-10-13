@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadDraft } from "@/lib/editor/load";
 import { toPublishForm, type DraftDoc } from "@/lib/document";
 import { PLAN_LIMITS } from "@/lib/limits";
+import { createEntryWithClient } from "@/lib/content/entries-core";
 import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 import { adminForTests, makeRuntime } from "./support/mcp-db";
 import { richDraft } from "./support/mcp-fixtures";
@@ -398,6 +399,24 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
         .from("pages")
         .update({ published: { version: 1 } as never, published_at: new Date().toISOString() })
         .eq("id", a.pageId);
+      // A published site is the site row's design plus a published Home entry (the move): the
+      // legacy column alone no longer says "published".
+      const actor = { userId: a.userId, source: "editor" as const };
+      const home = await createEntryWithClient(admin, {
+        actor,
+        siteId: a.pageId,
+        typeKey: "page",
+        draft: { path: "/", title: "", description: "", blocks: [] },
+      });
+      if (!home.ok) throw new Error(`creating Home failed: ${home.error}`);
+      const made = await admin.rpc("publish_site", {
+        p_page_id: a.pageId,
+        p_owner_id: a.userId,
+        p_home: { version: 1, blocks: [] } as never,
+        p_sub_pages: [],
+        p_published_at: new Date().toISOString(),
+      });
+      if (made.error) throw new Error(`publishing Home failed: ${made.error.message}`);
       const live = await rt.call("get_analytics", { pageId: a.pageId }, who(a));
       expect(live.text).toBe(
         "No views or clicks have been recorded yet. Publish the page and share it to start counting.",

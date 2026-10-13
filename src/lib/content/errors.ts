@@ -82,7 +82,13 @@ export function mapDbError(err: {
   if (blocked)
     return { ...failure("blocked_link"), hosts: blocked.hosts, blockIds: blocked.blockIds };
   // The 1 MiB cap on a draft (a CHECK), for a draft the schemas could not bound.
-  if (err.code === "23514" && err.message?.includes("content_entries_draft_integrity")) {
+  // The entry size checks raise 23514 with these messages (draft over its cap, published copy over its cap).
+  if (
+    err.code === "23514" &&
+    (err.message?.includes("content_entries_draft_integrity") ||
+      err.message === "draft_too_large" ||
+      err.message === "published_too_large")
+  ) {
     return failure("too_large");
   }
   // HL012 covers a path and a slug, reserved or taken; the message says which (`slug "…" is reserved`).

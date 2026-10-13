@@ -13,6 +13,13 @@ export type {
   ContentSource,
 } from "./types";
 
+/**
+ * The same operations for callers that hold their own client (a route's tool core, a version restore
+ * run against a test database). They write through the one writer; they do not expire the page tag.
+ */
+export { createEntryWithClient, updateEntryWithClient } from "./entries-core";
+export { purgeEntryWithClient, restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
+
 import { invalidatePage } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";

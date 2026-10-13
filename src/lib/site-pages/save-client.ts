@@ -21,7 +21,9 @@ export interface SubPageRevisions {
   refresh(siteId: string): Promise<void>;
 }
 
-export function createSubPageRevisions(initial: Readonly<Record<string, number>>): SubPageRevisions {
+export function createSubPageRevisions(
+  initial: Readonly<Record<string, number>>,
+): SubPageRevisions {
   const map = new Map(Object.entries(initial));
   return {
     get: (id) => map.get(id),

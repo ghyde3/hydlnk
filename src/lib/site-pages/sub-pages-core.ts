@@ -6,9 +6,13 @@ import {
   suggestPath,
   type SubPageDraft,
 } from "@/lib/document";
-import { createEntryWithClient } from "@/lib/content/entries-core";
-import { purgeEntryWithClient, trashEntryWithClient } from "@/lib/content/trash-core";
-import type { ContentActor } from "@/lib/content/types";
+import {
+  countSubPageEntriesWithClient,
+  listPagePathsWithClient,
+  readLiveSubPageWithClient,
+} from "@/lib/site/page-entries-core";
+import { createEntryWithClient, purgeEntryWithClient, trashEntryWithClient } from "@/lib/content";
+import type { ContentActor } from "@/lib/content";
 import { pagesPerSiteMessage, toPlanId } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -149,18 +153,10 @@ export async function createSubPageWithClient(
 
   // Paths only (draft->>path), never whole drafts. Home ('/') is not a sub-page's path, and a
   // trashed page has let go of its path.
-  const existing = await admin
-    .from("content_entries")
-    .select("path:draft->>path, live_path, content_types!inner(key)")
-    .eq("site_id", site.id)
-    .eq("content_types.key", "page")
-    .is("deleted_at", null);
-  if (existing.error) throw new Error(`Sub-page lookup failed: ${existing.error.message}`);
   const taken: string[] = [];
-  for (const row of existing.data ?? []) {
-    const { path: draftPath } = row as unknown as { path: string | null };
+  for (const { draftPath, livePath } of await listPagePathsWithClient(admin, site.id)) {
     if (typeof draftPath === "string" && draftPath !== "/") taken.push(draftPath);
-    if (row.live_path !== null && row.live_path !== "/") taken.push(row.live_path);
+    if (livePath !== null && livePath !== "/") taken.push(livePath);
   }
 
   let path: string;
@@ -195,13 +191,8 @@ export async function createSubPageWithClient(
     switch (made.error) {
       case "page_limit": {
         // Home plus every sub-page entry, trash included: what the trigger counted.
-        const count = await admin
-          .from("content_entries")
-          .select("id, content_types!inner(key)", { count: "exact", head: true })
-          .eq("site_id", site.id)
-          .eq("content_types.key", "page")
-          .neq("draft->>path", "/");
-        return failure("page_limit", pagesPerSiteMessage(account.plan, (count.count ?? 0) + 1));
+        const count = await countSubPageEntriesWithClient(admin, site.id);
+        return failure("page_limit", pagesPerSiteMessage(account.plan, count + 1));
       }
       case "path_taken":
         return failure("path_taken");
@@ -291,19 +282,7 @@ export async function deleteSubPageWithClient(
   const subPageId = input.subPageId.toLowerCase();
 
   // The page entry of this site that is not Home and not already in the trash.
-  const read = async () => {
-    const found = await admin
-      .from("content_entries")
-      .select("id, rev, created_at, published, first_published_at, content_types!inner(key)")
-      .eq("id", subPageId)
-      .eq("site_id", site.id)
-      .eq("content_types.key", "page")
-      .neq("draft->>path", "/")
-      .is("deleted_at", null)
-      .maybeSingle();
-    if (found.error) throw new Error(`Sub-page lookup failed: ${found.error.message}`);
-    return found.data;
-  };
+  const read = () => readLiveSubPageWithClient(admin, site.id, subPageId);
 
   // A concurrent autosave moves the rev: read it again, a few times.
   let entry = await read();

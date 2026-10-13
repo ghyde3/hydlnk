@@ -1,8 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACCOUNT_SUSPENDED_CODE } from "@/lib/admin/suspension";
-import { updateEntryWithClient } from "@/lib/content/entries-core";
-import type { ContentFailure } from "@/lib/content/types";
+import { updateEntryWithClient } from "@/lib/content";
+import type { ContentFailure } from "@/lib/content";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**

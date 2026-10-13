@@ -14,10 +14,13 @@ import { jsonbTextBytes } from "@/lib/editor/size";
 import { PLAN_LIMITS, toPlanId } from "@/lib/limits";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
 import { mediaOrigin } from "@/lib/media/url";
-import { createEntryWithClient, updateEntryWithClient } from "@/lib/content/entries-core";
+import {
+  createEntryWithClient,
+  restoreEntryWithClient,
+  updateEntryWithClient,
+} from "@/lib/content";
 import { listAllPageEntriesWithClient, type PageEntryRow } from "@/lib/site/page-entries-core";
-import { restoreEntryWithClient } from "@/lib/content/trash-core";
-import type { ContentFailure } from "@/lib/content/types";
+import type { ContentFailure } from "@/lib/content";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";

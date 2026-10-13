@@ -322,8 +322,8 @@ describe("M6-41 publish freezes the three tokens", () => {
     expect(Object.keys(form.tokens).sort()).toEqual([...TOKEN_KEYS].sort());
   });
 
-  it("the cache version of the public read is '3'", () => {
-    expect(PUBLIC_READ_CACHE_VERSION).toBe("3");
+  it("the cache version of the public read is '4'", () => {
+    expect(PUBLIC_READ_CACHE_VERSION).toBe("4");
   });
 });
 

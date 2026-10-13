@@ -14,9 +14,9 @@ import type { Json } from "@/lib/supabase/database.types";
 import { collectRefsByPath } from "@/lib/mcp/images";
 import { MESSAGES, ToolFailure } from "@/lib/mcp/errors";
 import { ACCOUNT_SUSPENDED_MESSAGE } from "@/lib/admin/suspension";
-import { updateEntryWithClient } from "@/lib/content/entries-core";
-import type { ContentFailure } from "@/lib/content/types";
-import { getHomeDraftWithClient } from "@/lib/site/page-entries-core";
+import { updateEntryWithClient } from "@/lib/content";
+import type { ContentFailure } from "@/lib/content";
+import { getHomeDraftWithClient, readSubPageEntryWithClient } from "@/lib/site/page-entries-core";
 import type { AdminClient } from "@/lib/mcp/types";
 
 /**
@@ -138,27 +138,11 @@ async function readSubPageEntry(
   siteId: string,
   entryId: string,
 ): Promise<EntryRow | null> {
-  const type = await loose
-    .from("content_types")
-    .select("id")
-    .eq("site_id", siteId)
-    .eq("key", "page")
-    .maybeSingle();
-  if (type.error) throw new ToolFailure("server_error", MESSAGES.serverError);
-  if (!type.data) return null;
-  const found = await loose
-    .from("content_entries")
-    .select("id, site_id, rev, draft")
-    .eq("id", entryId)
-    .eq("site_id", siteId)
-    .eq("type_id", (type.data as { id: string }).id)
-    .is("deleted_at", null)
-    .maybeSingle();
-  if (found.error) throw new ToolFailure("server_error", MESSAGES.serverError);
-  const row = found.data as (EntryRow & { site_id: string }) | null;
-  if (!row || row.site_id !== siteId) return null;
-  if ((row.draft as { path?: unknown } | null)?.path === "/") return null;
-  return { id: row.id, rev: Number(row.rev), draft: row.draft };
+  try {
+    return await readSubPageEntryWithClient(loose, siteId, entryId);
+  } catch {
+    throw new ToolFailure("server_error", MESSAGES.serverError);
+  }
 }
 
 /** A content writer refusal in a tool's words. */
