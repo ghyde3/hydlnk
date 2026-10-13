@@ -229,6 +229,40 @@ describe.skipIf(!run || !dockerDb())(
       expect(about.draft.title).toBe("About then");
     });
 
+    it("a conflict on the design write puts Home's blocks back: nothing changes", async () => {
+      const w = await world("v21-conflict-home");
+      const before = (await entry(w.homeId))!;
+      // Another tab autosaves the design right after the restore wrote Home's blocks.
+      let bumped = false;
+      const racing = new Proxy(admin, {
+        get(target, prop, receiver) {
+          if (prop !== "rpc") return Reflect.get(target, prop, receiver);
+          return async (...args: Parameters<typeof admin.rpc>) => {
+            const out = await target.rpc(...args);
+            if (!bumped && args[0] === "record_entry_revision") {
+              bumped = true;
+              const row = (await site(w.o.pageId)) as any;
+              await target
+                .from("pages")
+                .update({ draft: { ...row, rev: Number(row.rev) + 1 } as never })
+                .eq("id", w.o.pageId);
+            }
+            return out;
+          };
+        },
+      });
+      const result = await core.restorePageVersionCore(input(w), {
+        admin: racing as never,
+        mediaExists: async () => true,
+      });
+      expect(bumped).toBe(true);
+      expect(result).toMatchObject({ ok: false, reason: "conflict" });
+      const after = (await entry(w.homeId))!;
+      expect(after.draft.blocks.map((b: any) => b.label)).toEqual(
+        before.draft.blocks.map((b: any) => b.label),
+      );
+    });
+
     it("brings a trashed page back and recreates a purged one under its old id", async () => {
       const w = await world("v21-recreate");
       const about = (await entry(w.aboutId))!;

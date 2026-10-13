@@ -40,6 +40,7 @@ export type SubSaveResult =
   | { kind: "conflict" }
   | { kind: "too-large" }
   | { kind: "storage-full" }
+  | { kind: "invalid" }
   | ({ kind: "blocked" } & BlockedLinkError)
   | { kind: "error" };
 
@@ -244,6 +245,13 @@ export class SubPageSaver {
           if (!newer) {
             this.dirty.delete(id);
             this.unsendable.set(id, "storage-full");
+          }
+          break;
+        case "invalid":
+          // Refused for good (a taken path, a page the server will not take): flagged until edited.
+          if (!newer) {
+            this.dirty.delete(id);
+            this.unsendable.set(id, "invalid");
           }
           break;
         case "unauthorized":

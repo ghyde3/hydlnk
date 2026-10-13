@@ -232,3 +232,49 @@ describe.skipIf(!haveDb)("content-move-rollback.sql, applied", () => {
     });
   });
 });
+
+describe("block-publish-before-rollback.sql", () => {
+  const blockPath = resolve(root, "supabase/rollback/block-publish-before-rollback.sql");
+
+  it("is not a migration, replaces only publish_site and keeps its grants", () => {
+    const sql = readFileSync(blockPath, "utf8");
+    expect(sql).not.toMatch(/drop table|truncate/i);
+    expect(sql).toContain("create or replace function public.publish_site(");
+    expect(sql).toContain("raise exception 'maintenance'");
+    expect(sql).toContain(
+      "grant execute on function public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz) to service_role;",
+    );
+    expect(sql.match(/create or replace function/g)).toHaveLength(1);
+  });
+
+  it("the full rollback puts the real publish_site body back after it", () => {
+    const rollback = readFileSync(rollbackPath, "utf8");
+    expect(rollback).toContain("create or replace function public.publish_site(");
+    expect(rollback).not.toContain("'maintenance'");
+  });
+
+  it.skipIf(!haveDb)("makes publish_site refuse with 22023 in the database", () => {
+    const script = `
+begin;
+\\set ON_ERROR_STOP on
+${readFileSync(blockPath, "utf8")}
+create function pg_temp.try_publish() returns text language plpgsql as $f$
+begin
+  perform public.publish_site('${SITE}', '${OWNER}', '{}'::jsonb, '[]'::jsonb);
+  return 'published';
+exception when others then
+  return sqlstate || '|' || sqlerrm;
+end $f$;
+set local role service_role;
+select 'R|' || pg_temp.try_publish();
+reset role;
+rollback;
+`;
+    const out = execFileSync(
+      "docker",
+      ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
+      { input: script, encoding: "utf8" },
+    );
+    expect(out).toContain("R|22023|maintenance");
+  });
+});

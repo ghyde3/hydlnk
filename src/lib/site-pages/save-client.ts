@@ -42,8 +42,12 @@ export function createSubPageSaveFn(revisions: SubPageRevisions, siteId: string)
         return { kind: "ok" };
       case "blocked":
         return { kind: "blocked", hosts: answer.hosts, blockIds: answer.blockIds };
+      // Refused for good: the same draft is refused again, so none of these is retried on a timer.
       case "invalid":
-        return { kind: "error" };
+      case "path":
+        return { kind: "invalid" };
+      case "suspended":
+        return { kind: "unauthorized" };
       default:
         return { kind: answer.kind };
     }

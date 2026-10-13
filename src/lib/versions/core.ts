@@ -420,6 +420,20 @@ export async function restorePageVersionCore(
 
   const actor = { userId: open.ownerId, source: "system" } as const;
   const entries: RestoredEntry[] = [];
+  // Set once Home's blocks are written: the design write below can still fail, and then Home goes back.
+  let homeWritten: { id: string; rev: number; before: unknown } | null = null;
+  const undoHome = async (): Promise<void> => {
+    if (!homeWritten) return;
+    const back = await updateEntryWithClient(open.admin, {
+      actor,
+      entryId: homeWritten.id,
+      expectedRev: homeWritten.rev,
+      draft: homeWritten.before,
+    });
+    // A newer save of Home (another tab) wins over the undo: its edits are in the entry already.
+    if (!back.ok) console.error(`[versions] restore undo=${back.error} page=${open.pageId}`);
+    homeWritten = null;
+  };
 
   // Home's blocks first, to the '/' entry under the rev read: a refusal or a conflict stops
   // everything and nothing else is written. Home keeps its own path, title and description.
@@ -442,6 +456,7 @@ export async function restorePageVersionCore(
       return failed("error");
     }
     entries.push({ id: homeRow.id, rev: wrote.rev });
+    homeWritten = { id: homeRow.id, rev: wrote.rev, before: homeRow.draft };
   }
 
   // The design to `pages.draft`, guarded by its rev (the stale-tab guard). The blocks there are the
@@ -459,6 +474,8 @@ export async function restorePageVersionCore(
       : update.eq("draft->>rev", open.draftRev)
   ).select("id");
   if (written.error) {
+    // The design was not written, so Home's blocks must not stay restored on their own.
+    await undoHome();
     // A listing that landed between the check and the write: the trigger refuses the draft (HL005).
     const refusal = readBlockedLinkError(written.error);
     if (refusal) {
@@ -472,6 +489,8 @@ export async function restorePageVersionCore(
     return { ok: false, reason: "error" };
   }
   if (!written.data || written.data.length === 0) {
+    // A conflict changes nothing: Home's blocks go back to the draft they were.
+    await undoHome();
     logFailure("restore", "conflict", ids);
     return { ok: false, reason: "conflict" };
   }

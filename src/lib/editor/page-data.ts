@@ -1,7 +1,11 @@
 import "server-only";
 import { publishedDocSchema, type PublishDoc } from "@/lib/document";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
-import { getHomeDraftWithClient } from "@/lib/site/page-entries-core";
+import {
+  getHomeDraftWithClient,
+  getPublishedHomeWithClient,
+  mergeHomePublished,
+} from "@/lib/site/page-entries-core";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { loadDraft, type LoadedDraft } from "./load";
 import type { HomeEntryRef } from "./save-client";
@@ -68,8 +72,17 @@ export async function loadEditorPageData(
     themeTokens = parsed.success ? parsed.data : null;
   }
 
+  // Home's published blocks are its page entry's (the copy in pages.published is frozen at the
+  // move). A site with no Home entry keeps its whole document in pages.published.
+  const publishedHome = homeDraft
+    ? await getPublishedHomeWithClient(supabase, page.id)
+    : null;
+  const publishedWhole =
+    data.published === null || !homeDraft
+      ? data.published
+      : mergeHomePublished(data.published, publishedHome);
   const parsedPublished =
-    data.published === null ? null : publishedDocSchema.safeParse(data.published);
+    publishedWhole === null ? null : publishedDocSchema.safeParse(publishedWhole);
   return {
     ...loaded,
     home: homeDraft ? { entryId: homeDraft.entryId, rev: homeDraft.rev } : null,

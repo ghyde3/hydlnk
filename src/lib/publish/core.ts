@@ -158,6 +158,19 @@ export async function publishPageCore(
     return refuse("error");
   }
   if (!homeDraft) {
+    // A site whose Home entry was never made (a failed move at creation): move it now, once, then
+    // read Home again. Nothing else is written before this.
+    try {
+      const moved = await admin.rpc("move_site_content", { p_site: pageId.data });
+      if (moved.error) throw new Error(moved.error.message);
+      homeDraft = await getHomeDraftWithClient(admin, pageId.data);
+      subDrafts = await listDraftPagesWithClient(admin, pageId.data);
+    } catch (error) {
+      console.error("[publish] moving the site to page entries failed", error);
+      return refuse("error");
+    }
+  }
+  if (!homeDraft) {
     console.error("[publish] the site has no Home entry", pageId.data);
     return refuse("error");
   }

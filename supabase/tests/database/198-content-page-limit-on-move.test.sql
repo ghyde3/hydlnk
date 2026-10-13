@@ -37,10 +37,12 @@ select lives_ok(
     where site_id = '00000000-0000-4000-8000-00000198f001' and draft ->> 'path' = 'zq-p1'$$,
   'an edit of a page that is already a counted page is not counted again');
 update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('f');
-select lives_ok(
+-- Home's path is pinned since the cutover review (migration 20261015000010): the plan no longer
+-- stops the move, the pinned path does.
+select throws_ok(
   $$update public.content_entries set draft = jsonb_set(draft, '{path}', '"zq-p3"')
     where id = '00000000-0000-4000-8000-00000198e001'$$,
-  'pro: the same move fits');
+  'HL012', null, 'pro: the same move is refused only by the pinned Home path');
 
 select * from finish();
 rollback;

@@ -13,6 +13,10 @@ export type EntrySaveAnswer =
   | { kind: "blocked"; hosts: string[]; blockIds: string[] }
   | { kind: "unauthorized" }
   | { kind: "invalid" }
+  /** The path is taken or reserved (HL012): the same draft is refused again, so it is not retried. */
+  | { kind: "path" }
+  /** The account is suspended: nothing can be saved until support lifts it. */
+  | { kind: "suspended" }
   | { kind: "error" };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -50,6 +54,8 @@ export async function postEntryDraft(
     case "too-large":
     case "storage-full":
     case "invalid":
+    case "path":
+    case "suspended":
       return { kind: body.kind };
     case "blocked":
       return { kind: "blocked", hosts: strings(body.hosts), blockIds: strings(body.blockIds) };

@@ -203,13 +203,13 @@ describe.skipIf(!run)("1b1-15 publishPageCore over page entries (local Supabase)
     expect(await publish(o)).toMatchObject({ ok: true });
   });
 
-  it("a site with no Home entry is refused without writing", async () => {
+  it("a site with no Home entry is moved by its first Publish, and goes live", async () => {
     const o = await owner("pe8", [], false);
     const a = await sub(o, "Items", "items");
     const result = await publish(o);
-    expect(result).toMatchObject({ ok: false, reason: "error" });
-    expect((await entry(a)).published).toBeNull();
-    expect((await pageRow(o)).published).toBeNull();
+    expect(result).toMatchObject({ ok: true });
+    expect((await entry(a)).published).not.toBeNull();
+    expect((await pageRow(o)).published).not.toBeNull();
   });
 
   it("Unpublish takes Home's entry and every sub-page entry offline, with no code change", async () => {
