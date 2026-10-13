@@ -51,7 +51,7 @@ export interface PageRow {
 async function homeEntry(pageId: string) {
   const { data, error } = await adminClient()
     .from("content_entries")
-    .select("id, rev, draft")
+    .select("id, rev, draft, published")
     .eq("site_id", pageId)
     .eq("draft->>path", "/")
     .is("deleted_at", null)
@@ -73,6 +73,8 @@ export async function pageRow(pageId: string): Promise<PageRow> {
   if (home) {
     const blocks = (home.draft as { blocks?: unknown } | null)?.blocks;
     row.draft = { ...(row.draft as object), blocks } as unknown as DraftDoc;
+    // pages.published is a frozen copy on a moved site: the live form is the Home entry's.
+    if (home.published) row.published = home.published;
   }
   return row;
 }

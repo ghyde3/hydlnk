@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient, supabaseUrl } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, phoneOnly, publishHome } from "../fixtures/data";
 import { rawRequest, restAs } from "../fixtures/http";
 import { BLOCK_TYPES, BLOCK_TYPE_LABELS, LIMITS, draftDocSchema, newBlockId } from "@/lib/document";
 import {
@@ -676,20 +676,13 @@ test.describe("M2-13 delete with undo", () => {
       user.pageId,
       draftWith(user.handle, [{ id, type: "header", visible: true, text: "Only block here" }]),
     );
-    await adminClient()
-      .from("pages")
-      .update({
-        published: {
-          version: 1,
-          profile: { name: user.handle, bio: "", photo: null },
-          theme: { ref: null, overrides: {} },
-          tokens: (await import("@/lib/theme")).SYSTEM_DEFAULT_TOKENS,
-          blocks: [{ id, type: "header", visible: true, text: "Only block here" }],
-        },
-        published_at: new Date().toISOString(),
-      })
-      .eq("id", user.pageId)
-      .throwOnError();
+    await publishHome(user.pageId, {
+      version: 1,
+      profile: { name: user.handle, bio: "", photo: null },
+      theme: { ref: null, overrides: {} },
+      tokens: (await import("@/lib/theme")).SYSTEM_DEFAULT_TOKENS,
+      blocks: [{ id, type: "header", visible: true, text: "Only block here" }],
+    });
     const storage: string[] = [];
     page.on("request", (r) => {
       if (r.url().includes("/storage/v1/")) storage.push(`${r.method()} ${r.url()}`);

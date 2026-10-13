@@ -187,13 +187,14 @@ test("M11-08 add, rename, reorder, hide, delete and the Free limit", async ({ pa
   await expect(rowsOf(page)).toHaveCount(2);
   await expect(rowTitled(page, "Our Menu")).toHaveCount(0);
   expect(await subPages(user.pageId)).toHaveLength(1);
-  // The page is in the trash, not gone: its entry is kept with deleted_at set.
-  expect((await allSubPages(user.pageId)).filter((row) => row.deleted_at !== null)).toHaveLength(1);
+  // Delete purges (M15-13): the entry is gone, not trashed.
+  expect((await allSubPages(user.pageId)).filter((row) => row.deleted_at !== null)).toHaveLength(0);
+  expect(await allSubPages(user.pageId)).toHaveLength(1);
   expect(await navItems(user.pageId)).toEqual([second.id]);
-  // Back to Home. A trashed page still counts toward the limit, so Add page stays out of reach.
+  // Back to Home. The purged page freed its slot, so Add page is available again.
   await expect(rowsOf(page).first()).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("add-page")).toHaveCount(0);
-  await expect(page.getByTestId("page-limit-note")).toBeVisible();
+  await expect(page.getByTestId("add-page")).toBeVisible();
+  await expect(page.getByTestId("page-limit-note")).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });
 
