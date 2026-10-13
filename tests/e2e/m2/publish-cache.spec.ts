@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { emptyDraft, publishedDocSchema, toPublishForm, type Block } from "@/lib/document";
 import { adminClient, publishableKey, signInAs, supabaseUrl } from "../fixtures/auth";
-import { addPage, cleanupUsers, makeUser, rand } from "../fixtures/data";
+import { addPage, cleanupUsers, makeUser, publishHome, rand } from "../fixtures/data";
 import { authCookies, cookieHeader } from "../fixtures/http";
 import { pageRow, setDraft, accessToken, emptyUser } from "./editor-helpers";
 import { SERVER_PORT, pngSizeOf, rawBuffer, tenantGet } from "./publish-helpers";
@@ -61,11 +61,7 @@ async function publishedUser(
   draft.profile.bio = `Bio of ${label}`;
   draft.blocks = [link("lnk-cache-0001", "Book now")];
   await setDraft(user.pageId, draft);
-  const { error } = await adminClient()
-    .from("pages")
-    .update({ published: toPublishForm(draft, null), published_at: new Date().toISOString() })
-    .eq("id", user.pageId);
-  expect(error).toBeNull();
+  await publishHome(user.pageId, toPublishForm(draft, null));
   return { ...user, draft };
 }
 

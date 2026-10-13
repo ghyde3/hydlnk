@@ -14,6 +14,7 @@ import {
   rows,
   saveIndicator,
   seededUser,
+  setDraft,
 } from "./editor-helpers";
 
 /**
@@ -44,19 +45,13 @@ function manyBlocks(n: number) {
 }
 
 async function seedBlocks(pageId: string, handle: string, blocks: unknown[]) {
-  const { error } = await adminClient()
-    .from("pages")
-    .update({
-      draft: {
-        version: 1,
-        rev: 0,
-        profile: { name: handle, bio: "A long page", photo: null },
-        theme: { ref: "00000000-0000-4000-8000-000000000001", overrides: {} },
-        blocks,
-      },
-    })
-    .eq("id", pageId);
-  if (error) throw new Error(error.message);
+  await setDraft(pageId, {
+    version: 1,
+    rev: 0,
+    profile: { name: handle, bio: "A long page", photo: null },
+    theme: { ref: "00000000-0000-4000-8000-000000000001", overrides: {} },
+    blocks,
+  });
 }
 
 test.describe("M2-06 desktop: two columns", () => {

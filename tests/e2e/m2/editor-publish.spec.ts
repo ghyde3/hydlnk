@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, phoneOnly, setPublished, signedInUser } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { showPreviewSheet } from "../m7/phone-preview";
 import { newBlockId } from "@/lib/document";
@@ -309,11 +309,7 @@ test.describe("M2-27 the status chip", () => {
     expect(await css(chip, "color")).toBe("rgb(107, 82, 38)");
 
     // Never published: neutral.
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", user.pageId)
-      .throwOnError();
+    await setPublished(user.pageId, false);
     await page.waitForTimeout(1200);
     await reloadEditor(page);
     await expect(chip).toHaveText("Not published");

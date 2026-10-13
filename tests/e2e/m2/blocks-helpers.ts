@@ -108,34 +108,8 @@ export async function addBlock(page: Page, type: BlockType) {
   };
 }
 
-/** Waits until the stored draft satisfies `check` (autosave is asynchronous). */
-export async function expectDraft(
-  pageId: string,
-  check: (draft: DraftDoc) => unknown,
-  message = "the stored draft",
-): Promise<DraftDoc> {
-  let last: DraftDoc | undefined;
-  await expect
-    .poll(
-      async () => {
-        const { data, error } = await adminClient()
-          .from("pages")
-          .select("draft")
-          .eq("id", pageId)
-          .single();
-        if (error) throw new Error(error.message);
-        last = data.draft as DraftDoc;
-        try {
-          return Boolean(check(last));
-        } catch {
-          return false;
-        }
-      },
-      { message, timeout: 15_000 },
-    )
-    .toBe(true);
-  return last!;
-}
+/** Waits until the stored draft satisfies `check` (Home's blocks are read from its entry). */
+export { expectDraft } from "./editor-helpers";
 
 export const css = (locator: Locator, property: string) =>
   locator.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property);
