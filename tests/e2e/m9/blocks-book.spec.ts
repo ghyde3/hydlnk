@@ -8,6 +8,7 @@ import {
   desktopOnly,
   insertPage,
   makeUser,
+  publishHome,
   rand,
 } from "../fixtures/data";
 import {
@@ -19,12 +20,18 @@ import {
   settled,
 } from "./store-blocks-helpers";
 import { expectNoHorizontalScroll, url } from "../helpers";
-import { emptyUser, draftWith, saveIndicator } from "../m2/editor-helpers";
+import {
+  emptyUser,
+  draftWith,
+  expectDraft,
+  pageRow,
+  saveIndicator,
+  setDraft,
+} from "../m2/editor-helpers";
 import {
   addBlock,
   box,
   draftOf,
-  expectDraft,
   makePng,
   openEditor,
   previewScreen,
@@ -234,8 +241,7 @@ test.describe("M9-20 the click redirect for each store", () => {
         links: [{ id: "book-e2e-hidlnk", store: "amazon", url: "https://hidden.example/" }],
       },
     ]);
-    const write = await adminClient().from("pages").update({ draft }).eq("id", live.pageId);
-    expect(write.error).toBeNull();
+    await setDraft(live.pageId, draft);
     const other = await livePage("bk5b", (cover) => [bookOf(cover)]);
     const userAgent = await page.evaluate(() => navigator.userAgent);
 
@@ -290,11 +296,7 @@ test.describe("M9-20 the click redirect for each store", () => {
     expect(before.status()).toBe(302);
     // The republish: the store is gone from the published document.
     const published = publishDocOf([bookOf(live.cover, { links: [LINKS[0]!, LINKS[2]!] })]);
-    const write = await adminClient()
-      .from("pages")
-      .update({ published, published_at: new Date().toISOString() })
-      .eq("id", live.pageId);
-    expect(write.error).toBeNull();
+    await publishHome(live.pageId, published);
     // A write behind the server's back: on a production build the cached click target is expired the
     // way the product does it (M9-13), as Publish would.
     await expireOwnerPages(browser, live.userId);
@@ -453,8 +455,7 @@ test.describe("M9-20 the editor", () => {
       .click();
     await expect(panel.getByRole("button", { name: "Upload cover" })).toBeVisible();
     await expectDraft(pageId, (d) => d.blocks.some((b) => b.type === "book" && b.cover === null));
-    const stored = (await adminClient().from("pages").select("published").eq("id", pageId).single())
-      .data!.published as PublishDoc;
+    const stored = (await pageRow(pageId)).published as PublishDoc;
     expect((stored.blocks[0] as { cover: unknown }).cover).toEqual(cover);
     // The object itself is still in Storage (the live page still draws it).
     const { data } = await adminClient().storage.from("page-media").download(cover.path);

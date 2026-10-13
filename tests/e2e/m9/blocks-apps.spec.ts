@@ -3,12 +3,11 @@ import { adminClient } from "../fixtures/auth";
 import { abuseHomeBlocks, homeEntryOf } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
-import { draftWith, emptyUser, saveIndicator } from "../m2/editor-helpers";
+import { draftWith, emptyUser, expectDraft, saveIndicator, setDraft } from "../m2/editor-helpers";
 import {
   addBlock,
   box,
   draftOf,
-  expectDraft,
   openEditor,
   previewScreen,
   rowOf,
@@ -211,8 +210,7 @@ test.describe("M9-21 the click redirect for each badge", () => {
         ],
       }),
     ]);
-    const write = await adminClient().from("pages").update({ draft }).eq("id", live.pageId);
-    expect(write.error).toBeNull();
+    await setDraft(live.pageId, draft);
     const other = await livePage("ap5b", () => [appsOf()]);
     const userAgent = await page.evaluate(() => navigator.userAgent);
 

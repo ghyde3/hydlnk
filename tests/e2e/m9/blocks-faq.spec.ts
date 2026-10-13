@@ -7,7 +7,6 @@ import {
   addBlock,
   box,
   draftOf,
-  expectDraft,
   openEditor,
   previewScreen,
   publishDocOf,
@@ -16,6 +15,7 @@ import {
   showView,
   userWithDraft,
 } from "../m2/blocks-helpers";
+import { expectDraft } from "../m2/editor-helpers";
 import type { Block } from "@/lib/document";
 import {
   heightsOf,
