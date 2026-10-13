@@ -50,7 +50,9 @@ select lives_ok($$update public.site_pages set draft = draft || '{"note":"edited
 select set_config('hydlnk.content_move', 'off', true);
 select is((select bytes from public.account_site_bytes where owner_id = (select owner_id from t195)),
   (select bytes from mid195), 'and it still counts for nothing');
+select set_config('hydlnk.content_move', 'on', true);
 delete from public.site_pages where id = '00000000-0000-4000-8000-0000000000c1';
+select set_config('hydlnk.content_move', 'off', true);
 select is((select bytes from public.account_site_bytes where owner_id = (select owner_id from t195)),
   (select bytes from mid195), 'deleting a moved row releases nothing');
 

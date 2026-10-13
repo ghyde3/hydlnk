@@ -106,15 +106,16 @@ select is(pg_temp.err($$update public.pages set published = null, published_at =
   where id = '00000000-0000-4000-8000-00000202a001'$$), 'no error', 'unpublishing a moved site is allowed');
 reset role;
 
--- A first publish (published was null) is stored without blocks: they live in the entry.
+-- A first publish (published was null) is stored as given, blocks included: the frozen copy must parse
+-- for the old code (209).
 set local role service_role;
 update public.pages set published = '{"version":1,"blocks":[{"id":"first"}],"marker":"f"}', published_at = now()
   where id = '00000000-0000-4000-8000-00000202a001';
 reset role;
 select is((select published ->> 'marker' from public.pages where id = '00000000-0000-4000-8000-00000202a001'),
   'f', 'a first publish stores the design');
-select ok(not (select published ? 'blocks' from public.pages where id = '00000000-0000-4000-8000-00000202a001'),
-  'and leaves out the blocks');
+select is((select published -> 'blocks' from public.pages where id = '00000000-0000-4000-8000-00000202a001'),
+  '[{"id":"first"}]'::jsonb, 'and keeps the blocks it was given');
 
 -- A site without a Home entry is untouched by the guard.
 select tests.authenticate_as('a');

@@ -3,7 +3,7 @@
 --   * a publish writes each page entry's published copy and published_at; Home's '/' entry gets p_home's
 --     blocks; pages.published keeps its own blocks key byte for byte;
 --   * a set mismatch, a repeated id, a trashed id and another site's id raise 22023; a site without a
---     '/' entry raises 22023 site_not_moved; another owner raises P0002;
+--     '/' entry is moved first (it gets one, then publishes); another owner raises P0002;
 --   * two pages swapping live paths publish; a path given twice (and a clash with another page's draft
 --     path) raises 23505 and nothing changes;
 --   * the page_versions row is {document: design plus Home entry blocks, sub_pages: live entries};
@@ -106,9 +106,9 @@ select throws_ok($$select public.publish_site('00000000-0000-4000-8000-00000201a
   '22023', null, 'Home''s entry id among the sub-pages raises 22023');
 select throws_ok($$select public.publish_site('00000000-0000-4000-8000-00000201a001', tests.get_supabase_uid('a'),
   '[]', '[]')$$, '22023', null, 'a Home that is not an object raises 22023');
-select throws_ok($$select public.publish_site('00000000-0000-4000-8000-00000201a003', tests.get_supabase_uid('a'),
+select lives_ok($$select public.publish_site('00000000-0000-4000-8000-00000201a003', tests.get_supabase_uid('a'),
   pg_temp.home('x'), jsonb_build_array(pg_temp.sub('00000000-0000-4000-8000-00000201a3e1', 'only')))$$,
-  '22023', 'site_not_moved', 'a site without a Home entry raises 22023 site_not_moved');
+  'a site without a Home entry is moved first and then publishes (209 covers it further)');
 select is((select count(*)::int from public.content_entries
   where site_id = '00000000-0000-4000-8000-00000201a001' and published is not null), 0,
   'the refusals changed no entry');

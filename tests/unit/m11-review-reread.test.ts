@@ -186,6 +186,10 @@ describe.skipIf(!run)("HL009 in Publish and the click index (local Supabase)", (
     expect(hidden.error).toBeNull();
 
     const home = { blocks: [{ id: "home-1" }, { id: "b-shared" }] };
+    // The pairs read the page entries: move the site first. Home's blocks never come back as a pair
+    // (a null sub_page_id would crash the click index that is deployed).
+    const moved = await admin.rpc("move_site_content", { p_site: o.pageId });
+    expect(moved.error).toBeNull();
     const pairs = await admin.rpc("site_click_pairs", { p_page_id: o.pageId });
     expect(pairs.error).toBeNull();
     const old = buildIndexShards(

@@ -1,8 +1,8 @@
 -- M15-05 (1b1-07): unpublish_site, site_click_pairs and the admin readers over page entries.
 --
 --   * site_click_pairs: after the move the (block_id, sub_page_id) set is the pre-move set (sub-pages
---     by entry id, which equals the old site_pages id) plus Home's block ids at null; a draft-only
---     sub-page adds nothing;
+--     by entry id, which equals the old site_pages id); Home's ids come from the Home document and are
+--     never a pair (migration 20261015000009); a draft-only sub-page adds nothing;
 --   * admin_overview_numbers and admin_account_detail: sub_pages and live_sub_pages equal the pre-move
 --     numbers (Home is not counted as a sub-page, nothing is counted twice);
 --   * admin_blocked_domain_impact: a blocked domain in Home's published copy, in a sub-page's published
@@ -111,11 +111,9 @@ select results_eq(
       where sub_page_id is not null order by 1, 2 $$,
   $$ select block_id, sub_page_id from pairs_before207 order by 1, 2 $$,
   'the sub-page pairs equal the pre-move set (entry id = old sub-page id)');
-select results_eq(
-  $$ select block_id from public.site_click_pairs('00000000-0000-4000-8000-00000207a001')
-      where sub_page_id is null order by 1 $$,
-  $$ values ('hb1'::text), ('hl'::text) $$,
-  'Home''s blocks come back with a null sub_page_id');
+select is(
+  (select count(*)::int from public.site_click_pairs('00000000-0000-4000-8000-00000207a001') where sub_page_id is null),
+  0, 'Home''s blocks do not come back: the deployed click index cannot read a null sub_page_id (209)');
 select is(
   (select count(*)::int from public.site_click_pairs('00000000-0000-4000-8000-00000207a001') where block_id = 'b1'),
   0, 'a draft-only sub-page adds no pair');
