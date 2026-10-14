@@ -1,8 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks, homeEntryOf } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, phoneOnly, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
-import { draftWith, emptyUser, saveIndicator } from "../m2/editor-helpers";
+import { draftWith, emptyUser, pageRow, saveIndicator, setDraft } from "../m2/editor-helpers";
 import {
   addBlock,
   draftOf,
@@ -239,8 +240,7 @@ test.describe("M9-03 the click redirect for the new icons", () => {
       ...fixtureBlocks(),
       { id: "social-hidden-m9", type: "social", visible: false, icons: [draftOnly] },
     ]);
-    const write = await adminClient().from("pages").update({ draft }).eq("id", live.pageId);
-    expect(write.error).toBeNull();
+    await setDraft(live.pageId, draft);
     const other = await publishedPage("sp4b", publishDocOf(fixtureBlocks()));
 
     const events = async (blockId: string) => {
@@ -280,7 +280,7 @@ test.describe("M9-03 the click redirect for the new icons", () => {
   });
 });
 
-test.describe("M9-03 abuse: a draft written as raw JSON with the owner's own JWT", () => {
+test.describe("M9-03 abuse: a draft written as raw JSON (the owner's JWT is refused, HL013; the Home entry takes the planted one)", () => {
   test("M9-03 javascript:, data:, //host, credentials, a 4,000-character URL and a line break are refused at Publish, the icon is named, nothing is published", async ({
     page,
     context,
@@ -297,13 +297,10 @@ test.describe("M9-03 abuse: a draft written as raw JSON with the owner's own JWT
     const user = await userWithDraft(context, "sp5", (handle) =>
       draftOf(handle, [{ id: "Sx4kT9pLq2Wa", type: "social", visible: true, icons }]),
     );
-    // The publishable key and the owner's JWT, as curl would use them: RLS lets the owner write it.
-    const client = userClient(await accessTokenFor(user.email));
-    const draft = draftOf(user.handle, [
+    // The publishable key and the owner's JWT, as curl would use them: RLS refuses the frozen pages.draft blocks (HL013); the hostile draft goes into Home's entry with the secret key.
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, [
       { id: "Sx4kT9pLq2Wa", type: "social", visible: true, icons },
     ]);
-    const write = await client.from("pages").update({ draft }).eq("id", user.pageId);
-    expect(write.error).toBeNull();
 
     await openEditor(page);
     await page.getByRole("button", { name: "Publish", exact: true }).first().click();
@@ -320,6 +317,7 @@ test.describe("M9-03 abuse: a draft written as raw JSON with the owner's own JWT
       .eq("id", user.pageId)
       .single();
     expect(stored.data).toEqual({ published: null, published_at: null });
+    expect((await homeEntryOf(user.pageId)).published).toBeNull();
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).not.toContain("pg-social-link");
     expect(body).not.toContain("evil.example");
@@ -431,9 +429,7 @@ test.describe("M9-03 the Editor refuses a new icon that points at a blocked site
       });
       await openEditor(page);
       await rowOf(page, blockId).locator("button[aria-expanded]").first().click();
-      const before = (
-        await adminClient().from("pages").select("draft").eq("id", user.pageId).single()
-      ).data!.draft;
+      const before = (await pageRow(user.pageId)).draft;
       for (const id of ["ico-blk-discord", "ico-blk-spotif"]) {
         const field = rowOf(page, blockId).locator(
           `[data-item-id="${id}"] input[data-field="url"]`,

@@ -63,7 +63,7 @@ function refuse(path: string, message: string): never {
 export const updatePageSettings: ToolDefinition<typeof input> = {
   name: "update_page_settings",
   title: "Change a page's settings",
-  description: `Changes the settings of one page of a site other than Home: its title, description and path, and whether it is in the site menu and where. Send only what changes. ${DRAFT_ONLY} The menu belongs to Home, so a menu change writes Home's draft and returns Home's new rev as homeRev; ifRev is the page's own rev from get_page. Paths follow the same rules as in the editor: one lower-case word, not reserved and not used by another page. Sending the same values twice changes nothing. Errors: invalid_input, conflict, not_found.`,
+  description: `Changes the settings of one page of a site other than Home: its title, description and path, and whether it is in the site menu and where. Send only what changes. ${DRAFT_ONLY} The menu belongs to Home, so a menu change writes Home's design and returns its new rev as designRev (also sent as homeRev); design edits take designRev, Home's block edits take rev from get_page; ifRev is the page's own rev from get_page. Paths follow the same rules as in the editor: one lower-case word, not reserved and not used by another page. Sending the same values twice changes nothing. Errors: invalid_input, conflict, not_found.`,
   scope: MCP_SCOPES.write,
   annotations: WRITE_IDEMPOTENT,
   input,
@@ -205,7 +205,7 @@ export const updatePageSettings: ToolDefinition<typeof input> = {
           : {}),
         inMenu,
         menuPosition,
-        ...(homeRev !== undefined ? { homeRev } : {}),
+        ...(homeRev !== undefined ? { homeRev, designRev: homeRev } : {}),
       },
     };
   },

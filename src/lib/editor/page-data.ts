@@ -1,10 +1,21 @@
 import "server-only";
 import { publishedDocSchema, type PublishDoc } from "@/lib/document";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
+import {
+  getHomeDraftWithClient,
+  getPublishedHomeWithClient,
+  mergeHomePublished,
+} from "@/lib/site/page-entries-core";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { loadDraft, type LoadedDraft } from "./load";
+import type { HomeEntryRef } from "./save-client";
 
 export interface EditorPageData extends LoadedDraft {
+  /**
+   * Home's page entry (its id and rev) when the site has one: Home's blocks are saved there. Null for
+   * a site with no Home entry, whose draft is then the whole of `pages.draft`.
+   */
+  home: HomeEntryRef | null;
   /** The draft's theme row (system or the owner's own), or null: none, deleted or unreadable. */
   themeTokens: Partial<TokenSet> | null;
   hasPublished: boolean;
@@ -18,7 +29,9 @@ export interface EditorPageData extends LoadedDraft {
  * and the publishable key (never the secret key: RLS decides what is readable). The caller has
  * already picked the page from the user's own pages; the owner filter below is a second guard.
  *
- *   draft         `pages.draft`, repaired to a valid document when it is not one (see loadDraft)
+ *   draft         the design from `pages.draft` plus Home's blocks from the '/' page entry (the
+ *                 frozen `blocks` in `pages.draft` are never read), repaired to a valid document
+ *                 when it is not one (see loadDraft)
  *   theme         `themes.tokens` for `draft.theme.ref`: system themes and the owner's own are
  *                 readable, anything else (or a deleted row) reads as no theme
  *   published     `pages.published` parsed with the strict schema; unreadable reads as null while
@@ -39,7 +52,16 @@ export async function loadEditorPageData(
     .single();
   if (error) throw new Error(`Loading the draft for page ${page.id} failed: ${error.message}`);
 
-  const loaded = { ...loadDraft(data.draft, page.handle), revKey: data.draft_rev ?? null };
+  const homeDraft = await getHomeDraftWithClient(supabase, page.id);
+  const design =
+    typeof data.draft === "object" && data.draft !== null && !Array.isArray(data.draft)
+      ? data.draft
+      : {};
+  const loaded = {
+    // A site with no Home entry has not been moved: its `pages.draft` is the whole document.
+    ...loadDraft(homeDraft ? { ...design, blocks: homeDraft.draft.blocks } : design, page.handle),
+    revKey: data.draft_rev ?? null,
+  };
 
   let themeTokens: Partial<TokenSet> | null = null;
   const ref = loaded.draft.theme.ref;
@@ -50,10 +72,20 @@ export async function loadEditorPageData(
     themeTokens = parsed.success ? parsed.data : null;
   }
 
+  // Home's published blocks are its page entry's (the copy in pages.published is frozen at the
+  // move). A site with no Home entry keeps its whole document in pages.published.
+  const publishedHome = homeDraft
+    ? await getPublishedHomeWithClient(supabase, page.id)
+    : null;
+  const publishedWhole =
+    data.published === null || !homeDraft
+      ? data.published
+      : mergeHomePublished(data.published, publishedHome);
   const parsedPublished =
-    data.published === null ? null : publishedDocSchema.safeParse(data.published);
+    publishedWhole === null ? null : publishedDocSchema.safeParse(publishedWhole);
   return {
     ...loaded,
+    home: homeDraft ? { entryId: homeDraft.entryId, rev: homeDraft.rev } : null,
     themeTokens,
     hasPublished: data.published_at !== null,
     publishedAt: data.published_at ?? null,

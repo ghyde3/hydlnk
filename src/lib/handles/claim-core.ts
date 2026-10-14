@@ -78,5 +78,20 @@ export async function claimHandleWithClient(
         throw new Error(`Claiming handle failed: ${error.code} ${error.message}`);
     }
   }
+  await giveHomeEntry(admin, data.id);
   return { ok: true, handle: data.handle, pageId: data.id };
+}
+
+/**
+ * A new site gets its Home entry (the '/' page entry that holds Home's blocks) right away, so the
+ * editor, previews and MCP read it like every moved site. A failure is logged and ignored: the site
+ * exists, and its first Publish moves it (publishPageCore).
+ */
+async function giveHomeEntry(admin: SupabaseClient<Database>, siteId: string): Promise<void> {
+  try {
+    const { error } = await admin.rpc("move_site_content", { p_site: siteId });
+    if (error) console.error("[claim] creating the Home entry failed", error.code ?? "");
+  } catch {
+    console.error("[claim] creating the Home entry failed");
+  }
 }

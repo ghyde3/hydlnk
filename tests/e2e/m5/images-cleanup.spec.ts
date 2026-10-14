@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import {
@@ -7,8 +8,10 @@ import {
   cleanupUsers,
   desktopOnly,
   rand,
+  setPublished,
   signedInUser,
 } from "../fixtures/data";
+import { expectClientBlockWriteRefused, writeHomeDraft } from "../fixtures/home-abuse";
 import { restAs } from "../fixtures/http";
 import { pageRow } from "../m2/editor-helpers";
 import { rawBuffer } from "../m2/publish-helpers";
@@ -80,16 +83,29 @@ async function put(
 
 const ref = (image: Uploaded) => ({ path: image.path, width: image.width, height: image.height });
 
-/** Saves the draft as the browser does: the user's token, the publishable key, RLS decides. */
+/**
+ * Saves the draft as the browser does for the design (the user's token, the publishable key, RLS
+ * decides). Home's blocks live in its entry after the cutover (M15-14): a client write of them is
+ * refused (HL013), and the changed blocks are planted with the secret key.
+ */
 async function saveDraft(me: Me, pageId: string, edit: (draft: Draft) => void): Promise<void> {
-  const draft = structuredClone((await pageRow(pageId)).draft) as Draft;
+  const before = (await pageRow(pageId)).draft as Draft;
+  const draft = structuredClone(before) as Draft;
   edit(draft);
+  const frozen = (
+    await adminClient().from("pages").select("draft").eq("id", pageId).single().throwOnError()
+  ).data!.draft as { blocks?: unknown };
   const res = await restAs(me.token, `/pages?id=eq.${pageId}`, {
     method: "PATCH",
-    body: { draft },
+    body: { draft: { ...draft, blocks: frozen.blocks } },
   });
   expect(res.status, JSON.stringify(res.body)).toBeLessThan(300);
   expect((res.body as unknown[]).length).toBe(1);
+  if (!isDeepStrictEqual(draft.blocks, before.blocks)) {
+    await expectClientBlockWriteRefused(me.token, pageId, draft.blocks);
+    const { error } = await writeHomeDraft(pageId, draft.blocks);
+    expect(error).toBeNull();
+  }
 }
 
 type Draft = {
@@ -101,12 +117,7 @@ type Draft = {
 
 /** What core.ts does at Publish: the secret key copies the draft into `published`. */
 async function publish(pageId: string): Promise<void> {
-  const row = await pageRow(pageId);
-  const { error } = await adminClient()
-    .from("pages")
-    .update({ published: row.draft, published_at: new Date().toISOString() })
-    .eq("id", pageId);
-  expect(error).toBeNull();
+  await setPublished(pageId, true);
 }
 
 const cleanup = (cookie: string | undefined, headers: Record<string, string> = {}) =>
@@ -138,10 +149,7 @@ test.describe("M5-14 a draft save that drops an image", () => {
     const context = await browser.newContext();
     const me = await user(context, "cr");
     // Never published: the draft is the only document that references the images.
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", me.pageId);
+    await setPublished(me.pageId, false);
 
     const a = await put(me, "avatar", 1);
     await saveDraft(me, me.pageId, (d) => (d.profile.photo = ref(a)));
@@ -177,10 +185,7 @@ test.describe("M5-14 a draft save that drops an image", () => {
     test.skip(!desktopOnly(info), "not viewport dependent");
     const context = await browser.newContext();
     const me = await user(context, "cb");
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", me.pageId);
+    await setPublished(me.pageId, false);
     const img = await put(me, "content", 3);
     const card = await put(me, "content", 4);
     const bg1 = await put(me, "background", 5);
@@ -209,10 +214,7 @@ test.describe("M5-14 a draft save that drops an image", () => {
     test.skip(!desktopOnly(info), "not viewport dependent");
     const context = await browser.newContext();
     const me = await user(context, "cu");
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", me.pageId);
+    await setPublished(me.pageId, false);
     const img = await put(me, "content", 7);
     const block = { id: "bu", type: "image", image: ref(img), alt: "x" };
     await saveDraft(me, me.pageId, (d) => (d.blocks = [block]));
@@ -296,10 +298,7 @@ test.describe("M5-14 never deletes an image any draft, published page or theme s
     test.skip(!desktopOnly(info), "not viewport dependent");
     const context = await browser.newContext();
     const me = await user(context, "mr", "pro");
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", me.pageId);
+    await setPublished(me.pageId, false);
     const secondId = await addPage(me.userId, `zq-mr2-${rand(5)}`);
     const shared = await put(me, "content", 11);
     const themed = await put(me, "background", 12);
@@ -493,10 +492,7 @@ test.describe("M5-14 freed bytes lower the stored total (M4-31)", () => {
 
     const context = await browser.newContext();
     const me = await user(context, "fr");
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", me.pageId);
+    await setPublished(me.pageId, false);
     const cap = 10 * MIB;
     const room = Math.floor(stored / 2); // less than the upload needs
     const big = await bigObject(me.userId, 3 * MIB);

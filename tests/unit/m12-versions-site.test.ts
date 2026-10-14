@@ -21,7 +21,7 @@ vi.mock("@/lib/env/client", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => ({}) }));
 
-const { loadVersionPreviewCore, restorePageVersionCore } = await import("@/lib/versions/core");
+const { loadVersionPreviewCore } = await import("@/lib/versions/core");
 
 /**
  * M12-04: whole-site versions. The pure half (parse, live flag, image helpers, the restored menu)
@@ -37,7 +37,6 @@ const PAGE = "00000000-0000-4000-8000-0000000000b1";
 const VERSION = "11111111-1111-4111-8111-111111111111";
 const ITEMS_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const DIR_ID = "aaaaaaaa-0000-4000-8000-000000000002";
-const NEW_ID = "aaaaaaaa-0000-4000-8000-000000000003";
 
 const itemPhoto = {
   path: `${OWNER}/item-photo-aaaaaaaa.webp`,
@@ -224,102 +223,8 @@ beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
 
-describe("M12-04 restore across pages", () => {
-  it("M12-04 two sub-pages that still exist are written, each guarded by its own updated_at, after Home", async () => {
-    const { client, writes } = makeClient(world());
-    const result = await restorePageVersionCore(input, deps(client));
-    expect(result).toEqual({
-      ok: true,
-      restored: 3,
-      missingImages: 0,
-      pagesRestored: 2,
-      notRestored: [],
-    });
-    expect(writes.map((w) => w.table)).toEqual(["pages", "site_pages", "site_pages"]);
-    const items = writes.find((w) => w.filters.some(([c, v]) => c === "id" && v === ITEMS_ID))!;
-    expect(items.filters).toContainEqual(["updated_at", "2026-10-06T10:00:00.123456+00:00"]);
-    expect(items.filters).toContainEqual(["page_id", PAGE]);
-    const draft = items.payload as {
-      draft: { path: string; title: string; blocks: { visible: boolean }[] };
-    };
-    expect(draft.draft.path).toBe("items");
-    expect(draft.draft.title).toBe("Items for sale");
-    expect(draft.draft.blocks.every((b) => b.visible)).toBe(true);
-    // nothing but drafts: no published column in any write
-    for (const w of writes) expect(Object.keys(w.payload as object)).toEqual(["draft"]);
-  });
-
-  it("M12-04 Home's restored draft keeps the menu", async () => {
-    const { client, writes } = makeClient(world());
-    await restorePageVersionCore(input, deps(client));
-    const homeWrite = writes.find((w) => w.table === "pages")!;
-    expect((homeWrite.payload as { draft: { nav: unknown } }).draft.nav).toEqual({
-      show: true,
-      items: [ITEMS_ID, DIR_ID],
-    });
-    const theme = restoredTheme(home, home.tokens, null, false);
-    const draft = versionToDraft(home, theme, 5);
-    expect(draft.nav).toEqual({ show: true, items: [ITEMS_ID, DIR_ID] });
-    expect(versionToDraft({ ...home, nav: undefined } as PublishDoc, theme, 5)).not.toHaveProperty(
-      "nav",
-    );
-  });
-
-  it("M12-04 a page deleted since is listed as not restored and the others are written", async () => {
-    const { client, writes } = makeClient(
-      world({ sites: world().sites.filter((row) => row.id !== DIR_ID) }),
-    );
-    const result = await restorePageVersionCore(input, deps(client));
-    expect(result).toMatchObject({ ok: true, pagesRestored: 1 });
-    expect(result.ok && result.notRestored).toEqual([
-      { id: DIR_ID, path: "directions", title: "Find the studio", reason: "deleted" },
-    ]);
-    expect(writes.filter((w) => w.table === "site_pages")).toHaveLength(1);
-  });
-
-  it("M12-04 a page saved while the restore ran matches no row and is listed as changed", async () => {
-    const w = world();
-    w.sites[0]!.actual = "2026-10-06T10:05:00.000000+00:00";
-    const { client } = makeClient(w);
-    const result = await restorePageVersionCore(input, deps(client));
-    expect(result).toMatchObject({ ok: true, pagesRestored: 1 });
-    expect(result.ok && result.notRestored).toEqual([
-      { id: ITEMS_ID, path: "items", title: "Items for sale", reason: "changed" },
-    ]);
-  });
-
-  it("M12-04 a page whose draft write fails is listed, and one on the blocklist now is left alone with its hosts", async () => {
-    const { client, writes } = makeClient(
-      world({ writeFails: [DIR_ID], blockedBlockIds: ["itemslink0001"] }),
-    );
-    const result = await restorePageVersionCore(input, deps(client));
-    expect(result.ok && result.notRestored).toEqual([
-      { id: DIR_ID, path: "directions", title: "Find the studio", reason: "error" },
-      {
-        id: ITEMS_ID,
-        path: "items",
-        title: "Items for sale",
-        reason: "blocked_link",
-        hosts: ["bad.example"],
-      },
-    ]);
-    expect(result).toMatchObject({ pagesRestored: 0 });
-    // the blocked page was never written, the failing one was tried
-    expect(writes.filter((w) => w.table === "site_pages")).toHaveLength(1);
-  });
-
-  it("M12-04 a page created after the version is not touched, and a version row without pages reads as none", async () => {
-    const w = world();
-    w.sites.push({
-      id: NEW_ID,
-      page_id: PAGE,
-      seen: "2026-10-06T11:00:00+00:00",
-      actual: "2026-10-06T11:00:00+00:00",
-    });
-    const { client, writes } = makeClient(w);
-    await restorePageVersionCore(input, deps(client));
-    expect(writes.some((x) => x.filters.some(([c, v]) => c === "id" && v === NEW_ID))).toBe(false);
-
+describe("M12-04 preview across pages (the restore is in m15-versions-entries)", () => {
+  it("M12-04 a version row without pages reads as none", () => {
     expect(parseStoredSubPages(undefined)).toEqual([]);
     expect(parseStoredSubPages([])).toEqual([]);
   });

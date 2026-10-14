@@ -101,8 +101,8 @@ describe("M6-15 / M6-17 schemas fill the defaults of an older document", () => {
     };
     const parsed = publishedDocSchema.parse(stored);
     expect(parsed.profile).toMatchObject(PROFILE_OPTION_DEFAULTS);
-    // "3" since the gradient tokens (M6-41); the profile options alone did not need a bump.
-    expect(PUBLIC_READ_CACHE_VERSION).toBe("3");
+    // "3" came with the gradient tokens (M6-41), "4" with the content cutover (M15-06), which moved the readers onto page entries; the profile options alone needed neither.
+    expect(PUBLIC_READ_CACHE_VERSION).toBe("4");
   });
 
   it("keeps the seeded mara draft valid: no fields stored, all defaulted on parse", () => {

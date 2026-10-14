@@ -5,7 +5,11 @@ import { jsonbTextBytes } from "@/lib/editor/size";
 /**
  * The autosave of sub-pages (M11-08): one debounced queue for all the sub-pages of the open site.
  * Home's draft keeps its own `AutosaveQueue` (a stale-tab guard on `draft->>rev`); a sub-page has no
- * rev, so a write is a plain update of that page's own row and the newest document wins. The queue
+ * rev in its document, so its revision is its page entry's `rev` (M15-01, 1b1-17, the notion MCP's
+ * writer uses): `save-client.ts` posts to the entry save route only while `rev` is what the editor
+ * last loaded or saved. A write that matches nothing on a page that still exists is a "conflict": saving stops, the
+ * edits stay on screen and in the queue, the screen asks for a reload, and nothing is overwritten
+ * (a change made through MCP, or in another tab, wins until the owner reloads). The queue
  * follows the same rules as Home's: about 800 ms after the last edit, a failed write is retried with
  * backoff, a draft over the size limit or one that does not pass the draft schema is not sent, a 401
  * is not retried on a timer, and a link to a blocked site (HL005) is permanent until that page is
@@ -24,6 +28,8 @@ export type SubSaveStatus =
   | "invalid"
   | "signed-out"
   | "blocked"
+  /** Another writer (an MCP client, another tab) changed a page first: saving stops until a reload. */
+  | "conflict"
   /** A page it tried to write no longer exists (deleted in another tab). */
   | "missing";
 
@@ -31,8 +37,10 @@ export type SubSaveResult =
   | { kind: "ok" }
   | { kind: "unauthorized" }
   | { kind: "missing" }
+  | { kind: "conflict" }
   | { kind: "too-large" }
   | { kind: "storage-full" }
+  | { kind: "invalid" }
   | ({ kind: "blocked" } & BlockedLinkError)
   | { kind: "error" };
 
@@ -106,6 +114,7 @@ export class SubPageSaver {
     this.unsendable.delete(id);
     if (this.refused.delete(id)) this.onBlocked(id, null);
     if (this.current === "signed-out" || this.current === "missing") return;
+    if (this.current === "conflict") return;
     if (this.current === "error") return;
     this.setStatus("pending");
     this.arm(this.debounceMs);
@@ -134,6 +143,7 @@ export class SubPageSaver {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (this.inFlight) await this.inFlight;
       if (this.current === "signed-out" || this.current === "missing") return false;
+      if (this.current === "conflict") return false;
       if (this.dirty.size === 0) return stored();
       await this.run();
       if (this.current !== "pending" && this.current !== "saving") return stored();
@@ -219,6 +229,11 @@ export class SubPageSaver {
           this.cancelTimer();
           this.setStatus("missing");
           return;
+        case "conflict":
+          // Kept in `dirty` (the edits are not lost) but never retried: the screen asks for a reload.
+          this.cancelTimer();
+          this.setStatus("conflict");
+          return;
         case "too-large":
           if (!newer) {
             this.dirty.delete(id);
@@ -230,6 +245,13 @@ export class SubPageSaver {
           if (!newer) {
             this.dirty.delete(id);
             this.unsendable.set(id, "storage-full");
+          }
+          break;
+        case "invalid":
+          // Refused for good (a taken path, a page the server will not take): flagged until edited.
+          if (!newer) {
+            this.dirty.delete(id);
+            this.unsendable.set(id, "invalid");
           }
           break;
         case "unauthorized":

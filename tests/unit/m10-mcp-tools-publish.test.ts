@@ -4,6 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { hashPreviewToken } from "@/lib/previews/token";
 import {
   makeOwner,
+  moveHome,
+  setPageDraft,
   removeOwners,
   draftOf as publishableDraft,
   stackIsUp,
@@ -60,6 +62,8 @@ describe.skipIf(!run)(
       label: string,
       plan: "free" | "pro" | "studio" = "pro",
       draft?: (handle: string, id: string) => unknown,
+      /** False: the pre-move layout, for tools that still write pages.draft (they move in 1b1-19). */
+      moved = true,
     ) {
       const made = await makeOwner(
         admin,
@@ -67,12 +71,18 @@ describe.skipIf(!run)(
         (handle) => (draft ? { __pending: handle } : publishableDraft(handle)),
         plan,
       );
-      if (draft) {
+      // Publish reads Home's blocks from its page entry and the design from pages.draft.
+      if (draft && !moved) {
         const { error } = await admin
           .from("pages")
           .update({ draft: draft(made.handle, made.userId) as never })
           .eq("id", made.pageId);
         if (error) throw new Error(error.message);
+      } else if (draft) {
+        const { error } = await setPageDraft(admin, made.pageId, draft(made.handle, made.userId));
+        if (error) throw new Error(error.message);
+      } else if (moved) {
+        await moveHome(admin, made.pageId);
       }
       owners.push(made);
       return made;
@@ -215,7 +225,7 @@ describe.skipIf(!run)(
             url: `https://${domain}/x`,
           },
         ];
-        await admin.from("pages").update({ draft }).eq("id", o.pageId);
+        await setPageDraft(admin, o.pageId, draft);
         await admin.from("blocked_domains").insert({ domain, reason: "test" });
         blocked.push(domain);
         const out = await rt.call("publish_page", { pageId: o.pageId }, who(o));
@@ -407,11 +417,12 @@ describe.skipIf(!run)(
 
     describe("the activity log", () => {
       it("holds exactly one row per tool call, in order, with the tool, the page and the outcome, and never any content", async () => {
-        const o = await owner("al-rows", "pro", (h, id) => ({
-          ...richDraft(h, id),
-          redirect: undefined,
-          banner: undefined,
-        }));
+        const o = await owner(
+          "al-rows",
+          "pro",
+          (h, id) => ({ ...richDraft(h, id), redirect: undefined, banner: undefined }),
+          false,
+        );
         const stranger = await owner("al-other");
         const mine = await makeRuntime(admin);
         const CANARY = "CANARY-9c1e7f-secret-text";

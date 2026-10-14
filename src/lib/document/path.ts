@@ -33,6 +33,13 @@ export const RESERVED_PATHS: readonly string[] = [
 /** The reserved prefix: test hooks such as `hl-query-count`. */
 export const RESERVED_PATH_PREFIX = "hl-";
 
+/**
+ * Words a typed entry (a post) may not take as its slug: the routes served under an archive
+ * (`/blog/page/2`, `/blog/category/x`, `/blog/tag/x`, `/blog/feed.xml`). Kept beside the path list;
+ * `public.is_reserved_entry_slug` in SQL holds the same words (tests keep them equal).
+ */
+export const RESERVED_ENTRY_SLUGS: readonly string[] = ["page", "category", "tag", "feed.xml"];
+
 export const PATH_MESSAGES = {
   format:
     "Use 1 to 40 lowercase letters, digits or hyphens, starting and ending with a letter or digit.",
@@ -67,6 +74,9 @@ const FALLBACK_BASE = "page";
 /** Lowercase ASCII slug of `title`: accents folded, other characters become hyphens, 40 at most. */
 function slugify(title: string): string {
   const slug = title
+    // Blocks Unicode 16 added (outlined letters and more): Postgres 15.1 does not decompose them,
+    // and `suggest_site_path` treats them as separators, so do the same before folding.
+    .replace(/[\u{1CC00}-\u{1CEBF}]/gu, "-")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
@@ -90,6 +100,11 @@ export function suggestPath(title: string, taken: Iterable<string> = []): string
   base = base.replace(/^-+/, "") || FALLBACK_BASE;
   const fits = (candidate: string) => isValidSubPagePath(candidate) && !used.has(candidate);
   if (fits(base)) return base;
+  // Every suffixed form of 'hl' starts with the reserved `hl-`: fall back to 'page', as SQL does.
+  if (base === "hl") {
+    base = FALLBACK_BASE;
+    if (fits(base)) return base;
+  }
   for (let n = 2; ; n += 1) {
     const suffix = `-${n}`;
     const candidate = `${base.slice(0, 40 - suffix.length).replace(/-+$/g, "")}${suffix}`;

@@ -43,7 +43,7 @@ import {
   type SubPageSummary,
 } from "@/lib/site-pages/pages";
 import { SubPageSaver, type SubBlocked, type SubSaveStatus } from "@/lib/site-pages/saver";
-import { createSubPageSaveFn } from "@/lib/site-pages/save-client";
+import { createSubPageRevisions, createSubPageSaveFn } from "@/lib/site-pages/save-client";
 import {
   instantiateSiteTemplate,
   siteTemplateById,
@@ -53,13 +53,15 @@ import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/li
 import type { WorkspaceAction } from "@/components/workspace/workspace-reducer";
 import { docOf, initSiteState, siteReducer, type SubPageSettings } from "./site-state";
 
-/** One sub-page as the workspace opens it (the layout's read of `site_pages`). */
+/** One sub-page as the workspace opens it (the layout's read of the site's page entries). */
 export interface SubPageInit {
   id: string;
   draft: SubPageDraft;
   published: SubPagePublish | null;
   livePath: string | null;
   createdAt: string;
+  /** The page entry's `rev`: the revision this page's saves are checked against (M15-01). */
+  rev: number;
 }
 
 export type SiteAddResult = { ok: true; id: string } | { ok: false; message: string };
@@ -149,12 +151,16 @@ export function useSitePages(args: {
   siteId: string;
   plan: PlanId;
   initial: readonly SubPageInit[];
+  /** Page entries in the trash when the editor opened: they still count toward the limit. */
+  trashedPages?: number;
   homeTitle: string;
   nav: DraftDoc["nav"];
   editDraft: (update: (draft: DraftDoc) => DraftDoc, group?: string) => void;
 }): SiteValue {
   const { siteId, plan, homeTitle, nav, editDraft } = args;
   const [initial] = useState(() => args.initial);
+  // Trashed pages keep a place in the limit until they are purged; a delete here adds one.
+  const [trashed, setTrashed] = useState(() => args.trashedPages ?? 0);
   const [state, dispatch] = useReducer(siteReducer, initial, initSiteState);
   const [activeId, setActiveId] = useState<string>(HOME_PAGE_ID);
 
@@ -173,9 +179,13 @@ export function useSitePages(args: {
   const [saveStatus, setSaveStatus] = useState<SubSaveStatus>("idle");
   const [blocked, setBlocked] = useState<Record<string, SubBlocked>>({});
   const saverRef = useRef<SubPageSaver | null>(null);
+  // The entry rev each page was last loaded or saved at: every save is checked against it.
+  const [revisions] = useState(() =>
+    createSubPageRevisions(Object.fromEntries(initial.map((page) => [page.id, page.rev]))),
+  );
   useEffect(() => {
     const saver = new SubPageSaver({
-      save: createSubPageSaveFn(),
+      save: createSubPageSaveFn(revisions, siteId),
       onStatus: setSaveStatus,
       onBlocked: (id, refusal) =>
         setBlocked((current) => {
@@ -205,7 +215,7 @@ export function useSitePages(args: {
       void saver.flush().finally(() => saver.dispose());
       saverRef.current = null;
     };
-  }, []);
+  }, [revisions, siteId]);
 
   // Edits not stored yet: the browser asks before the tab closes, as it does for Home's.
   useEffect(() => {
@@ -253,7 +263,7 @@ export function useSitePages(args: {
     [homeTitle, nav, summaries],
   );
   const resolvedNav = useMemo(() => resolveNav(nav), [nav]);
-  const limit = pageLimitState(plan, state.ids.length);
+  const limit = pageLimitState(plan, state.ids.length + trashed);
   const limitMessage = pagesPerSiteMessage(plan, limit.used);
 
   const select = useCallback(
@@ -382,12 +392,14 @@ export function useSitePages(args: {
           id?: string;
           draft?: SubPageDraft;
           createdAt?: string;
+          rev?: number;
           message?: string;
         } | null;
         if (!response.ok || !body?.id || !body.draft) {
           return { ok: false, message: body?.message ?? "Couldn’t add the page. Try again." };
         }
         const id = body.id;
+        if (typeof body.rev === "number") revisions.set(id, body.rev);
         setCreatedAt((current) =>
           new Map(current).set(id, body.createdAt ?? new Date().toISOString()),
         );
@@ -404,19 +416,28 @@ export function useSitePages(args: {
         };
       }
     },
-    [siteId, setNav],
+    [siteId, setNav, revisions],
   );
 
-  const remove = useCallback<SiteValue["remove"]>(
-    async (id) => {
+  const removePage = useCallback(
+    async (id: string, purge: boolean): Promise<SiteDeleteResult> => {
       try {
-        const response = await fetch(`/api/pages/${siteId}/sub-pages/${id}`, { method: "DELETE" });
+        const response = await fetch(
+          `/api/pages/${siteId}/sub-pages/${id}${purge ? "?purge=1" : ""}`,
+          { method: "DELETE" },
+        );
         if (!response.ok && response.status !== 404) {
           const body = (await response.json().catch(() => null)) as { message?: string } | null;
           return { ok: false, message: body?.message ?? "Couldn’t delete the page. Try again." };
         }
+        if (response.ok) {
+          const done = (await response.json().catch(() => null)) as { purged?: boolean } | null;
+          // The page went to the trash, where it still counts, unless it was purged.
+          if (done?.purged !== true) setTrashed((current) => current + 1);
+        }
         // Gone on the server: stop writing it, leave the menu and go home if it was open.
         saverRef.current?.drop(id);
+        revisions.delete(id);
         dispatch({ type: "remove", id });
         setNav((current) => removeFromNav(current, id));
         setPublishedForms((current) => {
@@ -433,8 +454,9 @@ export function useSitePages(args: {
         };
       }
     },
-    [siteId, setNav],
+    [siteId, setNav, revisions],
   );
+  const remove = useCallback<SiteValue["remove"]>((id) => removePage(id, false), [removePage]);
 
   const applyTemplate = useCallback<SiteValue["applyTemplate"]>(
     async (id) => {
@@ -467,7 +489,7 @@ export function useSitePages(args: {
         });
         if (!result.ok) {
           // All or nothing: a page that was made is taken back.
-          for (const pageId of created) await remove(pageId);
+          for (const pageId of created) await removePage(pageId, true);
           return { ok: false, message: result.message };
         }
         created.push(result.id);
@@ -476,7 +498,7 @@ export function useSitePages(args: {
       setActiveId(HOME_PAGE_ID);
       return { ok: true };
     },
-    [limit.max, limit.used, limitMessage, state.ids, state.editors, add, remove, editDraft],
+    [limit.max, limit.used, limitMessage, state.ids, state.editors, add, removePage, editDraft],
   );
 
   const duplicate = useCallback<SiteValue["duplicate"]>(
@@ -523,12 +545,14 @@ export function useSitePages(args: {
     const current = formsRef.current;
     setPublishedForms(new Map(current));
     setLivePaths(new Map([...current].map(([id, form]) => [id, form.path])));
-  }, []);
+    void revisions.refresh(siteId);
+  }, [revisions, siteId]);
 
   const markUnpublished = useCallback(() => {
     setPublishedForms(new Map());
     setLivePaths(new Map());
-  }, []);
+    void revisions.refresh(siteId);
+  }, [revisions, siteId]);
 
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({

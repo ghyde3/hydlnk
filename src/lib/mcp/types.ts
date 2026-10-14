@@ -23,7 +23,15 @@ export interface OwnedPage {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
-  /** Only when the tool asked for the draft (`needsDraft`). */
+  /**
+   * The rev of Home's '/' entry, which holds Home's blocks (the block tools' `ifRev`); absent when
+   * the site has no Home entry. `draft.rev` stays the design's rev.
+   */
+  homeRev?: number;
+  /**
+   * Only when the tool asked for the draft (`needsDraft`): the site's design with Home's blocks from
+   * the Home entry, and the published document the same way.
+   */
   draft?: unknown;
   published?: unknown;
 }
@@ -36,9 +44,8 @@ export type LoadPageResult =
   { ok: true; page: OwnedPage; subPageId?: string } | { ok: false; failure: ToolFailureInfo };
 
 /**
- * A sub-page of one of the caller's sites (M12-05). `rev` is the page's `updated_at` as milliseconds:
- * a sub-page document has no rev of its own, and the database bumps `updated_at` on every write the
- * editor or a tool makes, so it plays the part of the optimistic lock.
+ * A sub-page of one of the caller's sites (M12-05). `rev` is the rev of its page entry,
+ * the optimistic lock of every write to it.
  */
 export interface OwnedSubPage {
   id: string;
@@ -55,8 +62,9 @@ export interface OwnedSubPage {
   published?: unknown;
 }
 
+/** `subPage` is null when the id named Home's entry: that means Home, which is the page itself. */
 export type LoadSubPageResult =
-  { ok: true; subPage: OwnedSubPage } | { ok: false; failure: ToolFailureInfo };
+  { ok: true; subPage: OwnedSubPage | null } | { ok: false; failure: ToolFailureInfo };
 
 export interface RateVerdict {
   allowed: boolean;

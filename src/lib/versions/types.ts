@@ -41,6 +41,12 @@ export interface NotRestoredPage {
   hosts?: string[];
 }
 
+/** A page entry as a restore left it. */
+export interface RestoredEntry {
+  id: string;
+  rev: number;
+}
+
 export type PreviewResult =
   | {
       ok: true;
@@ -61,6 +67,10 @@ export type RestoreResult =
       missingImages: number;
       /** How many sub-page drafts were written (Home's always is). */
       pagesRestored: number;
+      /** How many of those pages were gone (in the trash, or removed) and were brought back; Undo is not offered then. */
+      recreated: number;
+      /** Every page entry (Home's included) the restore left written, with the rev it has now: what Undo is checked against. */
+      entries: RestoredEntry[];
       /** Pages of the version that were not written: deleted since, changed meanwhile, blocked or unreadable. */
       notRestored: NotRestoredPage[];
     }

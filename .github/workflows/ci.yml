@@ -111,7 +111,7 @@ jobs:
 
       # The Vitest files that need the running stack (M1-05 ensureAccount, M2-23/M2-25 the publish
       # gate, the seeded mara rows, the system themes, the token and theme publish gate, the plan
-      # limits parity, page create and delete, the upload quota, the link blocklist and its Publish
+      # limits parity, the content tables' publishable-key probe, page create and delete, the upload quota, the link blocklist and its Publish
       # gate, and the admin suspension and its audit, all against the real database)
       # are skipped by the unit step
       # above. REQUIRE_SUPABASE=1 makes a missing stack fail here instead of skipping.
@@ -130,6 +130,16 @@ jobs:
           tests/unit/themes-publish.test.ts
           tests/unit/limits-parity.test.ts
           tests/unit/limits-pages.test.ts
+          tests/unit/content-rls.test.ts
+          tests/unit/m15-content-entries.test.ts
+          tests/unit/m15-content-fixes.test.ts
+          tests/unit/m15-content-guards.test.ts
+          tests/unit/m15-content-list.test.ts
+          tests/unit/m15-content-prune.test.ts
+          tests/unit/m15-content-publish.test.ts
+          tests/unit/m15-content-revisions.test.ts
+          tests/unit/m15-content-terms.test.ts
+          tests/unit/m15-content-trash.test.ts
           tests/unit/limits-upload-stack.test.ts
           tests/unit/blocklist-matching.test.ts
           tests/unit/blocklist-gate.test.ts

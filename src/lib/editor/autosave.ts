@@ -31,7 +31,7 @@ export type SaveStatus =
   | "saved" //      everything edited is stored
   | "error" //      the last write failed; retrying
   | "too-large" //  over the size limit: not sent (or refused by the database)
-  | "storage-full" // the account's 64 MiB sub-page cap (HL009): sub-page saves only, not retried
+  | "storage-full" // the account's 64 MiB cap (HL009): not retried until something is removed
   | "invalid" //    the draft does not pass the draft schema: not sent
   | "conflict" //   another tab saved first; reload to continue
   | "signed-out" // the session ended (the write was refused with 401): edits stay, no retry loop
@@ -42,6 +42,10 @@ export type SaveResult =
   | { kind: "ok" }
   | { kind: "conflict" }
   | { kind: "too-large" }
+  /** The account's 64 MiB cap (HL009) on page entries, Home's blocks included: not retried. */
+  | { kind: "storage-full" }
+  /** The server refused the draft as not valid: not retried (the client gate normally catches it). */
+  | { kind: "invalid" }
   /** The write was refused with 401: the session is gone. Not retried until the user is back. */
   | { kind: "unauthorized" }
   /** The database refused the draft: a link points to a blocked site (M5-03). Not retried. */
@@ -272,6 +276,14 @@ export class AutosaveQueue {
       case "too-large":
         this.cancelTimer();
         this.setStatus("too-large");
+        return;
+      case "storage-full":
+        this.cancelTimer();
+        this.setStatus("storage-full");
+        return;
+      case "invalid":
+        this.cancelTimer();
+        this.setStatus("invalid");
         return;
       case "unauthorized":
         // No timer: a 401 does not get better with waiting, and a loop would hammer the API.

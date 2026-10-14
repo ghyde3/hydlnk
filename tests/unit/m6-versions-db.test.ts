@@ -17,6 +17,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -64,9 +66,13 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
     await removeOwners(admin, owners);
   });
 
+  // Restore still writes the whole document into pages.draft; it moves to the page entries in
+  // 1b1-21. Until then its tests run on sites in the pre-move layout (no Home entry).
+  let preMoveSites = false;
   const owner = async (label: string, plan: "free" | "pro" | "studio" = "pro", draft = draftOf) => {
     const made = await makeOwner(admin, label, (handle) => draft(handle), plan);
     owners.push(made);
+    if (!preMoveSites) await moveHome(admin, made.pageId);
     return made;
   };
 
@@ -130,10 +136,7 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
         const draft = draftOf("Alpha", undefined, {});
         draft.profile.bio = bio;
         draft.rev += seen.length;
-        const { error } = await admin
-          .from("pages")
-          .update({ draft: draft as never })
-          .eq("id", a.pageId);
+        const { error } = await setPageDraft(admin, a.pageId, draft);
         expect(error).toBeNull();
         const result = await publishCore.publishPageCore(
           { pageId: a.pageId, userId: a.userId },
@@ -182,10 +185,7 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
 
     it("M6-48 a page with no published document gets none, and a draft save records nothing", async () => {
       const a = await owner("rec5");
-      const { error } = await admin
-        .from("pages")
-        .update({ draft: { ...draftOf("Changed"), rev: 2 } as never })
-        .eq("id", a.pageId);
+      const { error } = await setPageDraft(admin, a.pageId, { ...draftOf("Changed"), rev: 2 });
       expect(error).toBeNull();
       expect(await versionsOf(a)).toHaveLength(0);
     });
@@ -328,6 +328,12 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
 
   // -----------------------------------------------------------------------------------------
   describe("M6-49 restore", () => {
+    beforeAll(() => {
+      preMoveSites = true;
+    });
+    afterAll(() => {
+      preMoveSites = false;
+    });
     it("M6-49 writes the draft and nothing else: published, versions and the live document are untouched", async () => {
       const a = await owner("res1");
       await publishDoc(a, formOf("Version one", [link("lnk-aaaaaaaa", "Old link")]));
@@ -345,6 +351,8 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
         restored: 1,
         missingImages: 0,
         pagesRestored: 0,
+        recreated: 0,
+        entries: [],
         notRestored: [],
       });
 
@@ -468,6 +476,8 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
         restored: 1,
         missingImages: 2,
         pagesRestored: 0,
+        recreated: 0,
+        entries: [],
         notRestored: [],
       });
       const draft = draftDocSchema.parse((await draftOfPage(a)).draft);
@@ -714,16 +724,10 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
           ...draftWith.profile,
           photo: { path, width: 400, height: 400 },
         } as never;
-        await admin
-          .from("pages")
-          .update({ draft: draftWith as never })
-          .eq("id", a.pageId);
+        await setPageDraft(admin, a.pageId, draftWith);
         await publishDoc(a, withPhoto(formOf("Photo")));
         // the photo is replaced in the draft and the Publish drops it from the live page
-        await admin
-          .from("pages")
-          .update({ draft: { ...draftOf("Photo"), rev: 3 } as never })
-          .eq("id", a.pageId);
+        await setPageDraft(admin, a.pageId, { ...draftOf("Photo"), rev: 3 });
         await publishDoc(a, formOf("Photo"));
         expect(JSON.stringify((await versionsOf(a))[0]!.document)).toContain(path);
 

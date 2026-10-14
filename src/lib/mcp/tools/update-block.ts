@@ -14,7 +14,7 @@ import { parseBlockFields } from "../block-fields";
 import { MESSAGES, ToolFailure } from "../errors";
 import { createImageResolver } from "../images";
 import type { ToolDefinition } from "../types";
-import { DRAFT_ONLY, WRITE_IDEMPOTENT, ifRevField, pageIdField, subPageIdField } from "./common";
+import { DRAFT_ONLY, HOME_BLOCK_REV, WRITE_IDEMPOTENT, ifRevField, pageIdField, subPageIdField } from "./common";
 import { assertPageLinkTarget } from "./page-link-target";
 
 const input = z
@@ -45,7 +45,7 @@ function findBlock(blocks: unknown, blockId: string): Block | undefined {
 export const updateBlock: ToolDefinition<typeof input> = {
   name: "update_block",
   title: "Update a block",
-  description: `Changes fields of one block and leaves everything else as it is. The type cannot change. ${DRAFT_ONLY} Send only the fields to change, with the names add_block takes for that type; null clears an optional field. A list field replaces the list, and each item you send with its own id keeps its id, so its click history stays; an item you drop loses its click counts. Changing a text block's text clears its formatting. Pass subPageId for a block on another page of the site. Sending the same values twice changes nothing. Showing a block that is incomplete is refused. A page id from list_pages also works as pageId. Errors: block_not_found, invalid_input, blocked_link, image_not_found, conflict.`,
+  description: `Changes fields of one block and leaves everything else as it is. The type cannot change. ${DRAFT_ONLY} ${HOME_BLOCK_REV} Send only the fields to change, with the names add_block takes for that type; null clears an optional field. A list field replaces the list, and each item you send with its own id keeps its id, so its click history stays; an item you drop loses its click counts. Changing a text block's text clears its formatting. Pass subPageId for a block on another page of the site. Sending the same values twice changes nothing. Showing a block that is incomplete is refused. A page id from list_pages also works as pageId. Errors: block_not_found, invalid_input, blocked_link, image_not_found, conflict.`,
   scope: MCP_SCOPES.write,
   annotations: WRITE_IDEMPOTENT,
   input,

@@ -173,6 +173,267 @@ export type Database = {
         }
         Relationships: []
       }
+      content_entries: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          draft: Json
+          first_published_at: string | null
+          id: string
+          live_path: string | null
+          live_slug: string | null
+          published: Json | null
+          published_at: string | null
+          rev: number
+          scheduled_at: string | null
+          site_id: string
+          type_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          draft: Json
+          first_published_at?: string | null
+          id?: string
+          live_path?: string | null
+          live_slug?: string | null
+          published?: Json | null
+          published_at?: string | null
+          rev?: number
+          scheduled_at?: string | null
+          site_id: string
+          type_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          draft?: Json
+          first_published_at?: string | null
+          id?: string
+          live_path?: string | null
+          live_slug?: string | null
+          published?: Json | null
+          published_at?: string | null
+          rev?: number
+          scheduled_at?: string | null
+          site_id?: string
+          type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entries_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entries_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_entry_revisions: {
+        Row: {
+          created_at: string
+          entry_id: string
+          id: string
+          rev: number
+          site_id: string
+          snapshot: Json
+          source: string
+          was_published: boolean
+        }
+        Insert: {
+          created_at?: string
+          entry_id: string
+          id?: string
+          rev: number
+          site_id: string
+          snapshot: Json
+          source: string
+          was_published?: boolean
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string
+          id?: string
+          rev?: number
+          site_id?: string
+          snapshot?: Json
+          source?: string
+          was_published?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entry_revisions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entry_revisions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_entry_terms: {
+        Row: {
+          entry_id: string
+          term_id: string
+        }
+        Insert: {
+          entry_id: string
+          term_id: string
+        }
+        Update: {
+          entry_id?: string
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entry_terms_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entry_terms_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "content_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_terms: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_id: string | null
+          position: number
+          site_id: string
+          slug: string
+          taxonomy: string
+          type_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          position?: number
+          site_id: string
+          slug: string
+          taxonomy: string
+          type_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          position?: number
+          site_id?: string
+          slug?: string
+          taxonomy?: string
+          type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_terms_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "content_terms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_terms_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_terms_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_types: {
+        Row: {
+          archive_path: string | null
+          body_format: string
+          created_at: string
+          enabled: boolean
+          field_schema: Json
+          id: string
+          key: string
+          kind: string
+          label: string
+          label_plural: string
+          position: number
+          settings: Json
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          archive_path?: string | null
+          body_format: string
+          created_at?: string
+          enabled?: boolean
+          field_schema?: Json
+          id?: string
+          key: string
+          kind: string
+          label: string
+          label_plural: string
+          position?: number
+          settings?: Json
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          archive_path?: string | null
+          body_format?: string
+          created_at?: string
+          enabled?: boolean
+          field_schema?: Json
+          id?: string
+          key?: string
+          kind?: string
+          label?: string
+          label_plural?: string
+          position?: number
+          settings?: Json
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_types_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_dim_stats: {
         Row: {
           clicks: number
@@ -962,6 +1223,7 @@ export type Database = {
           draft: Json
           id: string
           live_path: string | null
+          moved_at: string | null
           page_id: string
           published: Json | null
           published_at: string | null
@@ -972,6 +1234,7 @@ export type Database = {
           draft: Json
           id?: string
           live_path?: string | null
+          moved_at?: string | null
           page_id: string
           published?: Json | null
           published_at?: string | null
@@ -982,6 +1245,7 @@ export type Database = {
           draft?: Json
           id?: string
           live_path?: string | null
+          moved_at?: string | null
           page_id?: string
           published?: Json | null
           published_at?: string | null
@@ -993,6 +1257,49 @@ export type Database = {
             columns: ["page_id"]
             isOneToOne: false
             referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_paths: {
+        Row: {
+          entry_id: string | null
+          path: string
+          site_id: string
+          type_id: string | null
+        }
+        Insert: {
+          entry_id?: string | null
+          path: string
+          site_id: string
+          type_id?: string | null
+        }
+        Update: {
+          entry_id?: string | null
+          path?: string
+          site_id?: string
+          type_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_paths_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_paths_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_paths_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
             referencedColumns: ["id"]
           },
         ]
@@ -1355,11 +1662,27 @@ export type Database = {
       }
       blocklist_pct_decode: { Args: { p_text: string }; Returns: string }
       blocklist_url_host: { Args: { p_url: string }; Returns: string }
+      charge_account_bytes: {
+        Args: { p_delta: number; p_owner: string }
+        Returns: undefined
+      }
       claim_domain_check: {
         Args: { p_cooldown_seconds?: number; p_id: string }
         Returns: boolean
       }
       claim_domain_live_email: { Args: { p_id: string }; Returns: boolean }
+      claim_site_path: {
+        Args: {
+          p_entry: string
+          p_path: string
+          p_site: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      content_move_active: { Args: never; Returns: boolean }
+      convert_all_versions: { Args: never; Returns: Json }
+      convert_site_versions: { Args: { p_site: string }; Returns: Json }
       end_expired_gifts: {
         Args: never
         Returns: {
@@ -1367,6 +1690,8 @@ export type Database = {
         }[]
       }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
+      is_reserved_entry_slug: { Args: { p_slug: string }; Returns: boolean }
+      is_reserved_site_path: { Args: { p_path: string }; Returns: boolean }
       mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
       media_paths_in_use: {
@@ -1380,6 +1705,8 @@ export type Database = {
           retry_after: number
         }[]
       }
+      move_all_content: { Args: never; Returns: Json }
+      move_site_content: { Args: { p_site: string }; Returns: Json }
       oauth_bind_request: {
         Args: { p_csrf_hash: string; p_id: string; p_user: string }
         Returns: {
@@ -1516,14 +1843,29 @@ export type Database = {
         Returns: {
           analytics_breakdowns: boolean
           analytics_history_days: number
+          content_bytes: number
+          custom_types: number
+          entries_per_type: number
           max_domains: number
           max_pages: number
           max_saved_themes: number
           max_upload_bytes: number
           pages_per_site: number
           redirect_mode: boolean
+          revisions_kept: number
           versions_kept: number
         }[]
+      }
+      publish_entry: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+          p_published_at?: string
+          p_source?: string
+        }
+        Returns: number
       }
       publish_site: {
         Args: {
@@ -1536,12 +1878,22 @@ export type Database = {
         Returns: string
       }
       purge_old_events: { Args: never; Returns: number }
+      purge_trashed_entries: { Args: never; Returns: number }
       rate_limit_hit: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: {
           allowed: boolean
           retry_after: number
         }[]
+      }
+      record_entry_revision: {
+        Args: {
+          p_entry_id: string
+          p_max_age?: string
+          p_source: string
+          p_was_published?: boolean
+        }
+        Returns: boolean
       }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
@@ -1551,6 +1903,12 @@ export type Database = {
         Args: { p_owner: string; p_paths: string[] }
         Returns: number
       }
+      restore_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
+      }
+      reverse_all_content: { Args: never; Returns: Json }
+      reverse_site_content: { Args: { p_site: string }; Returns: Json }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
       rollup_recent_days: { Args: { n: number }; Returns: number }
       run_domain_verification_sweep: { Args: never; Returns: undefined }
@@ -1563,6 +1921,7 @@ export type Database = {
           sub_page_id: string
         }[]
       }
+      site_has_home_entry: { Args: { p_site: string }; Returns: boolean }
       site_page_doc_bytes: {
         Args: { p_draft: Json; p_published: Json }
         Returns: number
@@ -1578,6 +1937,18 @@ export type Database = {
           p_reason: string
         }
         Returns: string
+      }
+      suggest_site_path: {
+        Args: { p_taken?: string[]; p_title: string }
+        Returns: string
+      }
+      trash_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
+      }
+      unpublish_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
       }
       unpublish_site: {
         Args: { p_owner_id: string; p_page_id: string }

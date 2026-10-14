@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
+import { pageRow } from "../m2/editor-helpers";
 
 /**
  * Shared bits of the FAQ, contact and discount-code specs (M9-16, M9-17, M9-18, M9-19): dialogs
@@ -57,13 +58,9 @@ export async function publishedOf(pageId: string): Promise<{
   published: Record<string, unknown> | null;
   published_at: string | null;
 }> {
-  const { data, error } = await adminClient()
-    .from("pages")
-    .select("published, published_at")
-    .eq("id", pageId)
-    .single();
-  if (error) throw new Error(error.message);
-  return data as never;
+  // Home's live blocks are in its entry; pageRow reads them from there.
+  const { published, published_at } = await pageRow(pageId);
+  return { published, published_at } as never;
 }
 
 /** Heights of every element the locator matches. */

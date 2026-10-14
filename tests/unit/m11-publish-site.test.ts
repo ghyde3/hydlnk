@@ -8,7 +8,14 @@ import {
   siteErrors,
   type SiteSubPage,
 } from "@/lib/publish/site-checks";
-import { draftOf, makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import {
+  draftOf,
+  makeOwner,
+  moveHome,
+  removeOwners,
+  stackIsUp,
+  type TestOwner,
+} from "./publish-support";
 
 vi.mock("server-only", () => ({}));
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -150,26 +157,44 @@ describe.skipIf(!run)("M11-05 publishPageCore publishes the whole site (local Su
     await removeOwners(admin, owners);
   });
 
-  const owner = async (label: string, blocks?: Block[], extra = {}) => {
-    const made = await makeOwner(admin, label, () => draftOf("Alpha", blocks, extra));
-    owners.push(made);
-    return made;
-  };
-  const addSub = async (o: TestOwner, title: string, path: string, blocks: Block[] = []) => {
+  // Stage 1b: Home's blocks and the sub-pages are page entries; pages.draft holds the design only.
+  const addEntry = async (siteId: string, draft: object) => {
+    const type = await admin
+      .from("content_types")
+      .select("id")
+      .eq("site_id", siteId)
+      .eq("key", "page")
+      .single();
     const { data, error } = await admin
-      .from("site_pages")
-      .insert({ page_id: o.pageId, draft: { path, title, description: "About it.", blocks } })
+      .from("content_entries")
+      .insert({ site_id: siteId, type_id: type.data!.id, draft: draft as never })
       .select("id")
       .single();
     expect(error).toBeNull();
     return data!.id as string;
   };
+  const homeIds = new Map<string, string>();
+  const owner = async (label: string, blocks?: Block[], extra = {}) => {
+    const made = await makeOwner(admin, label, () => draftOf("Alpha", blocks, extra));
+    owners.push(made);
+    homeIds.set(made.pageId, await moveHome(admin, made.pageId));
+    return made;
+  };
+  const setHomeBlocks = async (o: TestOwner, blocks: Block[]) => {
+    const { error } = await admin
+      .from("content_entries")
+      .update({ draft: { path: "/", title: "", description: "", blocks } as never })
+      .eq("id", homeIds.get(o.pageId)!);
+    expect(error).toBeNull();
+  };
+  const addSub = (o: TestOwner, title: string, path: string, blocks: Block[] = []) =>
+    addEntry(o.pageId, { path, title, description: "About it.", blocks });
   const publish = (o: TestOwner) =>
     core.publishPageCore({ pageId: o.pageId, userId: o.userId }, { admin });
   const subRow = async (id: string) =>
     (
       await admin
-        .from("site_pages")
+        .from("content_entries")
         .select("published, published_at, live_path")
         .eq("id", id)
         .single()
@@ -255,28 +280,29 @@ describe.skipIf(!run)("M11-05 publishPageCore publishes the whole site (local Su
     }
   });
 
-  it("an empty title or a reserved path is refused, naming the page", async () => {
+  it("an empty title is refused, naming the page; a reserved or repeated path never reaches a draft (HL012)", async () => {
     const o = await owner("ws4");
     await addSub(o, "", "items");
-    await addSub(o, "Other", "api");
     const result = await publish(o);
     expect(result).toMatchObject({ ok: false, reason: "invalid" });
     if (result.ok) return;
-    expect(result.errors.map((e) => e.field).sort()).toEqual(["path", "title"]);
-    expect(result.errors.find((e) => e.field === "title")!.pageTitle).toBe("Untitled page");
-  });
-
-  it("two pages with one path are refused, nothing is written", async () => {
-    const o = await owner("ws5");
-    const a = await addSub(o, "Items", "shop");
-    await addSub(o, "Directions", "shop");
-    const result = await publish(o);
-    expect(result).toMatchObject({ ok: false, reason: "invalid" });
-    if (result.ok) return;
-    expect(result.errors).toHaveLength(2);
-    expect(result.errors.every((e) => e.field === "path")).toBe(true);
-    expect((await subRow(a)).published).toBeNull();
-    expect((await homeRow(o)).published).toBeNull();
+    expect(result.errors.map((e) => e.field)).toEqual(["title"]);
+    expect(result.errors[0]!.pageTitle).toBe("Untitled page");
+    // Stage 1b: the database refuses a reserved path and a second page on one path at the draft, so
+    // the Publish-time path rules (kept as a second line, see siteErrors) cannot be reached here.
+    const reserved = await admin.from("content_entries").insert({
+      site_id: o.pageId,
+      type_id: (
+        await admin
+          .from("content_types")
+          .select("id")
+          .eq("site_id", o.pageId)
+          .eq("key", "page")
+          .single()
+      ).data!.id,
+      draft: { path: "api", title: "Other", description: "", blocks: [] } as never,
+    });
+    expect(reserved.error?.code).toBe("HL012");
   });
 
   it("a block id repeated across the site is refused", async () => {
@@ -298,22 +324,21 @@ describe.skipIf(!run)("M11-05 publishPageCore publishes the whole site (local Su
       expect.objectContaining({ blockId: "h-pl-000001", field: "target" }),
     ]);
 
-    await admin
-      .from("pages")
-      .update({ draft: draftOf("Alpha", [pageLink("h-pl-000001", a)]) as never })
-      .eq("id", o.pageId);
+    await setHomeBlocks(o, [pageLink("h-pl-000001", a)]);
     expect(await publish(o)).toMatchObject({ ok: true });
   });
 
   it("drops stale menu items at Publish", async () => {
     const o = await owner("ws8", undefined, { nav: { show: true, items: [GONE] } });
     const a = await addSub(o, "Items", "items");
-    await admin
+    // The design only: the frozen blocks of pages.draft are never touched (HL013).
+    const moved = await admin
       .from("pages")
       .update({
         draft: draftOf("Alpha", undefined, { nav: { show: true, items: [GONE, a] } }) as never,
       })
       .eq("id", o.pageId);
+    expect(moved.error).toBeNull();
     expect(await publish(o)).toMatchObject({ ok: true });
     expect((await homeRow(o)).published).toMatchObject({ nav: { show: true, items: [a] } });
   });
@@ -323,7 +348,7 @@ describe.skipIf(!run)("M11-05 publishPageCore publishes the whole site (local Su
     const a = await addSub(o, "Items", "items", [link("a-link-00001")]);
     expect(await publish(o)).toMatchObject({ ok: true });
     await admin
-      .from("site_pages")
+      .from("content_entries")
       .update({ draft: { path: "items", title: "Changed", description: "", blocks: [] } })
       .eq("id", a);
     expect(((await subRow(a)).published as { title: string }).title).toBe("Items");

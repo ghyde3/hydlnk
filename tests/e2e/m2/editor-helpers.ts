@@ -27,7 +27,7 @@ export async function seededUser(context: BrowserContext, label = "ed") {
 export async function emptyUser(
   context: BrowserContext,
   label = "ed",
-  opts: { draft?: unknown; plan?: "free" | "pro" | "studio" } = {},
+  opts: { draft?: unknown; plan?: "free" | "pro" | "studio"; move?: boolean } = {},
 ) {
   const user = await makeUser(label, { plan: opts.plan });
   const handle = `zq-${label}-${rand(5)}`;
@@ -35,6 +35,7 @@ export async function emptyUser(
     user.id,
     handle,
     opts.draft === undefined ? {} : { draft: opts.draft },
+    { move: opts.move },
   );
   await signInAs(context, user.email);
   return { ...user, handle, pageId };
@@ -46,6 +47,20 @@ export interface PageRow {
   published_at: string | null;
 }
 
+/** Home's '/' entry of a moved site (null for a site still in the old layout). */
+async function homeEntry(pageId: string) {
+  const { data, error } = await adminClient()
+    .from("content_entries")
+    .select("id, rev, draft, published")
+    .eq("site_id", pageId)
+    .eq("draft->>path", "/")
+    .is("deleted_at", null)
+    .limit(1);
+  if (error) throw new Error(`home entry lookup failed: ${error.message}`);
+  return data[0] ?? null;
+}
+
+/** The pages row; on a moved site its draft is the design plus the Home entry's draft blocks. */
 export async function pageRow(pageId: string): Promise<PageRow> {
   const { data, error } = await adminClient()
     .from("pages")
@@ -53,12 +68,46 @@ export async function pageRow(pageId: string): Promise<PageRow> {
     .eq("id", pageId)
     .single();
   if (error) throw new Error(`pageRow failed: ${error.message}`);
-  return data as unknown as PageRow;
+  const row = data as unknown as PageRow;
+  const home = await homeEntry(pageId);
+  if (home) {
+    const blocks = (home.draft as { blocks?: unknown } | null)?.blocks;
+    row.draft = { ...(row.draft as object), blocks } as unknown as DraftDoc;
+    // On a moved site the live blocks are the Home entry's; the rest of the published document
+    // (profile, tokens, share, ...) stays in pages.published, so compose the two.
+    const liveBlocks = (home.published as { blocks?: unknown } | null)?.blocks;
+    if (home.published && row.published) {
+      row.published = { ...(row.published as object), blocks: liveBlocks };
+    }
+  }
+  return row;
 }
 
+/** Writes `draft`: the design to the pages row, the blocks to Home's entry (rev + 1) on a moved site. */
 export async function setDraft(pageId: string, draft: unknown): Promise<void> {
-  const { error } = await adminClient().from("pages").update({ draft }).eq("id", pageId);
-  if (error) throw new Error(`setDraft failed: ${error.message}`);
+  const admin = adminClient();
+  const home = await homeEntry(pageId);
+  if (!home) {
+    const { error } = await admin.from("pages").update({ draft }).eq("id", pageId);
+    if (error) throw new Error(`setDraft failed: ${error.message}`);
+    return;
+  }
+  const { blocks, ...design } = draft as Record<string, unknown>;
+  const set = await admin
+    .from("pages")
+    .update({ draft: design as never })
+    .eq("id", pageId);
+  if (set.error) throw new Error(`setDraft failed: ${set.error.message}`);
+  if (blocks !== undefined) {
+    const entry = await admin
+      .from("content_entries")
+      .update({
+        draft: { ...(home.draft as object), blocks } as never,
+        rev: Number(home.rev) + 1,
+      })
+      .eq("id", home.id);
+    if (entry.error) throw new Error(`setDraft entry failed: ${entry.error.message}`);
+  }
 }
 
 /** Waits until the stored draft satisfies `check` (autosave is asynchronous). */

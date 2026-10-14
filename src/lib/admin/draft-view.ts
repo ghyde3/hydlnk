@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { isValidSubPagePath, stripHiddenCharacters } from "@/lib/document";
 import { loadDraftPreview, type SharedPreview } from "@/lib/previews/shared";
 import type { Database } from "@/lib/supabase/database.types";
+import { listDraftPagesWithClient } from "@/lib/site/page-entries";
 import { isUuid } from "./account-view";
 
 /**
@@ -57,14 +58,9 @@ export async function loadAdminDraftView(
   );
   if (preview.kind !== "active") return { kind: "missing" };
 
-  const rows = await db
-    .from("site_pages")
-    .select("path:draft->>path, title:draft->>title")
-    .eq("page_id", page.data.id)
-    .order("created_at", { ascending: true });
-  if (rows.error) throw new Error(`Listing the pages of a draft failed: ${rows.error.message}`);
-  const pages = (rows.data ?? []).flatMap((row) => {
-    const { path: rowPath, title } = row as unknown as { path: unknown; title: unknown };
+  const entries = await listDraftPagesWithClient(db, page.data.id);
+  const pages = entries.flatMap((entry) => {
+    const { path: rowPath, title } = entry.draft;
     if (typeof rowPath !== "string" || typeof title !== "string") return [];
     // The path is tenant-controlled and becomes a link in the admin's bar: only a valid sub-page
     // path (one lowercase segment, not reserved) is kept (Wave N security review).

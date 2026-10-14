@@ -1,10 +1,13 @@
 import { adminClient } from "../fixtures/auth";
 import { insertPage, makeUser, rand, type TestUser } from "../fixtures/data";
+import { moveSite } from "../m15/entry-helpers";
 
 /**
  * Setup for the tenant sub-page specs (M11-05, M11-06, M11-07, M11-10): a user of their own with a
  * site whose Home is a copy of mara's, and two sub-pages with the shape of mara's (`items` and
- * `directions`). Written with the secret key; mara's rows are only read, never modified.
+ * `directions`). Written with the secret key; mara's rows are only read, never modified. The layout is
+ * built the way a pre-cutover site stored it (site_pages rows, Home in pages) and then moved into page
+ * entries by the real mover, so the site is in the post-cutover shape (ids are kept by the move).
  */
 
 export const ITEMS = { path: "items", title: "Items for sale", blockId: "tnItemsLink01" } as const;
@@ -67,7 +70,8 @@ export async function makeLiveSite(label: string, opts: SiteOptions = {}): Promi
 
   const mara = await admin.from("pages").select("draft, published").eq("handle", "mara").single();
   if (mara.error) throw new Error(`seed page 'mara' missing: ${mara.error.message}`);
-  const pageId = await insertPage(user.id, handle, {});
+  // Built in the old layout (site_pages rows, blocks in pages); the mover below turns it into entries.
+  const pageId = await insertPage(user.id, handle, {}, { move: false });
 
   const sub = async (page: typeof ITEMS | typeof DIRECTIONS, extra: unknown[] = []) => {
     const doc = subDoc(page, extra);
@@ -117,6 +121,7 @@ export async function makeLiveSite(label: string, opts: SiteOptions = {}): Promi
     })
     .eq("id", pageId);
   if (update.error) throw new Error(`home failed: ${update.error.message}`);
+  await moveSite(pageId);
   return { user, pageId, handle, name, itemsId, directionsId };
 }
 

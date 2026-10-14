@@ -17,6 +17,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -68,14 +70,12 @@ describe.skipIf(!run)("M9-27 M9-29 M9-31 the Publish gate (local Supabase)", () 
     plan?: "free" | "pro" | "studio",
   ) => {
     const made = await makeOwner(admin, label, draft, plan);
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
   const writeDraft = async (o: TestOwner, draft: unknown) => {
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draft as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, draft);
     expect(error).toBeNull();
   };
   const publish = (o: TestOwner) =>
@@ -249,14 +249,12 @@ describe.skipIf(!run)("M9-27 M9-29 M9-31 the Publish gate (local Supabase)", () 
       ]);
 
       const domain = `links-${o.handle}.example.test`;
-      const inserted = await admin
-        .from("domains")
-        .insert({
-          page_id: o.pageId,
-          hostname: domain,
-          status: "verified",
-          verified_at: new Date().toISOString(),
-        } as never);
+      const inserted = await admin.from("domains").insert({
+        page_id: o.pageId,
+        hostname: domain,
+        status: "verified",
+        verified_at: new Date().toISOString(),
+      } as never);
       expect(inserted.error).toBeNull();
       await writeDraft(
         o,
@@ -289,14 +287,13 @@ describe.skipIf(!run)("M9-27 M9-29 M9-31 the Publish gate (local Supabase)", () 
       const blocked = await admin.from("blocked_domains").insert({ domain } as never);
       expect(blocked.error).toBeNull();
       try {
-        const { error } = await admin
-          .from("pages")
-          .update({
-            draft: withRedirect("x", "lnk-target-01", [
-              link("lnk-target-01", { url: `https://${domain}/x` }),
-            ]) as never,
-          })
-          .eq("id", o.pageId);
+        const { error } = await setPageDraft(
+          admin,
+          o.pageId,
+          withRedirect("x", "lnk-target-01", [
+            link("lnk-target-01", { url: `https://${domain}/x` }),
+          ]),
+        );
         // The save-time trigger refuses the draft itself; whichever layer says it, nothing is published.
         if (!error) {
           const result = await publish(o);

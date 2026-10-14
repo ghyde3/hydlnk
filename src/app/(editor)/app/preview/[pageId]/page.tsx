@@ -5,11 +5,17 @@ import { InteractivePageRenderer } from "@/components/previews/interactive-page"
 import { DraftPreviewBar } from "@/components/previews/preview-bars";
 import { PreviewFrame } from "@/components/previews/preview-frame";
 import { requireUser } from "@/lib/auth/session";
-import { toPublishForm } from "@/lib/document";
+import { publishedDocSchema, toPublishForm } from "@/lib/document";
 import { loadEditorPageData } from "@/lib/editor/page-data";
+import { loadDraft } from "@/lib/editor/load";
 import { computePublishStatus } from "@/lib/editor/status";
 import { toPlan } from "@/lib/pages/plans";
 import { pageChrome } from "@/lib/publish/chrome";
+import {
+  getHomeDraftWithClient,
+  getPublishedHomeWithClient,
+  mergeHomePublished,
+} from "@/lib/site/page-entries";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -52,10 +58,24 @@ export default async function DraftPreviewPage({ params }: PageProps<"/app/previ
   ]);
   if (account.error) throw new Error(`Loading the account failed: ${account.error.message}`);
 
-  const doc = toPublishForm(data.draft, data.themeTokens);
+  // Home's blocks are its page entry's (the copies in pages.draft and pages.published are frozen),
+  // read with the same signed-in session under RLS.
+  const [homeDraft, homePublished] = await Promise.all([
+    getHomeDraftWithClient(supabase as never, owned.data.id),
+    getPublishedHomeWithClient(supabase as never, owned.data.id),
+  ]);
+  // A site with no Home entry has not been moved: pages.draft is the whole document.
+  const draft = loadDraft(
+    homeDraft ? { ...data.draft, blocks: homeDraft.draft.blocks } : data.draft,
+    owned.data.handle,
+  ).draft;
+  const merged = data.published === null ? null : mergeHomePublished(data.published, homePublished);
+  const published = merged === null ? null : publishedDocSchema.safeParse(merged);
+
+  const doc = toPublishForm(draft, data.themeTokens);
   const status = computePublishStatus({
     hasPublished: data.hasPublished,
-    published: data.published,
+    published: published?.success ? published.data : null,
     form: doc,
   });
 

@@ -12,13 +12,14 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 /**
  * DELETE /api/pages/{id}/sub-pages/{subId} on the app host (M11-04, M11-08): deletes one page of the
  * signed-in account's site. Immediate, like deleting a site: the page leaves the live site now (its
- * menu entry and the page links to it render nothing), and its id leaves Home's draft menu. The one
- * door: clients have no delete grant on `site_pages`.
+ * menu entry and the page links to it render nothing), and its id leaves Home's draft menu. The page
+ * entry and its revisions are purged, not trashed, so the page limit frees at once (`?purge=1` is
+ * accepted and changes nothing). The one door: clients have no delete grant on entries.
  *
  *   401  no session (nothing is deleted)
  *   403  forbidden_origin, or `account_suspended` (code too)
  *   404  not_found: another account's site or page, an unknown id and a malformed id all read the same
- *   200  {id}
+ *   200  {id, purged}
  *
  * The owner is always the verified session user.
  */
@@ -37,7 +38,8 @@ export async function DELETE(
 
   const { id, subId } = await params;
   try {
-    const result = await deleteSubPage(user.id, id, subId);
+    const purge = new URL(request.url).searchParams.get("purge") === "1";
+    const result = await deleteSubPage(user.id, id, subId, { purge });
     if (!result.ok) {
       return NextResponse.json(
         {
@@ -48,7 +50,7 @@ export async function DELETE(
         { status: result.status, headers: NO_STORE },
       );
     }
-    return NextResponse.json({ id: result.id }, { status: 200, headers: NO_STORE });
+    return NextResponse.json({ id: result.id, purged: result.purged }, { status: 200, headers: NO_STORE });
   } catch (error) {
     console.error("[site-pages] delete failed", error);
     return NextResponse.json(

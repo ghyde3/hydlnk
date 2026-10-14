@@ -9,6 +9,11 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { resolveLink } from "./link-target";
 import { getPublishedSubPage } from "@/lib/site/published";
 import {
+  getPublishedHomeWithClient,
+  listLivePagesWithClient,
+  mergeHomePublished,
+} from "@/lib/site/page-entries";
+import {
   buildIndexShardsFromPairs,
   documentForBlock,
   shardOf,
@@ -28,16 +33,17 @@ import type { ContactCard } from "./vcard";
 type BeaconRead = { found: true; page: BeaconPage } | { found: false };
 
 async function readBeaconPage(pageId: string): Promise<BeaconRead> {
-  const { data, error } = await createAdminSupabase()
+  const admin = createAdminSupabase();
+  const { data, error } = await admin
     .from("pages")
-    .select(
-      "handle, accounts!inner(suspended_at), domains(hostname, status), site_pages(id, published_at)",
-    )
+    .select("handle, accounts!inner(suspended_at), domains(hostname, status)")
     .eq("id", pageId)
     .not("published", "is", null)
     .maybeSingle();
   if (error) throw new Error(`Loading page ${pageId} for a view failed: ${error.message}`);
   if (!data || data.accounts.suspended_at !== null) return { found: false };
+  // Live = a published, untrashed page entry that is not Home (the page entries are the sub-pages).
+  const live = await listLivePagesWithClient(admin, pageId);
   return {
     found: true,
     page: {
@@ -45,10 +51,7 @@ async function readBeaconPage(pageId: string): Promise<BeaconRead> {
       customHosts: (data.domains ?? [])
         .filter((domain) => domain.status === "verified")
         .map((domain) => domain.hostname.toLowerCase()),
-      // Live = published (published_at is set together with `published`); a draft-only page is not live.
-      subPageIds: (data.site_pages ?? [])
-        .filter((subPage) => subPage.published_at !== null)
-        .map((subPage) => subPage.id.toLowerCase()),
+      subPageIds: live.map((subPage) => subPage.id.toLowerCase()),
     },
   };
 }
@@ -85,7 +88,8 @@ type CoreRead =
   { found: true; handle: string; customHosts: string[]; home: unknown } | { found: false };
 
 async function readCore(pageId: string): Promise<CoreRead> {
-  const { data, error } = await createAdminSupabase()
+  const admin = createAdminSupabase();
+  const { data, error } = await admin
     .from("pages")
     .select("published, handle, accounts!inner(suspended_at), domains(hostname, status)")
     .eq("id", pageId)
@@ -97,9 +101,12 @@ async function readCore(pageId: string): Promise<CoreRead> {
   if (!data || data.published === null || data.accounts.suspended_at !== null) {
     return { found: false };
   }
+  // Home's blocks are its page entry; the design is the site row's.
+  const home = mergeHomePublished(data.published, await getPublishedHomeWithClient(admin, pageId));
+  if (home === null) return { found: false };
   return {
     found: true,
-    home: data.published,
+    home,
     handle: data.handle,
     customHosts: (data.domains ?? [])
       .filter((domain) => domain.status === "verified")
@@ -120,13 +127,15 @@ async function readIndexShard(pageId: string, shard: number): Promise<BlockIndex
       `Loading the block index of page ${pageId} for a click failed: ${error.message}`,
     );
   if (!data || data.published === null || data.accounts.suspended_at !== null) return {};
+  const home = mergeHomePublished(data.published, await getPublishedHomeWithClient(admin, pageId));
+  if (home === null) return {};
   // The sub-pages come as (block id, page id) pairs from SQL, never as documents.
   const pairs = await admin.rpc("site_click_pairs", { p_page_id: pageId });
   if (pairs.error)
     throw new Error(
       `Loading the sub-page ids of page ${pageId} for a click failed: ${pairs.error.message}`,
     );
-  return buildIndexShardsFromPairs(data.published, pairs.data ?? [])[shard] ?? {};
+  return buildIndexShardsFromPairs(home, pairs.data ?? [])[shard] ?? {};
 }
 
 function cached<Args extends [string, ...unknown[]], Result>(

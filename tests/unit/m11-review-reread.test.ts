@@ -4,7 +4,7 @@ import { buildIndexShards, buildIndexShardsFromPairs } from "@/lib/analytics/ing
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
 import { emptySubPageDraft } from "@/lib/document";
 import { SubPageSaver, type SubSaveResult, type SubSaveStatus } from "@/lib/site-pages/saver";
-import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import { makeOwner, moveHome, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -39,28 +39,29 @@ describe("HL009 in the sub-page autosave", () => {
     vi.useRealTimers();
   });
 
-  it("the browser write maps HL009 to storage-full", async () => {
+  it("the browser write maps the route's storage-full answer", async () => {
     vi.resetModules();
-    const builder: Record<string, unknown> = {};
-    for (const name of ["update", "eq"]) builder[name] = vi.fn(() => builder);
-    builder.select = vi.fn(async () => ({
-      data: null,
-      error: { code: "HL009", message: "site storage limit reached" },
-      status: 400,
-    }));
-    vi.doMock("@/lib/supabase/browser", () => ({
-      createBrowserSupabase: () => ({ from: () => builder }),
-    }));
     vi.doMock("@/lib/media/cleanup-client", () => ({ scheduleMediaCleanup: () => {} }));
-    const { createSubPageSaveFn } = await import("@/lib/site-pages/save-client");
-    expect(await createSubPageSaveFn()("x", emptySubPageDraft("items", "A"))).toEqual({
-      kind: "storage-full",
-    });
-    vi.doUnmock("@/lib/supabase/browser");
+    // The browser client reads the public env at import; CI has no .env.local.
+    vi.doMock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => ({}) }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () => new Response(JSON.stringify({ kind: "storage-full" }), { status: 403 }),
+      ),
+    );
+    const { createSubPageRevisions, createSubPageSaveFn } =
+      await import("@/lib/site-pages/save-client");
+    const revisions = createSubPageRevisions({ x: 3 });
+    expect(
+      await createSubPageSaveFn(revisions, "site-1")("x", emptySubPageDraft("items", "A")),
+    ).toEqual({ kind: "storage-full" });
+    vi.unstubAllGlobals();
   });
 
-  it("the message names the 64 MB limit and what to do", () => {
-    expect(STORAGE_FULL_MESSAGE).toMatch(/64 MB/);
+  it("the message names the plan's storage limit (no fixed number) and what to do", () => {
+    expect(STORAGE_FULL_MESSAGE).toMatch(/storage limit/);
+    expect(STORAGE_FULL_MESSAGE).not.toMatch(/64 MB/);
     expect(STORAGE_FULL_MESSAGE).toMatch(/Remove some content or pages/);
     expect(STORAGE_FULL_MESSAGE).not.toMatch(/retry|try again/i);
   });
@@ -68,10 +69,23 @@ describe("HL009 in the sub-page autosave", () => {
 
 describe("HL009 creating a page", () => {
   it("is storage_full (403) with the message, not create_failed", async () => {
+    // The page entry insert is the content writer's: its HL009 answer is what the core must map.
+    vi.resetModules();
+    vi.doMock("@/lib/content/entries-core", () => ({
+      createEntryWithClient: async () => ({
+        ok: false,
+        status: 403,
+        error: "storage_full",
+        message: "full",
+      }),
+    }));
+    // Module-scope env reads (the admin client) must not run: CI has no .env.local.
+    vi.doMock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => ({}) }));
     const { createSubPageWithClient } = await import("@/lib/site-pages/sub-pages-core");
+    vi.doUnmock("@/lib/content/entries-core");
     const table = (name: string) => {
       const chain: Record<string, unknown> = {};
-      for (const m of ["select", "eq", "insert"]) chain[m] = () => chain;
+      for (const m of ["select", "eq", "insert", "is", "neq"]) chain[m] = () => chain;
       chain.maybeSingle = async () =>
         name === "accounts"
           ? { data: { plan: "pro", suspended_at: null }, error: null }
@@ -111,6 +125,7 @@ describe.skipIf(!run)("HL009 in Publish and the click index (local Supabase)", (
 
   it("Publish answers storage_full when the database refuses with HL009", async () => {
     const o = await makeOwner(admin, "hl9", undefined, "pro");
+    await moveHome(admin, o.pageId);
     owners.push(o);
     const { publishPageCore } = await import("@/lib/publish/core");
     const refusing = new Proxy(admin, {
@@ -183,6 +198,10 @@ describe.skipIf(!run)("HL009 in Publish and the click index (local Supabase)", (
     expect(hidden.error).toBeNull();
 
     const home = { blocks: [{ id: "home-1" }, { id: "b-shared" }] };
+    // The pairs read the page entries: move the site first. Home's blocks never come back as a pair
+    // (a null sub_page_id would crash the click index that is deployed).
+    const moved = await admin.rpc("move_site_content", { p_site: o.pageId });
+    expect(moved.error).toBeNull();
     const pairs = await admin.rpc("site_click_pairs", { p_page_id: o.pageId });
     expect(pairs.error).toBeNull();
     const old = buildIndexShards(

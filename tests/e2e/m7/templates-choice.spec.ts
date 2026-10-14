@@ -2,6 +2,7 @@ import { expect, test, type Page, type Request } from "@playwright/test";
 import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, makeUser, phoneOnly, insertPage } from "../fixtures/data";
 import { restAs } from "../fixtures/http";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { accessToken } from "../m2/editor-helpers";
 import { url } from "../helpers";
 import { seedTheme } from "../m3/themes-helpers";
@@ -256,9 +257,14 @@ test.describe("M7-08 applying", () => {
     expect(stored.profile).toEqual(profileOf(before.draft));
     expect(stored.share).toEqual(before.draft.share);
 
-    // One PATCH, carrying only the draft; nothing else written, no Storage call, no Server Action.
+    // One PATCH of the design fields, carrying only the draft, and the save route's POST; nothing else written, no Storage call, no Server Action.
     expect(writes.patches).toHaveLength(1);
     expect(Object.keys(writes.patches[0]!.body)).toEqual(["draft"]);
+    // After the cutover Home's blocks save through the server save route (one POST), nothing else.
+    expect(writes.entryPosts).toHaveLength(1);
+    expect(writes.entryPosts[0]!.url).toMatch(
+      new RegExp(`^http://[^/]+/api/pages/${user.pageId}/entries/[0-9a-f-]+/draft$`),
+    );
     expect(writes.others).toEqual([]);
     expect(writes.serverActions).toEqual([]);
     expect(log.filter((entry) => entry.url.includes("/rest/v1/themes"))).toEqual([]);
@@ -308,6 +314,11 @@ test.describe("M7-08 applying", () => {
     expect(stored.share).toEqual(before.draft.share);
     expect(writes.patches).toHaveLength(1);
     expect(Object.keys(writes.patches[0]!.body)).toEqual(["draft"]);
+    // After the cutover Home's blocks save through the server save route (one POST), nothing else.
+    expect(writes.entryPosts).toHaveLength(1);
+    expect(writes.entryPosts[0]!.url).toMatch(
+      new RegExp(`^http://[^/]+/api/pages/${user.pageId}/entries/[0-9a-f-]+/draft$`),
+    );
     expect(writes.others).toEqual([]);
     expect(writes.serverActions).toEqual([]);
     expect(log.filter((entry) => entry.url.includes("/rest/v1/themes"))).toEqual([]);
@@ -418,11 +429,8 @@ test.describe("M7-08 safety", () => {
         visible: true,
       })),
     };
-    const accepted = await restAs(token, `/pages?id=eq.${own.pageId}`, {
-      method: "PATCH",
-      body: { draft: fifty1 },
-    });
-    expect(accepted.status).toBe(200);
+    // M15-14: the browser write is refused (HL013); the database takes the draft in Home's entry.
+    await abuseHomeBlocks(token, own.pageId, fifty1.blocks);
     expect((await pageRow(own.pageId)).draft.blocks).toHaveLength(51);
   });
 
@@ -606,15 +614,19 @@ test.describe("M7-08 on a desktop", () => {
     // Tab and Shift+Tab never leave the dialog.
     for (let i = 0; i < 24; i++) {
       await page.keyboard.press("Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
-        true,
-      );
+      expect(
+        await page.evaluate(
+          () => document.activeElement?.closest("[data-testid=template-dialog]") !== null,
+        ),
+      ).toBe(true);
     }
     for (let i = 0; i < 24; i++) {
       await page.keyboard.press("Shift+Tab");
-      expect(await page.evaluate(() => document.activeElement?.closest("[data-testid=template-dialog]") !== null)).toBe(
-        true,
-      );
+      expect(
+        await page.evaluate(
+          () => document.activeElement?.closest("[data-testid=template-dialog]") !== null,
+        ),
+      ).toBe(true);
     }
     await expectNoHorizontalScroll(page);
   });

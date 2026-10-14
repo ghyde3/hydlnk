@@ -1,4 +1,6 @@
--- Wave M1 (M11-05): publish_site, the whole-site publish RPC.
+-- Wave M1 (M11-05): publish_site, the whole-site publish RPC. Since M15-05 (1b1-23) it writes page
+-- entries (the sub-pages are non-Home entries, with the ids the site_pages rows had); 201 covers the
+-- entry-only parts (Home's blocks, revisions, a site not moved yet).
 --
 --   * success: every sub-page and Home are written in one call, with one published_at; Home is written
 --     last, so the version trigger records Home (and only Home);
@@ -24,13 +26,18 @@ insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000177a002', tests.get_supabase_uid('a'), 'zq177-a2',
    '{"version":1,"rev":1,"profile":{"name":"A2","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');
 
-insert into public.site_pages (id, page_id, draft) values
-  ('00000000-0000-4000-8000-00000177a0a1', '00000000-0000-4000-8000-00000177a001',
-   '{"path":"items","title":"Items","description":"","blocks":[]}'),
-  ('00000000-0000-4000-8000-00000177a0a2', '00000000-0000-4000-8000-00000177a001',
-   '{"path":"directions","title":"Directions","description":"","blocks":[]}'),
-  ('00000000-0000-4000-8000-00000177b0a1', '00000000-0000-4000-8000-00000177b001',
-   '{"path":"b-page","title":"B","description":"","blocks":[]}');
+-- Page entries as the move would make them: a Home entry per site, and the sub-pages.
+insert into public.content_entries (id, site_id, type_id, draft)
+select e.id::uuid, e.site::uuid, t.id, e.draft::jsonb
+from (values
+  ('00000000-0000-4000-8000-00000177a0e0', '00000000-0000-4000-8000-00000177a001', '{"path":"/","title":"","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-00000177a0a1', '00000000-0000-4000-8000-00000177a001', '{"path":"items","title":"Items","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-00000177a0a2', '00000000-0000-4000-8000-00000177a001', '{"path":"directions","title":"Directions","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-00000177b0e0', '00000000-0000-4000-8000-00000177b001', '{"path":"/","title":"","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-00000177b0a1', '00000000-0000-4000-8000-00000177b001', '{"path":"b-page","title":"B","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-00000177a2e0', '00000000-0000-4000-8000-00000177a002', '{"path":"/","title":"","description":"","blocks":[]}')
+) as e(id, site, draft)
+join public.content_types t on t.site_id = e.site::uuid and t.key = 'page';
 
 create function pg_temp.home(p_marker text) returns jsonb language sql as
   $$ select jsonb_build_object('version', 1, 'marker', p_marker) $$;
@@ -62,8 +69,8 @@ select is(
   'Home carries the published_at'
 );
 select results_eq(
-  $$ select live_path, published_at from public.site_pages
-      where page_id = '00000000-0000-4000-8000-00000177a001' order by live_path $$,
+  $$ select live_path, published_at from public.content_entries
+      where site_id = '00000000-0000-4000-8000-00000177a001' and draft ->> 'path' <> '/' order by live_path $$,
   $$ values ('directions'::text, timestamptz '2026-03-01 10:00:00+00'),
             ('items'::text, timestamptz '2026-03-01 10:00:00+00') $$,
   'both sub-pages are live at the same published_at'
@@ -79,7 +86,7 @@ select is(
   'the version is Home''s document'
 );
 select is(
-  (select draft ->> 'title' from public.site_pages where id = '00000000-0000-4000-8000-00000177a0a1'),
+  (select draft ->> 'title' from public.content_entries where id = '00000000-0000-4000-8000-00000177a0a1'),
   'Items',
   'publishing leaves the sub-page drafts alone'
 );
@@ -150,8 +157,8 @@ select is(
   'after all those refusals Home is unchanged'
 );
 select is(
-  (select count(*)::int from public.site_pages
-    where page_id = '00000000-0000-4000-8000-00000177a001' and live_path in ('items', 'directions')),
+  (select count(*)::int from public.content_entries
+    where site_id = '00000000-0000-4000-8000-00000177a001' and live_path in ('items', 'directions')),
   2,
   'and so are both sub-pages'
 );
@@ -201,8 +208,8 @@ select is(
   'the clash left Home as it was'
 );
 select results_eq(
-  $$ select live_path, published_at from public.site_pages
-      where page_id = '00000000-0000-4000-8000-00000177a001' order by live_path $$,
+  $$ select live_path, published_at from public.content_entries
+      where site_id = '00000000-0000-4000-8000-00000177a001' and draft ->> 'path' <> '/' order by live_path $$,
   $$ values ('directions'::text, timestamptz '2026-03-01 10:00:00+00'),
             ('items'::text, timestamptz '2026-03-01 10:00:00+00') $$,
   'and both sub-pages as they were (the paths cleared midway came back with the rollback)'
@@ -217,6 +224,12 @@ select is(
 -- Swap, unpublish, a site with no sub-pages
 -- ---------------------------------------------------------------------------
 
+-- A live path may differ from the page's draft path, but a draft path is a claim of its own: free the
+-- drafts' paths first, as an owner renaming the pages would, so the live paths can trade places.
+update public.content_entries set draft = jsonb_set(draft, '{path}', '"items-draft"')
+  where id = '00000000-0000-4000-8000-00000177a0a1';
+update public.content_entries set draft = jsonb_set(draft, '{path}', '"directions-draft"')
+  where id = '00000000-0000-4000-8000-00000177a0a2';
 select lives_ok(
   $$ select public.publish_site('00000000-0000-4000-8000-00000177a001', tests.get_supabase_uid('a'), pg_temp.home('swap'),
        jsonb_build_array(pg_temp.sub('00000000-0000-4000-8000-00000177a0a1', 'directions'),
@@ -225,7 +238,7 @@ select lives_ok(
   'two pages can swap paths in one publish'
 );
 select is(
-  (select live_path from public.site_pages where id = '00000000-0000-4000-8000-00000177a0a1'),
+  (select live_path from public.content_entries where id = '00000000-0000-4000-8000-00000177a0a1'),
   'directions',
   'the swap landed'
 );
@@ -243,7 +256,7 @@ select lives_ok(
   'a sub-page given a null published is unpublished'
 );
 select results_eq(
-  $$ select live_path, published_at from public.site_pages where id = '00000000-0000-4000-8000-00000177a0a1' $$,
+  $$ select live_path, published_at from public.content_entries where id = '00000000-0000-4000-8000-00000177a0a1' $$,
   $$ values (null::text, null::timestamptz) $$,
   'it has no live path and no published_at'
 );

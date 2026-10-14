@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { abuseHomeBlocks, homeEntryOf, writeHomeDraft } from "../fixtures/home-abuse";
 import { cleanupUsers, makeUser, signedInUser } from "../fixtures/data";
 import { url } from "../helpers";
 import { accessToken, openEditor, pageRow, rowOf } from "../m2/editor-helpers";
@@ -30,13 +30,9 @@ const link = (id: string, extra: Record<string, unknown> = {}) => ({
 /** Writes `blocks` (after the page's own) into the owner's draft with the publishable key. */
 async function patchDraft(token: string, pageId: string, blocks: unknown[]): Promise<void> {
   const current = (await pageRow(pageId)).draft;
-  const { data, error } = await userClient(token)
-    .from("pages")
-    .update({ draft: { ...current, blocks: [...current.blocks, ...blocks] } })
-    .eq("id", pageId)
-    .select("id");
-  expect(error, "the database takes any draft").toBeNull();
-  expect(data).toHaveLength(1);
+  // The owner's publishable-key write of pages.draft blocks is refused (HL013); the hostile blocks
+  // go into Home's entry draft with the secret key, where Publish and the editor meet them.
+  await abuseHomeBlocks(token, pageId, [...current.blocks, ...blocks]);
 }
 
 test("M6-20 a thumbnail from another account's folder and an icon name that is a script are refused at Publish and never render", async ({
@@ -48,6 +44,8 @@ test("M6-20 a thumbnail from another account's folder and an icon name that is a
   const token = await accessToken(context);
   const before = await pageRow(owner.pageId);
   expect(before.published).not.toBeNull();
+  const entryBefore = await homeEntryOf(owner.pageId);
+  expect(entryBefore.published).not.toBeNull();
 
   const cases: [string, unknown, string][] = [
     [
@@ -66,7 +64,7 @@ test("M6-20 a thumbnail from another account's folder and an icon name that is a
   ];
   for (const [name, icon, message] of cases) {
     // Reset to the page's own draft, then write the abusive block with the owner's JWT.
-    await adminClient().from("pages").update({ draft: before.draft }).eq("id", owner.pageId);
+    await writeHomeDraft(owner.pageId, before.draft.blocks);
     await patchDraft(token, owner.pageId, [link(BAD_ID, { icon })]);
 
     await openEditor(page);
@@ -80,6 +78,7 @@ test("M6-20 a thumbnail from another account's folder and an icon name that is a
     const after = await pageRow(owner.pageId);
     expect(after.published, name).toEqual(before.published);
     expect(after.published_at, name).toBe(before.published_at);
+    expect((await homeEntryOf(owner.pageId)).published, name).toEqual(entryBefore.published);
 
     // The live page shows none of it.
     const html = await (await page.request.get(url(owner.handle))).text();
@@ -90,13 +89,14 @@ test("M6-20 a thumbnail from another account's folder and an icon name that is a
   }
 });
 
-test("M6-22 five featured links written with the publishable key are accepted as a draft, refused at Publish, and the live page keeps its own", async ({
+test("M6-22 five featured links written straight to the draft (the publishable key is refused, HL013; the Home entry takes them) are held as a draft, refused at Publish, and the live page keeps its own", async ({
   page,
   context,
 }) => {
   const owner = await signedInUser(context, { label: "la2" });
   const token = await accessToken(context);
   const before = await pageRow(owner.pageId);
+  const entryBefore = await homeEntryOf(owner.pageId);
   const ids = [
     "Lk-feat5-aaaa01",
     "Lk-feat5-aaaa02",
@@ -125,6 +125,7 @@ test("M6-22 five featured links written with the publishable key are accepted as
   const after = await pageRow(owner.pageId);
   expect(after.published).toEqual(before.published);
   expect(after.published_at).toBe(before.published_at);
+  expect((await homeEntryOf(owner.pageId)).published).toEqual(entryBefore.published);
   const html = await (await page.request.get(url(owner.handle))).text();
   expect(html).not.toContain("Lk-feat5");
   expect(html).not.toMatch(/<a\b[^>]*\bdata-featured=/);

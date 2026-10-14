@@ -83,7 +83,7 @@ test.describe("M13-02 admin account details", () => {
     await expect(page.locator("main")).toContainText(customer);
     await expect(page.locator(`[data-site="${owner.handle}"]`)).toBeVisible();
     await expect(page.locator("[data-uploads]")).toContainText("of 1 GB");
-    await expect(page.locator("[data-site-bytes]")).toContainText("of 64 MB");
+    await expect(page.locator("[data-site-bytes]")).toContainText("of 5 GB");
 
     // The buttons: the live site, Stripe (a link from the stored id), gift, see draft, suspend.
     const live = page.getByRole("link", { name: "Open live site" });

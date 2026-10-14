@@ -17,6 +17,7 @@ import {
   mintToken,
 } from "../fixtures/mcp-client";
 import { openEditor, pageRow, saveIndicator } from "../m2/editor-helpers";
+import { homeEntryOf } from "../fixtures/home-abuse";
 import { prepareFlowUser, runEveryTool } from "./mcp-flow-helpers";
 
 /**
@@ -93,7 +94,11 @@ test("M10-23 two add_block calls started together never both write from the same
   const first = new McpClient((await mintToken(user.id)).token);
   const second = new McpClient((await mintToken(user.id)).token);
   await Promise.all([first.initialize(), second.initialize()]);
-  const blocks = async () => (await pageRow(pageId)).draft;
+  // A blocks write on a moved site is guarded by and bumps Home's entry rev, not the design rev in pages.draft.
+  const blocks = async () => ({
+    blocks: (await pageRow(pageId)).draft.blocks,
+    rev: Number((await homeEntryOf(pageId)).rev),
+  });
   let before = await blocks();
   let added = 0;
   let conflicts = 0;

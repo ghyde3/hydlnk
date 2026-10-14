@@ -2,6 +2,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toPlanId } from "@/lib/limits";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import {
+  getPublishedHomeWithClient,
+  listDraftPagesWithClient,
+  mergeHomePublished,
+} from "@/lib/site/page-entries";
 import type { StatsSource } from "../stats";
 import type { DailyRow, DimName, DimRow, RawEvent } from "./aggregate";
 import {
@@ -62,10 +67,7 @@ export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
     async resolvePage(ownerId, pageId) {
       const { data, error } = await db
         .from("pages")
-        // Sub-pages: only the titles and the published blocks (the link names), never whole drafts.
-        .select(
-          "published, accounts!inner(plan), site_pages(id, draft_title:draft->>title, published_title:published->>title, published_blocks:published->blocks, live_path, created_at)",
-        )
+        .select("published, accounts!inner(plan)")
         .eq("id", pageId)
         .eq("owner_id", ownerId)
         .maybeSingle();
@@ -73,23 +75,30 @@ export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
       if (!data) return null;
       const account = data.accounts as { plan?: unknown } | { plan?: unknown }[] | null;
       const plan = Array.isArray(account) ? account[0]?.plan : account?.plan;
-      const rows = (data.site_pages ?? []) as {
-        id: string;
-        draft_title: string | null;
-        published_title: string | null;
-        published_blocks: unknown;
-        live_path: string | null;
-        created_at: string;
-      }[];
-      const subPages = rows
-        .sort((a, b) => a.created_at.localeCompare(b.created_at))
-        .map((row) => ({
-          id: row.id.toLowerCase(),
-          title: row.published_title?.trim() || row.draft_title?.trim() || "Untitled page",
-          // A live page has a live_path (the RPC requires a published path); its link names are read from the blocks alone.
-          published: row.live_path !== null ? { blocks: row.published_blocks ?? [] } : null,
-        }));
-      return { plan: toPlanId(plan), published: data.published ?? null, subPages };
+      // Home's blocks and published state are its page entry; the sub-pages are the other page
+      // entries (titles and published blocks only, never whole drafts). Reads are keyed by the
+      // site the owner lookup just approved.
+      const typed = db as unknown as Parameters<typeof getPublishedHomeWithClient>[0];
+      const [home, pages] = await Promise.all([
+        getPublishedHomeWithClient(typed, pageId),
+        listDraftPagesWithClient(typed, pageId),
+      ]);
+      const subPages = pages.map((page) => {
+        const published = page.published as { title?: unknown; blocks?: unknown } | null;
+        const draftTitle = typeof page.draft.title === "string" ? page.draft.title.trim() : "";
+        const publishedTitle = typeof published?.title === "string" ? published.title.trim() : "";
+        return {
+          id: page.id.toLowerCase(),
+          title: publishedTitle || draftTitle || "Untitled page",
+          // A live page has a live path; its link names are read from the blocks alone.
+          published: page.livePath !== null ? { blocks: published?.blocks ?? [] } : null,
+        };
+      });
+      return {
+        plan: toPlanId(plan),
+        published: mergeHomePublished(data.published, home),
+        subPages,
+      };
     },
 
     async historicPageIds(pageId) {

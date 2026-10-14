@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { emptyDraft, emptySubPageDraft } from "@/lib/document";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
+import { writeHomeDraft } from "../fixtures/home-abuse";
 import { NEVER_STORED, appRaw } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { sessionCookie, signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
@@ -24,7 +25,7 @@ async function seedOwner(browser: import("@playwright/test").Browser) {
   const db = adminClient();
   const draft = emptyDraft(owner.handle!);
   draft.profile.name = SECRET_NAME;
-  draft.blocks = [
+  const homeBlocks = [
     {
       id: "lnk-zq000001",
       type: "link",
@@ -32,16 +33,31 @@ async function seedOwner(browser: import("@playwright/test").Browser) {
       label: "Book",
       url: "https://example.com/book",
     },
-  ] as never;
+  ];
+  // The design goes to pages.draft without `blocks`: the moved site's blocks there are a frozen copy
+  // (HL013 refuses a change), and Home's blocks live in its '/' entry.
+  const { blocks: _frozen, ...design } = draft;
   const saved = await db
     .from("pages")
-    .update({ draft: draft as never, published: null, published_at: null })
+    .update({ draft: design as never, published: null, published_at: null })
     .eq("id", owner.pageId!);
   expect(saved.error).toBeNull();
-  const sub = await db
-    .from("site_pages")
-    .insert({ page_id: owner.pageId!, draft: emptySubPageDraft("items", SUB_TITLE) as never });
-  expect(sub.error).toBeNull();
+  const home = await writeHomeDraft(owner.pageId!, homeBlocks);
+  expect(home.error).toBeNull();
+  // The sub-page is a page entry (1b1-14); Home's entry exists from the move.
+  const type = await db
+    .from("content_types")
+    .select("id")
+    .eq("site_id", owner.pageId!)
+    .eq("key", "page")
+    .single();
+  expect(type.error).toBeNull();
+  const entries = await db
+    .from("content_entries")
+    .insert(
+      [emptySubPageDraft("items", SUB_TITLE)].map((entry) => ({ site_id: owner.pageId!, type_id: type.data!.id, draft: entry as never })),
+    );
+  expect(entries.error).toBeNull();
   return owner;
 }
 
@@ -94,9 +110,10 @@ test.describe("M13-11 admin draft view", () => {
         .eq("id", owner.pageId!)
         .single();
       const subBefore = await db
-        .from("site_pages")
+        .from("content_entries")
         .select("draft, updated_at")
-        .eq("page_id", owner.pageId!);
+        .eq("site_id", owner.pageId!)
+        .order("id");
 
       await page.goto(url("app", `/admin/accounts/${owner.userId}`));
       // Opening the account page (and hovering the button) logs nothing.
@@ -168,9 +185,10 @@ test.describe("M13-11 admin draft view", () => {
         .single();
       expect(after.data).toEqual(before.data);
       const subAfter = await db
-        .from("site_pages")
+        .from("content_entries")
         .select("draft, updated_at")
-        .eq("page_id", owner.pageId!);
+        .eq("site_id", owner.pageId!)
+        .order("id");
       expect(subAfter.data).toEqual(subBefore.data);
 
       await expect(page.getByRole("link", { name: "Back to account" })).toHaveAttribute(

@@ -1,5 +1,5 @@
 import type { BrowserContext, Page } from "@playwright/test";
-import { adminClient, type Plan } from "../fixtures/auth";
+import { adminClient, moveSite, type Plan } from "../fixtures/auth";
 import { makeUser, signIn } from "../fixtures/data";
 import { url } from "../helpers";
 
@@ -132,6 +132,7 @@ export async function createPublishedPage(
     .select("id")
     .single();
   if (inserted.error) throw new Error(`creating page ${handle} failed: ${inserted.error.message}`);
+  await moveSite(inserted.data.id as string);
   return inserted.data.id as string;
 }
 

@@ -197,10 +197,16 @@ export const describeTemplate = (template: Template): string[] =>
 /** The draft PATCHes (writes to /rest/v1/pages) a page makes from now on, and every other write. */
 export function watchWrites(page: Page): {
   patches: { body: Record<string, unknown>; url: string }[];
+  /** Home's blocks saved through the server save route (M15-14), parsed. */
+  entryPosts: { body: { rev?: unknown; draft?: { blocks?: unknown } }; url: string }[];
   others: string[];
   serverActions: string[];
 } {
   const patches: { body: Record<string, unknown>; url: string }[] = [];
+  const entryPosts: {
+    body: { rev?: unknown; draft?: { blocks?: unknown } };
+    url: string;
+  }[] = [];
   const others: string[] = [];
   const serverActions: string[] = [];
   page.on("request", (request) => {
@@ -215,9 +221,19 @@ export function watchWrites(page: Page): {
       });
       return;
     }
+    if (request.method() === "POST" && /\/api\/pages\/[^/]+\/entries\/[^/]+\/draft$/.test(target)) {
+      entryPosts.push({
+        body: JSON.parse(request.postData() ?? "{}") as {
+          rev?: unknown;
+          draft?: { blocks?: unknown };
+        },
+        url: target,
+      });
+      return;
+    }
     others.push(`${request.method()} ${target}`);
   });
-  return { patches, others, serverActions };
+  return { patches, entryPosts, others, serverActions };
 }
 
 export async function userThemeRows(userId: string) {

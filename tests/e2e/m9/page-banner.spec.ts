@@ -2,10 +2,10 @@ import { expect, test, type Page } from "@playwright/test";
 import { DESKTOP, PHONE } from "../../../scripts/lib/viewports";
 import { adminClient, userClient } from "../fixtures/auth";
 import { expireOwnerPages } from "../fixtures/expire";
-import { cleanupUsers, desktopOnly, phoneOnly, rand } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, phoneOnly, publishHome, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { dayAt, makeOwner, seed, signInOwner } from "../m4/analytics-dash-helpers";
-import { accessToken, expectDraft, pageRow, seededUser, statusChip } from "../m2/editor-helpers";
+import { accessToken, expectDraft, pageRow, seededUser, setDraft, statusChip } from "../m2/editor-helpers";
 import { openEditor, previewScreen, showView } from "../m2/blocks-helpers";
 import { toPublishForm, emptyDraft } from "@/lib/document";
 import { tenantGet } from "../m2/publish-helpers";
@@ -187,15 +187,10 @@ test.describe("M9-23 the bar on the public page", () => {
     const hidden = await livePage("bnp5", () => ({}));
     // A hidden banner is dropped at Publish, so a stored document never holds one; a page whose draft
     // has one still publishes without it. The live page of both is the same.
-    await adminClient()
-      .from("pages")
-      .update({
-        draft: {
-          ...(await pageRow(hidden.pageId)).draft,
-          banner: banner({ visible: false, text: "SECRET-HIDDEN-TEXT" }),
-        },
-      })
-      .eq("id", hidden.pageId);
+    await setDraft(hidden.pageId, {
+      ...(await pageRow(hidden.pageId)).draft,
+      banner: banner({ visible: false, text: "SECRET-HIDDEN-TEXT" }),
+    });
     for (const live of [plain, hidden]) {
       await page.goto(live.url);
       await expect(page.locator("[data-page-root]")).toBeVisible();
@@ -264,11 +259,7 @@ test.describe("M9-23 budget and analytics", () => {
     const draft = { ...emptyDraft(owner.handle), banner: banner({ text: "Sale", label: "Shop" }) };
     const withBanner = toPublishForm(draft as never, null);
     const publish = async (doc: unknown) => {
-      const { error } = await adminClient()
-        .from("pages")
-        .update({ published: doc, published_at: new Date().toISOString() })
-        .eq("id", owner.pageId);
-      expect(error).toBeNull();
+      await publishHome(owner.pageId, doc);
     };
     await publish(withBanner);
     const day = dayAt(-3);
@@ -361,21 +352,16 @@ test.describe("M9-23 the link behind the bar: /r, counted, 404 when gone", () =>
     }));
     const other = await livePage("bnr4", () => ({ banner: banner({ id: "banner-other-1" }) }));
     // The draft holds a banner the published page does not.
-    await adminClient()
-      .from("pages")
-      .update({
-        draft: {
-          ...(await pageRow(live.pageId)).draft,
-          banner: {
-            id: "banner-draft-1",
-            visible: true,
-            text: "d",
-            label: "d",
-            url: "https://example.com/d",
-          },
-        },
-      })
-      .eq("id", live.pageId);
+    await setDraft(live.pageId, {
+      ...(await pageRow(live.pageId)).draft,
+      banner: {
+        id: "banner-draft-1",
+        visible: true,
+        text: "d",
+        label: "d",
+        url: "https://example.com/d",
+      },
+    });
 
     for (const [id, pageId] of [
       ["banner-draft-1", live.pageId],
@@ -393,10 +379,15 @@ test.describe("M9-23 the link behind the bar: /r, counted, 404 when gone", () =>
     // Removing the banner and republishing: the same id now answers 404.
     const first = await getClick(ingest(live), BANNER_ID);
     expect(first.status).toBe(302);
-    const { published } = (await pageRow(live.pageId)) as { published: Record<string, unknown> };
+    // The live document: the design half (the banner) on the pages row, Home's blocks in its entry.
+    const pagesRow = await adminClient().from("pages").select("published").eq("id", live.pageId).single();
+    const published: Record<string, unknown> = {
+      ...(pagesRow.data!.published as Record<string, unknown>),
+      blocks: ((await pageRow(live.pageId)).published as { blocks: unknown }).blocks,
+    };
     const without = { ...published };
     delete without.banner;
-    await adminClient().from("pages").update({ published: without }).eq("id", live.pageId);
+    await publishHome(live.pageId, without);
     // A write behind the server's back: on a production build the cached click target is expired the
     // way the product does it (M9-13), as Publish would.
     await expireOwnerPages(browser, live.userId);
@@ -623,14 +614,18 @@ test.describe("M9-23 abuse through the publishable key and the owner's JWT", () 
       },
       "an id of a block": { id: BLOCKS[0]!.id, visible: true, text: "hi", label: "", url: "" },
     };
+    // The page holds the block whose id the last case reuses for the banner; blocks live in Home's entry.
+    const start = await pageRow(user.pageId);
+    await setDraft(user.pageId, {
+      ...start.draft,
+      blocks: [...start.draft.blocks.filter((b) => b.id !== BLOCKS[0]!.id), BLOCKS[0]],
+    });
     await openEditor(page);
     for (const [name, bad] of Object.entries(cases)) {
       const row = await pageRow(user.pageId);
-      const draft = {
-        ...row.draft,
-        blocks: [...row.draft.blocks.filter((b) => b.id !== BLOCKS[0]!.id), BLOCKS[0]],
-        banner: bad,
-      };
+      // The blocks live in Home's entry (a write that changes them is refused), so only the banner is written.
+      const { blocks: _blocks, ...design } = row.draft;
+      const draft = { ...design, banner: bad };
       const written = await client
         .from("pages")
         .update({ draft })

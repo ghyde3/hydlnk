@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, phoneOnly, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
@@ -432,18 +433,11 @@ test.describe("M9-19 the abuse cases", () => {
     context,
   }) => {
     const user = await userWithDraft(context, "da1");
-    const client = userClient(await accessTokenFor(user.email));
-    const write = await client
-      .from("pages")
-      .update({
-        draft: draftOf(user.handle, [
-          discount({ id: "discount-bad-code", code: '"><img src=x onerror=alert(1)>', url: "" }),
-          discount({ id: "discount-bad-link", url: "javascript:alert(1)" }),
-          discount({ id: "discount-bad-long", code: "a".repeat(33), url: "" }),
-        ]),
-      })
-      .eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, [
+      discount({ id: "discount-bad-code", code: '"><img src=x onerror=alert(1)>', url: "" }),
+      discount({ id: "discount-bad-link", url: "javascript:alert(1)" }),
+      discount({ id: "discount-bad-long", code: "a".repeat(33), url: "" }),
+    ]);
     await openEditor(page);
     await page.getByRole("button", { name: "Publish", exact: true }).first().click();
     const alert = page.getByRole("alert").filter({ hasText: "before publishing" });
@@ -469,22 +463,15 @@ test.describe("M9-19 the abuse cases", () => {
     context,
   }) => {
     const user = await userWithDraft(context, "da2");
-    const client = userClient(await accessTokenFor(user.email));
-    const write = await client
-      .from("pages")
-      .update({
-        draft: draftOf(user.handle, [
-          discount({
-            id: "discount-hidden-1",
-            visible: false,
-            code: "a b",
-            url: "javascript:alert(1)",
-          }),
-          { id: "header-dsc-00001", type: "header", visible: true, text: "Hello" },
-        ]),
-      })
-      .eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, [
+      discount({
+        id: "discount-hidden-1",
+        visible: false,
+        code: "a b",
+        url: "javascript:alert(1)",
+      }),
+      { id: "header-dsc-00001", type: "header", visible: true, text: "Hello" },
+    ]);
     await openEditor(page);
     await publishFromEditor(page, user.pageId);
     expect(JSON.stringify((await publishedOf(user.pageId)).published)).not.toContain(

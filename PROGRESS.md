@@ -2,6 +2,31 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-10-12 — Content model, stages 0 and 1a (M15-01 to M15-04)
+
+On `m16-content` (draft PR #32). Flipped to `passes: true`: M15-01, M15-02, M15-03, M15-04. Features: 327 of 342. This is feature 1 of the CMS evolution (plan doc "HYDLNK Next Evolution Plan"; spec docs/PLAN.md "Content model (feature 1, Wave N)").
+
+- **How it was built** (Gary, 2026-10-11): short single-task agents (Sonnet builds, Opus review and adversarial verify, Haiku for mechanical runs), orchestrated as workflows. `.claude/agents/` gained `adversarial-verifier`, and `reviewer` and `security-reviewer` now run on Opus.
+- **Libraries** approved by Gary on 2026-10-11 and pinned: `@tiptap/markdown` 3.31.4, `@tiptap/core` 3.31.4, `marked` 17.0.6 (99a7598).
+- **M15-01:** sub-page saves check `updated_at` (ff2846c). Evidence:
+  - `tests/unit/m15-sub-page-save-revision.test.ts`;
+  - `tests/e2e/m15/subpage-revision.spec.ts`, 4 passed at 390x844 and 1440x900 (local `next dev`);
+  - the m11 editor-pages and tenant-subpages specs, 34 passed.
+- **M15-02:** migrations `20261014000001` to `000006` and `000009`. pgTAP 189 to 195 and 198. `tests/unit/content-rls.test.ts` (publishable-key probe on all six tables) and `content-reserved-sql.test.ts`. The reserved-path list lives in `src/lib/document/path.ts`, not the `src/lib/site-pages/path.ts` the row names; `RESERVED_ENTRY_SLUGS` sits beside it, with a SQL parity test. The stage 1b move rules and byte guard are in PLAN.
+- **M15-03:** `src/lib/content` (kernel, schemas, entries, publish, trash, list, terms, revisions), with migrations `000007` (publish), `000008` (trash and purge) and `000010` (revision byte budget). pgTAP 196, 197 and 199, and 15 `tests/unit/m15-content-*` files (118 tests against the local stack, including a concurrent publish and update). Two checkpoints (an Opus review plus the adversarial verifier) found and fixed:
+  - Markdown blocklist bypasses: links in tables, character references, long URLs;
+  - an HL008 bypass;
+  - another user's image paths accepted;
+  - raw page drafts published;
+  - untyped errors.
+- **M15-04:** the Opus security review found no critical or high issues. The two medium findings are fixed (c99e4c3): the scheme check is now an allowlist, and revision snapshots are bounded. Two low items were hardened (870f7f9): the move flag works only for privileged roles, and moved sub-pages are read-only. The rest are recorded in PLAN with Gary's decisions (2026-10-12): revisions are pruned oldest first, and the known items are fixed before stages 3 and 4.
+- **Checks:**
+  - CI run 38334322319 (head 4546905): Verify green, with the content integration tests now in its Supabase step.
+  - Local `pnpm verify`: typecheck clean, lint 0 errors, unit 10,511 passed (the 2 failures were the known `createUser` flake and passed alone), db 68 files and 2,633 tests.
+- **Known, next:**
+  - The editor adopts new sub-page revisions after Publish, so an MCP edit landing in that window goes unnoticed (recorded in PLAN).
+  - Next is stage 1b: moving sub-pages and Home into content entries, per the "Moving pages in" rules in PLAN.
+
 ## 2026-10-11 — Proving pass (PR #30): 20 rows proven, Unpublish, Lighthouse
 
 On `m15-proving` (PR #30). Flipped to `passes: true`: M4-21, M7-06, M7-07, M4-08, M9-02, M9-05, M9-06, M9-07, M9-08, M9-14, M14-01, M14-02, M14-03, M1-08, M1-13, M1-29, M1-30, M4-03, M4-09, M14-06. Features: 323 of 338.

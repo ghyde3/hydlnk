@@ -34,6 +34,10 @@ describe("M4-02 the TypeScript limits table", () => {
       versionsKept: 0,
       redirectMode: false,
       pagesPerSite: 3,
+      entriesPerType: 25,
+      customTypes: 0,
+      revisionsKept: 10,
+      contentBytes: 67108864,
     });
     expect(PLAN_LIMITS.pro).toEqual({
       pages: 3,
@@ -45,6 +49,10 @@ describe("M4-02 the TypeScript limits table", () => {
       versionsKept: 25,
       redirectMode: true,
       pagesPerSite: 10,
+      entriesPerType: 1000,
+      customTypes: 3,
+      revisionsKept: 50,
+      contentBytes: 1073741824,
     });
     expect(PLAN_LIMITS.studio).toEqual({
       pages: 15,
@@ -56,6 +64,10 @@ describe("M4-02 the TypeScript limits table", () => {
       versionsKept: 25,
       redirectMode: true,
       pagesPerSite: 500,
+      entriesPerType: 100000,
+      customTypes: 100,
+      revisionsKept: 200,
+      contentBytes: 5368709120,
     });
     // The exact figures the acceptance names.
     expect(PLAN_IDS.map((plan) => PLAN_LIMITS[plan].uploadBytes)).toEqual([

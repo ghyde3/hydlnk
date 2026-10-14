@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DraftDoc } from "@/lib/document";
 import { AutosaveQueue, type BlockedSave, type SaveStatus } from "@/lib/editor/autosave";
-import { createDraftSaver } from "@/lib/editor/save-client";
+import { createDraftSaver, type HomeEntryRef } from "@/lib/editor/save-client";
 
 /** Statuses with edits that are not stored: the browser asks before the tab is closed. */
 const UNSAVED: readonly SaveStatus[] = [
@@ -47,18 +47,28 @@ export function useAutosave(args: {
   pageId: string;
   draft: DraftDoc;
   initialRevKey: string | null;
+  /** Home's page entry, where Home's blocks are saved (1b1-17); null when the site has none. */
+  home: HomeEntryRef | null;
+  /** The load dropped parts of the stored draft: the first save must write the repaired blocks. */
+  repaired?: boolean;
 }): Autosave {
-  const { pageId, draft, initialRevKey } = args;
+  const { pageId, draft, initialRevKey, home, repaired = false } = args;
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [blocked, setBlocked] = useState<BlockedSave | null>(null);
   const queueRef = useRef<AutosaveQueue | null>(null);
   // What the screen loaded with: the baseline for "has the user edited yet".
   const [loaded] = useState(() => draft);
   const initialRev = loaded.rev;
+  // The entry rev the blocks in `loaded` belong to: a later entry means they are no longer the stored ones.
+  const [loadedHomeRev] = useState(() => home?.rev ?? null);
 
   useEffect(() => {
     const queue = new AutosaveQueue({
-      save: createDraftSaver(pageId),
+      save: createDraftSaver(
+        pageId,
+        home,
+        home && !repaired && home.rev === loadedHomeRev ? loaded.blocks : undefined,
+      ),
       onStatus: setStatus,
       onBlocked: setBlocked,
       initial: { rev: initialRev, revKey: initialRevKey },
@@ -84,7 +94,7 @@ export function useAutosave(args: {
       void queue.flush().finally(() => queue.dispose());
       queueRef.current = null;
     };
-  }, [pageId, initialRev, initialRevKey]);
+  }, [pageId, initialRev, initialRevKey, home, repaired, loaded, loadedHomeRev]);
 
   useEffect(() => {
     if (draft === loaded) return;

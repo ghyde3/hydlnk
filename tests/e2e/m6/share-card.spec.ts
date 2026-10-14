@@ -636,9 +636,14 @@ test.describe("M6-33 safety", () => {
       /[?&]_rsc=/, // the router's prefetch of another workspace tab (M7-02)
       /\/media\/[^/]+\/img-/, // the uploaded picture through our own address (M7-14)
     ];
+    // After the content cutover the editor reads the entry revs (a GET, never a write) before a save.
+    const entryRevRead = (r: { method: string; url: string }) =>
+      r.method === "GET" && /\/rest\/v1\/content_entries\?select=id%2Crev&site_id=eq\./.test(r.url);
     const stray = seen.filter(
       (request) =>
-        !/^(blob|data):/.test(request.url) && !allowed.some((pattern) => pattern.test(request.url)),
+        !/^(blob|data):/.test(request.url) &&
+        !entryRevRead(request) &&
+        !allowed.some((pattern) => pattern.test(request.url)),
     );
     expect(stray).toEqual([]);
     // The draft save is a PATCH of pages and nothing else is written.

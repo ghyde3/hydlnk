@@ -47,17 +47,29 @@ function fakeAdmin(queries: string[] = []) {
     { id: ITEMS, draft: itemsDraft },
     { id: DIRS, draft: dirsDraft },
   ];
+  const { blocks: homeBlocks, ...design } = home;
   return {
     from(table: string) {
       queries.push(table);
-      const state: { eq: Record<string, unknown>; cols: string } = { eq: {}, cols: "" };
+      const state: { eq: Record<string, unknown> } = { eq: {} };
       const chain = {
-        select(cols: string) {
-          state.cols = cols;
+        select() {
           return chain;
         },
         eq(column: string, value: unknown) {
           state.eq[column] = value;
+          return chain;
+        },
+        neq() {
+          return chain;
+        },
+        is() {
+          return chain;
+        },
+        not() {
+          return chain;
+        },
+        order() {
           return chain;
         },
         or() {
@@ -71,22 +83,37 @@ function fakeAdmin(queries: string[] = []) {
                 expires_at: new Date(Date.now() + 86400000).toISOString(),
                 revoked_at: null,
                 pages: {
-                  id: "site-1",
+                  id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
                   handle: "zq",
                   owner_id: "owner-1",
-                  draft: home,
+                  draft: design,
                   accounts: { plan: "free", suspended_at: null },
                 },
               },
             };
           }
-          const row = pages.find((p) => p.id === state.eq.id);
-          return { error: null, data: row ? { draft: row.draft } : null };
+          if (table === "content_types") return { error: null, data: { id: "type-page" } };
+          // Home's entry (the only maybeSingle on the entries).
+          return {
+            error: null,
+            data: {
+              id: "home-entry",
+              rev: 1,
+              draft: { path: "/", title: "", description: "", blocks: homeBlocks },
+            },
+          };
         },
         then(resolve: (value: unknown) => void) {
           resolve({
             error: null,
-            data: pages.map((p) => ({ id: p.id, path: p.draft.path, title: p.draft.title })),
+            data: pages.map((p) => ({
+              id: p.id,
+              rev: 1,
+              draft: p.draft,
+              published: null,
+              live_path: null,
+              created_at: "2026-01-01T00:00:00Z",
+            })),
           });
         },
       };

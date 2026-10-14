@@ -21,7 +21,7 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  *   409  path_taken      422  path_invalid (the rule or the reserved list), doc_invalid (`blocks` or
  *        `description` fail the draft schema; both are optional starting content)
  *   400/415  not JSON
- *   201  {id, draft, createdAt}: the title is "New page" unless given and the path is suggested from
+ *   201  {id, draft, rev, createdAt, updatedAt}: the title is "New page" unless given and the path is suggested from
  *        it against the site's other paths unless one is given
  *
  * The owner is always the verified session user. JSON only and no cross-origin Origin.
@@ -69,7 +69,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
     return NextResponse.json(
-      { id: result.id, draft: result.draft, createdAt: result.createdAt },
+      {
+        id: result.id,
+        draft: result.draft,
+        rev: result.rev,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+      },
       { status: 201, headers: NO_STORE },
     );
   } catch (error) {

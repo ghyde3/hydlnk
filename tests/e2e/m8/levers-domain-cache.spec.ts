@@ -1,10 +1,9 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import { cleanupUsers, desktopOnly, rand, signIn } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, rand, setPublished, signIn } from "../fixtures/data";
 import { authCookies, cookieHeader } from "../fixtures/http";
 import { requireLocalEnv } from "../fixtures/stripe-stub";
 import { markDnsReady } from "../fixtures/vercel-stub";
 import { rawBuffer, SERVER_PORT, type RawBufferResponse } from "../m2/publish-helpers";
-import { adminClient } from "../fixtures/auth";
 import {
   addDomainRow,
   domainRowOf,
@@ -138,10 +137,7 @@ test.describe("M8-10 the production build remembers the lookup", () => {
     test.skip(!desktopOnly(info) || COUNTER_OFF, "one project; needs the counter flag");
     const live = await makeSite("c2", "studio");
     const draft = await makeSite("c2d", "studio");
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", draft.pageId);
+    await setPublished(draft.pageId, false);
     const pending = hostnameFor("c2p");
     await addDomainRow({ pageId: live.pageId, hostname: pending, status: "pending" });
     const draftHost = await verifiedHost(draft, "c2d");
@@ -273,10 +269,7 @@ test.describe("M8-10 the production build remembers the lookup", () => {
   }, info) => {
     test.skip(!desktopOnly(info) || COUNTER_OFF, "one project; needs the counter flag");
     const site = await makeSite("c6", "pro");
-    await adminClient()
-      .from("pages")
-      .update({ published: null, published_at: null })
-      .eq("id", site.pageId);
+    await setPublished(site.pageId, false);
     const host = await verifiedHost(site, "c6");
     plain404(await get(host), site.name, site.handle);
     const warm = await get(host);
