@@ -168,11 +168,19 @@ export async function publishHome(pageId: string, doc: unknown, publishedAt?: st
   const admin = adminClient();
   const owner = await admin.from("pages").select("owner_id").eq("id", pageId).single();
   if (owner.error) throw new Error(`publishHome lookup failed: ${owner.error.message}`);
+  // publish_site names exactly the live sub-page entries; each keeps the live form it has now.
+  const subs = await admin
+    .from("content_entries")
+    .select("id, published, draft")
+    .eq("site_id", pageId)
+    .is("deleted_at", null)
+    .neq("draft->>path", "/");
+  if (subs.error) throw new Error(`publishHome sub-pages failed: ${subs.error.message}`);
   const done = await admin.rpc("publish_site", {
     p_page_id: pageId,
     p_owner_id: owner.data.owner_id,
     p_home: doc as never,
-    p_sub_pages: [],
+    p_sub_pages: subs.data.map((row) => ({ id: row.id, published: row.published })) as never,
     p_published_at: publishedAt ?? new Date().toISOString(),
   });
   if (done.error) throw new Error(`publish_site failed: ${done.error.message}`);
