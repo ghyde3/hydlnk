@@ -5845,6 +5845,17 @@
         "Supersedes, in the same respect as M15-14 (Gary, 2026-10-13): M3-18 step 6, where it describes the owner's browser writing block overrides into `pages.draft` through PostgREST. After the cutover a browser write of Home's blocks is refused (HL013). The test asserts that refusal, plants the same overrides (fontHeading 'Geist', bg '#000000', color '#C46A4F', radius -5 and colour 'red') with a direct database write to the Home entry, and keeps every downstream promise of the step: Publish stores only the accepted override, the live page shows it, and the invalid values never reach the live page. Every other part of M3-18 step 6 stands."
       ],
       "passes": false
+    },
+    {
+      "id": "M15-17",
+      "milestone": 15,
+      "area": "editor",
+      "title": "A design-only save first checks Home's revision",
+      "acceptance": [
+        "Supersedes, in this respect only (Gary, 2026-10-13): M6-33's and M7-04's 'calls nothing but the draft save' (and any equal wording). Before a design-only save, such as a share card or Share tab edit, the editor may make one read of Home's entry revision, a GET with no write. That read is how an AI or other-tab edit to Home's blocks made meanwhile is caught as a conflict (M15-07) instead of being silently overwritten. Every other part of those steps stands: the edit writes only the design fields, makes no entry write and calls no other endpoint.",
+        "Tests: the M6-33 and M7-04 network checks allow exactly that one read and still assert no entry write and no other request; an AI write to Home's blocks while the editor is open, followed by a design-only edit, shows the conflict notice and overwrites nothing (M10-23)."
+      ],
+      "passes": false
     }
   ]
 }
