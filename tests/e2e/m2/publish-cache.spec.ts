@@ -240,11 +240,13 @@ test.describe("M2-26 Publish invalidates the page cache with updateTag (producti
         body: JSON.stringify(body),
       });
 
+    // A design-only draft write (no blocks key; Home's blocks live in its entry since the cutover, M15-14).
+    const { blocks: _homeBlocks, ...designDraft } = user.draft;
     expect(
       (
         await patch({
           draft: {
-            ...user.draft,
+            ...designDraft,
             rev: 77,
             profile: { ...user.draft.profile, name: "POISON-DRAFT" },
           },
