@@ -3,6 +3,7 @@ import { emptyDraft, publishedDocSchema, toPublishForm, type Block } from "@/lib
 import { adminClient, publishableKey, signInAs, supabaseUrl } from "../fixtures/auth";
 import { addPage, cleanupUsers, makeUser, publishHome, rand } from "../fixtures/data";
 import { authCookies, cookieHeader } from "../fixtures/http";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { pageRow, setDraft, accessToken, emptyUser } from "./editor-helpers";
 import { SERVER_PORT, pngSizeOf, rawBuffer, tenantGet } from "./publish-helpers";
 
@@ -173,23 +174,11 @@ test.describe("M2-26 Publish invalidates the page cache with updateTag (producti
     expect(cacheState(hit)).toBe("HIT");
     const count = await queryCount(user.handle);
 
-    // A client writes a javascript: URL straight into the draft with the publishable key.
+    // A client's javascript: URL is refused for the browser; the hostile draft is planted in Home's entry.
     const token = await accessToken(context);
-    const bad = {
-      ...user.draft,
-      rev: 50,
-      blocks: [link("lnk-cache-0001", "Click", "javascript:alert(1)")],
-    };
-    const write = await fetch(`${supabaseUrl()}/rest/v1/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      headers: {
-        apikey: publishableKey(),
-        Authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ draft: bad }),
-    });
-    expect(write.status).toBeLessThan(300);
+    await abuseHomeBlocks(token, user.pageId, [
+      link("lnk-cache-0001", "Click", "javascript:alert(1)"),
+    ]);
     // A draft write is not a publish: the live page stays a HIT.
     const afterDraft = await tenantGet(user.handle);
     expect(cacheState(afterDraft)).toBe("HIT");
