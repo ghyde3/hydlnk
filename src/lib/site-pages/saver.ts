@@ -237,7 +237,13 @@ export class SubPageSaver {
 
   /** Writes every dirty page once; a page that cannot be sent is flagged and the rest still go. Stops at a failure worth retrying. */
   private async write(): Promise<void> {
-    if (this.disposed || this.dirty.size === 0) return;
+    if (this.disposed) return;
+    if (this.dirty.size === 0) {
+      // The page this write was for was dropped while it waited at a hold: `drop` left the status
+      // to this write, so nothing stays "pending" with nothing to send.
+      if (this.current === "pending" || this.current === "saving") this.settle();
+      return;
+    }
     if (this.current !== "error" && this.current !== "signed-out") this.setStatus("saving");
     for (const [id, entry] of [...this.dirty]) {
       if (this.disposed) return;
@@ -326,14 +332,19 @@ export class SubPageSaver {
       this.setStatus("pending");
       this.arm(this.debounceMs);
     } else {
-      const flagged = [...this.unsendable.values()];
-      this.setStatus(
-        flagged.length > 0
-          ? flagged[flagged.length - 1]!
-          : this.refused.size > 0
-            ? "blocked"
-            : "saved",
-      );
+      this.settle();
     }
+  }
+
+  /** Nothing is left to send: the status is the newest refusal still standing, else "saved". */
+  private settle(): void {
+    const flagged = [...this.unsendable.values()];
+    this.setStatus(
+      flagged.length > 0
+        ? flagged[flagged.length - 1]!
+        : this.refused.size > 0
+          ? "blocked"
+          : "saved",
+    );
   }
 }
