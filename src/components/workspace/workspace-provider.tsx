@@ -381,16 +381,28 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         };
         // A write that was already on the wire is answered before the revs are read.
         await held.settled;
-        // The sub-pages' forms are snapshotted as typed: they must be the stored ones. (Home's
-        // snapshot is the queue's stored draft, so an edit of Home typed since just waits.)
-        if (!covers.site || !siteHasUnsaved()) return held;
+        // What the editor records as published must be what is stored at this moment. The sub-pages'
+        // forms are snapshotted as typed, and Home's snapshot is the last draft known stored
+        // (`storedHome`): an edit typed while the other queue was being written (after its own queue
+        // was flushed, before this hold) is in neither, so the hold is given back and it is stored
+        // first. An edit typed from here on waits in its queue and is not part of the snapshot.
+        const homeStored = ["idle", "saved"].includes(currentStatus());
+        if ((!covers.home || homeStored) && (!covers.site || !siteHasUnsaved())) return held;
         held.release();
       }
       setPublishNote({ message: PUBLISH_UNSAVED_MESSAGE, retry: true });
       return null;
     },
-    [storeEdits, holdHomeSaves, holdSiteSaves, siteHasUnsaved],
+    [storeEdits, holdHomeSaves, holdSiteSaves, siteHasUnsaved, currentStatus],
   );
+
+  /**
+   * The design and Home's blocks as the database holds them: the newest draft the queue stored, or
+   * (no save since the load) the draft the workspace loaded. Never the draft on screen, which can
+   * hold an edit that is not stored.
+   */
+  const loadedDraft = initial.draft;
+  const storedHome = useCallback(() => savedDraft() ?? loadedDraft, [savedDraft, loadedDraft]);
 
   /**
    * A refused publish: show what failed, on the tab that holds it (a soft navigation: the toolbar,
@@ -445,7 +457,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         if (!held) return false;
         try {
           // What is stored now is what the server publishes: an edit typed while it answers is not live.
-          const snapshot = savedDraft() ?? draftRef.current;
+          const snapshot = storedHome();
           const siteForms = snapshotSiteForms();
           // What this tab holds: the gate refuses (`conflict`) when any of it was saved elsewhere since.
           const heldHome = homeRev();
@@ -483,7 +495,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [
       runPublish,
       storeAndHold,
-      savedDraft,
+      storedHome,
       snapshotSiteForms,
       homeRev,
       homeEntryId,
@@ -514,7 +526,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
             return false;
           }
           // What is stored now is what the server publishes: an edit typed while it answers is not live.
-          const snapshot = savedDraft() ?? draftRef.current;
+          const snapshot = storedHome();
           const form = isHome ? undefined : snapshotSiteForms().get(id);
           const result = await publishSitePage(pageId, entryId, rev);
           if (!result.ok) {
@@ -544,7 +556,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       homeEntryId,
       homeRev,
       siteRevisions,
-      savedDraft,
+      storedHome,
       snapshotSiteForms,
       pageId,
       showRefusal,
@@ -562,7 +574,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         const held = await storeAndHold({ home: true, site: false });
         if (!held) return false;
         try {
-          const snapshot = savedDraft() ?? draftRef.current;
+          const snapshot = storedHome();
           // Publish design moves no rev (the design's rev is the draft's own): nothing to adopt.
           const result = await publishDesign(pageId, revKey());
           if (!result.ok) {
@@ -582,7 +594,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
           held.release();
         }
       }),
-    [runPublish, storeAndHold, savedDraft, pageId, revKey, showRefusal, themeTokensOf],
+    [runPublish, storeAndHold, storedHome, pageId, revKey, showRefusal, themeTokensOf],
   );
 
   /** Retry on the publish note: the action that failed, not always Publish all. */

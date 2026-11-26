@@ -2,7 +2,13 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { emptyDraft, toSubPagePublishForm, type SubPageDraft } from "@/lib/document";
+import {
+  emptyDraft,
+  toPublishForm,
+  toSubPagePublishForm,
+  type DraftDoc,
+  type SubPageDraft,
+} from "@/lib/document";
 
 /**
  * M15-10: saves that land while a publish is still answering. Every timing here is forced with a
@@ -12,7 +18,9 @@ import { emptyDraft, toSubPagePublishForm, type SubPageDraft } from "@/lib/docum
  *     (Home's saver and the sub-pages' revisions); a save answered meanwhile keeps its newer rev;
  *   - after Publish all changes the editor adopts the revs the publish ANSWERED and never reads the
  *     stored revs again (A2): a rev another writer made since must stay a conflict;
- *   - a page is marked live with the form that was PUBLISHED, not with what was typed since.
+ *   - a page is marked live with the form that was PUBLISHED, not with what was typed since;
+ *   - Home and the design too: an edit typed while Publish stores the other queue's edits (before
+ *     the hold) is either stored before the publish is sent, or not called live.
  */
 
 interface Deferred<T> {
@@ -54,11 +62,40 @@ vi.mock("@/lib/supabase/browser", () => ({
   }),
 }));
 
+// The workspace provider's seams: the client env, the router and the publish Server Actions.
+vi.mock("@/lib/env/client", () => ({
+  clientEnv: {
+    NEXT_PUBLIC_SUPABASE_URL: "http://localhost:54321",
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "test",
+    NEXT_PUBLIC_ROOT_DOMAIN: "hydlnk.test",
+  },
+}));
+vi.mock("@/components/editor/use-is-desktop", () => ({ useIsDesktop: () => true }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: () => {}, refresh: () => {} }),
+  useSelectedLayoutSegment: () => "editor",
+}));
+type PublishAllAnswer = {
+  ok: true;
+  revs: { entries: Record<string, number> };
+  publishedAt: string;
+};
+const publishPage = vi.fn<(pageId: string, expected?: unknown) => Promise<PublishAllAnswer>>();
+vi.mock("@/lib/editor/contracts", () => ({
+  publishPage: (pageId: string, expected?: unknown) => publishPage(pageId, expected),
+  publishSitePage: vi.fn(),
+  publishDesign: vi.fn(),
+  unpublishSite: vi.fn(),
+}));
+
 const { createDraftSaver } = await import("@/lib/editor/save-client");
 const { createSubPageRevisions, createSubPageSaveFn } =
   await import("@/lib/site-pages/save-client");
 const { useSitePages } = await import("@/components/site/use-site-pages");
 type SiteValue = ReturnType<typeof useSitePages>;
+const { WorkspaceProvider } = await import("@/components/workspace/workspace-provider");
+const { useWorkspace } = await import("@/components/workspace/workspace-context");
+type Workspace = ReturnType<typeof useWorkspace>;
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const HOME = "00000000-0000-4000-8000-000000000001";
@@ -281,5 +318,146 @@ describe("M15-10 what the editor calls live after a publish", () => {
     });
     expect(postEntryDraft).toHaveBeenCalledTimes(1);
     expect(site.hasUnsaved()).toBe(false);
+  });
+});
+
+describe("M15-10 an edit of Home typed while Publish stores the sub-pages' edits", () => {
+  let root: Root;
+  let ws: Workspace;
+  const loaded: DraftDoc = { ...emptyDraft("mara"), rev: 1 };
+  const subDraft: SubPageDraft = {
+    path: "gallery",
+    title: "Gallery",
+    description: "",
+    blocks: [],
+  } as never;
+
+  function Probe() {
+    ws = useWorkspace();
+    return null;
+  }
+  const tick = (ms = 20) => act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  const typeOnHome = (text: string) =>
+    act(() => ws.editDraft((draft) => ({ ...draft, blocks: [header(text)] }) as never));
+  const homeSaves = (text: string) =>
+    postEntryDraft.mock.calls.filter(
+      (call) => call[1] === HOME && JSON.stringify(call[3]).includes(text),
+    ).length;
+
+  beforeEach(() => {
+    publishPage.mockReset();
+    root = createRoot(document.createElement("div"));
+    act(() =>
+      root.render(
+        createElement(
+          WorkspaceProvider,
+          {
+            pageId: "p",
+            ownerId: "u",
+            plan: "pro",
+            handle: "mara",
+            address: "mara.hydlnk.test",
+            name: "Mara",
+            liveUrl: "https://mara.hydlnk.test",
+            publicAddress: "mara.hydlnk.test",
+            primaryDomain: null,
+            chrome: {} as never,
+            draft: loaded,
+            revKey: "1",
+            home: { entryId: HOME, rev: 1 },
+            repaired: false,
+            hasPublished: true,
+            published: toPublishForm(loaded, null),
+            publishedAt: "2026-11-01T00:00:00Z",
+            themeTokens: null,
+            templateThemes: {},
+            themes: [],
+            themesFailed: false,
+            subPages: [
+              {
+                id: SUB,
+                draft: subDraft,
+                published: toSubPagePublishForm(subDraft),
+                livePath: "gallery",
+                createdAt: "2026-11-01T00:00:00Z",
+                rev: 1,
+              },
+            ],
+          } as never,
+          createElement(Probe),
+        ),
+      ),
+    );
+    expect(ws.status).toBe("published");
+  });
+  afterEach(() => act(() => root.unmount()));
+
+  it("Publish all: the edit is not called live unless it was stored before the publish was sent", async () => {
+    // Home and the design have had no save since the load; a sub-page is dirty.
+    act(() => ws.site.updateSettings(SUB, { title: "One" }));
+    expect(ws.status).toBe("unpublished-changes");
+    // Publish all stores the sub-page first, and that write is slow.
+    const subWrite = deferred<void>();
+    postEntryDraft.mockImplementationOnce(async (_site, _entry, rev) => {
+      await subWrite.promise;
+      return { kind: "ok", rev: rev + 1, unchanged: false } as const;
+    });
+    // What the server freezes is what is stored when its request arrives.
+    let storedWhenPublished = false;
+    publishPage.mockImplementation(async () => {
+      storedWhenPublished = homeSaves("Typed meanwhile") > 0;
+      return { ok: true, revs: { entries: {} }, publishedAt: "2026-11-02T00:00:00Z" };
+    });
+    let publish!: Promise<boolean>;
+    act(() => {
+      publish = ws.publishAll();
+    });
+    await tick();
+    expect(postEntryDraft).toHaveBeenCalledTimes(1);
+    expect(postEntryDraft.mock.calls[0]![1]).toBe(SUB);
+    expect(publishPage).not.toHaveBeenCalled();
+    // Typed on Home while that write is out: before any hold is taken.
+    typeOnHome("Typed meanwhile");
+    subWrite.resolve();
+    let ok = false;
+    await act(async () => {
+      ok = await publish;
+    });
+    await tick();
+    expect(ok).toBe(true);
+    expect(publishPage).toHaveBeenCalledTimes(1);
+    // The edit was stored before the hold was taken, so it went live with the rest.
+    expect(storedWhenPublished).toBe(true);
+    // The chip says Published only when the published site has the edit.
+    expect(ws.status).toBe(storedWhenPublished ? "published" : "unpublished-changes");
+    // And the edit is stored either way.
+    expect(homeSaves("Typed meanwhile")).toBe(1);
+    expect(ws.autosave.status).toBe("saved");
+  });
+
+  it("Publish all: an edit of Home typed while the publish answers is not called live, and is saved after", async () => {
+    act(() => ws.site.updateSettings(SUB, { title: "One" }));
+    const answer = deferred<void>();
+    publishPage.mockImplementation(async () => {
+      await answer.promise;
+      return { ok: true, revs: { entries: {} }, publishedAt: "2026-11-02T00:00:00Z" };
+    });
+    let publish!: Promise<boolean>;
+    act(() => {
+      publish = ws.publishAll();
+    });
+    await tick();
+    expect(publishPage).toHaveBeenCalledTimes(1);
+    typeOnHome("Typed during the answer");
+    await tick(1200);
+    // Held: the edit waits.
+    expect(homeSaves("Typed during the answer")).toBe(0);
+    answer.resolve();
+    await act(async () => {
+      expect(await publish).toBe(true);
+    });
+    await tick();
+    expect(ws.status).toBe("unpublished-changes");
+    expect(homeSaves("Typed during the answer")).toBe(1);
   });
 });
