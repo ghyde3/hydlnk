@@ -117,15 +117,30 @@ describe("M15-10 publish_page still means publish all changes", () => {
     expect(MCP_INSTRUCTIONS.length).toBeLessThanOrEqual(1200);
   });
 
-  it("is the one tool behind the publish scope: no per-page and no design publish tool was added", () => {
+  it("is behind the publish scope, with exactly the tools that change the live site (M18)", () => {
     expect(publishTool.scope).toBe(MCP_SCOPES.publish);
+    // Per-item publishing arrived with the content tools (M18-08, M18-09): one post or page, the
+    // design, taking a post down, the blog setting and the two term changes that show at once.
+    // Every one of them is behind the publish scope, and publish_page is still the last tool.
     expect(
       TOOLS.filter((tool) => tool.scope === MCP_SCOPES.publish).map((tool) => tool.name),
-    ).toEqual(["publish_page"]);
-    expect(TOOLS.map((tool) => tool.name).filter((name) => /publish/.test(name))).toEqual([
+    ).toEqual([
+      "rename_term",
+      "delete_term",
+      "publish_entry",
+      "unpublish_entry",
+      "publish_design",
+      "update_content_type",
       "publish_page",
     ]);
-    expect(TOOLS).toHaveLength(14);
+    expect(TOOLS.map((tool) => tool.name).filter((name) => /publish/.test(name))).toEqual([
+      "publish_entry",
+      "unpublish_entry",
+      "publish_design",
+      "publish_page",
+    ]);
+    expect(TOOLS.at(-1)!.name).toBe("publish_page");
+    expect(TOOLS).toHaveLength(31);
   });
 
   it("a token without the publish scope never reaches the gate, the limiter or a page", async () => {
