@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { resumeOauthRequest } from "@/lib/oauth/resume";
+import { resumeInvite } from "@/lib/team/resume";
 import { sharedSiteRows } from "@/lib/access/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { toMemberRole, type MemberRole } from "@/lib/team/constants";
@@ -128,6 +129,8 @@ export async function requireClaimUser(): Promise<SessionUser> {
 export async function redirectIfSignedIn(): Promise<void> {
   const user = await getSessionUser();
   if (!user) return;
+  // Wave F (M19-08): a person who opened an invite link goes back to it first.
+  await resumeInvite();
   const [pages, { sharedPages }] = await Promise.all([
     listOwnPages(user.id),
     listSharedSites(user.id),

@@ -1,13 +1,9 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { getSessionUser } from "@/lib/auth/session";
-import { clientEnv } from "@/lib/env/client";
-import { protocolFor } from "@/lib/routing/urls";
 import { siteAccessFor } from "@/lib/access/server";
-import { CURRENT_PAGE_COOKIE } from "./pick";
+import { setCurrentPageCookie } from "./current-cookie";
 
-const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -30,13 +26,6 @@ export async function selectPage(pageId: string): Promise<{ ok: boolean }> {
   if (!found.ok) return { ok: false };
   const data = { id: found.access.siteId };
 
-  const store = await cookies();
-  store.set(CURRENT_PAGE_COOKIE, data.id, {
-    path: "/",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: protocolFor(clientEnv.NEXT_PUBLIC_ROOT_DOMAIN) === "https",
-    maxAge: ONE_YEAR_SECONDS,
-  });
+  await setCurrentPageCookie(data.id);
   return { ok: true };
 }
