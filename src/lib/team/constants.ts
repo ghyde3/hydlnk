@@ -1,6 +1,6 @@
 /**
  * Team access numbers (Wave F, M19-05). Postgres holds the same numbers in the team functions
- * (20261126200300_site_team_functions.sql: 20 invites a day, 50 shared sites, 7 days) and
+ * (20261126220300_site_team_functions.sql: 20 invites a day, 50 shared sites, 7 days) and
  * `plan_site_members` (the per-site cap, PLAN_LIMITS[plan].siteMembers); tests/unit/m19t-team-constants.test.ts
  * pins both sides. Safe in server and client code.
  */

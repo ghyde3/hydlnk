@@ -1,5 +1,5 @@
 -- M19-01: team.site_members (migration 20261126220000_site_access_rule), and the cascades of all
--- three team tables (20261126200100_site_team_tables).
+-- three team tables (20261126220100_site_team_tables).
 --
 --   * RLS on, no policy, no privilege for anon, authenticated or service_role; the schemas team and
 --     access are not exposed; a signed-in user (the owner included) selects, inserts, updates and

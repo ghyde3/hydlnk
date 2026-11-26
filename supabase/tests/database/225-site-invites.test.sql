@@ -1,5 +1,5 @@
 -- M19-01, M19-08 (T1, T10, T11, T13, T20): team.site_invites and the invite functions
--- (migrations 20261126200100_site_team_tables, 20261126200300_site_team_functions).
+-- (migrations 20261126220100_site_team_tables, 20261126220300_site_team_functions).
 --
 --   * constraints: token hash shape (64 lower-case hex), unique hash, email shape (lower case), role,
 --     at most 7 days, one end (accepted or revoked), one pending invite per site and address;

@@ -1,5 +1,5 @@
 -- M19-03, M19-16 (T3, T5, T19, T21): the site-scoped policies read the one access rule
--- (migration 20261126200200_site_access_policies).
+-- (migration 20261126220200_site_access_policies).
 --
 -- A member (editor E, publisher P) of the owner O's site S:
 --   * selects S's row, types, entries, revisions, terms, entry terms, paths, slug redirects, versions

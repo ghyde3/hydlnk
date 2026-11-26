@@ -67,7 +67,7 @@ const P_OWNER_ID: Readonly<Record<string, { values: string[]; reason: string }>>
   "src/lib/content/trash-core.ts": { values: ["ready.access.ownerId", "ready.access.ownerId"], reason: "the writer's access" },
   "src/lib/site-pages/sub-pages-core.ts": { values: ["access.ownerId"], reason: "requireEntryAccess" },
   "src/lib/publish/core.ts": { values: ["ownerId", "ownerId"], reason: "const ownerId = access.ownerId / opened.site.ownerId (from access)" },
-  "src/lib/content/site-page-publish-core.ts": { values: ["input.ownerId"], reason: "its one caller passes opened.site.ownerId (publish/core.ts)" },
+  "src/lib/content/site-page-publish-core.ts": { values: ["input.ownerId", "input.ownerId"], reason: "its one caller passes opened.site.ownerId (publish/core.ts)" },
   "src/lib/publish/unpublish.ts": { values: ["userId"], reason: "owner-only (B1): checked owner_id === userId above" },
 };
 

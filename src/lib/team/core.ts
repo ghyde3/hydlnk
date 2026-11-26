@@ -56,7 +56,7 @@ export const teamFailure = (error: TeamError): TeamFailure => ({
   message: TEAM_MESSAGES[error],
 });
 
-/** What a team function raises, in this module's words (codes from 20261126200300). */
+/** What a team function raises, in this module's words (codes from 20261126220300). */
 export function teamErrorOf(err: { code?: string | null; message?: string | null }): TeamError {
   switch (err.code) {
     case "P0002":
