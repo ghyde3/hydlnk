@@ -12,7 +12,7 @@ import {
   isAsciiLetter,
   isJsSpace,
 } from "./chars";
-import type { NextIndex, NextWhere } from "./finder";
+import { NextIndex, type NextWhere } from "./finder";
 
 /**
  * Links without brackets, as marked 17 reads them: GFM's bare URLs and emails (its `url` rule) and
@@ -81,6 +81,14 @@ export function bareUrlEnd(
   // Every URL that starts inside one run without spaces ends where that run does: asked once.
   const stop = Math.min(urlStop.at(at + prefix), end);
   return trimUrl(text, at, stop, closeParen);
+}
+
+/**
+ * A URL run (up to its first space or `<`) cut where marked's `_backpedal` loop leaves it, in one
+ * linear pass: what the body editor's serializer asks of a run it may leave as typed.
+ */
+export function backpedal(run: string): string {
+  return run.slice(0, trimUrl(run, 0, run.length, new NextIndex(run, ")")));
 }
 
 /** What ends a bare URL before its trim: a space (JavaScript's `\s`) or `<`. */

@@ -173,6 +173,20 @@ describe("a URL typed in the rich editor is stored as typed (finding 2)", () => 
     });
   });
 
+  it("a bare link after a spaceless word longer than 4,096 characters is still a link (CJK)", () => {
+    const word = "字".repeat(5000);
+    for (const [text, href, written] of [
+      ["https://a.co/x_y", "https://a.co/x_y", "<https://a.co/x_y>"],
+      ["www.a.co", "http://www.a.co", "[www.a.co](http://www.a.co)"],
+    ] as const) {
+      const link = { type: "text", text, marks: [{ type: "link", attrs: { href, title: null } }] };
+      const doc = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: word }, link, { type: "text", text: " after" }] }] };
+      const md = toMarkdown(doc);
+      expect(md).toBe(`${word}${written} after`);
+      expect(fromMarkdown(md).content![0]!.content!.slice(1)).toEqual([link, { type: "text", text: " after" }]);
+    }
+  });
+
   it("a link with its own text, and code, are written as before", () => {
     const link = "A [read_me](https://example.com/a_b) here.";
     expect(toMarkdown(fromMarkdown(link))).toBe("A [read\\_me](https://example.com/a_b) here.");

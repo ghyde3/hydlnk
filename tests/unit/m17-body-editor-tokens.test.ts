@@ -140,6 +140,12 @@ describe("writing text is fast: the serializer reads a URL back over a bounded w
     }
   });
 
+  it("URL runs of entities are trimmed in one pass (marked's trim, repeated, was quadratic in each run)", () => {
+    const text = `${"http://a" + "&a;".repeat(1360)} `.repeat(128);
+    const ms = elapsed(() => toMarkdown(paragraph(text)));
+    expect(ms, `${ms.toFixed(0)} ms`).toBeLessThan(1000);
+  });
+
   it("a URL after a long paragraph of ordinary text is still written as typed", () => {
     const text = `${"words and more words ".repeat(2000)}see https://example.com/a_b*c~d`;
     expect(toMarkdown(paragraph(text)).endsWith(" https://example.com/a_b*c~d")).toBe(true);

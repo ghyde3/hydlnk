@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/core";
 import { MarkdownManager } from "@tiptap/markdown";
 import type { Token as MarkedToken } from "marked";
-import { decodeEntities, lexBounded } from "@/lib/blog/markdown";
+import { backpedal, decodeEntities, lexBounded } from "@/lib/blog/markdown";
 import { isHttpUrl } from "@/lib/document";
 import { BODY_HEADING_LEVELS, bodySchema } from "./extensions";
 
@@ -71,30 +71,21 @@ export function escapeBlockStarts(paragraph: string): string {
  * text would. Each part is at most `MAX_URL_RUN` long (a longer word is escaped), and all the
  * windows of a text together lex at most `LEX_FACTOR` times its length (past that, a run is
  * escaped), so writing a text is linear in it however many runs one word holds. Real text never
- * comes near either bound.
+ * comes near either bound. A run that was a bare link and is not left as typed is written as a
+ * link (`linkForm`), never escaped. The trim is the lexer's own, in one pass (`backpedal`).
  */
 const URL_RUN = /(?:https?:\/\/|www\.)[a-zA-Z0-9-][^\s<]*/gi;
-const BACKPEDAL = /(?:[^?!.,:;*_'"~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_'"~)]+(?!$))+/;
 /** Where the URL rule starts (its protocols in any case, `www.`): an escape on the `:` or `.`. */
 const URL_PREFIX = /(?<=(?:https?|ftp)(?=:\/\/)|www(?=\.))/gi;
 /** The `@` of an address the GFM email rule takes (marked 17.0.6): escaped, so it stays text. */
 const EMAIL_AT = /(?<=[A-Za-z0-9._+-])(?=@[a-zA-Z0-9-_]+(?:\.[a-zA-Z0-9-_]*[a-zA-Z0-9])+(?![-_]))/g;
 const DELIMITERS = /[*_~]/;
 const SPACE = /\s/;
-/** Longer runs and words are escaped as before (the trim is quadratic; no real address is this long). */
+/** Longer runs and words are escaped (a link among them is written as one, see `linkForm`). */
 const MAX_URL_RUN = 4096;
 /** The characters the windows of one text may lex, as a multiple of its length. */
 const LEX_FACTOR = 4;
 
-function trimmedUrl(run: string): string {
-  let current = run;
-  let previous: string;
-  do {
-    previous = current;
-    current = BACKPEDAL.exec(current)?.[0] ?? "";
-  } while (previous !== current);
-  return current;
-}
 
 interface InlineToken {
   type: string;
@@ -160,19 +151,37 @@ export function encodeKeepingUrls(
   text: string,
   escape: (piece: string) => string,
   context: UrlContext = PLAIN_TEXT,
+  links: readonly LinkRun[] = [],
 ): string {
   const safe = (piece: string) => escape(piece).replace(URL_PREFIX, "\\").replace(EMAIL_AT, "\\");
   let out = "";
   let from = 0;
   let budget = LEX_FACTOR * text.length;
+  let nextLink = 0;
   for (const match of text.matchAll(URL_RUN)) {
     const start = match.index;
     const run = match[0];
     const kept = run.length > MAX_URL_RUN ? undefined : keptPiece(start, run);
-    out += safe(text.slice(from, start)) + (kept ?? safe(run));
+    out += plain(from, start) + (kept ?? plain(start, start + run.length));
     from = start + (kept ?? run).length;
   }
-  return out + safe(text.slice(from));
+  return out + plain(from, text.length);
+
+  /**
+   * `text[a, b)` escaped, except the links in it (`links`, in order): a link that is not left as
+   * typed is still written as a link (`linkForm`), never escaped to text.
+   */
+  function plain(a: number, b: number): string {
+    let written = "";
+    let at = a;
+    while (nextLink < links.length && links[nextLink]!.start < a) nextLink += 1;
+    for (; nextLink < links.length && links[nextLink]!.end <= b; nextLink += 1) {
+      const link = links[nextLink]!;
+      written += safe(text.slice(at, link.start)) + linkForm(text.slice(link.start, link.end), link.href, escape);
+      at = link.end;
+    }
+    return written + safe(text.slice(at, b));
+  }
 
   /** Where the run's word starts: after the last space before it, or at the last run's end. */
   function wordStartOf(start: number): number {
@@ -186,7 +195,7 @@ export function encodeKeepingUrls(
     const wordStart = wordStartOf(start);
     if (start - wordStart > MAX_URL_RUN) return undefined;
     const before = safe(text.slice(wordStart, start));
-    for (const piece of new Set([run, trimmedUrl(run)])) {
+    for (const piece of new Set([run, backpedal(run)])) {
       if (piece === "" || (context.delimited && DELIMITERS.test(piece))) continue;
       const end = start + piece.length;
       if (end === text.length && !context.openEnd) continue;
@@ -202,6 +211,23 @@ export function encodeKeepingUrls(
     }
     return undefined;
   }
+}
+
+/** A stretch of a text node that was a bare link before `withBareLinksAsText` made it text. */
+export interface LinkRun {
+  start: number;
+  end: number;
+  href: string;
+}
+
+/**
+ * A bare link the serializer cannot leave as typed (its word is too long to check, or what is
+ * around it changes how it reads) written as a link: `<address>` when its text is its address,
+ * else `[text](address)`. Both read back as the same link wherever they stand.
+ */
+function linkForm(text: string, href: string, escape: (piece: string) => string): string {
+  if (href === text && !/[<>]/.test(href)) return `<${href}>`;
+  return `[${escape(text)}](${href.replace(/[\\()]/g, "\\$&")})`;
 }
 
 /** Whether the lexer reads `text` alone as one autolink to `href`. */
@@ -229,7 +255,12 @@ function mergeText(content: JSONContent[]): JSONContent[] {
   for (const node of content) {
     const last = merged.at(-1);
     if (last?.type === "text" && node.type === "text" && sameMarks(last, node)) {
-      merged[merged.length - 1] = { ...last, text: (last.text ?? "") + (node.text ?? "") };
+      const joined = { ...last, text: (last.text ?? "") + (node.text ?? "") };
+      // The links of both halves, the second's moved past the first's text.
+      const shift = (last.text ?? "").length;
+      const runs = [...(linkRuns.get(last) ?? []), ...(linkRuns.get(node) ?? []).map((run) => ({ ...run, start: run.start + shift, end: run.end + shift }))];
+      if (runs.length > 0) linkRuns.set(joined, runs);
+      merged[merged.length - 1] = joined;
     } else merged.push(node);
   }
   return merged;
@@ -244,11 +275,17 @@ function withBareLinksAsText(node: JSONContent): JSONContent {
   if (node.type === "text") {
     if (!isBareLink(node)) return node;
     const marks = node.marks?.filter((mark) => mark.type !== "link") ?? [];
-    return { ...node, marks };
+    const text = { ...node, marks };
+    const href = node.marks!.find((mark) => mark.type === "link")!.attrs!.href as string;
+    linkRuns.set(text, [{ start: 0, end: (node.text ?? "").length, href }]);
+    return text;
   }
   if (!node.content) return node;
   return { ...node, content: mergeText(node.content.map(withBareLinksAsText)) };
 }
+
+/** The links each text node held before it became text (`withBareLinksAsText`), fresh per `toMarkdown`. */
+let linkRuns = new WeakMap<JSONContent, LinkRun[]>();
 
 /**
  * Each parent's children by position, built once per parent (a search per child is quadratic in a
@@ -302,6 +339,7 @@ function manager(): MarkdownManager {
       text,
       (piece) => encode(piece, node, parentNode),
       urlContext(node, parentNode),
+      text === node.text ? linkRuns.get(node) : undefined,
     );
   };
   // Paragraphs are written by the library's own renderer; its result is escaped on the way out.
@@ -364,6 +402,7 @@ function asTheLibraryReadsThem(tokens: readonly MarkedToken[], orderedItem = fal
 
 export function toMarkdown(doc: JSONContent): string {
   positions = new WeakMap();
+  linkRuns = new WeakMap();
   return manager().serialize(withBareLinksAsText(doc));
 }
 
