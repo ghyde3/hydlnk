@@ -180,21 +180,36 @@ describe.skipIf(!run)("update_content_type (local Supabase)", () => {
     expect(named.isError, JSON.stringify(named.error)).toBe(false);
   });
 
-  it("with enabled and other fields in one call, enabled is applied first and the answer says which step failed", async () => {
+  it("with enabled and other fields in one call, all of them change or none (M18-10 step 2)", async () => {
     const o = await h.owner("ct-both", { blog: false, plan: "pro" });
     await h.subPage(o, "about", "About");
+    const before = await h.postType(o.pageId);
     const out = await h.call(
       "update_content_type",
-      { pageId: o.pageId, enabled: true, archivePath: "about" },
+      { pageId: o.pageId, enabled: true, archivePath: "about", labelPlural: "Journal" },
       o,
     );
     expect(out.error?.code).toBe("invalid_input");
-    expect(out.error!.message).toContain(
-      "The blog was turned on, but the other changes were not made.",
-    );
     expect(out.error!.issues![0]!.path).toBe("archivePath");
-    expect(out.error!.details).toMatchObject({ enabledApplied: true });
-    expect((await h.postType(o.pageId)).enabled).toBe(true);
+    expect(out.error!.details?.enabledApplied).toBeUndefined();
+    // Nothing changed: the blog is still off, at its old address, with its old names. (The
+    // address goes first and is put back when the switch is refused, so only updated_at moves.)
+    const { updated_at: _at, ...kept } = before;
+    void _at;
+    expect(await h.postType(o.pageId)).toMatchObject(kept);
+    expect(before).toMatchObject({ enabled: false, archive_path: "blog", label_plural: "Posts" });
+    // Turning it off with an address a page uses changes nothing either.
+    const on = await h.call("update_content_type", { pageId: o.pageId, enabled: true }, o);
+    expect(on.isError, JSON.stringify(on.error)).toBe(false);
+    const live = await h.postType(o.pageId);
+    const off = await h.call(
+      "update_content_type",
+      { pageId: o.pageId, enabled: false, archivePath: "about" },
+      o,
+    );
+    expect(off.error?.code).toBe("invalid_input");
+    expect(off.error!.issues![0]!.path).toBe("archivePath");
+    expect(await h.postType(o.pageId)).toEqual(live);
     // Both fine: one answer.
     const fine = await h.call(
       "update_content_type",
@@ -202,6 +217,12 @@ describe.skipIf(!run)("update_content_type (local Supabase)", () => {
       o,
     );
     expect(fine.json).toMatchObject({ enabled: false, labelPlural: "Notes" });
+    const both = await h.call(
+      "update_content_type",
+      { pageId: o.pageId, enabled: true, archivePath: "notes" },
+      o,
+    );
+    expect(both.json).toMatchObject({ enabled: true, archivePath: "notes", labelPlural: "Notes" });
   });
 
   it("nothing to change, a bad label and unknown fields are invalid_input", async () => {
