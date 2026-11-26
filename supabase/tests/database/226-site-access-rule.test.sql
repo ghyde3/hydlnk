@@ -1,5 +1,5 @@
 -- M19-02 (T5, T6, T17, T18): the one access rule, access.site_access_rows, and its projections
--- (migration 20261126200000_site_access_rule).
+-- (migration 20261126220000_site_access_rule).
 --
 --   * for an owner, an editor, a publisher, a stranger and anon: the rows and booleans each gets;
 --   * the owner leaving Studio, a gift ending, the owner's suspension and the member's suspension each

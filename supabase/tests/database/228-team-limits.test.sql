@@ -1,4 +1,4 @@
--- M19-05, M19-16 (T9, T14, T15): limits stay with the owner (migrations 20261126200000 to 20261126200300).
+-- M19-05, M19-16 (T9, T14, T15): limits stay with the owner (migrations 20261126220000 to 20261126220300).
 --
 --   * HL019: a Free or a Pro owner cannot invite (team_plan); the cap of 10 counts members plus live
 --     pending invites (team_limit), and an accept past the cap is refused too;

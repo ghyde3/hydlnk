@@ -9,7 +9,7 @@ import { INVITES_PER_DAY, INVITE_TTL_DAYS, SHARED_SITES_PER_MEMBER } from "@/lib
  */
 const sql = readFileSync("supabase/migrations/20261126200300_site_team_functions.sql", "utf8");
 const tables = readFileSync("supabase/migrations/20261126200100_site_team_tables.sql", "utf8");
-const rule = readFileSync("supabase/migrations/20261126200000_site_access_rule.sql", "utf8");
+const rule = readFileSync("supabase/migrations/20261126220000_site_access_rule.sql", "utf8");
 
 describe("M19-05 team constants mirror the SQL", () => {
   it("M19-05 20 invites a day, 50 shared sites, 7 days, Studio 10", () => {

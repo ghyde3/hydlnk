@@ -136,7 +136,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
 /** The limits that are columns of `public.plan_limits()` (every one but siteMembers). */
 export type SqlLimitKey = Exclude<LimitKey, "siteMembers">;
 
-/** The Postgres function that carries `siteMembers` (20261126200000_site_access_rule.sql). */
+/** The Postgres function that carries `siteMembers` (20261126220000_site_access_rule.sql). */
 export const SITE_MEMBERS_SQL_FUNCTION = "plan_site_members";
 
 /** The column of `public.plan_limits()` that carries each limit. */
