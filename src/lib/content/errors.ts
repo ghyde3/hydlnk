@@ -77,6 +77,8 @@ const BY_CODE: Record<string, ContentErrorCode> = {
   HL012: "path_taken",
   "23505": "slug_taken",
   P0002: "not_found",
+  // trash_entry_as: the entry is live and the actor may edit but not publish (R8).
+  "42501": "forbidden",
   "22023": "conflict",
   // Text jsonb refuses (U+0000, a lone surrogate): the caller sent an unstorable string.
   "22P05": "invalid",

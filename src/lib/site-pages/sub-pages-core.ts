@@ -249,13 +249,17 @@ export async function deleteSubPageWithClient(
   // and a failure leaves the page fully in place, still listed, still live and still in the menu.
   // It takes a live page and one already in the trash; Home, another site's entry and an unknown id
   // are all P0002. (Posts keep the 30-day trash; this door is for pages only.)
-  const deleted = await admin.rpc("delete_page_entry", {
+  // R8: decided again under the entry row's lock, through the rule (a page that went live since the
+  // read above needs publish: 42501).
+  const deleted = await admin.rpc("delete_page_entry_as", {
     p_entry_id: subPageId,
     p_site_id: site.id,
     p_owner_id: access.ownerId,
+    p_actor: access.actorId,
   });
   if (deleted.error) {
     if (deleted.error.code === "P0002") return failure("not_found");
+    if (deleted.error.code === "42501") return failure("forbidden");
     console.error("[site-pages] delete failed", deleted.error.code, deleted.error.message);
     return failure("delete_failed");
   }

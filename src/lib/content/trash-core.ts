@@ -54,9 +54,12 @@ export async function trashEntryWithClient(
   if (!ready.ok) return ready;
   const { entry } = ready;
   if (entry.deleted_at !== null) return failure("not_found");
-  const { data, error } = await admin.rpc("trash_entry", {
+  // R8: the database decides again on the LOCKED row (live: publish, draft: edit), through the rule,
+  // so an editor never trashes an entry a publisher has just published (42501: forbidden).
+  const { data, error } = await admin.rpc("trash_entry_as", {
     p_entry_id: entry.id,
     p_owner_id: ready.access.ownerId,
+    p_actor: ready.access.actorId,
     p_expected_rev: input.expectedRev,
   });
   if (error) return refused(admin, entry.id, error);
