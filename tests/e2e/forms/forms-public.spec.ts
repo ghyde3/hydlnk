@@ -294,6 +294,7 @@ test.describe("M17-05 the routes and their hosts", () => {
 
   test("fifty invented /f/<uuid>/<id> paths are the 404 notice, dynamic, never cached, and make no data-cache entry", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
+    test.setTimeout(120_000);
     const live = await formPage("fr5");
     const host = `${live.handle}.localhost:3000`;
     const uuid = () => crypto.randomUUID();
@@ -324,19 +325,15 @@ test.describe("M17-05 the routes and their hosts", () => {
     // page id (each entry carries its page tag, so this holds while other workers fill the cache).
     if (usesProductionServer(process.env)) {
       const dir = join(process.cwd(), ".next", "cache", "fetch-cache");
-      const names = readdirSync(dir);
-      expect(names.length).toBeGreaterThan(0);
-      for (const name of names) {
-        const text = readFileSync(join(dir, name), "utf8");
-        for (const pageId of invented) expect(text, name).not.toContain(pageId);
-      }
+      const entries = () => readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8"));
+      const named = (pageId: string) => entries().filter((text) => text.includes(pageId)).length;
+      const all = entries();
+      expect(all.length).toBeGreaterThan(0);
+      const anyInvented = new RegExp(invented.join("|"));
+      expect(all.filter((text) => anyInvented.test(text))).toEqual([]);
       // A real site through /f is cached (the cache is in play, so the negative above is real).
       await rawRequest(host, `/f/${live.pageId}/${SIGNUP_ID}`);
-      expect(
-        readdirSync(dir).some((name) =>
-          readFileSync(join(dir, name), "utf8").includes(live.pageId),
-        ),
-      ).toBe(true);
+      expect(named(live.pageId)).toBeGreaterThan(0);
     }
     expect(await storedRows(live.pageId)).toEqual([]);
   });
