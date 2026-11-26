@@ -4,7 +4,16 @@ Multi-tenant link-in-bio platform (a Linktree alternative) that wins on design c
 Stack: Next.js 16 App Router + TypeScript on Vercel, Supabase (Auth, Postgres + RLS, Storage, pg_cron), Stripe Checkout + hosted portal (live in production; the sandbox locally and in CI), Zod, dnd-kit, pnpm 10, Node 24.
 Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`): read `node_modules/next/dist/docs/` before writing Next code (see AGENTS.md).
 
+## How to work (every change)
+- **Surface assumptions.** State what you are assuming before you build on it. If two readings of a request differ in what gets built, ask or pick one and say so.
+- **Simplicity first.** The smallest change that meets the acceptance steps. No speculative options, layers or config.
+- **Surgical changes.** Touch only what the task needs; match the code around you; never tidy neighbors in the same commit.
+- **No done without evidence.** "Done" names its proof: the command and its result, a test name, a screenshot path or a runtime check. Unproven work is reported as built, not done.
+- **Corrections become checks.** When Gary or a reviewer corrects you, propose a deterministic guard in the same change (a test, lint rule, type, SQL constraint or hook) before adding prose here. Prose is the last resort: `docs/KNOWLEDGE.md` lists the footguns that still lack a guard.
+- **Verify in the running product.** `docs/FEATURE_MAP.md` says how to reach each feature, its selectors, code paths and spec. A PR gets an independent check from a fresh agent (`reviewer`, plus `adversarial-verifier` and `security-reviewer` where they apply), never only from the agent that wrote it.
+
 ## Commands
+- `scripts/cloud-init.sh`: cloud or bare Linux containers only, once before `init.sh`. Installs Node 24 and the Supabase CLI, starts Docker, and pulls Supabase's images from ghcr.io (the environment must allow `ghcr.io` and `pkg-containers.githubusercontent.com`).
 - `./scripts/init.sh`: start of every session, safe to rerun. Installs, starts local Supabase, writes `.env.local`, resets and seeds the db, starts the dev server, runs the smoke test.
 - `pnpm dev`: dev server on :3000. `pnpm verify`: typecheck + lint + unit + db tests.
 - `pnpm test` (Vitest unit), `pnpm test:db` (pgTAP RLS), `pnpm test:e2e` (Playwright: phone 390x844 and desktop 1440x900, against `next dev` here and against a production build in CI), `pnpm test:e2e:prod` (production smoke, release only).
@@ -16,7 +25,7 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 
 ## Repo map
 - `src/proxy.ts`, `src/lib/routing/`: host routing (marketing, `app.*`, `{handle}.*`, custom domains).
-- `src/app/`: route groups `(marketing)`, `(editor)/app/` (app host only), `(share)/app/share` (the private draft link on the app host, its own root layout), `(tenant)/t/[handle]` and `(tenant)/sites/[pageId]` (tenant pages by handle and by custom domain). `r/`, `api/` (click redirect, beacon, Stripe webhook) and `auth/callback` arrive in later milestones.
+- `src/app/`: route groups `(marketing)`, `(editor)/app/` (app host only), `(share)/app/shared-draft` (the private draft link, served at `/share/<token>` on the app host, its own root layout), `(tenant)/t/[handle]` and `(tenant)/sites/[pageId]` (tenant pages by handle and by custom domain). `r/` (click redirect) and `api/e` (beacon) are top level; the Stripe webhook, cron routes, `auth/callback`, `mcp` and `oauth` live under `(editor)/app/`.
 - `src/lib/tenant-render/`: the live page as finished HTML (route handlers under `src/app/(tenant)` call it; no React in the visitor's browser), plus the placeholder, 404 and 500 panels. `src/lib/tenant-assets/`: the one tenant script (`script/tenant.js`, built by `pnpm tenant-assets` into hashed `public/_t/p.*.js`), the inline CSS split, and the self-hosted theme fonts (`pnpm tenant-fonts` vendors them once, needs network).
 - `src/lib/theme/`: tenant token types, resolver, CSS variables. `src/lib/document/`: the page document (Zod draft and publish schemas, limits, URL and embed rules, block defaults, `toPublishForm`). `src/lib/schemas/`: the handle rule.
 - `src/lib/supabase/` (server, browser, admin clients, generated types), `src/lib/env/` (Zod-validated server and client env).
@@ -99,6 +108,7 @@ Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@modelcontextprotoco
 ## Git workflow
 - One branch per milestone: `m<N>-<slug>` (for example `m1-foundation`). Open a draft PR with `gh pr create --draft` as soon as the branch exists, so CI runs on every push.
 - Conventional commits, one per feature, feature id in the message. Never force push; never push to `main`.
+- Parallel work runs in its own git worktree (`git worktree add ../hydlnk-<slug> -b <branch> origin/main`), one branch per worktree. The local Supabase stack is shared, so only one worktree runs db tests or `db:reset` at a time.
 - Orchestrated waves (Gary's fast track, 2026-10-01): parallel agents build feature groups; one commit per feature group with every id in the message; only the integration agent flips `passes` in features.json, after running the tests itself; security-reviewer runs once per wave that touches auth, data, routing or payments. `tmp/orchestrating` pauses the Stop hook during a wave and is removed before release.
 - Test bar from Wave C on (Gary, 2026-10-02): full tests for security, auth, payments, RLS/limits and other users' data; elsewhere one phone + one desktop smoke per screen or flow (renders, main interaction works, no horizontal scroll); no exhaustive pixel/copy or axe assertions; full browser suite at release. `passes` flips only when every acceptance step is proven, so lightly tested features stay false and are listed in PROGRESS as built.
 - CI (Gary, 2026-10-03): every push runs only the fast job (typecheck, lint, unit, db, integration). The full browser suite runs nightly, from the Actions tab, or on a PR labelled `full-ci`; label release PRs that change screens. In CI it runs over eight shards against a production build (`pnpm build` once per shard, served by `next start`, M9-13); locally it still runs against `next dev`.
@@ -113,7 +123,9 @@ Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@modelcontextprotoco
 
 ## Area rules, agents, skills
 - `.claude/rules/` load by path: `supabase-migrations.md` (`supabase/**`), `tenant-pages.md` (`src/app/(tenant)/**`, `src/lib/theme/**`), `editor-app.md` (`src/app/(editor)/**`), `routing.md` (`src/proxy.ts`, `src/lib/routing/**`), `mcp-oauth.md` (`src/lib/mcp/**`, `src/lib/oauth/**` and their routes under `src/app/(editor)/app/`).
-- Agents: `reviewer` (correctness against acceptance), `security-reviewer` (auth, data, routing, payments), `design-verifier` (screens vs mockups).
+- Agents: `reviewer` (correctness against acceptance), `security-reviewer` (auth, data, routing, payments), `design-verifier` (screens vs mockups), `adversarial-verifier` (assumes the change is broken and reports only what it can show).
+- Engineering bar for every agent (Gary, 2026-11-26): DRY, KISS, SOLID, sound object and module design, strong separation of concerns. One implementation per behaviour; extend the existing module before adding a parallel one.
+- Every agent has a pinned model in `.claude/agents/` (Gary, 2026-11-26): `scout` haiku; `builder` and `design-verifier` sonnet; `fixer`, `integrator`, `planner`, `advisor`, `reviewer`, `security-reviewer` opus; `adversarial-verifier` and `deep-advisor` (very complex problems only) fable. An orchestrator never launches an unpinned `general-purpose` agent: it would inherit the orchestrator's model.
 - Skills: `/feature-loop`, `/release`, `/add-block-type`, `/db-change`.
 - Stripe: production runs on live keys (Gary, 2026-10-06). Local runs, CI and every Claude session use the HYDLNK sandbox only, the Stripe CLI always takes `--project-name hydlnk`, and nothing touches live Stripe without Gary's explicit yes. Never read or print `.env*` or secret keys. If a bare `supabase` command stalls on a docker image, run `source scripts/lib/docker-env.sh` first (it works around Docker Desktop's hanging credential helper; init.sh and `pnpm db:types` already do).
 
@@ -121,4 +133,6 @@ Dev dependencies, one line: `@axe-core/playwright` 4.13.0, `@modelcontextprotoco
 - `docs/PLAN.md`: scope, architecture, data model and access rules, tenant tokens, analytics, milestones. Decides scope and behavior.
 - `docs/DESIGN.md`: HYDLNK UI tokens, responsive rules, components, screens. Decides UI values; docs win over mockups.
 - `design/mockups/*.dc.html`: layout, copy and states as annotated HTML (cannot be run).
+- `STATUS.md`: where things stand right now (branches, open PRs, what waits on Gary). Read it first; update it when that changes.
+- `docs/FEATURE_MAP.md`: feature → route, selectors, code paths, spec. `docs/KNOWLEDGE.md`: footguns, environment facts and how orchestration scales.
 - `docs/features.json`: the feature list. `PROGRESS.md`: the session log. `KICKOFF_PROMPT.md`: the original brief.
