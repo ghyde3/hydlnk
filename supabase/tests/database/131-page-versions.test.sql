@@ -485,8 +485,9 @@ select set_eq(
       and (has_function_privilege('anon', p.oid, 'EXECUTE')
            or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
   $$,
-  $$ values ('plan_limits') $$,
-  'no RPC returns a version: plan_limits is still the only function a client role may execute'
+  -- form_submission_counts (Wave D) is security invoker over form_submissions and returns no version.
+  $$ values ('plan_limits'), ('form_submission_counts') $$,
+  'no RPC returns a version: plan_limits and form_submission_counts are still the only functions a client role may execute'
 );
 select tests.authenticate_as('pa');
 select throws_ok(

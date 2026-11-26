@@ -121,3 +121,20 @@ export function postLimitMessage(
 
 /** Why a new category or tag is refused (HL015, M16-14). The cap is the same on every plan. */
 export const TERM_LIMIT_MESSAGE = `A blog holds up to ${TERMS_PER_TYPE} categories and tags. Delete one to add another.`;
+
+/** "87 / 100 this month": the Audience screen's meter of form submissions (M17-02). */
+export function formMeterText(plan: PlanId, stored: number): string {
+  return `${grouped(stored)} / ${grouped(PLAN_LIMITS[plan].formSubmissionsPerMonth)} this month`;
+}
+
+/**
+ * The Audience screen's notice once anything was refused this month (M17-02), by plan:
+ *   "You’ve reached this month’s limit of 100 form submissions on Free. 12 were not saved. Upgrade to
+ *    keep more, or wait until the 1st."
+ * Studio has no plan to upgrade to, so its notice ends after the count. Null when nothing was refused.
+ */
+export function formLimitNotice(plan: PlanId, refused: number): string | null {
+  if (refused <= 0) return null;
+  const head = `You’ve reached this month’s limit of ${grouped(PLAN_LIMITS[plan].formSubmissionsPerMonth)} form submissions on ${PLAN_LABELS[plan]}. ${grouped(refused)} ${refused === 1 ? "was" : "were"} not saved.`;
+  return plan === "studio" ? head : `${head} Upgrade to keep more, or wait until the 1st.`;
+}

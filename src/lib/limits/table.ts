@@ -1,6 +1,6 @@
 /**
  * The plan limits, in one table (M4-02). Postgres holds the same numbers in `public.plan_limits(p_plan)`
- * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql and 20261011000001_site_pages.sql and 20261014000003_content_limits.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
+ * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql and 20261011000001_site_pages.sql and 20261014000003_content_limits.sql and 20261126162408_form_submissions.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
  * tests/unit/limits-parity.test.ts calls that function for every plan and column and fails when the
  * two differ. Change a number here and in the migration (a new one) together.
  *
@@ -42,6 +42,11 @@ export interface PlanLimits {
   revisionsKept: number;
   /** Bytes of entries and sub-pages per account (HL009). */
   contentBytes: number;
+  /**
+   * Form submissions accepted for storage per account and UTC calendar month, over all of its sites
+   * (HL016, M17-02). Deleting one gives nothing back; a duplicate sign-up is not counted.
+   */
+  formSubmissionsPerMonth: number;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -61,6 +66,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     customTypes: 0,
     revisionsKept: 10,
     contentBytes: 67108864,
+    formSubmissionsPerMonth: 100,
   },
   pro: {
     pages: 3,
@@ -76,6 +82,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     customTypes: 3,
     revisionsKept: 50,
     contentBytes: 1073741824,
+    formSubmissionsPerMonth: 5000,
   },
   studio: {
     pages: 15,
@@ -91,6 +98,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     customTypes: 100,
     revisionsKept: 200,
     contentBytes: 5368709120,
+    formSubmissionsPerMonth: 50000,
   },
 };
 
@@ -109,6 +117,7 @@ export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
   customTypes: "custom_types",
   revisionsKept: "revisions_kept",
   contentBytes: "content_bytes",
+  formSubmissionsPerMonth: "form_submissions_per_month",
 };
 
 export const PLAN_LABELS: Readonly<Record<PlanId, string>> = {
