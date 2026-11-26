@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
+import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll } from "../helpers";
+import { ingestPage } from "../m4/analytics-ingest-helpers";
 import { makePng } from "../m2/publish-helpers";
 import {
   POST_TEST_IDS,
   blogUser,
+  enableBlog,
   expectSaved,
   expectTargets44,
   openPost,
@@ -206,4 +208,39 @@ test("M16-13 a line typed like Markdown syntax is saved escaped and reopens in t
     "# not a heading",
   );
   await expect(page.getByTestId(POST_TEST_IDS.body).locator("h1, h2")).toHaveCount(0);
+});
+
+test("M16-13 a video URL typed in the rich editor is stored as typed, plays live as an embed and reopens rich", async ({
+  page,
+  context,
+}) => {
+  const VIDEO = "https://www.youtube.com/watch?v=a_bcdEFG_12";
+  // A published site (the live post needs one), signed in.
+  const user = await ingestPage("pu", { plan: "pro" });
+  await signInAs(context, user.email);
+  await enableBlog(user.pageId);
+  const id = await seedPost(user.pageId, { title: "Watch", slug: "watch", body: "" });
+  await openPost(page, id);
+  await page.getByTestId(POST_TEST_IDS.body).click();
+  await page.keyboard.type(VIDEO);
+  await expectSaved(page);
+  // No backslashes before the underscores.
+  expect((await postRow(id)).draft.body).toBe(VIDEO);
+
+  await page.getByTestId(POST_TEST_IDS.publish).click();
+  await expect(page.getByTestId("post-bar").locator("[data-post-state]")).toHaveAttribute(
+    "data-post-state",
+    "live",
+  );
+  const live = await page.context().newPage();
+  const response = await live.goto(`${user.origin}/blog/watch`);
+  expect(response?.status()).toBe(200);
+  await expect(live.locator("article .pg-embed[data-embed-provider='youtube']")).toHaveCount(1);
+  await expect(live.locator("article")).not.toContainText("\\_");
+  await live.close();
+
+  await page.reload();
+  await waitForPostEditor(page);
+  await expect(page.getByTestId(POST_TEST_IDS.bodySource)).toHaveCount(0);
+  await expect(page.getByTestId(POST_TEST_IDS.body)).toContainText(VIDEO);
 });

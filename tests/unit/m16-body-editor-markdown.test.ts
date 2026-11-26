@@ -174,13 +174,7 @@ describe("text typed like Markdown block syntax stays text (it is escaped at the
   });
 
   it("escapes nothing that is not syntax, so ordinary text is written as typed", () => {
-    for (const plain of [
-      "#hashtag first",
-      "-5 degrees",
-      "1.5 litres",
-      "a # b - c = d",
-      "+1",
-    ]) {
+    for (const plain of ["#hashtag first", "-5 degrees", "1.5 litres", "a # b - c = d", "+1"]) {
       expect(toMarkdown(doc(para(text(plain))) as never)).toBe(plain);
     }
   });
@@ -188,5 +182,53 @@ describe("text typed like Markdown block syntax stays text (it is escaped at the
   it("real headings, lists, quotes and rules are written as before", () => {
     const body = "## Heading\n\n- one\n- two\n\n1. first\n2. second\n\n> quote\n\n---\n\nEnd.";
     expect(toMarkdown(fromMarkdown(body))).toBe(body);
+  });
+});
+
+describe("a URL typed in the rich editor is stored as typed (finding 2)", () => {
+  const typed = (text: string) => ({
+    type: "doc",
+    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+  });
+  const EMBED = "https://www.youtube.com/watch?v=a_bcdEFG_12";
+
+  it("a bare URL with _, * and ~ gets no backslashes, and reopens in the rich editor", () => {
+    for (const url of [EMBED, "https://example.com/a_b*c~d", "http://x.example/~me/notes_1"]) {
+      const md = toMarkdown(typed(url));
+      expect(md).toBe(url);
+      expect(canEditRich(md)).toBe(true);
+      // Reopened it is a link whose text is its address; written again it is the same bytes.
+      const doc = fromMarkdown(md);
+      expect(doc.content?.[0]?.content?.[0]).toMatchObject({
+        text: url,
+        marks: [{ type: "link", attrs: { href: url } }],
+      });
+      expect(toMarkdown(doc)).toBe(url);
+    }
+  });
+
+  it("a URL inside a sentence: only the URL is left as typed, the rest is escaped as before", () => {
+    const md = toMarkdown(typed("see https://a.example/x_y_z, then *b* and c_d"));
+    expect(md).toBe("see https://a.example/x_y_z, then \\*b\\* and c\\_d");
+    expect(canEditRich(md)).toBe(true);
+  });
+
+  it("the stored bare URL is the one paragraph the live page turns into an embed", async () => {
+    const { bareUrlOf, lexMarkdown } = await import("@/lib/blog/markdown");
+    const [token] = lexMarkdown(toMarkdown(typed(EMBED)));
+    expect(bareUrlOf(token!)).toBe(EMBED);
+  });
+
+  it("a URL whose trailing punctuation the serializer escapes falls back to escaping (no backslash in the address)", () => {
+    const md = toMarkdown(typed("www.example.com/a*b*"));
+    expect(md).toBe("www.example.com/a\\*b\\*");
+  });
+
+  it("a link with its own text, and code, are written as before", () => {
+    const link = "A [read_me](https://example.com/a_b) here.";
+    expect(toMarkdown(fromMarkdown(link))).toBe("A [read\\_me](https://example.com/a_b) here.");
+    expect(toMarkdown(fromMarkdown("Run `https://a.example/x_y` now."))).toBe(
+      "Run `https://a.example/x_y` now.",
+    );
   });
 });
