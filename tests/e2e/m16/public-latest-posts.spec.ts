@@ -4,6 +4,7 @@ import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { addBlock, openEditor, previewScreen, showView, userWithDraft } from "../m2/blocks-helpers";
 import { ingestPage } from "../m4/analytics-ingest-helpers";
+import { ownerSession, publishNewPost, setBlog } from "./owner-routes";
 import { addPost, daysBefore, enableBlog } from "./public-helpers";
 
 /**
@@ -26,6 +27,7 @@ const BLOCK = {
 
 test("the live Home lists the newest posts, and a new post shows on the next request", async ({
   page,
+  browser,
 }) => {
   const site = await ingestPage("latest", { plan: "pro", blocks: [BLOCK] });
   const typeId = await enableBlog(site.pageId);
@@ -43,7 +45,9 @@ test("the live Home lists the newest posts, and a new post shows on the next req
   await expectNoHorizontalScroll(page);
   await expectTapTargets(page, ".hl-latest-posts");
 
-  await addPost(site, typeId, { title: "Third post", slug: "third", publishedAt: daysBefore(1) });
+  // Published through the real route (the writer expires the type, which the Home's read carries).
+  const owner = await ownerSession(browser, site.email);
+  await publishNewPost(owner, site, typeId, { title: "Third post", slug: "third" });
   await page.reload();
   await expect(block.locator("a")).toHaveCount(3);
   await expect(block.locator("a").first()).toContainText("Third post");
@@ -53,7 +57,8 @@ test("the live Home lists the newest posts, and a new post shows on the next req
   await expect(page.locator("h1")).toHaveText("Third post");
 
   // The blog is turned off: the block draws nothing, and the page is otherwise what it was.
-  await enableBlog(site.pageId, false);
+  await setBlog(owner, site.pageId, false);
+  await owner.close();
   await page.goto(site.url);
   await expect(page.locator(".hl-latest-posts")).toHaveCount(0);
   await expect(page.locator("[data-page-root]")).toBeVisible();

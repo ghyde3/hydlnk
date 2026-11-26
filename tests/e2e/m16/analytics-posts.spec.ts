@@ -1,3 +1,4 @@
+import { ownerSession, postAction } from "./owner-routes";
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
@@ -88,7 +89,7 @@ async function makeBlog(label: string, liveTitle = LIVE_TITLE): Promise<Blog> {
 let blog: Blog;
 let other: Blog;
 
-test.beforeAll(async ({}, info) => {
+test.beforeAll(async ({ browser }, info) => {
   blog = await makeBlog("bp");
   other = await makeBlog("bo", THEIR_TITLE);
   const ua = userAgentFor(info.project.name);
@@ -107,16 +108,11 @@ test.beforeAll(async ({}, info) => {
     if (response.status !== 204) throw new Error(`a view answered ${response.status}`);
   }
   await waitForEvents(blog.site.pageId, 4);
-  // Trashed through the real `trash_entry` (the live copy goes with it).
-  const admin = adminClient();
-  const row = await admin.from("content_entries").select("rev").eq("id", blog.trashed).single();
-  if (row.error) throw new Error(row.error.message);
-  const gone = await admin.rpc("trash_entry", {
-    p_entry_id: blog.trashed,
-    p_owner_id: blog.site.userId,
-    p_expected_rev: Number(row.data.rev),
-  });
-  if (gone.error) throw new Error(`trashing a post failed: ${gone.error.message}`);
+  // Trashed through the real route (the live copy goes with it, and the writer expires the cache
+  // the beacon's check reads, so a production build drops the trashed post's views at once).
+  const owner = await ownerSession(browser, blog.site.email);
+  await postAction(owner, blog.site.pageId, blog.trashed, "trash");
+  await owner.close();
 });
 
 test("M16-11 the beacon records a live post and the archive, and drops everything else", async ({}, info) => {
