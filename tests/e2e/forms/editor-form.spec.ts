@@ -61,7 +61,11 @@ test("M17-07 add, edit and publish a form block; the preview posts nowhere", asy
     ["successMessage", "18 / 160"],
     ["consent", "24 / 200"],
   ] as const) {
-    await expect(panel.locator("div", { has: field(name) }).last()).toContainText(counter);
+    await expect
+      .poll(() =>
+        field(name).evaluate((el) => el.closest("label, div")?.parentElement?.textContent ?? ""),
+      )
+      .toContain(counter);
   }
 
   // The row's visibility toggle hides the block in the draft and shows it again.
