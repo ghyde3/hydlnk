@@ -382,7 +382,7 @@ export async function publishPageCore(
   try {
     linkErrors = await checkLinkRules(admin, {
       pageId: pageId.data,
-      ownerId,
+      plan: access.plan,
       form: checked.data,
       raw,
     });
@@ -1103,7 +1103,7 @@ export async function publishDesignCore(
     const liveBlocks = liveBlocksOf(liveHome) as unknown as PublishDoc["blocks"];
     const linkErrors = await checkLinkRules(admin, {
       pageId,
-      ownerId,
+      plan: opened.site.access.plan,
       form: { ...form, blocks: liveBlocks },
       raw,
     });

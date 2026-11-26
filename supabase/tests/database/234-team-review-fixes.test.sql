@@ -170,6 +170,9 @@ select lives_ok(
 reset role;
 select is((select name from public.pages where id = '00000000-0000-4000-8000-000000234a01'), 'Renamed',
   'the owner''s name stands');
+select ok((select prosrc like '%access.accessible_site_ids(''owner'')%' and prosrc not like '%old.owner_id%'
+            from pg_proc where oid = 'public.guard_site_owner_columns()'::regprocedure),
+  'the rename guard asks the rule for the owner (no owner_id copy)');
 
 -- ---------------------------------------------------------------------------
 -- R13: one list of owner-only tables

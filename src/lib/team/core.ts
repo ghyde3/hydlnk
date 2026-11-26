@@ -2,7 +2,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isEmailAddress } from "@/lib/document";
 import type { Database } from "@/lib/supabase/database.types";
-import { toMemberRole, type MemberRole } from "./constants";
+import { PLAN_LIMITS } from "@/lib/limits/table";
+import {
+  INVITES_PER_DAY,
+  SHARED_SITES_PER_MEMBER,
+  toMemberRole,
+  type MemberRole,
+} from "./constants";
 import { hashInviteToken, isInviteToken, newInviteToken } from "./token";
 
 /**
@@ -39,15 +45,15 @@ export const TEAM_MESSAGES: Readonly<Record<TeamError, string>> = {
   already_member: "That person is already a member of this site.",
   already_invited: "That address already has an invite. Revoke it to send a new one.",
   team_plan: "Team access is part of Studio.",
-  team_limit: "This site has 10 members and invites, the most it can have. Remove one first.",
-  invite_limit: "You’ve sent 20 invites today, the most for a day. Try again tomorrow.",
+  team_limit: `This site has ${PLAN_LIMITS.studio.siteMembers} members and invites, the most it can have. Remove one first.`,
+  invite_limit: `You’ve sent ${INVITES_PER_DAY} invites today, the most for a day. Try again tomorrow.`,
   invite_email:
     "This invite is for another email address. Sign in with the address it was sent to.",
   invite_session:
     "To accept, sign in with the link we email you (or with Google), not with a password.",
   invite_used:
     "This invite link has expired, was revoked or was already used. Ask the owner for a new one.",
-  shared_site_limit: "You’re a member of 50 sites, the most an account can be. Leave one first.",
+  shared_site_limit: `You’re a member of ${SHARED_SITES_PER_MEMBER} sites, the most an account can be. Leave one first.`,
   rate_limited: "Too many tries. Try again in a while.",
   error: "Something went wrong. Try again.",
 };

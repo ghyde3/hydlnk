@@ -215,10 +215,14 @@ describe("M9-31 the Publish gate's rules (fake database)", () => {
     plan?: unknown;
     handle?: string;
     domains?: { hostname: string; status: string }[];
-    failOn?: "accounts" | "pages";
+    failOn?: "pages";
   }
 
+  // R13 (Wave F): the plan comes from the access helper (`access.plan`, already narrowed by
+  // toPlanId), not from a second accounts read; the fake's plan row stands for that value.
+  let lastPlan: unknown;
   function fakeAdmin(rows: Rows) {
+    lastPlan = rows.plan;
     const reads: string[] = [];
     const client = {
       from(table: string) {
@@ -248,7 +252,7 @@ describe("M9-31 the Publish gate's rules (fake database)", () => {
       redirect,
       blocks: list,
     }) as PublishDoc;
-  const input = (form: PublishDoc) => ({ pageId: "p", ownerId: "u", form, raw: {} });
+  const input = (form: PublishDoc) => ({ pageId: "p", plan: toPlanId(lastPlan), form, raw: {} });
 
   it("a page with no redirect reads nothing", async () => {
     const { client, reads } = fakeAdmin({ plan: "free" });
@@ -324,12 +328,7 @@ describe("M9-31 the Publish gate's rules (fake database)", () => {
   });
 
   it("a database error throws, so the gate refuses (closed)", async () => {
-    await expect(
-      checkLinkRules(
-        fakeAdmin({ plan: "pro", failOn: "accounts" }).client,
-        input(formOf({ linkId: LINK }, [link(LINK)])),
-      ),
-    ).rejects.toThrow();
+    // (The plan is no longer read here: a failed access read refuses before this runs, R13.)
     await expect(
       checkLinkRules(
         fakeAdmin({ plan: "pro", failOn: "pages" }).client,
@@ -343,7 +342,7 @@ describe("M9-31 the Publish gate's rules (fake database)", () => {
     const raw = draftWith({ ...blocks.card, lock: { kind: "age" } });
     const errors = await checkLinkRules(client, {
       pageId: "p",
-      ownerId: "u",
+      plan: "free",
       form: formOf(undefined, []),
       raw,
     });

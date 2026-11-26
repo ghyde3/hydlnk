@@ -73,9 +73,16 @@ describe.skipIf(!run)("M19-06 Publish and versions under team access (local Supa
 
   it("M19-05 redirect mode reads the OWNER's plan: a Free publisher may use it on a Studio site", async () => {
     const form = { blocks: [{ id: "lnk-aaaaaaaa", type: "link", visible: true, label: "Go", url: "https://example.com/go" }], redirect: { linkId: "lnk-aaaaaaaa" } };
-    const asOwnerPlan = await linkRules.checkLinkRules(admin as never, { pageId: o.pageId, ownerId: o.userId, form: form as never, raw: {} });
+    // R13: the plan is the one the access rule gives the publisher on S (the owner's), never re-read.
+    const { requireSiteAccess } = await import("@/lib/access");
+    const onS = await requireSiteAccess(admin as never, { actorId: p.userId, siteId: o.pageId, need: "publish", source: "editor" });
+    if (!onS.ok) throw new Error(onS.reason);
+    expect(onS.access.plan).toBe("studio");
+    const asOwnerPlan = await linkRules.checkLinkRules(admin as never, { pageId: o.pageId, plan: onS.access.plan, form: form as never, raw: {} });
     expect(asOwnerPlan.filter((err) => err.field === "redirect")).toEqual([]);
-    const asFreeAccount = await linkRules.checkLinkRules(admin as never, { pageId: o.pageId, ownerId: p.userId, form: form as never, raw: {} });
+    const onOwn = await requireSiteAccess(admin as never, { actorId: p.userId, siteId: p.pageId, need: "publish", source: "editor" });
+    if (!onOwn.ok) throw new Error(onOwn.reason);
+    const asFreeAccount = await linkRules.checkLinkRules(admin as never, { pageId: o.pageId, plan: onOwn.access.plan, form: form as never, raw: {} });
     expect(asFreeAccount.some((err) => err.field === "redirect")).toBe(true);
   });
 
