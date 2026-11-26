@@ -60,6 +60,12 @@ export interface PlanLimits {
   scheduling: boolean;
   /** Pending schedules (publish and unpublish rows) a site may hold at once (HL018). */
   scheduledPerSite: number;
+  /**
+   * Members plus pending invites a site may have (Wave F, HL019); 0 = team access is not included
+   * (existing members are paused, never deleted). Postgres: `public.plan_site_members(plan)`, not a
+   * `plan_limits` column (SITE_MEMBERS_SQL_FUNCTION; limits-parity calls it).
+   */
+  siteMembers: number;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -83,6 +89,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     formSubmissionsPerSiteDay: 20,
     scheduling: false,
     scheduledPerSite: 0,
+    siteMembers: 0,
   },
   pro: {
     pages: 3,
@@ -102,6 +109,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     formSubmissionsPerSiteDay: 500,
     scheduling: true,
     scheduledPerSite: 50,
+    siteMembers: 0,
   },
   studio: {
     pages: 15,
@@ -121,11 +129,18 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     formSubmissionsPerSiteDay: 5000,
     scheduling: true,
     scheduledPerSite: 500,
+    siteMembers: 10,
   },
 };
 
+/** The limits that are columns of `public.plan_limits()` (every one but siteMembers). */
+export type SqlLimitKey = Exclude<LimitKey, "siteMembers">;
+
+/** The Postgres function that carries `siteMembers` (20261126200000_site_access_rule.sql). */
+export const SITE_MEMBERS_SQL_FUNCTION = "plan_site_members";
+
 /** The column of `public.plan_limits()` that carries each limit. */
-export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
+export const SQL_COLUMNS: Readonly<Record<SqlLimitKey, string>> = {
   pages: "max_pages",
   customDomains: "max_domains",
   uploadBytes: "max_upload_bytes",

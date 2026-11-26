@@ -6407,6 +6407,269 @@
         "`adversarial-verifier` tries: scheduling another user's entry by id, a schedule on a trashed entry, 500 schedules in one minute on one site, a window planted directly in `published` with a non-ISO string, `/r` for a link one second outside its window, a double POST of the cron route, a POST with the secret in the query string."
       ],
       "passes": false
+    },
+    {
+      "id": "M19-01",
+      "milestone": 19,
+      "area": "data",
+      "title": "Team tables",
+      "acceptance": [
+        "`site_members`, `site_invites`, `site_activity` exist with RLS on, no policy, no privilege for anon or authenticated. pgTAP 224 and 225 prove:",
+        "A signed-in user (the owner included) selects, inserts, updates and deletes nothing in any of the three.",
+        "The owner cannot be a member of their own site.",
+        "`role` accepts only `editor` and `publisher`.",
+        "Deleting the site, the member's account or the inviter's account removes the rows as specified.",
+        "The invite constraints hold: hash shape, email shape, 7-day expiry, one pending invite per site and address."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-02",
+      "milestone": 19,
+      "area": "data",
+      "title": "One access rule",
+      "acceptance": [
+        "`site_access_rows` is the only function that states who can read, edit and publish. `site_access`, `accessible_site_ids`, `shared_theme_owner_ids`, `require_site_access` and `list_shared_sites` are projections of it. pgTAP 226 proves:",
+        "For an owner, an editor, a publisher, a stranger and anon: the rows and booleans each gets.",
+        "The owner leaving Studio, a gift ending, the owner's suspension and the member's suspension each stop member access, and undoing each restores it with no other write.",
+        "Deleting the member row takes effect on the next statement.",
+        "`authenticated` cannot execute `site_access`, `site_access_rows`, `require_site_access` or any team function.",
+        "`accessible_site_ids('x')` raises 22023.",
+        "`plan_site_members` equals `PLAN_LIMITS[].siteMembers` (limits-parity)."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-03",
+      "milestone": 19,
+      "area": "data",
+      "title": "Policies for members",
+      "acceptance": [
+        "The ten policies of 2.1 marked M are replaced, plus E1 when Wave E is present, and `themes_select_shared` is added. pgTAP 227 proves that a member of S:",
+        "Selects S's row, types, entries, revisions, terms, entry terms, paths, slug redirects, versions (only while the owner's plan keeps versions), schedules, and the owner's saved themes.",
+        "Updates `pages.draft` and nothing else: `name`, `handle`, `owner_id`, `published` and `published_at` are each refused.",
+        "Reads nothing of `domains`, the three `daily_*` tables, `site_pages`, `form_submissions`, or the owner's `accounts` row.",
+        "Reads no row of the owner's other site S2.",
+        "No pgTAP file that existed before the wave (87) is edited, and all pass."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-04",
+      "milestone": 19,
+      "area": "security",
+      "title": "Publishable-key probe",
+      "acceptance": [
+        "`tests/unit/m19-team-probe.test.ts`, with owner O, editor E and publisher P of S, stranger X, anon, and S2:",
+        "X and anon read and write nothing of S.",
+        "E and P read S and write only `pages.draft` of S.",
+        "Nobody but service_role touches the team tables.",
+        "After E's row is deleted, the same client with the same access token reads and writes nothing of S."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-05",
+      "milestone": 19,
+      "area": "data",
+      "title": "Limits stay with the owner",
+      "acceptance": [
+        "pgTAP 228:",
+        "HL019 (cap of 10 counting pending invites; a Free or Pro owner), HL020 (21st invite in 24 h), HL021 (wrong or unconfirmed email) and the 50-shared-sites cap are refused in SQL.",
+        "A member's writes are charged to and refused at the owner's limits: HL008 pages per site, HL009 bytes, HL010 posts, HL015 terms, HL018 schedules (when Wave E is present), and HL016 is counted on the owner.",
+        "The member's own empty Free account is never consulted.",
+        "Unit:",
+        "An upload with `site` is checked against and stored in the owner's folder and quota; the rate limit is the uploader's.",
+        "`link-rules` reads the owner's plan."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-06",
+      "milestone": 19,
+      "area": "server",
+      "title": "Writers ask the helper",
+      "acceptance": [
+        "Every A row of 2.4 calls `requireSiteAccess`, `requireEntryAccess` or `requireTermAccess`, and uses `access.ownerId` and `access.plan` for the account, plan, theme scope, media prefix and `p_owner_id`. Four-actor unit tests per area (content writer, posts routes, sub-pages, publish, versions, media) prove:",
+        "The owner's results are unchanged.",
+        "An editor edits.",
+        "Publish-class operations need publisher: publish, unpublish, trash or delete of a live item, purge, term rename/delete.",
+        "A stranger gets the same `not_found` as a missing id.",
+        "An entry or term of site B named under site A's URL is `not_found`.",
+        "A publisher's post with a body image they uploaded to S publishes; the same image path under the publisher's own folder is refused."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-07",
+      "milestone": 19,
+      "area": "server",
+      "title": "Owner-only operations refuse members",
+      "acceptance": [
+        "As an accepted publisher, each of these changes nothing and answers its refusal:",
+        "unpublish, delete, rename or create a site in the owner's account",
+        "add, check, move or remove a domain",
+        "create, list or revoke a share link (page or post)",
+        "analytics screen, JSON and CSV",
+        "Audience and its CSV",
+        "blog on/off, address and label (`types/post`)",
+        "invite, revoke, remove, change role",
+        "checkout and portal (these act on the session user only)",
+        "Unit per core plus `escalation.spec.ts`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-08",
+      "milestone": 19,
+      "area": "invites",
+      "title": "Invite by email",
+      "acceptance": [
+        "The owner invites an address with a role.",
+        "The link is shown once and emailed through `sendMessage` (Mailpit locally; skipped and logged without the address when SMTP is unset).",
+        "Opening it signed out leads through sign-in and back with no return-URL parameter (an HttpOnly resume cookie).",
+        "Accept is a POST, and repeated GETs consume nothing.",
+        "Acceptance requires a session whose confirmed email equals the invited one.",
+        "A used, expired or revoked link gives one message.",
+        "Pending invites are listed and revocable.",
+        "pgTAP 225; Playwright `invite.spec.ts` at 390x844 and 1440x900; a unit pins the email content (no site name, no remote resource, plain-text part)."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-09",
+      "milestone": 19,
+      "area": "editor",
+      "title": "Members screen",
+      "acceptance": [
+        "`/members` for the current site, owner only:",
+        "invite form (16px input, 44px targets)",
+        "members with a role select and Remove",
+        "pending invites with expiry and Revoke",
+        "recent activity (last 50)",
+        "the 10-member meter",
+        "on Free and Pro: \"Team access is part of Studio.\" with the upgrade action and no form",
+        "after a downgrade the list stays, marked paused",
+        "reached from the site switcher and the Settings sites card",
+        "Smoke at both viewports, no horizontal scroll."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-10",
+      "milestone": 19,
+      "area": "editor",
+      "title": "Working on a shared site",
+      "acceptance": [
+        "A shared site appears under \"Shared with you\" with its owner's address; a paused one is listed and not selectable.",
+        "On it: Analytics, Audience and Domains are absent from the nav and their URLs refuse.",
+        "The owner is named.",
+        "Editors see \"Ask the owner or a publisher to publish\" instead of Publish.",
+        "Rename, unpublish, delete, the share-link card, blog settings and saved-theme writes are absent.",
+        "Themes shown are the system themes plus the owner's.",
+        "Uploads work and land in the owner's folder.",
+        "Post body images display in the post editor.",
+        "An account with no own site lands in the shared site and can still claim a handle.",
+        "\"Leave this site\" is in the switcher.",
+        "The admin account page lists the team.",
+        "Smoke at both viewports."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-11",
+      "milestone": 19,
+      "area": "security",
+      "title": "Removal is immediate",
+      "acceptance": [
+        "With the member's tab open, the owner removes them. Then:",
+        "The next autosave, upload, publish and load are refused.",
+        "The tab says \"You no longer have access to this site.\": a 0-row design save re-reads the site and shows this instead of the conflict notice.",
+        "A reload lands on the member's own site or `/claim`.",
+        "The same holds for demotion (publish only), downgrade and either suspension. Playwright `removal.spec.ts` (two contexts) and the probe's last step."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-12",
+      "milestone": 19,
+      "area": "security",
+      "title": "Static guard",
+      "acceptance": [
+        "`tests/unit/m19-access-static.test.ts` fails when:",
+        "A file outside the allowlist compares or filters on `owner_id` (`.eq(\"owner_id\"`, `.eq(\"pages.owner_id\"`, `.eq(\"site.owner_id\"`, `owner_id ===`, `owner_id !==`, `.or(\\`owner_id`).",
+        "A `p_owner_id:` argument is not `access.ownerId` or bound from it.",
+        "A secret-key user of `pages`, `content_*`, `page_versions`, `site_paths` or `content_schedules` imports neither `@/lib/access` nor an allowlisted module.",
+        "`src/lib/access/**` is imported beside a cross-request cache API.",
+        "A migration after this wave creates a site-scoped policy that names `owner_id` without `accessible_site_ids`, outside the listed owner-only tables.",
+        "The allowlist lists file, pattern, count and reason (B and D rows); a count change fails."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-13",
+      "milestone": 19,
+      "area": "security",
+      "title": "MCP stays owner-only",
+      "acceptance": [
+        "Unit:",
+        "With a token of a member of S: every one of the 31 tools given S's id, an entry of S, a sub-page of S or a term of S answers `not_found`.",
+        "`list_pages` omits S.",
+        "The owner's token is unchanged.",
+        "The consent screen and Connected apps card show \"Sites shared with you aren't included.\""
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-14",
+      "milestone": 19,
+      "area": "security",
+      "title": "Adversarial verification",
+      "acceptance": [
+        "A verifier who did not build the wave:",
+        "re-runs 2.5 and maps every hit to a row of 2.4, or reports it",
+        "attempts every row T1-T22 with curl and the publishable key and with the app's endpoints, recording each result in PROGRESS.md",
+        "Any success blocks the release."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-15",
+      "milestone": 19,
+      "area": "security",
+      "title": "Security review",
+      "acceptance": [
+        "`security-reviewer` runs on the whole diff and names T1-T22. Findings are fixed or recorded with Gary's decision."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-16",
+      "milestone": 19,
+      "area": "data",
+      "title": "Forms and schedules under team access",
+      "acceptance": [
+        "A member reads 0 `form_submissions` rows and cannot delete one.",
+        "`form_submission_counts` returns nothing for a member.",
+        "A publisher schedules a post and an editor's schedule request is refused.",
+        "Removing, demoting or the leaving of that publisher cancels their pending rows (`result_code = 'canceled'`).",
+        "A row whose creator lost publish rights is failed with `access_lost` at claim and publishes nothing.",
+        "The owner's own schedules are untouched.",
+        "pgTAP 227/228 and worker unit."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M19-17",
+      "milestone": 19,
+      "area": "docs",
+      "title": "Docs and policy",
+      "acceptance": [
+        "PLAN.md: the Data model gains the three tables, the access rule and the role table; \"Team members, roles\" leaves Deferred; \"per page\" reads \"per site\"; Decided gains the v1 rules.",
+        "`.claude/rules/editor-app.md`, `supabase-migrations.md` and `mcp-oauth.md` say \"the access helper\" instead of \"`pages.owner_id` equals the caller\".",
+        "The Privacy and Terms sentences are listed for Gary (G7) and not edited."
+      ],
+      "passes": false
     }
   ]
 }

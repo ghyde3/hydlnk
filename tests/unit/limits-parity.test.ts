@@ -4,6 +4,7 @@ import {
   PLAN_IDS,
   PLAN_LIMITS,
   SQL_COLUMNS,
+  SITE_MEMBERS_SQL_FUNCTION,
   comparePlanLimits,
   type PlanId,
   type PlanLimitRows,
@@ -130,6 +131,17 @@ describe.skipIf(!run)("M4-02 plan_limits() parity (local Supabase)", () => {
       column: "max_pages",
       kind: "value",
     });
+  });
+
+  it("M19-02 siteMembers equals plan_site_members() for every plan (team access: Studio only)", async () => {
+    for (const plan of PLAN_IDS) {
+      const { data, error } = await admin.rpc(SITE_MEMBERS_SQL_FUNCTION, { p_plan: plan });
+      expect(error, `plan_site_members(${plan})`).toBeNull();
+      expect(data, `${plan}.siteMembers`).toBe(PLAN_LIMITS[plan].siteMembers);
+    }
+    expect(PLAN_LIMITS.studio.siteMembers).toBeGreaterThan(0);
+    expect(PLAN_LIMITS.pro.siteMembers).toBe(0);
+    expect(PLAN_LIMITS.free.siteMembers).toBe(0);
   });
 
   it("M4-02 unlimited saved themes is null in the database", async () => {
