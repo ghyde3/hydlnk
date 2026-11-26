@@ -44,7 +44,7 @@ import { ToggleRow } from "./toggle-row";
  * one is immediate and lives on the page's own settings.
  *
  * Under the pages sits the blog (M16-02): "Add blog", or the "Blog" row that opens the Posts screen
- * (`PagesBlogRow`, which loads its own data).
+ * (`PagesBlogRow`, which loads its own data and starts from the archives the layout read).
  */
 export function PagesCard() {
   const { site, plan, homeStatus, pageId, draft } = useWorkspace();
@@ -76,6 +76,7 @@ export function PagesCard() {
 
       <PagesBlogRow
         siteId={pageId}
+        initial={site.archives.find((archive) => archive.key === "post") ?? null}
         menuItems={resolveNav(draft.nav).items}
         onAddToMenu={(typeId) => {
           // The same edit as a page's "Show in menu" (`addToNav`, with the menu's item limit).
