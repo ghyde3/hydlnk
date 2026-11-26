@@ -22,7 +22,9 @@ describe("the publish permission in words", () => {
   });
 
   it("/connect says the same", () => {
-    expect(connect).toContain("turning your blog on or off, and changing your blog’s address or its name");
+    expect(connect).toContain(
+      "turning your blog on or off, and changing your blog’s address or its name",
+    );
   });
 });
 

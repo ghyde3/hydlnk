@@ -129,7 +129,7 @@ export const updateContentTypeTool: ToolDefinition<typeof input> = {
     } else {
       type = await settingsThenSwitch(call, { siteId, typeKey, settings, enabled: args.enabled });
     }
-        const now = type;
+    const now = type;
     return {
       sentence: `The blog is ${now.enabled ? "on" : "off"}${now.archivePath ? `, at /${now.archivePath}` : ""}. This is live now.`,
       data: {

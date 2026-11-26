@@ -25,8 +25,7 @@ function fakeAdmin(rows: unknown[]) {
         (selects[table] ??= []).push(columns);
         return chain;
       };
-      const data =
-        table === "content_types" ? [{ id: TYPE, site_id: SITE }] : (rows as unknown[]);
+      const data = table === "content_types" ? [{ id: TYPE, site_id: SITE }] : (rows as unknown[]);
       chain.range = async () => ({ data, error: null });
       chain.then = (resolve: (value: unknown) => unknown) => resolve({ data, error: null });
       return chain;

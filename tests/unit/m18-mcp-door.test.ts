@@ -516,12 +516,14 @@ describe("M18-01 delete_entry on a live post draws on the per-item bucket", () =
     writer.trashEntry.mockResolvedValue(trashed);
     const tool = toolByName("delete_entry")!;
     const one = live("published");
-    expect((await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, one.deps)).isError)
-      .toBeUndefined();
+    expect(
+      (await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, one.deps)).isError,
+    ).toBeUndefined();
     expect(one.seen.filter((key) => key === `mcp-publish-item:${USER_A}`)).toHaveLength(1);
     const two = live("draft");
-    expect((await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, two.deps)).isError)
-      .toBeUndefined();
+    expect(
+      (await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, two.deps)).isError,
+    ).toBeUndefined();
     expect(two.seen.some((key) => key.startsWith("mcp-publish-item:"))).toBe(false);
   });
 
@@ -534,8 +536,9 @@ describe("M18-01 delete_entry on a live post draws on the per-item bucket", () =
     // A draft post is trashed at the same moment: the bucket is for what visitors see.
     writer.trashEntry.mockResolvedValue(trashed);
     const draft = live("draft", false);
-    expect((await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, draft.deps)).isError)
-      .toBeUndefined();
+    expect(
+      (await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, draft.deps)).isError,
+    ).toBeUndefined();
   });
 });
 

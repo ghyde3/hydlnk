@@ -124,7 +124,9 @@ describe("update_entry with bodyEdits that multiply the body", () => {
   });
 
   it("a replace longer than the body limit is refused by the input schema", async () => {
-    const out = await runUpdate("x", { bodyEdits: [{ find: "x", replace: "r".repeat(KIB_512 + 1) }] });
+    const out = await runUpdate("x", {
+      bodyEdits: [{ find: "x", replace: "r".repeat(KIB_512 + 1) }],
+    });
     expect(failure(out)).toMatchObject({ code: "invalid_input" });
     expect(failure(out).issues[0].path).toBe("bodyEdits[0].replace");
     neverLexed();

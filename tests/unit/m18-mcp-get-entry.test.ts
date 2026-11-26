@@ -182,7 +182,11 @@ describe.skipIf(!run)("get_entry (local Supabase)", () => {
       expect(made.error).toBeNull();
       return (await h.call("get_entry", { entryId: made.data!.id }, o, READ)).json!;
     };
-    const remote = await insert({ title: "T", slug: "remote", body: "![x](https://example.com/a.png)" });
+    const remote = await insert({
+      title: "T",
+      slug: "remote",
+      body: "![x](https://example.com/a.png)",
+    });
     expect(remote.publishIssues).toEqual([
       { path: "body", message: "Use an image from your uploads." },
     ]);

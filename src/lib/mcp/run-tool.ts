@@ -378,11 +378,7 @@ export async function runTool(
     // call that got this far: a call refused for its input or for an id that is not the caller's
     // never reaches it.
     if (tool.changesLive) {
-      const over = await limited(
-        itemPublishKey(identity.userId),
-        MCP_ITEM_PUBLISH_PER_HOUR,
-        3600,
-      );
+      const over = await limited(itemPublishKey(identity.userId), MCP_ITEM_PUBLISH_PER_HOUR, 3600);
       if (over) return refuse(over);
     }
 

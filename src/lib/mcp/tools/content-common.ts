@@ -177,11 +177,7 @@ export function requirePublish(call: ToolCall): void {
 export async function requireItemPublishBudget(call: ToolCall): Promise<void> {
   let verdict: { allowed: boolean; retryAfter: number };
   try {
-    verdict = await call.deps.limit(
-      itemPublishKey(call.userId),
-      MCP_ITEM_PUBLISH_PER_HOUR,
-      3600,
-    );
+    verdict = await call.deps.limit(itemPublishKey(call.userId), MCP_ITEM_PUBLISH_PER_HOUR, 3600);
   } catch {
     call.deps.log("[mcp] the rate limiter failed; allowing the call");
     return;

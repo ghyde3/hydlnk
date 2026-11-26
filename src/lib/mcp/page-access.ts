@@ -463,7 +463,8 @@ export async function listOwnedSubPageDocs(
 }
 
 /** The two image references of a post draft, and nothing else of it. */
-export const POST_IMAGE_FIELDS = "featured_image:draft->featuredImage, og_image:draft->seo->ogImage";
+export const POST_IMAGE_FIELDS =
+  "featured_image:draft->featuredImage, og_image:draft->seo->ogImage";
 
 /**
  * The image fields of the drafts of the caller's posts (trash excluded), `size` rows from `offset`,
@@ -488,9 +489,7 @@ export async function listOwnedPostImageDocs(
     .range(offset, offset + size - 1);
   if (error) throw new PageReadError("reading the posts of a site failed");
   type ImageRow = EntryRow & { featured_image?: unknown; og_image?: unknown };
-  const rows = ((data ?? []) as unknown as ImageRow[]).filter(
-    (row) => siteOwnerOf(row) === userId,
-  );
+  const rows = ((data ?? []) as unknown as ImageRow[]).filter((row) => siteOwnerOf(row) === userId);
   const types = await typeIdsOf(admin, [...new Set(rows.map((row) => row.site_id))], "post");
   return rows
     .filter((row) => types.get(row.site_id) === row.type_id)

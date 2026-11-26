@@ -96,7 +96,10 @@ export function postDraftIssues(input: {
   issues.push(...(bodyImageIssue(input.draft)?.issues ?? []));
   for (const use of postImages(input.draft)) {
     if (!use.path.startsWith(`${input.actor.userId}/`)) {
-      issues.push({ path: use.field, message: "That image isn’t in your uploads. Upload it again." });
+      issues.push({
+        path: use.field,
+        message: "That image isn’t in your uploads. Upload it again.",
+      });
     }
   }
   return issues;

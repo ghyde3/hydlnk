@@ -51,7 +51,9 @@ export const restoreRevisionTool: ToolDefinition<typeof input> = {
       expectedRev: args.ifRev,
       // A tool save runs the body checks on what it would store (plan 3.5): the version's body
       // must pass them as a body sent to update_entry would, or nothing is written.
-      ...(isPost ? { check: (snapshot: unknown) => checkPostBody({ actor, draft: snapshot }) } : {}),
+      ...(isPost
+        ? { check: (snapshot: unknown) => checkPostBody({ actor, draft: snapshot }) }
+        : {}),
     });
     if (!out.ok) {
       throw await refusal(call, out, {
