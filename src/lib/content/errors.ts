@@ -1,5 +1,6 @@
 import { readBlockedLinkError } from "@/lib/blocklist/error";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
+import { TERM_LIMIT_MESSAGE } from "@/lib/limits/messages";
 import type { ContentErrorCode, ContentFailure } from "./types";
 
 export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
@@ -12,6 +13,7 @@ export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
   storage_full: 403,
   entry_limit: 403,
   type_limit: 403,
+  term_limit: 403,
   page_limit: 403,
   path_taken: 409,
   slug_taken: 409,
@@ -31,6 +33,7 @@ export const CONTENT_MESSAGES: Record<ContentErrorCode, string> = {
   storage_full: STORAGE_FULL_MESSAGE,
   entry_limit: "This site is at its limit of entries for that type.",
   type_limit: "This site is at its limit of custom types.",
+  term_limit: TERM_LIMIT_MESSAGE,
   page_limit: "This site is at its limit of pages.",
   path_taken: "That address is already used or reserved.",
   slug_taken: "Another entry of this type already uses that slug.",
@@ -57,6 +60,7 @@ const BY_CODE: Record<string, ContentErrorCode> = {
   HL009: "storage_full",
   HL010: "entry_limit",
   HL011: "type_limit",
+  HL015: "term_limit",
   HL008: "page_limit",
   HL005: "blocked_link",
   HL012: "path_taken",

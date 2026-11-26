@@ -70,12 +70,13 @@ export async function ownedEntry(
   return { ok: true, entry: row };
 }
 
-/** The site's enabled type, by id or key. A type that is off gives `type_disabled`; an unknown one `not_found`. */
-export async function enabledType(
+/** The site's type, by id or key, on or off. An unknown one, or one of another site, gives `not_found`. */
+export async function siteType(
   admin: Admin,
   siteId: string,
-  typeIdOrKey: string,
+  typeIdOrKey: unknown,
 ): Promise<{ ok: true; type: Row<"content_types"> } | ContentFailure> {
+  if (typeof typeIdOrKey !== "string") return failure("not_found");
   const query = admin.from("content_types").select("*").eq("site_id", siteId);
   const found = await (
     UUID.test(typeIdOrKey) ? query.eq("id", typeIdOrKey) : query.eq("key", typeIdOrKey)
@@ -84,6 +85,16 @@ export async function enabledType(
     console.error("[content] reading the type failed", found.error.message);
     return failure("error");
   }
-  if (!found.data) return failure("not_found");
-  return found.data.enabled ? { ok: true, type: found.data } : failure("type_disabled");
+  return found.data ? { ok: true, type: found.data } : failure("not_found");
+}
+
+/** The site's enabled type, by id or key. A type that is off gives `type_disabled`; an unknown one `not_found`. */
+export async function enabledType(
+  admin: Admin,
+  siteId: string,
+  typeIdOrKey: string,
+): Promise<{ ok: true; type: Row<"content_types"> } | ContentFailure> {
+  const found = await siteType(admin, siteId, typeIdOrKey);
+  if (!found.ok) return found;
+  return found.type.enabled ? found : failure("type_disabled");
 }

@@ -16,6 +16,7 @@ export type ContentErrorCode =
   | "storage_full"
   | "entry_limit"
   | "type_limit"
+  | "term_limit"
   | "page_limit"
   | "path_taken"
   | "slug_taken"

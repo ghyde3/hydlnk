@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { updateEntryWithClient } from "./entries-core";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, enabledType, ownedEntry, ownedSite } from "./guards";
+import { TERMS_PER_TYPE } from "@/lib/blog/types";
+import { activeAccount, enabledType, ownedEntry, ownedSite, siteType } from "./guards";
 import type { ContentActor, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -253,12 +254,31 @@ export async function setEntryTermsWithClient(
   });
 }
 
-/** The terms of one type of a site the actor owns. Contract stub (Wave B, plan 4.1): Builder A writes it. */
+/**
+ * The terms of one type of a site the actor owns: categories, then tags, each by name. A read: it
+ * checks ownership only (the type may be off, the account suspended). Another user's site, a missing
+ * one and an unknown type answer the same `not_found`. At most `TERMS_PER_TYPE` rows exist (HL015).
+ */
 export async function listTermsWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string; typeKey: string },
 ): Promise<ContentResult<{ terms: TermSummary[] }>> {
-  void admin;
-  void input;
-  throw new Error("not built: A");
+  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  if (!site.ok) return site;
+  const type = await siteType(admin, site.site.id, input.typeKey);
+  if (!type.ok) return type;
+  const rows = await admin
+    .from("content_terms")
+    .select(COLUMNS)
+    .eq("site_id", site.site.id)
+    .eq("type_id", type.type.id)
+    .order("taxonomy", { ascending: true })
+    .order("name", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(TERMS_PER_TYPE);
+  if (rows.error) {
+    console.error("[content] listing the terms failed", rows.error.message);
+    return failure("error");
+  }
+  return { ok: true, terms: rows.data.map(summary) };
 }
