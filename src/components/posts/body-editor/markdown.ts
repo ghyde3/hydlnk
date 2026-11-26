@@ -1,6 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import { MarkdownManager } from "@tiptap/markdown";
-import { lexBounded } from "@/lib/blog/markdown";
+import { decodeEntities, lexBounded } from "@/lib/blog/markdown";
 import { isHttpUrl } from "@/lib/document";
 import { BODY_HEADING_LEVELS, bodySchema } from "./extensions";
 
@@ -52,15 +52,26 @@ export function escapeBlockStarts(paragraph: string): string {
 /**
  * A URL typed as text (finding 2): the serializer backslash-escapes `_`, `*` and `~`, and marked
  * then reads `https://x.com/a\_b` as a URL WITH the backslashes (no link, no embed, backslashes on
- * the live page). So a run marked's GFM URL rule would take is written as typed. The run is found as
- * marked finds it (17.0.6: `(?:protocol://|www.)` and a host character, up to a space or `<`, then
- * its trailing punctuation trimmed by `_backpedal` until nothing changes). When the character after
- * the trimmed run is one the serializer escapes, marked would read the escape into the URL, so that
- * run is escaped as before.
+ * the live page). So a run marked's GFM URL rule might take is a candidate to be written as typed
+ * (17.0.6: `(?:protocol://|www.)` and a host character, up to a space or `<`, then its trailing
+ * punctuation trimmed by `_backpedal` until nothing changes).
+ *
+ * A candidate is only a guess: marked autolinks `www.` in lower case only, takes `x@www.host` as an
+ * email first, reads `&amp;` as `&`, and lexes whatever it does not take as Markdown. So a run is
+ * left as typed only when marked, lexing it in place, gives back exactly the typed text with no
+ * token but a verbatim autolink (`rendersAsTyped`). Everything else is escaped, with its URL
+ * prefixes and email `@` broken (`https\://`, `www\.`, `a\@b.co`), so it is never a link and reads
+ * back as the same text. The window lexed is the run and the rest of its word: past a space nothing
+ * can join it, and every candidate costs its own length, so the whole text is lexed about twice.
  */
 const URL_RUN = /(?:https?:\/\/|www\.)[a-zA-Z0-9-][^\s<]*/gi;
 const BACKPEDAL = /(?:[^?!.,:;*_'"~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_'"~)]+(?!$))+/;
-const ESCAPED = /[\\`*_[\]~<>&]/;
+/** What marked's URL rule starts at (its protocols in any case, `www.`), broken by an escape. */
+const URL_PREFIX = /(https?|ftp)(:\/\/)|(www)(\.)/gi;
+/** An address marked's GFM email rule takes (17.0.6); its `@` is escaped so it stays text. */
+const EMAIL = /([A-Za-z0-9._+-]+)@(?=[a-zA-Z0-9-_]+(?:\.[a-zA-Z0-9-_]*[a-zA-Z0-9])+(?![-_]))/g;
+const DELIMITERS = /[*_~]/;
+const NEXT_SPACE = /\s/g;
 /** Longer runs are escaped as before (the trim is quadratic; no real address is this long). */
 const MAX_URL_RUN = 4096;
 
@@ -74,20 +85,96 @@ function trimmedUrl(run: string): string {
   return current;
 }
 
-/** `text` with every URL run left as typed and everything else through `escape`. */
-export function encodeKeepingUrls(text: string, escape: (piece: string) => string): string {
+interface InlineToken {
+  type: string;
+  raw: string;
+  text?: string;
+  href?: string;
+}
+
+const lexInline = (markdown: string): InlineToken[] => {
+  const marked = manager().instance;
+  return marked.Lexer.lexInline(markdown, marked.defaults) as unknown as InlineToken[];
+};
+
+/**
+ * A link marked made of a web address as written: its text is its raw, its href that address. An
+ * email is not one: the editor holds it as a `mailto:` link the schema refuses (`canEditRich`).
+ */
+function isVerbatimAutolink(token: InlineToken): boolean {
+  const { raw, href } = token;
+  if (token.type !== "link" || token.text !== raw || decodeEntities(raw) !== raw) return false;
+  return href === raw || href === `http://${raw}`;
+}
+
+/**
+ * Whether marked reads `markdown` (inline) as `typed` drawn as `PostBody` draws it: text with its
+ * entities decoded, escapes as their character, and no token but a verbatim autolink.
+ */
+function rendersAsTyped(markdown: string, typed: string): boolean {
+  let drawn = "";
+  for (const token of lexInline(markdown)) {
+    if (token.type === "text" && !("tokens" in token)) drawn += decodeEntities(token.text ?? "");
+    else if (token.type === "escape") drawn += token.text ?? "";
+    else if (isVerbatimAutolink(token)) drawn += token.raw;
+    else return false;
+  }
+  return drawn === typed;
+}
+
+/** Where the serializer's output around a text node may still join a URL run at its end. */
+export interface UrlContext {
+  /** The node carries bold, italic or strike: a `*`, `_` or `~` in a run could close them. */
+  delimited: boolean;
+  /** Nothing inline follows the node (or a hard break does), so a run may end at the node's end. */
+  openEnd: boolean;
+}
+
+const PLAIN_TEXT: UrlContext = { delimited: false, openEnd: true };
+
+/**
+ * `text` with every URL run that marked reads back as typed left as typed (see `URL_RUN`), and
+ * everything else through `escape` with its URL prefixes and email `@` broken.
+ */
+export function encodeKeepingUrls(
+  text: string,
+  escape: (piece: string) => string,
+  context: UrlContext = PLAIN_TEXT,
+): string {
+  const safe = (piece: string) =>
+    escape(piece).replace(URL_PREFIX, "$1$3\\$2$4").replace(EMAIL, "$1\\@");
   let out = "";
   let from = 0;
   for (const match of text.matchAll(URL_RUN)) {
     const start = match.index;
-    if (start < from || match[0].length > MAX_URL_RUN) continue;
-    const url = trimmedUrl(match[0]);
-    const next = text.charAt(start + url.length);
-    if (url.length === 0 || (next !== "" && ESCAPED.test(next))) continue;
-    out += escape(text.slice(from, start)) + url;
-    from = start + url.length;
+    const run = match[0];
+    const between = safe(text.slice(from, start));
+    const kept = run.length > MAX_URL_RUN ? undefined : keptPiece(start, run, between);
+    out += between + (kept ?? safe(run));
+    from = start + (kept ?? run).length;
   }
-  return out + escape(text.slice(from));
+  return out + safe(text.slice(from));
+
+  /** The run, or its trimmed URL, when marked reads it (and the rest of its word) as typed. */
+  function keptPiece(start: number, run: string, between: string): string | undefined {
+    for (const piece of new Set([run, trimmedUrl(run)])) {
+      if (piece === "" || (context.delimited && DELIMITERS.test(piece))) continue;
+      const end = start + piece.length;
+      if (end === text.length && !context.openEnd) continue;
+      NEXT_SPACE.lastIndex = end;
+      const wordEnd = NEXT_SPACE.exec(text)?.index ?? text.length;
+      if (wordEnd - end > MAX_URL_RUN) continue;
+      const lexed = between + piece + safe(text.slice(end, wordEnd));
+      if (rendersAsTyped(lexed, text.slice(from, wordEnd))) return piece;
+    }
+    return undefined;
+  }
+}
+
+/** Whether marked reads `text` alone as one autolink to `href`. */
+function isBareAutolink(text: string, href: string): boolean {
+  const tokens = lexInline(text);
+  return tokens.length === 1 && isVerbatimAutolink(tokens[0]!) && tokens[0]!.href === href;
 }
 
 /** A text node whose link is a bare URL: its text is its address (or `www.` and the address). */
@@ -96,13 +183,28 @@ function isBareLink(node: JSONContent): boolean {
   const link = node.marks?.find((mark) => mark.type === "link");
   const href = link?.attrs?.href;
   if (typeof href !== "string" || (href !== text && href !== `http://${text}`)) return false;
-  const runs = [...text.matchAll(URL_RUN)];
-  return runs.length === 1 && runs[0]!.index === 0 && trimmedUrl(runs[0]![0]) === text;
+  return isBareAutolink(text, href);
+}
+
+const sameMarks = (a: JSONContent, b: JSONContent) =>
+  JSON.stringify(a.marks ?? []) === JSON.stringify(b.marks ?? []);
+
+/** Adjacent text nodes with the same marks as one node, as the editor holds them. */
+function mergeText(content: JSONContent[]): JSONContent[] {
+  const merged: JSONContent[] = [];
+  for (const node of content) {
+    const last = merged.at(-1);
+    if (last?.type === "text" && node.type === "text" && sameMarks(last, node)) {
+      merged[merged.length - 1] = { ...last, text: (last.text ?? "") + (node.text ?? "") };
+    } else merged.push(node);
+  }
+  return merged;
 }
 
 /**
  * The document with every bare link written as plain text: the URL run is then left as typed, and
- * marked reads it back as the same link (`https://...` on its own line stays an embed).
+ * marked reads it back as the same link (`https://...` on its own line stays an embed). A link that
+ * became text is joined to the text around it, as the editor would hold it after a reopen.
  */
 function withBareLinksAsText(node: JSONContent): JSONContent {
   if (node.type === "text") {
@@ -111,7 +213,18 @@ function withBareLinksAsText(node: JSONContent): JSONContent {
     return { ...node, marks };
   }
   if (!node.content) return node;
-  return { ...node, content: node.content.map(withBareLinksAsText) };
+  return { ...node, content: mergeText(node.content.map(withBareLinksAsText)) };
+}
+
+/** What follows a text node in its parent decides whether a URL run may end at its end. */
+function urlContext(node: JSONContent, parentNode?: JSONContent): UrlContext {
+  const siblings = parentNode?.content ?? [];
+  const index = siblings.indexOf(node);
+  const next = index < 0 ? undefined : siblings[index + 1];
+  return {
+    delimited: (node.marks?.length ?? 0) > 0,
+    openEnd: index >= 0 && (next === undefined || next.type === "hardBreak"),
+  };
 }
 
 type EncodeText = (text: string, node: JSONContent, parentNode?: JSONContent) => string;
@@ -128,7 +241,11 @@ function manager(): MarkdownManager {
     const inCode = encode("*", node, parentNode) === "*";
     const inLink = node.marks?.some((mark) => mark.type === "link") ?? false;
     if (inCode || inLink) return encode(text, node, parentNode);
-    return encodeKeepingUrls(text, (piece) => encode(piece, node, parentNode));
+    return encodeKeepingUrls(
+      text,
+      (piece) => encode(piece, node, parentNode),
+      urlContext(node, parentNode),
+    );
   };
   // Paragraphs are written by the library's own renderer; its result is escaped on the way out.
   // The manager calls this method for every node, nested ones included (list items, quotes).
