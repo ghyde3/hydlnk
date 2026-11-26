@@ -8,11 +8,11 @@ import { emptyDraft, toSubPagePublishForm, type SubPageDraft } from "@/lib/docum
  * M15-10: saves that land while a publish is still answering. Every timing here is forced with a
  * deferred promise: nothing depends on how fast a request is.
  *
- *   - the rev a Publish page answers is adopted only while the editor still holds the rev it sent
+ *   - the rev a publish answers is adopted only while the editor still holds the rev it sent
  *     (Home's saver and the sub-pages' revisions); a save answered meanwhile keeps its newer rev;
- *   - the re-read of the revs after Publish all changes does not put an older rev over a save's;
- *   - a page is marked live with the form that was PUBLISHED, not with what was typed since;
- *   - `markPublished` resolves only once the revs are re-read.
+ *   - after Publish all changes the editor adopts the revs the publish ANSWERED and never reads the
+ *     stored revs again (A2): a rev another writer made since must stay a conflict;
+ *   - a page is marked live with the form that was PUBLISHED, not with what was typed since.
  */
 
 interface Deferred<T> {
@@ -97,24 +97,9 @@ describe("M15-10 Home's entry rev while a publish answers", () => {
     expect(saver.homeRev()).toBe(3);
   });
 
-  it("the re-read after Publish all changes does not put an older rev over a save's", async () => {
+  it("A2: Home's saver has no way to re-read the stored rev", () => {
     const saver = createDraftSaver("p", { entryId: HOME, rev: 2 }, [header("One")]);
-    const read = deferred<Revs>();
-    readEntryRevs.mockReturnValueOnce(read.promise);
-    const refreshed = saver.refreshHomeRev();
-    await saver(homeDoc("Two", 2), "1");
-    expect(saver.homeRev()).toBe(3);
-    // The read was answered before that save was stored.
-    read.resolve([{ id: HOME, rev: 2 }]);
-    await refreshed;
-    expect(saver.homeRev()).toBe(3);
-  });
-
-  it("the re-read adopts a rev the publish moved when nothing was saved meanwhile", async () => {
-    const saver = createDraftSaver("p", { entryId: HOME, rev: 2 }, [header("One")]);
-    readEntryRevs.mockResolvedValueOnce([{ id: HOME, rev: 3 }]);
-    await saver.refreshHomeRev();
-    expect(saver.homeRev()).toBe(3);
+    expect("refreshHomeRev" in saver).toBe(false);
   });
 });
 
@@ -140,21 +125,9 @@ describe("M15-10 a sub-page's rev while a publish answers", () => {
     expect(revisions.get(SUB)).toBe(3);
   });
 
-  it("the re-read after Publish all changes keeps the rev of a save answered meanwhile", async () => {
-    const revisions = createSubPageRevisions({ [SUB]: 2, other: 5 });
-    const save = createSubPageSaveFn(revisions, "p");
-    const read = deferred<Revs>();
-    readEntryRevs.mockReturnValueOnce(read.promise);
-    const refreshed = revisions.refresh("p");
-    await save(SUB, doc("Two"));
-    read.resolve([
-      { id: SUB, rev: 2 },
-      { id: "other", rev: 6 },
-    ]);
-    await refreshed;
-    expect(revisions.get(SUB)).toBe(3);
-    // A page nothing was saved on takes the stored rev.
-    expect(revisions.get("other")).toBe(6);
+  it("A2: the revisions have no way to re-read the stored revs", () => {
+    const revisions = createSubPageRevisions({ [SUB]: 2 });
+    expect("refresh" in revisions).toBe(false);
   });
 });
 
@@ -239,41 +212,74 @@ describe("M15-10 what the editor calls live after a publish", () => {
     retitle("One");
     await store();
     const published = site.snapshotForms();
+    const sent = site.revisions();
     retitle("Two");
     await store();
-    readEntryRevs.mockResolvedValueOnce([{ id: SUB, rev: site.revisions()[SUB]! }]);
-    await act(async () => {
-      await site.markPublished(published);
-    });
+    act(() => site.markPublished(published, sent, sent));
     expect(site.pageStates[SUB]).toBe("changed");
     expect(site.dirty).toBe(true);
   });
 
-  it("markPublished resolves only once the revs are re-read, so the next action sends the new one", async () => {
+  it("A2: Publish all changes adopts the revs the publish answered and reads none", async () => {
     retitle("One");
     await store();
-    const before = site.revisions()[SUB]!;
-    const read = deferred<Revs>();
-    readEntryRevs.mockReturnValueOnce(read.promise);
-    let done = false;
-    let marked!: Promise<void>;
-    act(() => {
-      marked = Promise.resolve(site.markPublished(site.snapshotForms())).then(() => {
-        done = true;
-      });
-    });
+    const sent = site.revisions();
+    const before = sent[SUB]!;
+    // The publish moved the entry's rev; meanwhile ANOTHER writer moved it further (rev + 5). A read
+    // of the stored revs would bring that writer's rev in, and the next save would go over its draft.
+    readEntryRevs.mockResolvedValue([{ id: SUB, rev: before + 5 }]);
+    act(() => site.markPublished(site.snapshotForms(), { [SUB]: before + 1 }, sent));
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    // The read of the revs is still out: Publish all changes has not finished.
-    expect(done).toBe(false);
-    expect(site.revisions()[SUB]).toBe(before);
-    // Publish moved the entry's rev.
-    read.resolve([{ id: SUB, rev: before + 1 }]);
-    await act(async () => {
-      await marked;
-    });
-    expect(done).toBe(true);
+    expect(readEntryRevs).not.toHaveBeenCalled();
     expect(site.revisions()[SUB]).toBe(before + 1);
+    expect(site.pageStates[SUB]).toBe("live");
+    // The next save is sent with the answered rev: the route refuses it against the other writer's.
+    retitle("Two");
+    await act(async () => {
+      await site.flush();
+    });
+    expect(lastSentRev()).toBe(before + 1);
+  });
+
+  it("A2: a rev answered for a page whose held rev moved since is not adopted", async () => {
+    retitle("One");
+    await store();
+    const sent = site.revisions();
+    retitle("Two");
+    await store();
+    const held = site.revisions()[SUB]!;
+    act(() => site.markPublished(site.snapshotForms(), { [SUB]: sent[SUB]! + 1 }, sent));
+    expect(site.revisions()[SUB]).toBe(held);
+  });
+
+  it("A2: Unpublish reads no revs either", async () => {
+    readEntryRevs.mockResolvedValue([{ id: SUB, rev: 99 }]);
+    const before = site.revisions()[SUB];
+    act(() => site.markUnpublished());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(readEntryRevs).not.toHaveBeenCalled();
+    expect(site.revisions()[SUB]).toBe(before);
+  });
+
+  it("the sub-pages' saves wait while held and go on release", async () => {
+    const held = site.holdSaves();
+    await held.settled;
+    postEntryDraft.mockClear();
+    retitle("Typed during publish");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+    });
+    expect(postEntryDraft).not.toHaveBeenCalled();
+    expect(site.hasUnsaved()).toBe(true);
+    await act(async () => {
+      held.release();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(postEntryDraft).toHaveBeenCalledTimes(1);
+    expect(site.hasUnsaved()).toBe(false);
   });
 });

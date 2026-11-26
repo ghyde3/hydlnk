@@ -1905,6 +1905,17 @@ export type Database = {
         }
         Returns: Json
       }
+      publish_site_revs: {
+        Args: {
+          p_expected_revs?: Json
+          p_home: Json
+          p_owner_id: string
+          p_page_id: string
+          p_published_at?: string
+          p_sub_pages: Json
+        }
+        Returns: Json
+      }
       purge_old_events: { Args: never; Returns: number }
       purge_trashed_entries: { Args: never; Returns: number }
       rate_limit_hit: {

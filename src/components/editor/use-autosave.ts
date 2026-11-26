@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DraftDoc } from "@/lib/document";
-import { AutosaveQueue, type BlockedSave, type SaveStatus } from "@/lib/editor/autosave";
+import {
+  AutosaveQueue,
+  type BlockedSave,
+  type SaveHold,
+  type SaveStatus,
+} from "@/lib/editor/autosave";
 import { createDraftSaver, type DraftSaver, type HomeEntryRef } from "@/lib/editor/save-client";
 
 /** Statuses with edits that are not stored: the browser asks before the tab is closed. */
@@ -35,12 +40,15 @@ export interface Autosave {
   /** Home's entry rev this tab holds, or null when the site has no Home entry. */
   homeRev: () => number | null;
   /**
-   * Take the rev a Publish page of Home answered, when the rev held is still `sent` (the one the
-   * publish was checked against): a save that landed meanwhile holds the newer rev and keeps it.
+   * Take the rev a publish answered for Home's entry, when the rev held is still `sent` (the one the
+   * publish was checked against).
    */
   adoptHomeRev: (rev: number, sent: number) => void;
-  /** Re-read Home's entry rev (after Publish all changes, which can move it). The editor has flushed first. */
-  refreshHomeRev: () => Promise<void>;
+  /**
+   * Hold the queue while a publish that covers the design or Home's blocks is out (M15-10): edits are
+   * taken and wait, nothing is sent until `release()`. See `SaveHold`.
+   */
+  hold: () => SaveHold;
 }
 
 /**
@@ -140,7 +148,10 @@ export function useAutosave(args: {
     (rev: number, sent: number) => saverRef.current?.adoptHomeRev(rev, sent),
     [],
   );
-  const refreshHomeRev = useCallback(async () => saverRef.current?.refreshHomeRev(), []);
+  const hold = useCallback(
+    (): SaveHold => queueRef.current?.hold() ?? { settled: Promise.resolve(), release: () => {} },
+    [],
+  );
   return {
     status,
     blocked,
@@ -150,6 +161,6 @@ export function useAutosave(args: {
     revKey,
     homeRev,
     adoptHomeRev,
-    refreshHomeRev,
+    hold,
   };
 }

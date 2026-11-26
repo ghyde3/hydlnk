@@ -15,6 +15,7 @@ import {
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { checkTap, type PreviewTap } from "@/components/editor/preview-taps";
 import { useAutosave } from "@/components/editor/use-autosave";
+import type { SaveHold } from "@/lib/editor/autosave";
 import type { HomeEntryRef } from "@/lib/editor/save-client";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { useUndoRedo } from "@/components/editor/use-undo-redo";
@@ -316,11 +317,13 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     draftRef.current = draft;
   }, [draft]);
 
-  const { revKey, homeRev, adoptHomeRev, refreshHomeRev } = autosave;
+  const { revKey, homeRev, adoptHomeRev, hold: holdHomeSaves } = autosave;
   const {
     markPagePublished: markSitePagePublished,
     revisions: siteRevisions,
     snapshotForms: snapshotSiteForms,
+    holdSaves: holdSiteSaves,
+    hasUnsaved: siteHasUnsaved,
   } = site;
   const homeEntryId = initial.home?.entryId ?? null;
 
@@ -352,6 +355,42 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     }
     return true;
   }, [flush, flushSite, currentStatus]);
+
+  /**
+   * A save and a publish of the same entry never overlap (M15-10). Publish stores the pending edits,
+   * then HOLDS the save queues it covers (`home`: the design and Home's blocks, one queue; `site`:
+   * the sub-pages) until its answer is in: the publish can move an entry's rev, and a save sent
+   * meanwhile would carry the rev from before and be refused (the edit lost, "changed in another
+   * tab"), or would land first and make the publish a false conflict. Typing is never blocked: the
+   * edits wait in the queue and are sent on `release()`, with the revs the publish answered when it
+   * succeeded and with the revs held before when it did not.
+   *
+   * Returns null (a note says why) when the edits cannot be stored. The caller releases, always.
+   */
+  const storeAndHold = useCallback(
+    async (covers: { home: boolean; site: boolean }): Promise<SaveHold | null> => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (!(await storeEdits())) return null;
+        const holds = [
+          ...(covers.home ? [holdHomeSaves()] : []),
+          ...(covers.site ? [holdSiteSaves()] : []),
+        ];
+        const held: SaveHold = {
+          settled: Promise.all(holds.map((hold) => hold.settled)).then(() => undefined),
+          release: () => holds.forEach((hold) => hold.release()),
+        };
+        // A write that was already on the wire is answered before the revs are read.
+        await held.settled;
+        // The sub-pages' forms are snapshotted as typed: they must be the stored ones. (Home's
+        // snapshot is the queue's stored draft, so an edit of Home typed since just waits.)
+        if (!covers.site || !siteHasUnsaved()) return held;
+        held.release();
+      }
+      setPublishNote({ message: PUBLISH_UNSAVED_MESSAGE, retry: true });
+      return null;
+    },
+    [storeEdits, holdHomeSaves, holdSiteSaves, siteHasUnsaved],
+  );
 
   /**
    * A refused publish: show what failed, on the tab that holds it (a soft navigation: the toolbar,
@@ -402,38 +441,48 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const publishAll = useCallback(
     () =>
       runPublish("all", async () => {
-        if (!(await storeEdits())) return false;
-        // What is stored now is what the server publishes: an edit typed while it answers is not live.
-        const snapshot = savedDraft() ?? draftRef.current;
-        const siteForms = snapshotSiteForms();
-        // What this tab holds: the gate refuses (`conflict`) when any of it was saved elsewhere since.
-        const heldHome = homeRev();
-        const expected =
-          homeEntryId !== null && heldHome !== null
-            ? { designRev: revKey(), entries: { ...siteRevisions(), [homeEntryId]: heldHome } }
-            : undefined;
-        const result = await publishPage(pageId, expected);
-        if (!result.ok) {
-          showRefusal(result);
-          return false;
+        const held = await storeAndHold({ home: true, site: true });
+        if (!held) return false;
+        try {
+          // What is stored now is what the server publishes: an edit typed while it answers is not live.
+          const snapshot = savedDraft() ?? draftRef.current;
+          const siteForms = snapshotSiteForms();
+          // What this tab holds: the gate refuses (`conflict`) when any of it was saved elsewhere since.
+          const heldHome = homeRev();
+          const sentPages = siteRevisions();
+          const expected =
+            homeEntryId !== null && heldHome !== null
+              ? { designRev: revKey(), entries: { ...sentPages, [homeEntryId]: heldHome } }
+              : undefined;
+          const result = await publishPage(pageId, expected);
+          if (!result.ok) {
+            showRefusal(result);
+            return false;
+          }
+          // Publish can move an entry's rev without changing its draft. The answer names the revs it
+          // left, read under its own locks: those are adopted, and nothing is read again (a rev
+          // another writer made since must stay a conflict on the next save).
+          markSitePublished(siteForms, result.revs.entries, sentPages);
+          const homeLeft = homeEntryId === null ? undefined : result.revs.entries[homeEntryId];
+          if (homeLeft !== undefined && heldHome !== null) adoptHomeRev(homeLeft, heldHome);
+          setPublished({
+            has: true,
+            doc: toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)),
+          });
+          setPublishedAt(result.publishedAt);
+          dispatch({ type: "publish/clear-errors" });
+          clearSiteErrors();
+          setPublishedToken((token) => (token ?? 0) + 1);
+          return true;
+        } finally {
+          // Now the edits typed meanwhile are sent, with the revs adopted above (or, after a refusal
+          // or a failed request, with the revs held before).
+          held.release();
         }
-        // Publish can move an entry's rev without changing its draft: take the stored ones, and wait
-        // for them, so a Publish page or a Restore right after this sends the new rev. (A save of this
-        // tab answered meanwhile keeps its own, newer rev.)
-        await Promise.all([markSitePublished(siteForms), refreshHomeRev()]);
-        setPublished({
-          has: true,
-          doc: toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)),
-        });
-        setPublishedAt(result.publishedAt);
-        dispatch({ type: "publish/clear-errors" });
-        clearSiteErrors();
-        setPublishedToken((token) => (token ?? 0) + 1);
-        return true;
       }),
     [
       runPublish,
-      storeEdits,
+      storeAndHold,
       savedDraft,
       snapshotSiteForms,
       homeRev,
@@ -443,7 +492,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       pageId,
       showRefusal,
       markSitePublished,
-      refreshHomeRev,
+      adoptHomeRev,
       themeTokensOf,
       clearSiteErrors,
     ],
@@ -453,40 +502,45 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const publishPageById = useCallback(
     (id: string) =>
       runPublish(id, async () => {
-        if (!(await storeEdits())) return false;
         const isHome = id === HOME_PAGE_ID;
-        const entryId = isHome ? homeEntryId : id;
-        const rev = isHome ? homeRev() : siteRevisions()[id];
-        if (entryId === null || rev === null || rev === undefined) {
-          setPublishNote(publishFailureNote("conflict"));
-          return false;
+        // Home's blocks are saved by the design's queue; a sub-page by the sub-pages' queue.
+        const held = await storeAndHold({ home: isHome, site: !isHome });
+        if (!held) return false;
+        try {
+          const entryId = isHome ? homeEntryId : id;
+          const rev = isHome ? homeRev() : siteRevisions()[id];
+          if (entryId === null || rev === null || rev === undefined) {
+            setPublishNote(publishFailureNote("conflict"));
+            return false;
+          }
+          // What is stored now is what the server publishes: an edit typed while it answers is not live.
+          const snapshot = savedDraft() ?? draftRef.current;
+          const form = isHome ? undefined : snapshotSiteForms().get(id);
+          const result = await publishSitePage(pageId, entryId, rev);
+          if (!result.ok) {
+            showRefusal(result);
+            return false;
+          }
+          if (isHome) {
+            adoptHomeRev(result.rev, rev);
+            const blocks = toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)).blocks;
+            setPublished((current) =>
+              current.doc ? { has: true, doc: { ...current.doc, blocks } } : current,
+            );
+            dispatch({ type: "publish/clear-errors" });
+          } else {
+            markSitePagePublished(id, { rev: result.rev, sent: rev, form });
+            clearSiteErrors();
+          }
+          setPublishedToken((token) => (token ?? 0) + 1);
+          return true;
+        } finally {
+          held.release();
         }
-        // What is stored now is what the server publishes: an edit typed while it answers is not live.
-        const snapshot = savedDraft() ?? draftRef.current;
-        const form = isHome ? undefined : snapshotSiteForms().get(id);
-        const result = await publishSitePage(pageId, entryId, rev);
-        if (!result.ok) {
-          showRefusal(result);
-          return false;
-        }
-        if (isHome) {
-          // The rev the server answered, unless a save landed meanwhile and holds a newer one.
-          adoptHomeRev(result.rev, rev);
-          const blocks = toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)).blocks;
-          setPublished((current) =>
-            current.doc ? { has: true, doc: { ...current.doc, blocks } } : current,
-          );
-          dispatch({ type: "publish/clear-errors" });
-        } else {
-          markSitePagePublished(id, { rev: result.rev, sent: rev, form });
-          clearSiteErrors();
-        }
-        setPublishedToken((token) => (token ?? 0) + 1);
-        return true;
       }),
     [
       runPublish,
-      storeEdits,
+      storeAndHold,
       homeEntryId,
       homeRev,
       siteRevisions,
@@ -505,24 +559,30 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const publishDesignOnly = useCallback(
     () =>
       runPublish("design", async () => {
-        if (!(await storeEdits())) return false;
-        const snapshot = savedDraft() ?? draftRef.current;
-        const result = await publishDesign(pageId, revKey());
-        if (!result.ok) {
-          showRefusal(result);
-          return false;
+        const held = await storeAndHold({ home: true, site: false });
+        if (!held) return false;
+        try {
+          const snapshot = savedDraft() ?? draftRef.current;
+          // Publish design moves no rev (the design's rev is the draft's own): nothing to adopt.
+          const result = await publishDesign(pageId, revKey());
+          if (!result.ok) {
+            showRefusal(result);
+            return false;
+          }
+          const next = toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref));
+          setPublished((current) => ({
+            has: true,
+            doc: { ...next, blocks: current.doc?.blocks ?? [] },
+          }));
+          setPublishedAt(result.publishedAt);
+          dispatch({ type: "publish/clear-errors" });
+          setPublishedToken((token) => (token ?? 0) + 1);
+          return true;
+        } finally {
+          held.release();
         }
-        const next = toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref));
-        setPublished((current) => ({
-          has: true,
-          doc: { ...next, blocks: current.doc?.blocks ?? [] },
-        }));
-        setPublishedAt(result.publishedAt);
-        dispatch({ type: "publish/clear-errors" });
-        setPublishedToken((token) => (token ?? 0) + 1);
-        return true;
       }),
-    [runPublish, storeEdits, savedDraft, pageId, revKey, showRefusal, themeTokensOf],
+    [runPublish, storeAndHold, savedDraft, pageId, revKey, showRefusal, themeTokensOf],
   );
 
   /** Retry on the publish note: the action that failed, not always Publish all. */

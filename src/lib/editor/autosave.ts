@@ -74,6 +74,20 @@ export interface AutosaveOptions {
   now?: () => number;
 }
 
+/**
+ * A hold on a save queue (M15-10): while it stands, no write is SENT. Edits are still taken
+ * (`schedule` works, typing is never blocked) and wait in the queue; `release()` lets the newest one
+ * go. Publish holds the queues it covers for the length of its request, so a save and a publish of
+ * the same entry never overlap: the publish can move the entry's rev, and a save sent meanwhile would
+ * carry the rev from before and be refused as a conflict (or, landing first, make the publish one).
+ */
+export interface SaveHold {
+  /** Resolves once the write that was already on the wire when the hold was taken has been answered. */
+  settled: Promise<void>;
+  /** Lets queued writes go. Safe to call twice. */
+  release: () => void;
+}
+
 export const AUTOSAVE_DEBOUNCE_MS = 800;
 export const AUTOSAVE_RETRY_DELAYS_MS = [1000, 2000, 4000, 5000] as const;
 
@@ -100,6 +114,11 @@ export class AutosaveQueue {
   private current: SaveStatus = "idle";
   private blockedSave: BlockedSave | null = null;
   private disposed = false;
+  private holds = 0;
+  private gate: Promise<void> | null = null;
+  private openGate: (() => void) | null = null;
+  /** The write on the wire (past the gate), as opposed to `inFlight`, which may be waiting at it. */
+  private sending: Promise<void> | null = null;
 
   constructor(options: AutosaveOptions) {
     this.save = options.save;
@@ -182,6 +201,30 @@ export class AutosaveQueue {
     }
   }
 
+  /** Stops writes from being sent until the hold is released (see `SaveHold`). Holds nest. */
+  hold(): SaveHold {
+    this.holds += 1;
+    if (this.gate === null) {
+      this.gate = new Promise<void>((open) => {
+        this.openGate = open;
+      });
+    }
+    let released = false;
+    return {
+      settled: (this.sending ?? Promise.resolve()).catch(() => undefined),
+      release: () => {
+        if (released) return;
+        released = true;
+        this.holds -= 1;
+        if (this.holds > 0) return;
+        const open = this.openGate;
+        this.gate = null;
+        this.openGate = null;
+        open?.();
+      },
+    };
+  }
+
   dispose(): void {
     this.disposed = true;
     this.cancelTimer();
@@ -217,11 +260,23 @@ export class AutosaveQueue {
   /** One write of the newest draft. Never runs two at once. */
   private run(): Promise<void> {
     if (this.inFlight) return this.inFlight;
-    const work = this.write().finally(() => {
+    const work = this.gated().finally(() => {
       this.inFlight = null;
     });
     this.inFlight = work;
     return work;
+  }
+
+  /** Waits out a hold, then writes: what is sent is the newest draft at that moment. */
+  private async gated(): Promise<void> {
+    while (this.gate !== null) await this.gate;
+    const sending = this.write();
+    this.sending = sending;
+    try {
+      await sending;
+    } finally {
+      this.sending = null;
+    }
   }
 
   private async write(): Promise<void> {

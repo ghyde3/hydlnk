@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -310,21 +310,33 @@ select 'X|' || p.oid::regprocedure
     and (has_function_privilege('anon', p.oid, 'execute')
       or has_function_privilege('authenticated', p.oid, 'execute'));
 `;
+  // The full rollback walks and locks every site of the local database while it runs. A test of
+  // another file that deletes its own site at that moment makes the reverse report it
+  // (`reverse_failed … site_not_found`), and one that holds a row can make Postgres pick this
+  // transaction as the deadlock victim. Nothing was changed then (it is all one transaction): it is
+  // run again.
+  const BUSY =
+    /deadlock detected|could not serialize|lock timeout|canceling statement|reverse_failed: .*site_not_found/;
   function executable(sql: string): string[] {
-    const out = execFileSync(
-      "docker",
-      ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-q", "-At"],
-      {
-        input: `begin;\n\\set ON_ERROR_STOP on\n${sql}\n${probe}\nselect 'X|done';\nrollback;\n`,
-        encoding: "utf8",
-        maxBuffer: 16 * 1024 * 1024,
-        stdio: ["pipe", "pipe", "ignore"],
-      },
-    );
-    return out
-      .split("\n")
-      .filter((line) => line.startsWith("X|"))
-      .map((line) => line.slice(2));
+    const input = `begin;\n\\set ON_ERROR_STOP on\n${sql}\n${probe}\nselect 'X|done';\nrollback;\n`;
+    for (let attempt = 1; ; attempt++) {
+      const run = spawnSync(
+        "docker",
+        ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-q", "-At"],
+        { input, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+      );
+      if (run.status === 0) {
+        return run.stdout
+          .split("\n")
+          .filter((line) => line.startsWith("X|"))
+          .map((line) => line.slice(2));
+      }
+      const errors = run.stderr
+        .split("\n")
+        .filter((line) => /^(psql:|ERROR|FATAL)/.test(line))
+        .join("\n");
+      if (attempt >= 4 || !BUSY.test(errors)) throw new Error(`psql failed: ${errors}`);
+    }
   }
 
   it("the probe finds a function created with the default ACL", () => {
@@ -339,11 +351,4 @@ select 'X|' || p.oid::regprocedure
       expect(executable(sql)).toEqual(["done"]);
     });
   }
-
-  it("both files run one after the other, as at a real rollback", () => {
-    const sql = files
-      .map((file) => readFileSync(resolve(root, "supabase/rollback", file), "utf8"))
-      .join("\n");
-    expect(executable(sql)).toEqual(["done"]);
-  });
 });

@@ -64,6 +64,24 @@ export type PublishResult =
   | { ok: false; errors: PublishError[]; reason?: PublishFailureReason };
 
 /**
+ * What Publish all changes left, read by `publish_site_revs` under the publish's own locks (M15-10):
+ * the design's rev key and the rev of every live page entry, Home's included. The publish can move an
+ * entry's rev without changing its draft, and the editor adopts exactly these values: it never reads
+ * the revs again on its own, where another writer's rev could slip in and be saved over.
+ */
+export type PublishedRevs = { designRev: string | null; entries: Record<string, number> };
+
+/** The answer of Publish all changes. */
+export type SitePublishResult =
+  | { ok: true; publishedAt: string; revs: PublishedRevs }
+  | { ok: false; errors: PublishError[]; reason?: PublishFailureReason };
+
+const publishedRevsSchema = z.object({
+  design_rev: z.string().nullable(),
+  entries: z.record(z.string(), z.number().int().min(1)),
+});
+
+/**
  * What the editor last loaded or saved (M15-10): the design's rev key (`pages.draft->>rev`) and the
  * rev of each page entry it holds, Home's included. Publish all changes refuses with `conflict` when
  * any of them moved. Absent (MCP): no rev is checked.
@@ -150,7 +168,7 @@ const refuse = (
 export async function publishPageCore(
   input: { pageId: unknown; userId: string | null; expected?: PublishExpected },
   deps: PublishDeps = {},
-): Promise<PublishResult> {
+): Promise<SitePublishResult> {
   if (!input.userId || !UID.test(input.userId)) return refuse("unauthorized");
   const userId = input.userId;
   const pageId = pageIdSchema.safeParse(input.pageId);
@@ -363,7 +381,8 @@ export async function publishPageCore(
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
   // Home and every sub-page in one transaction, or nothing (M11-05). The function checks the owner
   // itself and that the pages given are exactly the site's current sub-pages.
-  const written = await admin.rpc("publish_site", {
+  // `publish_site_revs` is `publish_site` in the same transaction, answering the revs it left.
+  const written = await admin.rpc("publish_site_revs", {
     p_page_id: pageId.data,
     p_owner_id: userId,
     p_home: home as unknown as Json,
@@ -396,7 +415,15 @@ export async function publishPageCore(
     console.error("[publish] writing the published site failed", message);
     return refuse("error");
   }
-  return { ok: true, publishedAt };
+  // The site IS published by now. An answer that does not read (it always should) leaves the editor
+  // with the revs it sent: its next save of a page the publish moved is then a conflict, never an
+  // overwrite.
+  const left = publishedRevsSchema.safeParse(written.data);
+  if (!left.success) console.error("[publish] publish_site_revs answered no revs");
+  const revs: PublishedRevs = left.success
+    ? { designRev: left.data.design_rev, entries: left.data.entries }
+    : { designRev: expectedRevs?.design ?? null, entries: expectedRevs?.entries ?? {} };
+  return { ok: true, publishedAt, revs };
 }
 
 /**

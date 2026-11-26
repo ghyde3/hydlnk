@@ -131,5 +131,11 @@ export function recording(admin: SupabaseClient): {
 }
 
 /** The functions that write a published copy: what a refused gate must never have called. */
-export const WRITERS = ["publish_site", "publish_site_page", "publish_design"];
+export const WRITERS = [
+  "publish_site",
+  // Publish all changes goes through this one since A2: `publish_site` answering the revs it left.
+  "publish_site_revs",
+  "publish_site_page",
+  "publish_design",
+];
 export const wrote = (calls: readonly string[]) => calls.filter((name) => WRITERS.includes(name));

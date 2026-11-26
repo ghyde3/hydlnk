@@ -86,7 +86,7 @@ describe.skipIf(!run)("M15-12 a second writer between the gate's read and its wr
     const site = await tools.site("pc1", [link("home-link-001")], owners);
     const a = await tools.sub(site, "Items", "items", [link("a-link-00001", "Read")]);
     const expected = await held(site, [site.homeId, a]);
-    const client = racing(admin, "publish_site", () =>
+    const client = racing(admin, "publish_site_revs", () =>
       save(a, [link("a-link-00001", "Saved since")]),
     );
     expect(await publishAll(site, expected, client)).toEqual(conflict);
@@ -97,11 +97,11 @@ describe.skipIf(!run)("M15-12 a second writer between the gate's read and its wr
   it("Publish all changes: Home's blocks or the design saved after the read are a conflict too", async () => {
     const site = await tools.site("pc2", [link("home-link-001", "Read")], owners);
     const a = await tools.sub(site, "Items", "items", [link("a-link-00001")]);
-    const viaHome = racing(admin, "publish_site", () =>
+    const viaHome = racing(admin, "publish_site_revs", () =>
       save(site.homeId, [link("home-link-001", "Saved since")]),
     );
     expect(await publishAll(site, await held(site, [site.homeId, a]), viaHome)).toEqual(conflict);
-    const viaDesign = racing(admin, "publish_site", () => tools.setDesign(site, { rev: 77 }));
+    const viaDesign = racing(admin, "publish_site_revs", () => tools.setDesign(site, { rev: 77 }));
     expect(await publishAll(site, await held(site, [site.homeId, a]), viaDesign)).toEqual(conflict);
     expect((await tools.pageRow(site)).published).toBeNull();
     expect((await tools.entry(site.homeId)).published).toBeNull();
@@ -110,7 +110,7 @@ describe.skipIf(!run)("M15-12 a second writer between the gate's read and its wr
   it("Publish all changes without revs (MCP) still publishes what the gate read", async () => {
     const site = await tools.site("pc3", [link("home-link-001")], owners);
     const a = await tools.sub(site, "Items", "items", [link("a-link-00001", "Read")]);
-    const client = racing(admin, "publish_site", () =>
+    const client = racing(admin, "publish_site_revs", () =>
       save(a, [link("a-link-00001", "Saved since")]),
     );
     expect(await publishAll(site, undefined, client)).toMatchObject({ ok: true });
@@ -139,13 +139,13 @@ describe.skipIf(!run)("M15-12 a second writer between the gate's read and its wr
     const expected = await held(site, [site.homeId, a]);
     const spy = recording(admin);
     expect(await publishAll(site, expected, spy.client)).toMatchObject({ ok: true });
-    expect(spy.args.publish_site).toMatchObject({
+    expect(spy.args.publish_site_revs).toMatchObject({
       p_expected_revs: { design: expected.designRev, entries: expected.entries },
     });
     // MCP's call sends none: the function then checks no rev.
     const mcp = recording(admin);
     expect(await publishAll(site, undefined, mcp.client)).toMatchObject({ ok: true });
-    expect(mcp.args.publish_site).not.toHaveProperty("p_expected_revs");
+    expect(mcp.args.publish_site_revs).not.toHaveProperty("p_expected_revs");
   });
 
   it("Publish page: another page going live with the same block id meanwhile is refused, naming the block", async () => {

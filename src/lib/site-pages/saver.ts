@@ -1,5 +1,6 @@
 import type { BlockedLinkError } from "@/lib/blocklist/error";
 import { LIMITS, draftSubPageSchema, type SubPageDraft } from "@/lib/document";
+import type { SaveHold } from "@/lib/editor/autosave";
 import { jsonbTextBytes } from "@/lib/editor/size";
 
 /**
@@ -87,6 +88,11 @@ export class SubPageSaver {
   private inFlight: Promise<void> | null = null;
   private current: SubSaveStatus = "idle";
   private disposed = false;
+  private holds = 0;
+  private gate: Promise<void> | null = null;
+  private openGate: (() => void) | null = null;
+  /** The write on the wire (past the gate), as opposed to `inFlight`, which may be waiting at it. */
+  private sending: Promise<void> | null = null;
 
   constructor(options: SubPageSaverOptions) {
     this.save = options.save;
@@ -158,6 +164,30 @@ export class SubPageSaver {
     }
   }
 
+  /** Stops writes from being sent until the hold is released (see `SaveHold`). Holds nest. */
+  hold(): SaveHold {
+    this.holds += 1;
+    if (this.gate === null) {
+      this.gate = new Promise<void>((open) => {
+        this.openGate = open;
+      });
+    }
+    let released = false;
+    return {
+      settled: (this.sending ?? Promise.resolve()).catch(() => undefined),
+      release: () => {
+        if (released) return;
+        released = true;
+        this.holds -= 1;
+        if (this.holds > 0) return;
+        const open = this.openGate;
+        this.gate = null;
+        this.openGate = null;
+        open?.();
+      },
+    };
+  }
+
   dispose(): void {
     this.disposed = true;
     this.cancelTimer();
@@ -186,11 +216,23 @@ export class SubPageSaver {
 
   private run(): Promise<void> {
     if (this.inFlight) return this.inFlight;
-    const work = this.write().finally(() => {
+    const work = this.gated().finally(() => {
       this.inFlight = null;
     });
     this.inFlight = work;
     return work;
+  }
+
+  /** Waits out a hold, then writes: what is sent is the newest draft at that moment. */
+  private async gated(): Promise<void> {
+    while (this.gate !== null) await this.gate;
+    const sending = this.write();
+    this.sending = sending;
+    try {
+      await sending;
+    } finally {
+      this.sending = null;
+    }
   }
 
   /** Writes every dirty page once; a page that cannot be sent is flagged and the rest still go. Stops at a failure worth retrying. */

@@ -16,22 +16,18 @@ export interface HomeEntryRef {
  * The draft save function, with Home's entry rev as this tab holds it (M15-10). Publish page and
  * Publish all changes can move Home's entry rev without changing its draft; the editor adopts the
  * rev the server answered (`adoptHomeRev`), or its next save of Home's blocks would be a conflict.
+ * It never re-reads the rev on its own after a publish: that read is unlocked, and a rev another
+ * writer made in between would be adopted and that writer's blocks saved over.
  */
 export type DraftSaver = SaveFn & {
   /** Home's entry rev the next save is checked against, or null when the site has no Home entry. */
   homeRev: () => number | null;
   /**
-   * Take the rev a Publish page of Home answered, but only while the rev held is still `sent`, the
-   * one that publish was checked against. A save that landed while the publish was answering has
-   * moved the entry on, and its rev is the newer one: adopting the publish's would make the next save
-   * a conflict.
+   * Take the rev a publish answered for Home's entry, but only while the rev held is still `sent`,
+   * the one that publish was checked against. Saves wait for a publish's answer (`SaveHold`), so the
+   * two are equal; the check stays as a second line of defense.
    */
   adoptHomeRev: (rev: number, sent: number) => void;
-  /**
-   * Re-read Home's entry rev (after Publish all changes, which can move it) and adopt it, unless a
-   * save of this tab moved the held rev while the read was out (that save's answer is the newer one).
-   */
-  refreshHomeRev: () => Promise<void>;
 };
 
 /**
@@ -124,12 +120,6 @@ export function createDraftSaver(
     homeRev: () => (home ? homeRev : null),
     adoptHomeRev: (rev: number, sent: number) => {
       if (home && homeRev === sent && Number.isSafeInteger(rev) && rev >= 1) homeRev = rev;
-    },
-    refreshHomeRev: async () => {
-      if (!home) return;
-      const before = homeRev;
-      const row = (await readEntryRevs(pageId))?.find((entry) => entry.id === home.entryId);
-      if (row && homeRev === before) homeRev = row.rev;
     },
   });
 }

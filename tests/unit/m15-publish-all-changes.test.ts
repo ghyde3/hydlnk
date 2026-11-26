@@ -60,7 +60,7 @@ describe.skipIf(!run)("M15-10 publishPageCore with expected revs (local Supabase
     expect(await publish(site, await held(site, [site.homeId, a]), spy.client)).toMatchObject({
       ok: true,
     });
-    expect(wrote(spy.calls)).toEqual(["publish_site"]);
+    expect(wrote(spy.calls)).toEqual(["publish_site_revs"]);
     expect((await tools.entry(a)).published).not.toBeNull();
   });
 

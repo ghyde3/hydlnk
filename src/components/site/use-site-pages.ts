@@ -42,6 +42,7 @@ import {
   type SitePageItem,
   type SubPageSummary,
 } from "@/lib/site-pages/pages";
+import type { SaveHold } from "@/lib/editor/autosave";
 import { SubPageSaver, type SubBlocked, type SubSaveStatus } from "@/lib/site-pages/saver";
 import { createSubPageRevisions, createSubPageSaveFn } from "@/lib/site-pages/save-client";
 import {
@@ -120,6 +121,13 @@ export interface SiteValue {
   limitMessage: string;
   /** Writes the sub-pages' pending edits; true when everything is stored. */
   flush: () => Promise<boolean>;
+  /**
+   * Hold the sub-pages' save queue while a publish that covers a sub-page is out (M15-10): edits are
+   * taken and wait, nothing is sent until `release()`. See `SaveHold`.
+   */
+  holdSaves: () => SaveHold;
+  /** True while a sub-page edit is not stored yet (asked right after a hold: was something typed since the flush). */
+  hasUnsaved: () => boolean;
   saveStatus: SubSaveStatus;
   /** A sub-page differs from what is live (an edit, or never published): Publish has something to do. */
   dirty: boolean;
@@ -131,10 +139,15 @@ export interface SiteValue {
   snapshotForms: () => ReadonlyMap<string, SubPagePublish>;
   /**
    * Called after a successful Publish all changes with the forms that were published (`snapshotForms`
-   * taken before the call). Resolves once the pages' revs are re-read: Publish can move them, and the
-   * next Publish page or Restore must send the new ones.
+   * taken before the call), the revs the publish answered (what it left, under its locks) and the
+   * revs it was sent with. Each page takes the answered rev while it still holds the one sent. The
+   * revs are never read again from here: a rev another writer made must stay a conflict.
    */
-  markPublished: (published: ReadonlyMap<string, SubPagePublish>) => Promise<void>;
+  markPublished: (
+    published: ReadonlyMap<string, SubPagePublish>,
+    revs: Readonly<Record<string, number>>,
+    sent: Readonly<Record<string, number>>,
+  ) => void;
   /**
    * Called after Publish page on one sub-page (M15-10): `form` (from `snapshotForms`, taken before
    * the call) is live. `rev` is the rev the server answered and `sent` the one the publish was checked
@@ -539,6 +552,11 @@ export function useSitePages(args: {
   );
 
   const flush = useCallback(async () => (await saverRef.current?.flush()) ?? true, []);
+  const holdSaves = useCallback(
+    (): SaveHold => saverRef.current?.hold() ?? { settled: Promise.resolve(), release: () => {} },
+    [],
+  );
+  const hasUnsaved = useCallback(() => saverRef.current?.hasUnsaved ?? false, []);
 
   const forms = useMemo(() => {
     const map = new Map<string, SubPagePublish>();
@@ -567,14 +585,17 @@ export function useSitePages(args: {
     (): ReadonlyMap<string, SubPagePublish> => new Map(formsRef.current),
     [],
   );
-  const markPublished = useCallback(
-    async (published: ReadonlyMap<string, SubPagePublish>) => {
+  const markPublished = useCallback<SiteValue["markPublished"]>(
+    (published, revs, sent) => {
       // What went live is what was stored when Publish was sent, not what has been typed since.
       setPublishedForms(new Map(published));
       setLivePaths(new Map([...published].map(([id, form]) => [id, form.path])));
-      await revisions.refresh(siteId);
+      for (const [id, rev] of Object.entries(revs)) {
+        const was = sent[id];
+        if (was !== undefined) revisions.adopt(id, rev, was);
+      }
     },
-    [revisions, siteId],
+    [revisions],
   );
 
   const markPagePublished = useCallback<SiteValue["markPagePublished"]>(
@@ -602,9 +623,10 @@ export function useSitePages(args: {
 
   const markUnpublished = useCallback(() => {
     setPublishedForms(new Map());
+    // Unpublish moves no rev (unpublish_site clears the published copies only): nothing to adopt,
+    // and nothing is re-read.
     setLivePaths(new Map());
-    void revisions.refresh(siteId);
-  }, [revisions, siteId]);
+  }, []);
 
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({
@@ -663,6 +685,8 @@ export function useSitePages(args: {
     limit,
     limitMessage,
     flush,
+    holdSaves,
+    hasUnsaved,
     saveStatus,
     dirty,
     snapshotForms,

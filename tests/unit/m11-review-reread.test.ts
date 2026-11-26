@@ -46,9 +46,7 @@ describe("HL009 in the sub-page autosave", () => {
     vi.doMock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => ({}) }));
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () => new Response(JSON.stringify({ kind: "storage-full" }), { status: 403 }),
-      ),
+      vi.fn(async () => new Response(JSON.stringify({ kind: "storage-full" }), { status: 403 })),
     );
     const { createSubPageRevisions, createSubPageSaveFn } =
       await import("@/lib/site-pages/save-client");
@@ -132,7 +130,7 @@ describe.skipIf(!run)("HL009 in Publish and the click index (local Supabase)", (
       get(target, prop, receiver) {
         if (prop === "rpc")
           return async (name: string, args: unknown) =>
-            name === "publish_site"
+            name === "publish_site_revs"
               ? { data: null, error: { code: "HL009", message: "cap" } }
               : target.rpc(name, args as never);
         const value = Reflect.get(target, prop, receiver);

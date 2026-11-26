@@ -11,6 +11,7 @@ import {
   type PagePublishResult,
   type PublishExpected,
   type PublishResult,
+  type SitePublishResult,
 } from "./core";
 import { PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS, publishRateKey } from "./limits";
 import { pageTag } from "./tags";
@@ -59,7 +60,7 @@ async function published(pageId: string, userId: string | null): Promise<void> {
 export async function publishPage(
   pageId: string,
   expected?: PublishExpected,
-): Promise<PublishResult> {
+): Promise<SitePublishResult> {
   const who = await publisher();
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishPageCore({
