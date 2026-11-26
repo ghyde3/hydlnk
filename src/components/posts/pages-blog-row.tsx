@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { Field, FORM_BUTTON, controlClass } from "@/components/blocks/field";
 import type { TypeSummary } from "@/lib/content";
@@ -22,12 +22,18 @@ export function PagesBlogRow({
   siteId,
   menuItems,
   onAddToMenu,
+  onRemoveFromMenu,
+  onType,
 }: {
   siteId: string;
   /** The ids in the site's draft menu. */
   menuItems: readonly string[];
   /** Appends the Post type's id to the draft menu. */
   onAddToMenu: (typeId: string) => void;
+  /** Takes the Post type's id out of the draft menu. */
+  onRemoveFromMenu?: (typeId: string) => void;
+  /** The Post type as the server last answered it (loaded, or just turned on): the menu's preview draws it. */
+  onType?: (type: TypeSummary) => void;
 }) {
   const suspended = useAccountSuspended();
   const [type, setType] = useState<TypeSummary | null>(null);
@@ -37,13 +43,21 @@ export function PagesBlogRow({
   const [path, setPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // The latest `onType`, so the load below does not run again when the parent redraws.
+  const typeSeen = useRef(onType);
+  useEffect(() => {
+    typeSeen.current = onType;
+  }, [onType]);
+
   useEffect(() => {
     let stale = false;
     void fetchTypes(siteId).then((out) => {
       if (stale) return;
       if (out.kind === "ok") {
-        setType(out.types.find((item) => item.key === "post") ?? null);
+        const post = out.types.find((item) => item.key === "post") ?? null;
+        setType(post);
         setPosts(out.usage.posts);
+        if (post) typeSeen.current?.(post);
       }
       setReady(true);
     });
@@ -64,6 +78,7 @@ export function PagesBlogRow({
     setBusy(false);
     if (out.kind === "ok") {
       setType(out.type);
+      typeSeen.current?.(out.type);
       setPath(null);
       return;
     }
@@ -105,7 +120,18 @@ export function PagesBlogRow({
             <span data-testid="pages-blog-menu-state">{inMenu ? "In menu" : "Not in menu"}</span>
           </span>
         </Link>
-        {inMenu ? null : (
+        {inMenu ? (
+          <button
+            type="button"
+            data-testid="pages-blog-menu-remove"
+            disabled={suspended}
+            title={suspended ? SUSPENDED_REASON : undefined}
+            onClick={() => onRemoveFromMenu?.(type.typeId)}
+            className={`${FORM_BUTTON} self-start`}
+          >
+            Remove Blog from the menu
+          </button>
+        ) : (
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <button
               type="button"

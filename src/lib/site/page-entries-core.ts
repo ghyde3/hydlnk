@@ -61,6 +61,52 @@ async function pageTypeId(client: Db, siteId: string): Promise<string | null> {
   return data?.id ?? null;
 }
 
+/** A content type of the site that has an archive (never the page type), as the menu needs it. */
+export interface ArchiveType {
+  typeId: string;
+  key: string;
+  /** The archive's one-segment path, without a slash. */
+  path: string;
+  labelPlural: string;
+  /** False while the type is off: its menu item is kept in the stored menu and hidden on the live site. */
+  enabled: boolean;
+}
+
+/**
+ * The site's content types that have an archive path, on or off (M16-08): the ids a menu item may
+ * name besides the site's pages. Publish keeps such an item in Home's menu (`homeForSite`); the
+ * live site draws it only while the type is on. The caller's client decides who may read: the
+ * secret-key client after an ownership check, or the owner's own session under RLS.
+ */
+export async function listArchiveTypesWithClient(
+  client: Db,
+  siteId: string,
+): Promise<ArchiveType[]> {
+  if (!UUID.test(siteId)) return [];
+  const { data, error } = await client
+    .from("content_types")
+    .select("id, key, label_plural, archive_path, enabled")
+    .eq("site_id", siteId)
+    .neq("key", "page")
+    .not("archive_path", "is", null)
+    .order("position", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) throw new Error(`Loading the archives of site ${siteId} failed: ${error.message}`);
+  return (data ?? []).flatMap((row): ArchiveType[] =>
+    typeof row.archive_path === "string"
+      ? [
+          {
+            typeId: row.id,
+            key: row.key,
+            path: row.archive_path,
+            labelPlural: row.label_plural,
+            enabled: row.enabled,
+          },
+        ]
+      : [],
+  );
+}
+
 const isDocument = (value: unknown): value is EntryDocument =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 

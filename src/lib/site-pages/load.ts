@@ -6,7 +6,11 @@ import {
   type SubPageDraft,
   type SubPagePublish,
 } from "@/lib/document";
-import { listDraftPagesWithClient } from "@/lib/site/page-entries-core";
+import {
+  listArchiveTypesWithClient,
+  listDraftPagesWithClient,
+  type ArchiveType,
+} from "@/lib/site/page-entries-core";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /** One sub-page as the editor opens it. */
@@ -86,4 +90,18 @@ export async function countTrashedPages(siteId: string): Promise<number> {
     return 0;
   }
   return count ?? 0;
+}
+
+/**
+ * The site's types that have an archive (the blog), on or off, for the editor's menu (M16-08): read
+ * with the signed-in user's own session under RLS. A failed read answers none: the workspace opens,
+ * the menu just does not show the archive until the next load (Publish reads its own list).
+ */
+export async function loadSiteArchives(siteId: string): Promise<ArchiveType[]> {
+  try {
+    return await listArchiveTypesWithClient(await createServerSupabase(), siteId);
+  } catch (error) {
+    console.error("[workspace] loading the site's archives failed", error);
+    return [];
+  }
 }

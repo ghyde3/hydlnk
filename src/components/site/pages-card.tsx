@@ -47,7 +47,7 @@ import { ToggleRow } from "./toggle-row";
  * (`PagesBlogRow`, which loads its own data).
  */
 export function PagesCard() {
-  const { site, plan, homeStatus, pageId, draft, editDraft } = useWorkspace();
+  const { site, plan, homeStatus, pageId, draft } = useWorkspace();
   const suspended = useAccountSuspended();
   const headingId = useId();
   const [adding, setAdding] = useState(false);
@@ -77,14 +77,23 @@ export function PagesCard() {
       <PagesBlogRow
         siteId={pageId}
         menuItems={resolveNav(draft.nav).items}
-        onAddToMenu={(typeId) =>
-          editDraft((current) => {
-            const nav = resolveNav(current.nav);
-            return nav.items.includes(typeId)
-              ? current
-              : { ...current, nav: { ...nav, items: [...nav.items, typeId] } };
-          }, "menu")
-        }
+        onAddToMenu={(typeId) => {
+          // The same edit as a page's "Show in menu" (`addToNav`, with the menu's item limit).
+          if (!resolveNav(draft.nav).items.includes(typeId)) site.toggleMenu(typeId);
+        }}
+        onRemoveFromMenu={(typeId) => {
+          if (resolveNav(draft.nav).items.includes(typeId)) site.toggleMenu(typeId);
+        }}
+        onType={(type) => {
+          if (type.archivePath !== null)
+            site.setArchive({
+              typeId: type.typeId,
+              key: type.key,
+              path: type.archivePath,
+              labelPlural: type.labelPlural,
+              enabled: type.enabled,
+            });
+        }}
       />
 
       {site.items
