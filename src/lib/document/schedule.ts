@@ -80,16 +80,22 @@ export function previewBlocks<B extends { schedule?: unknown }>(
   });
 }
 
+/** How far the site's schedule clock may lead the server's when it is read (the database caps it the same way). */
+export const SCHEDULE_CLOCK_MAX_LEAD_MS = 60_000;
+
 /**
  * The instant a page is generated for: the later of the server's clock and the site's schedule
  * clock (`pages.schedule_clock`, set by the boundary sweep from the database clock before it expires
  * the site). So a function whose clock is behind Postgres still renders the state the sweep expired
- * the page for (clock skew, M20-04).
+ * the page for (clock skew, M20-04). The schedule clock counts for at most a minute ahead: a clock
+ * that once ran ahead never holds a site's blocks in the future.
  */
 export function effectiveNow(serverNow: number, clock: string | null | undefined): number {
   if (typeof clock !== "string") return serverNow;
   const ms = Date.parse(clock);
-  return Number.isFinite(ms) && ms > serverNow ? ms : serverNow;
+  return Number.isFinite(ms) && ms > serverNow
+    ? Math.min(ms, serverNow + SCHEDULE_CLOCK_MAX_LEAD_MS)
+    : serverNow;
 }
 
 export type WindowState = "none" | "upcoming" | "showing" | "ended";
@@ -114,9 +120,9 @@ export function hasWindow(schedule: BlockSchedule | undefined | null): boolean {
  * times only, in that key order, or nothing at all when neither is set. Pure: never reads the clock,
  * so an ended block stays in the published copy and the renderer decides.
  */
-export function publishWindow(
-  schedule: BlockSchedule | undefined | null,
-): { schedule?: BlockSchedule } {
+export function publishWindow(schedule: BlockSchedule | undefined | null): {
+  schedule?: BlockSchedule;
+} {
   if (!schedule || !hasWindow(schedule)) return {};
   return {
     schedule: {

@@ -34,8 +34,26 @@ export async function publishSitePageWithClient(
     publishedAt: string;
     source: ContentSource;
     fire?: Extract<PublishRun, { kind: "fire" }>;
+    /** Schedule (Wave E): the same write in `publish_dry_run`, rolled back; the same refusals. */
+    dryRun?: boolean;
   },
 ): Promise<SitePagePublishWrite> {
+  if (input.dryRun) {
+    const dry = await admin.rpc("publish_dry_run", {
+      p_entry_id: input.entryId,
+      p_owner_id: input.ownerId,
+      p_expected_rev: input.expectedRev,
+      p_published: input.published as Json,
+    });
+    return dry.error
+      ? {
+          ok: false,
+          code: dry.error.code ?? null,
+          message: dry.error.message ?? null,
+          detail: dry.error.details ?? null,
+        }
+      : { ok: true, rev: input.expectedRev, publishedAt: input.publishedAt, unchanged: false };
+  }
   const { data, error } = input.fire
     ? await admin.rpc("fire_scheduled_publish", {
         p_id: input.fire.scheduleId,

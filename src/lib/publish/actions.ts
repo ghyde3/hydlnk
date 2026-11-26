@@ -3,8 +3,8 @@
 import { updateTag } from "next/cache";
 import { siteAccessFor } from "@/lib/access/server";
 import { getSessionUser } from "@/lib/auth/session";
-import { cleanupMediaQuietly } from "@/lib/media/cleanup-admin";
 import { rateLimit } from "@/lib/rate-limit";
+import { afterPagePublished } from "./after-publish";
 import {
   publishDesignCore,
   publishPageCore,
@@ -15,7 +15,6 @@ import {
   type SitePublishResult,
 } from "./core";
 import { PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS, publishRateKey } from "./limits";
-import { pageTag } from "./tags";
 
 /**
  * Publish (M2-23): the Server Action behind the editor's Publish button. Takes the page id and
@@ -63,12 +62,9 @@ async function publisher(pageId: string): Promise<{
   return { userId: user.id, ownerId, limited: false };
 }
 
-/** After a publish that stands: the site's tag (Home, every page, the index), then the OWNER's media queue. */
+/** After a publish that stands: the shared step (the site's tag with `updateTag`, then the OWNER's media queue). */
 async function published(pageId: string, ownerId: string | null): Promise<void> {
-  // Tags are case-sensitive and page ids are stored lower case; the id is a GUID by now.
-  updateTag(pageTag(pageId.toLowerCase()));
-  // The Publish may have dropped the last reference to an image the live page used to show (M5-14).
-  if (ownerId) await cleanupMediaQuietly(ownerId);
+  await afterPagePublished({ siteId: pageId, ownerId }, updateTag);
 }
 
 export async function publishPage(

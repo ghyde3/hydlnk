@@ -11,7 +11,10 @@ import {
 import type { PublishError } from "@/lib/document";
 import { isEntryOfSite } from "@/lib/site-pages/entry-revisions-core";
 import { fromFailure, type EntrySaveBody } from "@/lib/site-pages/entry-save-core";
+import { rateLimit } from "@/lib/rate-limit";
 import type { Database } from "@/lib/supabase/database.types";
+import type { z } from "zod";
+import { cancelScheduleBody, scheduleBody } from "./schemas";
 import type { EntrySchedule, EntryScheduleSummary, ScheduleAction } from "./types";
 
 /**
@@ -20,14 +23,14 @@ import type { EntrySchedule, EntryScheduleSummary, ScheduleAction } from "./type
  * and the Origin (`gate`); this checks that the entry is a page or a post of the site in the URL (a
  * page entry of another site, another account's entry, a trashed one and a malformed id all answer
  * `missing`, one answer), then calls the content writer, which checks the owner and the suspension
- * and runs the Publish gate on the draft before it schedules a publish. Speaks the editor's save
- * vocabulary, plus `time`, `plan` and `limit`.
+ * and runs the Publish gate on the draft before it schedules a publish. Bodies are parsed with the
+ * shared schemas (./schemas); writes are rate limited per account (429 `limit`). Speaks the editor's
+ * save vocabulary, plus `time`, `plan` and `limit`.
  */
 
 type Admin = SupabaseClient<Database>;
 
 const SCHEDULABLE = ["page", "post"] as const;
-const ACTIONS: readonly ScheduleAction[] = ["publish", "unpublish"];
 const MISSING = { status: 404, body: { kind: "missing" } } as const;
 
 export type ScheduleBody =
@@ -54,9 +57,12 @@ const invalid = (message: string): ScheduleResponse => ({
 
 function refused(failure: ScheduleFailure): ScheduleResponse {
   const { status } = failure;
-  if (failure.error === "schedule_time") return { status, body: { kind: "time", message: failure.message } };
-  if (failure.error === "schedule_plan") return { status, body: { kind: "plan", message: failure.message } };
-  if (failure.error === "schedule_limit") return { status, body: { kind: "limit", message: failure.message } };
+  if (failure.error === "schedule_time")
+    return { status, body: { kind: "time", message: failure.message } };
+  if (failure.error === "schedule_plan")
+    return { status, body: { kind: "plan", message: failure.message } };
+  if (failure.error === "schedule_limit")
+    return { status, body: { kind: "limit", message: failure.message } };
   const out = fromFailure(failure) as ScheduleResponse;
   if (out.body.kind === "invalid" && failure.publishErrors) {
     return { status, body: { ...out.body, errors: failure.publishErrors } };
@@ -66,17 +72,33 @@ function refused(failure: ScheduleFailure): ScheduleResponse {
 
 const actor = (userId: string) => ({ userId, source: "editor" as const });
 
-/** The rev and the action of a body, or the 422 that says what is missing. */
-function readWrite(body: Record<string, unknown>): { rev: number; action: ScheduleAction } | ScheduleResponse {
-  const rev = body.rev;
-  if (typeof rev !== "number" || !Number.isSafeInteger(rev) || rev < 1) {
-    return invalid("Send the revision you are editing.");
-  }
-  const action = body.action;
-  if (typeof action !== "string" || !ACTIONS.includes(action as ScheduleAction)) {
-    return invalid("Choose publish or unpublish.");
-  }
-  return { rev, action: action as ScheduleAction };
+/** Schedule writes per account per minute (both POST and DELETE), the shared limiter (M20-12). */
+export const SCHEDULE_RATE_LIMIT = 30;
+export const SCHEDULE_RATE_WINDOW_SECONDS = 60;
+export const SCHEDULE_RATE_LIMITED = "Too many changes to schedules. Wait a minute and try again.";
+
+async function limited(userId: string): Promise<ScheduleResponse | null> {
+  const limit = await rateLimit(
+    `schedule-write:${userId}`,
+    SCHEDULE_RATE_LIMIT,
+    SCHEDULE_RATE_WINDOW_SECONDS,
+  );
+  return limit.allowed
+    ? null
+    : { status: 429, body: { kind: "limit", message: SCHEDULE_RATE_LIMITED } };
+}
+
+/** The body through the shared schema (src/lib/schedule/schemas.ts), or the answer that says what is wrong. */
+function readWrite<T extends { rev: number; action: ScheduleAction }>(
+  schema: z.ZodType<T>,
+  body: Record<string, unknown>,
+): T | ScheduleResponse {
+  const parsed = schema.safeParse(body);
+  if (parsed.success) return parsed.data;
+  const field = parsed.error.issues[0]?.path[0];
+  if (field === "rev") return invalid("Send the revision you are editing.");
+  if (field === "action") return invalid("Choose publish or unpublish.");
+  return { status: 400, body: { kind: "time", message: "Choose a date and time." } };
 }
 
 type Where = { userId: string; siteId: string; entryId: string };
@@ -94,19 +116,17 @@ export async function scheduleCore(
   admin: Admin,
   input: Where & { body: Record<string, unknown> },
 ): Promise<ScheduleResponse> {
-  const write = readWrite(input.body);
+  const write = readWrite(scheduleBody, input.body);
   if ("status" in write) return write;
-  const runAt = input.body.runAt;
-  if (typeof runAt !== "string" || runAt.length > 40) {
-    return { status: 400, body: { kind: "time", message: "Choose a date and time." } };
-  }
+  const refusedNow = await limited(input.userId);
+  if (refusedNow) return refusedNow;
   if (!(await isEntryOfSite(admin, input.siteId, input.entryId, SCHEDULABLE))) return MISSING;
   const out = await scheduleEntry({
     actor: actor(input.userId),
     entryId: input.entryId,
     expectedRev: write.rev,
     action: write.action,
-    runAt,
+    runAt: write.runAt,
   });
   if (!out.ok) return refused(out);
   return { status: 200, body: { kind: "ok", schedule: out.schedule } };
@@ -117,8 +137,10 @@ export async function cancelScheduleCore(
   admin: Admin,
   input: Where & { body: Record<string, unknown> },
 ): Promise<ScheduleResponse> {
-  const write = readWrite(input.body);
+  const write = readWrite(cancelScheduleBody, input.body);
   if ("status" in write) return write;
+  const refusedNow = await limited(input.userId);
+  if (refusedNow) return refusedNow;
   if (!(await isEntryOfSite(admin, input.siteId, input.entryId, SCHEDULABLE))) return MISSING;
   const out = await cancelSchedule({
     actor: actor(input.userId),

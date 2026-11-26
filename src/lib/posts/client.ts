@@ -1,7 +1,8 @@
 import type { EntrySummary, TermSummary, TypeSummary } from "@/lib/content/schemas/summaries";
 import type { RevisionSummary } from "@/lib/content/schemas/summaries";
 import type { PublishError } from "@/lib/document/publish";
-import type { EntrySchedule, EntryScheduleSummary, ScheduleAction } from "@/lib/schedule/types";
+import type { CancelScheduleRequest, ScheduleRequest } from "@/lib/schedule/schemas";
+import type { EntrySchedule, EntryScheduleSummary } from "@/lib/schedule/types";
 import type { PostEntry } from "./types";
 
 /**
@@ -67,7 +68,9 @@ function refusal(status: number, body: unknown): Refused {
         kind: "invalid",
         message: text(body.message),
         issues: issuesOf(body.issues),
-        ...(Array.isArray(body.errors) ? { errors: body.errors.filter(isRecord) as unknown as PublishError[] } : {}),
+        ...(Array.isArray(body.errors)
+          ? { errors: body.errors.filter(isRecord) as unknown as PublishError[] }
+          : {}),
       };
     case "time":
     case "plan":
@@ -179,17 +182,14 @@ export const fetchSiteSchedules = (siteId: string) =>
   request<{ entries: Record<string, EntryScheduleSummary> }>("GET", `${base(siteId)}/schedules`);
 
 /** Schedule (or reschedule) a publish of the saved draft at `rev`, or an unpublish, at `runAt` (UTC). */
-export const scheduleChange = (
-  siteId: string,
-  entryId: string,
-  change: { rev: number; action: ScheduleAction; runAt: string },
-) => request<{ schedule: EntrySchedule }>("POST", `${entry(siteId, entryId)}/schedule`, change);
+export const scheduleChange = (siteId: string, entryId: string, change: ScheduleRequest) =>
+  request<{ schedule: EntrySchedule }>("POST", `${entry(siteId, entryId)}/schedule`, change);
 
 /** Cancel the pending scheduled publish or unpublish. */
 export const cancelScheduledChange = (
   siteId: string,
   entryId: string,
-  change: { rev: number; action: ScheduleAction },
+  change: CancelScheduleRequest,
 ) => request<{ canceled: boolean }>("DELETE", `${entry(siteId, entryId)}/schedule`, change);
 
 export const fetchTerms = (siteId: string) =>

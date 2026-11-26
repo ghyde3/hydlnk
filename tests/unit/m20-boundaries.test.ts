@@ -24,10 +24,41 @@ function spyDb(due: string[][]) {
 }
 
 describe("M20-04 sweepBlockBoundaries", () => {
+  it("M20-04 a site is acknowledged only after its expiry has resolved, never while it is in flight", async () => {
+    const { db, calls } = spyDb([["site-a"]]);
+    let land!: () => void;
+    const invalidate = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          land = resolve;
+        }),
+    );
+    const sweep = sweepBlockBoundaries({ db, invalidate });
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    expect(invalidate).toHaveBeenCalledWith("site-a");
+    expect(calls.map(([name]) => name)).toEqual(["due_block_boundaries"]);
+    land();
+    expect(await sweep).toEqual({ sites: 1, failed: 0 });
+    expect(calls.map(([name]) => name)).toEqual([
+      "due_block_boundaries",
+      "advance_block_boundaries",
+    ]);
+  });
+
+  it("M20-04 an expiry that rejects (the cache refused it) is never acknowledged", async () => {
+    const { db, calls } = spyDb([["site-a"]]);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const invalidate = vi.fn(async () => {
+      throw new Error("no cache handle");
+    });
+    expect(await sweepBlockBoundaries({ db, invalidate })).toEqual({ sites: 0, failed: 1 });
+    expect(calls.map(([name]) => name)).toEqual(["due_block_boundaries"]);
+  });
+
   it("M20-04 expires each due site, then acknowledges exactly those", async () => {
     const { db, calls } = spyDb([["site-a", "site-b"]]);
     const order: string[] = [];
-    const invalidate = vi.fn((siteId: string) => {
+    const invalidate = vi.fn(async (siteId: string) => {
       order.push(`expire:${siteId}`);
       calls.push(["invalidate", siteId]);
     });
@@ -46,7 +77,7 @@ describe("M20-04 sweepBlockBoundaries", () => {
     const { db, calls } = spyDb([["site-a", "site-b"], ["site-b"]]);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     let broken = true;
-    const invalidate = vi.fn((siteId: string) => {
+    const invalidate = vi.fn(async (siteId: string) => {
       if (siteId === "site-b" && broken) throw new Error("cache down");
     });
     expect(await sweepBlockBoundaries({ db, invalidate })).toEqual({ sites: 1, failed: 1 });
@@ -62,7 +93,7 @@ describe("M20-04 sweepBlockBoundaries", () => {
 
   it("M20-04 nothing due: no expiry and no acknowledgement", async () => {
     const { db, calls } = spyDb([[]]);
-    const invalidate = vi.fn();
+    const invalidate = vi.fn(async () => undefined);
     expect(await sweepBlockBoundaries({ db, invalidate })).toEqual({ sites: 0, failed: 0 });
     expect(invalidate).not.toHaveBeenCalled();
     expect(calls.map(([name]) => name)).toEqual(["due_block_boundaries"]);

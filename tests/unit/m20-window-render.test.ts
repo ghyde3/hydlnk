@@ -62,9 +62,8 @@ const T0 = Date.parse("2026-12-01T09:00:00Z");
 const MIN = 60_000;
 const iso = (ms: number) => new Date(ms).toISOString().slice(0, 16) + ":00Z";
 
-const { handleResponse, siteResponse, siteSubPageResponse } = await import(
-  "@/lib/tenant-render/respond"
-);
+const { handleResponse, siteResponse, siteSubPageResponse } =
+  await import("@/lib/tenant-render/respond");
 
 /** A link that starts in an hour, a card and an FAQ that ended an hour ago, an open-ended link, a hidden link. */
 const windowed: Block[] = [
@@ -144,7 +143,12 @@ function site(clock: string | null = null) {
     accounts: { plan: "pro", suspended_at: null },
   };
   state.homeBlocks = windowed;
-  const sub: SubPagePublish = { path: "events", title: "Events", description: "", blocks: windowed };
+  const sub: SubPagePublish = {
+    path: "events",
+    title: "Events",
+    description: "",
+    blocks: windowed,
+  };
   state.subPage = { id: SUB_ID, document: sub };
 }
 
@@ -191,15 +195,34 @@ describe("M20-03 the live HTML holds a block only inside its window", () => {
     expectBlocks(await (await handleResponse("mara")).text(), ["lnk-showing01"]);
   });
 
-  it("M20-03 a window planted past Publish with a non-ISO from hides the block, and never throws", async () => {
+  it("M20-03 a window planted past Publish that is not canonical fails closed, and never throws", async () => {
     vi.setSystemTime(T0);
-    state.homeBlocks = [
-      { ...windowed[3]!, schedule: { from: "tomorrow" } },
-      { ...windowed[0]!, id: "lnk-planted02", schedule: { until: 5 } },
-    ];
-    const html = await (await handleResponse("mara")).text();
-    expect(html).not.toContain("lnk-showing01");
-    // A Publish-time schema refuses `until: 5`, so the parsed copy fails and the page reads as missing.
-    expect(html).not.toContain("upcoming-url");
+    // The live copy is read through the publish schema, whose time rule is the renderer's own
+    // (`scheduleInstant`): no stored value can pass one and fail the other. So a planted value that is
+    // not a canonical minute makes the whole copy unreadable, and the page answers the plain 404
+    // panel: nothing of the copy is served, the block that held it least of all. One at a time.
+    for (const schedule of [
+      { from: "tomorrow" },
+      { from: "2026-02-30T09:00:00Z" },
+      { until: "2026-11-26T24:00:00Z" },
+      { until: 5 },
+    ]) {
+      state.homeBlocks = [
+        { ...windowed[3]!, schedule } as never,
+        { ...windowed[0]!, id: "lnk-planted02" },
+      ];
+      const response = await handleResponse("mara");
+      const html = await response.text();
+      expect(response.status, JSON.stringify(schedule)).toBe(404);
+      expect(html, JSON.stringify(schedule)).not.toContain("lnk-showing01");
+      expect(html, JSON.stringify(schedule)).not.toContain("lnk-planted02");
+      expect(html, JSON.stringify(schedule)).not.toContain("upcoming-url");
+    }
+    // The decision itself fails closed for an unreadable `from` (what a looser reader would reach).
+    const { isLiveAt } = await import("@/lib/document/schedule");
+    expect(isLiveAt({ schedule: { from: "tomorrow" } }, T0)).toBe(false);
+    expect(isLiveAt({ schedule: { from: "2026-11-26T24:00:00Z" } }, T0 + 10 * 24 * 60 * MIN)).toBe(
+      false,
+    );
   });
 });

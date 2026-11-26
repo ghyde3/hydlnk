@@ -62,7 +62,7 @@ const OWNER_COMPARISONS: Readonly<Record<string, { count: number; reason: string
 
 /** Rule 2: every `p_owner_id:` argument, as written, and why it is the site's owner. */
 const P_OWNER_ID: Readonly<Record<string, { values: string[]; reason: string }>> = {
-  "src/lib/content/publish-core.ts": { values: ["ready.access.ownerId", "ready.access.ownerId"], reason: "the writer's access" },
+  "src/lib/content/publish-core.ts": { values: ["ready.access.ownerId", "ready.access.ownerId", "ready.access.ownerId"], reason: "the writer's access" },
   "src/lib/content/schedule-core.ts": { values: ["ready.access.ownerId", "ready.access.ownerId"], reason: "the writer's access" },
   "src/lib/content/trash-core.ts": { values: ["ready.access.ownerId", "ready.access.ownerId"], reason: "the writer's access" },
   "src/lib/site-pages/sub-pages-core.ts": { values: ["access.ownerId"], reason: "requireEntryAccess" },
@@ -167,14 +167,14 @@ const OWNER_ONLY_TABLES = [
   "accounts", "themes", "domains", "daily_stats", "daily_dim_stats", "daily_site_stats", "site_pages",
   "form_submissions",
 ];
-const THIS_WAVE_LAST = "20261126200300";
+const THIS_WAVE_LAST = "20261126220300";
 
 describe("M19-12 new migrations keep site-scoped policies on the rule", () => {
   const dir = join(ROOT, "supabase/migrations");
   const migrations = readdirSync(dir).filter((name) => name.endsWith(".sql")).sort();
 
   it("M19-12 this wave's policy migration puts every site-scoped policy on accessible_site_ids", () => {
-    const sql = readFileSync(join(dir, "20261126200200_site_access_policies.sql"), "utf8");
+    const sql = readFileSync(join(dir, "20261126220200_site_access_policies.sql"), "utf8");
     const policies = [...sql.matchAll(/create policy (\w+) on public\.(\w+)([\s\S]*?);/g)];
     expect(policies.length).toBe(12);
     for (const [, name, , body] of policies) {

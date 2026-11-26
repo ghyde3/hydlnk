@@ -132,3 +132,56 @@ describe("expireDeletedPages (account deletion)", () => {
     expect(revalidateTag).not.toHaveBeenCalled();
   });
 });
+
+describe("expireTagsNow (Wave E, the schedule route)", () => {
+  const cache = globalThis as { __incrementalCache?: unknown };
+  const env = process.env as Record<string, string | undefined>;
+  const node = env.NODE_ENV;
+  const restore = () => {
+    env.NODE_ENV = node;
+    delete cache.__incrementalCache;
+  };
+
+  it("M20-04 in production it resolves only after the incremental cache dropped the tags", async () => {
+    const { expireTagsNow } = await import("@/lib/publish/invalidate");
+    env.NODE_ENV = "production";
+    let land!: () => void;
+    const dropped = vi.fn(() => new Promise<void>((resolve) => (land = resolve)));
+    cache.__incrementalCache = { revalidateTag: dropped };
+    try {
+      let done = false;
+      const call = expireTagsNow(["page:s1"]).then(() => (done = true));
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+      expect(revalidateTag).toHaveBeenCalledWith("page:s1", { expire: 0 });
+      expect(dropped).toHaveBeenCalledWith(["page:s1"], { expire: 0 });
+      expect(done).toBe(false);
+      land();
+      await call;
+      expect(done).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it("M20-04 in production with no cache handle to await it throws: an expiry is never assumed", async () => {
+    const { expireTagsNow } = await import("@/lib/publish/invalidate");
+    env.NODE_ENV = "production";
+    delete cache.__incrementalCache;
+    try {
+      await expect(expireTagsNow(["page:s1"])).rejects.toThrow(/cache handle/);
+    } finally {
+      restore();
+    }
+  });
+
+  it("M20-04 a cache that refuses the expiry rejects", async () => {
+    const { expireTagsNow } = await import("@/lib/publish/invalidate");
+    env.NODE_ENV = "production";
+    cache.__incrementalCache = { revalidateTag: async () => Promise.reject(new Error("down")) };
+    try {
+      await expect(expireTagsNow(["page:s1"])).rejects.toThrow("down");
+    } finally {
+      restore();
+    }
+  });
+});

@@ -30,6 +30,10 @@ import {
   type PublishError,
 } from "@/lib/document";
 import { useMinuteClock } from "@/lib/schedule/use-minute-clock";
+import { firedRevToAdopt, nextFireOf } from "@/lib/schedule/adopt";
+import { useFireWatch } from "@/lib/schedule/use-fire-watch";
+import type { EntryScheduleSummary } from "@/lib/schedule/types";
+import { fetchSiteSchedules } from "@/lib/posts/client";
 import {
   publishDesign,
   publishPage,
@@ -666,6 +670,45 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   );
 
   /**
+   * A schedule that fires while the workspace is open (Wave E, M20-10 step 3): the site's schedules are
+   * read on open, after a publish and after a Schedule; once a pending time has passed the shared
+   * watch reads them again, and every page that still holds the rev its fire found takes the rev the
+   * fire left (`firedRevToAdopt`: the draft is the server's), so its next save is no false conflict.
+   * Home's rev goes to Home's queue, a sub-page's to the sub-pages' queue (each adopts only while it
+   * still holds the rev sent, as after a publish).
+   */
+  const [siteSchedules, setSiteSchedules] = useState<Record<string, EntryScheduleSummary>>({});
+  const takeSiteSchedules = useCallback(
+    (entries: Record<string, EntryScheduleSummary>) => {
+      setSiteSchedules(entries);
+      const revs = siteRevisions();
+      for (const [entryId, summary] of Object.entries(entries)) {
+        const isHome = entryId === homeEntryId;
+        const held = isHome ? homeRev() : revs[entryId];
+        const rev = firedRevToAdopt(held, summary.fired);
+        if (rev === null || held === null || held === undefined) continue;
+        if (isHome) adoptHomeRev(rev, held);
+        else markSitePagePublished(entryId, { rev, sent: held, form: undefined });
+      }
+    },
+    [homeEntryId, homeRev, siteRevisions, adoptHomeRev, markSitePagePublished],
+  );
+  const readSiteSchedules = useCallback(async () => {
+    const out = await fetchSiteSchedules(pageId);
+    if (out.kind === "ok") takeSiteSchedules(out.entries);
+  }, [pageId, takeSiteSchedules]);
+  useEffect(() => {
+    let current = true;
+    void fetchSiteSchedules(pageId).then((out) => {
+      if (current && out.kind === "ok") takeSiteSchedules(out.entries);
+    });
+    return () => {
+      current = false;
+    };
+  }, [pageId, takeSiteSchedules, publishedToken]);
+  useFireWatch(nextFireOf(Object.values(siteSchedules)), readSiteSchedules);
+
+  /**
    * Schedule or cancel for one page (Wave E, M20-07): Home ("home") or a sub-page. Both queues write
    * first (the schedule snapshots the stored draft, at the rev this tab holds), then `send` runs with
    * the page's entry id and that rev. Scheduling changes no rev and nothing live. Null when the page's
@@ -690,9 +733,12 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       if (entryId === null || held === null || held === undefined) {
         return { ok: false, message: PUBLISH_CONFLICT_MESSAGE };
       }
-      return { ok: true, value: await send(entryId, held) };
+      const value = await send(entryId, held);
+      // The open workspace watches the new time for its fire (below).
+      void readSiteSchedules();
+      return { ok: true, value };
     },
-    [flush, flushSite, homeEntryId, homeRev, siteRevisions],
+    [flush, flushSite, homeEntryId, homeRev, siteRevisions, readSiteSchedules],
   );
   /** The rev this tab holds for a page's entry, or null. */
   const pageRev = useCallback(

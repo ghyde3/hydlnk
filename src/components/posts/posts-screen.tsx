@@ -416,8 +416,9 @@ function BlogSettings({
               Keep it on
             </button>
             <span className="min-w-0 basis-full text-xs text-text-2">
-              The blog and every post leave your site on the next visit. Nothing is deleted: turn it
-              on again and they come back.
+              The blog and every post leave your site on the next visit, and posts scheduled to
+              publish are no longer scheduled. Nothing is deleted: turn it on again and they come
+              back.
             </span>
           </>
         ) : (

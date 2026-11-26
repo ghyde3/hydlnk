@@ -916,7 +916,9 @@ export async function publishSitePageCore(
   }
 
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
-  if (run?.kind === "check") return { ok: true, publishedAt, rev: row.rev, unchanged: false };
+  // `check` (Schedule) makes the same write as a dry run, rolled back: the database's own rules (a
+  // taken path, a block id another page went live with, the size, the byte cap) refuse it here with
+  // the words below, and nothing is written.
   const written = await publishSitePageWithClient(admin, {
     siteId: pageId,
     ownerId,
@@ -926,6 +928,7 @@ export async function publishSitePageCore(
     publishedAt,
     source: fire ? "system" : (input.source ?? "editor"),
     ...(fire ? { fire } : {}),
+    ...(run?.kind === "check" ? { dryRun: true } : {}),
   });
   if (written.ok) {
     if (!fire) await recordSiteActivity(admin, opened.site.access, "page_published", wanted);

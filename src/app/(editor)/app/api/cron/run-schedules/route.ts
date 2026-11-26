@@ -16,7 +16,8 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  * header only, never the query string or the body) it answers 401 and runs nothing; the secret is
  * never echoed or logged. Answers `{sites, published, unpublished, failed, retried}`; 500 when a cache
  * expiry failed (the boundary is not acknowledged and is retried next tick; a publish stands and the
- * one-day backstop repairs its cache) or the run itself failed. Only POST is exported.
+ * one-day backstop repairs its cache) or either half of the run failed (both always run: a failing
+ * boundary sweep never holds back the scheduled publishes). Only POST is exported.
  */
 export async function POST(request: NextRequest) {
   if (!isAuthorizedCron(request.headers.get("authorization"), serverEnv.CRON_SECRET)) {
@@ -31,6 +32,13 @@ export async function POST(request: NextRequest) {
       failed: result.failed,
       retried: result.retried,
     };
+    // Both halves ran (runSchedules never stops one for the other); either one failing is a 500.
+    if (result.sweepFailed || result.workerFailed) {
+      return NextResponse.json(
+        { error: "run_failed", ...body },
+        { status: 500, headers: NO_STORE },
+      );
+    }
     if (result.sitesFailed > 0 || result.expiryFailed > 0) {
       console.error(
         "[schedule] cache expiry failed for",

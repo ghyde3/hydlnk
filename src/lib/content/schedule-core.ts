@@ -24,26 +24,35 @@ import type { ContentActor, ContentFailure, ContentResult } from "./types";
  * functions check it again under their locks. Nothing here changes what is live, so nothing expires.
  *
  * Schedule a publish first runs the whole Publish gate on the stored draft in `check` mode (a post
- * through `publishEntryWithClient`, a page through `publishSitePageCore`): an unpublishable draft is
- * refused now with the same issues Publish gives, and the snapshot `schedule_entry` stores is the draft
- * at that rev. At fire time the gate runs again, on the snapshot (src/lib/schedule/worker.ts).
+ * through `publishEntryWithClient`, a page through `publishSitePageCore`), the database's own publish
+ * rules included (`publish_dry_run`: a taken slug or path, a block id clash, the size, rolled back):
+ * an unpublishable draft is refused now with the same issues Publish gives, and the snapshot
+ * `schedule_entry` stores is the draft at that rev. At fire time the gate runs again, on the snapshot (src/lib/schedule/worker.ts).
  */
 
 type Admin = SupabaseClient<Database>;
 type Row = Database["public"]["Tables"]["content_schedules"]["Row"];
 
 const ACTIONS: readonly ScheduleAction[] = ["publish", "unpublish"];
-const SCHEDULE_COLUMNS = "entry_id, action, run_at, status, scheduled_rev, result_code, finished_at, created_at";
+const SCHEDULE_COLUMNS =
+  "entry_id, action, run_at, status, scheduled_rev, result_code, finished_at, created_at, fired_from_rev, fired_rev";
+/** Rows one entry can hold: a pending row per action and the 20 finished rows `schedule_entry` keeps, plus two that finished since. */
+const ROWS_PER_ENTRY = 24;
+/** A fire this recent is still reported by the site's summary (the open workspace adopts its rev). */
+const RECENT_FIRE_MS = 15 * 60_000;
 
 /** A refusal of Schedule on a page: the Publish gate's own errors, for the publish bar to draw. */
 export type ScheduleFailure = ContentFailure & { publishErrors?: PublishError[] };
 
-export type ScheduleResult = ContentResult<{ schedule: EntrySchedule } & EntryPlace> | ScheduleFailure;
+export type ScheduleResult =
+  ContentResult<{ schedule: EntrySchedule } & EntryPlace> | ScheduleFailure;
 
 /** A stored instant in the canonical form every scheduling reader takes (`YYYY-MM-DDTHH:MM:00Z`). */
 const minuteOf = (value: string) => new Date(value).toISOString().slice(0, 16) + ":00Z";
 
-const toSchedule = (row: Pick<Row, "action" | "run_at" | "status" | "scheduled_rev" | "result_code">) =>
+const toSchedule = (
+  row: Pick<Row, "action" | "run_at" | "status" | "scheduled_rev" | "result_code">,
+) =>
   ({
     action: row.action as ScheduleAction,
     runAt: minuteOf(row.run_at),
@@ -57,7 +66,7 @@ async function refusedSchedule(
   admin: Admin,
   entryId: string,
   plan: string,
-  err: { code?: string | null; message?: string | null },
+  err: { code?: string | null; message?: string | null; details?: string | null },
 ): Promise<ContentFailure> {
   if (err.code === "22023") {
     if (err.message === "schedule_time") return failure("schedule_time");
@@ -68,14 +77,23 @@ async function refusedSchedule(
       return failure("invalid", "Home can’t be scheduled to unpublish.");
     }
     if (err.message === "stale_rev") {
-      const reread = await admin.from("content_entries").select("rev").eq("id", entryId).maybeSingle();
+      const reread = await admin
+        .from("content_entries")
+        .select("rev")
+        .eq("id", entryId)
+        .maybeSingle();
       return reread.data
         ? failure("conflict", undefined, Number(reread.data.rev))
         : failure("not_found");
     }
     return failure("invalid", "That can’t be scheduled.");
   }
-  if (err.code === "HL018") return failure("schedule_limit", scheduleLimitMessage(toPlanId(plan)));
+  if (err.code === "HL018") {
+    return failure(
+      "schedule_limit",
+      scheduleLimitMessage(toPlanId(plan), err.details === "account" ? "account" : "site"),
+    );
+  }
   return mapDbError(err);
 }
 
@@ -131,13 +149,18 @@ async function publishCheck(
       expectedRev: input.expectedRev,
       userId: input.actor.userId,
     },
-    { admin, run: { kind: "check" }, ...(deps.mediaExists ? { mediaExists: deps.mediaExists } : {}) },
+    {
+      admin,
+      run: { kind: "check" },
+      ...(deps.mediaExists ? { mediaExists: deps.mediaExists } : {}),
+    },
   );
   if (out.ok) return null;
   if (out.reason === "conflict") return failure("conflict", undefined, out.currentRev);
   if (out.reason === "not_found" || out.reason === "forbidden") return failure("not_found");
   if (out.reason === "account_suspended") return failure("account_suspended");
   if (out.reason === "error" || out.reason === "unauthorized") return failure("error");
+  if (out.reason === "storage_full") return failure("storage_full");
   const code = out.reason === "blocked_link" ? "blocked_link" : "invalid";
   return {
     ...failure(code, out.errors[0]?.message),
@@ -253,8 +276,9 @@ export async function listSchedulesWithClient(
 }
 
 /**
- * The schedule summaries of a site's entries that have a pending or a failed schedule (M20-10), for
- * the publish bar: one read of the site's rows, one of the entries' publish dates. Ownership first.
+ * The schedule summaries of a site's entries that have a pending or a failed schedule, or a fire in
+ * the last 15 minutes (M20-10), for the publish bar and the open workspace: one read of the site's
+ * rows, one of the entries' publish dates. Ownership first.
  */
 export async function siteScheduleSummariesWithClient(
   admin: Admin,
@@ -266,7 +290,9 @@ export async function siteScheduleSummariesWithClient(
     .from("content_schedules")
     .select("entry_id")
     .eq("site_id", site.site.id)
-    .in("status", ["pending", "failed"])
+    .or(
+      `status.in.(pending,failed),finished_at.gte.${new Date(Date.now() - RECENT_FIRE_MS).toISOString()}`,
+    )
     .limit(1000);
   if (rows.error) {
     console.error("[content] reading the site's schedules failed", rows.error.message);
@@ -302,6 +328,7 @@ export async function scheduleSummariesWithClient(
 ): Promise<Map<string, EntryScheduleSummary> | null> {
   const out = new Map<string, EntryScheduleSummary>();
   if (entries.length === 0) return out;
+  // Bounded: the pending rows and the newest finished ones are all that is read (ROWS_PER_ENTRY each).
   const rows = await admin
     .from("content_schedules")
     .select(SCHEDULE_COLUMNS)
@@ -309,7 +336,8 @@ export async function scheduleSummariesWithClient(
       "entry_id",
       entries.map((entry) => entry.id),
     )
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(entries.length * ROWS_PER_ENTRY);
   if (rows.error) {
     console.error("[content] reading the schedule summaries failed", rows.error.message);
     return null;
@@ -329,8 +357,18 @@ export async function scheduleSummariesWithClient(
       }
     } else if (!newest.has(key) && row.status === "failed" && row.action === "publish") {
       const liveAt = published.get(row.entry_id);
-      const after = liveAt && row.finished_at ? Date.parse(liveAt) > Date.parse(row.finished_at) : false;
+      const after =
+        liveAt && row.finished_at ? Date.parse(liveAt) > Date.parse(row.finished_at) : false;
       if (!after) summary.failed = row.result_code ?? "error";
+    }
+    // The newest fire of either action (rows come newest first): what an open editor adopts.
+    if (
+      row.status === "done" &&
+      summary.fired === null &&
+      row.fired_rev !== null &&
+      row.fired_from_rev !== null
+    ) {
+      summary.fired = { fromRev: Number(row.fired_from_rev), rev: Number(row.fired_rev) };
     }
     newest.add(key);
     out.set(row.entry_id, summary);

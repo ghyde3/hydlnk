@@ -28,6 +28,7 @@ const row = (over: Raw = {}): Raw => ({
   site_id: SITE,
   owner_id: OWNER,
   created_by: OWNER,
+  type_id: "t1",
   type_key: "post",
   run_at: "2026-12-01T09:00:00Z",
   snapshot: { title: "Hi" },
@@ -37,9 +38,16 @@ const row = (over: Raw = {}): Raw => ({
 
 function setup(
   batches: Raw[][],
-  opts: { account?: Raw | null; accountError?: boolean; now?: () => number } = {},
+  opts: {
+    account?: Raw | null;
+    accountError?: boolean;
+    now?: () => number;
+    /** What finish_schedule answers (the row's status afterwards); by default as the real one would. */
+    finishStatus?: string;
+  } = {},
 ) {
   const finished: Array<{ p_id: string; p_failed: boolean; p_code: string }> = [];
+  const released: string[] = [];
   let claims = 0;
   const db = {
     rpc: vi.fn(async (name: string, args: Raw) => {
@@ -61,6 +69,10 @@ function setup(
       }
       if (name === "finish_schedule") {
         finished.push(args as never);
+        return { data: opts.finishStatus ?? (args.p_failed ? "failed" : "pending"), error: null };
+      }
+      if (name === "release_schedule_claim") {
+        released.push(String(args.p_id));
         return { data: true, error: null };
       }
       return { data: null, error: { message: `unexpected ${name}` } };
@@ -93,9 +105,9 @@ function setup(
       unchanged: false,
     })),
     unpublish: vi.fn(async () => ({ ok: true as const, changed: true, ...place })),
-    expire: vi.fn(() => true),
+    expire: vi.fn(async (...args: [unknown, unknown]) => args.length > 0),
   };
-  return { deps, finished, db, place };
+  return { deps, finished, released, db, place };
 }
 
 describe("M20-08 the worker publishes due snapshots through the gate", () => {
@@ -107,7 +119,10 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
       { actor: { userId: OWNER, source: "system" }, entryId: "e1" },
       { kind: "fire", scheduleId: "a", claim: "claim-token", snapshot: { title: "Hi" } },
     );
-    expect(deps.expire).toHaveBeenCalledWith("e1", place);
+    expect(deps.expire).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a", entryId: "e1" }),
+      place,
+    );
     expect(finished).toEqual([]); // the fire marked it done in its own transaction
   });
 
@@ -118,7 +133,10 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
       { siteId: SITE, entryId: "e1", userId: OWNER },
       expect.objectContaining({ kind: "fire" }),
     );
-    expect(deps.expire).toHaveBeenCalledWith("e1", expect.objectContaining({ typeKey: "page", siteId: SITE }));
+    expect(deps.expire).toHaveBeenCalledWith(
+      expect.objectContaining({ entryId: "e1", ownerId: OWNER }),
+      { siteId: SITE, typeId: "t1", typeKey: "page" },
+    );
   });
 
   it("M20-08 the owner is suspended at fire: failed account_suspended, nothing published", async () => {
@@ -127,7 +145,9 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     });
     expect((await runScheduleWorker(deps)).failed).toBe(1);
     expect(deps.publishPost).not.toHaveBeenCalled();
-    expect(finished).toEqual([expect.objectContaining({ p_id: "a", p_failed: true, p_code: "account_suspended" })]);
+    expect(finished).toEqual([
+      expect.objectContaining({ p_id: "a", p_failed: true, p_code: "account_suspended" }),
+    ]);
   });
 
   it("M20-08 the plan no longer includes scheduling: failed plan", async () => {
@@ -152,14 +172,17 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     ["a slug taken meanwhile", failure("slug_taken"), "slug_taken"],
     ["a type turned off", failure("type_disabled"), "type_disabled"],
     ["a downgrade the database saw first (HL017)", failure("schedule_plan"), "plan"],
-  ])("M20-08 the snapshot now holds %s: failed with that code, never retried", async (_label, refusal, code) => {
-    const { deps, finished } = setup([[row()]]);
-    deps.publishPost.mockResolvedValueOnce(refusal as never);
-    const out = await runScheduleWorker(deps);
-    expect(out).toMatchObject({ published: 0, failed: 1, retried: 0 });
-    expect(finished[0]).toMatchObject({ p_failed: true, p_code: code });
-    expect(deps.expire).not.toHaveBeenCalled();
-  });
+  ])(
+    "M20-08 the snapshot now holds %s: failed with that code, never retried",
+    async (_label, refusal, code) => {
+      const { deps, finished } = setup([[row()]]);
+      deps.publishPost.mockResolvedValueOnce(refusal as never);
+      const out = await runScheduleWorker(deps);
+      expect(out).toMatchObject({ published: 0, failed: 1, retried: 0 });
+      expect(finished[0]).toMatchObject({ p_failed: true, p_code: code });
+      expect(deps.expire).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ["the site is not live", [SITE_NOT_LIVE_MESSAGE], "site_not_live"],
@@ -205,7 +228,9 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     const { deps, finished } = setup([[row({ id: "a" })]]);
     deps.publishPost.mockResolvedValueOnce(failure("error") as never);
     expect((await runScheduleWorker(deps)).retried).toBe(1);
-    expect(finished).toEqual([{ p_id: "a", p_claim: "claim-token", p_failed: false, p_code: "error" }]);
+    expect(finished).toEqual([
+      { p_id: "a", p_claim: "claim-token", p_failed: false, p_code: "error" },
+    ]);
   });
 
   it("M20-08 a gate that throws, or an account read that fails, is a retry too", async () => {
@@ -220,13 +245,14 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
 
   it("M20-08 a failed cache expiry is counted (the route answers 500); the publish stands", async () => {
     const { deps } = setup([[row()]]);
-    deps.expire.mockReturnValueOnce(false);
+    deps.expire.mockResolvedValueOnce(false);
     expect(await runScheduleWorker(deps)).toMatchObject({ published: 1, expiryFailed: 1 });
   });
 
   it("M20-08 a run stops claiming after 100 rows", async () => {
-    const batch = () => Array.from({ length: 25 }, (_, i) => row({ id: `r${i}` }));
-    const { deps, db } = setup([batch(), batch(), batch(), batch(), batch(), batch()]);
+    // Each claim hands out other rows (a row claimed again in the same run is not fired twice).
+    const batch = (n: number) => Array.from({ length: 25 }, (_, i) => row({ id: `b${n}r${i}` }));
+    const { deps, db } = setup([batch(1), batch(2), batch(3), batch(4), batch(5), batch(6)]);
     const out = await runScheduleWorker(deps);
     expect(out.published).toBe(WORKER_MAX_ROWS);
     expect(db.rpc.mock.calls.filter(([name]) => name === "claim_due_schedules")).toHaveLength(4);
@@ -242,6 +268,54 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     const out = await runScheduleWorker(deps);
     expect(out.published).toBe(2);
     expect(db.rpc.mock.calls.filter(([name]) => name === "claim_due_schedules")).toHaveLength(2);
+  });
+
+  it("M20-08 the budget is checked before every row: rows claimed past it are released, not fired, no attempt spent", async () => {
+    let clock = NOW;
+    const { deps, finished, released } = setup(
+      [[row({ id: "a" }), row({ id: "b" }), row({ id: "c" })]],
+      {
+        now: () => clock,
+      },
+    );
+    deps.publishPost.mockImplementation(async () => {
+      clock += WORKER_BUDGET_MS + 1; // one slow fire spends the whole budget
+      return { ok: true as const, siteId: SITE, typeId: "t1", typeKey: "post" };
+    });
+    const out = await runScheduleWorker(deps);
+    expect(out).toMatchObject({ published: 1, retried: 0, failed: 0 });
+    expect(deps.publishPost).toHaveBeenCalledTimes(1);
+    expect(released).toEqual(["b", "c"]);
+    expect(finished).toEqual([]);
+  });
+
+  it("M20-08 a row claimed twice in one run is fired once: the second claim is released", async () => {
+    const { deps, released, db } = setup([
+      [row({ id: "a" })],
+      [row({ id: "a" })],
+      [row({ id: "z" })],
+    ]);
+    deps.publishPost.mockResolvedValueOnce(failure("error") as never);
+    const out = await runScheduleWorker(deps);
+    expect(out).toMatchObject({ retried: 1, published: 0 });
+    expect(deps.publishPost).toHaveBeenCalledTimes(1);
+    expect(released).toEqual(["a"]);
+    // A batch of rows it already handled ends the run: a backoff that failed never loops.
+    expect(db.rpc.mock.calls.filter(([name]) => name === "claim_due_schedules")).toHaveLength(2);
+  });
+
+  it("M20-08 a fire that committed but whose answer was lost still expires the cache", async () => {
+    const { deps, finished } = setup([[row({ id: "a" })]], { finishStatus: "done" });
+    deps.publishPost.mockRejectedValueOnce(new Error("socket hang up"));
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const out = await runScheduleWorker(deps);
+    expect(finished).toEqual([expect.objectContaining({ p_id: "a", p_failed: false })]);
+    expect(out).toMatchObject({ published: 1, retried: 0, expiryFailed: 0 });
+    expect(deps.expire).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), {
+      siteId: SITE,
+      typeId: "t1",
+      typeKey: "post",
+    });
   });
 
   it("M20-08 nothing due (trashed, published by hand: the rows were canceled): nothing runs", async () => {
@@ -265,15 +339,23 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
 
 describe("M20-09 scheduled unpublish", () => {
   it("M20-09 runs however late, takes the entry down and expires it", async () => {
-    const { deps, place } = setup([[row({ action: "unpublish", run_at: "2026-11-01T09:00:00Z", snapshot: null })]]);
+    const { deps, place } = setup([
+      [row({ action: "unpublish", run_at: "2026-11-01T09:00:00Z", snapshot: null })],
+    ]);
     expect((await runScheduleWorker(deps)).unpublished).toBe(1);
     expect(deps.unpublish).toHaveBeenCalledTimes(1);
-    expect(deps.expire).toHaveBeenCalledWith("e1", place);
+    expect(deps.expire).toHaveBeenCalledWith(expect.objectContaining({ entryId: "e1" }), place);
   });
 
   it("M20-09 an entry that is not live ends done with nothing changed and nothing expired", async () => {
     const { deps } = setup([[row({ action: "unpublish", snapshot: null })]]);
-    deps.unpublish.mockResolvedValueOnce({ ok: true, changed: false, siteId: SITE, typeId: "t1", typeKey: "post" });
+    deps.unpublish.mockResolvedValueOnce({
+      ok: true,
+      changed: false,
+      siteId: SITE,
+      typeId: "t1",
+      typeKey: "post",
+    });
     expect((await runScheduleWorker(deps)).unpublished).toBe(1);
     expect(deps.expire).not.toHaveBeenCalled();
   });

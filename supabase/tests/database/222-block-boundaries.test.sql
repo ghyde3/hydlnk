@@ -5,14 +5,14 @@
 --     now (and the site's clock), null with none, null for a post, recomputed by publish, unpublish
 --     and trash;
 --   * entry_next_boundary never raises on a hostile copy and skips every value it cannot read;
---   * due_block_boundaries returns each due site once, sets its clock (never back) and is safe to
+--   * due_block_boundaries returns each due site once, sets its clock (never back within a one-minute lead, never further ahead) and is safe to
 --     call twice; advance_block_boundaries moves past every boundary at or before the clock;
 --   * HL017: on Free a published copy (a page publish, the whole-site publish, a direct write) that
 --     holds a block window is refused; a downgrade keeps a live copy, its boundaries keep running,
 --     and the next publish of a copy with windows is refused.
 
 begin;
-select plan(29);
+select plan(30);
 
 select tests.create_supabase_user('f', 'f-222@example.test');
 select tests.create_supabase_user('p', 'p-222@example.test');
@@ -133,10 +133,14 @@ select is((select schedule_clock from public.pages where id = '00000000-0000-400
   'and sets its clock to the database clock');
 select is(array(select public.due_block_boundaries()), array['00000000-0000-4000-8000-000000222a01'::uuid],
   'a second call before the acknowledgement returns it again (safe to repeat)');
+update public.pages set schedule_clock = now() + interval '30 seconds' where id = '00000000-0000-4000-8000-000000222a01';
+select public.due_block_boundaries();
+select is((select schedule_clock from public.pages where id = '00000000-0000-4000-8000-000000222a01'), now() + interval '30 seconds',
+  'the clock never moves back within its one-minute lead');
 update public.pages set schedule_clock = now() + interval '1 hour' where id = '00000000-0000-4000-8000-000000222a01';
 select public.due_block_boundaries();
-select is((select schedule_clock from public.pages where id = '00000000-0000-4000-8000-000000222a01'), now() + interval '1 hour',
-  'the clock never moves back');
+select is((select schedule_clock from public.pages where id = '00000000-0000-4000-8000-000000222a01'), now() + interval '1 minute',
+  'a clock that ran an hour ahead comes back to now() + 1 minute (20261126210000: its lead is capped)');
 update public.pages set schedule_clock = now() where id = '00000000-0000-4000-8000-000000222a01';
 select is(public.advance_block_boundaries(array['00000000-0000-4000-8000-000000222a01'::uuid]), 1,
   'advance_block_boundaries acknowledges the due entry');

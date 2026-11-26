@@ -12,6 +12,11 @@ export interface EntryScheduleSummary {
   /** When the pending publish's snapshot was taken (Schedule was pressed), for "Your scheduled version is from …". */
   snapshotAt: string | null;
   failed: string | null;
+  /**
+   * The newest fire that ran (M20-10 step 3): the rev it found and the rev it left. An editor that
+   * still holds `fromRev` adopts `rev` without the conflict notice (`firedRevToAdopt`).
+   */
+  fired: { fromRev: number; rev: number } | null;
 }
 
 /**
