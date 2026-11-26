@@ -21,6 +21,14 @@ export const SUPPORTED: Record<string, string> = {
   "bullet list": "- one\n- two\n- three",
   "numbered list": "1. first\n2. second\n3. third",
   "nested list": "- a\n  - nested\n- b",
+  // A tight numbered item keeps its inline formatting (Tiptap's ordered list reads its own tokens).
+  "numbered list with marks, a link and code": "1. **bold** and [l](https://a.co) `c`\n2. two",
+  "numbered list with an escape": "1. a\\~b",
+  "numbered list with an entity": "1. a &amp; b",
+  "numbered list in a bullet list": "- one\n  1. nested *x*\n- two",
+  "numbered list in a numbered list": "1. one\n   1. *two*",
+  "numbered list in a quote": "> 1. *q*\n> 2. ~~r~~",
+  "numbered list from 3": "3. **x**",
   quote: "> Quoted words.",
   "code block": "```\nconst a = 1;\n```",
   "code block with a language": "```js\nlet a = 1;\n```",
@@ -29,6 +37,7 @@ export const SUPPORTED: Record<string, string> = {
   "hard break": "line one  \nline two",
   image: `![A photo](${IMAGE})`,
   "image in a paragraph": `Before ![alt](${IMAGE}) after.`,
+  "image in a numbered list": `1. ![alt](${IMAGE})`,
   everything: [
     "## Heading",
     "A paragraph with **bold**, *italic*, ~~strike~~ and a [link](https://example.com).",

@@ -329,7 +329,37 @@ const comparable = (body: string) => unixLines(body).replace(/\n+$/, "");
 export function fromMarkdown(markdown: string): JSONContent {
   const lexed = lexBounded(unixLines(markdown));
   if (!lexed.ok) throw new Error(`The body editor cannot read this body (${lexed.reason}).`);
-  return { type: "doc", content: parseTokens(lexed.tokens) };
+  return { type: "doc", content: parseTokens(asTheLibraryReadsThem(lexed.tokens)) };
+}
+
+type BlockToken = MarkedToken & { tokens?: MarkedToken[]; items?: Array<{ tokens: MarkedToken[] }>; ordered?: boolean };
+
+/**
+ * The lexer's tokens as the library's handlers expect them. The ordered list has its own block
+ * tokenizer under marked, which gives a tight item's text a paragraph; handed marked-shaped tokens,
+ * its handler (`parseListItems`) parses a tight item's `text` token as a block, which keeps its
+ * marks, links and escapes as literal text. So each ordered item's `text` token is handed over as
+ * a paragraph of the same inline tokens. The other handlers read marked's tokens as they are.
+ * A copy along the path to each change: the lexer's tokens are shared and cached.
+ */
+function asTheLibraryReadsThem(tokens: readonly MarkedToken[], orderedItem = false): MarkedToken[] {
+  return tokens.map((token) => {
+    const block = token as BlockToken;
+    if (orderedItem && block.type === "text" && block.tokens) {
+      return { type: "paragraph", raw: block.raw, text: block.text, tokens: block.tokens } as MarkedToken;
+    }
+    if (block.type === "list" && block.items) {
+      const items = block.items.map((item) => ({
+        ...item,
+        tokens: asTheLibraryReadsThem(item.tokens, block.ordered === true),
+      }));
+      return { ...block, items } as MarkedToken;
+    }
+    if (block.type === "blockquote" && block.tokens) {
+      return { ...block, tokens: asTheLibraryReadsThem(block.tokens) } as MarkedToken;
+    }
+    return token;
+  });
 }
 
 export function toMarkdown(doc: JSONContent): string {
