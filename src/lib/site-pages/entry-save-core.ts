@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACCOUNT_SUSPENDED_CODE } from "@/lib/admin/suspension";
 import { updateEntryWithClient } from "@/lib/content";
 import type { ContentFailure } from "@/lib/content";
+import { MAX_DRAFT_BYTES } from "@/lib/content/schemas";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -70,6 +71,58 @@ function fromFailure(f: ContentFailure): EntrySaveResponse {
   }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The most bytes a save request may carry: twice the largest draft the writer accepts, so no draft
+ * the writer would take is refused here (the JSON envelope, escapes), and nothing larger is read.
+ */
+export const MAX_ENTRY_SAVE_BODY_BYTES = MAX_DRAFT_BYTES * 2;
+
+export type EntrySaveBodyRead =
+  { ok: true; value: unknown } | { ok: false; reason: "too_large" | "invalid" };
+
+/**
+ * Reads and parses a save request's JSON body, at most `maxBytes`. A `Content-Length` over the cap
+ * is refused before a byte is read; a body with no (or a wrong) declared length is counted as it
+ * arrives and dropped the moment it passes the cap, never buffered whole.
+ */
+export async function readEntrySaveBody(
+  request: Request,
+  maxBytes: number = MAX_ENTRY_SAVE_BODY_BYTES,
+): Promise<EntrySaveBodyRead> {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    const length = Number(declared);
+    if (!Number.isFinite(length) || length < 0) return { ok: false, reason: "invalid" };
+    if (length > maxBytes) {
+      await request.body?.cancel().catch(() => undefined);
+      return { ok: false, reason: "too_large" };
+    }
+  }
+  if (!request.body) return { ok: false, reason: "invalid" };
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        return { ok: false, reason: "too_large" };
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch {
+    return { ok: false, reason: "invalid" };
+  }
+}
+
 export async function saveEntryDraftWithClient(
   admin: SupabaseClient<Database>,
   input: { userId: string; siteId: string; entryId: string; expectedRev: unknown; draft: unknown },
@@ -80,6 +133,15 @@ export async function saveEntryDraftWithClient(
       status: 422,
       body: { kind: "invalid", message: "Send the revision you are editing." },
     };
+  }
+  // A malformed id is no entry: answered here, before it reaches a uuid column and fails the query.
+  if (
+    typeof input.siteId !== "string" ||
+    typeof input.entryId !== "string" ||
+    !UUID.test(input.siteId) ||
+    !UUID.test(input.entryId)
+  ) {
+    return { status: 404, body: { kind: "missing" } };
   }
   // The entry must sit in the site of the URL. A mismatch, a missing entry and another user's entry
   // all answer the same; ownership itself is the writer's check.

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { execFileSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +14,12 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   admin: undefined as unknown,
 }));
+vi.mock("@/lib/media/cleanup-client", () => ({ scheduleMediaCleanup: () => {} }));
+vi.mock("@/lib/supabase/browser", () => ({
+  createBrowserSupabase: () => {
+    throw new Error("the entry saves never use the browser client");
+  },
+}));
 vi.mock("@/lib/auth/session", () => ({ getSessionUser: mocks.getSessionUser }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => mocks.admin }));
 // Real writer by default; individual tests substitute its answer to drive each error mapping.
@@ -23,6 +30,25 @@ vi.mock("@/lib/content/entries-core", async (importOriginal) => {
 });
 
 const { run } = await stackIsUp();
+
+function psql(sql: string): string {
+  return execFileSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      "supabase_db_hydlnk",
+      "psql",
+      "-U",
+      "postgres",
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-At",
+      "-q",
+    ],
+    { input: sql, encoding: "utf8" },
+  ).trim();
+}
 
 describe.skipIf(!run)("POST /api/pages/{id}/entries/{entryId}/draft", () => {
   const admin = run
@@ -73,7 +99,15 @@ describe.skipIf(!run)("POST /api/pages/{id}/entries/{entryId}/draft", () => {
     );
 
   async function post(
-    opts: { siteId?: string; entry?: string; body?: unknown; origin?: string } = {},
+    opts: {
+      siteId?: string;
+      entry?: string;
+      body?: unknown;
+      origin?: string;
+      raw?: BodyInit;
+      headers?: Record<string, string>;
+      duplex?: boolean;
+    } = {},
   ) {
     const { POST } =
       await import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/draft/route");
@@ -86,9 +120,11 @@ describe.skipIf(!run)("POST /api/pages/{id}/entries/{entryId}/draft", () => {
         headers: {
           "content-type": "application/json",
           ...(opts.origin ? { origin: opts.origin } : {}),
+          ...opts.headers,
         },
-        body: JSON.stringify(opts.body ?? { rev: await rev(), draft: page("Saved") }),
-      },
+        body: opts.raw ?? JSON.stringify(opts.body ?? { rev: await rev(), draft: page("Saved") }),
+        ...(opts.duplex ? { duplex: "half" } : {}),
+      } as RequestInit,
     );
     const response = await POST(request as never, {
       params: Promise.resolve({ id: siteId, entryId: entry }),
@@ -134,6 +170,234 @@ describe.skipIf(!run)("POST /api/pages/{id}/entries/{entryId}/draft", () => {
     expect((await post({ origin: "https://evil.example" })).status).toBe(403);
     mocks.getSessionUser.mockResolvedValue(null);
     expect((await post()).status).toBe(401);
+  });
+
+  it("a malformed site id or entry id is not-found before any query, like an unknown one", async () => {
+    const before = await rev();
+    const writes = mocks.update.mock.calls.length;
+    const from = vi.spyOn(admin, "from");
+    try {
+      for (const bad of ["not-a-uuid", "123", `${entryId}x`, "' or 1=1 --", "%00"]) {
+        const badEntry = await post({ entry: bad });
+        expect(badEntry.status, bad).toBe(404);
+        expect(badEntry.json, bad).toEqual({ kind: "missing" });
+        const badSite = await post({ siteId: bad });
+        expect(badSite.status, bad).toBe(404);
+        expect(badSite.json, bad).toEqual({ kind: "missing" });
+      }
+      // `rev()` reads content_entries for the default body; the route itself asked for nothing else.
+      expect(from.mock.calls.every(([table]) => table === "content_entries")).toBe(true);
+      expect(mocks.update.mock.calls.length).toBe(writes);
+    } finally {
+      from.mockRestore();
+    }
+    expect(await rev()).toBe(before);
+  });
+
+  it("a body over the cap is refused by its declared length before it is read or parsed", async () => {
+    const { MAX_ENTRY_SAVE_BODY_BYTES } = await import("@/lib/site-pages/entry-save-core");
+    const { MAX_DRAFT_BYTES } = await import("@/lib/content/schemas");
+    expect(MAX_ENTRY_SAVE_BODY_BYTES).toBeGreaterThan(MAX_DRAFT_BYTES);
+    expect(MAX_ENTRY_SAVE_BODY_BYTES).toBeLessThanOrEqual(MAX_DRAFT_BYTES * 2);
+    const before = await rev();
+    const writes = mocks.update.mock.calls.length;
+    // The declared length alone decides: the stream behind it is never pulled.
+    let pulled = 0;
+    const unread = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(new TextEncoder().encode("{"));
+      },
+    });
+    const declared = await post({
+      raw: unread,
+      duplex: true,
+      headers: { "content-length": String(MAX_ENTRY_SAVE_BODY_BYTES + 1) },
+    });
+    expect(declared.status).toBe(413);
+    expect(declared.json).toEqual({ kind: "too-large" });
+    expect(pulled).toBeLessThanOrEqual(1);
+    // No declared length: counted as it arrives and dropped at the cap.
+    let sent = 0;
+    const chunk = new TextEncoder().encode("x".repeat(64 * 1024));
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const streamed = await post({ raw: endless, duplex: true });
+    expect(streamed.status).toBe(413);
+    expect(sent).toBeLessThanOrEqual(MAX_ENTRY_SAVE_BODY_BYTES + 4 * chunk.byteLength);
+    expect(mocks.update.mock.calls.length).toBe(writes);
+    expect(await rev()).toBe(before);
+    // A body that is not JSON is still a 400, and a normal save still goes through.
+    expect((await post({ raw: "{nope" })).status).toBe(400);
+    expect((await post()).status).toBe(200);
+  });
+
+  /**
+   * M15-07 step 2, end to end: the real database error, through the writer and the route, into the
+   * editor's own save function and the notice its result shows. The browser's fetch to the route is
+   * handed to the route handler; everything else (the Supabase client) keeps the real fetch.
+   */
+  async function throughTheEditor(run: () => Promise<void>) {
+    const { POST } =
+      await import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/draft/route");
+    const realFetch = globalThis.fetch;
+    const answers: Array<{ status: number; body: unknown }> = [];
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const match = /^\/api\/pages\/([^/]+)\/entries\/([^/]+)\/draft$/.exec(url);
+      if (!match) return realFetch(input, init);
+      const response = await POST(new Request(`http://app.localhost:3000${url}`, init) as never, {
+        params: Promise.resolve({ id: match[1]!, entryId: match[2]! }),
+      });
+      answers.push({ status: response.status, body: await response.clone().json() });
+      return response;
+    });
+    try {
+      await run();
+    } finally {
+      vi.stubGlobal("fetch", realFetch);
+    }
+    return answers;
+  }
+
+  it("HL009 from the database reaches the storage-full notice, for a sub-page and for Home's blocks", async () => {
+    const { createSubPageRevisions, createSubPageSaveFn } =
+      await import("@/lib/site-pages/save-client");
+    const { createDraftSaver } = await import("@/lib/editor/save-client");
+    const { saveIndicatorText } = await import("@/components/workspace/toolbar/save-status");
+    const { STORAGE_FULL_MESSAGE } = await import("@/lib/editor/messages");
+    const { PLAN_LIMITS } = await import("@/lib/limits");
+    const { emptyDraft } = await import("@/lib/document");
+
+    // account_site_bytes is written by triggers only (no API role may touch it), so psql sets it.
+    const usage = Number(
+      psql(`select bytes from public.account_site_bytes where owner_id = '${a.userId}'`),
+    );
+    expect(Number.isFinite(usage)).toBe(true);
+    // Home's entry, as the move makes it.
+    const home = await admin
+      .from("content_entries")
+      .insert({
+        site_id: a.pageId,
+        type_id: (
+          await admin
+            .from("content_types")
+            .select("id")
+            .eq("site_id", a.pageId)
+            .eq("key", "page")
+            .single()
+        ).data!.id,
+        draft: { path: "/", title: "", description: "", blocks: [] },
+      })
+      .select("id, rev")
+      .single();
+    if (home.error) throw new Error(home.error.message);
+
+    // The account sits a few bytes under its plan's cap, so any growth is over it.
+    psql(
+      `update public.account_site_bytes set bytes = ${PLAN_LIMITS.free.contentBytes - 8} where owner_id = '${a.userId}'`,
+    );
+    try {
+      // The database itself raises HL009 for this growth.
+      const direct = await admin
+        .from("content_entries")
+        .update({ draft: page("x".repeat(200)) })
+        .eq("id", entryId);
+      expect(direct.error?.code).toBe("HL009");
+
+      const before = await rev();
+      const revisions = createSubPageRevisions({ [entryId]: before });
+      let sub: unknown;
+      let homeResult: unknown;
+      const answers = await throughTheEditor(async () => {
+        sub = await createSubPageSaveFn(revisions, a.pageId)(entryId, {
+          ...page("About"),
+          description: "y".repeat(150),
+        } as never);
+        const save = createDraftSaver(a.pageId, {
+          entryId: home.data.id,
+          rev: Number(home.data.rev),
+        });
+        const text = "z".repeat(200);
+        homeResult = await save(
+          {
+            ...emptyDraft("es-a"),
+            blocks: [{ id: "txt-aaaaaaaa", type: "text", visible: true, text } as never],
+          },
+          "1",
+        );
+      });
+      expect(answers).toEqual([
+        { status: 403, body: { kind: "storage-full" } },
+        { status: 403, body: { kind: "storage-full" } },
+      ]);
+      expect(sub).toEqual({ kind: "storage-full" });
+      expect(homeResult).toEqual({ kind: "storage-full" });
+      // The notice of that result is the existing storage message.
+      expect(saveIndicatorText("storage-full")).toBe(STORAGE_FULL_MESSAGE);
+      expect(await rev()).toBe(before);
+      expect(revisions.get(entryId)).toBe(before);
+    } finally {
+      // Home's entry goes, then the total is what it was before this test.
+      await admin.from("content_entries").delete().eq("id", home.data.id);
+      psql(`update public.account_site_bytes set bytes = ${usage} where owner_id = '${a.userId}'`);
+    }
+  });
+
+  it("HL012 from the database reaches the path notice: a path another page holds, and a reserved one", async () => {
+    const { createSubPageRevisions, createSubPageSaveFn } =
+      await import("@/lib/site-pages/save-client");
+    const { CONTENT_MESSAGES } = await import("@/lib/content/errors");
+    const typeId = (
+      await admin
+        .from("content_types")
+        .select("id")
+        .eq("site_id", a.pageId)
+        .eq("key", "page")
+        .single()
+    ).data!.id;
+    const other = await admin
+      .from("content_entries")
+      .insert({
+        site_id: a.pageId,
+        type_id: typeId,
+        draft: { ...page("Taken"), path: "/taken" },
+      })
+      .select("id")
+      .single();
+    if (other.error) throw new Error(other.error.message);
+    try {
+      // The database itself raises HL012 for the taken path.
+      const direct = await admin
+        .from("content_entries")
+        .update({ draft: { ...page("About"), path: "/taken" } })
+        .eq("id", entryId);
+      expect(direct.error?.code).toBe("HL012");
+
+      const before = await rev();
+      const revisions = createSubPageRevisions({ [entryId]: before });
+      let result: unknown;
+      const answers = await throughTheEditor(async () => {
+        result = await createSubPageSaveFn(revisions, a.pageId)(entryId, {
+          ...page("About"),
+          path: "/taken",
+        } as never);
+      });
+      expect(answers).toEqual([
+        { status: 409, body: { kind: "path", message: CONTENT_MESSAGES.path_taken } },
+      ]);
+      // The editor flags the page as one that cannot be saved until the field is fixed.
+      expect(result).toEqual({ kind: "invalid" });
+      expect(await rev()).toBe(before);
+      const stored = await admin.from("content_entries").select("draft").eq("id", entryId).single();
+      expect((stored.data!.draft as { path: string }).path).toBe("/about");
+    } finally {
+      await admin.from("content_entries").delete().eq("id", other.data.id);
+    }
   });
 
   it("a suspended owner is refused and nothing changes", async () => {

@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { clientEnv } from "@/lib/env/client";
 import { appOrigin } from "@/lib/routing/urls";
-import { saveEntryDraftWithClient } from "@/lib/site-pages/entry-save-core";
+import { readEntrySaveBody, saveEntryDraftWithClient } from "@/lib/site-pages/entry-save-core";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -16,9 +16,10 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  *
  *   200  {kind: "ok", rev, unchanged}
  *   401  no session; 403 forbidden_origin or {kind: "suspended"}; 404 {kind: "missing"} (another
- *        account's entry, an unknown or mismatched id)
+ *        account's entry, an unknown, malformed or mismatched id)
  *   409  {kind: "conflict", currentRev}  nothing changed
- *   413  {kind: "too-large"}; 403 {kind: "storage-full"}; 422 {kind: "blocked"} (HL005),
+ *   413  {kind: "too-large"} (also a request over MAX_ENTRY_SAVE_BODY_BYTES, refused before it is
+ *        read); 403 {kind: "storage-full"}; 422 {kind: "blocked"} (HL005),
  *        {kind: "invalid"}; 409 {kind: "path"} (HL012)
  */
 export async function POST(
@@ -37,14 +38,15 @@ export async function POST(
   if (mediaType !== "application/json") {
     return NextResponse.json({ error: "expected_json" }, { status: 415, headers: NO_STORE });
   }
-  let body: { rev?: unknown; draft?: unknown };
-  try {
-    const parsed: unknown = await request.json();
-    if (!parsed || typeof parsed !== "object") throw new Error("not an object");
-    body = parsed as { rev?: unknown; draft?: unknown };
-  } catch {
+  // The size is checked before anything is read or parsed.
+  const read = await readEntrySaveBody(request);
+  if (!read.ok && read.reason === "too_large") {
+    return NextResponse.json({ kind: "too-large" }, { status: 413, headers: NO_STORE });
+  }
+  if (!read.ok || !read.value || typeof read.value !== "object") {
     return NextResponse.json({ error: "invalid_body" }, { status: 400, headers: NO_STORE });
   }
+  const body = read.value as { rev?: unknown; draft?: unknown };
 
   const { id, entryId } = await params;
   try {
