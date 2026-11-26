@@ -164,7 +164,7 @@ test("M16-11 Analytics lists Blog and the post by its title; a trashed post is a
   await expect(page.getByTestId("kpi-strip")).toBeVisible();
   const labels = await filter(page).locator("option").allInnerTexts();
   expect(labels).toEqual(["All pages", "Home", "Blog", LIVE_TITLE, "Deleted page"]);
-  // A draft post is never named.
+  // A draft post is never named, and the list is the posts that have views in the range.
   expect(labels).not.toContain(DRAFT_TITLE);
   expect(await kpi(page, "Views")).toBe("4");
 
@@ -189,9 +189,10 @@ test("M16-11 another owner's Analytics never names this site's posts", async ({
   await expect(page.getByTestId("kpi-strip")).toBeVisible();
   const labels = await filter(page).locator("option").allInnerTexts();
   expect(labels).not.toContain(LIVE_TITLE);
-  // Their own blog and their own live posts (theirs to pick, viewed or not); the foreign id they
-  // asked for is only ever "Deleted page".
-  expect(labels).toEqual(["All pages", "Home", "Blog", "Gone", THEIR_TITLE, "Deleted page"]);
+  // Their own blog; their own live posts have no view in the range, so they are not named (a post
+  // is listed once it has views). The foreign id they asked for is only ever "Deleted page".
+  expect(labels).toEqual(["All pages", "Home", "Blog", "Deleted page"]);
+  expect(labels).not.toContain(THEIR_TITLE);
   await expect(filter(page)).toHaveValue(blog.live);
   await expect(page.locator("option:checked")).toHaveText("Deleted page");
 });

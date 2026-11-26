@@ -45,7 +45,7 @@ export interface SubPageInfo {
 
 /** The archive of the built-in Post type in the page select (M16-11). */
 export const BLOG_LABEL = "Blog";
-/** How many posts the page select names (the newest live ones). */
+/** How many posts the page select names (the most viewed in the range). */
 export const POST_OPTIONS_MAX = 50;
 const UNTITLED_POST = "Untitled post";
 
