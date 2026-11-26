@@ -380,7 +380,10 @@ async function main(): Promise<number> {
       madeFixtures = true;
       targets = [
         { name: "mara", url: `http://mara.localhost:${PORT}/` },
-        ...fixtures.map((f) => ({ name: f.name, url: `http://${f.handle}.localhost:${PORT}/` })),
+        ...fixtures.map((f) => ({
+          name: f.name,
+          url: `http://${f.handle}.localhost:${PORT}${f.path ?? "/"}`,
+        })),
       ];
     }
 
