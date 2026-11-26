@@ -53,16 +53,16 @@ export const connectingAs = (email: string): string => `Connecting as ${email}.`
 
 export const SCOPE_LABELS: Readonly<Record<OauthScope, { title: string; hint: string }>> = {
   [SCOPE_READ]: {
-    title: "See your sites, pages and analytics",
+    title: "See your sites, pages, posts and analytics",
     hint: "Always included",
   },
   [SCOPE_WRITE]: {
     title: "Edit your drafts",
-    hint: "Add, change and remove blocks, design choices and your profile in your drafts. Nothing goes live until you publish.",
+    hint: "Add, change and remove blocks, blog posts, design choices and your profile in your drafts. Nothing goes live until you publish.",
   },
   [SCOPE_PUBLISH]: {
-    title: "Publish your pages",
-    hint: "Make your draft live on your public page, the same as the Publish button.",
+    title: "Publish your pages and posts",
+    hint: "Make your drafts live on your public site, the same as the Publish button. Also take a post down, rename or delete categories and tags, and turn your blog on or off.",
   },
 };
 
@@ -75,9 +75,9 @@ export const allowedNow = (scopes: readonly OauthScope[]): string =>
 
 /** The scopes in the lower-case words of a sentence. */
 export const PLAIN_SCOPE: Readonly<Record<OauthScope, string>> = {
-  [SCOPE_READ]: "see your pages and analytics",
+  [SCOPE_READ]: "see your pages, posts and analytics",
   [SCOPE_WRITE]: "edit your drafts",
-  [SCOPE_PUBLISH]: "publish your pages",
+  [SCOPE_PUBLISH]: "publish your pages and posts",
 };
 
 export const SUSPENDED_NOTICE =
@@ -125,9 +125,9 @@ export const CONNECTED_APPS_LOAD_ERROR =
   "We couldn’t load your connected apps. Reload to try again.";
 export const REGISTERED_NOT_VERIFIED_SHORT = "Registered automatically. Not verified.";
 export const SCOPE_ABILITIES: Readonly<Record<OauthScope, string>> = {
-  [SCOPE_READ]: "Can see your pages and analytics",
+  [SCOPE_READ]: "Can see your pages, posts and analytics",
   [SCOPE_WRITE]: "Can edit your drafts",
-  [SCOPE_PUBLISH]: "Can publish your pages",
+  [SCOPE_PUBLISH]: "Can publish your pages and posts",
 };
 export const connectedOn = (date: string): string => `Connected ${date}`;
 export const lastUsedOn = (date: string): string => `Last used ${date}`;

@@ -100,9 +100,9 @@ test.describe("M10-18 the card", () => {
 
     const registeredRow = card(page).locator('[data-connected-app="Zq Registered App"]');
     await expect(registeredRow).toContainText("Registered automatically. Not verified.");
-    await expect(registeredRow).toContainText("Can see your pages and analytics");
+    await expect(registeredRow).toContainText("Can see your pages, posts and analytics");
     await expect(registeredRow).toContainText("Can edit your drafts");
-    await expect(registeredRow).toContainText("Can publish your pages");
+    await expect(registeredRow).toContainText("Can publish your pages and posts");
     await expect(registeredRow).toContainText(`Connected ${today()}`);
     await expect(registeredRow).toContainText("Not used yet");
     await expect(
@@ -111,9 +111,9 @@ test.describe("M10-18 the card", () => {
 
     const metadataRow = card(page).locator('[data-connected-app="Zq Metadata App"]');
     await expect(metadataRow).toContainText(/Address: zq-[a-z0-9]+\.example\.org/);
-    await expect(metadataRow).toContainText("Can see your pages and analytics");
+    await expect(metadataRow).toContainText("Can see your pages, posts and analytics");
     await expect(metadataRow).not.toContainText("Can edit your drafts");
-    await expect(metadataRow).not.toContainText("Can publish your pages");
+    await expect(metadataRow).not.toContainText("Can publish your pages and posts");
 
     // Never a token, a hash, a client id or a grant id as text.
     const text = await card(page).innerText();

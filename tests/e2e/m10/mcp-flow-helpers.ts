@@ -9,7 +9,7 @@ import { url } from "../helpers";
 
 /**
  * The shared part of the Wave L end-to-end flows (M10-24 to M10-33): a fixture user with a page whose
- * draft differs from what is live, and `runEveryTool`, which works that page through all fourteen tools
+ * draft differs from what is live, and `runEveryTool`, which works that page through all the page tools
  * the way an AI would and checks every result for the documented shape and for nothing internal. The
  * minted-token spec and the real OAuth dance (flow.spec.ts) run the very same steps.
  */
@@ -100,7 +100,7 @@ export interface FlowEnv {
 }
 
 /**
- * Works the page through all fourteen tools in the order an AI would, publishes, and sees the new
+ * Works the page through all the page tools in the order an AI would, publishes, and sees the new
  * content live on the very next request. At the end the activity log holds exactly one row per call
  * and none carries the canary text planted in the page.
  */

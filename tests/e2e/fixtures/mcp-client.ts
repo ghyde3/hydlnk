@@ -310,6 +310,38 @@ export class McpClient {
   }
 }
 
+/**
+ * Reads a post's whole body through `get_entry`, a range at a time (M18-13): the ranges joined in
+ * order, how many calls it took, and the hash and length the server reported for the whole body.
+ */
+export async function readWholeBody(
+  mcp: McpClient,
+  entryId: string,
+  length?: number,
+): Promise<{ body: string; calls: number; contentHash: string; bodyChars: number; rev: number }> {
+  let body = "";
+  let offset: number | null = 0;
+  let calls = 0;
+  let contentHash = "";
+  let bodyChars = 0;
+  let rev = 0;
+  while (offset !== null) {
+    const part: Record<string, any> = await mcp.call("get_entry", {
+      entryId,
+      offset,
+      ...(length === undefined ? {} : { length }),
+    });
+    body += part.body;
+    contentHash = part.contentHash;
+    bodyChars = part.bodyChars;
+    rev = part.rev;
+    offset = part.nextOffset;
+    calls += 1;
+    if (calls > 200) throw new Error("get_entry never reached the end of the body");
+  }
+  return { body, calls, contentHash, bodyChars, rev };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Discovery and the loopback listener of the OAuth dance (M10-33)
 // ---------------------------------------------------------------------------------------------

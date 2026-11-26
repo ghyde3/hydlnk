@@ -163,14 +163,14 @@ test.describe("M10-34 the sections", () => {
     await page.goto(url(null, PATH));
     const can = await sectionText(page, "can-do");
     for (const phrase of [
-      /See your pages and your numbers/,
+      /See your pages, your posts and your numbers/,
       /Edit your profile/,
       /links and the other blocks/,
       /Change your theme/,
       /private preview link/,
       /7 days/,
       /custom domains/,
-      /Publish your page, if you allowed publishing/,
+      /Publish your pages and posts, if you allowed publishing/,
     ]) {
       expect(can, String(phrase)).toMatch(phrase);
     }
@@ -186,7 +186,7 @@ test.describe("M10-34 the sections", () => {
       /banner/,
       /share card/,
       /redirect settings/,
-      /Delete anything except a block/,
+      /Delete a page, or delete a post for good/,
       /unless you allowed it/,
     ]) {
       expect(cannot, String(phrase)).toMatch(phrase);
@@ -303,7 +303,7 @@ test.describe("M10-34 Connect ChatGPT", () => {
       /I understand and want to continue/,
       /Create as a plugin/,
       /sign in on HYDLNK/,
-      /Tick Publish your pages only if you want ChatGPT to publish for you/,
+      /Tick Publish your pages and posts only if you want ChatGPT to publish for you/,
       /choose Install if it is not already installed/,
       /type @ in the prompt box and select HYDLNK/,
       /You do not need to enable Developer mode/,
@@ -356,7 +356,8 @@ test.describe("M10-34 privacy, turning it off, good to know", () => {
     expect(text).toMatch(/every HYDLNK plan, Free included/);
     expect(text).toMatch(/ChatGPT account and workspace permissions/);
     expect(text).toMatch(/about 60 requests a minute/);
-    expect(text).toMatch(/up to 10 times an hour/);
+    expect(text).toMatch(/all changes of a site up to 10 times an hour/);
+    expect(text).toMatch(/single posts and pages up to 60 times an hour/);
     expect(text).toMatch(/Free covers the last 30 days/);
     expect(text).toMatch(
       /Pro and Studio cover up to a year, with referrers, devices and countries/,
