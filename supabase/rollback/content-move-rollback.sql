@@ -132,6 +132,13 @@ $$;
 comment on function public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz) is
   'Whole-site publish in one transaction: every sub-page of the site (the given ids must be exactly its current sub-pages) and then Home. Returns published_at. A path clash or any refusal rolls everything back. Server only (service_role).';
 
+-- The drop above means `create or replace` CREATED this function, with the default ACL (execute to
+-- public, anon and authenticated). It is SECURITY DEFINER and takes p_owner_id from its caller, so
+-- the grants of 20261011000003 are put back by hand. Every other function below replaces a body
+-- in place and keeps its ACL.
+revoke all on function public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz) from public, anon, authenticated;
+grant execute on function public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz) to service_role;
+
 create or replace function public.record_page_version()
 returns trigger
 language plpgsql

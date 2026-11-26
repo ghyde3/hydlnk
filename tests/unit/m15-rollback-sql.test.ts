@@ -297,3 +297,53 @@ rollback;
     expect(out).toContain("R|22023|maintenance");
   });
 });
+
+// A1: `create or replace` after a drop CREATES the function, with the default ACL (execute to
+// public, and Supabase's default privileges add anon and authenticated). Every rollback file must
+// leave no SECURITY DEFINER function a client can call.
+describe.skipIf(!haveDb)("the rollback files leave no function a client can execute", () => {
+  const files = ["block-publish-before-rollback.sql", "content-move-rollback.sql"];
+  const probe = `
+select 'X|' || p.oid::regprocedure
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname <> 'plan_limits'
+    and (has_function_privilege('anon', p.oid, 'execute')
+      or has_function_privilege('authenticated', p.oid, 'execute'));
+`;
+  function executable(sql: string): string[] {
+    const out = execFileSync(
+      "docker",
+      ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-q", "-At"],
+      {
+        input: `begin;\n\\set ON_ERROR_STOP on\n${sql}\n${probe}\nselect 'X|done';\nrollback;\n`,
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        stdio: ["pipe", "pipe", "ignore"],
+      },
+    );
+    return out
+      .split("\n")
+      .filter((line) => line.startsWith("X|"))
+      .map((line) => line.slice(2));
+  }
+
+  it("the probe finds a function created with the default ACL", () => {
+    expect(
+      executable("create function public.zz_a1_probe() returns int language sql as 'select 1';"),
+    ).toEqual(["zz_a1_probe()", "done"]);
+  });
+
+  for (const file of files) {
+    it(`${file}: only plan_limits stays executable by anon or authenticated`, () => {
+      const sql = readFileSync(resolve(root, "supabase/rollback", file), "utf8");
+      expect(executable(sql)).toEqual(["done"]);
+    });
+  }
+
+  it("both files run one after the other, as at a real rollback", () => {
+    const sql = files
+      .map((file) => readFileSync(resolve(root, "supabase/rollback", file), "utf8"))
+      .join("\n");
+    expect(executable(sql)).toEqual(["done"]);
+  });
+});
