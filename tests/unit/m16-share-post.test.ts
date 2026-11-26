@@ -292,6 +292,38 @@ describe("M16-16 loadSharedPreview of a post", () => {
     expect(entryRead?.select).not.toContain("published,");
   });
 
+  it("the menu shows the Blog item when the blog is on and the menu names it, at its live address", async () => {
+    const { loadSharedPreview } = await import("@/lib/previews/shared");
+    const data = tables();
+    data.content_types = data.content_types!.map((type) =>
+      type.id === POST_TYPE ? { ...type, enabled: true, label_plural: "Posts" } : type,
+    );
+    const withBlog = { ...design, nav: { show: true, items: [PAGE_ENTRY, POST_TYPE] } };
+    (data.preview_links![0]!.pages as Row).draft = withBlog;
+    for (const path of ["", "items", `entry/${POST}`]) {
+      const result = await loadSharedPreview(fakeAdmin(data).client, TOKEN, new Date(), path);
+      expect(result.kind).toBe("active");
+      if (result.kind !== "active") continue;
+      const items = result.site?.menu?.items ?? [];
+      // The preview has no archive of its own: the item keeps the live address, which the frame
+      // does not follow (only /share/{token}/{path} links are followed).
+      expect(items.find((item) => item.label === "Posts")).toEqual({
+        label: "Posts",
+        href: "/blog",
+        current: false,
+      });
+      expect(items.find((item) => item.label === "Items")?.href).toBe(`/share/${TOKEN}/items`);
+    }
+    // Off: no Blog item.
+    const off = tables();
+    (off.preview_links![0]!.pages as Row).draft = withBlog;
+    const result = await loadSharedPreview(fakeAdmin(off).client, TOKEN, new Date(), "items");
+    expect(result.kind === "active" && result.site?.menu?.items.map((item) => item.label)).toEqual([
+      "Home",
+      "Items",
+    ]);
+  });
+
   it("a published post shows its first publish date", async () => {
     const { loadSharedPreview } = await import("@/lib/previews/shared");
     const data = tables();
