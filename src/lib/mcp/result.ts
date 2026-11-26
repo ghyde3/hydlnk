@@ -25,6 +25,11 @@ export interface ToolSuccess {
   sentence: string;
   /** The data of the result, without `ok`. */
   data: Record<string, unknown>;
+  /**
+   * A content tool's result is never shortened (M18-02): the tool bounds its own output, lists by
+   * count and a body by its range.
+   */
+  exact?: true;
 }
 
 export interface ToolFailureInfo extends ToolFailureExtras {
@@ -60,7 +65,7 @@ export function successResult(
 ): ToolResult {
   let data = success.data;
   let sentence = success.sentence;
-  if (byteLength(JSON.stringify(data)) > maxBytes) {
+  if (success.exact !== true && byteLength(JSON.stringify(data)) > maxBytes) {
     const shortened = shortenStrings(data, MCP_SHORTENED_TEXT_CHARS);
     data = { ...(shortened.value as Record<string, unknown>), truncated: true };
     sentence = `${sentence} Long text was shortened. Ask for one block at a time with blockId to read it in full.`;

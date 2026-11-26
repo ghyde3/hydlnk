@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { ACCOUNT_SUSPENDED_MESSAGE } from "@/lib/admin/suspension";
 import {
+  MCP_ITEM_PUBLISH_PER_HOUR,
   MCP_PUBLISH_PER_HOUR,
   MCP_TOKEN_PER_MINUTE,
   MCP_TOOL_TIMEOUT_MS,
@@ -23,17 +24,19 @@ import {
   type ToolFailureInfo,
   type ToolResult,
 } from "./result";
-import type { AnyToolDefinition, ToolCall, ToolDeps, ToolIdentity } from "./types";
+import type { AnyToolDefinition, OwnedEntry, ToolCall, ToolDeps, ToolIdentity } from "./types";
 
 /**
  * The one door every tool call goes through (M10-22). The order is the contract, and a Vitest with
  * spies proves it:
  *
  *   1. the token's scopes include the tool's scope;
- *   2. the rate limits (per person, per token, and the publish limit);
+ *   2. the rate limits (per person, per token, and `publish_page`'s own publish limit);
  *   3. the account is not suspended (read fresh, closed on a failed read);
  *   4. the input parses with the tool's schema;
  *   5. the page is loaded and checked for ownership (and the sub-page it names, under that page);
+ *      for an entry tool (M18-01) the entry is, under the token's user, and then its site; a tool
+ *      that changes one item of the live site then counts against the per-item publish limit;
  *   6. the handler runs (cut off after 25 seconds);
  *   7. one activity row is written, after the response (a rate_limited refusal at most once a minute
  *      per token);
@@ -45,6 +48,16 @@ import type { AnyToolDefinition, ToolCall, ToolDeps, ToolIdentity } from "./type
  */
 
 class TimedOut extends Error {}
+
+/**
+ * The one answer of an entry tool for anything it may not work on (M18-01): another account's entry,
+ * an entry of another site than the `pageId` sent, a type the tool does not take, the wrong side of
+ * the trash, a random id and a malformed id.
+ */
+const entryNotFound = (): ToolFailureInfo => ({
+  code: "not_found",
+  message: MESSAGES.entry_not_found,
+});
 
 function logLine(tool: string, ok: boolean, code: string | null): string {
   return ok
@@ -203,30 +216,37 @@ export async function runTool(
     }
 
     // 2. Rate limits. A limiter that fails lets the call through (the limiter logs it itself).
-    const limits: Array<[string, number, number]> = [
-      [`mcp:${identity.userId}:min`, MCP_USER_PER_MINUTE, 60],
-      [`mcp:${identity.userId}:hour`, MCP_USER_PER_HOUR, 3600],
-      [`mcp-token:${identity.tokenId}`, MCP_TOKEN_PER_MINUTE, 60],
-    ];
-    if (tool.name === "publish_page") {
-      limits.push([`mcp-publish:${identity.userId}`, MCP_PUBLISH_PER_HOUR, 3600]);
-    }
-    for (const [key, limit, windowSeconds] of limits) {
+    const limited = async (
+      key: string,
+      limit: number,
+      windowSeconds: number,
+    ): Promise<ToolFailureInfo | null> => {
       let verdict: { allowed: boolean; retryAfter: number };
       try {
         verdict = await deps.limit(key, limit, windowSeconds);
       } catch {
         deps.log("[mcp] the rate limiter failed; allowing the call");
-        continue;
+        return null;
       }
-      if (!verdict.allowed) {
-        const seconds = Math.max(1, Math.ceil(verdict.retryAfter));
-        return refuse({
-          code: "rate_limited",
-          message: rateLimitedMessage(seconds),
-          retryAfterSeconds: seconds,
-        });
-      }
+      if (verdict.allowed) return null;
+      const seconds = Math.max(1, Math.ceil(verdict.retryAfter));
+      return {
+        code: "rate_limited",
+        message: rateLimitedMessage(seconds),
+        retryAfterSeconds: seconds,
+      };
+    };
+    const limits: Array<[string, number, number]> = [
+      [`mcp:${identity.userId}:min`, MCP_USER_PER_MINUTE, 60],
+      [`mcp:${identity.userId}:hour`, MCP_USER_PER_HOUR, 3600],
+      [`mcp-token:${identity.tokenId}`, MCP_TOKEN_PER_MINUTE, 60],
+    ];
+    if (tool.publishesSite) {
+      limits.push([`mcp-publish:${identity.userId}`, MCP_PUBLISH_PER_HOUR, 3600]);
+    }
+    for (const [key, limit, windowSeconds] of limits) {
+      const over = await limited(key, limit, windowSeconds);
+      if (over) return refuse(over);
     }
 
     // 3. Suspension, read fresh. A failed read refuses the call: closed.
@@ -243,20 +263,41 @@ export async function runTool(
     if (!parsed.success) return refuse(invalidInputFailure(parsed.error, rawInput));
     const args = parsed.data as Record<string, unknown>;
 
-    // 5. The page.
+    // 5. The page. An entry tool that was sent an `entryId` starts from the entry instead (5c).
     let page: ToolCall["page"] = null;
     let resolvedSubPageId: string | undefined;
-    if (tool.page === "one") {
+    const entryTool = tool.page === "entry";
+    const entryTypes = tool.entryTypes ?? [];
+    const entryId = entryTool && typeof args.entryId === "string" ? args.entryId : undefined;
+    if (entryTool && entryId !== undefined && args.subPageId !== undefined) {
+      return refuse({
+        code: "invalid_input",
+        message: MESSAGES.entryIdWithSubPage,
+        issues: [{ path: "subPageId", message: MESSAGES.entryIdWithSubPage }],
+      });
+    }
+    if (entryTool && entryId === undefined && !entryTypes.includes("page")) {
+      return refuse({
+        code: "invalid_input",
+        message: MESSAGES.entryIdRequired,
+        issues: [{ path: "entryId", message: MESSAGES.entryIdRequired }],
+      });
+    }
+    /** For an entry tool every miss is the one `not_found` of entries, whatever the lookup said. */
+    const miss = (failure: ToolFailureInfo): ToolFailureInfo =>
+      entryTool && failure.code === "not_found" ? entryNotFound() : failure;
+    const byPage = tool.page === "one" || (entryTool && entryId === undefined);
+    if (byPage) {
       const requested = typeof args.pageId === "string" ? args.pageId : undefined;
       let loaded;
       try {
         loaded = await deps.loadPage(identity.userId, requested, {
-          withDraft: tool.needsDraft === true,
+          withDraft: !entryTool && tool.needsDraft === true,
         });
       } catch {
         return refuse(serverFailure());
       }
-      if (!loaded.ok) return refuse(loaded.failure);
+      if (!loaded.ok) return refuse(miss(loaded.failure));
       page = loaded.page;
       pageId = page.id;
       resolvedSubPageId = loaded.subPageId;
@@ -285,15 +326,63 @@ export async function runTool(
       let loaded;
       try {
         loaded = await deps.loadSubPage(identity.userId, page.id, args.subPageId, {
+          withDraft: !entryTool && tool.needsDraft === true,
+        });
+      } catch {
+        return refuse(serverFailure());
+      }
+      if (!loaded.ok) return refuse(miss(loaded.failure));
+      subPage = loaded.subPage;
+      // Home's entry id means Home.
+      if (!subPage) args.subPageId = "home";
+    }
+
+    // 5c. The entry of an entry tool (M18-01), read under the token's user. With an `entryId` it
+    // comes first and its site second (a `pageId` sent with it must be that same site); without one
+    // it is the page 5 to 5b just resolved: the sub-page, or Home's own entry.
+    let entry: OwnedEntry | null = null;
+    if (entryTool) {
+      const wanted = entryId ?? subPage?.id ?? page?.homeEntryId;
+      if (wanted === undefined) return refuse(entryNotFound());
+      let found;
+      try {
+        found = await deps.loadEntry(identity.userId, wanted, {
+          types: entryId === undefined ? ["page"] : entryTypes,
+          trashed: tool.entryTrash ?? "no",
+          allowDisabledType: tool.allowDisabledType === true,
           withDraft: tool.needsDraft === true,
         });
       } catch {
         return refuse(serverFailure());
       }
-      if (!loaded.ok) return refuse(loaded.failure);
-      subPage = loaded.subPage;
-      // Home's entry id means Home.
-      if (!subPage) args.subPageId = "home";
+      if (!found.ok) return refuse(miss(found.failure));
+      entry = found.entry;
+      if (entryId !== undefined) {
+        const requested = typeof args.pageId === "string" ? args.pageId : entry.siteId;
+        let site;
+        try {
+          site = await deps.loadPage(identity.userId, requested, { withDraft: false });
+        } catch {
+          return refuse(serverFailure());
+        }
+        if (!site.ok || site.page.id !== entry.siteId) return refuse(entryNotFound());
+        page = site.page;
+        pageId = page.id;
+      } else if (!page || entry.siteId !== page.id) {
+        return refuse(entryNotFound());
+      }
+    }
+
+    // 5d. The per-item publish limit (M18-01), per person across tokens. It is counted only for a
+    // call that got this far: a call refused for its input or for an id that is not the caller's
+    // never reaches it.
+    if (tool.changesLive) {
+      const over = await limited(
+        `mcp-publish-item:${identity.userId}`,
+        MCP_ITEM_PUBLISH_PER_HOUR,
+        3600,
+      );
+      if (over) return refuse(over);
     }
 
     // 6. The handler, cut off after the timeout.
@@ -302,6 +391,7 @@ export async function runTool(
       admin: deps.admin,
       page,
       subPage,
+      entry,
       deps,
       defer: deps.defer,
       now: deps.now,

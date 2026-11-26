@@ -163,7 +163,7 @@ describe("runTool: scope", () => {
     const error = (result.structuredContent as { error: Record<string, unknown> }).error;
     expect(error).toMatchObject({ code: "insufficient_scope", requiredScope: "hydlnk.publish" });
     expect(error.message).toBe(
-      "This connection can’t publish your pages. In HYDLNK open Settings, remove this app under Connected apps, then connect it again and allow “Publish your pages”.",
+      "This connection can’t publish your pages and posts. In HYDLNK open Settings, remove this app under Connected apps, then connect it again and allow “Publish your pages and posts”.",
     );
     const challenge = (result._meta as Record<string, string[]>)["mcp/www_authenticate"]!;
     expect(challenge).toHaveLength(1);
@@ -202,10 +202,29 @@ describe("runTool: rate limits", () => {
       "limit:mcp-token:44444444-4444-4444-8444-444444444444",
     ]);
     calls.length = 0;
-    await runTool(tool({ name: "publish_page", scope: "hydlnk.publish" }), identity(), {}, deps);
+    await runTool(
+      tool({ name: "publish_page", scope: "hydlnk.publish", publishesSite: true }),
+      identity(),
+      {},
+      deps,
+    );
     expect(calls.filter((call) => call.startsWith("limit:")).at(-1)).toBe(
       "limit:mcp-publish:11111111-1111-4111-8111-111111111111",
     );
+    // The mark decides, not the name (M18-01): a tool that changes one item counts in its own bucket.
+    calls.length = 0;
+    await runTool(
+      tool({ name: "publish_entry", scope: "hydlnk.publish", changesLive: true }),
+      identity(),
+      {},
+      deps,
+    );
+    expect(calls.filter((call) => call.startsWith("limit:"))).toEqual([
+      "limit:mcp:11111111-1111-4111-8111-111111111111:min",
+      "limit:mcp:11111111-1111-4111-8111-111111111111:hour",
+      "limit:mcp-token:44444444-4444-4444-8444-444444444444",
+      "limit:mcp-publish-item:11111111-1111-4111-8111-111111111111",
+    ]);
   });
 
   it("uses the pinned numbers", async () => {
@@ -216,13 +235,26 @@ describe("runTool: rate limits", () => {
         return { allowed: true, retryAfter: 0 };
       },
     });
-    await runTool(tool({ name: "publish_page", scope: "hydlnk.publish" }), identity(), {}, deps);
+    await runTool(
+      tool({ name: "publish_page", scope: "hydlnk.publish", publishesSite: true }),
+      identity(),
+      {},
+      deps,
+    );
     expect(seen).toEqual([
       ["mcp:ID:min", 60, 60],
       ["mcp:ID:hour", 600, 3600],
       ["mcp-token:ID", 30, 60],
       ["mcp-publish:ID", 10, 3600],
     ]);
+    seen.length = 0;
+    await runTool(
+      tool({ name: "publish_entry", scope: "hydlnk.publish", changesLive: true }),
+      identity(),
+      {},
+      deps,
+    );
+    expect(seen.at(-1)).toEqual(["mcp-publish-item:ID", 60, 3600]);
   });
 
   it("the 61st call in a minute is rate_limited with the number of seconds", async () => {
@@ -386,7 +418,7 @@ describe("runTool: results", () => {
     });
   });
 
-  it("the failure codes are exactly the sixteen, pinned", () => {
+  it("the failure codes are exactly the eighteen, pinned", () => {
     expect([...TOOL_ERROR_CODES]).toEqual([
       "invalid_input",
       "not_found",
@@ -404,6 +436,8 @@ describe("runTool: results", () => {
       "rate_limited",
       "account_suspended",
       "server_error",
+      "type_disabled",
+      "limit_reached",
     ]);
   });
 

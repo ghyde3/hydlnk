@@ -29,6 +29,8 @@ import { invalidateEntry, invalidatePage, invalidateType } from "@/lib/publish/i
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } from "./query-core";
+import { unsafeBodySchemes } from "./blocklist";
+import { bodyImageIssue, bodyImages, checkOwnImages } from "./images";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 import type { EntryPlace } from "./publish-core";
 import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
@@ -41,7 +43,27 @@ import {
 } from "./terms-core";
 import { listRevisionsWithClient, restoreRevisionWithClient } from "./revisions-core";
 import { enableTypeWithClient, listTypesWithClient, updateTypeWithClient } from "./types-core";
-import type { ContentActor } from "./types";
+import type { ContentActor, ContentFailure } from "./types";
+
+/**
+ * What Publish checks on a post body, for a caller that wants it at save (the MCP tools, M18-05):
+ * only http, https, mailto and tel addresses, every image an upload, at most `BODY_IMAGES_MAX` of
+ * them, each in the actor's own folder and present in Storage. Reads only; it stores nothing. The
+ * editor's lenient draft save does not call it, and Publish runs every check again.
+ */
+export async function checkPostBody(input: {
+  actor: ContentActor;
+  draft: unknown;
+}): Promise<ContentFailure | null> {
+  const unsafe = unsafeBodySchemes(input.draft);
+  if (unsafe) return unsafe;
+  const foreign = bodyImageIssue(input.draft);
+  if (foreign) return foreign;
+  const body = (input.draft as { body?: unknown } | null)?.body;
+  const uses = typeof body === "string" ? bodyImages(body) : [];
+  if (uses.length === 0) return null;
+  return checkOwnImages(createAdminSupabase(), input.actor.userId, uses);
+}
 
 /** Create an entry of an enabled type. The draft is validated leniently and stored as given. */
 export function createEntry(input: {

@@ -29,6 +29,11 @@ export const MCP_USER_PER_HOUR = 600;
 export const MCP_TOKEN_PER_MINUTE = 30;
 /** Publishes per person per hour, across every token, on top of the general limits. */
 export const MCP_PUBLISH_PER_HOUR = 10;
+/**
+ * Per-item changes to the live site (one post or page published or taken down, the design, the blog
+ * setting) per person per hour, across every token: the editor's own number (M18-01).
+ */
+export const MCP_ITEM_PUBLISH_PER_HOUR = 60;
 
 /**
  * Requests per access token per minute, of any kind (`initialize`, `tools/list`, a tool call), counted
@@ -47,8 +52,16 @@ export const MCP_ACTIVITY_RETENTION_DAYS = 90;
 /** A tool call is cut off after this long, and the route's `maxDuration` leaves room for it. */
 export const MCP_TOOL_TIMEOUT_MS = 25_000;
 
-/** The largest request body the endpoint reads (M10-02, M10-20). */
-export const MCP_MAX_BODY_BYTES = 256 * 1024;
+/** The largest request body the endpoint reads (M10-02, M10-20): room for a full post body (M18-02). */
+export const MCP_MAX_BODY_BYTES = 1024 * 1024;
+
+/** How many characters of a post body `get_entry` returns in one call, and the most it can be asked for (M18-02). */
+export const MCP_BODY_RANGE_CHARS = 12_000;
+export const MCP_BODY_RANGE_MAX_CHARS = 30_000;
+
+/** The most entries `list_entries` returns in one call, and the most revisions `list_revisions` lists. */
+export const MCP_LIST_ENTRIES_MAX = 50;
+export const MCP_LIST_REVISIONS_MAX = 200;
 
 /** A result over this size shortens its long text fields (M10-22). */
 export const MCP_RESULT_MAX_BYTES = 60 * 1024;
