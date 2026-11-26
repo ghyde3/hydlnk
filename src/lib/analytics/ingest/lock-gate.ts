@@ -1,5 +1,5 @@
 import { rateLimitClientKey } from "./client-ip";
-import { notice, recordClick } from "./click-common";
+import { notice, readBodyUpTo, recordClick } from "./click-common";
 import {
   LOCK_PAGE_HEADERS,
   LINK_BUSY_MESSAGE,
@@ -123,33 +123,6 @@ export function isCrossSitePost(request: Request): boolean {
   }
 }
 
-/** The body as text, or `"too-large"` once it passes the cap: never reads more than the cap plus one chunk. */
-async function readSmallBody(request: Request): Promise<string | "too-large"> {
-  const declared = Number(request.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > LOCK_BODY_MAX_BYTES) return "too-large";
-  const reader = request.body?.getReader();
-  if (!reader) return "";
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > LOCK_BODY_MAX_BYTES) {
-      await reader.cancel().catch(() => undefined);
-      return "too-large";
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(bytes);
-}
-
 function pass(
   request: Request,
   params: { pageId: string; blockId: string },
@@ -181,7 +154,7 @@ export async function handleLockedPost(
   if (type !== FORM_TYPE) {
     return notice(415, "This form can’t be read.", homeHref, false);
   }
-  const text = await readSmallBody(request);
+  const text = await readBodyUpTo(request, LOCK_BODY_MAX_BYTES);
   if (text === "too-large") return notice(413, "That request is too large.", homeHref, false);
   const form = new URLSearchParams(text);
 

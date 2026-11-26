@@ -144,6 +144,8 @@ describe("M4-21 where the beacon is, and where it is not", () => {
     expect(users.filter((file) => !file.startsWith("src/lib/tenant-assets/")).sort()).toEqual([
       // The archive and post builders (Wave B) take the CSS and the font preloads; the tag is live-page's.
       "src/lib/tenant-render/archive-html.tsx",
+      // The form result pages (Wave D, M17-06) take the CSS and the font preloads, and no script.
+      "src/lib/tenant-render/form-page.tsx",
       "src/lib/tenant-render/live-page.tsx",
       "src/lib/tenant-render/post-html.tsx",
       "src/lib/tenant-render/state-css.ts",
@@ -242,8 +244,12 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     // The proxy leaves the tracking paths unrewritten on tenant and custom hosts, so one pair of
     // routes serves every host (src/lib/routing/paths.ts, src/proxy.ts).
     expect(read("src/proxy.ts")).toMatch(/isTrackingPath\(pathname\)/);
+    // The page routes are /r, /c and (Wave D) /f; the tracking paths are those and the beacon.
     expect(read("src/lib/routing/paths.ts")).toMatch(
-      /pathname\.startsWith\("\/r\/"\) \|\| pathname\.startsWith\("\/c\/"\) \|\| pathname === "\/api\/e"/,
+      /pathname\.startsWith\("\/r\/"\) \|\| pathname\.startsWith\("\/c\/"\) \|\| pathname\.startsWith\("\/f\/"\)/,
+    );
+    expect(read("src/lib/routing/paths.ts")).toMatch(
+      /return isPageRoutePath\(pathname\) \|\| pathname === "\/api\/e";/,
     );
   });
 });

@@ -9,6 +9,7 @@ import {
   UNKNOWN_SITE_ID,
   appRewritePath,
   isInternalPath,
+  isPageRoutePath,
   isTrackingPath,
   siteRewritePath,
   tenantRewritePath,
@@ -76,7 +77,7 @@ function tenantMethodRejected(pathname: string): NextResponse {
  * directly on the root host gets a 404. Consequences for later milestones:
  *   - everything on the app host lives under src/app/(editor)/app/, so the auth callback is
  *     .../app/auth/callback/route.ts and the Stripe webhook .../app/api/stripe/webhook/route.ts;
- *   - the tracking routes (/r/..., /c/..., /api/e) are served from every host: tenant hosts and resolved
+ *   - the tracking routes (/r/..., /c/..., /f/..., /api/e) are served from every host: tenant hosts and resolved
  *     custom hosts leave them unrewritten (`isTrackingPath`), so the handlers at the root of the app
  *     answer them.
  *
@@ -119,10 +120,10 @@ export async function proxy(request: NextRequest) {
         );
       }
       if (isInternalPath(pathname)) return NextResponse.rewrite(rewriteTo(NOT_FOUND_PATH));
-      // The click redirect and "Save contact" belong to a page's own hosts: on the root host (and
-      // deployment hosts) there is no page, so /r/* and /c/* are the plain 404 here (the handlers
-      // check the host as well).
-      if (pathname.startsWith("/r/") || pathname.startsWith("/c/")) {
+      // The click redirect, "Save contact" and the form routes belong to a page's own hosts: on the
+      // root host (and deployment hosts) there is no page, so /r/*, /c/* and /f/* are the plain 404
+      // here (the handlers check the host as well).
+      if (isPageRoutePath(pathname)) {
         return NextResponse.rewrite(rewriteTo(NOT_FOUND_PATH));
       }
       return NextResponse.next();
@@ -231,7 +232,7 @@ export const config = {
   // any path ending in a static file extension, video included (the showreel in public/marketing
   // is .mp4, .webm and .mov). Those requests never need a host decision, and the proxy would otherwise
   // run once per image and per video range request. The extension rule does not apply under /app,
-  // /t, /sites, /r and /c (the lookahead `(?!(?:app|t|sites|r|c)/)`): those are routed by host, so
+  // /t, /sites, /r, /c and /f (the lookahead `(?!(?:app|t|sites|r|c|f)/)`): those are routed by host, so
   // `/app/api/domains/<uuid>.png` still gets its host check instead of reaching the app route. tests/unit/routing-proxy-matcher.test.ts
   // checks that every file in public/ is covered. There is deliberately no /marketing/ prefix
   // rule: a path that is not a file must still get its host's routing and 404. robots.txt and
@@ -241,6 +242,6 @@ export const config = {
   // and no file in public/ has that shape. The pattern has to be a literal so Next.js can analyse it
   // at build time.
   matcher: [
-    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|(?!(?:app|t|sites|r|c)/|[a-z0-9-]+/feed\\.xml$).*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm|mov)$).*)",
+    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|(?!(?:app|t|sites|r|c|f)/|[a-z0-9-]+/feed\\.xml$).*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm|mov)$).*)",
   ],
 };

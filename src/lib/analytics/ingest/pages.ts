@@ -21,7 +21,7 @@ import {
   type BlockIndex,
   type SiteRead,
 } from "./site-index";
-import type { BeaconPage, ClickTarget } from "./types";
+import type { BeaconPage, ClickTarget, FormTarget } from "./types";
 import type { ContactCard } from "./vcard";
 
 /**
@@ -266,6 +266,32 @@ export async function resolveContactCard(
     email: block.email,
     hours: block.hours,
     pageUrl: hostname ? `${customOrigin(hostname, rootDomain)}/` : `${tenantOrigin(read.handle)}/`,
+    handle: read.handle,
+    customHosts: read.customHosts,
+    ...(holder.subPageId ? { subPageId: holder.subPageId } : {}),
+  };
+}
+
+/**
+ * The form block with this id in the site's published documents (Home or a live sub-page), for the
+ * form routes (Wave D, M17-06), with the handle and verified custom hosts of its site and the
+ * sub-page that holds it. The same cached read as a click: no query of its own. Null for an unknown
+ * site, nothing published, a suspended owner, a document that fails the published schema, and an id
+ * that is not a VISIBLE form block (a hidden one, another type, a draft-only one). Throws when the
+ * database fails.
+ */
+export async function resolveFormBlock(
+  pageId: string,
+  blockId: string,
+): Promise<FormTarget | null> {
+  const read = await readPublishedCached(pageId, blockId);
+  if (!read.found) return null;
+  const holder = documentForBlock(read, blockId);
+  if (!holder) return null;
+  const block = holder.doc.blocks.find((candidate) => candidate.id === blockId);
+  if (!block || block.type !== "form" || block.visible === false) return null;
+  return {
+    block,
     handle: read.handle,
     customHosts: read.customHosts,
     ...(holder.subPageId ? { subPageId: holder.subPageId } : {}),

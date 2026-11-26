@@ -2,6 +2,7 @@ import "server-only";
 import type { Metadata } from "next";
 import { PageRenderer } from "@/components/page/page-renderer";
 import type { PublishDoc, SubPagePublish } from "@/lib/document";
+import { formOpenPath } from "@/lib/forms/contract";
 import { pageChrome } from "@/lib/publish/chrome";
 import { pageMetadata, subPageMetadata } from "@/lib/publish/share-meta";
 import type { SiteContext } from "@/lib/site/menu";
@@ -22,9 +23,10 @@ import { renderStatic } from "./static-markup";
  * two cannot drift. What the live document adds around it is listed here and nowhere else:
  *
  *   head      `pageMetadata` tags, the favicon, the font and avatar preloads, one `<style>`
- *   after     the body: one deferred same-origin `<script>` (the tenant script: tap to play, and the
- *             view beacon of M4-21), carrying the page id as `data-page-id` (and, on a sub-page, its
- *             id as `data-sub-page-id`, so the beacon splits views per page: M11-09)
+ *   after     the body: the form open marker (`formPixel`, Wave D, M17-04) when the page holds a
+ *             visible form block, then one deferred same-origin `<script>` (the tenant script: tap
+ *             to play, and the view beacon of M4-21), carrying the page id as `data-page-id` (and, on
+ *             a sub-page, its id as `data-sub-page-id`, so the beacon splits views per page: M11-09)
  *
  * The footer's two links come from `pageChrome(plan, pageId)`, decided here from the owner's plan
  * (read server-side with the page) and the page id, never from the document. The script is part of
@@ -70,6 +72,21 @@ export function scriptTag(pageId: string, subPageId?: string): string {
     (subPageId === undefined ? "" : ` data-sub-page-id="${subPageId}"`) +
     ` defer></script>`
   );
+}
+
+/**
+ * The open marker of a page that holds a visible form block (M17-04, M17-06): one 1x1 image from
+ * `/f/{pageId}/o`, off screen and hidden from assistive technology, which tells the form route this
+ * client opened the page (src/lib/forms/open-marker.ts). "" for any other page, which is then
+ * byte-identical to before. Part of the live documents only: the editor preview, the share link and
+ * the demos never request it.
+ */
+export function formPixel(
+  pageId: string,
+  blocks: readonly { type: string; visible?: boolean }[],
+): string {
+  if (!blocks.some((block) => block.type === "form" && block.visible !== false)) return "";
+  return `<img src="${formOpenPath(pageId)}" alt="" width="1" height="1" aria-hidden="true" style="position:absolute;left:-9999px">`;
 }
 
 /**
@@ -143,7 +160,7 @@ export function renderLivePage(input: LivePageInput): string {
       hints,
       jsonLd: faqJsonLd(document),
     }),
-    root + scriptTag(pageId),
+    root + formPixel(pageId, document.blocks) + scriptTag(pageId),
   );
 }
 
@@ -200,6 +217,6 @@ export function renderLiveSubPage(input: LiveSubPageInput): string {
       hints,
       jsonLd: faqJsonLd(subPage),
     }),
-    root + scriptTag(pageId, subPageId),
+    root + formPixel(pageId, subPage.blocks) + scriptTag(pageId, subPageId),
   );
 }

@@ -1,3 +1,4 @@
+import type { FormBlock } from "@/lib/document";
 import type { RateLimitOptions, RateLimitResult } from "@/lib/rate-limit";
 import type { VisitorHashInput } from "./hash";
 
@@ -61,6 +62,20 @@ export interface ClickTarget {
   handle: string;
   /** Hostnames of the page's VERIFIED custom domains. */
   customHosts: string[];
+}
+
+/**
+ * A form block as the form routes read it (Wave D, M17-06): the visible block from the site's
+ * PUBLISHED documents, never from the request, and the hosts that may serve it.
+ */
+export interface FormTarget {
+  block: FormBlock;
+  /** `pages.handle` of the site: `{handle}.{root}` serves it. */
+  handle: string;
+  /** Hostnames of the site's VERIFIED custom domains. */
+  customHosts: string[];
+  /** The sub-page (page entry) whose published document holds the block; absent for Home. */
+  subPageId?: string;
 }
 
 /**

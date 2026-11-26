@@ -1,0 +1,36 @@
+import "server-only";
+import { after } from "next/server";
+import { visitorHash } from "@/lib/analytics/ingest/hash";
+import { insertEvent } from "@/lib/analytics/ingest/insert";
+import { lookupBeaconPage, resolveFormBlock } from "@/lib/analytics/ingest/pages";
+import { visitorHashSecret } from "@/lib/analytics/ingest/secret";
+import { clientEnv } from "@/lib/env/client";
+import { rateLimit } from "@/lib/rate-limit";
+import { rootOrigin } from "@/lib/routing/urls";
+import { renderFormPage } from "@/lib/tenant-render/form-page";
+import { notifyOwnerOfLimit, notifyOwnerOfMessage } from "./notify";
+import { hasBlockedLink, recordSubmission } from "./store";
+import type { FormDeps } from "./submit";
+
+/** The real dependencies of the form routes (the unit tests pass spies instead). */
+export function formDeps(): FormDeps {
+  const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
+  return {
+    // The default: fail open. The monthly cap in the database is the hard bound.
+    rateLimit: (key, limit, windowSeconds) => rateLimit(key, limit, windowSeconds),
+    now: () => new Date(),
+    visitorHash,
+    tokenSecret: visitorHashSecret,
+    resolveFormBlock,
+    lookupSite: lookupBeaconPage,
+    renderFormPage,
+    hasBlockedLink,
+    recordSubmission,
+    insertEvent,
+    notifyOwnerOfMessage,
+    notifyOwnerOfLimit,
+    schedule: (task) => after(task),
+    rootDomain,
+    homeHref: `${rootOrigin(rootDomain)}/`,
+  };
+}

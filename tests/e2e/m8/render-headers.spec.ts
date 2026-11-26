@@ -20,7 +20,7 @@ test.describe.configure({ timeout: 180_000 });
 const ROOT = `http://localhost:${SERVER_PORT}`;
 const FRAME_ORIGINS =
   "https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv";
-const PAGE_CSP = `default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' ${ROOT}; connect-src 'self'; frame-src ${FRAME_ORIGINS}; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+const PAGE_CSP = `default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' ${ROOT}; connect-src 'self'; frame-src ${FRAME_ORIGINS}; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`;
 
 const SECURITY_HEADERS = {
   "content-security-policy": PAGE_CSP,
