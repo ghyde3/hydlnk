@@ -364,6 +364,34 @@ describe.skipIf(!run)("the Posts app routes", () => {
     await call("typePost", "POST", { id: a.pageId }, { body: { archivePath: "blog" } });
   });
 
+  it("types/post: a refused turn on at an address leaves the stored archive path as it was", async () => {
+    const pathOf = async () =>
+      (
+        await admin
+          .from("content_types")
+          .select("archive_path, enabled")
+          .eq("site_id", a.pageId)
+          .eq("key", "post")
+          .single()
+      ).data;
+    await call("typePost", "POST", { id: a.pageId }, { body: { enabled: false } });
+    try {
+      expect(await pathOf()).toEqual({ archive_path: "blog", enabled: false });
+      // `about` is the path of a page entry of this site: turning the blog on there is refused.
+      const out = await call(
+        "typePost",
+        "POST",
+        { id: a.pageId },
+        { body: { enabled: true, archivePath: "about" } },
+      );
+      expect(out.status).toBe(409);
+      expect(out.json.kind).toBe("path");
+      expect(await pathOf()).toEqual({ archive_path: "blog", enabled: false });
+    } finally {
+      await call("typePost", "POST", { id: a.pageId }, { body: { enabled: true } });
+    }
+  });
+
   it("types/post: a suspended account is refused", async () => {
     await admin
       .from("accounts")

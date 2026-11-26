@@ -8,6 +8,7 @@ import {
   enableType,
   getEntry,
   listTermsWithClient,
+  listTypes,
   listTypesWithClient,
   publishEntry,
   renameTerm,
@@ -111,7 +112,8 @@ export async function listTypesCore(
 /**
  * POST types/post {enabled?, archivePath?}: turn the blog on or off, or move its archive. The path is
  * changed first, so "turn on at /news" claims `/news` and never `/blog`. A path a page uses or a
- * reserved word answers `{kind: "path"}` (HL012) and nothing changes.
+ * reserved word answers `{kind: "path"}` (HL012) and nothing changes: a refused turn on puts the
+ * previous path back.
  */
 export async function setPostTypeCore(input: {
   userId: string;
@@ -130,6 +132,14 @@ export async function setPostTypeCore(input: {
   if (!UUID.test(input.siteId)) return MISSING;
   const who = actor(input.userId);
   let type: TypeSummary | null = null;
+  // Turning on at an address moves the path first; if the turn on is then refused, the path the
+  // type had is put back, so a refusal changes nothing.
+  let previousPath: string | null = null;
+  if (archivePath !== undefined && enabled !== undefined) {
+    const types = await listTypes({ actor: who, siteId: input.siteId });
+    if (!types.ok) return refused(types);
+    previousPath = types.types.find((t) => t.key === POST_KEY)?.archivePath ?? null;
+  }
   if (archivePath !== undefined) {
     const moved = await updateType({
       actor: who,
@@ -147,7 +157,18 @@ export async function setPostTypeCore(input: {
       typeKey: POST_KEY,
       enabled,
     });
-    if (!switched.ok) return refused(switched);
+    if (!switched.ok) {
+      if (previousPath !== null && previousPath !== archivePath) {
+        const back = await updateType({
+          actor: who,
+          siteId: input.siteId,
+          typeKey: POST_KEY,
+          archivePath: previousPath,
+        });
+        if (!back.ok) console.error("[posts] restoring the archive path failed", back.error);
+      }
+      return refused(switched);
+    }
     type = switched;
   }
   if (!type) return invalid("Nothing to change.");
