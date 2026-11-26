@@ -28,10 +28,13 @@ const { run } = await stackIsUp();
 let admin: SupabaseClient;
 // The browser pieces Undo uses, pointed at the secret-key client (the tests have no browser session).
 vi.mock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => admin }));
+/** Every entry write Undo asked for (the entry ids), so a refused Undo can be shown to have made none. */
+const entryWrites: string[] = [];
 vi.mock("@/lib/site-pages/entry-save-client", async () => {
   const { saveEntryDraftWithClient } = await import("@/lib/site-pages/entry-save-core");
   return {
     postEntryDraft: async (siteId: string, entryId: string, rev: number, draft: unknown) => {
+      entryWrites.push(entryId);
       const owner = (await admin.from("pages").select("owner_id").eq("id", siteId).single()).data!;
       const out = await saveEntryDraftWithClient(admin as never, {
         userId: owner.owner_id,
@@ -369,9 +372,60 @@ describe.skipIf(!run || !dockerDb())(
           rev: home.rev + 1,
         })
         .eq("id", w.homeId);
+      const afterRestore = {
+        about: await entry(w.aboutId),
+        shop: await entry(w.shopId),
+        design: await site(w.o.pageId),
+      };
+      entryWrites.length = 0;
       const outcome = await client.undoRestore(w.o.pageId, saved!, result.entries);
       expect(outcome).toBe("conflict");
       expect((await entry(w.homeId))!.draft.blocks[0].label).toBe("Later");
+      // A conflict changes nothing: the other pages and the design stay as the restore left them.
+      expect(entryWrites).toEqual([]);
+      expect(await entry(w.aboutId)).toEqual(afterRestore.about);
+      expect(await entry(w.shopId)).toEqual(afterRestore.shop);
+      expect(await site(w.o.pageId)).toEqual(afterRestore.design);
+    });
+
+    it("Undo after the design rev moved (another tab, set_theme) is a conflict with zero entry writes", async () => {
+      const w = await world("v21-undo-design");
+      const saved = await client.readDraft(w.o.pageId);
+      const result = await core.restorePageVersionCore(input(w), deps());
+      if (!result.ok) throw new Error("restore failed");
+      // Another writer saves the design after the restore: its rev moves on.
+      const restored = await site(w.o.pageId);
+      const { blocks: _frozen, ...design } = restored;
+      void _frozen;
+      const bumped = await admin
+        .from("pages")
+        .update({
+          draft: {
+            ...design,
+            profile: { ...design.profile, name: "Later" },
+            rev: restored.rev + 1,
+          },
+        })
+        .eq("id", w.o.pageId)
+        .select("id");
+      expect(bumped.error).toBeNull();
+      const after = {
+        design: await site(w.o.pageId),
+        home: await entry(w.homeId),
+        about: await entry(w.aboutId),
+        shop: await entry(w.shopId),
+      };
+      expect(after.design.rev).toBe(restored.rev + 1);
+
+      entryWrites.length = 0;
+      const outcome = await client.undoRestore(w.o.pageId, saved!, result.entries);
+      expect(outcome).toBe("conflict");
+      expect(entryWrites).toEqual([]);
+      // Not a mixed state: the pages are not pre-restore while the design stays restored.
+      expect(await entry(w.homeId)).toEqual(after.home);
+      expect(await entry(w.aboutId)).toEqual(after.about);
+      expect(await entry(w.shopId)).toEqual(after.shop);
+      expect(await site(w.o.pageId)).toEqual(after.design);
     });
   },
 );

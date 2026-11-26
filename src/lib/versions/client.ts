@@ -1,5 +1,6 @@
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { createDraftSaver } from "@/lib/editor/save-client";
+import { readEntryRevs } from "@/lib/site-pages/entry-revs-client";
 import { postEntryDraft } from "@/lib/site-pages/entry-save-client";
 import type { DraftDoc } from "@/lib/document";
 import { nextRev } from "./restore";
@@ -61,7 +62,13 @@ export type UndoOutcome = "ok" | "conflict" | "error";
 
 /**
  * Put the snapshot back. `restored` is the restore's answer: each entry it wrote, with the rev it has
- * now. Pages first (a conflict there stops before the design moves), Home with the design last.
+ * now. Pages first, Home with the design last.
+ *
+ * A conflict changes nothing: before the first write, the design's rev and the rev of every entry
+ * Undo would write are read and compared with what the restore left. Anything saved since (another
+ * tab, an MCP tool) answers `conflict` with no page written, so the pages never go back while the
+ * design stays restored. Each write is still conditional on its own rev, for a save that lands
+ * between this check and the write.
  */
 export async function undoRestore(
   pageId: string,
@@ -70,6 +77,27 @@ export async function undoRestore(
 ): Promise<UndoOutcome> {
   const revOf = new Map(restored.map((entry) => [entry.id, entry.rev]));
   const home = saved.entries.find((entry) => entry.draft.path === "/") ?? null;
+
+  const homeRev = home ? revOf.get(home.id) : undefined;
+  if (home && homeRev === undefined) return "error";
+  // The restore wrote `rev + 1`; the write back carries one more and is conditional on that.
+  const restoredRev = nextRev(saved.draft);
+
+  // Nothing is written unless everything can be: the design first, then each entry.
+  const design = await createBrowserSupabase()
+    .from("pages")
+    .select("rev:draft->>rev")
+    .eq("id", pageId)
+    .maybeSingle();
+  if (design.error || !design.data) return "error";
+  if (design.data.rev !== String(restoredRev)) return "conflict";
+  const stored = await readEntryRevs(pageId);
+  if (!stored) return "error";
+  const storedRev = new Map(stored.map((row) => [row.id, row.rev]));
+  for (const entry of saved.entries) {
+    const rev = revOf.get(entry.id);
+    if (rev !== undefined && storedRev.get(entry.id) !== rev) return "conflict";
+  }
 
   for (const entry of saved.entries) {
     if (entry === home) continue;
@@ -80,16 +108,12 @@ export async function undoRestore(
     return answer.kind === "conflict" ? "conflict" : "error";
   }
 
-  // The restore wrote `rev + 1`; the write back carries one more and is conditional on that.
-  const restoredRev = nextRev(saved.draft);
   const doc = {
     ...saved.draft,
     // With a Home entry the saver sends the blocks there; the frozen copy is never sent back.
     ...(home ? { blocks: home.draft.blocks } : {}),
     rev: restoredRev + 1,
   } as unknown as DraftDoc;
-  const homeRev = home ? revOf.get(home.id) : undefined;
-  if (home && homeRev === undefined) return "error";
   const saver = createDraftSaver(
     pageId,
     home && homeRev !== undefined ? { entryId: home.id, rev: homeRev } : null,
