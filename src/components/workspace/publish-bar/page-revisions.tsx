@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LocalTime } from "@/components/versions/local-time";
 import { fetchPageRevisions, type PageRevision } from "@/lib/site-pages/entry-revisions-client";
+import { CHIP, CHIP_COLORS } from "./item-chip";
 import { ROW_BUTTON } from "./publish-bar-view";
 
 export const REVISIONS_NOTE =
@@ -77,7 +78,9 @@ export function PageRevisions({
           Back
         </button>
         <div className="min-w-0">
-          <p className="m-0 truncate text-sm font-semibold text-ink">{title}</p>
+          <p title={title} className="m-0 truncate text-sm font-semibold text-ink">
+            {title}
+          </p>
           <p className="m-0 text-xs text-text-2">Revisions</p>
         </div>
       </div>
@@ -127,7 +130,7 @@ export function PageRevisions({
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <LocalTime iso={revision.createdAt} className="font-mono text-xs text-text-2" />
                 {revision.wasPublished ? (
-                  <span className="rounded-sm bg-[#E7F3EC] px-2 py-[3px] text-xs font-medium text-[#2B7448]">
+                  <span data-revision-published="" className={`${CHIP} ${CHIP_COLORS.live.chip}`}>
                     Published
                   </span>
                 ) : null}

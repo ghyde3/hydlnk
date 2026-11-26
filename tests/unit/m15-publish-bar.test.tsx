@@ -108,6 +108,46 @@ describe("M15-10 the rows of the publish bar", () => {
     });
   });
 
+  it("the chips are one class on the 4px grid, colored by the UI tokens only", () => {
+    render();
+    const chips = [...host.querySelectorAll<HTMLElement>("[data-item-state]")];
+    expect(chips).toHaveLength(4);
+    for (const chip of chips) {
+      const classes = chip.className.split(/\s+/);
+      // 8px sides, 4px top and bottom, 12px text on a 16px line: 24px tall.
+      for (const name of ["rounded-sm", "px-2", "py-1", "text-xs", "leading-4", "font-medium"]) {
+        expect(classes, name).toContain(name);
+      }
+      // No arbitrary value (py-[5px], bg-[#...]) and no inline color.
+      expect(chip.className).not.toMatch(/\[[^\]]*\]/);
+      expect(chip.getAttribute("style")).toBeNull();
+      expect(chip.querySelector("span")!.getAttribute("style")).toBeNull();
+    }
+    const classOf = (state: ItemPublishState) =>
+      host.querySelector<HTMLElement>(`[data-item-state="${state}"]`)!.className;
+    expect(classOf("draft")).toContain("bg-track text-text-2");
+    expect(classOf("changed")).toContain("bg-brass-soft text-brass-soft-text");
+    expect(classOf("live")).toContain("bg-good-bg text-good-text");
+  });
+
+  it("a title cut with an ellipsis can be read in full: the row's title and path carry a title attribute", () => {
+    const long = "A page with a title much longer than a 380px panel can show on one line";
+    const rows = publishRows({
+      items: orderSitePages("Home", { show: true, items: [] }, [
+        { id: ABOUT, title: long, path: "a-long-path", livePath: null, createdAt: "2026-01-01" },
+      ]),
+      design: "live",
+      home: "live",
+      pages: { [ABOUT]: "draft" },
+    });
+    render({ rows });
+    const [title, detail] = [...row(ABOUT).querySelectorAll("p")];
+    expect(title!.className).toContain("truncate");
+    expect(title!.getAttribute("title")).toBe(long);
+    expect(detail!.getAttribute("title")).toBe("/a-long-path");
+    expect(row("home").querySelector("p")!.getAttribute("title")).toBe("Home");
+  });
+
   it("the pages card says the same three words", () => {
     for (const state of ["live", "unpublished", "changed"] as const) {
       expect(PAGE_STATE_LABEL[state]).toBe(ITEM_STATE_LABEL[itemStateOf(state)]);

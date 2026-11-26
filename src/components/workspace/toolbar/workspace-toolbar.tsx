@@ -7,7 +7,7 @@ import { StatusChip } from "@/components/editor/status-chip";
 import { UndoRedoButtons } from "@/components/editor/undo-redo-controls";
 import type { UndoRedo } from "@/components/editor/use-undo-redo";
 import type { SaveStatus } from "@/lib/editor/autosave";
-import type { PublishStatus } from "@/lib/editor/status";
+import { PUBLISH_STATUS_LABEL, type PublishStatus } from "@/lib/editor/status";
 import { MoreMenu } from "./more-menu";
 import { PIN_ATTRIBUTE, usePinnedHeight } from "./pinned-height";
 import { PreviewMenu } from "./preview-menu";
@@ -78,6 +78,11 @@ export interface WorkspaceToolbarProps {
 export const TOOLBAR_TEST_ID = "workspace-toolbar";
 export const TOOLBAR_ROW_TEST_ID = "workspace-toolbar-row";
 export const TOOLBAR_TABS_TEST_ID = "workspace-tabs-pin";
+
+/** The accessible name of the chip that opens the publish bar: the status it shows, then what it does. */
+export function publishToggleName(status: PublishStatus): string {
+  return `Status: ${PUBLISH_STATUS_LABEL[status]}, choose what to publish`;
+}
 
 function PublishButton({
   publishing,
@@ -175,7 +180,7 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
       <div
         data-testid={TOOLBAR_ROW_TEST_ID}
         {...{ [PIN_ATTRIBUTE]: "" }}
-        className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-2 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
+        className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-1.5 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
       >
         <div className="order-2 flex min-w-0 flex-1 hl:order-none hl:flex-none">
           {onTogglePublishBar ? (
@@ -183,18 +188,22 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
               ref={publishToggleRef}
               type="button"
               data-testid="publish-bar-toggle"
-              aria-label="Choose what to publish"
+              // The name holds the visible text (WCAG 2.5.3, label in name), so "click Published"
+              // finds it. It starts with "Status": no button but Publish has a name starting "Publish".
+              aria-label={publishToggleName(status)}
               aria-haspopup="dialog"
               aria-expanded={publishBarOpen}
               aria-controls={publishBarOpen ? publishBarId : undefined}
               onClick={onTogglePublishBar}
-              className="inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent p-0 text-ink"
+              className="inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-0.5 rounded-sm border-0 bg-transparent p-0 text-ink hl:gap-1"
             >
               <StatusChip status={status} />
+              {/* At every width: without it the chip reads as a plain badge on a phone. */}
               <ChevronDown
                 aria-hidden="true"
+                data-testid="publish-bar-chevron"
                 size={14}
-                className={`hidden shrink-0 text-text-2 hl:block ${publishBarOpen ? "rotate-180" : ""}`}
+                className={`shrink-0 text-text-2 ${publishBarOpen ? "rotate-180" : ""}`}
               />
             </button>
           ) : (

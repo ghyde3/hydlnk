@@ -1,30 +1,30 @@
 import { ITEM_STATE_LABEL, type ItemPublishState } from "@/lib/publish/status";
 
 /**
- * The colors of the toolbar's status chip (`src/components/editor/status-chip.tsx`), by item state:
- * Draft is the neutral chip, Unpublished changes the brass one, Live the green one. One chip style
- * in the workspace, so a row of the publish bar reads like the toolbar it hangs from.
+ * The one chip of the publish bar: 4px radius, 12px/500 on a 16px line, 8px side and 4px top and
+ * bottom padding (24px tall, on the 4px grid). Colors come from the HYDLNK UI tokens only.
  */
-const CHIP_STYLE: Record<ItemPublishState, { background: string; color: string; dot?: string }> = {
-  draft: { background: "#EFEDE9", color: "#5E5A54" },
-  changed: { background: "#F6EEDF", color: "#6B5226" },
-  live: { background: "#E7F3EC", color: "#2B7448", dot: "#2F7D4F" },
+export const CHIP =
+  "inline-flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-1 text-xs leading-4 font-medium whitespace-nowrap";
+
+/**
+ * The chip's colors by item state, the pairs DESIGN.md gives the toolbar's status chip: Draft is the
+ * neutral chip (`--hl-track`), Unpublished changes the brass one (`--hl-brass-soft`), Live the green
+ * one (`--hl-good-bg` with `--hl-good-text`, the green that reaches 4.5:1 at 12px; the dot keeps
+ * `--hl-good`).
+ */
+export const CHIP_COLORS: Record<ItemPublishState, { chip: string; dot: string }> = {
+  draft: { chip: "bg-track text-text-2", dot: "bg-current" },
+  changed: { chip: "bg-brass-soft text-brass-soft-text", dot: "bg-current" },
+  live: { chip: "bg-good-bg text-good-text", dot: "bg-good" },
 };
 
-/** One item's state in the publish bar: "Live", "Unpublished changes" or "Draft". 4px radius, 12px/500, a 6px dot. */
+/** One item's state in the publish bar: "Live", "Unpublished changes" or "Draft", with a 6px dot. */
 export function ItemChip({ state }: { state: ItemPublishState }) {
-  const { background, color, dot } = CHIP_STYLE[state];
+  const colors = CHIP_COLORS[state];
   return (
-    <span
-      data-item-state={state}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-sm px-2 py-[5px] text-xs font-medium whitespace-nowrap"
-      style={{ background, color }}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-block size-1.5 rounded-full"
-        style={{ background: dot ?? color }}
-      />
+    <span data-item-state={state} className={`${CHIP} ${colors.chip}`}>
+      <span aria-hidden="true" className={`inline-block size-1.5 rounded-full ${colors.dot}`} />
       {ITEM_STATE_LABEL[state]}
     </span>
   );
