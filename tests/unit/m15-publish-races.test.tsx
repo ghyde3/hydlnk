@@ -193,6 +193,7 @@ describe("M15-10 what the editor calls live after a publish", () => {
         },
       ],
       homeTitle: "Home",
+      homeBlocks: [],
       nav: { show: true, items: [] },
       editDraft: () => {},
     });
