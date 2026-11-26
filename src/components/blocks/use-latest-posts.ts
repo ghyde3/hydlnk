@@ -68,16 +68,18 @@ export function parseLatestPosts(body: unknown): Omit<LatestPostsData, "state"> 
 
 /**
  * The site's latest posts as the live page reads them. `categoryIds`: the categories the blocks on
- * screen filter by, so their older posts are included too.
+ * screen filter by, so their older posts are included too. `enabled` false reads nothing (a page with
+ * no latest-posts block has no use for the posts).
  */
 export function useLatestPosts(
   siteId: string | null | undefined,
   categoryIds: readonly string[] = [],
+  enabled = true,
 ): LatestPostsData {
   const [data, setData] = useState<LatestPostsData>(EMPTY);
   const categories = [...new Set(categoryIds.filter((id) => id !== ""))].sort().join(",");
   useEffect(() => {
-    if (!siteId) return;
+    if (!siteId || !enabled) return;
     let live = true;
     const query = categories === "" ? "" : `?categories=${encodeURIComponent(categories)}`;
     fetch(`/api/pages/${encodeURIComponent(siteId)}/posts/latest${query}`, {
@@ -93,6 +95,6 @@ export function useLatestPosts(
     return () => {
       live = false;
     };
-  }, [siteId, categories]);
+  }, [siteId, categories, enabled]);
   return data;
 }

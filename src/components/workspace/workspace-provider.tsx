@@ -187,6 +187,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     initialArchives: props.archives ?? [],
     homeTitle: "Home",
     nav: draft.nav,
+    homeBlocks: draft.blocks,
     editDraft,
   });
   const {

@@ -77,7 +77,7 @@ function dividers(n: number) {
 // ---------------------------------------------------------------------------------------------
 
 test.describe("M2-10 add a block", () => {
-  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store, Map, Page link, Items and Hours), 4px radius, #D9D6D0 border and a brass plus", async ({
+  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store, Map, Page link, Items, Hours and Latest posts), 4px radius, #D9D6D0 border and a brass plus", async ({
     page,
     context,
   }) => {
@@ -115,7 +115,7 @@ test.describe("M2-10 add a block", () => {
       "Page link",
       "Items",
       "Hours",
-      // Wave B (M16-07), which left this list behind, and Wave D (M17-03).
+      // Wave B (M16-07) and Wave D (M17-03).
       "Latest posts",
       "Form",
     ]);
