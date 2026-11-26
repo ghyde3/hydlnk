@@ -94,8 +94,11 @@ export function PagesBlogRow({
     setError(refusalMessage(out));
   }
 
-  // Nothing is drawn until the answer is in, so the panel does not jump from "Add blog" to the row.
-  if (!ready || type === null) return null;
+  // Until the answer is in, a blank the height of the "Add blog" button (the common case) holds the
+  // place, so the Profile card below does not jump when the button arrives. An error draws nothing.
+  if (!ready)
+    return <div aria-hidden="true" data-testid="pages-blog-pending" className="min-h-11" />;
+  if (type === null) return null;
 
   if (type.enabled) {
     const inMenu = menuItems.includes(type.typeId);
