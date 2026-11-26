@@ -142,13 +142,40 @@ test("M16-15 Publish lists what to fix by field, with a link to the field", asyn
   await expectNoHorizontalScroll(page);
 });
 
-test("M16-15 Preview opens the post's private share address", async ({ page, context }) => {
+test("M16-15 M16-16 Preview opens the post's private share address, which draws the draft", async ({
+  page,
+  context,
+}) => {
   const user = await blogUser(context, "pv");
-  const id = await seedPost(user.pageId, { title: "Preview me", slug: "preview-me", body: "Hi." });
+  const id = await seedPost(user.pageId, {
+    title: "Preview me",
+    slug: "preview-me",
+    body: "## A draft heading\n\nOnly the draft says *this*.",
+  });
   await openPost(page, id);
-  const popup = page.waitForEvent("popup");
+  const opened = page.waitForEvent("popup");
   await page.getByTestId(POST_TEST_IDS.preview).click();
   const link = page.getByTestId("post-preview-link");
   await expect(link).toHaveAttribute("href", new RegExp(`/share/[^/]+/entry/${id}$`));
-  await (await popup).waitForURL(new RegExp(`/share/[^/]+/entry/${id}$`));
+  const popup = await opened;
+  await popup.waitForURL(new RegExp(`/share/[^/]+/entry/${id}$`));
+
+  // The page behind the address (M16-16) really draws this never-published draft: its title as the
+  // one <h1>, its body, and the share rules (not indexed, never stored).
+  expect((await postRow(id)).published).toBeNull();
+  await expect(popup.getByRole("heading", { level: 1, name: "Preview me" })).toBeVisible();
+  await expect(popup.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(popup.getByRole("heading", { name: "A draft heading" })).toBeVisible();
+  await expect(popup.locator(".hl-post-body")).toContainText("Only the draft says this.");
+  await expect(popup.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  const response = await popup.reload();
+  expect(response?.status()).toBe(200);
+  const headers = response!.headers();
+  // `next dev` rewrites a page's Cache-Control to "no-cache, must-revalidate"; the production build
+  // (CI) answers the proxy's "no-store". Either way nothing is stored (as in m6/pages-preview).
+  expect(headers["cache-control"]).toMatch(/no-store|no-cache/);
+  expect(headers["cache-control"]).not.toMatch(/public|s-maxage/);
+  expect(headers["x-robots-tag"]).toContain("noindex");
+  await expect(popup.getByRole("heading", { level: 1, name: "Preview me" })).toBeVisible();
+  await expectNoHorizontalScroll(popup);
 });
