@@ -21,7 +21,8 @@ import { chromium, type Browser, type Page } from "@playwright/test";
 import { createFixtures, removeFixtures } from "./lib/lighthouse-fixtures";
 import { DESKTOP, PHONE } from "./lib/viewports";
 
-const PORT = 3000;
+// LIGHTHOUSE_PORT lets a run sit beside a dev server on :3000 (the default).
+const PORT = Number(process.env.LIGHTHOUSE_PORT ?? 3000);
 const OUT_DIR = path.resolve(process.cwd(), "tmp", "lighthouse");
 const USAGE =
   "Usage: pnpm lighthouse [--skip-build] [--reuse-server] [--url https://{handle}.hydlnk.com]";
@@ -167,7 +168,7 @@ function isRootHostOf(host: string, tenantHost: string): boolean {
 }
 
 /** HYDLNK's own root hosts: a custom domain's images come from here too, not from the custom host. */
-const ROOT_HOSTS = new Set(["hydlnk.com", "localhost:3000"]);
+const ROOT_HOSTS = new Set(["hydlnk.com", `localhost:${PORT}`]);
 
 function sameSite(requestUrl: string, pageUrl: string): boolean {
   return new URL(requestUrl).origin === new URL(pageUrl).origin;
