@@ -14,7 +14,7 @@
  * against the local stack and removed again by `removeFixtures`. Never run against production.
  */
 import sharp from "sharp";
-import { adminClient, deleteUser, supabaseUrl } from "../../tests/e2e/fixtures/auth";
+import { adminClient, deleteUser, moveSite, supabaseUrl } from "../../tests/e2e/fixtures/auth";
 
 const IVORY = "00000000-0000-4000-8000-000000000002";
 const SMOKE = "00000000-0000-4000-8000-000000000003";
@@ -135,17 +135,23 @@ export async function createFixtures(): Promise<Fixture[]> {
     const page = must(
       await admin
         .from("pages")
-        .insert({
-          owner_id: owner,
-          handle: f.handle,
-          draft,
-          published,
-          published_at: new Date().toISOString(),
-        })
+        .insert({ owner_id: owner, handle: f.handle, draft })
         .select("id")
         .single(),
       `insert ${f.handle}`,
     ) as { id: string };
+    // A site is live through its Home entry (M15): move the draft's blocks into the '/' entry, then
+    // publish the way Publish does. A `pages` row with `published` alone is an unpublished site,
+    // and the audit would measure the placeholder.
+    await moveSite(page.id);
+    const live = await admin.rpc("publish_site", {
+      p_page_id: page.id,
+      p_owner_id: owner,
+      p_home: published as never,
+      p_sub_pages: [] as never,
+      p_published_at: new Date().toISOString(),
+    });
+    if (live.error) throw new Error(`publish ${f.handle}: ${live.error.message}`);
     if (f.handle === BLOG_HANDLE) await makeBlog(page.id, owner);
   }
   return FIXTURES;
