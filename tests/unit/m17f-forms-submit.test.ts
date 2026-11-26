@@ -326,7 +326,10 @@ describe("M17-06 the block and the host", () => {
 
   it("only the site's own hosts: another tenant, the root host and a forwarded host are 404", async () => {
     for (const headers of [
-      { host: "other.localhost:3000", origin: "http://other.localhost:3000" } as Record<string, string>,
+      { host: "other.localhost:3000", origin: "http://other.localhost:3000" } as Record<
+        string,
+        string
+      >,
       { host: "localhost:3000", origin: "http://localhost:3000" },
       {
         host: "evil.example",

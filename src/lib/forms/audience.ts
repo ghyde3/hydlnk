@@ -46,10 +46,9 @@ export interface AudienceData {
 
 type Db = SupabaseClient;
 
-const blocksOf = (doc: unknown): unknown[] => {
-  const blocks = (doc as { blocks?: unknown } | null)?.blocks;
-  return Array.isArray(blocks) ? blocks : [];
-};
+/** The blocks of a page entry's draft (never the site row's frozen copy). */
+const entryBlocks = (entry: { blocks?: unknown }): unknown[] =>
+  Array.isArray(entry.blocks) ? entry.blocks : [];
 
 function addLabels(labels: Map<string, string>, blocks: unknown[], pageTitle: string): void {
   for (const raw of blocks) {
@@ -68,22 +67,18 @@ function addLabels(labels: Map<string, string>, blocks: unknown[], pageTitle: st
   }
 }
 
-/** Each form block of the site's drafts (Home, then the pages): "{heading or kind} · {page}". */
+/** Each form block of the site's page drafts (Home's entry, then the pages): "{heading or kind} · {page}". */
 export async function loadFormLabels(client: Db, siteId: string): Promise<FormLabels> {
-  const [site, home, pages] = await Promise.all([
-    client.from("pages").select("draft").eq("id", siteId).maybeSingle(),
+  const [home, pages] = await Promise.all([
     getHomeDraftWithClient(client as never, siteId),
     listDraftPagesWithClient(client as never, siteId),
   ]);
-  if (site.error)
-    throw new Error(`Loading the site's forms failed (${site.error.code ?? "unknown"})`);
   const labels = new Map<string, string>();
-  // A site with no Home entry keeps Home's blocks in pages.draft (it was never moved).
-  addLabels(labels, blocksOf(home ? home.draft : site.data?.draft), "Home");
+  if (home) addLabels(labels, entryBlocks(home.draft), "Home");
   for (const page of pages) {
     const title =
       typeof page.draft.title === "string" && page.draft.title ? page.draft.title : "Page";
-    addLabels(labels, blocksOf(page.draft), title);
+    addLabels(labels, entryBlocks(page.draft), title);
   }
   return labels;
 }

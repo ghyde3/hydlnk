@@ -121,6 +121,17 @@ for (const javaScriptEnabled of [true, false]) {
         email: "visitor@example.test",
         entry_id: null,
       });
+      // One click row under the form block's id, recorded after the answer.
+      await expect
+        .poll(async () => {
+          const { data } = await adminClient()
+            .from("events")
+            .select("block_id, type")
+            .eq("page_id", live.pageId)
+            .eq("type", "click");
+          return data;
+        })
+        .toEqual([{ block_id: SIGNUP_ID, type: "click" }]);
     });
 
     test("a contact message after 3 seconds is stored with the name and message", async ({
