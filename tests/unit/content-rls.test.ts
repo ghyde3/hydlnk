@@ -6,9 +6,12 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 /**
  * M15-02 acceptance step 2: an integration probe with the publishable key. Two signed-in users and
- * anon each try select, insert, update and delete on the six content tables against another user's
+ * anon each try select, insert, update and delete on the content tables against another user's
  * site, over PostgREST (the path curl would take). The owner may read and may not write; everyone else
  * reads nothing and writes nothing; nothing of the owner's changes.
+ *
+ * M16-01 adds content_slug_redirects to the probe: the same rules, and not even the secret key writes
+ * it (a database trigger is its one writer).
  */
 const { run } = await stackIsUp();
 
@@ -19,6 +22,7 @@ const TABLES = [
   "content_terms",
   "content_entry_terms",
   "site_paths",
+  "content_slug_redirects",
 ] as const;
 type Table = (typeof TABLES)[number];
 
@@ -129,6 +133,18 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
       .insert({ entry_id: ids.entry, term_id: ids.term });
     if (link.error) throw new Error(link.error.message);
 
+    // A slug change of a published post leaves one redirect row (the trigger writes it).
+    for (const slug of ["crls-old", "crls-new"]) {
+      const live = await admin
+        .from("content_entries")
+        .update({
+          published: { title: "secret of A", slug },
+          published_at: new Date().toISOString(),
+        })
+        .eq("id", ids.entry);
+      if (live.error) throw new Error(live.error.message);
+    }
+
     asA = await signIn(a);
     asB = await signIn(b);
     anon = publishable();
@@ -165,6 +181,12 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
     },
     content_entry_terms: { entry_id: ids.entry, term_id: ids.term },
     site_paths: { site_id: a.pageId, path: "zz", entry_id: ids.entry },
+    content_slug_redirects: {
+      site_id: a.pageId,
+      type_id: ids.postType,
+      from_slug: "zz",
+      entry_id: ids.entry,
+    },
   });
   const updates: Record<Table, Record<string, unknown>> = {
     content_types: { label: "hacked" },
@@ -173,6 +195,7 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
     content_terms: { name: "hacked" },
     content_entry_terms: { term_id: "00000000-0000-4000-8000-000000000000" },
     site_paths: { path: "hacked" },
+    content_slug_redirects: { from_slug: "hacked" },
   };
 
   async function count(table: Table): Promise<number> {
@@ -186,7 +209,7 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
     return n ?? 0;
   }
 
-  it("the owner reads all six tables of their site", async () => {
+  it("the owner reads all the content tables of their site", async () => {
     for (const table of TABLES) {
       const { data, error } = await asA.from(table).select("*");
       expect(error, `${table} as owner`).toBeNull();
@@ -194,7 +217,7 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
     }
   });
 
-  it("another signed-in user reads none of the six tables", async () => {
+  it("another signed-in user reads none of the content tables", async () => {
     for (const table of TABLES) {
       // Another user has rows of their own in some tables (their built-in types): ask for A's.
       const q = asB.from(table).select("*");
@@ -206,7 +229,7 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
     }
   });
 
-  it("anon cannot read any of the six tables", async () => {
+  it("anon cannot read any of the content tables", async () => {
     for (const table of TABLES) {
       const { data, error } = await anon.from(table).select("*");
       expect(error?.code, `${table} as anon`).toBe("42501");
@@ -221,7 +244,7 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
   ];
 
   for (const [who, client] of writers) {
-    it(`${who} can neither insert, update nor delete in any of the six tables`, async () => {
+    it(`${who} can neither insert, update nor delete in any of the content tables`, async () => {
       const before = await Promise.all(TABLES.map((t) => count(t)));
       for (const table of TABLES) {
         const ins = await client().from(table).insert(inserts()[table]);
@@ -229,7 +252,11 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
       }
       for (const table of TABLES) {
         const col =
-          table === "content_entry_terms" ? "entry_id" : table === "site_paths" ? "site_id" : "id";
+          table === "content_entry_terms"
+            ? "entry_id"
+            : table === "site_paths" || table === "content_slug_redirects"
+              ? "site_id"
+              : "id";
         const upd = await client().from(table).update(updates[table]).not(col, "is", null);
         expect(upd.error?.code, `update ${table} as ${who}`).toBe("42501");
         const del = await client().from(table).delete().not(col, "is", null);
@@ -239,6 +266,30 @@ describe.skipIf(!run)("M15-02 content tables, publishable key (local Supabase)",
       expect(after, `row counts after ${who}'s attempts`).toEqual(before);
     });
   }
+
+  it("the owner reads exactly the redirect of their own slug change", async () => {
+    const { data, error } = await asA.from("content_slug_redirects").select("from_slug, entry_id");
+    expect(error).toBeNull();
+    expect(data).toEqual([{ from_slug: "crls-old", entry_id: ids.entry }]);
+  });
+
+  it("the secret key cannot write a redirect either: the trigger is the one writer", async () => {
+    const row = inserts().content_slug_redirects;
+    const ins = await admin.from("content_slug_redirects").insert(row);
+    expect(ins.error?.code).toBe("42501");
+    const upd = await admin
+      .from("content_slug_redirects")
+      .update({ from_slug: "hacked" })
+      .eq("site_id", a.pageId);
+    expect(upd.error?.code).toBe("42501");
+    const del = await admin.from("content_slug_redirects").delete().eq("site_id", a.pageId);
+    expect(del.error?.code).toBe("42501");
+    const still = await admin
+      .from("content_slug_redirects")
+      .select("from_slug")
+      .eq("site_id", a.pageId);
+    expect(still.data).toEqual([{ from_slug: "crls-old" }]);
+  });
 
   it("nothing of the owner's changed", async () => {
     const entry = await mustSingle(

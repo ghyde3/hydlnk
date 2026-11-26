@@ -317,6 +317,52 @@ export type Database = {
           },
         ]
       }
+      content_slug_redirects: {
+        Row: {
+          created_at: string
+          entry_id: string
+          from_slug: string
+          site_id: string
+          type_id: string
+        }
+        Insert: {
+          created_at?: string
+          entry_id: string
+          from_slug: string
+          site_id: string
+          type_id: string
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string
+          from_slug?: string
+          site_id?: string
+          type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_slug_redirects_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_slug_redirects_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_slug_redirects_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_terms: {
         Row: {
           created_at: string
@@ -1696,6 +1742,17 @@ export type Database = {
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
       is_reserved_entry_slug: { Args: { p_slug: string }; Returns: boolean }
       is_reserved_site_path: { Args: { p_path: string }; Returns: boolean }
+      live_term_counts: {
+        Args: { p_site: string; p_type: string }
+        Returns: {
+          id: string
+          live_count: number
+          name: string
+          parent_id: string
+          slug: string
+          taxonomy: string
+        }[]
+      }
       mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
       media_paths_in_use: {
