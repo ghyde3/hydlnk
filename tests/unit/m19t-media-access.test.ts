@@ -54,7 +54,7 @@ beforeEach(() => {
 
 describe("M19-06 uploads on a shared site", () => {
   it("M19-05 a member's upload with site goes to the OWNER's folder and quota; the rate limit is the uploader's", async () => {
-    m.access.mockResolvedValue({ ok: true, access: { ownerId: OWNER } });
+    m.access.mockResolvedValue({ ok: true, access: { ownerId: OWNER, actorId: MEMBER, siteId: SITE } });
     const res = await upload.POST(post("/api/media", SITE));
     expect(res.status).toBe(200);
     expect(m.access).toHaveBeenCalledWith({
@@ -73,9 +73,11 @@ describe("M19-06 uploads on a shared site", () => {
     expect(folder).toBe(OWNER);
     expect(quota).toEqual({ quotaOf: OWNER });
     expect(options.rateLimit).toEqual({ rateOf: MEMBER });
-    // S3: every stored path goes on the OWNER's cleanup queue (with its grace).
+    // S3: every stored path goes on the OWNER's cleanup queue (with its grace), as the site's row.
     await options.queue(`${OWNER}/img-x.webp`);
-    expect(m.queue).toHaveBeenCalledWith(OWNER, `${OWNER}/img-x.webp`);
+    expect(m.queue).toHaveBeenCalledWith(OWNER, `${OWNER}/img-x.webp`, undefined, SITE);
+    // Finding 1: a member's reclaim for room is scoped to the site, past the Undo window.
+    expect(m.quota).toHaveBeenCalledWith(OWNER, undefined, { siteId: SITE, before: expect.any(Date) });
     expect(m.suspended).toHaveBeenCalledWith(MEMBER);
   });
 
@@ -111,11 +113,22 @@ describe("M19-06 uploads on a shared site", () => {
   });
 
   it("M19-06 cleanup with site works off the OWNER's queue; a site the user may not edit runs nothing", async () => {
-    m.access.mockResolvedValueOnce({ ok: true, access: { ownerId: OWNER } });
+    m.access.mockResolvedValueOnce({ ok: true, access: { ownerId: OWNER, actorId: MEMBER, siteId: SITE } });
     expect((await cleanup.POST(post("/api/media/cleanup", SITE))).status).toBe(200);
-    expect(m.cleanup).toHaveBeenCalledWith(OWNER);
+    // Finding 1: a member works only the site's rows queued before the Undo window.
+    const [owner, , scope] = m.cleanup.mock.calls[0] as unknown as [string, unknown, { siteId: string; before: Date }];
+    expect(owner).toBe(OWNER);
+    expect(scope.siteId).toBe(SITE);
+    expect(Date.now() - scope.before.getTime()).toBeGreaterThanOrEqual(10_000);
     m.access.mockResolvedValueOnce({ ok: false, reason: "not_found" });
     expect((await cleanup.POST(post("/api/media/cleanup", SITE))).status).toBe(404);
     expect(m.cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("finding 1: the owner's own call with site still works the whole queue", async () => {
+    m.user = { id: OWNER };
+    m.access.mockResolvedValueOnce({ ok: true, access: { ownerId: OWNER, actorId: OWNER, siteId: SITE } });
+    expect((await cleanup.POST(post("/api/media/cleanup", SITE))).status).toBe(200);
+    expect(m.cleanup).toHaveBeenCalledWith(OWNER);
   });
 });

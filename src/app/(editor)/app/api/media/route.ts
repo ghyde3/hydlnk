@@ -4,6 +4,7 @@ import { siteAccessFor } from "@/lib/access/server";
 import { UPLOAD_SITE_HEADER, UPLOAD_SITE_REQUIRED_MESSAGE } from "@/lib/media/upload-site";
 import { isAccountSuspended, suspendedBody } from "@/lib/admin/suspension";
 import { clientEnv } from "@/lib/env/client";
+import { cleanupScopeFor } from "@/lib/media/cleanup";
 import { queueNewUpload } from "@/lib/media/cleanup-admin";
 import { adminUploadQuota } from "@/lib/media/quota";
 import { adminUploadRateLimit } from "@/lib/media/rate-limit";
@@ -26,8 +27,9 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  * plan apply, T15). A site the user may not edit stores nothing (404, the one answer for a missing
  * one). Without it (an old bundle) nothing is stored: 400 `site_required` with a message to reload
  * (G22, S3: every upload belongs to a site, so it lands in, and is cleaned from, that owner's folder).
- * Every stored path is queued for the cleanup with a grace (`queueNewUpload`, S3), so an upload that
- * no document ever names does not stay in the owner's folder. Any owner or folder
+ * Every stored path is queued for the cleanup with a grace and its site (`queueNewUpload`, S3), so an
+ * upload that no document ever names does not stay in the owner's folder. A member's upload that
+ * needs room reclaims only that site's rows past the Undo window (`cleanupScopeFor`). Any owner or folder
  * field in the form is ignored; a caller without a session gets a 401 and nothing is stored. The
  * rate limit and the suspension check stay the uploader's (T16).
  * A cross-origin Origin header is refused, so a cross-site form cannot upload as the signed-in
@@ -81,10 +83,13 @@ export async function POST(request: NextRequest) {
         { status: 404, headers: NO_STORE },
       );
     }
-    const ownerId = allowed.access.ownerId;
-    const result = await processUpload(request, ownerId, undefined, adminUploadQuota(ownerId), {
+    const { ownerId, siteId } = allowed.access;
+    // A member's upload that needs room reclaims only what the cleanup route would let them (finding 1).
+    const scope = cleanupScopeFor(allowed.access);
+    const quota = scope ? adminUploadQuota(ownerId, undefined, scope) : adminUploadQuota(ownerId);
+    const result = await processUpload(request, ownerId, undefined, quota, {
       rateLimit: adminUploadRateLimit(user.id),
-      queue: (path) => queueNewUpload(ownerId, path),
+      queue: (path) => queueNewUpload(ownerId, path, undefined, siteId),
     });
     if (!result.ok) {
       return NextResponse.json(

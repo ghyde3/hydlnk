@@ -6,6 +6,7 @@ import {
   isOwnedMediaPath,
   type CleanupDeps,
   type CleanupResult,
+  type CleanupScope,
 } from "./cleanup";
 import { MEDIA_BUCKET, UPLOAD_UNUSED_GRACE_SECONDS } from "./limits";
 
@@ -19,15 +20,16 @@ export function adminCleanupDeps(
   admin: SupabaseClient = createAdminSupabase() as unknown as SupabaseClient,
 ): CleanupDeps {
   return {
-    async listQueue(ownerId, limit) {
-      const { data, error } = await admin
+    async listQueue(ownerId, limit, scope) {
+      let query = admin
         .from("image_cleanup_queue")
         .select("path")
         .eq("owner_id", ownerId)
         // A new upload waits out its grace (queue_new_upload, S3) before the cleanup may see it.
-        .lte("queued_at", new Date().toISOString())
-        .order("queued_at", { ascending: true })
-        .limit(limit);
+        .lte("queued_at", (scope?.before ?? new Date()).toISOString());
+      // A member's call: only what this site's writes queued (cleanupScopeFor).
+      if (scope) query = query.eq("site_id", scope.siteId);
+      const { data, error } = await query.order("queued_at", { ascending: true }).limit(limit);
       if (error) throw new Error(`Reading the media queue failed: ${error.message}`);
       return (data ?? []).map((row: { path: string }) => row.path);
     },
@@ -63,9 +65,18 @@ export function adminCleanupDeps(
   };
 }
 
-/** Works the owner's queue off. `userId` must be the verified session user (or the page owner). */
-export function cleanupMediaFor(userId: string, admin?: SupabaseClient): Promise<CleanupResult> {
-  return cleanupOwnerMedia(userId, adminCleanupDeps(admin));
+/**
+ * Works the owner's queue off. `userId` must be the verified session user (or the page owner); a
+ * member's call passes its `scope` (cleanupScopeFor).
+ */
+export function cleanupMediaFor(
+  userId: string,
+  admin?: SupabaseClient,
+  scope?: CleanupScope,
+): Promise<CleanupResult> {
+  return scope
+    ? cleanupOwnerMedia(userId, adminCleanupDeps(admin), scope)
+    : cleanupOwnerMedia(userId, adminCleanupDeps(admin));
 }
 
 /**
@@ -97,13 +108,16 @@ export async function queueNewUpload(
   ownerId: string,
   path: string,
   admin: SupabaseClient = createAdminSupabase() as unknown as SupabaseClient,
+  /** The site the upload is for: its row is that site's, so a member's cleanup of the site sees it. */
+  siteId: string | null = null,
 ): Promise<void> {
   if (!isOwnedMediaPath(ownerId, path)) return;
-  const { error } = await admin.rpc("queue_new_upload", {
-    p_owner: ownerId,
-    p_path: path,
-    p_grace_seconds: UPLOAD_UNUSED_GRACE_SECONDS,
-  });
+  const { error } = await admin.rpc(
+    "queue_new_upload",
+    siteId
+      ? { p_owner: ownerId, p_path: path, p_grace_seconds: UPLOAD_UNUSED_GRACE_SECONDS, p_site: siteId }
+      : { p_owner: ownerId, p_path: path, p_grace_seconds: UPLOAD_UNUSED_GRACE_SECONDS },
+  );
   if (error) throw new Error(`Queueing the upload failed: ${error.message}`);
 }
 

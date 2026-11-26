@@ -848,16 +848,19 @@ export type Database = {
           owner_id: string
           path: string
           queued_at: string
+          site_id: string | null
         }
         Insert: {
           owner_id: string
           path: string
           queued_at?: string
+          site_id?: string | null
         }
         Update: {
           owner_id?: string
           path?: string
           queued_at?: string
+          site_id?: string | null
         }
         Relationships: []
       }
@@ -2092,6 +2095,10 @@ export type Database = {
         Args: { p_paths: string[]; p_uid: string }
         Returns: string[]
       }
+      media_queue_paths: {
+        Args: { p_owner: string; p_paths: string[]; p_site: string }
+        Returns: undefined
+      }
       media_upload_rate_hit: {
         Args: { p_limit: number; p_uid: string; p_window_seconds: number }
         Returns: {
@@ -2324,10 +2331,20 @@ export type Database = {
       purge_old_events: { Args: never; Returns: number }
       purge_site_team: { Args: never; Returns: undefined }
       purge_trashed_entries: { Args: never; Returns: number }
-      queue_new_upload: {
-        Args: { p_grace_seconds: number; p_owner: string; p_path: string }
-        Returns: undefined
-      }
+      queue_new_upload:
+        | {
+            Args: { p_grace_seconds: number; p_owner: string; p_path: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_grace_seconds: number
+              p_owner: string
+              p_path: string
+              p_site: string
+            }
+            Returns: undefined
+          }
       rate_limit_age: {
         Args: { p_bucket: string; p_window_seconds: number }
         Returns: number

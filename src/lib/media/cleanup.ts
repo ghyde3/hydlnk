@@ -1,5 +1,6 @@
 import "server-only";
 import { IMAGE_PATH_PATTERN } from "@/lib/document";
+import { UNDO_WINDOW_MS } from "./cleanup-client";
 
 /**
  * The cleanup of replaced and removed images (M5-14), written against injected dependencies so the
@@ -27,9 +28,34 @@ import { IMAGE_PATH_PATTERN } from "@/lib/document";
  * bucket (M4-31).
  */
 
+/**
+ * A member's cleanup call (team attack pass, finding 1): only the rows the named site's writes queued,
+ * and only those queued before `before` (past the editor's Undo window), so a member never deletes
+ * what the owner dropped on another site, or what anyone dropped a moment ago. The owner's own calls
+ * pass no scope and work the whole queue.
+ */
+export interface CleanupScope {
+  siteId: string;
+  before: Date;
+}
+
+/**
+ * The scope of a cleanup run for `actorId` acting on `siteId` of `ownerId` (team attack pass,
+ * finding 1): none for the owner (the whole queue, as before), and for a member only the site's own
+ * rows queued more than UNDO_WINDOW_MS ago, so a member's call never deletes what the owner removed on
+ * another site, nor anything still inside someone's Undo.
+ */
+export function cleanupScopeFor(
+  access: { actorId: string; ownerId: string; siteId: string },
+  now: Date = new Date(),
+): CleanupScope | undefined {
+  if (access.actorId === access.ownerId) return undefined;
+  return { siteId: access.siteId, before: new Date(now.getTime() - UNDO_WINDOW_MS) };
+}
+
 export interface CleanupDeps {
-  /** The owner's queued paths, oldest first, at most `limit`. */
-  listQueue(ownerId: string, limit: number): Promise<string[]>;
+  /** The owner's queued paths (of `scope` when given), oldest first, at most `limit`. */
+  listQueue(ownerId: string, limit: number, scope?: CleanupScope): Promise<string[]>;
   /** The subset of `paths` that any draft, published document or saved theme of the owner names. */
   inUse(ownerId: string, paths: string[]): Promise<string[]>;
   /** Removes these objects from Storage. Every path starts with `{ownerId}/`; a missing object is fine. */
@@ -70,9 +96,14 @@ export function isOwnedMediaPath(ownerId: string, path: string): boolean {
 export async function cleanupOwnerMedia(
   ownerId: string,
   deps: CleanupDeps,
+  scope?: CleanupScope,
 ): Promise<CleanupResult> {
   const result: CleanupResult = { deleted: [], kept: [], discarded: [] };
-  const queued = [...new Set(await deps.listQueue(ownerId, CLEANUP_QUEUE_LIMIT))];
+  const queued = [
+    ...new Set(
+      await (scope ? deps.listQueue(ownerId, CLEANUP_QUEUE_LIMIT, scope) : deps.listQueue(ownerId, CLEANUP_QUEUE_LIMIT)),
+    ),
+  ];
   if (queued.length === 0) return result;
 
   const owned: string[] = [];

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toPlanId } from "@/lib/limits";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import type { CleanupScope } from "./cleanup";
 import { cleanupMediaFor } from "./cleanup-admin";
 import { MEDIA_BUCKET } from "./limits";
 import type { UploadQuota } from "./upload";
@@ -18,6 +19,8 @@ import type { UploadQuota } from "./upload";
 export function adminUploadQuota(
   userId: string,
   admin: SupabaseClient = createAdminSupabase() as unknown as SupabaseClient,
+  /** A member's upload: the reclaim works only what their cleanup call may (cleanupScopeFor). */
+  scope?: CleanupScope,
 ): UploadQuota {
   return {
     async read() {
@@ -41,7 +44,7 @@ export function adminUploadQuota(
     // M5-14: an upload that would not fit first lets go of what the account replaced or removed
     // (and nothing it still uses), then the total is read again.
     async reclaim() {
-      await cleanupMediaFor(userId, admin);
+      await (scope ? cleanupMediaFor(userId, admin, scope) : cleanupMediaFor(userId, admin));
     },
   };
 }
