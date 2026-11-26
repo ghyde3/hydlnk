@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it, vi } from "vitest";
@@ -10,6 +12,10 @@ import { stackIsUp } from "./publish-support";
 vi.mock("server-only", () => ({}));
 
 const { run } = await stackIsUp();
+
+/** The seed sites (supabase/seed.sql): one published with sub-pages, one never published. */
+const PUBLISHED_SEED_SITES = ["mara"];
+const UNPUBLISHED_SEED_SITES = ["nico-demo"];
 
 /**
  * 1b1-12 (M15-05): the public readers read page entries. The frozen pre-move copies (pages.published
@@ -31,8 +37,65 @@ describe.skipIf(!run)("public HTML from entries equals the frozen pre-move HTML"
       )
     : (undefined as unknown as SupabaseClient<Database>);
 
-  for (const handle of ["mara"]) {
-    it(`${handle}: Home, every sub-page, sitemap.xml and robots origin`, async () => {
+  it("covers every seed site: the handles below are the sites of supabase/seed.sql", () => {
+    const seed = readFileSync(path.join(process.cwd(), "supabase/seed.sql"), "utf8");
+    const seeded = [
+      ...seed.matchAll(/insert into public\.pages\b[^;]*?'[^']*',\s*'[^']*',\s*'([^']+)'/g),
+    ].map((match) => match[1]);
+    expect(seeded.sort()).toEqual([...PUBLISHED_SEED_SITES, ...UNPUBLISHED_SEED_SITES].sort());
+  });
+
+  /** robots.txt as the route serves it for a host. */
+  async function robotsBody(host: string): Promise<string> {
+    const { GET } = await import("@/app/robots.txt/route");
+    const response = await GET(new Request(`http://${host}/robots.txt`, { headers: { host } }));
+    expect(response.status).toBe(200);
+    return response.text();
+  }
+
+  for (const handle of UNPUBLISHED_SEED_SITES) {
+    it(`${handle} (never published): the placeholder, no sub-page, no sitemap and a robots.txt that names none`, async () => {
+      const { handleResponse, handleSubPageResponse } = await import("@/lib/tenant-render/respond");
+      const { tenantSitemap } = await import("@/lib/tenant-render/sitemap");
+      const { placeholderDocument, plainNotFoundDocument } =
+        await import("@/lib/tenant-render/state-pages");
+      const { robotsTxt } = await import("@/lib/marketing/seo");
+      const { clientEnv } = await import("@/lib/env/client");
+      const root = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
+
+      // The frozen fixtures say what the old code served: nothing published, no sub-page rows.
+      const { data: page } = await admin
+        .from("pages")
+        .select("id, published")
+        .eq("handle", handle)
+        .single();
+      expect(page!.published).toBeNull();
+      const { data: frozenRows } = await admin
+        .from("site_pages")
+        .select("id")
+        .eq("page_id", page!.id)
+        .not("published", "is", null);
+      expect(frozenRows).toEqual([]);
+
+      const home = await handleResponse(handle);
+      expect(home.status).toBe(200);
+      expect(await home.text()).toBe(placeholderDocument(handle));
+      const sub = await handleSubPageResponse(handle, "about");
+      expect(sub.status).toBe(404);
+      expect(await sub.text()).toBe(plainNotFoundDocument());
+      const host = `${handle}.${root}`;
+      expect(await tenantSitemap(host, root)).toEqual({
+        status: 404,
+        contentType: "text/plain; charset=utf-8",
+        body: "Not found\n",
+      });
+      expect(await robotsBody(host)).toBe(robotsTxt(host, root, null).body);
+    });
+  }
+
+  for (const handle of PUBLISHED_SEED_SITES) {
+    it(`${handle}: Home, every sub-page, sitemap.xml and robots.txt`, async () => {
+      const { robotsTxt } = await import("@/lib/marketing/seo");
       const { handleResponse, handleSubPageResponse } = await import("@/lib/tenant-render/respond");
       const { tenantSitemap, siteHostOrigin } = await import("@/lib/tenant-render/sitemap");
       const { renderLivePage, renderLiveSubPage } = await import("@/lib/tenant-render/live-page");
@@ -110,6 +173,10 @@ describe.skipIf(!run)("public HTML from entries equals the frozen pre-move HTML"
         ).body,
       );
       expect(await siteHostOrigin(host, root)).toBe(tenantOrigin(handle, root));
+      // robots.txt, the body the route serves: it names the sitemap on the site's own origin.
+      const robots = await robotsBody(host);
+      expect(robots).toBe(robotsTxt(host, root, tenantOrigin(handle, root)).body);
+      expect(robots).toContain(`Sitemap: ${tenantOrigin(handle, root)}/sitemap.xml`);
     });
   }
 

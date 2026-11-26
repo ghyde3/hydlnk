@@ -462,10 +462,15 @@ export async function restorePageVersionCore(
     homeWritten = { id: homeRow.id, rev: wrote.rev, before: homeRow.draft };
   }
 
-  // The design to `pages.draft`, guarded by its rev (the stale-tab guard). The blocks there are the
-  // frozen copy and stay as they are once Home is an entry.
-  const frozen = (open.draft as { blocks?: unknown } | null)?.blocks ?? [];
-  const designDraft = homeRow ? { ...draft.data, blocks: frozen } : draft.data;
+  // The design to `pages.draft`, guarded by its rev (the stale-tab guard). Once Home is an entry the
+  // write carries no blocks: the frozen copy there is never read, and the database keeps it as it is
+  // for a draft that omits them (guard_frozen_page_blocks).
+  let designDraft: Record<string, unknown> = draft.data;
+  if (homeRow) {
+    const { blocks: _restored, ...design } = draft.data;
+    void _restored;
+    designDraft = design;
+  }
   const update = open.admin
     .from("pages")
     .update({ draft: designDraft as unknown as Json })
