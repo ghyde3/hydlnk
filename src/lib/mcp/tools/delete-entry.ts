@@ -7,6 +7,7 @@ import {
   entryIdField,
   entryPageIdField,
   entryRevField,
+  cacheStaleOf,
   mcpActor,
   refusal,
   requireItemPublishBudget,
@@ -46,11 +47,20 @@ export const deleteEntryTool: ToolDefinition<typeof input> = {
       expectedRev: args.ifRev,
     });
     if (!out.ok) throw await refusal(call, out);
+    const stale = cacheStaleOf(out);
     return {
-      sentence: wasLive
-        ? "Moved the post to the trash. It is no longer on the public site."
-        : "Moved the post to the trash.",
-      data: { id: entry.id, pageId: entry.siteId, rev: out.rev, status: "trashed", wasLive },
+      sentence:
+        (wasLive
+          ? "Moved the post to the trash. It is no longer on the public site."
+          : "Moved the post to the trash.") + stale.sentence,
+      data: {
+        id: entry.id,
+        pageId: entry.siteId,
+        rev: out.rev,
+        status: "trashed",
+        wasLive,
+        ...stale.data,
+      },
       exact: true,
     };
   },

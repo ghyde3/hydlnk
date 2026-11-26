@@ -11,6 +11,7 @@ import { DESTRUCTIVE_IDEMPOTENT, subPageIdField } from "./common";
 import {
   entryPageIdField,
   entryRevField,
+  cacheStaleOf,
   mcpActor,
   optionalEntryIdField,
   refusal,
@@ -83,6 +84,7 @@ export const publishEntryTool: ToolDefinition<typeof input> = {
       expectedRev: args.ifRev,
     });
     if (!out.ok) throw await refusal(call, out, { publish: true });
+    const stale = cacheStaleOf(out);
     // The live address is read after the publish: the slug that is live now.
     let url: string | null = null;
     const now = await call.deps.loadEntry(call.userId, entry.id, {
@@ -93,9 +95,10 @@ export const publishEntryTool: ToolDefinition<typeof input> = {
     });
     if (now.ok) url = await liveUrlOf({ ...call, entry: now.entry });
     return {
-      sentence: url
-        ? `Published the post. It is live at ${url}.`
-        : "Published the post. Nothing else of the site changed.",
+      sentence:
+        (url
+          ? `Published the post. It is live at ${url}.`
+          : "Published the post. Nothing else of the site changed.") + stale.sentence,
       data: {
         published: true,
         type: "post",
@@ -104,6 +107,7 @@ export const publishEntryTool: ToolDefinition<typeof input> = {
         rev: out.rev,
         publishedAt: out.publishedAt,
         ...(url ? { url } : {}),
+        ...stale.data,
       },
       exact: true,
     };

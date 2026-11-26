@@ -8,6 +8,7 @@ import {
   entryIdField,
   entryPageIdField,
   entryRevField,
+  cacheStaleOf,
   mcpActor,
   refusal,
   requireRev,
@@ -38,9 +39,10 @@ export const restoreEntryTool: ToolDefinition<typeof input> = {
       expectedRev: args.ifRev,
     });
     if (!out.ok) throw await refusal(call, out);
+    const stale = cacheStaleOf(out);
     return {
-      sentence: `Restored the post as a draft. ${NOT_LIVE_UNTIL_PUBLISH}`,
-      data: { id: entry.id, pageId: entry.siteId, rev: out.rev, status: "draft" },
+      sentence: `Restored the post as a draft. ${NOT_LIVE_UNTIL_PUBLISH}${stale.sentence}`,
+      data: { id: entry.id, pageId: entry.siteId, rev: out.rev, status: "draft", ...stale.data },
       exact: true,
     };
   },

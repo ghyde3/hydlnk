@@ -7,6 +7,7 @@ import {
   entryIdField,
   entryPageIdField,
   entryRevField,
+  cacheStaleOf,
   mcpActor,
   refusal,
   requireRev,
@@ -39,9 +40,17 @@ export const unpublishEntryTool: ToolDefinition<typeof input> = {
       expectedRev: args.ifRev,
     });
     if (!out.ok) throw await refusal(call, out);
+    const stale = cacheStaleOf(out);
     return {
-      sentence: "The post is off the public site. Its draft is kept.",
-      data: { id: entry.id, pageId: entry.siteId, rev: out.rev, status: "draft", published: false },
+      sentence: `The post is off the public site. Its draft is kept.${stale.sentence}`,
+      data: {
+        id: entry.id,
+        pageId: entry.siteId,
+        rev: out.rev,
+        status: "draft",
+        published: false,
+        ...stale.data,
+      },
       exact: true,
     };
   },

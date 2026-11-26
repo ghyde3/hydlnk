@@ -246,3 +246,20 @@ export async function checkTermIds(
     ...(tags !== undefined ? { tags } : {}),
   };
 }
+
+/** The fixed sentence of a write whose cache expiry failed twice (no tenant text). */
+export const CACHE_STALE_NOTE =
+  "The change is saved. The live site may take a moment to show it: there is no need to call this again.";
+
+/**
+ * What a write's answer adds when the writer says its cache expiry failed twice (`cacheStale`,
+ * M16-09): the write stands, so it is a success with a note in `data` and in the sentence, never an
+ * error. Nothing when the expiry went through.
+ */
+export function cacheStaleOf(out: object): {
+  data: { cacheStale?: true; note?: string };
+  sentence: string;
+} {
+  if (!("cacheStale" in out) || out.cacheStale !== true) return { data: {}, sentence: "" };
+  return { data: { cacheStale: true, note: CACHE_STALE_NOTE }, sentence: ` ${CACHE_STALE_NOTE}` };
+}
