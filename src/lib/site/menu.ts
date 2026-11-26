@@ -5,6 +5,7 @@ import {
   resolveNav,
   type Nav,
 } from "@/lib/document";
+import type { LatestPosts } from "@/lib/blog/types";
 
 /**
  * The site menu and the page-link hrefs of a site (M11-07), as plain data both the live renderer and
@@ -41,6 +42,11 @@ export interface SiteContext {
   hrefs: Readonly<Record<string, string>>;
   /** The menu to draw, or null/absent for none. */
   menu?: SiteMenuData | null;
+  /**
+   * What a `latest_posts` block draws (Wave B): null or absent when the blog is off. An archive
+   * enters the menu as a `SitePageSummary` `{ id: typeId, path: archivePath, title: labelPlural }`.
+   */
+  latestPosts?: LatestPosts | null;
 }
 
 export const MENU_HOME_LABEL = "Home";

@@ -252,3 +252,13 @@ export async function setEntryTermsWithClient(
     draft: { ...draft, terms: { categories, tags } },
   });
 }
+
+/** The terms of one type of a site the actor owns. Contract stub (Wave B, plan 4.1): Builder A writes it. */
+export async function listTermsWithClient(
+  admin: Admin,
+  input: { actor: ContentActor; siteId: string; typeKey: string },
+): Promise<ContentResult<{ terms: TermSummary[] }>> {
+  void admin;
+  void input;
+  throw new Error("not built: A");
+}

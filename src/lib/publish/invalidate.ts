@@ -80,3 +80,28 @@ export function expireDeletedPages(pages: ReadonlyArray<{ id: string; handle: st
   }
   if (failure) throw failure;
 }
+
+/**
+ * Expires what the cache holds for one typed entry (a post) after its publish, unpublish, trash or
+ * restore: `entry:<entryId>` and `type:<typeId>`, not the site tag. Contract stub (Wave B, plan
+ * section 4.4): Builder D writes the body.
+ */
+export function invalidateEntry(input: {
+  siteId: string;
+  typeId: string;
+  typeKey: string;
+  entryId: string;
+}): void {
+  void input;
+  throw new Error("not built: D");
+}
+
+/**
+ * Expires what the cache holds for one content type after it is turned on or off or its archive
+ * path changes: `type:<typeId>` and also `page:<siteId>` (the archive list lives under the site
+ * tag). Contract stub (Wave B, plan section 4.4): Builder D writes the body.
+ */
+export function invalidateType(input: { siteId: string; typeId: string }): void {
+  void input;
+  throw new Error("not built: D");
+}

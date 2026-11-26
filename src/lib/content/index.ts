@@ -28,17 +28,18 @@ export type { SitePagePublishWrite } from "./site-page-publish-core";
 import { invalidatePage } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
-import { getEntryWithClient, listEntriesWithClient } from "./query-core";
+import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } from "./query-core";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
 import {
   createTermWithClient,
   deleteTermWithClient,
+  listTermsWithClient,
   renameTermWithClient,
   setEntryTermsWithClient,
 } from "./terms-core";
 import { listRevisionsWithClient, restoreRevisionWithClient } from "./revisions-core";
-import { enableTypeWithClient, updateTypeWithClient } from "./types-core";
+import { enableTypeWithClient, listTypesWithClient, updateTypeWithClient } from "./types-core";
 import type { ContentActor } from "./types";
 
 /** Create an entry of an enabled type. The draft is validated leniently and stored as given. */
@@ -149,3 +150,24 @@ export function listRevisions(input: Parameters<typeof listRevisionsWithClient>[
 export function restoreRevision(input: Parameters<typeof restoreRevisionWithClient>[1]) {
   return restoreRevisionWithClient(createAdminSupabase(), input);
 }
+
+/** Every type of a site, on or off (Wave B). Stubbed in its core until Builder A writes it. */
+export function listTypes(input: Parameters<typeof listTypesWithClient>[1]) {
+  return listTypesWithClient(createAdminSupabase(), input);
+}
+
+/** The terms of one type of a site (Wave B). Stubbed in its core until Builder A writes it. */
+export function listTerms(input: Parameters<typeof listTermsWithClient>[1]) {
+  return listTermsWithClient(createAdminSupabase(), input);
+}
+
+/** How many entries of one type a site holds, trash included (Wave B). Stubbed in its core until Builder A writes it. */
+export function countEntries(input: Parameters<typeof countEntriesWithClient>[1]) {
+  return countEntriesWithClient(createAdminSupabase(), input);
+}
+
+/** The Wave B reads for callers that hold their own client (the Posts routes' cores). */
+export { countEntriesWithClient, listTermsWithClient, listTypesWithClient };
+export type { EntrySummary } from "./query-core";
+export type { TermSummary } from "./terms-core";
+export type { TypeSummary } from "./types-core";

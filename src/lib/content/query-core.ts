@@ -187,3 +187,16 @@ export async function listEntriesWithClient(
     nextCursor: raw.length > limit && last ? encodeCursor(sortValue(last), last.id) : null,
   };
 }
+
+/**
+ * How many entries of one type a site holds, trash included (as HL010 counts). Contract stub
+ * (Wave B, plan 4.1): Builder A writes it.
+ */
+export async function countEntriesWithClient(
+  admin: Admin,
+  input: { actor: ContentActor; siteId: string; typeKey: string },
+): Promise<ContentResult<{ count: number }>> {
+  void admin;
+  void input;
+  throw new Error("not built: A");
+}

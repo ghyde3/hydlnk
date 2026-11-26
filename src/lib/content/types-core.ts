@@ -136,3 +136,13 @@ export async function updateTypeWithClient(
   if (!updated.data) return failure("not_found");
   return { ok: true, ...summary(updated.data) };
 }
+
+/** Every type of a site the actor owns, on or off. Contract stub (Wave B, plan 4.1): Builder A writes it. */
+export async function listTypesWithClient(
+  admin: Admin,
+  input: { actor: ContentActor; siteId: string },
+): Promise<ContentResult<{ types: TypeSummary[] }>> {
+  void admin;
+  void input;
+  throw new Error("not built: A");
+}
