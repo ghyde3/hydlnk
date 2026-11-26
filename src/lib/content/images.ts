@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { marked, type Token, type Tokens } from "marked";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
-import { mediaPathOf } from "@/lib/themes/bg-image";
+import { uploadPathOf } from "@/lib/media/upload-path";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure } from "./errors";
 import type { ContentFailure } from "./types";
@@ -32,6 +32,9 @@ export function postImages(published: unknown): ImageUse[] {
   return uses;
 }
 
+// The one rule for "this address is an upload": shared with the live renderer (`PostBody`).
+export { uploadPathOf };
+
 /** Most distinct images one post body may hold: Publish asks Storage about each of them. */
 export const BODY_IMAGES_MAX = 50;
 
@@ -44,31 +47,6 @@ function imageAddresses(body: string): string[] {
     if (token.type === "image") found.push((token as Tokens.Image).href);
   });
   return found;
-}
-
-/**
- * The upload an address stands for, or null. Only the stored form passes, character for character:
- * what `storageUrl(path)` builds (`src/lib/media/url.ts`) for a `{uid}/{file}.{jpg|png|webp}` path on
- * this project's Storage. `mediaPathOf` reads the address back; on top of it, the address must be
- * exactly what a URL parser prints for it and must end in the path as written. So nothing a browser
- * would normalize into an upload's address (dot segments, a backslash, a tab, upper case, a
- * percent-encoded letter) passes, and the renderer never has to guess what a stored address means.
- * The project URL is read when called, as `isProjectMediaUrl` does; with none set, nothing is an upload.
- */
-export function uploadPathOf(address: string): string | null {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return null;
-  let origin: string;
-  let printed: string;
-  try {
-    origin = new URL(base).origin;
-    printed = new URL(address).href;
-  } catch {
-    return null;
-  }
-  const path = mediaPathOf(address, origin);
-  if (path === null) return null;
-  return printed === address && address.endsWith(`/${path}`) ? path : null;
 }
 
 const bodyOf = (draft: unknown): string => {

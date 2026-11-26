@@ -11,8 +11,8 @@ import {
   plainText,
 } from "@/lib/blog/markdown";
 import { EMBED_PROVIDER_NAMES, parseEmbed, safeHref } from "@/lib/document";
+import { uploadPathOf } from "@/lib/media/upload-path";
 import { mediaUrl } from "@/lib/media/url";
-import { mediaPathOf } from "@/lib/themes/bg-image";
 
 /**
  * A post's Markdown body as React elements (Wave B, M16-04). No "use client" and no hooks: used in
@@ -38,35 +38,11 @@ import { mediaPathOf } from "@/lib/themes/bg-image";
 /**
  * The address a body image is drawn from: `/media/{uid}/{file}` on the media origin when `address`
  * is, character for character, the stored address of an upload in the owner's own folder
- * (`uploadPathOf`), else null.
+ * (`uploadPathOf`, the same function the publish gate uses), else null.
  */
-/**
- * The upload a body image's address stands for, or null: the rule of `uploadPathOf` in
- * `src/lib/content/images.ts` (the publish gate), which this module cannot import, because that one
- * reaches the writer's error copy and the live path imports nothing from the editor side. A unit
- * test keeps the two equal. Only the stored form passes, character for character: what
- * `storageUrl(path)` builds for a `{uid}/{file}.{jpg|png|webp}` path on this project's Storage, and
- * exactly what a URL parser prints for it. With no project URL set, nothing is an upload.
- */
-export function bodyUploadPath(address: string): string | null {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base || typeof address !== "string") return null;
-  let origin: string;
-  let printed: string;
-  try {
-    origin = new URL(base).origin;
-    printed = new URL(address).href;
-  } catch {
-    return null;
-  }
-  const path = mediaPathOf(address, origin);
-  if (path === null) return null;
-  return printed === address && address.endsWith(`/${path}`) ? path : null;
-}
-
 export function ownMediaSrc(address: string, ownerId: string): string | null {
   if (typeof address !== "string" || typeof ownerId !== "string" || ownerId === "") return null;
-  const path = bodyUploadPath(address);
+  const path = uploadPathOf(address);
   if (path === null || !path.startsWith(`${ownerId}/`)) return null;
   return mediaUrl(path);
 }

@@ -216,20 +216,16 @@ describe("PostBody: images are the owner's own uploads only", () => {
     expect(html).not.toMatch(/<img\b/);
   });
 
-  it("the renderer's rule is the publish gate's rule (`uploadPathOf`), address for address", async () => {
-    const { uploadPathOf } = await import("@/lib/content/images");
-    const { bodyUploadPath } = await import("@/components/post/post-body");
-    for (const address of [
-      OWN_IMAGE,
-      ...FOREIGN,
-      "",
-      "not a url",
-      `${OWN_IMAGE}/`,
-      OWN_IMAGE.toUpperCase(),
-    ]) {
-      expect(bodyUploadPath(address), address).toBe(uploadPathOf(address));
+  it("the renderer and the publish gate share one function for what an upload is", async () => {
+    const gate = await import("@/lib/content/images");
+    const shared = await import("@/lib/media/upload-path");
+    expect(gate.uploadPathOf).toBe(shared.uploadPathOf);
+    expect(shared.uploadPathOf(OWN_IMAGE)).toBe(`${OWNER}/0123456789abcdef0123456789abcdef.webp`);
+    for (const address of ["", "not a url", `${OWN_IMAGE}/`, OWN_IMAGE.toUpperCase()]) {
+      expect(shared.uploadPathOf(address), address).toBeNull();
     }
-    expect(bodyUploadPath(OWN_IMAGE)).toBe(`${OWNER}/0123456789abcdef0123456789abcdef.webp`);
+    for (const address of FOREIGN) expect(ownMediaSrc(address, OWNER), address).toBeNull();
+    expect(ownMediaSrc(OWN_IMAGE, OWNER)).not.toBeNull();
   });
 
   it("with no project URL set, nothing is an upload", () => {
