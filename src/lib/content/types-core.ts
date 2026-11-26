@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, ownedSite } from "./guards";
+import { siteFor } from "./guards";
 import type { TypeSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult } from "./types";
 
@@ -34,12 +34,13 @@ function summary(row: {
   };
 }
 
-/** Ownership and a live account, then the site's type by key. Reads the type whether it is on or off. */
+/**
+ * The active owner, then the site's type by key. Reads the type whether it is on or off. Type
+ * settings (the blog on or off, its address and label) are owner-only (G14): a member gets not_found.
+ */
 async function ownedType(admin: Admin, actor: ContentActor, siteId: string, typeKey: string) {
-  const site = await ownedSite(admin, actor.userId, siteId);
+  const site = await siteFor(admin, actor, siteId, "owner");
   if (!site.ok) return site;
-  const account = await activeAccount(admin, actor.userId);
-  if (!account.ok) return account;
   if (typeof typeKey !== "string") return failure("not_found");
   const found = await admin
     .from("content_types")
@@ -140,7 +141,7 @@ export async function listTypesWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string },
 ): Promise<ContentResult<{ types: TypeSummary[] }>> {
-  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  const site = await siteFor(admin, input.actor, input.siteId, "read");
   if (!site.ok) return site;
   const rows = await admin
     .from("content_types")

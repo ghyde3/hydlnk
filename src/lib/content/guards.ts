@@ -2,72 +2,82 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure } from "./errors";
-import type { ContentFailure } from "./types";
+import {
+  requireEntryAccess,
+  requireSiteAccess,
+  requireTermAccess,
+  type AccessRefusal,
+  type SiteAccess,
+  type SiteNeed,
+} from "@/lib/access";
+import type { ContentActor, ContentFailure } from "./types";
 
 type Admin = SupabaseClient<Database>;
 type Row<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Writes refuse a suspended account. A failed read refuses too; a missing account reads as suspended. */
-export async function activeAccount(
-  admin: Admin,
-  userId: string,
-): Promise<{ ok: true; plan: string } | ContentFailure> {
-  const account = await admin
-    .from("accounts")
-    .select("plan, suspended_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (account.error) {
-    console.error("[content] reading the account failed", account.error.message);
-    return failure("error");
-  }
-  if (!account.data || account.data.suspended_at !== null) return failure("account_suspended");
-  return { ok: true, plan: account.data.plan };
+/** A refusal of the access helper as the writer's error (a stranger's id answers like a missing one). */
+export function toContentFailure(refusal: AccessRefusal): ContentFailure {
+  return failure(refusal.reason);
 }
 
-/** The site, if `userId` owns it. Another user's site and a missing one answer identically. */
-export async function ownedSite(
+/**
+ * The site, when the actor meets `need` on it (Wave F: the owner or a member, through the one access
+ * helper). Another user's site and a missing one answer identically. `access.ownerId` and
+ * `access.plan` are the OWNER's: use them for every limit, folder and `p_owner_id`.
+ */
+export async function siteFor(
   admin: Admin,
-  userId: string,
+  actor: ContentActor,
   siteId: unknown,
-): Promise<{ ok: true; site: Pick<Row<"pages">, "id" | "handle"> } | ContentFailure> {
-  if (typeof siteId !== "string" || !UUID.test(siteId)) return failure("not_found");
-  const site = await admin
-    .from("pages")
-    .select("id, handle")
-    .eq("id", siteId)
-    .eq("owner_id", userId)
-    .maybeSingle();
-  if (site.error) {
-    console.error("[content] reading the site failed", site.error.message);
-    return failure("error");
-  }
-  return site.data ? { ok: true, site: site.data } : failure("not_found");
+  need: SiteNeed,
+): Promise<{ ok: true; access: SiteAccess; site: { id: string } } | ContentFailure> {
+  const found = await requireSiteAccess(admin, {
+    actorId: actor.userId,
+    siteId,
+    need,
+    source: actor.source,
+  });
+  if (!found.ok) return toContentFailure(found);
+  return { ok: true, access: found.access, site: { id: found.access.siteId } };
 }
 
-/** The entry, if its site belongs to `userId`. Another user's entry and a missing one answer identically. */
-export async function ownedEntry(
+/**
+ * The entry, when the actor meets `need` on the entry's OWN site. Another user's entry and a missing
+ * one answer identically. `need` may depend on the entry (`needForEntryWrite`).
+ */
+export async function entryFor(
   admin: Admin,
-  userId: string,
+  actor: ContentActor,
   entryId: unknown,
-): Promise<{ ok: true; entry: Row<"content_entries"> } | ContentFailure> {
-  if (typeof entryId !== "string" || !UUID.test(entryId)) return failure("not_found");
-  const entry = await admin
-    .from("content_entries")
-    .select("*, pages!inner(owner_id)")
-    .eq("id", entryId)
-    .eq("pages.owner_id", userId)
-    .maybeSingle();
-  if (entry.error) {
-    console.error("[content] reading the entry failed", entry.error.message);
-    return failure("error");
-  }
-  if (!entry.data) return failure("not_found");
-  const { pages: _owner, ...row } = entry.data;
-  void _owner;
-  return { ok: true, entry: row };
+  need: SiteNeed | ((entry: Row<"content_entries">) => SiteNeed),
+): Promise<{ ok: true; access: SiteAccess; entry: Row<"content_entries"> } | ContentFailure> {
+  const found = await requireEntryAccess(admin, {
+    actorId: actor.userId,
+    entryId,
+    need,
+    source: actor.source,
+  });
+  return found.ok ? found : toContentFailure(found);
+}
+
+/** The term, when the actor meets `need` on the term's own site, which must also be `siteId`. */
+export async function termFor(
+  admin: Admin,
+  actor: ContentActor,
+  siteId: string,
+  termId: unknown,
+  need: SiteNeed,
+): Promise<{ ok: true; access: SiteAccess; term: Row<"content_terms"> } | ContentFailure> {
+  const found = await requireTermAccess(admin, {
+    actorId: actor.userId,
+    termId,
+    need,
+    source: actor.source,
+    siteId,
+  });
+  return found.ok ? found : toContentFailure(found);
 }
 
 /** The site's type, by id or key, on or off. An unknown one, or one of another site, gives `not_found`. */

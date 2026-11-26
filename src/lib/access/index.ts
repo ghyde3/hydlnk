@@ -63,7 +63,8 @@ export async function requireSiteAccess(
 export interface EntryAccessInput {
   actorId: string;
   entryId: unknown;
-  need: SiteNeed;
+  /** A need, or one computed from the entry row (trash and delete of a live entry need publish). */
+  need: SiteNeed | ((entry: Row<"content_entries">) => SiteNeed);
   source: AccessSource;
   /** The site the URL names: when given, the entry's own site must equal it (T5). */
   siteId?: string;
@@ -83,7 +84,8 @@ export async function requireEntryAccess(
   if (!found.data || (input.siteId !== undefined && found.data.site_id !== input.siteId)) {
     return refuse("not_found");
   }
-  const site = await requireSiteAccess(admin, { ...input, siteId: found.data.site_id });
+  const need = typeof input.need === "function" ? input.need(found.data) : input.need;
+  const site = await requireSiteAccess(admin, { ...input, need, siteId: found.data.site_id });
   return site.ok ? { ...site, entry: found.data } : site;
 }
 

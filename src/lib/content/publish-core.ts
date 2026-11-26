@@ -5,7 +5,8 @@ import { publishedSubPageSchema, toSubPagePublishForm } from "@/lib/document/sub
 import { placedBlockImages } from "@/lib/publish/placed-images";
 import { blockedBodyLinks, blockedPageLinks, unsafeBodySchemes } from "./blocklist";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, ownedEntry, siteType } from "./guards";
+import { recordSiteActivity } from "@/lib/access";
+import { entryFor, siteType } from "./guards";
 import { bodyShapeIssue } from "./body-shape";
 import { bodyImageIssue, checkOwnImages, postImages, type ImageUse } from "./images";
 import { pruneTerms } from "./prune-terms";
@@ -41,11 +42,10 @@ async function prepare(
   input: Input,
   opts: { allowDisabledType?: boolean; fire?: boolean } = {},
 ) {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  // Publish and unpublish are publish-class: an editor is refused (forbidden).
+  const owned = await entryFor(admin, input.actor, input.entryId, "publish");
   if (!owned.ok) return owned;
-  const account = await activeAccount(admin, input.actor.userId);
-  if (!account.ok) return account;
-  const { entry } = owned;
+  const { entry, access } = owned;
   if (entry.deleted_at !== null) return failure("not_found");
   if (!opts.fire && (!Number.isSafeInteger(input.expectedRev) || input.expectedRev < 1)) {
     return failure("invalid", "Send the revision you are editing.");
@@ -58,7 +58,7 @@ async function prepare(
     return failure("conflict", undefined, Number(entry.rev));
   }
   const place: EntryPlace = { siteId: entry.site_id, typeId: type.type.id, typeKey: type.type.key };
-  return { ok: true as const, entry, type: type.type, place };
+  return { ok: true as const, entry, access, type: type.type, place };
 }
 
 /**
@@ -120,7 +120,8 @@ export async function publishEntryWithClient(
       field: `${p.blockId ?? "page"}.${p.field}`,
     }));
   }
-  const unplaced = await checkOwnImages(admin, input.actor.userId, images);
+  // Uploads live in the site OWNER's folder, whoever publishes (a member's own folder is refused).
+  const unplaced = await checkOwnImages(admin, ready.access.ownerId, images);
   if (unplaced) return unplaced;
 
   if (run?.kind === "check") {
@@ -145,13 +146,14 @@ export async function publishEntryWithClient(
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
   const { data, error } = await admin.rpc("publish_entry", {
     p_entry_id: entry.id,
-    p_owner_id: input.actor.userId,
+    p_owner_id: ready.access.ownerId,
     p_expected_rev: input.expectedRev,
     p_published: published as Json,
     p_published_at: publishedAt,
     p_source: input.actor.source,
   });
   if (error) return refused(admin, entry.id, error);
+  await recordSiteActivity(admin, ready.access, type.key === "page" ? "page_published" : "post_published", entry.id);
   return { ok: true, rev: Number(data), publishedAt, ...ready.place };
 }
 
@@ -178,9 +180,10 @@ export async function unpublishEntryWithClient(
   }
   const { data, error } = await admin.rpc("unpublish_entry", {
     p_entry_id: entry.id,
-    p_owner_id: input.actor.userId,
+    p_owner_id: ready.access.ownerId,
     p_expected_rev: input.expectedRev,
   });
   if (error) return refused(admin, entry.id, error);
+  await recordSiteActivity(admin, ready.access, "post_unpublished", entry.id);
   return { ok: true, rev: Number(data), ...ready.place };
 }

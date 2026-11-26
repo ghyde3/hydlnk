@@ -4,7 +4,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { decodeCursor, encodeCursor } from "./cursor";
 import { canonical } from "./entries-core";
 import { failure } from "./errors";
-import { ownedEntry, ownedSite, siteType } from "./guards";
+import { entryFor, siteFor, siteType } from "./guards";
 import { LIST_SORTS, LIST_STATUSES } from "./schemas/enums";
 import type { EntryStatus, ListSort, ListStatus } from "./schemas/enums";
 import type { EntrySummary } from "./schemas/summaries";
@@ -28,7 +28,7 @@ export async function getEntryWithClient(
   admin: Admin,
   input: { actor: ContentActor; entryId: string },
 ) {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  const owned = await entryFor(admin, input.actor, input.entryId, "read");
   if (!owned.ok) return owned;
   const e = owned.entry;
   const type = await siteType(admin, e.site_id, e.type_id);
@@ -154,7 +154,7 @@ export async function listEntriesWithClient(
     : DEFAULT_LIMIT;
   const asc = (input.order ?? (sort === "title" ? "asc" : "desc")) === "asc";
 
-  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  const site = await siteFor(admin, input.actor, input.siteId, "read");
   if (!site.ok) return site;
   const type = await admin
     .from("content_types")
@@ -279,7 +279,7 @@ export async function countEntriesWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string; typeKey: string },
 ): Promise<ContentResult<{ count: number }>> {
-  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  const site = await siteFor(admin, input.actor, input.siteId, "read");
   if (!site.ok) return site;
   const type = await siteType(admin, site.site.id, input.typeKey);
   if (!type.ok) return type;

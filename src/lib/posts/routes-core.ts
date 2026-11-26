@@ -28,6 +28,7 @@ import { LIST_STATUSES, POST_LIMITS, type ListStatus } from "@/lib/content/schem
 import { postLimitMessage } from "@/lib/limits/messages";
 import { PLAN_LIMITS } from "@/lib/limits/table";
 import { toPlan, type Plan } from "@/lib/pages/plans";
+import { requireSiteAccess } from "@/lib/access";
 import { rateLimit } from "@/lib/rate-limit";
 import { isEntryOfSite } from "@/lib/site-pages/entry-revisions-core";
 import { fromFailure, type EntrySaveBody } from "@/lib/site-pages/entry-save-core";
@@ -68,11 +69,14 @@ const actor = (userId: string): ContentActor => ({ userId, source: "editor" });
 const refused = (failure: ContentFailure): PostsResponse<Refusal> =>
   fromFailure(failure) as PostsResponse<Refusal>;
 
-/** The effective plan of the session user, for the limit's number and words. Read with the secret key by id. */
-async function planOf(admin: Admin, userId: string): Promise<Plan> {
-  const account = await admin.from("accounts").select("plan").eq("id", userId).maybeSingle();
-  if (account.error) throw new Error(`Reading the plan failed: ${account.error.message}`);
-  return toPlan(account.data?.plan);
+/**
+ * The site OWNER's effective plan, for the limit's number and words (a member is limited by the owner's
+ * plan, never their own). Called after the writer already passed access for the site.
+ */
+async function planOf(admin: Admin, userId: string, siteId: string): Promise<Plan> {
+  const found = await requireSiteAccess(admin, { actorId: userId, siteId, need: "read", source: "editor" });
+  if (!found.ok) throw new Error(`Reading the site's plan failed: ${found.reason}`);
+  return toPlan(found.access.plan);
 }
 
 // Types ------------------------------------------------------------------------------------------
@@ -100,7 +104,7 @@ export async function listTypesCore(
   });
   // A site without the post type (none exists today) simply holds no posts.
   if (!count.ok && count.error !== "not_found") return refused(count);
-  const plan = await planOf(admin, input.userId);
+  const plan = await planOf(admin, input.userId, input.siteId);
   return {
     status: 200,
     body: {
@@ -262,7 +266,7 @@ export async function createPostCore(
   });
   if (made.ok) return { status: 201, body: { kind: "ok", id: made.id, rev: made.rev } };
   if (made.error !== "entry_limit") return refused(made);
-  const plan = await planOf(admin, input.userId);
+  const plan = await planOf(admin, input.userId, input.siteId);
   const count = await countEntriesWithClient(admin, {
     actor: who,
     siteId: input.siteId,

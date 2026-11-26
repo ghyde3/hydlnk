@@ -5,7 +5,7 @@ import { blockedBodyLinks } from "./blocklist";
 import { bodyShapeIssue } from "./body-shape";
 import { failure, mapDbError } from "./errors";
 import { pruneTerms } from "./prune-terms";
-import { activeAccount, enabledType, ownedEntry, ownedSite } from "./guards";
+import { enabledType, entryFor, siteFor } from "./guards";
 import {
   MAX_DRAFT_BYTES,
   draftBytes,
@@ -67,9 +67,7 @@ export async function createEntryWithClient(
   },
 ): Promise<ContentResult<{ id: string; rev: number; updatedAt: string }>> {
   const { actor } = input;
-  const account = await activeAccount(admin, actor.userId);
-  if (!account.ok) return account;
-  const site = await ownedSite(admin, actor.userId, input.siteId);
+  const site = await siteFor(admin, actor, input.siteId, "edit");
   if (!site.ok) return site;
   const type = await enabledType(admin, site.site.id, input.typeKey);
   if (!type.ok) return type;
@@ -100,10 +98,8 @@ export async function updateEntryWithClient(
   input: { actor: ContentActor; entryId: string; expectedRev: number; draft: unknown },
 ): Promise<ContentResult<{ rev: number; unchanged: boolean }>> {
   const { actor, expectedRev } = input;
-  const owned = await ownedEntry(admin, actor.userId, input.entryId);
+  const owned = await entryFor(admin, actor, input.entryId, "edit");
   if (!owned.ok) return owned;
-  const account = await activeAccount(admin, actor.userId);
-  if (!account.ok) return account;
   const { entry } = owned;
   if (entry.deleted_at !== null) return failure("not_found");
   if (!Number.isSafeInteger(expectedRev) || expectedRev < 1) {

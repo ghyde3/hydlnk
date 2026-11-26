@@ -31,6 +31,8 @@ const input = z.strictObject({
 /** How the shared create code's refusals read as tool codes. */
 const CODES: Record<SubPageError, ToolErrorCode> = {
   not_found: "not_found",
+  // Never reached over MCP (a member's token gets not_found, M19-13); listed for completeness.
+  forbidden: "not_found",
   account_suspended: "account_suspended",
   page_limit: "plan_required",
   storage_full: "too_large",

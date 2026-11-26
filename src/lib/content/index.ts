@@ -2,8 +2,8 @@ import "server-only";
 
 /**
  * The content writer (M15-03): the only code that writes content_* and calls the entry functions.
- * Callers pass a ContentActor; every operation checks ownership, suspension and that the type is
- * enabled. Operations arrive in later tasks; for now this exports types.
+ * Callers pass a ContentActor; every operation checks access through the one helper (src/lib/access:
+ * the owner or a member with the need, the owner not suspended) and that the type is enabled. Operations arrive in later tasks; for now this exports types.
  */
 export type {
   ContentActor,
@@ -260,7 +260,8 @@ export { countEntriesWithClient, listTermsWithClient, listTypesWithClient };
 export type { EntrySummary } from "./query-core";
 export type { EntryPlace } from "./publish-core";
 export { BODY_IMAGES_MAX } from "./images";
-// The ownership check itself, for an app route that reads published data with the secret key.
-export { ownedSite } from "./guards";
+// The access check itself (Wave F: the one helper), for an app route that reads published data with
+// the secret key.
+export { siteFor } from "./guards";
 export type { TermSummary } from "./terms-core";
 export type { TypeSummary } from "./types-core";

@@ -4,7 +4,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/lib/supabase/database.types";
 import { CONTENT_STATUS, failure, mapDbError } from "@/lib/content/errors";
-import { activeAccount, enabledType, ownedEntry, ownedSite } from "@/lib/content/guards";
+import { enabledType, entryFor, siteFor } from "@/lib/content/guards";
+
+// Wave F: the guards ask the one access helper (siteFor / entryFor with a need); the owner's results
+// are unchanged. ownedSite, ownedEntry and activeAccount were these three calls before.
+const editor = (userId: string) => ({ userId, source: "editor" as const });
+const ownedSite = (admin: SupabaseClient<Database>, userId: string, siteId: unknown) =>
+  siteFor(admin, editor(userId), siteId, "read");
+const ownedEntry = (admin: SupabaseClient<Database>, userId: string, entryId: unknown) =>
+  entryFor(admin, editor(userId), entryId, "read");
 import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 import { contentTypes, enablePost } from "./content-support";
 
@@ -82,15 +90,17 @@ describe.skipIf(!run)("guards against the local stack", () => {
   });
 
   it("a suspended account is refused, an active one passes", async () => {
-    expect(await activeAccount(admin, a.userId)).toMatchObject({ ok: true });
+    expect(await siteFor(admin, editor(a.userId), a.pageId, "edit")).toMatchObject({ ok: true });
     await admin
       .from("accounts")
       .update({ suspended_at: new Date().toISOString() })
       .eq("id", a.userId);
-    expect(await activeAccount(admin, a.userId)).toMatchObject({
+    expect(await siteFor(admin, editor(a.userId), a.pageId, "edit")).toMatchObject({
       ok: false,
       error: "account_suspended",
     });
+    // A read (the owner's own lists) still passes while suspended, as before.
+    expect(await siteFor(admin, editor(a.userId), a.pageId, "read")).toMatchObject({ ok: true });
     await admin.from("accounts").update({ suspended_at: null }).eq("id", a.userId);
   });
 

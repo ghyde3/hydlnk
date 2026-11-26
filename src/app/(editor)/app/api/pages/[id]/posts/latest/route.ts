@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getLatestPosts, getSiteArchives, getTermIndex } from "@/lib/blog/published";
-import { ownedSite } from "@/lib/content";
+import { siteFor } from "@/lib/content";
 import { answer, failed, gate } from "@/lib/posts/route-http";
 import { postsArchiveOf } from "@/lib/site/live";
 import { createAdminSupabase } from "@/lib/supabase/admin";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/pages/{id}/posts/latest[?categories=a,b] on the app host (M16-07): what latest-posts
- * blocks would draw for the signed-in account's own site, so the editor's preview shows the real
+ * blocks would draw for a site the signed-in account may read (its own or one shared with it), so the editor's preview shows the real
  * list; with the categories the blocks filter by, those categories' newest posts are included.
  *
  *   200  {kind: "ok", latest, categories}   `latest` is null while the blog is off; `categories`
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!gated.ok) return gated.response;
   const { id } = await params;
   try {
-    const site = await ownedSite(createAdminSupabase(), gated.userId, id);
+    const site = await siteFor(createAdminSupabase(), { userId: gated.userId, source: "editor" }, id, "read");
     if (!site.ok) {
       return site.error === "not_found"
         ? answer({ status: 404, body: { kind: "missing" } })

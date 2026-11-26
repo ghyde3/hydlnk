@@ -1,11 +1,13 @@
 import { readBlockedLinkError } from "@/lib/blocklist/error";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
+import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import { SCHEDULING_PLAN_MESSAGE, TERM_LIMIT_MESSAGE } from "@/lib/limits/messages";
 import type { ContentErrorCode, ContentFailure } from "./types";
 
 export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
   not_found: 404,
   conflict: 409,
+  forbidden: 403,
   account_suspended: 403,
   type_disabled: 403,
   invalid: 422,
@@ -28,6 +30,7 @@ export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
 export const CONTENT_MESSAGES: Record<ContentErrorCode, string> = {
   not_found: "That doesn’t exist.",
   conflict: "This was changed somewhere else. Reload to see the latest version.",
+  forbidden: PUBLISH_FORBIDDEN_MESSAGE,
   account_suspended:
     "Your account is suspended, so its content can’t be changed. Contact support to appeal.",
   type_disabled: "That content type isn’t turned on for this site.",

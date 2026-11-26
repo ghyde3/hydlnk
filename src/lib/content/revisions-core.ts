@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { canonical, updateEntryWithClient } from "./entries-core";
 import { failure } from "./errors";
-import { activeAccount, ownedEntry } from "./guards";
+import { recordSiteActivity } from "@/lib/access";
+import { entryFor, siteFor } from "./guards";
 import type { RevisionSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult, ContentSource } from "./types";
 
@@ -16,7 +17,7 @@ export async function listRevisionsWithClient(
   admin: Admin,
   input: { actor: ContentActor; entryId: string },
 ): Promise<ContentResult<{ revisions: RevisionSummary[] }>> {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  const owned = await entryFor(admin, input.actor, input.entryId, "read");
   if (!owned.ok) return owned;
   const found = await admin
     .from("content_entry_revisions")
@@ -57,7 +58,7 @@ export async function restoreRevisionWithClient(
   admin: Admin,
   input: { actor: ContentActor; entryId: string; rev: number; expectedRev: number },
 ): Promise<ContentResult<{ rev: number; unchanged: boolean }>> {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  const owned = await entryFor(admin, input.actor, input.entryId, "read");
   if (!owned.ok) return owned;
   const { entry } = owned;
   if (!Number.isSafeInteger(input.rev) || input.rev < 1) return failure("not_found");
@@ -80,19 +81,23 @@ export async function restoreRevisionWithClient(
     Number(entry.rev) === expectedRev &&
     canonical(entry.draft) !== canonical(snapshot);
   if (replaces) {
-    // A suspended account writes nothing, a revision included.
-    const account = await activeAccount(admin, input.actor.userId);
-    if (!account.ok) return account;
+    // Recording the current draft is a write: it needs edit (a suspended owner writes nothing).
+    const writable = await siteFor(admin, input.actor, entry.site_id, "edit");
+    if (!writable.ok) return writable;
     const kept = await keepCurrentDraft(admin, entry, input.actor.source);
     if (!kept.ok) return kept;
     expectedRev = kept.rev;
   }
-  return updateEntryWithClient(admin, {
+  const restored = await updateEntryWithClient(admin, {
     actor: input.actor,
     entryId: entry.id,
     expectedRev,
     draft: snapshot,
   });
+  if (restored.ok && !restored.unchanged) {
+    await recordSiteActivity(admin, owned.access, "revision_restored", entry.id);
+  }
+  return restored;
 }
 
 /**

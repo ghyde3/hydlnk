@@ -11,6 +11,8 @@ export interface ContentActor {
 export type ContentErrorCode =
   | "not_found"
   | "conflict"
+  /** A member whose role does not allow it (an editor asked to publish; Wave F). */
+  | "forbidden"
   | "account_suspended"
   | "type_disabled"
   | "invalid"
