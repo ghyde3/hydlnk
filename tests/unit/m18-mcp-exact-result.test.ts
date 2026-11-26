@@ -25,7 +25,7 @@ const { MCP_MAX_BODY_BYTES, MCP_RESULT_MAX_BYTES } = await import("@/lib/mcp/con
 import type { AnyToolDefinition } from "@/lib/mcp/types";
 
 /**
- * M18-02: a content tool's result is never shortened, and the fourteen older tools still are. The
+ * M18-02: a content tool's result is never shortened, and the older page tools still are. The
  * request body the endpoint reads is 1 MiB (the endpoint's own tests hold the 413).
  */
 
@@ -109,7 +109,7 @@ describe("through runTool", () => {
 });
 
 describe("which tools are exact", () => {
-  it("the fourteen older tools still shorten: none of them marks its result", async () => {
+  it("the older page tools still shorten: none of them marks its result", async () => {
     const older = TOOLS.filter((tool) => !CONTENT_TOOL_NAMES.includes(tool.name));
     expect(older).toHaveLength(14);
     const { readFileSync } = await import("node:fs");
