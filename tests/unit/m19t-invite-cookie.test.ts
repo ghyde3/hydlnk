@@ -105,11 +105,13 @@ describe("S1 the session's sign-in methods", () => {
 
 describe("S7 the invite cookie", () => {
   it.each(["invite_email", "invite_used", "invite_session", "team_plan", "team_limit"] as const)(
-    "a final answer (%s) drops the cookie",
+    "a final answer (%s) drops the cookie and records why for /invite",
     async (error) => {
       accept.mockResolvedValue(teamFailure(error));
       await run(() => acceptInvite(null, new FormData()));
-      expect(deleted).toEqual(["hl_invite"]);
+      expect(deleted).toContain("hl_invite");
+      expect(jar.has("hl_invite")).toBe(false);
+      expect(jar.get("hl_invite_result")).toBe(error);
     },
   );
 
@@ -122,7 +124,8 @@ describe("S7 the invite cookie", () => {
   it("a joined invite drops it and opens the editor", async () => {
     accept.mockResolvedValue({ ok: true, siteId: "22222222-2222-4222-8222-222222222222" });
     expect(await run(() => acceptInvite(null, new FormData()))).toEqual({ redirected: "/editor" });
-    expect(deleted).toEqual(["hl_invite"]);
+    expect(deleted).toContain("hl_invite");
+    expect(jar.has("hl_invite")).toBe(false);
   });
 
   it("signing out drops it", async () => {
@@ -132,6 +135,7 @@ describe("S7 the invite cookie", () => {
 
   it("Not now drops it and goes home", async () => {
     expect(await run(() => dismissInvite())).toEqual({ redirected: "/" });
-    expect(deleted).toEqual(["hl_invite"]);
+    expect(deleted).toContain("hl_invite");
+    expect(jar.has("hl_invite")).toBe(false);
   });
 });

@@ -5,8 +5,8 @@ import { AcceptInviteForm } from "@/components/team/accept-invite-form";
 import { signOut } from "@/lib/auth/actions";
 import { requireUser } from "@/lib/auth/session";
 import { dismissInvite } from "@/lib/team/actions";
-import { TEAM_MESSAGES } from "@/lib/team/core";
-import { pendingInviteToken } from "@/lib/team/resume";
+import { TEAM_MESSAGES, type TeamError } from "@/lib/team/core";
+import { inviteResult, pendingInviteToken } from "@/lib/team/resume";
 
 export const metadata: Metadata = { title: { absolute: "HYDLNK — Join a site" } };
 
@@ -20,6 +20,10 @@ export const metadata: Metadata = { title: { absolute: "HYDLNK — Join a site" 
 export default async function InvitePage() {
   const user = await requireUser();
   const token = await pendingInviteToken();
+  // S7: an Accept refused for good dropped the cookie; say why (another address, a password session).
+  const refused = token ? null : await inviteResult(Object.keys(TEAM_MESSAGES) as TeamError[]);
+  // The wrong account or a password session: the link still works for the right sign-in.
+  const signInAgain = refused === "invite_email" || refused === "invite_session";
   return (
     <AuthLayout>
       <AuthHeading
@@ -27,9 +31,20 @@ export default async function InvitePage() {
         intro={
           token
             ? "You were invited to edit a site on HYDLNK. Accept to start working on it."
-            : TEAM_MESSAGES.invite_used
+            : signInAgain
+              ? "Open the link in the invite email again once you’re signed in the right way."
+              : TEAM_MESSAGES[refused ?? "invite_used"]
         }
       />
+      {signInAgain && refused ? (
+        <p
+          role="alert"
+          data-invite-refused={refused}
+          className="mt-5 rounded-md bg-brass-soft px-3 py-2.5 text-sm leading-normal text-brass-soft-text"
+        >
+          {TEAM_MESSAGES[refused]}
+        </p>
+      ) : null}
       {token ? (
         <div className="mt-7 flex flex-col gap-2">
           <AcceptInviteForm />

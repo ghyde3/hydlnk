@@ -32,11 +32,37 @@ export async function resumeInvite(): Promise<void> {
   if (await pendingInviteToken()) redirect("/invite");
 }
 
-/** Drops the cookie (a Server Action or a route handler; a Server Component cannot write one). */
+/**
+ * Why the last Accept on this device was refused for good (S7): the invite cookie is dropped then, so
+ * /invite re-renders without a token; this one-minute HttpOnly cookie lets it say why (another
+ * address, a password session, a used link) instead of only "this link doesn't work".
+ */
+export const INVITE_RESULT_COOKIE = "hl_invite_result";
+const INVITE_RESULT_SECONDS = 60;
+
+/** Drops the invite cookie and its result (a Server Action or a route handler only). */
 export async function clearInviteCookie(): Promise<void> {
   try {
-    (await cookies()).delete(INVITE_COOKIE);
+    const jar = await cookies();
+    jar.delete(INVITE_COOKIE);
+    jar.delete(INVITE_RESULT_COOKIE);
   } catch {
-    // A Server Component: it expires on its own.
+    // A Server Component: they expire on their own.
   }
+}
+
+/** Drops the invite cookie and records why (S7). */
+export async function endInvite(reason: string, secure: boolean): Promise<void> {
+  await clearInviteCookie();
+  try {
+    (await cookies()).set(INVITE_RESULT_COOKIE, reason, inviteCookieOptions(secure, INVITE_RESULT_SECONDS));
+  } catch {
+    // Not in an action: nothing to show.
+  }
+}
+
+/** The recorded reason, when it is one of `known` (anything else reads as none). */
+export async function inviteResult<T extends string>(known: readonly T[]): Promise<T | null> {
+  const value = (await cookies()).get(INVITE_RESULT_COOKIE)?.value;
+  return known.find((reason) => reason === value) ?? null;
 }

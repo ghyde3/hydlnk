@@ -7,7 +7,7 @@ import { sendMessage } from "@/lib/domains/email";
 import { clientEnv } from "@/lib/env/client";
 import { setCurrentPageCookie } from "@/lib/pages/current-cookie";
 import { rateLimit } from "@/lib/rate-limit";
-import { appOrigin } from "@/lib/routing/urls";
+import { appOrigin, protocolFor } from "@/lib/routing/urls";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import {
   acceptInviteCore,
@@ -20,7 +20,7 @@ import {
   type TeamFailure,
 } from "./core";
 import { siteInviteEmail } from "./invite-email";
-import { clearInviteCookie, pendingInviteToken } from "./resume";
+import { clearInviteCookie, endInvite, pendingInviteToken } from "./resume";
 
 /**
  * The team Server Actions (Wave F, M19-08, M19-09). Each takes ids and plain values only, acts as the
@@ -109,7 +109,9 @@ export async function acceptInvite(
     // S7: every final answer drops the cookie (a used link, the wrong account, a password session):
     // the person opens the emailed link again once signed in the right way. Only a passing failure
     // (too many tries, an error) keeps it for another try.
-    if (result.error !== "rate_limited" && result.error !== "error") await clearInviteCookie();
+    if (result.error !== "rate_limited" && result.error !== "error") {
+      await endInvite(result.error, protocolFor(clientEnv.NEXT_PUBLIC_ROOT_DOMAIN) === "https");
+    }
     return { message: result.message };
   }
   await clearInviteCookie();
