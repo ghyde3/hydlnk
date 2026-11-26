@@ -8,7 +8,8 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 /**
  * M11-04 step 7 and M11-08, on page entries (1b1-18): creating and deleting a sub-page, the real
  * cores with the secret-key client against the local Supabase stack (the real ownership checks, the
- * real HL008 and HL012 triggers). A sub-page is a page entry; delete trashes it.
+ * real HL008 and HL012 triggers). A sub-page is a page entry; delete removes it for good in one
+ * transaction (M15-13).
  */
 const { run } = await stackIsUp();
 
@@ -401,11 +402,20 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect(await count(o.pageId)).toBe(0);
   });
 
-  it("a purge that fails after the trash still finishes the delete: menu cleaned, ok with purged false, and a retry purges", async () => {
-    const o = await owner("purgefail", "pro");
+  it("a delete that fails leaves the page fully in place (listed, live, in the menu, path held) and answers delete_failed (M15-13)", async () => {
+    const o = await owner("delfail", "pro");
     const a = await create(o);
     const b = await create(o);
     if (!a.ok || !b.ok) throw new Error("setup");
+    const pub = await admin
+      .from("content_entries")
+      .update({
+        published: a.draft as never,
+        published_at: new Date().toISOString(),
+        first_published_at: new Date().toISOString(),
+      })
+      .eq("id", a.id);
+    expect(pub.error).toBeNull();
     const home = await admin.from("pages").select("draft").eq("id", o.pageId).single();
     const draft = home.data!.draft as Record<string, unknown>;
     const nav = { show: true, items: [a.id, b.id] };
@@ -413,43 +423,64 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
       .from("pages")
       .update({ draft: { ...draft, nav } as never })
       .eq("id", o.pageId);
-    // An admin client whose entry DELETE fails the way a statement timeout does.
-    const failing = (target: SupabaseClient): SupabaseClient =>
-      new Proxy(target, {
-        get(t, prop) {
-          const value = Reflect.get(t, prop, t);
-          if (prop !== "from") return typeof value === "function" ? value.bind(t) : value;
-          return (table: string) => {
-            const builder = t.from(table);
-            if (table !== "content_entries") return builder;
-            return new Proxy(builder, {
-              get(bt, bprop) {
-                if (bprop !== "delete") {
-                  const v = Reflect.get(bt, bprop, bt);
-                  return typeof v === "function" ? v.bind(bt) : v;
-                }
-                const dead: unknown = new Proxy(() => dead, {
-                  get: (_x, p) =>
-                    p === "then"
-                      ? (resolve: (v: unknown) => void) =>
-                          resolve({ data: null, error: { code: "57014", message: "timeout" } })
-                      : () => dead,
-                });
-                return () => dead;
-              },
-            });
-          };
-        },
-      });
-    const first = await core.deleteSubPageWithClient(failing(admin) as never, {
+    const state = async () => {
+      const entry = await admin
+        .from("content_entries")
+        .select("rev, draft, published, published_at, deleted_at")
+        .eq("id", a.id)
+        .maybeSingle();
+      const paths = await admin
+        .from("site_paths")
+        .select("path, type_id")
+        .eq("entry_id", a.id)
+        .order("path");
+      const revisions = await admin
+        .from("content_entry_revisions")
+        .select("id")
+        .eq("entry_id", a.id)
+        .order("id");
+      const page = await admin.from("pages").select("draft").eq("id", o.pageId).single();
+      expect(paths.error).toBeNull();
+      expect(revisions.error).toBeNull();
+      return {
+        entry: entry.data,
+        paths: paths.data,
+        revisions: revisions.data,
+        home: page.data!.draft,
+        listed: await live(o.pageId),
+      };
+    };
+    const before = await state();
+    expect(before.entry).toMatchObject({ deleted_at: null });
+    expect(before.entry!.published).not.toBeNull();
+    expect(before.paths!.length).toBeGreaterThan(0);
+
+    // An admin client whose delete call fails the way a statement timeout does: the one statement
+    // is rolled back by the database, so nothing of the delete is applied.
+    const calls: string[] = [];
+    const failing = new Proxy(admin, {
+      get(t, prop) {
+        const value = Reflect.get(t, prop, t);
+        if (prop !== "rpc") return typeof value === "function" ? value.bind(t) : value;
+        return (fn: string, args: unknown) => {
+          calls.push(fn);
+          if (fn !== "delete_page_entry") return t.rpc(fn, args as never);
+          return Promise.resolve({ data: null, error: { code: "57014", message: "timeout" } });
+        };
+      },
+    });
+    const first = await core.deleteSubPageWithClient(failing as never, {
       userId: o.userId,
       siteId: o.pageId,
       subPageId: a.id,
     });
-    expect(first).toMatchObject({ ok: true, id: a.id, purged: false });
-    const after = await admin.from("pages").select("draft").eq("id", o.pageId).single();
-    expect(after.data!.draft).toMatchObject({ nav: { show: true, items: [b.id] } });
-    // Retrying finds the trashed entry and purges it for good.
+    expect(first).toMatchObject({ ok: false, status: 500, error: "delete_failed" });
+    expect(calls).toContain("delete_page_entry");
+    // Nothing moved: the entry is not trashed, its live copy, paths and revisions are there, and
+    // Home's menu still names it.
+    expect(await state()).toEqual(before);
+
+    // The same delete with a working database removes it for good.
     const retry = await core.deleteSubPageWithClient(admin as never, {
       userId: o.userId,
       siteId: o.pageId,
@@ -458,6 +489,40 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect(retry).toMatchObject({ ok: true, id: a.id, purged: true });
     const gone = await admin.from("content_entries").select("id").eq("id", a.id);
     expect(gone.data).toEqual([]);
+    const after = await admin.from("pages").select("draft").eq("id", o.pageId).single();
+    expect(after.data!.draft).toMatchObject({ nav: { show: true, items: [b.id] } });
+  });
+
+  it("a real failure inside the delete rolls the whole delete back, and a page left in the trash is deleted too (M15-13)", async () => {
+    const o = await owner("delreal");
+    const a = await create(o);
+    const b = await create(o);
+    if (!a.ok || !b.ok) throw new Error("setup");
+    // The wrong site: the database refuses (P0002) and nothing is touched.
+    const other = await owner("delreal2");
+    const wrong = await admin.rpc("delete_page_entry", {
+      p_entry_id: a.id,
+      p_site_id: other.pageId,
+      p_owner_id: other.userId,
+    });
+    expect(wrong.error?.code).toBe("P0002");
+    expect(await live(o.pageId)).toBe(2);
+    // A page trashed by other means still counts (HL008) until it is deleted here.
+    const trashed = await admin.rpc("trash_entry", {
+      p_entry_id: a.id,
+      p_owner_id: o.userId,
+      p_expected_rev: a.rev,
+    });
+    expect(trashed.error).toBeNull();
+    expect(await create(o)).toMatchObject({ ok: false, error: "page_limit" });
+    const del = await core.deleteSubPageWithClient(admin as never, {
+      userId: o.userId,
+      siteId: o.pageId,
+      subPageId: a.id,
+    });
+    expect(del).toMatchObject({ ok: true, purged: true });
+    expect(await count(o.pageId)).toBe(1);
+    expect(await create(o)).toMatchObject({ ok: true });
   });
 
   it("delete leaves a Home draft with no menu untouched", async () => {

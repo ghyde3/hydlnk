@@ -1683,6 +1683,10 @@ export type Database = {
       content_move_active: { Args: never; Returns: boolean }
       convert_all_versions: { Args: never; Returns: Json }
       convert_site_versions: { Args: { p_site: string }; Returns: Json }
+      delete_page_entry: {
+        Args: { p_entry_id: string; p_owner_id: string; p_site_id: string }
+        Returns: string
+      }
       end_expired_gifts: {
         Args: never
         Returns: {

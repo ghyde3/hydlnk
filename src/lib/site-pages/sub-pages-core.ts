@@ -9,10 +9,8 @@ import {
 import {
   countSubPageEntriesWithClient,
   listPagePathsWithClient,
-  readLiveSubPageWithClient,
-  readTrashedSubPageIdWithClient,
 } from "@/lib/site/page-entries-core";
-import { createEntryWithClient, purgeEntryWithClient, trashEntryWithClient } from "@/lib/content";
+import { createEntryWithClient } from "@/lib/content";
 import type { ContentActor } from "@/lib/content";
 import { pagesPerSiteMessage, toPlanId } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
@@ -24,7 +22,8 @@ import { pathProblem } from "./pages";
  * Create and delete a sub-page of one of the signed-in account's sites (M11-04 step 7, M11-08),
  * written against an injected secret-key client so tests drive it without Next.js; the routes call
  * these with the server-only admin client. A sub-page is a page entry (stage 1b): create goes through
- * the content writer (`createEntryWithClient`, type page) and delete trashes the entry. Clients have
+ * the content writer (`createEntryWithClient`, type page) and delete removes the entry for good in one
+ * transaction (`delete_page_entry`, M15-13). Clients have
  * no insert or delete grant on entries, so these are the only doors, and they check ownership
  * themselves: the site must belong to `userId` (a verified session user, never request input), and a
  * suspended owner is refused, read first and failing closed (a failed read refuses the write, a
@@ -279,52 +278,21 @@ export async function deleteSubPageWithClient(
   }
   const subPageId = input.subPageId.toLowerCase();
 
-  // The page entry of this site that is not Home and not already in the trash.
-  const read = () => readLiveSubPageWithClient(admin, site.id, subPageId);
-
-  // A concurrent autosave moves the rev: read it again, a few times.
-  let entry = await read();
-  // Not live: a page whose trash went through but whose purge did not is still ours to finish.
-  const leftover = entry ? null : await readTrashedSubPageIdWithClient(admin, site.id, subPageId);
-  if (!entry && !leftover) return failure("not_found");
-  let trashed = leftover !== null;
-  let entryId = entry?.id ?? leftover!.id;
-  for (let attempt = 0; attempt < 3 && !trashed && entry; attempt++) {
-    const out = await trashEntryWithClient(admin, {
-      actor: actorOf(userId),
-      entryId: entry.id,
-      expectedRev: Number(entry.rev),
-    });
-    if (out.ok) {
-      trashed = true;
-      entryId = entry.id;
-    } else if (out.error === "conflict") {
-      const again = await read();
-      if (!again) return failure("not_found");
-      entry = again;
-    } else if (out.error === "not_found") {
-      return failure("not_found");
-    } else if (out.error === "account_suspended") {
-      return failure("account_suspended");
-    } else {
-      console.error("[site-pages] delete failed", out.error, out.message);
-      return failure("delete_failed");
-    }
-  }
-  if (!trashed) return failure("delete_failed");
-
-  // Deleting a sub-page is immediate and permanent: the entry and its revisions go for good, so the
-  // page limit frees at once. (Posts keep the 30-day trash; this door is for pages only.)
-  const purged = await purgeEntryWithClient(admin, {
-    actor: actorOf(userId),
-    entryId,
-    includePublished: true,
+  // One transaction (delete_page_entry): the entry, its revisions, its links and its path claims go
+  // together or not at all, so the page limit frees at once and a failure leaves the page fully in
+  // place, still listed and still live. It takes a live page and one already in the trash; Home,
+  // another site's entry and an unknown id are all P0002. (Posts keep the 30-day trash; this door is
+  // for pages only.)
+  const deleted = await admin.rpc("delete_page_entry", {
+    p_entry_id: subPageId,
+    p_site_id: site.id,
+    p_owner_id: userId,
   });
-  // The trash is the committed delete: the live copy and its paths are gone. A failed purge only
-  // leaves the row in the trash (the 30-day job takes it, a retry purges it), so the menu cleanup
-  // and the caller's cache expiry still run.
-  if (!purged.ok) console.error("[site-pages] purge failed", purged.error, purged.message);
-  const purgedForGood = purged.ok;
+  if (deleted.error) {
+    if (deleted.error.code === "P0002") return failure("not_found");
+    console.error("[site-pages] delete failed", deleted.error.code, deleted.error.message);
+    return failure("delete_failed");
+  }
 
   try {
     await removeFromHomeNav(admin, site.id, subPageId);
@@ -335,5 +303,5 @@ export async function deleteSubPageWithClient(
       error instanceof Error ? error.message : "",
     );
   }
-  return { ok: true, id: subPageId, siteId: site.id, handle: site.handle, purged: purgedForGood };
+  return { ok: true, id: subPageId, siteId: site.id, handle: site.handle, purged: true };
 }
