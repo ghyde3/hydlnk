@@ -5,7 +5,7 @@ import { rand, signedInUser } from "../fixtures/data";
 import type { ToolSession } from "../fixtures/official-mcp-client";
 import { openEditor, pageRow, setDraft, statusChip } from "../m2/editor-helpers";
 import { homeEntryOf } from "../fixtures/home-abuse";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 
 /**
  * The shared part of the Wave L end-to-end flows (M10-24 to M10-33): a fixture user with a page whose
@@ -50,7 +50,7 @@ export function expectNothingInternal(result: unknown, userId: string, allowed: 
 }
 
 export async function tenantHtml(handle: string, path = ""): Promise<string> {
-  const response = await fetch(`http://${handle}.localhost:3000/${path}`);
+  const response = await fetch(`http://${handle}.localhost:${DEV_PORT}/${path}`);
   return response.text();
 }
 
@@ -139,11 +139,17 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
   expect((await mcp.initialize()).status).toBe(200);
   await mcp.initialized();
   const tools = await mcp.listTools();
+  // The 31 tools in the pinned order (src/lib/mcp/tools/index.ts, M18-12).
   expect(tools.map((tool) => tool.name)).toEqual([
     "list_pages",
     "get_page",
     "get_analytics",
     "get_domains",
+    "list_content_types",
+    "list_entries",
+    "get_entry",
+    "list_terms",
+    "list_revisions",
     "update_profile",
     "add_block",
     "update_block",
@@ -152,7 +158,19 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     "create_page",
     "update_page_settings",
     "set_theme",
+    "create_entry",
+    "update_entry",
+    "delete_entry",
+    "restore_entry",
+    "create_term",
+    "restore_revision",
     "create_preview_link",
+    "rename_term",
+    "delete_term",
+    "publish_entry",
+    "unpublish_entry",
+    "publish_design",
+    "update_content_type",
     "publish_page",
   ]);
 
@@ -425,14 +443,17 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     ),
   ).toEqual(["hours", "items"]);
   // Not live yet: neither the page nor the link to it.
-  expect((await fetch(`http://${user.handle}.localhost:3000/specials`)).status).toBe(404);
+  expect((await fetch(`http://${user.handle}.localhost:${DEV_PORT}/specials`)).status).toBe(404);
   expect(await tenantHtml(user.handle)).not.toContain("See the specials");
 
   // Publish: the old content is live until the call, the new content is live on the very next request.
   const before = await tenantHtml(user.handle);
   expect(before).not.toContain("A paragraph written by an assistant.");
   const published = await call<any>("publish_page", { pageId: user.pageId });
-  expect(published).toMatchObject({ published: true, url: `http://${user.handle}.localhost:3000` });
+  expect(published).toMatchObject({
+    published: true,
+    url: `http://${user.handle}.localhost:${DEV_PORT}`,
+  });
   const after = await tenantHtml(user.handle);
   // The whole site went live: the new page, and the link from Home to it.
   const specials = await tenantHtml(user.handle, "specials");

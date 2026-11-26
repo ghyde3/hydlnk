@@ -166,6 +166,7 @@ test.describe("M10-34 the sections", () => {
       /See your pages, your posts and your numbers/,
       /Edit your profile/,
       /links and the other blocks/,
+      /Write and edit blog posts as drafts/,
       /Change your theme/,
       /private preview link/,
       /7 days/,
@@ -174,7 +175,7 @@ test.describe("M10-34 the sections", () => {
     ]) {
       expect(can, String(phrase)).toMatch(phrase);
     }
-    expect(await page.locator("#can-do ~ ul").first().locator("li").count()).toBe(7);
+    expect(await page.locator("#can-do ~ ul").first().locator("li").count()).toBe(8);
     const cannot = await sectionText(page, "cant-do");
     for (const phrase of [
       /Sign in as anyone else/,

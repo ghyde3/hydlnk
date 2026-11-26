@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { BrowserContext } from "@playwright/test";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 
 /**
  * The one auth fixture for every spec (M1-04). Sibling modules: http.ts (raw requests, cookies,
@@ -226,7 +226,10 @@ export async function openCallback(
   try {
     await page.route("**/*", async (route) => {
       const requested = new URL(route.request().url());
-      if (requested.host === "app.localhost:3000" && requested.pathname !== "/auth/callback") {
+      if (
+        requested.host === `app.localhost:${DEV_PORT}` &&
+        requested.pathname !== "/auth/callback"
+      ) {
         await route.fulfill({ status: 200, contentType: "text/plain", body: "signed in" });
       } else {
         await route.continue();

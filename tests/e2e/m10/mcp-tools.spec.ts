@@ -18,6 +18,7 @@ import {
 } from "../fixtures/mcp-client";
 import { openEditor, pageRow, saveIndicator } from "../m2/editor-helpers";
 import { homeEntryOf } from "../fixtures/home-abuse";
+import { DEV_PORT } from "../helpers";
 import { prepareFlowUser, runEveryTool } from "./mcp-flow-helpers";
 
 /**
@@ -179,7 +180,9 @@ test("M10-22 scopes, suspension and the limits, over the wire", async () => {
     requiredScope: "hydlnk.write",
   });
   expect((denied.meta!["mcp/www_authenticate"] as string[])[0]).toMatch(
-    /^Bearer error="insufficient_scope", scope="hydlnk\.write", resource_metadata="http:\/\/app\.localhost:3000\/\.well-known\/oauth-protected-resource\/mcp"/,
+    new RegExp(
+      `^Bearer error="insufficient_scope", scope="hydlnk\\.write", resource_metadata="http://app\\.localhost:${DEV_PORT}/\\.well-known/oauth-protected-resource/mcp"`,
+    ),
   );
   const writer = new McpClient((await mintToken(user.id, READ_WRITE_SCOPES)).token);
   await writer.initialize();

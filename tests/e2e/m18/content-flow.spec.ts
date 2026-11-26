@@ -57,8 +57,9 @@ test("M18-13 an AI client turns the blog on, writes a post, edits it by exact re
 
   // 2. Create a post. The body is long enough for two ranges and holds what a careless reader
   // would lose: astral characters, CRLF, trailing spaces.
+  // 360 paragraphs: about 22,600 characters, so the default range of 12,000 reads it in two.
   const filler = Array.from(
-    { length: 400 },
+    { length: 360 },
     (_, index) => `Paragraph ${index} of the kiln log, written before the edit. 😀  \r\n\r\n`,
   ).join("");
   const original = `Opening line BEFORE-THE-EDIT of the post.\r\n\r\n${filler}Closing line.   `;

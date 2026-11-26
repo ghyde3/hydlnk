@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { axeViolations } from "../fixtures/a11y";
 import { cleanupUsers, desktopOnly, phoneOnly, rand, signedInUser } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
   APP_ORIGIN,
   mcpAnswers,
@@ -83,7 +83,7 @@ test.describe("M10-18 the card", () => {
       "Apps you’ve let manage your pages, like Claude or ChatGPT. Remove one to cut off its access.",
     );
     const link = card(page).getByRole("link", { name: "How to connect an app" });
-    await expect(link).toHaveAttribute("href", "http://localhost:3000/connect");
+    await expect(link).toHaveAttribute("href", `http://localhost:${DEV_PORT}/connect`);
     await expect(card(page)).toContainText("No apps are connected yet.");
   });
 
