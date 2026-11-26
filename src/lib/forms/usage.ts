@@ -10,6 +10,8 @@ export interface FormUsage {
   refused: number;
   /** Submissions turned away this month because a site reached its daily cap. */
   refusedDaily: number;
+  /** Owner message emails skipped today (UTC) by their hourly cap; each message is still stored. */
+  notifySkippedToday: number;
   /** The plan's monthly allowance, from the limits table. */
   limit: number;
 }
@@ -27,11 +29,14 @@ export async function loadFormUsage(
   const { data, error } = await admin.rpc("form_usage", { p_uid: userId });
   if (error) throw new Error(`Loading form usage failed (${error.code ?? "unknown"})`);
   const row = (Array.isArray(data) ? data[0] : data) as
-    { stored?: number; refused?: number; refused_daily?: number } | null | undefined;
+    | { stored?: number; refused?: number; refused_daily?: number; notify_skipped_today?: number }
+    | null
+    | undefined;
   return {
     stored: Number(row?.stored ?? 0),
     refused: Number(row?.refused ?? 0),
     refusedDaily: Number(row?.refused_daily ?? 0),
+    notifySkippedToday: Number(row?.notify_skipped_today ?? 0),
     limit: PLAN_LIMITS[plan].formSubmissionsPerMonth,
   };
 }

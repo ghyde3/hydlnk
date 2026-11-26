@@ -338,6 +338,32 @@ test.describe("M17-05 the routes and their hosts", () => {
     expect(await storedRows(live.pageId)).toEqual([]);
   });
 
+  test("a path under /f/ that is no form route is the plain tenant 404 (forms attack pass, finding 5)", async ({}, info) => {
+    test.skip(!desktopOnly(info), "raw HTTP, no UI");
+    const live = await formPage("fr6");
+    const host = `${live.handle}.localhost:3000`;
+    for (const path of [
+      `/f/${live.pageId}`,
+      `/f/${live.pageId}/${SIGNUP_ID}/extra`,
+      `/f/${live.pageId}/o/extra`,
+      `/f/${live.pageId}/%E0%A4%A`,
+      `/f/%ZZ/${SIGNUP_ID}`,
+    ]) {
+      for (const method of ["GET", "POST"]) {
+        const res = await rawRequest(host, path, {
+          method,
+          headers: { "x-forwarded-for": randomIp() },
+        });
+        expect(res.status, `${method} ${path}`).toBe(404);
+        expect(String(res.headers["content-security-policy"]), path).toContain(
+          "form-action 'self'",
+        );
+        expect(res.headers["x-frame-options"], path).toBe("DENY");
+        expect(res.body, path).not.toContain("<script");
+      }
+    }
+  });
+
   test("a cross-site POST is 403 and a POST with the wrong type 415; nothing is stored", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
     const live = await formPage("fr2");

@@ -48,7 +48,7 @@ beforeEach(() => resolveCustomDomain.mockReset());
 
 describe("M17-05 the form routes on a page's own hosts", () => {
   it("are page routes and tracking paths; /f alone and /form are not", () => {
-    for (const path of [FORM_PATH, MARKER_PATH, "/f/x"]) {
+    for (const path of [FORM_PATH, MARKER_PATH, "/f/x/y"]) {
       expect(isPageRoutePath(path), path).toBe(true);
       expect(isTrackingPath(path), path).toBe(true);
     }
@@ -95,6 +95,56 @@ describe("M17-05 the form routes on a page's own hosts", () => {
     expect(rewriteOf(await proxy(request("app.localhost:3000", FORM_PATH)))).toBe(
       `/app${FORM_PATH}`,
     );
+  });
+});
+
+describe("forms attack pass finding 5: only the exact /f route shapes pass through", () => {
+  const NOT_ROUTES = [
+    `/f/${PAGE}`,
+    "/f/x",
+    `/f/${PAGE}/formSign01/extra`,
+    `/f/${PAGE}/o/extra`,
+    `/f/${PAGE}/formSign01/`,
+    `/f/${PAGE}/`,
+    "/f/",
+    "//f/x/y",
+    `/f/${PAGE}/%E0%A4%A`,
+    `/f/%ZZ/formSign01`,
+    `/f/${PAGE}/form%2FSign01`,
+    `/f/${PAGE}/form.Sign01`,
+    "/f//formSign01",
+  ];
+
+  it.each(NOT_ROUTES)("%s is no page route and no tracking path", (path) => {
+    expect(isPageRoutePath(path)).toBe(false);
+    expect(isTrackingPath(path)).toBe(false);
+  });
+
+  it.each(NOT_ROUTES.flatMap((path) => ["GET", "POST", "HEAD"].map((m) => [m, path] as const)))(
+    "%s %s on a handle host is the plain tenant 404 with the tenant headers",
+    async (method, path) => {
+      const response = await proxy(request("mara.localhost:3000", path, method, { rsc: "1" }));
+      expect(passedThrough(response)).toBe(false);
+      if (method === "POST") expect(response.status).toBe(404);
+      else expect(rewriteOf(response)).toBe("/sites/unknown");
+      expect(response.headers.get("content-security-policy")).toBe(TENANT_PAGE_CSP);
+    },
+  );
+
+  it.each(NOT_ROUTES)(
+    "%s on a verified custom host is the plain 404, for GET and POST",
+    async (path) => {
+      resolveCustomDomain.mockResolvedValue(PAGE);
+      expect(rewriteOf(await proxy(request("links.example.org", path)))).toBe("/sites/unknown");
+      const post = await proxy(request("links.example.org", path, "POST"));
+      expect(post.status).toBe(404);
+      expect(post.headers.get("content-security-policy")).toBe(TENANT_PAGE_CSP);
+    },
+  );
+
+  it("/r/ and /c/ keep their prefix rule (pre-existing, unchanged here)", () => {
+    expect(isPageRoutePath("/r/x")).toBe(true);
+    expect(isPageRoutePath("/c/x/y/z")).toBe(true);
   });
 });
 

@@ -31,8 +31,9 @@ const {
   formSiteHourlyLimit,
   MIN_FILL_SECONDS,
 } = await import("@/lib/forms/submit");
+const { FORM_POST_FLOOR_MS, FORM_POST_JITTER_MS } = await import("@/lib/forms/contract");
 const { notice } = await import("@/lib/analytics/ingest/click-common");
-const { rateLimit, rateLimitAge } = await import("@/lib/rate-limit");
+const { rateLimit, rateLimitAge, rateLimitPeek } = await import("@/lib/rate-limit");
 const { issueFormToken } = await import("@/lib/forms/token");
 const { TENANT_PAGE_CSP } = await import("@/lib/routing/tenant-headers");
 
@@ -66,6 +67,8 @@ interface Setup {
   status?: RecordStatus | Error;
   blocked?: boolean | Error;
   html?: string | null;
+  /** How long the store takes on the fake clock (ms); 20 unless said. */
+  recordMs?: number;
 }
 
 function setup(over: Setup = {}) {
@@ -79,21 +82,39 @@ function setup(over: Setup = {}) {
     raw === null || raw instanceof Error ? raw : { plan: "free", ...raw };
   const scheduled: (() => Promise<void>)[] = [];
   const rendered: FormRenderState[] = [];
+  // A fake monotonic clock: every dependency below costs time on it, each its own amount, and the
+  // floor's sleep moves it on (finding 2).
+  const time = { t: 1_000 };
+  const cost = (ms: number) => {
+    time.t += ms;
+  };
   const deps = {
     rateLimit: vi.fn(async (key: string, ..._rest: number[]): Promise<RateLimitResult> => {
       const prefix = key.split(":")[0]!;
       calls.push(`limit:${prefix}`);
+      cost(1);
+      return over.limits?.[prefix] ?? { allowed: true, retryAfter: 0 };
+    }),
+    rateLimitPeek: vi.fn(async (key: string, ..._rest: number[]): Promise<RateLimitResult> => {
+      const prefix = key.split(":")[0]!;
+      calls.push(`peek:${prefix}`);
+      cost(1);
       return over.limits?.[prefix] ?? { allowed: true, retryAfter: 0 };
     }),
     rateLimitAge: vi.fn(async (key: string, ..._rest: number[]): Promise<number | null> => {
       calls.push(`age:${key.split(":")[0]!}`);
+      cost(2);
       return over.openedAgo === undefined ? 10 : over.openedAgo;
     }),
     now: () => NOW,
+    clock: () => time.t,
+    sleep: vi.fn(async (ms: number) => cost(ms)),
+    random: () => 0.5,
     visitorHash: vi.fn(() => "a".repeat(64)),
     tokenSecret: () => SECRET,
     resolveFormBlock: vi.fn(async () => {
       calls.push("resolve");
+      cost(3);
       if (target instanceof Error) throw target;
       return target;
     }),
@@ -105,16 +126,19 @@ function setup(over: Setup = {}) {
     }),
     renderFormPage: vi.fn(async ({ state }: { state: FormRenderState }) => {
       calls.push(`render:${state.view}`);
+      cost(5);
       rendered.push(state);
       return over.html === undefined ? `<html>${state.view}</html>` : over.html;
     }),
     hasBlockedLink: vi.fn(async () => {
       calls.push("blocklist");
+      cost(7);
       if (over.blocked instanceof Error) throw over.blocked;
       return over.blocked ?? false;
     }),
-    recordSubmission: vi.fn(async () => {
+    recordSubmission: vi.fn(async (_row?: { blockId: string; email: string }) => {
       calls.push("record");
+      cost(over.recordMs ?? 20);
       if (over.status instanceof Error) throw over.status;
       return { status: over.status ?? "stored", ownerId: "owner-0000-0001" };
     }),
@@ -130,7 +154,7 @@ function setup(over: Setup = {}) {
   const flush = async () => {
     for (const task of scheduled.splice(0)) await task();
   };
-  return { deps, calls, scheduled, rendered, flush };
+  return { deps, calls, scheduled, rendered, flush, time };
 }
 
 function post(
@@ -176,6 +200,55 @@ async function shape(response: Response) {
   };
 }
 
+/** One in-memory store behind every limiter call, like rate_limit_hit, _age and _peek. */
+function sharedStore(clock: () => number) {
+  const hits = new Map<string, number[]>();
+  const live = (bucket: string, window: number) =>
+    (hits.get(bucket) ?? []).filter((at) => at > clock() - window * 1000);
+  return {
+    async hit(bucket: string, limit: number, window: number) {
+      const rows = live(bucket, window);
+      hits.set(bucket, rows);
+      if (rows.length >= limit) return { allowed: false, retryAfter: 1 };
+      rows.push(clock());
+      return { allowed: true, retryAfter: 0 };
+    },
+    async peek(bucket: string, limit: number, window: number) {
+      return live(bucket, window).length >= limit
+        ? { allowed: false, retryAfter: 1 }
+        : { allowed: true, retryAfter: 0 };
+    },
+    async age(bucket: string, window: number) {
+      const rows = live(bucket, window);
+      return rows.length === 0 ? null : Math.floor((clock() - rows[0]!) / 1000);
+    },
+  };
+}
+
+/**
+ * `s.deps` with the real limiter over one in-memory store; with `marker`, the open marker's read too
+ * (otherwise the setup's marker of 10 seconds stands).
+ */
+function realLimiter(
+  s: ReturnType<typeof setup>,
+  clock: () => number = () => 5_000_000,
+  marker = false,
+) {
+  const store = sharedStore(clock);
+  s.deps.rateLimit = vi.fn((key: string, limit: number, window: number) =>
+    rateLimit(key, limit, window, { store, secret: SECRET }),
+  );
+  s.deps.rateLimitPeek = vi.fn((key: string, limit: number, window: number) =>
+    rateLimitPeek(key, limit, window, { store, secret: SECRET }),
+  );
+  if (marker) {
+    s.deps.rateLimitAge = vi.fn((key: string, window: number) =>
+      rateLimitAge(key, window, { store, secret: SECRET }),
+    );
+  }
+  return store;
+}
+
 let logged: string[] = [];
 afterEach(() => {
   // Nothing a visitor typed, and no IP address or user agent, was written to the console.
@@ -217,7 +290,7 @@ describe("M17-06 a stored submission", () => {
     );
   });
 
-  it("the order: cross-site and ids, limiter, body, block, then checks, then the per-form and per-site limits, then the store", async () => {
+  it("the order: cross-site and ids, limiter, body, block, fields, fill time, the per-form limit and the site's hour (read), the drops, the store, then the site's hour counted", async () => {
     const s = setup({
       block: CONTACT,
       target: { block: CONTACT, handle: "mara", customHosts: [] },
@@ -227,10 +300,11 @@ describe("M17-06 a stored submission", () => {
       "limit:form-post",
       "resolve",
       "age:form-open",
-      "blocklist",
       "limit:form-block",
-      "limit:form-site",
+      "peek:form-site",
+      "blocklist",
       "record",
+      "limit:form-site",
     ]);
   });
 
@@ -594,9 +668,270 @@ describe("M17-06 the per-form and per-site limits", () => {
     );
     const perSite = setup({ limits: { "form-site": { allowed: false, retryAfter: 7 } } });
     expect((await handleFormPost(post(signupBody), params(), perSite.deps)).status).toBe(429);
-    expect(perSite.deps.rateLimit).toHaveBeenCalledWith(`form-site:${PAGE}`, 5, 3600);
+    expect(perSite.deps.rateLimitPeek).toHaveBeenCalledWith(`form-site:${PAGE}`, 5, 3600);
+    expect(perSite.deps.rateLimit).not.toHaveBeenCalledWith(`form-site:${PAGE}`, 5, 3600);
     expect(perForm.deps.recordSubmission).not.toHaveBeenCalled();
     expect(perSite.deps.recordSubmission).not.toHaveBeenCalled();
+  });
+});
+
+describe("forms attack pass finding 1: the site's hour counts stored submissions only", () => {
+  /** A form store with real dedupe: a sign-up address once per form; a message is always stored. */
+  function storeWithDedupe(s: ReturnType<typeof setup>, existing: string[] = []) {
+    const held = new Set(existing);
+    s.deps.recordSubmission.mockImplementation(async (row) => {
+      if (row!.blockId === "formSign01") {
+        const key = row!.email.toLowerCase();
+        if (held.has(key)) return { status: "duplicate", ownerId: "owner-0000-0001" };
+        held.add(key);
+      }
+      return { status: "stored", ownerId: "owner-0000-0001" };
+    });
+  }
+  const twoForms = {
+    resolveFormBlock: async (_page: string, blockId: string) => ({
+      block: blockId === "formCont01" ? CONTACT : SIGNUP,
+      handle: "mara",
+      customHosts: [],
+      plan: "free" as const,
+    }),
+  };
+  const contactPost = (ip: string) =>
+    post(contactBody, { "x-forwarded-for": ip }, `http://mara.localhost:3000/f/${PAGE}/formCont01`);
+
+  it("3 repeat sign-ups of one address and 2 messages from one client, then another visitor's first post stores", async () => {
+    const s = setup();
+    Object.assign(s.deps, twoForms);
+    realLimiter(s);
+    // The attacker's address is already on the list: every sign-up below is a duplicate.
+    storeWithDedupe(s, ["visitor@example.test"]);
+    const attacker = "198.51.100.9";
+    const statuses: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await handleFormPost(
+        post(signupBody, { "x-forwarded-for": attacker }),
+        params(),
+        s.deps,
+      );
+      statuses.push(r.status);
+    }
+    for (let i = 0; i < 2; i++) {
+      statuses.push(
+        (await handleFormPost(contactPost(attacker), params("formCont01"), s.deps)).status,
+      );
+    }
+    expect(statuses).toEqual([303, 303, 303, 303, 303]);
+    // Another visitor, a new address: stored, not 429.
+    const visitor = await handleFormPost(
+      post({ ...signupBody, email: "real@example.test" }, { "x-forwarded-for": "192.0.2.44" }),
+      params(),
+      s.deps,
+    );
+    expect(visitor.status).toBe(303);
+    expect(s.deps.recordSubmission).toHaveBeenLastCalledWith(
+      expect.objectContaining({ email: "real@example.test" }),
+    );
+  });
+
+  it("the hour still bounds what is stored: after 5 stored on Free the next visitor is 429 and nothing reaches the store", async () => {
+    const s = setup();
+    realLimiter(s);
+    storeWithDedupe(s);
+    for (let i = 0; i < 5; i++) {
+      const r = await handleFormPost(
+        post(
+          { ...signupBody, email: `v${i}@example.test` },
+          { "x-forwarded-for": `192.0.2.${i + 1}` },
+        ),
+        params(),
+        s.deps,
+      );
+      expect(r.status).toBe(303);
+    }
+    const sixth = await handleFormPost(
+      post({ ...signupBody, email: "v6@example.test" }, { "x-forwarded-for": "192.0.2.66" }),
+      params(),
+      s.deps,
+    );
+    expect(sixth.status).toBe(429);
+    expect(s.deps.recordSubmission).toHaveBeenCalledTimes(5);
+  });
+
+  it.each(["duplicate", "over_limit", "over_limit_first", "over_daily_limit"] as const)(
+    "%s does not count against the site's hour",
+    async (status) => {
+      const s = setup({ status });
+      await handleFormPost(post(signupBody), params(), s.deps);
+      expect(s.deps.rateLimitPeek).toHaveBeenCalledWith(`form-site:${PAGE}`, 5, 3600);
+      expect(s.calls).not.toContain("limit:form-site");
+    },
+  );
+});
+
+describe("forms attack pass finding 3: a dropped post follows the same visible sequence as a real one", () => {
+  const BOT = "Googlebot/2.1 (+http://www.google.com/bot.html)";
+  type Variant = {
+    name: string;
+    body: Record<string, string>;
+    headers: Record<string, string | null>;
+    blocked: boolean;
+  };
+  const clean = { ...contactBody, message: "see https://fine.example/x" };
+  const variants: Variant[] = [
+    { name: "clean", body: clean, headers: {}, blocked: false },
+    { name: "bot user agent", body: clean, headers: { "user-agent": BOT }, blocked: false },
+    { name: "no user agent", body: clean, headers: { "user-agent": null }, blocked: false },
+    { name: "filled honeypot", body: { ...clean, hl_confirm: "x" }, headers: {}, blocked: false },
+    { name: "blocked link", body: clean, headers: {}, blocked: true },
+  ];
+  const contactSetup = (v: Variant, over: Setup = {}) =>
+    setup({
+      block: CONTACT,
+      target: { block: CONTACT, handle: "mara", customHosts: [] },
+      blocked: v.blocked,
+      ...over,
+    });
+  const send = (v: Variant, s: ReturnType<typeof setup>, body = v.body) =>
+    handleFormPost(
+      post(body, v.headers, `http://mara.localhost:3000/f/${PAGE}/formCont01`),
+      params("formCont01"),
+      s.deps,
+    );
+
+  it.each(variants.slice(1))(
+    "$name: no open marker is the 200 confirm page, as a clean post",
+    async (v) => {
+      const s = contactSetup(v, { openedAgo: null });
+      const r = await send(v, s);
+      expect(r.status).toBe(200);
+      expect(s.rendered.map((state) => state.view)).toEqual(["confirm"]);
+    },
+  );
+
+  it.each(variants.slice(1))(
+    "$name: an invalid email is the 422 error page, as a clean post",
+    async (v) => {
+      const s = contactSetup(v);
+      const r = await send(v, s, { ...v.body, email: "not-an-address" });
+      expect(r.status).toBe(422);
+    },
+  );
+
+  it("every variant: 303, 303, 303, then 429 from the per-client limit, the same as a clean post", async () => {
+    const sequences: Record<string, number[]> = {};
+    for (const v of variants) {
+      const s = contactSetup(v);
+      realLimiter(s);
+      const statuses: number[] = [];
+      for (let i = 0; i < 4; i++) statuses.push((await send(v, s)).status);
+      sequences[v.name] = statuses;
+      expect(s.deps.recordSubmission).toHaveBeenCalledTimes(v.name === "clean" ? 3 : 0);
+    }
+    for (const v of variants) expect(sequences[v.name], v.name).toEqual([303, 303, 303, 429]);
+  });
+
+  it("the site's hour full: 429 for a dropped post as for a clean one", async () => {
+    for (const v of variants) {
+      const s = contactSetup(v, { limits: { "form-site": { allowed: false, retryAfter: 9 } } });
+      expect((await send(v, s)).status, v.name).toBe(429);
+    }
+  });
+});
+
+describe("forms attack pass finding 2: every POST outcome answers at the same moment", () => {
+  const contactTarget = { block: CONTACT, handle: "mara", customHosts: [] };
+  const contactUrl = `http://mara.localhost:3000/f/${PAGE}/formCont01`;
+  const denied = { allowed: false, retryAfter: 5 };
+  const token = () =>
+    issueFormToken({
+      pageId: PAGE,
+      blockId: "formSign01",
+      client: IP,
+      secret: SECRET,
+      now: new Date(NOW.getTime() - 5000),
+    });
+  type Case = [string, Setup, () => Request, string?];
+  const cases: Case[] = [
+    ["403 cross-site", {}, () => post(signupBody, { "sec-fetch-site": "cross-site" })],
+    ["404 ids", {}, () => post(signupBody), "not-a-uuid"],
+    ["429 form-post", { limits: { "form-post": denied } }, () => post(signupBody)],
+    ["415", {}, () => post(signupBody, { "content-type": "text/plain" })],
+    ["413", {}, () => post("x".repeat(40_000))],
+    ["503 lookup", { target: new Error("down") }, () => post(signupBody)],
+    ["404 block", { target: null }, () => post(signupBody)],
+    ["422", {}, () => post({ ...signupBody, email: "nope" })],
+    ["200 confirm", { openedAgo: null }, () => post(signupBody)],
+    [
+      "200 token spent",
+      { limits: { "form-token": denied } },
+      () => post({ ...signupBody, t: token() }),
+    ],
+    ["429 form-block", { limits: { "form-block": denied } }, () => post(signupBody)],
+    ["429 form-site", { limits: { "form-site": denied } }, () => post(signupBody)],
+    ["303 bot", {}, () => post(signupBody, { "user-agent": "Googlebot/2.1" })],
+    ["303 honeypot", {}, () => post({ ...signupBody, hl_confirm: "x" })],
+    [
+      "303 blocked link",
+      { block: CONTACT, target: contactTarget, blocked: true },
+      () => post(contactBody, {}, contactUrl),
+    ],
+    [
+      "503 blocklist",
+      { block: CONTACT, target: contactTarget, blocked: new Error("down") },
+      () => post(contactBody, {}, contactUrl),
+    ],
+    ["303 stored", {}, () => post(signupBody)],
+    [
+      "303 stored message",
+      { block: CONTACT, target: contactTarget },
+      () => post(contactBody, {}, contactUrl),
+    ],
+    ["303 duplicate", { status: "duplicate" }, () => post(signupBody)],
+    ["303 over_limit_first", { status: "over_limit_first" }, () => post(signupBody)],
+    ["303 over_daily_limit", { status: "over_daily_limit" }, () => post(signupBody)],
+    ["404 unavailable", { status: "unavailable" }, () => post(signupBody)],
+    ["422 invalid_email", { status: "invalid_email" }, () => post(signupBody)],
+    ["503 store", { status: new Error("down") }, () => post(signupBody)],
+  ];
+
+  it.each(cases)(
+    "%s ends at arrival + the floor + the jitter",
+    async (_name, over, req, pageId) => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const s = setup(over);
+      const blockId = over.block?.id ?? "formSign01";
+      const start = s.time.t;
+      await handleFormPost(req(), { pageId: pageId ?? PAGE, blockId }, s.deps);
+      expect(s.time.t - start).toBe(FORM_POST_FLOOR_MS + 0.5 * FORM_POST_JITTER_MS);
+      expect(s.deps.sleep).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("a request slower than the floor is not made slower; a dependency that throws still waits for the floor", async () => {
+    const slow = setup({ recordMs: FORM_POST_FLOOR_MS + 100 });
+    const start = slow.time.t;
+    expect((await handleFormPost(post(signupBody), params(), slow.deps)).status).toBe(303);
+    expect(slow.deps.sleep).toHaveBeenCalledWith(0);
+    expect(slow.time.t - start).toBeGreaterThan(FORM_POST_FLOOR_MS + 100);
+
+    const broken = setup();
+    broken.deps.renderFormPage.mockRejectedValue(new Error("render down"));
+    const from = broken.time.t;
+    await expect(
+      handleFormPost(post({ ...signupBody, email: "nope" }), params(), broken.deps),
+    ).rejects.toThrow("render down");
+    expect(broken.time.t - from).toBe(FORM_POST_FLOOR_MS + 0.5 * FORM_POST_JITTER_MS);
+  });
+
+  it("the jitter stays within its bound and the floor is the same for every plan", async () => {
+    for (const r of [0, 0.999]) {
+      const s = setup();
+      s.deps.random = () => r;
+      const start = s.time.t;
+      await handleFormPost(post(signupBody), params(), s.deps);
+      expect(s.time.t - start).toBeCloseTo(FORM_POST_FLOOR_MS + r * FORM_POST_JITTER_MS, 6);
+    }
+    expect(FORM_POST_JITTER_MS).toBeLessThanOrEqual(FORM_POST_FLOOR_MS / 10);
   });
 });
 
@@ -990,36 +1325,10 @@ describe("M17-06 review fixes: order, unavailable and a check the database refus
 });
 
 describe("M17-06 the open marker is set by GET /o only (review B7)", () => {
-  /** One in-memory store behind both limiter calls, like rate_limit_hit and rate_limit_age. */
-  function sharedStore(clock: () => number) {
-    const hits = new Map<string, number[]>();
-    const live = (bucket: string, window: number) =>
-      (hits.get(bucket) ?? []).filter((at) => at > clock() - window * 1000);
-    return {
-      async hit(bucket: string, limit: number, window: number) {
-        const rows = live(bucket, window);
-        hits.set(bucket, rows);
-        if (rows.length >= limit) return { allowed: false, retryAfter: 1 };
-        rows.push(clock());
-        return { allowed: true, retryAfter: 0 };
-      },
-      async age(bucket: string, window: number) {
-        const rows = live(bucket, window);
-        return rows.length === 0 ? null : Math.floor((clock() - rows[0]!) / 1000);
-      },
-    };
-  }
-
   it("POST, wait, POST with no token and no marker: both are the confirm page, nothing stored", async () => {
     let now = 5_000_000;
-    const store = sharedStore(() => now);
     const s = setup();
-    s.deps.rateLimit = vi.fn((key: string, limit: number, window: number) =>
-      rateLimit(key, limit, window, { store, secret: SECRET }),
-    );
-    s.deps.rateLimitAge = vi.fn((key: string, window: number) =>
-      rateLimitAge(key, window, { store, secret: SECRET }),
-    );
+    realLimiter(s, () => now, true);
     expect((await handleFormPost(post(signupBody), params(), s.deps)).status).toBe(200);
     now += 10_000;
     expect((await handleFormPost(post(signupBody), params(), s.deps)).status).toBe(200);
@@ -1042,6 +1351,7 @@ describe("M17-06 step 6 a limiter that cannot answer lets the request through", 
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     const broken = {
       hit: async () => Promise.reject(new Error("down")),
+      peek: async () => Promise.reject(new Error("down")),
       age: async () => Promise.reject(new Error("down")),
     };
     const s = setup();
@@ -1049,6 +1359,10 @@ describe("M17-06 step 6 a limiter that cannot answer lets the request through", 
     s.deps.rateLimit = vi.fn((key: string, limit: number, window: number) => {
       keys.push(key.split(":")[0]!);
       return rateLimit(key, limit, window, { store: broken, secret: SECRET });
+    });
+    s.deps.rateLimitPeek = vi.fn((key: string, limit: number, window: number) => {
+      keys.push(`peek ${key.split(":")[0]!}`);
+      return rateLimitPeek(key, limit, window, { store: broken, secret: SECRET });
     });
     s.deps.rateLimitAge = vi.fn((key: string, window: number) =>
       rateLimitAge(key, window, { store: broken, secret: SECRET }),
@@ -1064,7 +1378,7 @@ describe("M17-06 step 6 a limiter that cannot answer lets the request through", 
     const stored = await handleFormPost(post({ ...signupBody, t: token }), params(), s.deps);
     expect(stored.status).toBe(303);
     expect(s.deps.recordSubmission).toHaveBeenCalledTimes(1);
-    expect(keys).toEqual(["form-post", "form-token", "form-block", "form-site"]);
+    expect(keys).toEqual(["form-post", "form-token", "form-block", "peek form-site", "form-site"]);
     // Without a token, a marker that cannot be read is the confirm page, never a silent drop.
     const confirm = await handleFormPost(post(signupBody), params(), s.deps);
     expect(confirm.status).toBe(200);

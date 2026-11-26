@@ -64,6 +64,7 @@ function deps(over: { limit?: RateLimitResult; owner?: unknown; send?: unknown }
             : { email: OWNER, plan: "free" as const },
       ),
       rateLimit: vi.fn(async () => over.limit ?? { allowed: true, retryAfter: 0 }),
+      recordSkipped: vi.fn(async (_ownerId: string) => undefined),
       send:
         (over.send as never) ??
         ((message: Parameters<typeof sendMessage>[0]) =>
@@ -142,10 +143,36 @@ describe("M17-10 the message email", () => {
     expect(html).not.toContain("www.other.example");
     expect(html).not.toContain("evil.example/login");
     expect(html).toContain('content="telephone=no, date=no, address=no, email=no, url=no"');
-    // The words read the same, and the plain-text part keeps the link as typed.
+    // The words read the same in the HTML; the plain-text part writes each link inert (finding 4).
     const visible = html.replace(/<[^>]+>/g, "");
     expect(visible).toContain("See https://evil.example/login?x=1 and www.other.example, thanks");
-    expect(text).toContain("See https://evil.example/login?x=1 and www.other.example, thanks");
+    expect(text).toContain(
+      "See https[:]//evil[.]example/login?x=1 and www[.]other[.]example, thanks",
+    );
+  });
+
+  it("every kind of link, glued to a word or not, is inert in both parts; the text part keeps line breaks (finding 4)", async () => {
+    const d = deps();
+    const message = [
+      "first line xhttps://evil.example/a",
+      "_www.evil.example and 1www.evil.example",
+      "mailto:boss@evil.example ftp://evil.example/f evil.example/login",
+    ].join("\n");
+    await notifyOwnerOfMessage(notice({ message }), d.deps);
+    const { html, text } = d.smtp.sent[0]! as { html: string; text: string };
+    const anchors = [...html.matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((match) => match[1]);
+    expect(anchors).toEqual(["http://app.localhost:3000/audience"]);
+    for (const part of [html, text]) {
+      expect(part).not.toContain("evil.example");
+      expect(part).not.toContain("://evil");
+    }
+    expect(text).toContain(
+      [
+        "first line xhttps[:]//evil[.]example/a",
+        "_www[.]evil[.]example and 1www[.]evil[.]example",
+        "mailto[:]boss@evil[.]example ftp[:]//evil[.]example/f evil[.]example/login",
+      ].join("\n"),
+    );
   });
 
   it("a line break followed by Bcc: in a name or a message adds no header", async () => {
@@ -178,6 +205,19 @@ describe("M17-10 the message email", () => {
     expect(await notifyOwnerOfMessage(notice(), d.deps)).toBe("limited");
     expect(d.smtp.raw).toHaveLength(0);
     expect(d.deps.owner).not.toHaveBeenCalled();
+    // Counted for the owner's Audience screen (finding 6), once per skipped email.
+    expect(d.deps.recordSkipped).toHaveBeenCalledTimes(1);
+    expect(d.deps.recordSkipped).toHaveBeenCalledWith(notice().ownerId);
+  });
+
+  it("a sent email records no skip; a skip that cannot be recorded is logged and never throws", async () => {
+    const sent = deps();
+    expect(await notifyOwnerOfMessage(notice(), sent.deps)).toBe("sent");
+    expect(sent.deps.recordSkipped).not.toHaveBeenCalled();
+    const broken = deps({ limit: { allowed: false, retryAfter: 100 } });
+    broken.deps.recordSkipped.mockRejectedValue(new Error("down"));
+    expect(await notifyOwnerOfMessage(notice(), broken.deps)).toBe("skipped");
+    expect(broken.log).toHaveBeenCalledTimes(1);
   });
 
   it("a deployment without SMTP skips it", async () => {
@@ -237,6 +277,10 @@ describe("M17-02 the limit email", () => {
     expect(headersOf(raw)).toContain(`To: ${OWNER}`);
     const { html, text } = d.smtp.sent[0]! as { html: string; text: string };
     for (const part of [html, text]) expect(part).toContain("5,000 form submissions on Pro");
+    // Deleting makes room now that the caps count what the forms hold.
+    expect(text.replace(/\s+/g, " ")).toContain(
+      "New submissions are not saved until there is room: delete the ones you don’t need, or wait until the 1st of next month.",
+    );
     expect(headersOf(raw).some((line) => line.startsWith("Subject:"))).toBe(true);
     expect(FORM_LIMIT_SUBJECT).toBe("Your forms reached this month’s limit");
     expect(headersOf(raw).some((line) => /^reply-to:/i.test(line))).toBe(false);

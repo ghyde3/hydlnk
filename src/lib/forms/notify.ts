@@ -7,7 +7,7 @@ import { toPlanId, type PlanId } from "@/lib/limits";
 import { rateLimit, type RateLimitResult } from "@/lib/rate-limit";
 import { appOrigin } from "@/lib/routing/urls";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { AUDIENCE_PATH } from "./contract";
+import { AUDIENCE_PATH, FORM_NOTIFY_PER_HOUR } from "./contract";
 import { limitEmailContent, messageEmailContent } from "./email-content";
 
 /**
@@ -17,7 +17,9 @@ import { limitEmailContent, messageEmailContent } from "./email-content";
  *            address (read with the secret key; a block can name no other recipient), with the
  *            visitor's address as Reply-To and nowhere else in a header; only once that address is
  *            confirmed (`email_confirmed_at`). At most 30 an hour per
- *            account (`form-notify:{ownerId}`); past that the message is stored and no email goes.
+ *            account (`form-notify:{ownerId}`); past that the message is stored, no email goes,
+ *            and the skip is counted for the day (`record_form_notify_skipped`), so the Audience
+ *            screen says that emails were skipped (forms attack pass, finding 6).
  *   limit    the first refusal of a month (`over_limit_first`, which the database answers once per
  *            account and month): one email with the plan's numbers and no visitor text.
  *
@@ -25,7 +27,7 @@ import { limitEmailContent, messageEmailContent } from "./email-content";
  * visitor. SMTP when SMTP_HOST is set, Mailpit locally, skipped on a deployment without SMTP.
  */
 
-export const NOTIFY_LIMIT = 30;
+export const NOTIFY_LIMIT = FORM_NOTIFY_PER_HOUR;
 export const NOTIFY_WINDOW_SECONDS = 3600;
 
 export interface MessageNotice {
@@ -41,6 +43,8 @@ export interface NotifyDeps {
   /** The account's CONFIRMED sign-in address and plan, or null (gone, or never confirmed). */
   owner: (ownerId: string) => Promise<{ email: string; plan: PlanId } | null>;
   rateLimit: (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult>;
+  /** Counts one message email skipped by the hourly cap today (`record_form_notify_skipped`). */
+  recordSkipped: (ownerId: string) => Promise<void>;
   send: (message: OutgoingMessage) => Promise<"sent" | "skipped">;
   rootDomain: string;
   log: (line: string) => void;
@@ -64,10 +68,19 @@ export async function readOwner(ownerId: string): Promise<{ email: string; plan:
   return { email, plan: toPlanId(account.data?.plan) };
 }
 
+/** `record_form_notify_skipped` with the secret key; throws with the code only. */
+export async function recordNotifySkipped(ownerId: string): Promise<void> {
+  const { error } = await createAdminSupabase().rpc("record_form_notify_skipped", {
+    p_owner: ownerId,
+  });
+  if (error) throw new Error(`recording a skipped email failed (${error.code ?? "unknown"})`);
+}
+
 export function notifyDeps(): NotifyDeps {
   return {
     owner: readOwner,
     rateLimit: (key, limit, windowSeconds) => rateLimit(key, limit, windowSeconds),
+    recordSkipped: recordNotifySkipped,
     send: (message) => sendMessage(message, serverEmailEnv()),
     rootDomain: clientEnv.NEXT_PUBLIC_ROOT_DOMAIN,
     log: (line) => console.error(line),
@@ -86,7 +99,10 @@ export async function notifyOwnerOfMessage(
       NOTIFY_LIMIT,
       NOTIFY_WINDOW_SECONDS,
     );
-    if (!limit.allowed) return "limited";
+    if (!limit.allowed) {
+      await deps.recordSkipped(input.ownerId);
+      return "limited";
+    }
     const owner = await deps.owner(input.ownerId);
     if (!owner || !isEmailAddress(owner.email)) return "skipped";
     const content = await messageEmailContent({
