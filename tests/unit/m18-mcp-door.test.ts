@@ -48,6 +48,7 @@ const writer = vi.hoisted(() => {
     "listTerms",
     "countEntries",
     "checkPostBody",
+    "postDraftIssues",
   ] as const;
   return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<
     (typeof names)[number],

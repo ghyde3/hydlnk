@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { listTypes } from "@/lib/content";
+import { listTypes, postDraftIssues } from "@/lib/content";
 import { postHref } from "@/lib/blog/types";
 import { storageUrl } from "@/lib/media/url";
 import { tenantOrigin } from "@/lib/publish/urls";
@@ -38,7 +38,7 @@ export async function liveUrlOf(call: ToolCall): Promise<string | null> {
 export const getEntryTool: ToolDefinition<typeof input> = {
   name: "get_entry",
   title: "Get a post",
-  description: `Reads one post's draft, which can differ from what is live: id, rev, status, hasUnpublishedChanges, title, slug, excerpt, featuredImageId, ogImageId, seoTitle, seoDescription, noindex, categories, tags, dates, liveUrl when it is live, publishIssues (what publish_entry would refuse) and imageUrlPrefix. The body is exact Markdown, never shortened, in ranges: body holds ${MCP_BODY_RANGE_CHARS} characters from offset by default, bodyChars is the whole length, and nextOffset is where to go on (null at the end). contentHash is the SHA-256 of the whole body in UTF-8, to check the joined ranges. A trashed post reads with status trashed. Pass rev as ifRev to writes. ${UNTRUSTED_CONTENT} Errors: not_found.`,
+  description: `Reads one post's draft, which can differ from what is live: id, rev, status, hasUnpublishedChanges, title, slug, excerpt, featuredImageId, ogImageId, seoTitle, seoDescription, noindex, categories, tags, dates, liveUrl when it is live, publishIssues (most of what publish_entry would refuse) and imageUrlPrefix. The body is exact Markdown, never shortened, in ranges: body holds ${MCP_BODY_RANGE_CHARS} characters from offset by default, bodyChars is the whole length, and nextOffset is where to go on (null at the end). contentHash is the SHA-256 of the whole body in UTF-8, to check the joined ranges. A trashed post reads with status trashed. Pass rev as ifRev to writes. ${UNTRUSTED_CONTENT} Errors: not_found.`,
   scope: MCP_SCOPES.read,
   annotations: READ_ONLY,
   input,
@@ -52,7 +52,14 @@ export const getEntryTool: ToolDefinition<typeof input> = {
     const view = postView(
       entry,
       { offset: args.offset ?? 0, length: args.length ?? MCP_BODY_RANGE_CHARS },
-      { imageUrlPrefix: storageUrl(`${call.userId}/`), liveUrl: await liveUrlOf(call) },
+      {
+        imageUrlPrefix: storageUrl(`${call.userId}/`),
+        liveUrl: await liveUrlOf(call),
+        draftIssues:
+          entry.status === "trashed"
+            ? []
+            : postDraftIssues({ actor: mcpActor(call), draft: entry.draft }),
+      },
     );
     const more =
       view.nextOffset === null ? "" : " There is more of the body: pass nextOffset as offset.";

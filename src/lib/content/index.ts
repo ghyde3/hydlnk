@@ -32,7 +32,7 @@ import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } fro
 import { unsafeBodySchemes } from "./blocklist";
 import { failure } from "./errors";
 import { POST_BODY_TOO_LARGE, postBodyTooLarge } from "./schemas";
-import { bodyImageIssue, bodyImages, checkOwnImages } from "./images";
+import { bodyImageIssue, bodyImages, checkOwnImages, postImages } from "./images";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 import type { EntryPlace } from "./publish-core";
 import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
@@ -73,6 +73,33 @@ export async function checkPostBody(input: {
   const uses = typeof body === "string" ? bodyImages(body) : [];
   if (uses.length === 0) return null;
   return checkOwnImages(createAdminSupabase(), input.actor.userId, uses);
+}
+
+/**
+ * What Publish would refuse in a post draft that needs no read (`get_entry`'s `publishIssues`,
+ * M18-04), as `{path, message}` rows: a body over the limit, a link or image with a scheme that is
+ * not allowed, a body image that is not an upload or one image too many, and an image (body,
+ * featured or share) outside the owner's own folder. Not here, because each needs a read that only
+ * Publish makes: the link blocklist, whether each file still exists in Storage, and a live slug
+ * another post uses. Pure; it stores and reads nothing.
+ */
+export function postDraftIssues(input: {
+  actor: ContentActor;
+  draft: unknown;
+}): Array<{ path: string; message: string }> {
+  const raw = (input.draft as { body?: unknown } | null)?.body;
+  if (typeof raw === "string" && postBodyTooLarge(raw)) {
+    return [{ path: "body", message: POST_BODY_TOO_LARGE }];
+  }
+  const issues: Array<{ path: string; message: string }> = [];
+  issues.push(...(unsafeBodySchemes(input.draft)?.issues ?? []));
+  issues.push(...(bodyImageIssue(input.draft)?.issues ?? []));
+  for (const use of postImages(input.draft)) {
+    if (!use.path.startsWith(`${input.actor.userId}/`)) {
+      issues.push({ path: use.field, message: "That image isn’t in your uploads. Upload it again." });
+    }
+  }
+  return issues;
 }
 
 /** Create an entry of an enabled type. The draft is validated leniently and stored as given. */

@@ -14,6 +14,7 @@ vi.mock("@/lib/env/server", () => ({ serverEnv: new Proxy({}, { get: () => "x" }
 // get_entry asks the writer where the blog is, for the live address: a read this test is not about.
 vi.mock("@/lib/content", () => ({
   listTypes: async () => ({ ok: true, types: [] }),
+  postDraftIssues: () => [],
 }));
 
 const { successResult, byteLength } = await import("@/lib/mcp/result");

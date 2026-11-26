@@ -47,6 +47,7 @@ const writer = vi.hoisted(() => {
     "listTerms",
     "countEntries",
     "checkPostBody",
+    "postDraftIssues",
   ] as const;
   return Object.fromEntries(names.map((name) => [name, vi.fn()])) as Record<
     (typeof names)[number],
@@ -127,6 +128,7 @@ function allowEverything() {
   writer.listTerms.mockResolvedValue({ ok: true, terms: [] });
   writer.countEntries.mockResolvedValue({ ok: true, count: 0 });
   writer.checkPostBody.mockResolvedValue(null);
+  writer.postDraftIssues.mockReturnValue([]);
   gate.publishPageCore.mockResolvedValue({ ok: true, publishedAt: "2026-11-26T10:00:00Z" });
   gate.publishSitePageCore.mockResolvedValue({
     ok: true,

@@ -167,6 +167,47 @@ describe.skipIf(!run)("get_entry (local Supabase)", () => {
     );
   });
 
+  it("publishIssues also holds Publish's body checks: a remote image, an unsafe link, an image of another account", async () => {
+    const o = await h.owner("ge-body-issues");
+    const type = await h.postType(o.pageId);
+    const insert = async (draft: Record<string, unknown>) => {
+      const made = await h.admin
+        .from("content_entries")
+        .insert({ site_id: o.pageId, type_id: type.id, draft })
+        .select("id")
+        .single();
+      expect(made.error).toBeNull();
+      return (await h.call("get_entry", { entryId: made.data!.id }, o, READ)).json!;
+    };
+    const remote = await insert({ title: "T", slug: "remote", body: "![x](https://example.com/a.png)" });
+    expect(remote.publishIssues).toEqual([
+      { path: "body", message: "Use an image from your uploads." },
+    ]);
+    // Publish refuses the same draft for the same reason.
+    const refused = await h.call("publish_entry", { entryId: remote.id, ifRev: 1 }, o);
+    expect(refused.error?.code).toBe("publish_refused");
+    expect(refused.error!.issues).toEqual(remote.publishIssues);
+
+    const unsafe = await insert({ title: "T", slug: "unsafe", body: "[x](javascript:alert(1))" });
+    expect(unsafe.publishIssues).toHaveLength(1);
+    expect(unsafe.publishIssues[0]).toMatchObject({ path: "body" });
+    expect(unsafe.publishIssues[0].message).toContain("only http, https, mailto and tel");
+
+    const foreign = await insert({
+      title: "T",
+      slug: "foreign",
+      body: `![x](${storageUrl(`${a.userId}/img-0000000ge001.webp`)})`,
+      featuredImage: { path: `${a.userId}/img-0000000ge002.webp`, width: 10, height: 10 },
+    });
+    expect(foreign.publishIssues.map((issue: any) => issue.path).sort()).toEqual([
+      "body",
+      "featuredImage",
+    ]);
+    expect(foreign.publishIssues[0].message).toBe(
+      "That image isn’t in your uploads. Upload it again.",
+    );
+  });
+
   it("a live post has liveUrl at the blog's address and the live slug; a draft has none", async () => {
     const o = await h.owner("ge-live");
     const made = await h.post(o, { slug: "first-slug" });

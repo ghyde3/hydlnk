@@ -40,7 +40,12 @@ export function postPublishIssues(draft: unknown): Array<{ path: string; message
 export function postView(
   entry: OwnedEntry,
   range: { offset: number; length: number },
-  ctx: { imageUrlPrefix: string; liveUrl: string | null },
+  ctx: {
+    imageUrlPrefix: string;
+    liveUrl: string | null;
+    /** What else Publish would refuse that needs no read (`postDraftIssues` of the writer). */
+    draftIssues?: ReadonlyArray<{ path: string; message: string }>;
+  },
 ): Record<string, unknown> {
   const draft = record(entry.draft);
   const seo = record(draft.seo);
@@ -75,7 +80,10 @@ export function postView(
     firstPublishedAt: entry.firstPublishedAt,
     ...(entry.deletedAt ? { deletedAt: entry.deletedAt } : {}),
     ...(ctx.liveUrl ? { liveUrl: ctx.liveUrl } : {}),
-    publishIssues: entry.status === "trashed" ? [] : postPublishIssues(entry.draft),
+    publishIssues:
+      entry.status === "trashed"
+        ? []
+        : boundIssues([...postPublishIssues(entry.draft), ...(ctx.draftIssues ?? [])]),
     imageUrlPrefix: ctx.imageUrlPrefix,
   };
 }
