@@ -92,6 +92,24 @@ describe("M17-07 the form block's edit panel", () => {
       expect(input.className).toMatch(/text-base|16px/);
   });
 
+  it("every text field has its own counter, in code points, that follows what is typed", () => {
+    const { host } = mount(blockDefaults.form() as FormBlock);
+    const counterOf = (name: string) =>
+      field(host, name)!.closest("label, div")!.parentElement!.textContent ?? "";
+    for (const [name, max] of [
+      ["heading", 80],
+      ["description", 200],
+      ["buttonLabel", 30],
+      ["successMessage", 160],
+      ["consent", 200],
+    ] as const) {
+      const value = (field(host, name) as HTMLInputElement).value;
+      expect(counterOf(name), name).toContain(`${[...value].length} / ${max}`);
+    }
+    type(field(host, "heading") as HTMLInputElement, "Écrire ✉");
+    expect(counterOf("heading")).toContain("8 / 80");
+  });
+
   it("switching to Contact swaps the default words, hides Ask for a name and shows the notify switch", () => {
     const { host, latest } = mount(blockDefaults.form() as FormBlock, [], "owner@example.test");
     choose(field(host, "kind") as HTMLSelectElement, "contact");
