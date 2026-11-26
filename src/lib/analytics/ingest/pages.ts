@@ -5,6 +5,7 @@ import { getPrimaryDomain } from "@/lib/domains/primary";
 import { clientEnv } from "@/lib/env/client";
 import { tenantOrigin } from "@/lib/publish/urls";
 import { customOrigin } from "@/lib/routing/urls";
+import { toPlanId, type PlanId } from "@/lib/limits";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { resolveLink } from "./link-target";
 import { getPublishedSubPage } from "@/lib/site/published";
@@ -90,15 +91,16 @@ async function archiveTypeIdsOf(pageId: string): Promise<string[]> {
  * another site's post id, a draft's and an invented one are "no" without a query. Neither is part
  * of the cached entry above: each is its own cached read under the site and type tags.
  */
-export async function lookupBeaconPage(pageId: string): Promise<BeaconPage | null> {
-  const read =
-    process.env.NODE_ENV !== "production"
-      ? await readBeaconPage(pageId)
-      : await unstable_cache(
-          readBeaconPage,
-          ["beacon-page", "host-bound", PUBLIC_READ_CACHE_VERSION, pageId],
-          { tags: [pageTag(pageId)], revalidate: PAGE_REVALIDATE_SECONDS },
-        )(pageId);
+export async function lookupBeaconPage(
+  pageId: string,
+  options: ReadOptions = {},
+): Promise<BeaconPage | null> {
+  const read = await cachedRead(
+    readBeaconPage,
+    ["beacon-page", "host-bound", PUBLIC_READ_CACHE_VERSION, pageId],
+    [pageId],
+    options,
+  );
   if (!read.found) return null;
   return {
     ...read.page,
@@ -116,13 +118,14 @@ export async function lookupBeaconPage(pageId: string): Promise<BeaconPage | nul
  * A click reads the core, one shard and, for a sub-page block, that page's document.
  */
 type CoreRead =
-  { found: true; handle: string; customHosts: string[]; home: unknown } | { found: false };
+  | { found: true; handle: string; customHosts: string[]; home: unknown; plan: PlanId }
+  | { found: false };
 
 async function readCore(pageId: string): Promise<CoreRead> {
   const admin = createAdminSupabase();
   const { data, error } = await admin
     .from("pages")
-    .select("published, handle, accounts!inner(suspended_at), domains(hostname, status)")
+    .select("published, handle, accounts!inner(suspended_at, plan), domains(hostname, status)")
     .eq("id", pageId)
     .maybeSingle();
   // A database failure is an error, not a "not found": nobody should be told a link is gone
@@ -139,6 +142,7 @@ async function readCore(pageId: string): Promise<CoreRead> {
     found: true,
     home,
     handle: data.handle,
+    plan: toPlanId(data.accounts.plan),
     customHosts: (data.domains ?? [])
       .filter((domain) => domain.status === "verified")
       .map((domain) => domain.hostname.toLowerCase()),
@@ -184,6 +188,49 @@ function cached<Args extends [string, ...unknown[]], Result>(
 }
 
 /**
+ * How a cached read treats a page that is not found. `/r`, `/c` and `/api/e` store the miss like any
+ * answer (pre-existing: each invented page id they are asked about adds one data-cache entry, kept
+ * until it is evicted, a day at most fresh). The form routes pass `cacheMisses: false` (M17-05: an
+ * invented `/f/<uuid>/<id>` makes no cache entry): a miss is thrown inside the cached function, which
+ * the data cache never stores, and read again from Postgres next time (the form routes' limiter runs
+ * first, so that costs at most one primary-key read per allowed request).
+ */
+export interface ReadOptions {
+  cacheMisses?: boolean;
+}
+
+class CacheMiss extends Error {
+  override readonly name = "CacheMiss";
+}
+
+async function cachedRead<Args extends [string, ...unknown[]], Result extends { found: boolean }>(
+  read: (...args: Args) => Promise<Result>,
+  key: string[],
+  args: Args,
+  options: ReadOptions,
+): Promise<Result | { found: false }> {
+  // `next dev` reads Postgres every time (the same rule as `published-page.ts`).
+  if (process.env.NODE_ENV !== "production") return read(...args);
+  const store = (fn: (...args: Args) => Promise<Result>) =>
+    unstable_cache(fn, key, { tags: [pageTag(args[0])], revalidate: PAGE_REVALIDATE_SECONDS })(
+      ...args,
+    );
+  if (options.cacheMisses !== false) return store(read);
+  try {
+    return await store(async (...inner: Args) => {
+      const result = await read(...inner);
+      if (!result.found) throw new CacheMiss();
+      return result;
+    });
+  } catch (error) {
+    if (error instanceof CacheMiss || (error as { name?: unknown } | null)?.name === "CacheMiss") {
+      return { found: false };
+    }
+    throw error;
+  }
+}
+
+/**
  * The site read of a click (M11-09) for one block id: Home's published document, the sub-page that
  * holds the block (when it is not Home) and the one-entry index that names it. Publish expires the
  * tag, so a link edited and republished redirects to its new URL at once, and a suspension or
@@ -192,8 +239,18 @@ function cached<Args extends [string, ...unknown[]], Result>(
 async function readPublishedCached(
   pageId: string,
   blockId: string,
-): Promise<({ found: true; handle: string; customHosts: string[] } & SiteRead) | { found: false }> {
-  const core = await cached(readCore, "click-core", [pageId], [pageId]);
+  options: ReadOptions = {},
+): Promise<
+  | ({ found: true; handle: string; customHosts: string[]; plan: PlanId } & SiteRead)
+  | { found: false }
+> {
+  // "click-core-plan": the core gained the owner's plan (Wave D fixes), so it is a new entry.
+  const core = await cachedRead(
+    readCore,
+    ["click-core-plan", PUBLIC_READ_CACHE_VERSION, pageId],
+    [pageId],
+    options,
+  );
   if (!core.found) return { found: false };
   const shard = shardOf(blockId);
   const index = await cached(readIndexShard, "click-index", [pageId, shard], [pageId, `${shard}`]);
@@ -208,6 +265,7 @@ async function readPublishedCached(
     found: true,
     handle: core.handle,
     customHosts: core.customHosts,
+    plan: core.plan,
     home: core.home,
     subPages,
     index: owner === null ? {} : { [blockId]: owner },
@@ -275,7 +333,8 @@ export async function resolveContactCard(
 /**
  * The form block with this id in the site's published documents (Home or a live sub-page), for the
  * form routes (Wave D, M17-06), with the handle and verified custom hosts of its site and the
- * sub-page that holds it. The same cached read as a click: no query of its own. Null for an unknown
+ * sub-page that holds it, and the owner's plan (for the per-site rate). The same cached read as a
+ * click (no query of its own), except that a miss is never stored. Null for an unknown
  * site, nothing published, a suspended owner, a document that fails the published schema, and an id
  * that is not a VISIBLE form block (a hidden one, another type, a draft-only one). Throws when the
  * database fails.
@@ -284,7 +343,7 @@ export async function resolveFormBlock(
   pageId: string,
   blockId: string,
 ): Promise<FormTarget | null> {
-  const read = await readPublishedCached(pageId, blockId);
+  const read = await readPublishedCached(pageId, blockId, { cacheMisses: false });
   if (!read.found) return null;
   const holder = documentForBlock(read, blockId);
   if (!holder) return null;
@@ -292,6 +351,7 @@ export async function resolveFormBlock(
   if (!block || block.type !== "form" || block.visible === false) return null;
   return {
     block,
+    plan: read.plan,
     handle: read.handle,
     customHosts: read.customHosts,
     ...(holder.subPageId ? { subPageId: holder.subPageId } : {}),

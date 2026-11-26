@@ -43,10 +43,16 @@ export interface PlanLimits {
   /** Bytes of entries and sub-pages per account (HL009). */
   contentBytes: number;
   /**
-   * Form submissions accepted for storage per account and UTC calendar month, over all of its sites
-   * (HL016, M17-02). Deleting one gives nothing back; a duplicate sign-up is not counted.
+   * Form submissions per account and UTC calendar month, over all of its sites (HL016, M17-02):
+   * what the sites HOLD from this month, so deleting one gives its place back; a duplicate sign-up
+   * is not counted.
    */
   formSubmissionsPerMonth: number;
+  /**
+   * Form submissions per site and UTC day (HL016, security review A1): what one site holds from
+   * today, well under the month, so a burst of junk cannot take the month in an hour.
+   */
+  formSubmissionsPerSiteDay: number;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -67,6 +73,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     revisionsKept: 10,
     contentBytes: 67108864,
     formSubmissionsPerMonth: 100,
+    formSubmissionsPerSiteDay: 20,
   },
   pro: {
     pages: 3,
@@ -83,6 +90,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     revisionsKept: 50,
     contentBytes: 1073741824,
     formSubmissionsPerMonth: 5000,
+    formSubmissionsPerSiteDay: 500,
   },
   studio: {
     pages: 15,
@@ -99,6 +107,7 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     revisionsKept: 200,
     contentBytes: 5368709120,
     formSubmissionsPerMonth: 50000,
+    formSubmissionsPerSiteDay: 5000,
   },
 };
 
@@ -118,6 +127,7 @@ export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
   revisionsKept: "revisions_kept",
   contentBytes: "content_bytes",
   formSubmissionsPerMonth: "form_submissions_per_month",
+  formSubmissionsPerSiteDay: "form_submissions_per_site_day",
 };
 
 export const PLAN_LABELS: Readonly<Record<PlanId, string>> = {

@@ -5,7 +5,7 @@ import { insertEvent } from "@/lib/analytics/ingest/insert";
 import { lookupBeaconPage, resolveFormBlock } from "@/lib/analytics/ingest/pages";
 import { visitorHashSecret } from "@/lib/analytics/ingest/secret";
 import { clientEnv } from "@/lib/env/client";
-import { rateLimit } from "@/lib/rate-limit";
+import { rateLimit, rateLimitAge } from "@/lib/rate-limit";
 import { rootOrigin } from "@/lib/routing/urls";
 import { renderFormPage } from "@/lib/tenant-render/form-page";
 import { notifyOwnerOfLimit, notifyOwnerOfMessage } from "./notify";
@@ -18,11 +18,14 @@ export function formDeps(): FormDeps {
   return {
     // The default: fail open. The monthly cap in the database is the hard bound.
     rateLimit: (key, limit, windowSeconds) => rateLimit(key, limit, windowSeconds),
+    // The open marker's read: counts nothing, and a store failure reads as "no marker".
+    rateLimitAge: (key, windowSeconds) => rateLimitAge(key, windowSeconds),
     now: () => new Date(),
     visitorHash,
     tokenSecret: visitorHashSecret,
     resolveFormBlock,
-    lookupSite: lookupBeaconPage,
+    // An invented page id must make no cache entry (M17-05 step 1): misses are not stored.
+    lookupSite: (pageId) => lookupBeaconPage(pageId, { cacheMisses: false }),
     renderFormPage,
     hasBlockedLink,
     recordSubmission,

@@ -1,5 +1,6 @@
 import {
   BLOCK_ID_PATTERN,
+  UUID_PATTERN,
   codePointLength,
   isEmailAddress,
   isValidSubPagePath,
@@ -19,14 +20,13 @@ export {
   FORM_DEFAULTS,
   FORM_KINDS,
   FORM_KIND_LABELS,
+  formKindLabel,
   switchFormKind,
   type FormKind,
 } from "@/lib/document";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function isUuid(value: unknown): value is string {
-  return typeof value === "string" && UUID.test(value);
+  return typeof value === "string" && UUID_PATTERN.test(value);
 }
 
 export function isBlockId(value: unknown): value is string {
@@ -79,6 +79,8 @@ export const SUBMISSION_MESSAGES = {
   messageMissing: "Write a message.",
   messageTooLong: "Use 2,000 characters or fewer.",
   messageLinks: `Use ${SUBMISSION_LIMITS.links} links or fewer.`,
+  /** A value the database refused although the checks above passed (review B8): never expected. */
+  unsupported: "This has characters the form can’t take. Remove them and send again.",
 } as const;
 
 export type SubmissionField = "email" | "name" | "message";
@@ -191,17 +193,35 @@ export const FORM_VIEW_TITLES: Record<FormViewKind, string> = {
   sent: "Sent",
 };
 
-/** What `record_form_submission` answers (the migration's SQL surface). */
+/** What `record_form_submission` answers (the migrations' SQL surface). */
 export const RECORD_STATUSES = [
   "stored",
   "duplicate",
   "over_limit",
   "over_limit_first",
+  "over_daily_limit",
   "unavailable",
+  "invalid_email",
+  "invalid_name",
+  "invalid_message",
 ] as const;
 export type RecordStatus = (typeof RECORD_STATUSES)[number];
 
-/** The columns a client may read (never `visitor_hash`). */
+/** The field a check of the table refused (`invalid_*`), or null for any other status. */
+export function refusedField(status: RecordStatus): SubmissionField | null {
+  switch (status) {
+    case "invalid_email":
+      return "email";
+    case "invalid_name":
+      return "name";
+    case "invalid_message":
+      return "message";
+    default:
+      return null;
+  }
+}
+
+/** The columns a client may read: every column of the table (it holds no visitor hash). */
 export const SUBMISSION_COLUMNS =
   "id, site_id, entry_id, block_id, kind, email, name, message, created_at";
 export interface SubmissionRow {

@@ -61,6 +61,7 @@ export {
   FORM_KINDS,
   FORM_KIND_LABELS,
   FORM_KIND_MESSAGE,
+  formKindLabel,
   switchFormKind,
   type FormKind,
 } from "./form";
@@ -141,7 +142,7 @@ export {
   type ProfileOptionKey,
   type ProfileOptions,
 } from "./profile-options";
-export { BLOCK_ID_PATTERN, blockIdsOf, freshenBlockIds, newBlockId } from "./ids";
+export { BLOCK_ID_PATTERN, UUID_PATTERN, blockIdsOf, freshenBlockIds, newBlockId } from "./ids";
 export {
   EMAIL_ERROR_MESSAGE,
   MAX_EMAIL_LENGTH,

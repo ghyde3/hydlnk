@@ -7,8 +7,6 @@ import { makeOwner, type TestOwner } from "./publish-support";
  * `record_form_submission` takes submissions for it.
  */
 
-export const HASH = "c".repeat(64);
-
 export function adminClient(): SupabaseClient {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
     auth: { persistSession: false },
@@ -64,7 +62,6 @@ export async function record(
     p_email: email,
     p_name: "",
     p_message: "",
-    p_visitor_hash: HASH,
   });
   if (error) throw new Error(`record: ${error.code}`);
   return (data as { status: string }[])[0]!.status;

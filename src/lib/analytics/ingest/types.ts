@@ -1,3 +1,4 @@
+import type { PlanId } from "@/lib/limits";
 import type { FormBlock } from "@/lib/document";
 import type { RateLimitOptions, RateLimitResult } from "@/lib/rate-limit";
 import type { VisitorHashInput } from "./hash";
@@ -70,6 +71,8 @@ export interface ClickTarget {
  */
 export interface FormTarget {
   block: FormBlock;
+  /** The owner's plan: the per-site rate of the form routes follows its daily cap. */
+  plan: PlanId;
   /** `pages.handle` of the site: `{handle}.{root}` serves it. */
   handle: string;
   /** Hostnames of the site's VERIFIED custom domains. */

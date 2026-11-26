@@ -1,3 +1,4 @@
+import { UUID_PATTERN } from "@/lib/document/ids";
 import { isBot } from "./bot";
 import { countryFromHeaders } from "./country";
 import { deviceFromUserAgent } from "./device";
@@ -11,7 +12,8 @@ import type { IngestDeps } from "./types";
  * a click and the capped body read. No behavior of its own.
  */
 
-export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The page id pattern, shared with the form routes (src/lib/forms/contract.ts `isUuid`). */
+export const UUID = UUID_PATTERN;
 export const BLOCK_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export function errorMessage(error: unknown): string {

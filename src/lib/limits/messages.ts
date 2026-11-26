@@ -128,6 +128,25 @@ export function formMeterText(plan: PlanId, stored: number): string {
 }
 
 /**
+ * The line under the meter (security review A1): what is counted, that deleting frees a place, and
+ * the per-site daily cap. "Counts what your forms hold from the 1st of the month (UTC). Deleting a
+ * submission frees its place. Each site takes up to 20 a day."
+ */
+export function formMeterHelp(plan: PlanId): string {
+  return `Counts what your forms hold from the 1st of the month (UTC). Deleting a submission frees its place. Each site takes up to ${grouped(PLAN_LIMITS[plan].formSubmissionsPerSiteDay)} a day.`;
+}
+
+/**
+ * The notice once a site's daily cap refused anything this month, or null:
+ *   "A site reached its limit of 20 form submissions a day on Free. 3 were not saved this month.
+ *    Delete what you don’t need to make room, or wait until tomorrow (UTC)."
+ */
+export function formDailyLimitNotice(plan: PlanId, refusedDaily: number): string | null {
+  if (refusedDaily <= 0) return null;
+  return `A site reached its limit of ${grouped(PLAN_LIMITS[plan].formSubmissionsPerSiteDay)} form submissions a day on ${PLAN_LABELS[plan]}. ${grouped(refusedDaily)} ${refusedDaily === 1 ? "was" : "were"} not saved this month. Delete what you don’t need to make room, or wait until tomorrow (UTC).`;
+}
+
+/**
  * The Audience screen's notice once anything was refused this month (M17-02), by plan:
  *   "You’ve reached this month’s limit of 100 form submissions on Free. 12 were not saved. Upgrade to
  *    keep more, or wait until the 1st."

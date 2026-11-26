@@ -678,19 +678,19 @@ export type Database = {
           month: string
           owner_id: string
           refused: number
-          stored: number
+          refused_daily: number
         }
         Insert: {
           month: string
           owner_id: string
           refused?: number
-          stored?: number
+          refused_daily?: number
         }
         Update: {
           month?: string
           owner_id?: string
           refused?: number
-          stored?: number
+          refused_daily?: number
         }
         Relationships: [
           {
@@ -713,7 +713,6 @@ export type Database = {
           message: string
           name: string
           site_id: string
-          visitor_hash: string
         }
         Insert: {
           block_id: string
@@ -725,7 +724,6 @@ export type Database = {
           message?: string
           name?: string
           site_id: string
-          visitor_hash: string
         }
         Update: {
           block_id?: string
@@ -737,7 +735,6 @@ export type Database = {
           message?: string
           name?: string
           site_id?: string
-          visitor_hash?: string
         }
         Relationships: [
           {
@@ -1823,6 +1820,10 @@ export type Database = {
         }[]
       }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
+      form_month_stored: {
+        Args: { p_month: string; p_owner: string }
+        Returns: number
+      }
       form_submission_counts: {
         Args: { p_site_id: string }
         Returns: {
@@ -1837,6 +1838,7 @@ export type Database = {
         Returns: {
           month: string
           refused: number
+          refused_daily: number
           stored: number
         }[]
       }
@@ -2010,6 +2012,7 @@ export type Database = {
           custom_types: number
           entries_per_type: number
           form_submissions_per_month: number
+          form_submissions_per_site_day: number
           max_domains: number
           max_pages: number
           max_saved_themes: number
@@ -2077,6 +2080,10 @@ export type Database = {
       }
       purge_old_events: { Args: never; Returns: number }
       purge_trashed_entries: { Args: never; Returns: number }
+      rate_limit_age: {
+        Args: { p_bucket: string; p_window_seconds: number }
+        Returns: number
+      }
       rate_limit_hit: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: {
@@ -2102,7 +2109,6 @@ export type Database = {
           p_message: string
           p_name: string
           p_site_id: string
-          p_visitor_hash: string
         }
         Returns: {
           owner_id: string

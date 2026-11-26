@@ -1,8 +1,8 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
 import { publishHome } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { draftOf, publishDocOf, userWithDraft } from "../m2/blocks-helpers";
+import { seedFormRows } from "../../../scripts/lib/local-db";
 import { CONTACT_ID, SIGNUP_ID, contactForm, recordRow, signupForm } from "./forms-helpers";
 
 /**
@@ -80,10 +80,11 @@ test("M17-08 the submissions of the site, as text, filtered, deleted; the meter;
   await expect(page).toHaveURL(/\/audience\?form=formSignE2E1$/);
   await expect(rows(page)).toHaveCount(2);
 
-  // Delete one; the month's count stays.
+  // Delete one; it frees its place in the month (the count is what the forms hold: owner decision,
+  // security review A1).
   await rows(page).first().getByTestId("audience-delete").click();
   await expect(rows(page)).toHaveCount(1);
-  await expect(page.getByTestId("audience-meter")).toHaveText("3 / 100 this month");
+  await expect(page.getByTestId("audience-meter")).toHaveText("2 / 100 this month");
 
   // Delete all from this form, asked in a dialog; Cancel first does nothing.
   await page.getByTestId("audience-delete-all").click();
@@ -97,7 +98,7 @@ test("M17-08 the submissions of the site, as text, filtered, deleted; the meter;
   await expect(dialog).toBeHidden();
   await page.goto(url("app", "/audience"));
   await expect(rows(page)).toHaveCount(1);
-  await expect(page.getByTestId("audience-meter")).toHaveText("3 / 100 this month");
+  await expect(page.getByTestId("audience-meter")).toHaveText("1 / 100 this month");
 
   // The CSV of the site: the header, the one row left, the formula opened as text.
   const csv = await page.request.get(url("app", "/audience/export?form=all"));
@@ -159,15 +160,9 @@ test("M17-02 over the month's limit: the notice with the numbers of the plan", a
   context,
 }) => {
   const a = await siteWithForms(context, "audl");
-  const seed = Array.from({ length: 100 }, (_, i) => ({
-    site_id: a.pageId,
-    block_id: SIGNUP_ID,
-    kind: "signup",
-    email: `seed${i}@example.test`,
-    visitor_hash: "e".repeat(64),
-  }));
-  const inserted = await adminClient().from("form_submissions").insert(seed);
-  expect(inserted.error).toBeNull();
+  // 100 from this month, written with no trigger running (the per-site daily cap would refuse a
+  // seed of 100 in one day).
+  await seedFormRows(a.pageId, 100, { blockId: SIGNUP_ID });
   expect(
     await recordRow(a.pageId, { blockId: SIGNUP_ID, kind: "signup", email: "late1@example.test" }),
   ).toBe("over_limit_first");

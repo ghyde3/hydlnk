@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 import {
-  HASH,
   adminClient,
   publishableClient,
   publishedOwner,
@@ -12,13 +11,13 @@ import {
 
 /**
  * M17-01 step 5: a probe with the publishable key over PostgREST (the path curl would take). Anon can
- * read, insert, update and delete nothing; a signed-in owner reads their own rows (never
- * visitor_hash) and may delete them, but can neither insert nor update; another user reads and
- * deletes nothing; no client can call the secret-key functions.
+ * read, insert, update and delete nothing; a signed-in owner reads their own rows and may delete
+ * them, but can neither insert nor update; another user reads and deletes nothing; no client can
+ * call the secret-key functions. Since 20261126185204 the table has no visitor_hash column at all.
  */
 const { run } = await stackIsUp();
 
-/** The columns the owner may read (the grant in the migration): every column but visitor_hash. */
+/** The columns the owner may read (the grant in the migration): every column of the table. */
 const SUBMISSION_COLUMNS =
   "id, site_id, entry_id, block_id, kind, email, name, message, created_at";
 
@@ -35,7 +34,6 @@ describe.skipIf(!run)("M17-01 form_submissions with the publishable key (local S
     block_id: "formSignup01",
     kind: "signup",
     email: "probe@example.test",
-    visitor_hash: HASH,
   });
   const countA = async () => {
     const { count, error } = await admin
@@ -79,11 +77,11 @@ describe.skipIf(!run)("M17-01 form_submissions with the publishable key (local S
     expect(await countA()).toBe(2);
   });
 
-  it("the owner reads their rows but never visitor_hash, and cannot insert or update", async () => {
+  it("the owner reads their rows (there is no visitor_hash to read), and cannot insert or update", async () => {
     const read = await asA.from("form_submissions").select(SUBMISSION_COLUMNS);
     expect(read.error).toBeNull();
     expect(read.data).toHaveLength(2);
-    expect((await asA.from("form_submissions").select("visitor_hash")).error?.code).toBe("42501");
+    expect((await asA.from("form_submissions").select("visitor_hash")).error?.code).toBe("42703");
     expect((await asA.from("form_submissions").insert(row())).error?.code).toBe("42501");
     const update = await asA
       .from("form_submissions")
@@ -115,12 +113,11 @@ describe.skipIf(!run)("M17-01 form_submissions with the publishable key (local S
         p_email: "rpc@example.test",
         p_name: "",
         p_message: "",
-        p_visitor_hash: HASH,
       });
       expect(recorded.error?.code).toBe("42501");
       expect((await client.rpc("form_usage", { p_uid: a.userId })).error?.code).toBe("42501");
     }
-    expect((await asA.from("form_submission_usage").select("stored")).error?.code).toBe("42501");
+    expect((await asA.from("form_submission_usage").select("refused")).error?.code).toBe("42501");
     expect(await countA()).toBe(2);
   });
 

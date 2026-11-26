@@ -14,6 +14,11 @@ export const FORM_KIND_LABELS: Record<FormKind, string> = {
   contact: "Contact form",
 };
 
+/** The label of a form's kind, for a value read from a stored document: anything but 'contact' is a sign-up. */
+export function formKindLabel(kind: unknown): string {
+  return FORM_KIND_LABELS[kind === "contact" ? "contact" : "signup"];
+}
+
 /** The button label and success message a new form of each kind starts with. */
 export const FORM_DEFAULTS: Record<FormKind, { buttonLabel: string; successMessage: string }> = {
   signup: { buttonLabel: "Subscribe", successMessage: "Thanks. You’re on the list." },

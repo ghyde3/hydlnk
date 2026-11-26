@@ -94,3 +94,44 @@ export async function rateLimit(
     if (timer) clearTimeout(timer);
   }
 }
+
+/** Reads a bucket without counting a hit (`rate_limit_age`). */
+export interface RateLimitAgeStore {
+  /** Seconds since the oldest hit of `bucket` within the window, or null when there is none. */
+  age(bucket: string, windowSeconds: number): Promise<number | null>;
+}
+
+/**
+ * How long ago the oldest hit of `key` within `windowSeconds` was, in seconds, or null when there is
+ * none; it counts nothing, so asking never starts a window. The open marker's read (M17-06): only
+ * `GET /f/{pageId}/o` starts the marker, a POST only asks. Fails open the one safe way for its one
+ * caller: a store error or a timeout reads as null ("no marker"), which sends the visitor to the
+ * confirm page, never past the fill-time check.
+ */
+export async function rateLimitAge(
+  key: string,
+  windowSeconds: number,
+  options: { store?: RateLimitAgeStore; secret?: string; timeoutMs?: number } = {},
+): Promise<number | null> {
+  if (!Number.isInteger(windowSeconds) || windowSeconds < 1) {
+    throw new RangeError("rateLimitAge needs a whole window of at least 1");
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const store = options.store ?? createSupabaseRateLimitStore();
+    const bucket = rateLimitBucket(key, options.secret ?? visitorHashSecret());
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("the counter store did not answer in time")),
+        options.timeoutMs ?? RATE_LIMIT_TIMEOUT_MS,
+      );
+    });
+    return await Promise.race([store.age(bucket, windowSeconds), timeout]);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown error";
+    console.error("[rate-limit] the counter store failed; reading no hit:", reason);
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
