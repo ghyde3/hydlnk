@@ -108,11 +108,24 @@ export function asksName(kind: FormKind, askName: boolean): boolean {
   return kind === "contact" || askName;
 }
 
-const LINK = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+/gi;
+/**
+ * What counts as a link in what a visitor typed (forms attack pass, finding 4). One rule for the
+ * field checks (no link in a name, at most 5 in a message), the blocklist check and the owner's
+ * email, which neutralises every one of them:
+ *   - `http://`, `https://` or `ftp://` and what follows, or `mailto:` and what follows;
+ *   - a `www.` host;
+ *   - a bare host with a path: dotted labels, a last label of 2 to 63 letters, then `/`
+ *     (`evil.example/login`).
+ * Not a link: a bare host with no path (`booking.com`, `node.js`), which names and plain sentences
+ * hold too often. No leading word boundary: a link glued to a word character (`xhttps://…`,
+ * `_https://…`, `1www.…`) is found all the same.
+ */
+const LINK =
+  /(?:https?|ftp):\/\/[^\s<>"']+|mailto:[^\s<>"']+|www\.[^\s<>"']+|(?:[\p{L}\p{N}-]+\.)+\p{L}{2,63}\/[^\s<>"']*/giu;
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}]+$/;
 const MAX_LINKS_RETURNED = 50;
 
-/** The http(s) links and bare `www.` hosts in a text, in order, at most 50. */
+/** The links in a text (the rule above), in order, at most 50. */
 export function linksIn(text: string): string[] {
   const found: string[] = [];
   for (const match of text.matchAll(LINK)) {
@@ -121,6 +134,32 @@ export function linksIn(text: string): string[] {
     if (found.length === MAX_LINKS_RETURNED) break;
   }
   return found;
+}
+
+/** A text cut at its links (`linksIn`), in order: the pieces between them and the links. */
+export function linkParts(text: string): { text: string; link: boolean }[] {
+  const parts: { text: string; link: boolean }[] = [];
+  let rest = text;
+  for (const link of linksIn(text)) {
+    const at = rest.indexOf(link);
+    if (at < 0) continue;
+    if (at > 0) parts.push({ text: rest.slice(0, at), link: false });
+    parts.push({ text: link, link: true });
+    rest = rest.slice(at + link.length);
+  }
+  if (rest !== "") parts.push({ text: rest, link: false });
+  return parts;
+}
+
+/**
+ * A text with each of its links (`linksIn`) made inert for plain text: every `.` becomes `[.]` and
+ * every `:` becomes `[:]` inside the link (`https[:]//evil[.]example/login`), the usual way to write
+ * an address no client turns into a link. The rest of the text, line breaks included, is unchanged.
+ */
+export function neutralizeLinks(text: string): string {
+  return linkParts(text)
+    .map((part) => (part.link ? part.text.replace(/[.:]/g, (c) => `[${c}]`) : part.text))
+    .join("");
 }
 
 function line(raw: string | null | undefined): string {

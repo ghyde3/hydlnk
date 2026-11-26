@@ -2,7 +2,7 @@ import "server-only";
 import { createElement } from "react";
 import { render } from "react-email";
 import { FormLimit } from "@/emails/form-limit";
-import { FormMessage, type FormMessageProps } from "@/emails/form-message";
+import { FormMessage, messageEmailText, type FormMessageProps } from "@/emails/form-message";
 import { PLAN_LABELS, PLAN_LIMITS, type PlanId } from "@/lib/limits";
 
 /**
@@ -24,8 +24,13 @@ async function both(element: ReturnType<typeof createElement>) {
   return { html, text };
 }
 
+/** The message email: the HTML from react-email, the text part line by line (`messageEmailText`). */
 export async function messageEmailContent(props: FormMessageProps): Promise<EmailContent> {
-  return { subject: FORM_MESSAGE_SUBJECT, ...(await both(createElement(FormMessage, props))) };
+  return {
+    subject: FORM_MESSAGE_SUBJECT,
+    html: await render(createElement(FormMessage, props)),
+    text: messageEmailText(props),
+  };
 }
 
 export async function limitEmailContent(plan: PlanId, audienceUrl: string): Promise<EmailContent> {

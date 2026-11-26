@@ -142,10 +142,36 @@ describe("M17-10 the message email", () => {
     expect(html).not.toContain("www.other.example");
     expect(html).not.toContain("evil.example/login");
     expect(html).toContain('content="telephone=no, date=no, address=no, email=no, url=no"');
-    // The words read the same, and the plain-text part keeps the link as typed.
+    // The words read the same in the HTML; the plain-text part writes each link inert (finding 4).
     const visible = html.replace(/<[^>]+>/g, "");
     expect(visible).toContain("See https://evil.example/login?x=1 and www.other.example, thanks");
-    expect(text).toContain("See https://evil.example/login?x=1 and www.other.example, thanks");
+    expect(text).toContain(
+      "See https[:]//evil[.]example/login?x=1 and www[.]other[.]example, thanks",
+    );
+  });
+
+  it("every kind of link, glued to a word or not, is inert in both parts; the text part keeps line breaks (finding 4)", async () => {
+    const d = deps();
+    const message = [
+      "first line xhttps://evil.example/a",
+      "_www.evil.example and 1www.evil.example",
+      "mailto:boss@evil.example ftp://evil.example/f evil.example/login",
+    ].join("\n");
+    await notifyOwnerOfMessage(notice({ message }), d.deps);
+    const { html, text } = d.smtp.sent[0]! as { html: string; text: string };
+    const anchors = [...html.matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((match) => match[1]);
+    expect(anchors).toEqual(["http://app.localhost:3000/audience"]);
+    for (const part of [html, text]) {
+      expect(part).not.toContain("evil.example");
+      expect(part).not.toContain("://evil");
+    }
+    expect(text).toContain(
+      [
+        "first line xhttps[:]//evil[.]example/a",
+        "_www[.]evil[.]example and 1www[.]evil[.]example",
+        "mailto[:]boss@evil[.]example ftp[:]//evil[.]example/f evil[.]example/login",
+      ].join("\n"),
+    );
   });
 
   it("a line break followed by Bcc: in a name or a message adds no header", async () => {
