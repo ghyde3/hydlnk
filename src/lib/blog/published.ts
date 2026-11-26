@@ -56,8 +56,11 @@ import {
 type Admin = SupabaseClient<Database>;
 
 /** Loaded on first read, not at import: modules that only need the shapes load without the server env. */
+let adminModule: Promise<typeof import("@/lib/supabase/admin")> | undefined;
 async function adminClient(): Promise<Admin> {
-  return (await import("@/lib/supabase/admin")).createAdminSupabase();
+  // One import, shared: several reads of one request start together.
+  adminModule ??= import("@/lib/supabase/admin");
+  return (await adminModule).createAdminSupabase();
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

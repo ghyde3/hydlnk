@@ -25,7 +25,7 @@ const NAMED: Record<string, string> = {
   gt: ">",
   quot: '"',
   apos: "'",
-  nbsp: " ",
+  nbsp: "\u00a0",
 };
 
 /**
@@ -68,8 +68,10 @@ export function plainText(tokens: readonly Token[] | undefined, depth = 0): stri
         out += " ";
         break;
       case "code":
-      case "codespan":
         out += `${(token as Tokens.Code).text} `;
+        break;
+      case "codespan":
+        out += (token as Tokens.Codespan).text;
         break;
       case "escape":
         out += (token as Tokens.Escape).text;
