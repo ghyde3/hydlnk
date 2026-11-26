@@ -55,11 +55,14 @@ select tests.clear_authentication();
 reset role;
 
 -- Item pairs
-insert into public.site_pages (id, page_id, draft, published, published_at) values
-  ('00000000-0000-4000-8000-00000180a0b1', '00000000-0000-4000-8000-00000180a001',
-   '{"path":"shop","title":"Shop","description":"","blocks":[]}',
-   '{"path":"shop","title":"Shop","description":"","blocks":[{"id":"BLK1","type":"items","items":[{"id":"ITEM1","name":"a"},{"id":"ITEM2","name":"b"}]},{"id":"BLK2","type":"links","items":[{"id":"OTHER"}]}]}',
-   now());
+-- Since M15-05 (1b1-23) a sub-page is a live page entry (the same id as the old site_pages row).
+insert into public.content_entries (id, site_id, type_id, draft, published, published_at)
+select '00000000-0000-4000-8000-00000180a0b1', '00000000-0000-4000-8000-00000180a001', t.id,
+   '{"path":"shop","title":"Shop","description":"","blocks":[]}'::jsonb,
+   '{"path":"shop","title":"Shop","description":"","blocks":[{"id":"BLK1","type":"items","items":[{"id":"ITEM1","name":"a"},{"id":"ITEM2","name":"b"}]},{"id":"BLK2","type":"links","items":[{"id":"OTHER"}]}]}'::jsonb,
+   now()
+from public.content_types t
+where t.site_id = '00000000-0000-4000-8000-00000180a001' and t.key = 'page';
 select is(
   (select array_agg(block_id order by block_id collate "C") from public.site_click_pairs('00000000-0000-4000-8000-00000180a001')
     where sub_page_id = '00000000-0000-4000-8000-00000180a0b1'),

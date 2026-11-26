@@ -104,6 +104,6 @@ describe("update_page_settings failure after the first write", () => {
     writeMenuChange.mockResolvedValue({ rev: 7, changed: true, nav: { show: true, items: [SUB] } });
     const out = await updatePageSettings.handler(args, call);
     expect(commitSubPage).toHaveBeenCalledTimes(1);
-    expect(out.data).toMatchObject({ rev: 200, homeRev: 7, inMenu: true, menuPosition: 0 });
+    expect(out.data).toMatchObject({ rev: 200, homeRev: 7, designRev: 7, inMenu: true, menuPosition: 0 });
   });
 });

@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
+import { pageRow } from "../m2/editor-helpers";
 import type { Block } from "@/lib/document";
 import { publishDocOf, publishedPage, type PublishedTestPage } from "../m2/blocks-helpers";
 
@@ -150,13 +150,9 @@ export async function storedBlock(
   pageId: string,
   blockId: string,
 ): Promise<Record<string, unknown> | undefined> {
-  const { data, error } = await adminClient()
-    .from("pages")
-    .select("draft")
-    .eq("id", pageId)
-    .single();
-  if (error) throw new Error(error.message);
-  return ((data.draft as { blocks: Record<string, unknown>[] }).blocks ?? []).find(
+  // Home's blocks live in its entry (pageRow reads them from there).
+  const { draft } = await pageRow(pageId);
+  return ((draft as unknown as { blocks: Record<string, unknown>[] }).blocks ?? []).find(
     (b) => b.id === blockId,
   );
 }

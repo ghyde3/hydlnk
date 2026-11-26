@@ -1,11 +1,16 @@
 import type { BlockedLinkError } from "@/lib/blocklist/error";
 import { LIMITS, draftSubPageSchema, type SubPageDraft } from "@/lib/document";
+import type { SaveHold } from "@/lib/editor/autosave";
 import { jsonbTextBytes } from "@/lib/editor/size";
 
 /**
  * The autosave of sub-pages (M11-08): one debounced queue for all the sub-pages of the open site.
  * Home's draft keeps its own `AutosaveQueue` (a stale-tab guard on `draft->>rev`); a sub-page has no
- * rev, so a write is a plain update of that page's own row and the newest document wins. The queue
+ * rev in its document, so its revision is its page entry's `rev` (M15-01, 1b1-17, the notion MCP's
+ * writer uses): `save-client.ts` posts to the entry save route only while `rev` is what the editor
+ * last loaded or saved. A write that matches nothing on a page that still exists is a "conflict": saving stops, the
+ * edits stay on screen and in the queue, the screen asks for a reload, and nothing is overwritten
+ * (a change made through MCP, or in another tab, wins until the owner reloads). The queue
  * follows the same rules as Home's: about 800 ms after the last edit, a failed write is retried with
  * backoff, a draft over the size limit or one that does not pass the draft schema is not sent, a 401
  * is not retried on a timer, and a link to a blocked site (HL005) is permanent until that page is
@@ -24,6 +29,8 @@ export type SubSaveStatus =
   | "invalid"
   | "signed-out"
   | "blocked"
+  /** Another writer (an MCP client, another tab) changed a page first: saving stops until a reload. */
+  | "conflict"
   /** A page it tried to write no longer exists (deleted in another tab). */
   | "missing";
 
@@ -31,8 +38,10 @@ export type SubSaveResult =
   | { kind: "ok" }
   | { kind: "unauthorized" }
   | { kind: "missing" }
+  | { kind: "conflict" }
   | { kind: "too-large" }
   | { kind: "storage-full" }
+  | { kind: "invalid" }
   | ({ kind: "blocked" } & BlockedLinkError)
   | { kind: "error" };
 
@@ -79,6 +88,11 @@ export class SubPageSaver {
   private inFlight: Promise<void> | null = null;
   private current: SubSaveStatus = "idle";
   private disposed = false;
+  private holds = 0;
+  private gate: Promise<void> | null = null;
+  private openGate: (() => void) | null = null;
+  /** The write on the wire (past the gate), as opposed to `inFlight`, which may be waiting at it. */
+  private sending: Promise<void> | null = null;
 
   constructor(options: SubPageSaverOptions) {
     this.save = options.save;
@@ -106,6 +120,7 @@ export class SubPageSaver {
     this.unsendable.delete(id);
     if (this.refused.delete(id)) this.onBlocked(id, null);
     if (this.current === "signed-out" || this.current === "missing") return;
+    if (this.current === "conflict") return;
     if (this.current === "error") return;
     this.setStatus("pending");
     this.arm(this.debounceMs);
@@ -134,6 +149,7 @@ export class SubPageSaver {
     for (let attempt = 0; attempt < 3; attempt++) {
       if (this.inFlight) await this.inFlight;
       if (this.current === "signed-out" || this.current === "missing") return false;
+      if (this.current === "conflict") return false;
       if (this.dirty.size === 0) return stored();
       await this.run();
       if (this.current !== "pending" && this.current !== "saving") return stored();
@@ -146,6 +162,30 @@ export class SubPageSaver {
       this.cancelTimer();
       void this.run();
     }
+  }
+
+  /** Stops writes from being sent until the hold is released (see `SaveHold`). Holds nest. */
+  hold(): SaveHold {
+    this.holds += 1;
+    if (this.gate === null) {
+      this.gate = new Promise<void>((open) => {
+        this.openGate = open;
+      });
+    }
+    let released = false;
+    return {
+      settled: (this.sending ?? Promise.resolve()).catch(() => undefined),
+      release: () => {
+        if (released) return;
+        released = true;
+        this.holds -= 1;
+        if (this.holds > 0) return;
+        const open = this.openGate;
+        this.gate = null;
+        this.openGate = null;
+        open?.();
+      },
+    };
   }
 
   dispose(): void {
@@ -176,16 +216,34 @@ export class SubPageSaver {
 
   private run(): Promise<void> {
     if (this.inFlight) return this.inFlight;
-    const work = this.write().finally(() => {
+    const work = this.gated().finally(() => {
       this.inFlight = null;
     });
     this.inFlight = work;
     return work;
   }
 
+  /** Waits out a hold, then writes: what is sent is the newest draft at that moment. */
+  private async gated(): Promise<void> {
+    while (this.gate !== null) await this.gate;
+    const sending = this.write();
+    this.sending = sending;
+    try {
+      await sending;
+    } finally {
+      this.sending = null;
+    }
+  }
+
   /** Writes every dirty page once; a page that cannot be sent is flagged and the rest still go. Stops at a failure worth retrying. */
   private async write(): Promise<void> {
-    if (this.disposed || this.dirty.size === 0) return;
+    if (this.disposed) return;
+    if (this.dirty.size === 0) {
+      // The page this write was for was dropped while it waited at a hold: `drop` left the status
+      // to this write, so nothing stays "pending" with nothing to send.
+      if (this.current === "pending" || this.current === "saving") this.settle();
+      return;
+    }
     if (this.current !== "error" && this.current !== "signed-out") this.setStatus("saving");
     for (const [id, entry] of [...this.dirty]) {
       if (this.disposed) return;
@@ -219,6 +277,11 @@ export class SubPageSaver {
           this.cancelTimer();
           this.setStatus("missing");
           return;
+        case "conflict":
+          // Kept in `dirty` (the edits are not lost) but never retried: the screen asks for a reload.
+          this.cancelTimer();
+          this.setStatus("conflict");
+          return;
         case "too-large":
           if (!newer) {
             this.dirty.delete(id);
@@ -230,6 +293,13 @@ export class SubPageSaver {
           if (!newer) {
             this.dirty.delete(id);
             this.unsendable.set(id, "storage-full");
+          }
+          break;
+        case "invalid":
+          // Refused for good (a taken path, a page the server will not take): flagged until edited.
+          if (!newer) {
+            this.dirty.delete(id);
+            this.unsendable.set(id, "invalid");
           }
           break;
         case "unauthorized":
@@ -262,14 +332,19 @@ export class SubPageSaver {
       this.setStatus("pending");
       this.arm(this.debounceMs);
     } else {
-      const flagged = [...this.unsendable.values()];
-      this.setStatus(
-        flagged.length > 0
-          ? flagged[flagged.length - 1]!
-          : this.refused.size > 0
-            ? "blocked"
-            : "saved",
-      );
+      this.settle();
     }
+  }
+
+  /** Nothing is left to send: the status is the newest refusal still standing, else "saved". */
+  private settle(): void {
+    const flagged = [...this.unsendable.values()];
+    this.setStatus(
+      flagged.length > 0
+        ? flagged[flagged.length - 1]!
+        : this.refused.size > 0
+          ? "blocked"
+          : "saved",
+    );
   }
 }

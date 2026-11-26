@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { url } from "../helpers";
-import { pageRow, waitForEditorHydrated } from "../m2/editor-helpers";
+import { pageRow, setDraft, waitForEditorHydrated } from "../m2/editor-helpers";
 import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
 /**
@@ -91,8 +91,7 @@ export async function setOverrides(
 ): Promise<void> {
   const row = await pageRow(pageId);
   const draft = { ...row.draft, theme: { ...row.draft.theme, overrides } };
-  const { error } = await adminClient().from("pages").update({ draft }).eq("id", pageId);
-  if (error) throw new Error(`setOverrides failed: ${error.message}`);
+  await setDraft(pageId, draft);
 }
 
 /** The values of every `--t-*` custom property on `root` that the two token systems share. */

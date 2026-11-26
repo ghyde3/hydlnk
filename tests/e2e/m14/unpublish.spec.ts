@@ -101,11 +101,12 @@ test("M14-02 Unpublish takes the site back to its placeholder on every host, kee
   await expect(chip(page)).toHaveAttribute("data-publish-status", "not-published");
   const row = await pageRow(site.pageId);
   expect(row.published).toBeNull();
+  // Home's '/' entry is a page entry too: three entries, none of them live.
   const subs = await admin
-    .from("site_pages")
+    .from("content_entries")
     .select("published, published_at, live_path")
-    .eq("page_id", site.pageId);
-  expect(subs.data).toHaveLength(2);
+    .eq("site_id", site.pageId);
+  expect(subs.data).toHaveLength(3);
   for (const sub of subs.data!) {
     expect(sub.published).toBeNull();
     expect(sub.published_at).toBeNull();

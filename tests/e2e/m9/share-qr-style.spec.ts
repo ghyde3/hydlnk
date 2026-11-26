@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { expect, test, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
 import {
   cleanupUsers,
   desktopOnly,
@@ -11,7 +10,7 @@ import {
 } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { addVerifiedDomains } from "../m4/lifecycle-helpers";
-import { emptyUser } from "../m2/editor-helpers";
+import { emptyUser, pageRow } from "../m2/editor-helpers";
 import { signInAsUser } from "../m5/admin-helpers";
 import { openShare } from "../m6/share-helpers";
 import { TEMPLATE_THEME_IDS } from "@/lib/templates/catalog";
@@ -260,8 +259,8 @@ test.describe("M9-25 defaults are M6-31, byte for byte", () => {
     await frameSwitch(page).click();
     await page.waitForTimeout(1500); // longer than the autosave's wait
     expect(requests).toEqual([]);
-    const row = await adminClient().from("pages").select("draft").eq("id", user.pageId).single();
-    expect(JSON.stringify(row.data!.draft)).not.toMatch(/0B2A5B|FBF6E9|Scan me|qr/i);
+    const row = await pageRow(user.pageId);
+    expect(JSON.stringify(row.draft)).not.toMatch(/0B2A5B|FBF6E9|Scan me|qr/i);
 
     await page.reload();
     await expect(styleGroup(page)).toBeVisible();

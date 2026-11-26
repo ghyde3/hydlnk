@@ -17,6 +17,7 @@ import {
   mintToken,
 } from "../fixtures/mcp-client";
 import { openEditor, pageRow, saveIndicator } from "../m2/editor-helpers";
+import { homeEntryOf } from "../fixtures/home-abuse";
 import { prepareFlowUser, runEveryTool } from "./mcp-flow-helpers";
 
 /**
@@ -86,6 +87,39 @@ test("M10-23 a tool write while an editor tab is open: the tab's next save is th
   expect((await pageRow(user.pageId)).draft).toEqual(before.draft);
 });
 
+test("M15-17 a design edit, then a tool write to Home's blocks, then another design edit: the second edit is the conflict state and overwrites nothing", async ({
+  context,
+  page,
+}) => {
+  const user = await signedInUser(context, { label: "mcp-tab2", plan: "pro" });
+  const token = await mintToken(user.userId);
+  const mcp = new McpClient(token.token);
+  await mcp.initialize();
+  await openEditor(page);
+  // Design edit 1 is saved: this tab has already confirmed Home's revision once.
+  const first = `first ${rand(4)}`;
+  await page.getByLabel("Bio", { exact: true }).fill(first);
+  await expect(saveIndicator(page)).toHaveText("Saved", { timeout: 15_000 });
+  expect((await pageRow(user.pageId)).draft.profile.bio).toBe(first);
+  // The tool writes Home's blocks while the tab stays open.
+  const added = await mcp.call<{ blockId: string; rev: number }>("add_block", {
+    pageId: user.pageId,
+    type: "header",
+    fields: { text: "Added between two design edits" },
+  });
+  const afterTool = await pageRow(user.pageId);
+  // Design edit 2 sends no blocks either: it must check Home's revision again and stop.
+  await page.getByLabel("Bio", { exact: true }).fill(`second ${rand(4)}`);
+  await expect(
+    page.getByText("This page changed in another tab. Reload to keep editing."),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(saveIndicator(page)).toHaveText("Not saved");
+  const stored = await pageRow(user.pageId);
+  expect(stored.draft).toEqual(afterTool.draft);
+  expect(stored.draft.blocks.some((block) => block.id === added.blockId)).toBe(true);
+  expect(stored.draft.profile.bio).toBe(first);
+});
+
 test("M10-23 two add_block calls started together never both write from the same rev: 20 rounds, blocks added equal successes, rev rises by exactly that", async () => {
   const user = await makeUser("mcp-race", { plan: "pro" });
   const pageId = await insertPage(user.id, uniq("race"));
@@ -93,7 +127,11 @@ test("M10-23 two add_block calls started together never both write from the same
   const first = new McpClient((await mintToken(user.id)).token);
   const second = new McpClient((await mintToken(user.id)).token);
   await Promise.all([first.initialize(), second.initialize()]);
-  const blocks = async () => (await pageRow(pageId)).draft;
+  // A blocks write on a moved site is guarded by and bumps Home's entry rev, not the design rev in pages.draft.
+  const blocks = async () => ({
+    blocks: (await pageRow(pageId)).draft.blocks,
+    rev: Number((await homeEntryOf(pageId)).rev),
+  });
   let before = await blocks();
   let added = 0;
   let conflicts = 0;

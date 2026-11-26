@@ -9,7 +9,7 @@ import { tenantOrigin } from "@/lib/editor/urls";
 import { getAppContext } from "@/lib/pages/context";
 import { handleAddress } from "@/lib/pages/plans";
 import { pageChrome } from "@/lib/publish/chrome";
-import { loadSubPages } from "@/lib/site-pages/load";
+import { countTrashedPages, loadSubPages } from "@/lib/site-pages/load";
 import { publicPageAddress } from "@/lib/qr/address";
 import { loadTemplateThemes } from "@/lib/templates/load";
 import { failIfInjected } from "@/lib/testing/faults";
@@ -45,11 +45,12 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
     (async () => {
       try {
         await failIfInjected("draft-load");
-        const [data, subPages] = await Promise.all([
+        const [data, subPages, trashedPages] = await Promise.all([
           loadEditorPageData(current, user.id),
           loadSubPages(current.id),
+          countTrashedPages(current.id),
         ]);
-        return { ok: true as const, data, subPages };
+        return { ok: true as const, data, subPages, trashedPages };
       } catch (error) {
         console.error("[workspace] loading the draft failed", error);
         return { ok: false as const };
@@ -96,6 +97,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
       chrome={pageChrome(plan, current.id)}
       draft={data.draft}
       revKey={data.revKey}
+      home={data.home}
       repaired={data.repaired}
       hasPublished={data.hasPublished}
       published={data.published}
@@ -105,6 +107,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
       themes={themesRead.ok ? themesRead.themes : []}
       themesFailed={!themesRead.ok}
       subPages={draftRead.subPages}
+      trashedPages={draftRead.trashedPages}
     >
       <WorkspaceShell>{children}</WorkspaceShell>
     </WorkspaceProvider>

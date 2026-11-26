@@ -18,6 +18,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -65,14 +67,12 @@ describe.skipIf(!run)("M2-23 / M2-25 publish gate (local Supabase)", () => {
     plan?: "free" | "pro",
   ) => {
     const made = await makeOwner(admin, label, draft, plan);
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
   const writeDraft = async (o: TestOwner, draft: unknown) => {
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draft as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, draft);
     expect(error).toBeNull();
   };
   const publish = (o: TestOwner, userId: string | null = o.userId) =>
@@ -347,18 +347,17 @@ describe.skipIf(!run)("M2-23 / M2-25 publish gate (local Supabase)", () => {
           },
         }),
       );
-      const fixed = await admin
-        .from("pages")
-        .update({
-          draft: draftOf("Alpha", undefined, {
-            profile: {
-              name: "Alpha",
-              bio: "",
-              photo: { path: `${o.userId}/${crypto.randomUUID()}.png`, width: 8, height: 8 },
-            },
-          }) as never,
-        })
-        .eq("id", o.pageId);
+      const fixed = await setPageDraft(
+        admin,
+        o.pageId,
+        draftOf("Alpha", undefined, {
+          profile: {
+            name: "Alpha",
+            bio: "",
+            photo: { path: `${o.userId}/${crypto.randomUUID()}.png`, width: 8, height: 8 },
+          },
+        }),
+      );
       expect(fixed.error).toBeNull();
       const result = await core.publishPageCore(
         { pageId: o.pageId, userId: o.userId },

@@ -462,3 +462,47 @@ describe("M7-05 the save indicator's words", () => {
     expect(saveIndicatorText("too-large")).toMatch(/too large/);
   });
 });
+
+describe("M15-10 the chip that opens the publish bar", () => {
+  const toggle = () => host.querySelector<HTMLButtonElement>("[data-testid='publish-bar-toggle']")!;
+  const withBar = (overrides: Partial<WorkspaceToolbarProps> = {}) =>
+    render(createElement(WorkspaceToolbar, props({ onTogglePublishBar: vi.fn(), ...overrides })));
+
+  it("its accessible name contains the status it shows (WCAG 2.5.3, label in name)", () => {
+    for (const [status, visible] of [
+      ["published", "Published"],
+      ["unpublished-changes", "Unpublished changes"],
+      ["not-published", "Not published"],
+    ] as const) {
+      withBar({ status });
+      const shown = toggle().querySelector("[data-publish-status]")!.textContent!;
+      expect(shown).toBe(visible);
+      const name = toggle().getAttribute("aria-label")!;
+      expect(name.toLowerCase()).toContain(shown.toLowerCase());
+      expect(name).toBe(`Status: ${visible}, choose what to publish`);
+    }
+  });
+
+  it("no button but Publish has a name that is, or starts with, Publish", () => {
+    for (const status of ["published", "unpublished-changes", "not-published"] as const) {
+      withBar({ status });
+      const names = Array.from(host.querySelectorAll("button")).map(
+        (b) => b.getAttribute("aria-label") ?? b.textContent?.trim() ?? "",
+      );
+      expect(names.filter((name) => name === "Publish")).toHaveLength(1);
+      expect(names.filter((name) => /^Publish/.test(name))).toEqual(["Publish"]);
+    }
+  });
+
+  it("shows its chevron at every width, phones included, and stays a 44px target", () => {
+    withBar();
+    const chevron = toggle().querySelector("[data-testid='publish-bar-chevron']")!;
+    const classes = (chevron.getAttribute("class") ?? "").split(/\s+/);
+    // Not hidden below 760px any more: no `hidden`, no width-conditional display.
+    expect(classes).not.toContain("hidden");
+    expect(classes.some((name) => name.startsWith("hl:"))).toBe(false);
+    expect(chevron.getAttribute("aria-hidden")).toBe("true");
+    expect(toggle().className).toContain("min-h-11");
+    expect(toggle().className).toContain("min-w-0");
+  });
+});

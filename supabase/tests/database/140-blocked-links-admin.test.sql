@@ -43,6 +43,10 @@ insert into public.pages (id, owner_id, handle, draft, published, published_at) 
    '{"version":1,"blocks":[{"id":"L1","type":"link","url":"https://imp140.test/"}]}',
    '{"version":1,"blocks":[{"id":"L1","type":"link","url":"https://imp140.test/"}]}', now());
 
+-- Since M15-05 (1b1-23) Home's blocks live in the page entry: move the sites, as the cutover does
+-- (the blocks stay in pages.draft and pages.published as the frozen copy that nothing reads).
+select public.move_site_content(id) from public.pages where handle like 'bl140-%';
+
 insert into public.blocked_domains (domain, reason, added_by) values
   ('imp140.test', 'test', tests.get_supabase_uid('f')),
   ('draftonly140.test', 'test', null),
@@ -228,7 +232,8 @@ select results_eq(
 
 -- The check reads the live copy: a page whose published copy no longer links to it is not a live match
 reset role;
-update public.pages set published = '{"version":1,"blocks":[]}'::jsonb where id = '00000000-0000-4000-8000-0000000140c2';
+update public.content_entries set published = jsonb_set(published, '{blocks}', '[]'::jsonb)
+  where site_id = '00000000-0000-4000-8000-0000000140c2' and live_path = '/';
 select tests.authenticate_as_service_role();
 select results_eq(
   $$ select handle::text, total_pages from public.admin_blocked_domain_impact('imp140.test') where page_id is not null $$,
@@ -239,18 +244,18 @@ select results_eq(
 -- The listed domain applies on the next save, with no cache: a draft that links to it is refused
 reset role;
 select throws_ok(
-  $$ update public.pages set draft = '{"version":1,"blocks":[{"id":"L9","type":"link","url":"https://x.imp140.test/"}]}'
-       where id = '00000000-0000-4000-8000-0000000140c3' $$,
+  $$ update public.content_entries set draft = jsonb_set(draft, '{blocks}', '[{"id":"L9","type":"link","url":"https://x.imp140.test/"}]')
+       where site_id = '00000000-0000-4000-8000-0000000140c3' and draft ->> 'path' = '/' $$,
   'HL005', 'blocked_link', 'once a domain is listed, saving a draft that links to a subdomain of it is refused'
 );
 delete from public.blocked_domains where domain = 'imp140.test';
 select lives_ok(
-  $$ update public.pages set draft = '{"version":1,"blocks":[{"id":"L9","type":"link","url":"https://x.imp140.test/"}]}'
-       where id = '00000000-0000-4000-8000-0000000140c3' $$,
+  $$ update public.content_entries set draft = jsonb_set(draft, '{blocks}', '[{"id":"L9","type":"link","url":"https://x.imp140.test/"}]')
+       where site_id = '00000000-0000-4000-8000-0000000140c3' and draft ->> 'path' = '/' $$,
   'and after the domain is removed the same save goes through'
 );
 select is(
-  (select published from public.pages where id = '00000000-0000-4000-8000-0000000140c1') is not null, true,
+  (select published from public.content_entries where site_id = '00000000-0000-4000-8000-0000000140c1' and live_path = '/') is not null, true,
   'removing an entry never touches a page''s published copy'
 );
 

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
-import { restAs } from "../fixtures/http";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { url } from "../helpers";
 import {
   CASES,
@@ -19,8 +19,8 @@ import {
 test.afterAll(cleanupUsers);
 
 /**
- * M6-26 abuse case: the owner's JWT and the publishable key can write ANY embed URL into a draft
- * (RLS decides who, not what). The draft takes it; Publish refuses it with the new sentence naming
+ * M6-26 abuse case: ANY embed URL can end up in a draft. A browser write of Home's blocks is refused
+ * (HL013, M15-14); a direct database write to the Home entry takes it. The draft takes it; Publish refuses it with the new sentence naming
  * the block, it never reaches `pages.published`, and the live page never renders an iframe for it.
  */
 
@@ -51,18 +51,11 @@ test.describe("M6-26 a hostile embed URL written straight to the draft", () => {
       expect(seedError).toBeNull();
       const before = await pageRow(user.pageId);
 
-      // The owner's JWT and the publishable key, like curl: the block is written as a draft.
+      // The block is written as a draft: the owner's JWT is refused, the attacker's database write is taken.
       const token = await accessToken(context);
       const hostile = { ...embedBlock({ id: "emb-hostile-001", url: evil, caption: "Hostile" }) };
-      const next = {
-        ...(draftWith(user.handle, [safe, hostile]) as unknown as Record<string, unknown>),
-        rev: before.draft.rev + 1,
-      };
-      const write = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-        method: "PATCH",
-        body: { draft: next },
-      });
-      expect(write.status, JSON.stringify(write.body)).toBe(200);
+      // M15-14: the browser write is refused (HL013); the hostile block goes into Home's entry.
+      await abuseHomeBlocks(token, user.pageId, [safe, hostile]);
       expect((await pageRow(user.pageId)).draft.blocks).toHaveLength(2);
 
       // Publish names the block and gives the sentence.

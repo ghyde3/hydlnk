@@ -128,8 +128,8 @@ describe("M7-15 the stored form does not change", () => {
     expect(backgroundImageUrl({ bgType: "image", bgImage: value })).toBeNull();
   });
 
-  it("a published document and the cached read hold no /media string, so the cache version stays 3", () => {
-    expect(PUBLIC_READ_CACHE_VERSION).toBe("3");
+  it("a published document and the cached read hold no /media string, so the cache version stays 4", () => {
+    expect(PUBLIC_READ_CACHE_VERSION).toBe("4");
     const published = {
       ...fullPublished,
       tokens: { ...fullPublished.tokens, bgType: "image" as const, bgImage: stored },

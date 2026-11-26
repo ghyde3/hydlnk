@@ -946,37 +946,32 @@ export function requireUniqueIds(
 }
 
 /** The draft: what the editor autosaves. Lenient about completeness; strict about structure. */
-export const draftDocSchema = z
-  .object({
-    version: z.literal(1),
-    /** Bumped by one on every save; the stale-tab guard filters the update on the stored value. */
-    rev: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-    profile: lenient.profile,
-    /** The share card (M6-32). Absent until one of its three fields is filled in. */
-    share: lenient.share.optional(),
-    /** The support banner (M9-23). Absent until one is set up. */
-    banner: lenient.banner.optional(),
-    /** The page's default UTM tags (M9-27). Absent until one value is set. */
-    utm: lenient.utm.optional(),
-    /** Redirect mode (M9-31): the live page answers with a redirect to this link. Absent means off. */
-    redirect: lenient.redirect.optional(),
-    /** The site menu (M11-07). Absent means the default: shown, no items. */
-    nav: navSchema.optional(),
-    theme: themeSchema,
-    blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
-  })
-  .superRefine(requireUniqueIds);
+export const draftDocObject = z.object({
+  version: z.literal(1),
+  /** Bumped by one on every save; the stale-tab guard filters the update on the stored value. */
+  rev: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  profile: lenient.profile,
+  /** The share card (M6-32). Absent until one of its three fields is filled in. */
+  share: lenient.share.optional(),
+  /** The support banner (M9-23). Absent until one is set up. */
+  banner: lenient.banner.optional(),
+  /** The page's default UTM tags (M9-27). Absent until one value is set. */
+  utm: lenient.utm.optional(),
+  /** Redirect mode (M9-31): the live page answers with a redirect to this link. Absent means off. */
+  redirect: lenient.redirect.optional(),
+  /** The site menu (M11-07). Absent means the default: shown, no items. */
+  nav: navSchema.optional(),
+  theme: themeSchema,
+  blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
+});
+export const draftDocSchema = draftDocObject.superRefine(requireUniqueIds);
 export type DraftDoc = Omit<z.infer<typeof draftDocSchema>, "profile"> & { profile: Profile };
 
-/**
- * The Publish gate's validator for a draft-shaped document. Everything `draftDocSchema` checks,
- * plus: the display name is required, and every visible block is complete and safe (required
- * fields filled, http(s) URLs only, embed URLs on the allowlist, uploaded images, no control or
- * bidi characters, newlines only in text blocks). Hidden blocks are exempt from the completeness
- * rules because Publish drops them. Its issues carry the same paths as the draft, with messages
- * written for the editor ("Add a link label.").
- */
-export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
+/** The design half of the Publish gate (profile, share card, utm, redirect, banner); no blocks. */
+export function refinePublishDesign(
+  doc: Pick<DraftDoc, "profile" | "share" | "utm" | "redirect" | "banner">,
+  ctx: z.core.$RefinementCtx,
+): void {
   const profile = strict.profile.safeParse(doc.profile);
   if (!profile.success) {
     for (const issue of profile.error.issues) {
@@ -1017,6 +1012,18 @@ export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
       }
     }
   }
+}
+
+/**
+ * The Publish gate's validator for a draft-shaped document. Everything `draftDocSchema` checks,
+ * plus: the display name is required, and every visible block is complete and safe (required
+ * fields filled, http(s) URLs only, embed URLs on the allowlist, uploaded images, no control or
+ * bidi characters, newlines only in text blocks). Hidden blocks are exempt from the completeness
+ * rules because Publish drops them. Its issues carry the same paths as the draft, with messages
+ * written for the editor ("Add a link label.").
+ */
+export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
+  refinePublishDesign(doc, ctx);
   doc.blocks.forEach((block, index) => {
     if (block.visible === false) return;
     const result = strict.block.safeParse(block);

@@ -38,7 +38,35 @@ interface PageRow {
   published?: unknown;
 }
 
-function toOwnedPage(row: PageRow, withDraft: boolean): OwnedPage {
+/** Home's page entry as the tools read it: its blocks are Home's blocks, its rev the blocks' rev. */
+interface HomeEntryRow {
+  id: string;
+  site_id: string;
+  rev: number | string;
+  draft: unknown;
+  published: unknown;
+}
+
+const blocksOf = (doc: unknown): unknown =>
+  doc && typeof doc === "object" ? (doc as { blocks?: unknown }).blocks : undefined;
+
+/**
+ * The site row's design with Home's blocks from its '/' entry (the site row's own blocks are a frozen
+ * copy nobody reads). A site with no Home entry keeps the whole document of the site row.
+ */
+function toOwnedPage(row: PageRow, withDraft: boolean, home: HomeEntryRow | undefined): OwnedPage {
+  let draft = row.draft;
+  let published = row.published ?? null;
+  if (home && withDraft) {
+    const blocks = blocksOf(home.draft);
+    if (blocks !== undefined && draft && typeof draft === "object") {
+      draft = { ...(draft as object), blocks };
+    }
+    const liveBlocks = blocksOf(home.published);
+    if (published && typeof published === "object" && liveBlocks !== undefined) {
+      published = { ...(published as object), blocks: liveBlocks };
+    }
+  }
   return {
     id: row.id,
     name: row.name,
@@ -46,8 +74,47 @@ function toOwnedPage(row: PageRow, withDraft: boolean): OwnedPage {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
-    ...(withDraft ? { draft: row.draft, published: row.published ?? null } : {}),
+    ...(home ? { homeRev: Number(home.rev) } : {}),
+    ...(withDraft ? { draft, published } : {}),
   };
+}
+
+/** The `page` content type of each site: site id to type id. */
+async function pageTypeIdsOf(
+  admin: AdminClient,
+  siteIds: readonly string[],
+): Promise<Map<string, string>> {
+  const types = new Map<string, string>();
+  if (siteIds.length === 0) return types;
+  const { data, error } = await admin
+    .from("content_types")
+    .select("id, site_id")
+    .eq("key", "page")
+    .in("site_id", [...siteIds]);
+  if (error) throw new PageReadError("reading the page type failed");
+  for (const row of data ?? []) types.set(row.site_id, row.id);
+  return types;
+}
+
+/** Home's entry of each site that has one, by site id. */
+async function loadHomeEntries(
+  admin: AdminClient,
+  siteIds: readonly string[],
+): Promise<Map<string, HomeEntryRow>> {
+  const homes = new Map<string, HomeEntryRow>();
+  const types = await pageTypeIdsOf(admin, siteIds);
+  if (types.size === 0) return homes;
+  const { data, error } = await admin
+    .from("content_entries")
+    .select("id, site_id, type_id, rev, draft, published")
+    .in("type_id", [...types.values()])
+    .is("deleted_at", null)
+    .eq("draft->>path", "/");
+  if (error) throw new PageReadError("reading Home failed");
+  for (const row of data ?? []) {
+    if (types.get(row.site_id) === row.type_id) homes.set(row.site_id, row as HomeEntryRow);
+  }
+  return homes;
 }
 
 /** A failed read is the caller's `server_error`: the message of the database never leaves here. */
@@ -94,24 +161,35 @@ export async function loadOwnedPage(
     .maybeSingle();
   if (found.error) throw new PageReadError("reading the page failed");
   const row = found.data as unknown as PageRow | null;
-  if (row && row.owner_id === userId) return { ok: true, page: toOwnedPage(row, withDraft) };
+  if (row && row.owner_id === userId) {
+    const homes = await loadHomeEntries(admin, [row.id]);
+    return { ok: true, page: toOwnedPage(row, withDraft, homes.get(row.id)) };
+  }
   if (pageId === undefined) return { ok: false, failure: { ...NOT_FOUND } };
 
   // Not one of the caller's sites: an AI app with a stale tool list sends a page id from
-  // list_pages as pageId (M13-14). Look it up as a sub-page of one of the caller's sites; the answer
-  // for every miss (another account, deleted, random) stays the same `not_found`.
+  // list_pages as pageId (M13-14). Look it up as a page entry of one of the caller's sites; the
+  // answer for every miss (another account, deleted, random) stays the same `not_found`. Home's
+  // entry id means Home ("home"), and the id itself is never printed.
   const sub = await admin
-    .from("site_pages")
-    .select(`id, page_id, ${SITE_JOIN}`)
+    .from("content_entries")
+    .select(`id, site_id, type_id, draft->>path, ${SITE_JOIN}`)
     .eq("id", id.toLowerCase())
+    .is("deleted_at", null)
     .eq("site.owner_id", userId)
     .maybeSingle();
   if (sub.error) throw new PageReadError("reading the page failed");
-  const subRow = sub.data as unknown as SubPageRow | null;
+  const subRow = sub.data as unknown as EntryRow | null;
   if (!subRow || siteOwnerOf(subRow) !== userId) return { ok: false, failure: { ...NOT_FOUND } };
-  const site = await loadOwnedPage(admin, userId, subRow.page_id, options);
+  const types = await pageTypeIdsOf(admin, [subRow.site_id]);
+  if (types.get(subRow.site_id) !== subRow.type_id) return { ok: false, failure: { ...NOT_FOUND } };
+  const site = await loadOwnedPage(admin, userId, subRow.site_id, options);
   if (!site.ok) return site;
-  return { ok: true, page: site.page, subPageId: subRow.id };
+  return {
+    ok: true,
+    page: site.page,
+    subPageId: subRow.path === "/" ? "home" : subRow.id,
+  };
 }
 
 /** Every page the caller owns, oldest first, drafts and published documents included. */
@@ -123,9 +201,12 @@ export async function listOwnedPages(admin: AdminClient, userId: string): Promis
     .order("created_at", { ascending: true })
     .limit(MCP_LIST_PAGES_MAX);
   if (error) throw new PageReadError("listing pages failed");
-  return ((data ?? []) as unknown as PageRow[])
-    .filter((row) => row.owner_id === userId)
-    .map((row) => toOwnedPage(row, true));
+  const mine = ((data ?? []) as unknown as PageRow[]).filter((row) => row.owner_id === userId);
+  const homes = await loadHomeEntries(
+    admin,
+    mine.map((row) => row.id),
+  );
+  return mine.map((row) => toOwnedPage(row, true, homes.get(row.id)));
 }
 
 /** The plan of the account (`free` when unreadable: the lower plan fails closed). */
@@ -220,39 +301,48 @@ export async function loadThemeTokens(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Sub-pages (M12-05)
+// Sub-pages (M12-05, on page entries since 1b1-20)
 // ---------------------------------------------------------------------------------------------
 
 /**
- * `site_pages` has no owner column: a sub-page belongs to the owner of its site. Every read below
- * joins the site (`SITE_JOIN`) and filters on `pages.owner_id` IN THE QUERY, and asks
- * again in code, so the owner rule holds whatever the caller passes. A sub-page of another site, of
- * another account, a random id and a malformed id are one answer: `not_found`.
+ * A sub-page is a non-Home `page` entry of the caller's site. An entry has no owner column: it
+ * belongs to the owner of its site. Every read below joins the site (`SITE_JOIN`) and filters on
+ * `pages.owner_id` IN THE QUERY, and asks again in code, so the owner rule holds whatever the caller
+ * passes. A page of another site, of another account, a trashed one, a random id and a malformed id
+ * are one answer: `not_found`. The page's entry id is the id the tools show, and its entry rev is the
+ * `ifRev` of its writes.
  */
 // PostgREST spells an inner join with an exclamation mark, which the copy rules keep out of every
 // string in this directory; the character is built so the join stays readable here.
 const SITE_JOIN = `site:pages${String.fromCharCode(33)}inner(owner_id)`;
-const SUB_PAGE_BASE = `id, page_id, created_at, updated_at, published_at, live_path, ${SITE_JOIN}`;
-const SUB_PAGE_WITH_DOCS = `${SUB_PAGE_BASE}, draft, published`;
+const ENTRY_BASE = `id, site_id, type_id, rev, created_at, updated_at, published_at, live_path, path:draft->>path, ${SITE_JOIN}`;
+const ENTRY_WITH_DOCS = `${ENTRY_BASE}, draft, published`;
 
-interface SubPageRow {
+interface EntryRow {
   id: string;
-  page_id: string;
-  created_at: string;
-  updated_at: string;
-  published_at: string | null;
-  live_path: string | null;
+  site_id: string;
+  type_id: string;
+  rev?: number | string;
+  created_at?: string;
+  updated_at?: string;
+  published_at?: string | null;
+  live_path?: string | null;
+  path: string | null;
+  title?: string | null;
   site: { owner_id: string } | { owner_id: string }[] | null;
   draft?: unknown;
   published?: unknown;
 }
 
-function siteOwnerOf(row: SubPageRow): string | null {
+function siteOwnerOf(row: { site: EntryRow["site"] }): string | null {
   const site = Array.isArray(row.site) ? row.site[0] : row.site;
   return site?.owner_id ?? null;
 }
 
-/** One sub-page of the caller's site `siteId`, with its documents when `docs` is true. */
+/**
+ * One page of the caller's site `siteId` by its entry id, with its documents when `docs` is true.
+ * Home's entry id answers `subPage: null`: it means Home, and Home's entry id is never printed.
+ */
 export async function loadOwnedSubPage(
   admin: AdminClient,
   userId: string,
@@ -263,25 +353,29 @@ export async function loadOwnedSubPage(
   if (!UUID.test(subPageId) || !UUID.test(siteId)) return { ok: false, failure: { ...NOT_FOUND } };
   const docs = options.docs === true;
   const found = await admin
-    .from("site_pages")
-    .select(docs ? SUB_PAGE_WITH_DOCS : SUB_PAGE_BASE)
+    .from("content_entries")
+    .select(docs ? ENTRY_WITH_DOCS : ENTRY_BASE)
     .eq("id", subPageId.toLowerCase())
-    .eq("page_id", siteId.toLowerCase())
+    .eq("site_id", siteId.toLowerCase())
+    .is("deleted_at", null)
     .eq("site.owner_id", userId)
     .maybeSingle();
   if (found.error) throw new PageReadError("reading the page failed");
-  const row = found.data as unknown as SubPageRow | null;
-  if (!row || siteOwnerOf(row) !== userId || row.page_id !== siteId.toLowerCase()) {
+  const row = found.data as unknown as EntryRow | null;
+  if (!row || siteOwnerOf(row) !== userId || row.site_id !== siteId.toLowerCase()) {
     return { ok: false, failure: { ...NOT_FOUND } };
   }
+  const types = await pageTypeIdsOf(admin, [row.site_id]);
+  if (types.get(row.site_id) !== row.type_id) return { ok: false, failure: { ...NOT_FOUND } };
+  if (row.path === "/") return { ok: true, subPage: null };
   const subPage: OwnedSubPage = {
     id: row.id,
-    siteId: row.page_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    rev: Date.parse(row.updated_at),
-    publishedAt: row.published_at,
-    livePath: row.live_path,
+    siteId: row.site_id,
+    createdAt: row.created_at ?? "",
+    updatedAt: row.updated_at ?? "",
+    rev: Number(row.rev),
+    publishedAt: row.published_at ?? null,
+    livePath: row.live_path ?? null,
     ...(docs ? { draft: row.draft, published: row.published ?? null } : {}),
   };
   return { ok: true, subPage };
@@ -299,9 +393,9 @@ export interface SubPageSummaryRow {
 }
 
 /**
- * The sub-pages of the caller's sites `siteIds`, oldest first (at most `MCP_LIST_SUB_PAGES_MAX` a
- * site are kept by the caller; this read is capped at 1,000 rows in all). Only the title and the
- * path are read from the draft.
+ * The sub-pages (non-Home page entries, trash excluded) of the caller's sites `siteIds`, oldest
+ * first (at most `MCP_LIST_SUB_PAGES_MAX` a site are kept by the caller; this read is capped at 1,000
+ * rows in all). Only the title and the path are read from the draft.
  */
 export async function listSubPageSummaries(
   admin: AdminClient,
@@ -309,28 +403,31 @@ export async function listSubPageSummaries(
   siteIds: readonly string[],
 ): Promise<SubPageSummaryRow[]> {
   if (siteIds.length === 0) return [];
+  const types = await pageTypeIdsOf(admin, siteIds);
+  if (types.size === 0) return [];
   const { data, error } = await admin
-    .from("site_pages")
+    .from("content_entries")
     .select(
-      `id, page_id, title:draft->>title, path:draft->>path, live_path, published_at, created_at, ${SITE_JOIN}`,
+      `id, site_id, type_id, title:draft->>title, path:draft->>path, live_path, published_at, created_at, ${SITE_JOIN}`,
     )
-    .in("page_id", [...siteIds])
+    .in("type_id", [...types.values()])
+    .is("deleted_at", null)
+    .neq("draft->>path", "/")
     .eq("site.owner_id", userId)
     .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
     .limit(MCP_LIST_SUB_PAGES_MAX * 10);
   if (error) throw new PageReadError("listing the pages of a site failed");
-  return (
-    (data ?? []) as unknown as Array<SubPageRow & { title: string | null; path: string | null }>
-  )
-    .filter((row) => siteOwnerOf(row) === userId)
+  return ((data ?? []) as unknown as EntryRow[])
+    .filter((row) => siteOwnerOf(row) === userId && types.get(row.site_id) === row.type_id)
     .map((row) => ({
       id: row.id,
-      siteId: row.page_id,
+      siteId: row.site_id,
       title: row.title ?? "",
       path: row.path ?? "",
-      livePath: row.live_path,
-      publishedAt: row.published_at,
-      createdAt: row.created_at,
+      livePath: row.live_path ?? null,
+      publishedAt: row.published_at ?? null,
+      createdAt: row.created_at ?? "",
     }));
 }
 
@@ -345,13 +442,17 @@ export async function listOwnedSubPageDocs(
   size: number,
 ): Promise<Array<{ draft: unknown; published: unknown }>> {
   const { data, error } = await admin
-    .from("site_pages")
-    .select(`draft, published, ${SITE_JOIN}`)
+    .from("content_entries")
+    .select(`site_id, type_id, draft, published, ${SITE_JOIN}`)
+    .is("deleted_at", null)
+    .neq("draft->>path", "/")
     .eq("site.owner_id", userId)
     .order("id", { ascending: true })
     .range(offset, offset + size - 1);
   if (error) throw new PageReadError("reading the pages of a site failed");
-  return ((data ?? []) as unknown as SubPageRow[])
-    .filter((row) => siteOwnerOf(row) === userId)
+  const rows = ((data ?? []) as unknown as EntryRow[]).filter((row) => siteOwnerOf(row) === userId);
+  const types = await pageTypeIdsOf(admin, [...new Set(rows.map((row) => row.site_id))]);
+  return rows
+    .filter((row) => types.get(row.site_id) === row.type_id)
     .map((row) => ({ draft: row.draft, published: row.published ?? null }));
 }

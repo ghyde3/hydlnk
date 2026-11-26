@@ -170,6 +170,26 @@ describe("SubPageSaver", () => {
     vi.useRealTimers();
   });
 
+  it("M15-10: a page dropped while its write waits at a hold leaves the queue saved, not pending", async () => {
+    vi.useFakeTimers();
+    const { saver, calls } = setup();
+    // A publish holds the queue; the page is edited and its debounce fires: the write waits.
+    const held = saver.hold();
+    await held.settled;
+    saver.schedule("a", doc("A"));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toHaveLength(0);
+    // The page is deleted while the write waits, then the publish answers.
+    saver.drop("a");
+    held.release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toHaveLength(0);
+    expect(saver.status).toBe("saved");
+    await expect(saver.flush()).resolves.toBe(true);
+    saver.dispose();
+    vi.useRealTimers();
+  });
+
   it("an edit made while a write is in flight is written next", async () => {
     vi.useFakeTimers();
     let release: (r: SubSaveResult) => void = () => {};

@@ -8,7 +8,8 @@ import {
 } from "@/lib/document";
 import { SYSTEM_DEFAULT_TOKENS, TOKEN_KEYS, type TokenSet } from "@/lib/theme";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, publishHome } from "../fixtures/data";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import {
   accessToken,
@@ -154,23 +155,11 @@ test.describe("M2-23 publish gate (through the editor)", () => {
     });
     const before = await pageRow(user.pageId);
 
-    // A client writes a javascript: URL straight into the draft with the publishable key.
-    const token = await accessToken(context);
-    const write = await fetch(`${supabaseUrl()}/rest/v1/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      headers: {
-        apikey: publishableKey(),
-        Authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-        Prefer: "return=minimal",
-      },
-      body: JSON.stringify({
-        draft: draftFor(user.handle, { rev: 99 }, [
-          link("lnk-gate-0001", "Click me", "javascript:alert(1)"),
-        ]),
-      }),
-    });
-    expect(write.status).toBeLessThan(300);
+    // A client cannot write blocks into pages.draft any more (HL013, the frozen copy); the javascript:
+    // URL goes into Home's entry draft with the secret key, as an attacker with database access would.
+    await abuseHomeBlocks(await accessToken(context), user.pageId, [
+      link("lnk-gate-0001", "Click me", "javascript:alert(1)"),
+    ]);
 
     await page.reload();
     await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
@@ -360,7 +349,8 @@ test.describe("M2-23 publish gate (through the editor)", () => {
 const cssVars = async (handle: string) => {
   const { text } = await tenantGet(handle);
   // The root's own style attribute, in the body: the page's inline <style> in the head names data-page-root too.
-  const style = /data-page-root[^>]*style="([^"]*)"/.exec(text.slice(text.indexOf("<body>")))?.[1] ?? "";
+  const style =
+    /data-page-root[^>]*style="([^"]*)"/.exec(text.slice(text.indexOf("<body>")))?.[1] ?? "";
   return Object.fromEntries(
     decode(style)
       .split(";")
@@ -479,13 +469,8 @@ test.describe("M2-25 Publish freezes resolved tokens into the live page", () => 
       user.pageId,
       draftFor(user.handle, { theme: { ref: theme.data!.id as string, overrides: {} } }),
     );
-    await admin
-      .from("pages")
-      .update({
-        published: publishedFrom(FIXTURE),
-        published_at: new Date().toISOString(),
-      })
-      .eq("id", user.pageId);
+    // The site is moved: Home goes live through publish_site, not a write to pages.published.
+    await publishHome(user.pageId, publishedFrom(FIXTURE));
     const frozenRow = await pageRow(user.pageId);
     const edit = await fetch(`${supabaseUrl()}/rest/v1/themes?id=eq.${theme.data!.id}`, {
       method: "PATCH",

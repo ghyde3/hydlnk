@@ -24,6 +24,7 @@
   --hl-brass-soft-text: #6b5226;
   --hl-good: #2f7d4f; /* live, verified, available */
   --hl-good-bg: #e7f3ec;
+  --hl-good-text: #2b7448; /* green as 12px text on --hl-good-bg: --hl-good is 4.42:1 there, this is 4.5:1 */
   --hl-bad: #b23a2b; /* errors, destructive buttons */
   --hl-bad-line: #e8c4bd;
 
@@ -49,6 +50,9 @@
   /* Shape */
   --hl-radius: 6px; /* cards, buttons, inputs, segmented track */
   --hl-radius-sm: 4px; /* chips, segmented items, small buttons */
+  /* The phone tab bar without the safe-area inset: 56px of tabs under its 1px top border. The bar
+     is sized by it, and what sits on top of the bar (the publish sheet) is placed by it. */
+  --hl-tab-bar: 57px;
 
   /* Focus */
   --hl-focus-width: 2px;
@@ -74,6 +78,7 @@
   --color-brass-soft-text: var(--hl-brass-soft-text);
   --color-good: var(--hl-good);
   --color-good-bg: var(--hl-good-bg);
+  --color-good-text: var(--hl-good-text);
   --color-bad: var(--hl-bad);
   --color-bad-line: var(--hl-bad-line);
   --color-on-ink: var(--hl-on-ink);

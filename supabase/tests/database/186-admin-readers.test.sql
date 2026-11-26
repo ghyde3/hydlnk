@@ -59,11 +59,17 @@ insert into public.pages (id, owner_id, handle, draft, published, published_at) 
   ('00000000-0000-4000-8000-000000186a02', tests.get_supabase_uid('x'), 'zq-186-draft', '{"version":1,"rev":0}', null, null),
   ('00000000-0000-4000-8000-000000186a03', tests.get_supabase_uid('z'), 'zq-186-susp', '{"version":1,"rev":0}', '{"version":1}', now());
 
-insert into public.site_pages (id, page_id, draft, published, published_at) values
-  ('00000000-0000-4000-8000-000000186b01', '00000000-0000-4000-8000-000000186a01',
-   '{"path":"one","title":"One","description":"","blocks":[]}', '{"path":"one","title":"One","description":"","blocks":[]}', now()),
-  ('00000000-0000-4000-8000-000000186b02', '00000000-0000-4000-8000-000000186a01',
-   '{"path":"two","title":"Two","description":"","blocks":[]}', null, null);
+-- Since M15-05 (1b1-23) the sub-pages are page entries (same ids as the old site_pages rows).
+insert into public.content_entries (id, site_id, type_id, draft, published, published_at)
+select e.id::uuid, '00000000-0000-4000-8000-000000186a01', t.id, e.draft::jsonb, e.published::jsonb,
+       case when e.published is null then null else now() end
+from (values
+  ('00000000-0000-4000-8000-000000186b01',
+   '{"path":"one","title":"One","description":"","blocks":[]}', '{"path":"one","title":"One","description":"","blocks":[]}'),
+  ('00000000-0000-4000-8000-000000186b02',
+   '{"path":"two","title":"Two","description":"","blocks":[]}', null)
+) as e(id, draft, published)
+join public.content_types t on t.site_id = '00000000-0000-4000-8000-000000186a01' and t.key = 'page';
 
 insert into public.domains (id, page_id, hostname, status, verified_at, created_at, last_checked_at) values
   ('00000000-0000-4000-8000-000000186c01', '00000000-0000-4000-8000-000000186a01', 'zq-186-old.example', 'pending', null, now() - interval '25 hours', now() - interval '1 minute'),

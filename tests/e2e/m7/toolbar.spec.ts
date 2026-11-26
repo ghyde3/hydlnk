@@ -315,8 +315,12 @@ test.describe("M7-05 the toolbar on a phone", () => {
       expect(Math.abs((await box(bar)).height - 52)).toBeLessThanOrEqual(0.5);
       expect(await css(bar, "position")).toBe("sticky");
       expect(await css(bar, "top")).toBe("0px");
-      // Undo, Redo, the status chip and Publish, and nothing else.
-      await expect(bar.getByRole("button")).toHaveCount(3);
+      // Undo, Redo, the status chip and Publish, and nothing else. Since M15-10 the chip is a button
+      // too (it opens the publish bar), so the row holds four buttons where it held three.
+      await expect(bar.getByRole("button")).toHaveCount(4);
+      const chipToggle = bar.getByTestId("publish-bar-toggle");
+      await expect(chipToggle).toHaveAttribute("aria-expanded", "false");
+      expect((await box(chipToggle)).height).toBeGreaterThanOrEqual(44);
       await expect(bar.getByRole("button", { name: "Undo" })).toBeVisible();
       await expect(bar.getByRole("button", { name: "Redo" })).toBeVisible();
       await expect(bar.locator("[data-publish-status]")).toBeVisible();

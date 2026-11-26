@@ -1,6 +1,8 @@
 import { expect, type Locator, type Page, type Request } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
+import { publishHome } from "../fixtures/data";
 import { url } from "../helpers";
+import { pageRow } from "../m2/editor-helpers";
 
 /**
  * Shared setup for the version history specs (M6-48 .. M6-50). Versions are made the way the
@@ -63,8 +65,8 @@ export async function makeVersions(
     extra?: (index: number, base: Record<string, unknown>) => Record<string, unknown>;
   } = {},
 ): Promise<MadeVersion[]> {
-  const admin = adminClient();
-  const base = (await pageState(pageId)).published as Record<string, unknown> & {
+  // On a moved site the live blocks are Home's entry, so the base and each version go through it.
+  const base = (await pageRow(pageId)).published as Record<string, unknown> & {
     profile: Record<string, unknown>;
   };
   const start = Date.parse(opts.firstAt ?? new Date(Date.now() - 3600_000).toISOString());
@@ -77,11 +79,11 @@ export async function makeVersions(
       ...(opts.extra?.(i, base) ?? {}),
     };
     const publishedAt = new Date(start + i * 1000).toISOString();
-    const { error } = await admin
-      .from("pages")
-      .update({ published: doc as never, published_at: publishedAt })
-      .eq("id", pageId);
-    if (error) throw new Error(`publish #${i} failed: ${error.message}`);
+    try {
+      await publishHome(pageId, doc, publishedAt);
+    } catch (e) {
+      throw new Error(`publish #${i} failed: ${(e as Error).message}`);
+    }
     made.push({ id: "", versionNo: 0, bio, publishedAt });
   }
   // Matched on the Publish time (a document may carry any bio); a version pruned by retention is not returned.

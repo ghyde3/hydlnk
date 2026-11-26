@@ -2,6 +2,54 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-11-26 — Content model, stage 1b: the page move and per-page publishing (M15-05 to M15-17)
+
+On `m16-content` (draft PR #32, label `full-ci`), built in a cloud session by an orchestrator with builder, reviewer, security-reviewer, design-verifier and adversarial-verifier agents. Flipped to `passes: true`: M15-10, M15-11, M15-13, M15-14, M15-15, M15-16, M15-17. Features: 334 of 355. Nothing was merged or released.
+
+- **Built, still `passes: false`** (strict acceptance audit at e241163):
+  - **M15-05:** every step has a test except "refused with HL013 for every role": an authenticated write to a moved `site_pages` row is refused by RLS (0 rows, or 42501), so the HL013 trigger never runs for that role (pgTAP 202:145-150). Gary decides whether that counts.
+  - **M15-06:** the step "site_click_pairs returns the same set with Home at null" is deliberately not done (pgTAP 207:124 asserts the opposite): doing it in one release breaks click tracking on the deployed build. Needs two releases or a superseding row.
+  - **M15-07:** step 4 says a version restore writes blocks to entries; M15-10 made History design-only (ed05938). Needs a superseding row from Gary.
+  - **M15-08:** the production-copy dry runs cannot run here; no test pins "never reads .env.production".
+  - **M15-09, M15-12:** the reviews ran and every finding but one accepted low is fixed; the record is in PLAN ("Security review record, stages 1b-1 and 1b-2") and waits for Gary's decisions.
+- **M15-10:** migrations `20261126051628_per_page_publish.sql`, `20261126063714_per_page_publish_checks.sql`, `20261126074805_publish_site_revs.sql`; pgTAP 209, 210, 213, 215; unit `m15-publish-per-page`, `-design`, `-all-changes`, `-status`, `-races`, `-serialize`, `-concurrent`, `m15-publish-bar`, `m15-entry-revisions-route`, `m15-mcp-publish-scope`; e2e `tests/e2e/m15/per-page-publish.spec.ts`, `publish-races.spec.ts`, `publish-bar-design.spec.ts` at 390x844 and 1440x900. design-verifier, measured in the running app at 58115e8 (the two later commits change no markup): no gaps (12 pages: rows 109px, no overlap; phone sheet meets the tab bar at 787px; Tab order follows the toolbar; one status chip at 390, 759, 760 and 1440). The publish bar has no mockup: it was built from DESIGN.md, with a new token `--hl-good-text` and a 6px phone toolbar gap for Gary to confirm.
+- **M15-11:** `tests/unit/m15-hidden-links.test.ts`, `tests/e2e/m15/hidden-links.spec.ts`.
+- **M15-13:** `delete_page_entry` in one transaction, menu link included (migrations `20261126000001`, `20261126000002`; pgTAP 211, 212; `m11-editor-sub-pages-core.test.ts`).
+- **M15-14 to M15-17:** `tests/e2e/fixtures/home-abuse.ts` (asserts HL013) and the specs that use it; `m5/blocklist-api.spec.ts`, `m7/blocked-links-api.spec.ts`, `m13/admin-account-details.spec.ts`; `m3/themes-overrides.spec.ts:447`; `m6/share-card.spec.ts:640`, `m7/workspace-share.spec.ts:268`, `m10/mcp-tools.spec.ts`, `m15-editor-save-entries.test.ts`.
+- **Attack passes:** one on the move (five lows, fixed) and three on publishing. The second found a rollback file that left `publish_site` executable by clients (529ef0c) and two lost-edit orderings; the fix is that a save and a publish of the same entry never overlap and the editor adopts only the revs the publish function answers. The third found two more orderings (e241163, ad3ffcc). 13 of 14 deliberate mutations of the first fix round were caught; the survivor now has a test.
+- **Checks at e241163 (local, cloud container):** typecheck and lint pass; `pnpm test --retry 2` 10,833 passed; `pnpm test:db` 84 files, 3,016 tests; `tests/e2e/m15` plus the touched m7 and m9 specs pass at both sizes; `pnpm build` passes and its client chunks hold no publish function or key names.
+- **CI:** run 45794100401 on e241163 failed two M15-10 browser tests that only fail on the production build: the phone status chip wrapped to two lines (1.2px of room at 390px) and the new A2 race test waited on the end of the action's body. Fixed in 054e102 (phone toolbar gaps 4px; under 381px the chip still wraps inside its 44px button) and 6df0c9d. Run 45804893085 on 6df0c9d: Verify and all eight browser shards green.
+- **Known:**
+  - `tests/e2e/m7/toolbar-menus.spec.ts:64` (desktop menu keyboard) fails now and then under load on `next dev`; 12 of 12 alone. `m6/wave-g-done.spec.ts:365` cannot pass in a container without access to example.com.
+  - Database-backed unit files can deadlock when the suite runs while another process uses the database; run them with `--retry 2` and nothing else on the database.
+  - A style-only commit of seven formatter-touched files is on the branch.
+- **Next:** the blog (stages 2 and 3) on a branch stacked on this one.
+
+## 2026-10-12 — Content model, stages 0 and 1a (M15-01 to M15-04)
+
+On `m16-content` (draft PR #32). Flipped to `passes: true`: M15-01, M15-02, M15-03, M15-04. Features: 327 of 342. This is feature 1 of the CMS evolution (plan doc "HYDLNK Next Evolution Plan"; spec docs/PLAN.md "Content model (feature 1, Wave N)").
+
+- **How it was built** (Gary, 2026-10-11): short single-task agents (Sonnet builds, Opus review and adversarial verify, Haiku for mechanical runs), orchestrated as workflows. `.claude/agents/` gained `adversarial-verifier`, and `reviewer` and `security-reviewer` now run on Opus.
+- **Libraries** approved by Gary on 2026-10-11 and pinned: `@tiptap/markdown` 3.31.4, `@tiptap/core` 3.31.4, `marked` 17.0.6 (99a7598).
+- **M15-01:** sub-page saves check `updated_at` (ff2846c). Evidence:
+  - `tests/unit/m15-sub-page-save-revision.test.ts`;
+  - `tests/e2e/m15/subpage-revision.spec.ts`, 4 passed at 390x844 and 1440x900 (local `next dev`);
+  - the m11 editor-pages and tenant-subpages specs, 34 passed.
+- **M15-02:** migrations `20261014000001` to `000006` and `000009`. pgTAP 189 to 195 and 198. `tests/unit/content-rls.test.ts` (publishable-key probe on all six tables) and `content-reserved-sql.test.ts`. The reserved-path list lives in `src/lib/document/path.ts`, not the `src/lib/site-pages/path.ts` the row names; `RESERVED_ENTRY_SLUGS` sits beside it, with a SQL parity test. The stage 1b move rules and byte guard are in PLAN.
+- **M15-03:** `src/lib/content` (kernel, schemas, entries, publish, trash, list, terms, revisions), with migrations `000007` (publish), `000008` (trash and purge) and `000010` (revision byte budget). pgTAP 196, 197 and 199, and 15 `tests/unit/m15-content-*` files (118 tests against the local stack, including a concurrent publish and update). Two checkpoints (an Opus review plus the adversarial verifier) found and fixed:
+  - Markdown blocklist bypasses: links in tables, character references, long URLs;
+  - an HL008 bypass;
+  - another user's image paths accepted;
+  - raw page drafts published;
+  - untyped errors.
+- **M15-04:** the Opus security review found no critical or high issues. The two medium findings are fixed (c99e4c3): the scheme check is now an allowlist, and revision snapshots are bounded. Two low items were hardened (870f7f9): the move flag works only for privileged roles, and moved sub-pages are read-only. The rest are recorded in PLAN with Gary's decisions (2026-10-12): revisions are pruned oldest first, and the known items are fixed before stages 3 and 4.
+- **Checks:**
+  - CI run 38334322319 (head 4546905): Verify green, with the content integration tests now in its Supabase step.
+  - Local `pnpm verify`: typecheck clean, lint 0 errors, unit 10,511 passed (the 2 failures were the known `createUser` flake and passed alone), db 68 files and 2,633 tests.
+- **Known, next:**
+  - The editor adopts new sub-page revisions after Publish, so an MCP edit landing in that window goes unnoticed (recorded in PLAN).
+  - Next is stage 1b: moving sub-pages and Home into content entries, per the "Moving pages in" rules in PLAN.
+
 ## 2026-10-11 — Proving pass (PR #30): 20 rows proven, Unpublish, Lighthouse
 
 On `m15-proving` (PR #30). Flipped to `passes: true`: M4-21, M7-06, M7-07, M4-08, M9-02, M9-05, M9-06, M9-07, M9-08, M9-14, M14-01, M14-02, M14-03, M1-08, M1-13, M1-29, M1-30, M4-03, M4-09, M14-06. Features: 323 of 338.

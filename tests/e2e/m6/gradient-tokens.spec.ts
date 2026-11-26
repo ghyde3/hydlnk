@@ -3,7 +3,14 @@ import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { rawRequest, restAs } from "../fixtures/http";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
-import { accessToken, openEditor, pageRow, previewScreen, seededUser } from "../m2/editor-helpers";
+import {
+  accessToken,
+  openEditor,
+  pageRow,
+  previewScreen,
+  seededUser,
+  setDraft,
+} from "../m2/editor-helpers";
 import { liveHtml, seedTheme, setTheme } from "../m3/themes-helpers";
 import { setOverrides } from "../m3/design-helpers";
 import { resolveTokens, tokenSetSchema, TOKEN_KEYS, type TokenSet } from "@/lib/theme";
@@ -372,8 +379,7 @@ test.describe("M6-41 the public page at both sizes", () => {
       theme: { ref: SMOKE, overrides: {} },
     };
     expect(draft.blocks).toHaveLength(1);
-    const { error } = await adminClient().from("pages").update({ draft }).eq("id", user.pageId);
-    expect(error).toBeNull();
+    await setDraft(user.pageId, draft); // design to pages.draft, blocks to Home's entry
     await publishFromEditor(page);
 
     const live = await openLive(context, user.handle);

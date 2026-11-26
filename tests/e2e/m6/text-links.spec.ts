@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { expireOwnerPages } from "../fixtures/expire";
-import { cleanupUsers, makeUser, rand } from "../fixtures/data";
+import { cleanupUsers, makeUser, publishHome, rand } from "../fixtures/data";
 import { restAs } from "../fixtures/http";
+import { expectClientBlockWriteRefused, homeEntryOf, writeHomeDraft } from "../fixtures/home-abuse";
 import { DAY_MS, dayAt, makeOwner, seed, signInOwner } from "../m4/analytics-dash-helpers";
 import { insertPage } from "../fixtures/data";
 import { rawBuffer } from "../m2/publish-helpers";
@@ -156,11 +157,7 @@ test.describe("M6-29 the click redirect for a link in text", () => {
       "https://user@host.example/",
     ]) {
       tampered.blocks[0]!.marks[0]!.url = hostile;
-      const { error } = await adminClient()
-        .from("pages")
-        .update({ published: tampered })
-        .eq("id", pageId);
-      expect(error).toBeNull();
+      await publishHome(pageId, tampered);
       // A production build reads the click target from the cache under the page's tag; this write
       // went straight to the database, so expire the tag the way an admin action does.
       await expireOwnerPages(browser, user.id);
@@ -235,11 +232,7 @@ test.describe("M6-29 Clicks by link", () => {
       null,
     );
     const publish = async (doc: unknown) => {
-      const { error } = await adminClient()
-        .from("pages")
-        .update({ published: doc, published_at: new Date().toISOString() })
-        .eq("id", owner.pageId);
-      expect(error).toBeNull();
+      await publishHome(owner.pageId, doc);
     };
     await publish(withLink);
     const day = dayAt(-3);
@@ -276,17 +269,13 @@ test.describe("M6-29 Clicks by link", () => {
   });
 });
 
-test.describe("M6-29 writes made straight through the publishable key", () => {
+test.describe("M6-29 writes made straight to the draft (the publishable key is refused, HL013; the Home entry takes the planted one)", () => {
   test("M6-29 700 link marks are accepted as a draft quickly and never published; and a 4000-character link fails Publish", async ({
     page,
     context,
   }) => {
     const user = await userWithBlocks(context, "tlab", [textBlock("Hello", [link(0, 5, L1)])]);
     const token = await accessToken(context);
-    const rev = (
-      (await adminClient().from("pages").select("draft").eq("id", user.pageId).single()).data!
-        .draft as { rev: number }
-    ).rev;
 
     // 700 link marks in one block.
     const many = Array.from({ length: 700 }, (_, i) =>
@@ -297,30 +286,26 @@ test.describe("M6-29 writes made straight through the publishable key", () => {
         "https://ok.example/p",
       ),
     );
+    const hostile = [textBlock("x".repeat(600), many)];
+    // The owner's publishable-key write of pages.draft blocks is refused now (HL013, the frozen copy).
+    await expectClientBlockWriteRefused(token, user.pageId, hostile);
+    // The database still takes the 700 marks as a draft, quickly: written with the secret key into
+    // Home's entry, where the link-mark triggers run.
     const started = Date.now();
-    const bulk = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      body: {
-        draft: { ...draftWith(user.handle, [textBlock("x".repeat(600), many)]), rev: rev + 1 },
-      },
-    });
+    const bulk = await writeHomeDraft(user.pageId, hostile);
     const elapsed = Date.now() - started;
-    expect(bulk.status, JSON.stringify(bulk.body).slice(0, 200)).toBe(200);
+    expect(bulk.error, JSON.stringify(bulk.error)?.slice(0, 200)).toBeNull();
+    expect(bulk.data).toHaveLength(1);
     expect(elapsed, "the save finishes within 2 seconds").toBeLessThan(2000);
 
     // A link of 4000 characters. (A link id that repeats another block's id is covered in Vitest: the
     // editor repairs such a draft when it loads it, so the gate's sentence is never reached from here.)
     const longUrl = `https://example.com/${"a".repeat(3980)}`;
-    const next = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      body: {
-        draft: {
-          ...draftWith(user.handle, [textBlock("Hello world again", [link(0, 5, L1, longUrl)])]),
-          rev: rev + 2,
-        },
-      },
-    });
-    expect(next.status, JSON.stringify(next.body).slice(0, 200)).toBe(200);
+    const long = [textBlock("Hello world again", [link(0, 5, L1, longUrl)])];
+    await expectClientBlockWriteRefused(token, user.pageId, long);
+    const next = await writeHomeDraft(user.pageId, long);
+    expect(next.error, JSON.stringify(next.error)?.slice(0, 200)).toBeNull();
+    expect(next.data).toHaveLength(1);
 
     const before = (
       await adminClient().from("pages").select("published").eq("id", user.pageId).single()
@@ -356,31 +341,24 @@ test.describe("M6-29 writes made straight through the publishable key", () => {
       textBlock("Hello world", [link(0, 5, L1, "https://ok.example/")]),
     ]);
     const token = await accessToken(context);
-    const before = (
-      await adminClient().from("pages").select("draft").eq("id", user.pageId).single()
-    ).data!.draft;
-    const rev = (before as { rev: number }).rev;
+    const before = await homeEntryOf(user.pageId);
     for (const bad of [
       `https://good.example@${domain}/`,
       `https://${domain}/x`,
       `https://sub.${domain}:8443/y`,
       `https://${domain.toUpperCase()}./z`,
     ]) {
-      const res = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-        method: "PATCH",
-        body: {
-          draft: {
-            ...draftWith(user.handle, [textBlock("Hello world", [link(0, 5, L1, bad)])]),
-            rev: rev + 1,
-          },
-        },
-      });
-      expect(res.status, bad).toBe(400);
-      expect(JSON.stringify(res.body), bad).toContain("HL005");
+      const blocks = [textBlock("Hello world", [link(0, 5, L1, bad)])];
+      // The browser's publishable-key write of pages.draft blocks is refused (HL013, the frozen copy).
+      await expectClientBlockWriteRefused(token, user.pageId, blocks);
+      // The link checks of the database still run on Home's entry: written with the secret key.
+      const res = await writeHomeDraft(user.pageId, blocks);
+      expect(res.error?.code, bad).toBe("HL005");
+      expect(res.data, bad).toBeNull();
     }
-    const after = (await adminClient().from("pages").select("draft").eq("id", user.pageId).single())
-      .data!.draft;
-    expect(after).toEqual(before);
+    const after = await homeEntryOf(user.pageId);
+    expect(after.draft).toEqual(before.draft);
+    expect(Number(after.rev)).toBe(Number(before.rev));
   });
 
   test("M6-29 another user's page stays out of reach: PATCH matches no row and changes nothing", async ({

@@ -55,15 +55,18 @@ Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds thes
 - `@sentry/nextjs` 11.4.0: error monitoring on the app host only, off unless NEXT_PUBLIC_SENTRY_DSN is set
 - `@supabase/ssr` 0.12.7: Supabase auth cookies and server clients
 - `@supabase/supabase-js` 2.117.2: Supabase client
+- `@tiptap/core` 3.31.4: the Tiptap core, a peer of `@tiptap/markdown` (Approved by Gary 2026-10-11)
 - `@tiptap/extension-link` 3.31.4: the link mark of the text editor
 - `@tiptap/extension-text-align` 3.31.4: paragraph alignment in the text editor
 - `@tiptap/extension-underline` 3.31.4: the underline mark of the text editor
+- `@tiptap/markdown` 3.31.4: Markdown in and out of the rich-text post editor (Approved by Gary 2026-10-11)
 - `@tiptap/pm` 3.31.4: ProseMirror packages for Tiptap
 - `@tiptap/react` 3.31.4: the rich text editor for text blocks
 - `@tiptap/starter-kit` 3.31.4: bold, italic, strike and history for the text editor
 - `clsx` 2.1.1: class name joining (with tailwind-merge, in `cn`)
 - `isbot` 5.2.2: bot detection in the view and click tracking
 - `lucide-react` 1.51.0: UI icons on the app side
+- `marked` 17.0.6: renders post bodies from Markdown to static HTML at publish, server only; the same parser `@tiptap/markdown` uses (Approved by Gary 2026-10-11)
 - `mcp-handler` 2.2.0: mounts the MCP server as a Next.js route handler on the app host, server only (Approved by Gary 2026-10-04 (Wave L))
 - `next` 16.3.8: the framework
 - `nodemailer` 10.0.13: SMTP for the domain-live email

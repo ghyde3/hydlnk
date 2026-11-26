@@ -1,4 +1,6 @@
--- M14-02: unpublish_site, the whole-site unpublish.
+-- M14-02: unpublish_site, the whole-site unpublish. Since M15-05 (1b1-23) the sub-pages are page
+-- entries: the first publish moves a site, so the legacy site_pages rows only seed the move and
+-- every assertion reads content_entries (a sub-page is a live, non-Home entry; ids are unchanged).
 --
 --   * success: Home and every sub-page lose published and published_at in one call; it returns true;
 --   * nothing else changes: the drafts, the version history (no version is recorded by the
@@ -59,7 +61,7 @@ select public.publish_site('00000000-0000-4000-8000-00000188c001', tests.get_sup
 
 create temp table before_draft as
   select (select draft from public.pages where id = '00000000-0000-4000-8000-00000188a001') as home_draft,
-         (select draft from public.site_pages where id = '00000000-0000-4000-8000-00000188a0a1') as sub_draft;
+         (select draft from public.content_entries where id = '00000000-0000-4000-8000-00000188a0a1') as sub_draft;
 
 -- ---------------------------------------------------------------------------
 -- Success
@@ -76,15 +78,17 @@ select results_eq(
   'Home has no published document and no published time'
 );
 select results_eq(
-  $$ select published is null, published_at is null, live_path is null from public.site_pages
-      where page_id = '00000000-0000-4000-8000-00000188a001' $$,
+  $$ select published is null, published_at is null, live_path is null from public.content_entries
+      where site_id = '00000000-0000-4000-8000-00000188a001' and deleted_at is null
+        and draft ->> 'path' <> '/' $$,
   $$ values (true, true, true), (true, true, true) $$,
   'every sub-page is cleared, and leaves its live path'
 );
 select is(
-  (select count(*)::int from public.site_pages where page_id = '00000000-0000-4000-8000-00000188a001'),
+  (select count(*)::int from public.content_entries
+    where site_id = '00000000-0000-4000-8000-00000188a001' and deleted_at is null and draft ->> 'path' <> '/'),
   2,
-  'the sub-page rows are still there'
+  'the sub-page entries are still there'
 );
 select is(
   (select home_draft from before_draft),
@@ -93,7 +97,7 @@ select is(
 );
 select is(
   (select sub_draft from before_draft),
-  (select draft from public.site_pages where id = '00000000-0000-4000-8000-00000188a0a1'),
+  (select draft from public.content_entries where id = '00000000-0000-4000-8000-00000188a0a1'),
   'the sub-page draft is untouched'
 );
 select is(
@@ -123,7 +127,8 @@ select is(
   'other owners'' sites stay published'
 );
 select is(
-  (select count(*)::int from public.site_pages where published is not null and page_id in
+  (select count(*)::int from public.content_entries where published is not null and deleted_at is null
+     and draft ->> 'path' <> '/' and site_id in
      ('00000000-0000-4000-8000-00000188b001', '00000000-0000-4000-8000-00000188c001')),
   2,
   'and so do their sub-pages'
@@ -148,7 +153,8 @@ select is(
   'publishing again brings Home back'
 );
 select is(
-  (select count(*)::int from public.site_pages where page_id = '00000000-0000-4000-8000-00000188a001' and published is not null),
+  (select count(*)::int from public.content_entries where site_id = '00000000-0000-4000-8000-00000188a001'
+     and deleted_at is null and draft ->> 'path' <> '/' and published is not null),
   2,
   'and the sub-pages'
 );
@@ -182,7 +188,8 @@ select throws_ok(
 );
 select is(
   (select count(*)::int from public.pages p where p.id = '00000000-0000-4000-8000-00000188c001' and p.published is not null)
-  + (select count(*)::int from public.site_pages where page_id = '00000000-0000-4000-8000-00000188c001' and published is not null),
+  + (select count(*)::int from public.content_entries where site_id = '00000000-0000-4000-8000-00000188c001'
+       and deleted_at is null and draft ->> 'path' <> '/' and published is not null),
   2,
   'and nothing of that site changed'
 );

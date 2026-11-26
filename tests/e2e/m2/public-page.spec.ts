@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { emptyDraft, toPublishForm, type Block, type PublishDoc } from "@/lib/document";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
-import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
+import { adminClient, moveSite, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { expireOwnerPages } from "../fixtures/expire";
 import {
   accessTokenFor,
@@ -9,8 +9,10 @@ import {
   desktopOnly,
   makeUser,
   rand,
+  publishHome,
   signedInUser,
 } from "../fixtures/data";
+import { setDraft } from "./editor-helpers";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pngSizeOf, rawBuffer, tenantGet } from "./publish-helpers";
 
@@ -68,6 +70,7 @@ async function publishedPage(
   }
   const { data, error } = await adminClient().from("pages").insert(row).select("id").single();
   if (error) throw new Error(`page insert failed: ${error.message}`);
+  await moveSite(data.id as string);
   return { userId: user.id, pageId: data.id as string, handle, doc };
 }
 
@@ -125,8 +128,7 @@ test.describe("M2-22 public page", () => {
     const draft = emptyDraft(fx.handle);
     draft.profile.name = "DRAFT-ONLY-7f3a";
     draft.blocks = [link("lnk-draft-001", "DRAFT-BLOCK-7f3a")];
-    const { error } = await adminClient().from("pages").update({ draft }).eq("id", fx.pageId);
-    expect(error).toBeNull();
+    await setDraft(fx.pageId, draft);
 
     for (const headers of [{}, { RSC: "1" }] as Record<string, string>[]) {
       let res = await tenantGet(fx.handle, "/", headers);
@@ -724,7 +726,7 @@ test.describe("M2-30 OG image and social metadata", () => {
 
     const draft = emptyDraft(fx.handle);
     draft.profile.name = "Zq Draft Edit";
-    await adminClient().from("pages").update({ draft }).eq("id", fx.pageId);
+    await setDraft(fx.pageId, draft);
     expect((await tenantGet(fx.handle, "/og")).body.equals(before)).toBe(true);
 
     // A Publish: the new published copy and published_at.
@@ -732,10 +734,7 @@ test.describe("M2-30 OG image and social metadata", () => {
       ...fx.doc,
       profile: { ...fx.doc.profile, name: "Zq After Publish" },
     };
-    await adminClient()
-      .from("pages")
-      .update({ published: next, published_at: new Date().toISOString() })
-      .eq("id", fx.pageId);
+    await publishHome(fx.pageId, next);
     // Publish expires the page's tag (a production build caches the image under it); this write
     // went straight to the database, so expire it the way an admin action does.
     await expireOwnerPages(browser, fx.userId);

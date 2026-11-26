@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadDraft } from "@/lib/editor/load";
 import { toPublishForm, type DraftDoc } from "@/lib/document";
 import { PLAN_LIMITS } from "@/lib/limits";
+import { createEntryWithClient } from "@/lib/content/entries-core";
 import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 import { adminForTests, makeRuntime } from "./support/mcp-db";
 import { richDraft } from "./support/mcp-fixtures";
@@ -137,11 +138,34 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
         second.pageId,
         third.pageId,
       ]);
+      // The third site's change is its profile name: the design, not Home's blocks (M15-10, as get_page).
       expect(pages.map((page: { publishStatus: string }) => page.publishStatus)).toEqual([
+        "not-published",
+        "published",
+        "published",
+      ]);
+      expect(pages.map((page: { designStatus: string }) => page.designStatus)).toEqual([
         "not-published",
         "published",
         "unpublished-changes",
       ]);
+      expect(
+        pages.map((page: { hasUnpublishedChanges: boolean }) => page.hasUnpublishedChanges),
+      ).toEqual([true, false, true]);
+      // list_pages and get_page say the same about each site, a design-only change included.
+      for (const listed of pages) {
+        const read = await rt.call("get_page", { pageId: listed.id }, who(a));
+        expect(read.isError).toBe(false);
+        const { publishStatus, designStatus, hasUnpublishedChanges } = read.json!.page;
+        expect({
+          publishStatus: listed.publishStatus,
+          designStatus: listed.designStatus,
+          hasUnpublishedChanges: listed.hasUnpublishedChanges,
+        }).toEqual({ publishStatus, designStatus, hasUnpublishedChanges });
+      }
+      expect(out.text).toContain("(not published)");
+      expect(out.text).toContain("(published)");
+      expect(out.text).toContain("(unpublished changes)");
       expect(pages[0]).toMatchObject({
         id: a.pageId,
         handle: a.handle,
@@ -154,7 +178,9 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
       expect(Object.keys(pages[0]).sort()).toEqual([
         "address",
         "customDomains",
+        "designStatus",
         "handle",
+        "hasUnpublishedChanges",
         "id",
         "name",
         "pageCount",
@@ -223,10 +249,12 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
       const text = everything(out.raw);
       expect(text).toContain("DRAFT-ONLY-7f3a");
       expect(text).not.toContain("PUBLISHED-ONLY-91c2");
+      // Only the bio differs, which is the design's (M15-10): Home's own blocks match what is live.
       expect(out.json!.page).toMatchObject({
         id: a.pageId,
         handle: a.handle,
-        publishStatus: "unpublished-changes",
+        publishStatus: "published",
+        designStatus: "unpublished-changes",
         hasUnpublishedChanges: true,
         rev: 3,
       });
@@ -398,6 +426,24 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
         .from("pages")
         .update({ published: { version: 1 } as never, published_at: new Date().toISOString() })
         .eq("id", a.pageId);
+      // A published site is the site row's design plus a published Home entry (the move): the
+      // legacy column alone no longer says "published".
+      const actor = { userId: a.userId, source: "editor" as const };
+      const home = await createEntryWithClient(admin, {
+        actor,
+        siteId: a.pageId,
+        typeKey: "page",
+        draft: { path: "/", title: "", description: "", blocks: [] },
+      });
+      if (!home.ok) throw new Error(`creating Home failed: ${home.error}`);
+      const made = await admin.rpc("publish_site", {
+        p_page_id: a.pageId,
+        p_owner_id: a.userId,
+        p_home: { version: 1, blocks: [] } as never,
+        p_sub_pages: [],
+        p_published_at: new Date().toISOString(),
+      });
+      if (made.error) throw new Error(`publishing Home failed: ${made.error.message}`);
       const live = await rt.call("get_analytics", { pageId: a.pageId }, who(a));
       expect(live.text).toBe(
         "No views or clicks have been recorded yet. Publish the page and share it to start counting.",

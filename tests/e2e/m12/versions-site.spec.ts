@@ -1,15 +1,21 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { toSubPagePublishForm } from "@/lib/document";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, signedInUser } from "../fixtures/data";
+import { homeEntryOf } from "../fixtures/home-abuse";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { addPageEntry, subPageEntries, trashPageEntry, writeEntry } from "../m15/entry-helpers";
 import { makeVersions, openHistory, pageState, rowFor } from "../m6/versions-helpers";
 
 /**
  * M12-04: whole-site versions. A pro site publishes twice with two sub-pages (the items page
  * changes between the two); the history screen previews the old version across its pages behind a
- * page switcher, then restores it: Home's draft and the draft of the page that still exists are
- * written, the page deleted since is listed as not restored, and nothing is published. At 390x844
- * and 1440x900: no sideways scroll, every control 44px tall.
+ * page switcher, then restores it. At 390x844 and 1440x900: no sideways scroll, every control 44px tall.
+ *
+ * Rewritten for M15-10 (History restores the site design only; it replaces what M12-04 shipped): the
+ * three restore tests keep their setup and now assert that the design goes back to the version's
+ * while every page (Home's blocks, an edited page, a deleted page) stays exactly as it was, that
+ * Undo is always offered, and that nothing is published. A page is restored from its own revisions.
  */
 
 test.afterAll(cleanupUsers);
@@ -32,21 +38,8 @@ interface Site {
 /** Version 1: items "Items one" + directions; version 2: the items page renamed "Items two". */
 async function siteWithTwoVersions(context: BrowserContext, label: string): Promise<Site> {
   const user = await signedInUser(context, { label, plan: "pro" });
-  const admin = adminClient();
-  const publish = async (path: string, doc: ReturnType<typeof subDoc>) => {
-    const { data, error } = await admin
-      .from("site_pages")
-      .insert({
-        page_id: user.pageId,
-        draft: doc,
-        published: doc,
-        published_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(`sub-page ${path} failed: ${error.message}`);
-    return data.id as string;
-  };
+  const publish = (_path: string, doc: ReturnType<typeof subDoc>) =>
+    addPageEntry(user.pageId, doc, { live: true });
   const itemsId = await publish(
     "items",
     subDoc("items", "Items one", "vsItemsLink01", "Open items one"),
@@ -59,11 +52,7 @@ async function siteWithTwoVersions(context: BrowserContext, label: string): Prom
   await makeVersions(user.pageId, 1, { label: "First", extra: () => ({ nav }) });
 
   const second = subDoc("items", "Items two", "vsItemsLink01", "Open items two");
-  const edit = await admin
-    .from("site_pages")
-    .update({ draft: second, published: second, published_at: new Date().toISOString() })
-    .eq("id", itemsId);
-  if (edit.error) throw new Error(`items page edit failed: ${edit.error.message}`);
+  await writeEntry(itemsId, { draft: second, published: toSubPagePublishForm(second as never) });
   await makeVersions(user.pageId, 1, {
     label: "Second",
     firstAt: new Date(Date.now() - 1800_000).toISOString(),
@@ -141,94 +130,162 @@ test("M12-04 preview shows Home and each page of an old version behind a page sw
   await closeSheetIfOpen(page);
 });
 
-test("M12-04 restore writes Home and the page that still exists, lists the deleted page, and publishes nothing", async ({
+test("M12-04 / M15-10 restore brings back the design only: an edited page stays edited, a deleted page stays deleted, nothing is published", async ({
   page,
   context,
 }) => {
   const site = await siteWithTwoVersions(context, "vs2");
-  const admin = adminClient();
   const liveBefore = await pageState(site.pageId);
 
   // after the second publish: the items page is edited, the directions page is deleted
   const edited = subDoc("items", "Items edited", "vsItemsLink01", "Open items edited");
-  await admin.from("site_pages").update({ draft: edited }).eq("id", site.itemsId);
-  const gone = await admin.from("site_pages").delete().eq("id", site.directionsId);
-  expect(gone.error).toBeNull();
+  await writeEntry(site.itemsId, { draft: edited });
+  await trashPageEntry(site.pageId, site.directionsId);
 
   await openHistory(page);
+  await expect(page.getByTestId("history-scope")).toHaveText(
+    "Restores the design: theme, menu and profile. Pages are restored from their own revisions.",
+  );
   await rowFor(page, 1).getByRole("button", { name: "Restore version 1", exact: true }).click();
   const confirm = rowFor(page, 1).getByTestId("restore-confirm");
-  await expect(confirm.getByTestId("restore-pages")).toHaveText(
-    "The drafts of its 2 other pages are replaced too.",
-  );
+  // The confirmation no longer says other pages are replaced: they are not.
+  await expect(confirm.getByTestId("restore-pages")).toHaveCount(0);
+  await expect(confirm).toContainText("Your pages don’t change");
   await confirm.getByRole("button", { name: "Restore version 1", exact: true }).click();
 
   const done = rowFor(page, 1).getByTestId("restore-done");
-  await expect(done).toContainText("Restored version 1 and 1 other page to your draft.");
-  const notRestored = rowFor(page, 1).getByTestId("restore-not-restored");
-  await expect(notRestored).toContainText("1 page was not restored:");
-  await expect(notRestored).toContainText("Find the studio (/directions) was deleted since");
-  // Undo only snapshots Home: it is not offered once another page was written
-  await expect(done.getByRole("button", { name: "Undo" })).toHaveCount(0);
-  await expect(rowFor(page, 1).getByTestId("restore-no-undo")).toBeVisible();
+  await expect(done).toContainText("Restored the design of version 1 to your draft.");
+  await expect(rowFor(page, 1).getByTestId("restore-not-restored")).toHaveCount(0);
+  // No page was brought back, so Undo is offered (it puts the design back).
+  await expect(done.getByRole("button", { name: "Undo" })).toBeVisible();
+  await expect(rowFor(page, 1).getByTestId("restore-no-undo")).toHaveCount(0);
   await expectNoHorizontalScroll(page);
   await expectTapTargets(page, '[data-testid="restore-done"]');
 
-  // the drafts: Home as of version 1 (bio and menu), the items page as of version 1
+  // the design: Home's profile and menu as of version 1
   const after = await pageState(site.pageId);
   expect((after.draft.profile as { bio: string }).bio).toBe("First number 1");
   expect((after.draft.nav as { items: string[] }).items).toEqual([site.itemsId, site.directionsId]);
-  const items = await admin
-    .from("site_pages")
-    .select("draft, published")
-    .eq("id", site.itemsId)
-    .single();
-  expect((items.data!.draft as { title: string }).title).toBe("Items one");
+  // the pages: the edited one keeps its edit, the deleted one stays in the trash
+  const rows = await subPageEntries(site.pageId);
+  const items = rows.find((r) => r.id === site.itemsId)!;
+  expect(items.draft.title).toBe("Items edited");
+  const directions = rows.find((r) => r.id === site.directionsId)!;
+  expect(directions.deleted_at).not.toBeNull();
   // nothing is published: Home's live document and the page's live form are as they were
   expect(after.published).toEqual(liveBefore.published);
   expect(after.published_at).toBe(liveBefore.published_at);
-  expect((items.data!.published as { title: string }).title).toBe("Items two");
-  // the deleted page was not brought back
-  const rows = await admin.from("site_pages").select("id").eq("page_id", site.pageId);
-  expect(rows.data!.map((r) => r.id)).toEqual([site.itemsId]);
+  expect((items.published as { title: string }).title).toBe("Items two");
 });
 
-test("M12-04 restore writes two sub-page drafts when both pages still exist, and publishes nothing", async ({
+test("M12-04 / M15-10 restore leaves two edited sub-page drafts as they are, and publishes nothing", async ({
   page,
   context,
 }) => {
   const site = await siteWithTwoVersions(context, "vs3");
-  const admin = adminClient();
   const liveBefore = await pageState(site.pageId);
 
   // after the second publish both pages are edited in the draft only
   const itemsEdit = subDoc("items", "Items edited", "vsItemsLink01", "Open items edited");
   const dirEdit = subDoc("directions", "Directions edited", "vsDirLink0001", "Open dir edited");
-  await admin.from("site_pages").update({ draft: itemsEdit }).eq("id", site.itemsId);
-  await admin.from("site_pages").update({ draft: dirEdit }).eq("id", site.directionsId);
+  await writeEntry(site.itemsId, { draft: itemsEdit });
+  await writeEntry(site.directionsId, { draft: dirEdit });
+  const before = new Map((await subPageEntries(site.pageId)).map((r) => [r.id, r]));
 
   await openHistory(page);
   await rowFor(page, 1).getByRole("button", { name: "Restore version 1", exact: true }).click();
   const confirm = rowFor(page, 1).getByTestId("restore-confirm");
   await confirm.getByRole("button", { name: "Restore version 1", exact: true }).click();
   const done = rowFor(page, 1).getByTestId("restore-done");
-  await expect(done).toContainText("Restored version 1 and 2 other pages to your draft.");
+  await expect(done).toContainText("Restored the design of version 1 to your draft.");
   await expect(rowFor(page, 1).getByTestId("restore-not-restored")).toHaveCount(0);
+  await expect(done.getByRole("button", { name: "Undo" })).toBeVisible();
   await expectNoHorizontalScroll(page);
 
-  // both drafts are version 1's, and nothing was published
-  const rows = await admin
-    .from("site_pages")
-    .select("id, draft, published")
-    .eq("page_id", site.pageId);
-  const byId = new Map((rows.data ?? []).map((r) => [r.id as string, r]));
-  expect((byId.get(site.itemsId)!.draft as { title: string }).title).toBe("Items one");
-  expect((byId.get(site.directionsId)!.draft as { title: string }).title).toBe("Find the studio");
+  // both drafts are still the edited ones, at the same rev, and nothing was published
+  const byId = new Map((await subPageEntries(site.pageId)).map((r) => [r.id, r]));
+  expect(byId.get(site.itemsId)!.draft.title).toBe("Items edited");
+  expect(byId.get(site.directionsId)!.draft.title).toBe("Directions edited");
+  expect(byId.get(site.itemsId)!.rev).toBe(before.get(site.itemsId)!.rev);
+  expect(byId.get(site.directionsId)!.rev).toBe(before.get(site.directionsId)!.rev);
   expect((byId.get(site.itemsId)!.published as { title: string }).title).toBe("Items two");
   expect((byId.get(site.directionsId)!.published as { title: string }).title).toBe(
     "Find the studio",
   );
   const after = await pageState(site.pageId);
+  expect((after.draft.profile as { bio: string }).bio).toBe("First number 1");
   expect(after.published).toEqual(liveBefore.published);
   expect(after.published_at).toBe(liveBefore.published_at);
+});
+
+test("M15-07 / M15-10 History restore writes the design and no page entry, and Undo returns the previous design", async ({
+  page,
+  context,
+}) => {
+  const site = await siteWithTwoVersions(context, "vs4");
+  const liveBefore = await pageState(site.pageId);
+  const entriesOf = async () => {
+    const { data, error } = await adminClient()
+      .from("content_entries")
+      .select("id, draft, published, rev")
+      .eq("site_id", site.pageId);
+    if (error) throw new Error(error.message);
+    return new Map(
+      data.map((row) => [
+        row.id as string,
+        row as { draft: Record<string, unknown>; published: unknown; rev: number },
+      ]),
+    );
+  };
+
+  // After the second publish: Home's blocks (its entry) and both pages are edited, in the draft only.
+  const home = await homeEntryOf(site.pageId);
+  const versionBlocks = (home.draft as { blocks: Array<Record<string, unknown>> }).blocks;
+  const added = { id: "vsHomeAdded01", type: "header", visible: true, text: "Added after publish" };
+  await writeEntry(home.id, { draft: { ...home.draft, blocks: [...versionBlocks, added] } });
+  const itemsEdit = subDoc("items", "Items edited", "vsItemsLink01", "Open items edited");
+  const dirEdit = subDoc("directions", "Directions edited", "vsDirLink0001", "Open dir edited");
+  await writeEntry(site.itemsId, { draft: itemsEdit });
+  await writeEntry(site.directionsId, { draft: dirEdit });
+  const edited = await entriesOf();
+  const designBefore = (await pageState(site.pageId)).draft;
+  const frozenBefore = designBefore.blocks;
+  expect((designBefore.profile as { bio: string }).bio).not.toBe("First number 1");
+
+  await openHistory(page);
+  await rowFor(page, 1).getByRole("button", { name: "Restore version 1", exact: true }).click();
+  await rowFor(page, 1)
+    .getByTestId("restore-confirm")
+    .getByRole("button", { name: "Restore version 1", exact: true })
+    .click();
+  const done = rowFor(page, 1).getByTestId("restore-done");
+  await expect(done).toContainText("Restored the design of version 1 to your draft.");
+
+  // Restore: the design went to pages.draft. Every entry is exactly as it was: draft, rev and live copy.
+  const restored = await entriesOf();
+  for (const [id, row] of restored) expect(row, id).toEqual(edited.get(id));
+  const restoredIds = (restored.get(home.id)!.draft.blocks as Array<{ id: string }>).map(
+    (b) => b.id,
+  );
+  expect(restoredIds).toContain(added.id);
+  expect(restored.get(site.itemsId)!.draft.title).toBe("Items edited");
+  expect(restored.get(site.directionsId)!.draft.title).toBe("Directions edited");
+  const afterRestore = await pageState(site.pageId);
+  expect((afterRestore.draft.profile as { bio: string }).bio).toBe("First number 1");
+  // The frozen copy of the blocks in pages.draft is not what restore writes.
+  expect(afterRestore.draft.blocks).toEqual(frozenBefore);
+
+  // Undo: the design is the one from before the restore, and nothing was published on the way.
+  await done.getByRole("button", { name: "Undo" }).click();
+  await expect(rowFor(page, 1).getByTestId("restore-undone")).toHaveText("Undone.");
+  const undone = await entriesOf();
+  for (const [id, row] of undone) expect(row, id).toEqual(edited.get(id));
+  const afterUndo = await pageState(site.pageId);
+  const { rev: _undoneRev, ...undoneDesign } = afterUndo.draft;
+  const { rev: _editedRev, ...editedDesign } = designBefore;
+  expect(undoneDesign).toEqual(editedDesign);
+  expect(Number(_undoneRev)).toBeGreaterThan(Number(_editedRev));
+  expect(afterUndo.published).toEqual(liveBefore.published);
+  expect(afterUndo.published_at).toBe(liveBefore.published_at);
+  await expectNoHorizontalScroll(page);
 });

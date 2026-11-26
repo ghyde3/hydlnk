@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks, homeEntryOf } from "../fixtures/home-abuse";
 import { expireOwnerPages } from "../fixtures/expire";
 import {
   accessTokenFor,
@@ -7,6 +8,7 @@ import {
   desktopOnly,
   insertPage,
   makeUser,
+  publishHome,
   rand,
 } from "../fixtures/data";
 import {
@@ -18,12 +20,18 @@ import {
   settled,
 } from "./store-blocks-helpers";
 import { expectNoHorizontalScroll, url } from "../helpers";
-import { emptyUser, draftWith, saveIndicator } from "../m2/editor-helpers";
+import {
+  emptyUser,
+  draftWith,
+  expectDraft,
+  pageRow,
+  saveIndicator,
+  setDraft,
+} from "../m2/editor-helpers";
 import {
   addBlock,
   box,
   draftOf,
-  expectDraft,
   makePng,
   openEditor,
   previewScreen,
@@ -233,8 +241,7 @@ test.describe("M9-20 the click redirect for each store", () => {
         links: [{ id: "book-e2e-hidlnk", store: "amazon", url: "https://hidden.example/" }],
       },
     ]);
-    const write = await adminClient().from("pages").update({ draft }).eq("id", live.pageId);
-    expect(write.error).toBeNull();
+    await setDraft(live.pageId, draft);
     const other = await livePage("bk5b", (cover) => [bookOf(cover)]);
     const userAgent = await page.evaluate(() => navigator.userAgent);
 
@@ -289,11 +296,7 @@ test.describe("M9-20 the click redirect for each store", () => {
     expect(before.status()).toBe(302);
     // The republish: the store is gone from the published document.
     const published = publishDocOf([bookOf(live.cover, { links: [LINKS[0]!, LINKS[2]!] })]);
-    const write = await adminClient()
-      .from("pages")
-      .update({ published, published_at: new Date().toISOString() })
-      .eq("id", live.pageId);
-    expect(write.error).toBeNull();
+    await publishHome(live.pageId, published);
     // A write behind the server's back: on a production build the cached click target is expired the
     // way the product does it (M9-13), as Publish would.
     await expireOwnerPages(browser, live.userId);
@@ -452,8 +455,7 @@ test.describe("M9-20 the editor", () => {
       .click();
     await expect(panel.getByRole("button", { name: "Upload cover" })).toBeVisible();
     await expectDraft(pageId, (d) => d.blocks.some((b) => b.type === "book" && b.cover === null));
-    const stored = (await adminClient().from("pages").select("published").eq("id", pageId).single())
-      .data!.published as PublishDoc;
+    const stored = (await pageRow(pageId)).published as PublishDoc;
     expect((stored.blocks[0] as { cover: unknown }).cover).toEqual(cover);
     // The object itself is still in Storage (the live page still draws it).
     const { data } = await adminClient().storage.from("page-media").download(cover.path);
@@ -495,7 +497,7 @@ test.describe("M9-20 the editor", () => {
   });
 });
 
-test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT", () => {
+test.describe("M9-20 abuse: a draft written as raw JSON (the owner's JWT is refused, HL013; the Home entry takes the planted one)", () => {
   test("M9-20 store 'evil', data: and credential URLs are refused at Publish, each field is named and nothing is published", async ({
     page,
     context,
@@ -508,17 +510,11 @@ test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT
     const user = await userWithDraft(context, "bk10", (handle) =>
       draftOf(handle, [bookOf(null, { links, title: "<img src=x onerror=alert(1)>" })]),
     );
-    // The publishable key and the owner's JWT, as curl would use them: RLS lets the owner write it.
-    const client = userClient(await accessTokenFor(user.email));
-    const write = await client
-      .from("pages")
-      .update({
-        draft: draftOf(user.handle, [
-          bookOf(null, { links, title: "<img src=x onerror=alert(1)>" }),
-        ]),
-      })
-      .eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    // The publishable key and the owner's JWT, as curl would use them: RLS refuses the frozen pages.draft
+    // blocks (HL013); the hostile draft goes into Home's entry with the secret key.
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, [
+      bookOf(null, { links, title: "<img src=x onerror=alert(1)>" }),
+    ]);
 
     await openEditor(page);
     await page.getByRole("button", { name: "Publish", exact: true }).first().click();
@@ -539,6 +535,7 @@ test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT
       .eq("id", user.pageId)
       .single();
     expect(stored.data).toEqual({ published: null, published_at: null });
+    expect((await homeEntryOf(user.pageId)).published).toBeNull();
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).not.toContain("pg-book");
     expect(body).not.toContain("data:text/html");
@@ -568,6 +565,7 @@ test.describe("M9-20 abuse: a draft written as raw JSON with the owner's own JWT
       .eq("id", user.pageId)
       .single();
     expect(stored.data).toEqual({ published: null, published_at: null });
+    expect((await homeEntryOf(user.pageId)).published).toBeNull();
     const body = await (await page.request.get(url(user.handle))).text();
     expect(body).not.toContain("pg-book");
     expect(body).not.toContain(other.id);

@@ -9,7 +9,7 @@ import {
   blockView,
   profileView,
   publishIssues,
-  publishStatusOf,
+  homeStatusesOf,
   readDraft,
   readSubPageDraft,
   subPagePublishIssues,
@@ -89,7 +89,7 @@ export const getPage: ToolDefinition<typeof input> = {
   name: "get_page",
   title: "Get a page",
   description:
-    "Reads the draft of one page, which can differ from what is live. Pass subPageId (from list_pages) to read another page of the site: you get its title, path, rev, inMenu, blocks and publishIssues, and the profile and theme stay on Home. Otherwise returns page (id, rev, publishStatus, hasUnpublishedChanges, publishedAt), profile, theme (including how the page looks now), blocks in order, limits, publishIssues (what Publish would refuse, in plain words) and alsoSetInTheApp (settings no tool can change). Each block has an id, a type, visible and the same fields add_block takes. This is the only way to learn block ids and image ids. Pass blockId to read one block in full. Pass rev as ifRev to later writes. A page id from list_pages also works as pageId. Errors: not_found, block_not_found.",
+    "Reads one page's draft, which can differ from what is live. Pass subPageId for another page of the site: title, path, rev, inMenu, blocks, publishStatus, publishIssues; profile and theme stay on Home. Else returns page (id, rev, publishStatus, designStatus, hasUnpublishedChanges, publishedAt), profile, theme, blocks, limits, publishIssues (what Publish would refuse) and alsoSetInTheApp (settings no tool changes). publishStatus is this page's own; designStatus covers theme, menu and profile. A block has id, type, visible and add_block's fields. It is the only way to learn block ids and image ids. Pass blockId to read one block. Pass rev as ifRev to later writes (designRev for update_profile and set_theme). A page id from list_pages also works as pageId. Errors: not_found, block_not_found.",
   scope: MCP_SCOPES.read,
   annotations: READ_ONLY,
   input,
@@ -109,21 +109,29 @@ export const getPage: ToolDefinition<typeof input> = {
         throw new ToolFailure("server_error", MESSAGES.serverError);
       throw error;
     }
-    const publishStatus = publishStatusOf({
+    // Home's own state and the design's, apart (M15-10): Home's blocks against Home's live blocks,
+    // and theme, menu and profile against the live design.
+    const { publishStatus, designStatus } = homeStatusesOf({
       draft,
       published: page.published,
       publishedAt: page.publishedAt,
       themeTokens: theme?.tokens ?? null,
     });
+    // Home's blocks are a page entry with a rev of its own: `rev` is the one the block tools take as
+    // ifRev, and `designRev` the one update_profile, set_theme and the menu tools take. A site with no
+    // Home entry has the one rev.
+    const rev = page.homeRev ?? draft.rev;
     const header = {
       id: page.id,
       name: page.name,
       handle: page.handle,
       address: handleAddress(page.handle),
       publishStatus,
-      hasUnpublishedChanges: publishStatus !== "published",
+      designStatus,
+      hasUnpublishedChanges: publishStatus !== "published" || designStatus !== "published",
       publishedAt: page.publishedAt,
-      rev: draft.rev,
+      rev,
+      ...(page.homeRev !== undefined ? { designRev: draft.rev } : {}),
     };
 
     if (args.blockId !== undefined) {
@@ -133,17 +141,21 @@ export const getPage: ToolDefinition<typeof input> = {
       }
       return {
         sentence: `Here is ${blockPhrase(block.type)}.`,
-        data: { page: { id: page.id, rev: draft.rev }, block: blockView(block) },
+        data: { page: { id: page.id, rev }, block: blockView(block) },
       };
     }
 
     const blocks = draft.blocks.map(blockView);
     const words =
-      publishStatus === "published"
-        ? "The draft matches the live page."
-        : publishStatus === "not-published"
-          ? "The page isn’t published yet."
-          : "The draft has changes that aren’t live.";
+      publishStatus === "not-published"
+        ? "The page isn’t published yet."
+        : publishStatus === "published" && designStatus === "published"
+          ? "The draft matches the live page."
+          : publishStatus === "published"
+            ? "The page matches what is live. The design has changes that aren’t live."
+            : designStatus === "published"
+              ? "The draft has changes that aren’t live."
+              : "The page and the design have changes that aren’t live.";
     return {
       sentence: `Read the draft of ${handleAddress(page.handle)}: ${blocks.length} ${blocks.length === 1 ? "block" : "blocks"}. ${words}`,
       data: {

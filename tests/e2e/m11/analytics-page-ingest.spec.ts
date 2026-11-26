@@ -11,6 +11,7 @@ import {
   waitForEvents,
 } from "../m4/analytics-ingest-helpers";
 import { adminClient } from "../fixtures/auth";
+import { trashPageEntry } from "../m15/entry-helpers";
 import { dayAt, rollUp } from "../m4/analytics-dash-helpers";
 import { ITEMS_LINK, HOME_LINK, addSubPage } from "./analytics-helpers";
 
@@ -69,8 +70,7 @@ test("M11-09 the beacon refuses an id that is a draft, deleted, another site's o
   expect(await settledCount(site.pageId)).toBe(1);
 
   // Deleting the page makes its id stale at once.
-  const gone = await adminClient().from("site_pages").delete().eq("id", live.id);
-  expect(gone.error).toBeNull();
+  await trashPageEntry(site.pageId, live.id);
   await postBeacon(site, { pageId: site.pageId, subPageId: live.id, referrer: "" });
   expect(await settledCount(site.pageId)).toBe(1);
 });

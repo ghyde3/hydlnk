@@ -449,6 +449,8 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 0,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const written = writes(calls);
@@ -486,7 +488,10 @@ describe("M6-49 the work", () => {
     expect((writes(calls)[0]!.payload as { draft: { rev: number } }).draft.rev).toBe(1);
   });
 
-  it("M6-49 restore with a missing photo, card image, image-block image and background counts them and nulls them", async () => {
+  // M15-10 rewrote the three restore tests below: History restores the design only, so only the
+  // design's images (photo, logo, share image, background) are looked up, counted and nulled. The
+  // images inside blocks are not restored, so they are neither asked about nor counted.
+  it("M6-49 restore with a missing photo and background counts them and nulls them; block images are not counted", async () => {
     const bg = `http://127.0.0.1:54321/storage/v1/object/public/page-media/${OWNER}/bg-aaaaaaaa.webp`;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
     const doc = {
@@ -504,8 +509,10 @@ describe("M6-49 the work", () => {
     expect(result).toEqual({
       ok: true,
       restored: 8,
-      missingImages: 5,
+      missingImages: 2,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const draft = (
@@ -540,10 +547,10 @@ describe("M6-49 the work", () => {
   };
   type WrittenDraft = {
     share?: { title?: string; image?: unknown };
-    blocks: { id: string; icon?: unknown }[];
+    blocks?: { id: string; icon?: unknown }[];
   };
 
-  it("M6-49 restore with a missing link thumbnail and share image drops the thumbnail, nulls the share image and counts both", async () => {
+  it("M6-49 restore with a missing link thumbnail and share image nulls the share image and counts it; the thumbnail is not asked about", async () => {
     const world = makeWorld({
       versions: [{ id: VERSION, page_id: PAGE, version_no: 8, document: docWithThumbAndShare }],
     });
@@ -563,18 +570,21 @@ describe("M6-49 the work", () => {
     expect(result).toEqual({
       ok: true,
       restored: 8,
-      missingImages: 2,
+      missingImages: 1,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
-    expect(asked).toEqual(expect.arrayContaining([THUMB, SHARE_PIC]));
+    expect(asked).toContain(SHARE_PIC);
+    expect(asked).not.toContain(THUMB);
     const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
-    const link = draft.blocks.find((b) => b.id === "link-thumb-1")!;
-    expect("icon" in link).toBe(false);
+    // The version's blocks are not written: the link with the thumbnail never reaches the draft.
+    expect((draft.blocks ?? []).find((b) => b.id === "link-thumb-1")).toBeUndefined();
     expect(draft.share).toEqual({ title: "Mara", image: null });
   });
 
-  it("M6-49 restore with the thumbnail and share image stored keeps both in the draft", async () => {
+  it("M6-49 restore with the share image stored keeps it in the draft; the version's blocks are not written", async () => {
     const world = makeWorld({
       versions: [{ id: VERSION, page_id: PAGE, version_no: 8, document: docWithThumbAndShare }],
     });
@@ -588,13 +598,12 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 0,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
-    expect(draft.blocks.find((b) => b.id === "link-thumb-1")?.icon).toEqual({
-      type: "image",
-      image: { path: THUMB, width: 96, height: 96 },
-    });
+    expect((draft.blocks ?? []).find((b) => b.id === "link-thumb-1")).toBeUndefined();
     expect(draft.share).toEqual(docWithThumbAndShare.share);
   });
 

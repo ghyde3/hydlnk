@@ -7,6 +7,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -50,6 +52,7 @@ describe.skipIf(!run)("M5-08 / M5-09 suspended owners (local Supabase)", () => {
 
   it("M5-09 Publish refuses a suspended owner (account_suspended), writes nothing, and works again after the unsuspend", async () => {
     const o = await makeOwner(admin, "pub", (handle) => draftOf(handle));
+    await moveHome(admin, o.pageId);
     owners.push(o);
     const deps = { admin: admin as never, mediaExists: async () => true };
 
@@ -66,6 +69,7 @@ describe.skipIf(!run)("M5-08 / M5-09 suspended owners (local Supabase)", () => {
 
   it("M5-09 a suspended owner cannot republish over a live page: the stored document stays as it was", async () => {
     const o = await makeOwner(admin, "re", (handle) => draftOf(handle));
+    await moveHome(admin, o.pageId);
     owners.push(o);
     const deps = { admin: admin as never, mediaExists: async () => true };
     expect((await core.publishPageCore({ pageId: o.pageId, userId: o.userId }, deps)).ok).toBe(
@@ -73,10 +77,7 @@ describe.skipIf(!run)("M5-08 / M5-09 suspended owners (local Supabase)", () => {
     );
     const live = await publishedOf(admin, o.pageId);
 
-    await admin
-      .from("pages")
-      .update({ draft: draftOf("Changed") })
-      .eq("id", o.pageId);
+    await setPageDraft(admin, o.pageId, draftOf("Changed"));
     await setSuspended(o.userId, true);
     expect(await core.publishPageCore({ pageId: o.pageId, userId: o.userId }, deps)).toMatchObject({
       ok: false,

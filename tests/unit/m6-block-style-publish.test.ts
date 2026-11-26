@@ -10,6 +10,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 import { blocks as fixtureBlocks } from "./fixtures/page-document";
 
@@ -49,14 +51,12 @@ describe.skipIf(!run)("M6-45 publish gate (local Supabase)", () => {
 
   const owner = async (label: string, docBlocks: Block[] = []) => {
     const made = await makeOwner(admin, label, (handle) => draftOf(handle, docBlocks));
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
   const writeDraft = async (o: TestOwner, docBlocks: Block[]) => {
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draftOf(o.handle, docBlocks) as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, draftOf(o.handle, docBlocks));
     expect(error).toBeNull();
   };
   const publish = (o: TestOwner) =>

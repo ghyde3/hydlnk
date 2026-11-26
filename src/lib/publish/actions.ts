@@ -4,7 +4,15 @@ import { updateTag } from "next/cache";
 import { getSessionUser } from "@/lib/auth/session";
 import { cleanupMediaQuietly } from "@/lib/media/cleanup-admin";
 import { rateLimit } from "@/lib/rate-limit";
-import { publishPageCore, type PublishResult } from "./core";
+import {
+  publishDesignCore,
+  publishPageCore,
+  publishSitePageCore,
+  type PagePublishResult,
+  type PublishExpected,
+  type PublishResult,
+  type SitePublishResult,
+} from "./core";
 import { PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS, publishRateKey } from "./limits";
 import { pageTag } from "./tags";
 
@@ -22,23 +30,85 @@ import { pageTag } from "./tags";
  * `{ok: false, errors: [], reason: "rate_limited"}` before anything is read or written.
  * A failed publish returns the errors and touches no cache: the live page stays as it was. Any
  * other failure reads `{ok: false, errors: []}` with a `reason`.
+ *
+ * Since M15-10 this is "Publish all changes": the design and every page that changed. `expected` is
+ * what the editor holds (the design's rev key and each page entry's rev); when any of them moved the
+ * answer is `conflict` and nothing is written. Unchanged pages keep their publish date.
  */
-export async function publishPage(pageId: string): Promise<PublishResult> {
+/** The session user and the shared publish rate limit (M11-12): 60 an hour per account, all three actions together. */
+async function publisher(): Promise<
+  { userId: string | null; limited: false } | { userId: string; limited: true }
+> {
   const user = await getSessionUser();
-  if (user) {
-    const limit = await rateLimit(
-      publishRateKey(user.id),
-      PUBLISH_RATE_LIMIT,
-      PUBLISH_RATE_WINDOW_SECONDS,
-    );
-    if (!limit.allowed) return { ok: false, errors: [], reason: "rate_limited" };
-  }
-  const result = await publishPageCore({ pageId, userId: user?.id ?? null });
+  if (!user) return { userId: null, limited: false };
+  const limit = await rateLimit(
+    publishRateKey(user.id),
+    PUBLISH_RATE_LIMIT,
+    PUBLISH_RATE_WINDOW_SECONDS,
+  );
+  return { userId: user.id, limited: !limit.allowed };
+}
+
+/** After a publish that stands: the site's tag (Home, every page, the index), then the media queue. */
+async function published(pageId: string, userId: string | null): Promise<void> {
   // Tags are case-sensitive and page ids are stored lower case; the id is a GUID by now.
-  if (result.ok) {
-    updateTag(pageTag(pageId.toLowerCase()));
-    // The Publish may have dropped the last reference to an image the live page used to show (M5-14).
-    if (user) await cleanupMediaQuietly(user.id);
-  }
+  updateTag(pageTag(pageId.toLowerCase()));
+  // The Publish may have dropped the last reference to an image the live page used to show (M5-14).
+  if (userId) await cleanupMediaQuietly(userId);
+}
+
+export async function publishPage(
+  pageId: string,
+  expected?: PublishExpected,
+): Promise<SitePublishResult> {
+  const who = await publisher();
+  if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
+  const result = await publishPageCore({
+    pageId,
+    userId: who.userId,
+    ...(expected === undefined ? {} : { expected }),
+  });
+  if (result.ok) await published(pageId, who.userId);
+  return result;
+}
+
+/**
+ * Publish page (M15-10): one page's draft goes live, Home's or a sub-page's; the design and every
+ * other page stay as they are. Takes ids and the entry rev the editor holds and nothing else: the
+ * draft is read from Postgres by `publishSitePageCore`, which checks the session user owns the site
+ * and that the entry belongs to it. A stale rev answers `conflict` with `currentRev`. The same rate
+ * limit as Publish; the site's tag is expired on success only.
+ */
+export async function publishSitePage(
+  pageId: string,
+  entryId: string,
+  expectedRev: number,
+): Promise<PagePublishResult> {
+  const who = await publisher();
+  if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
+  const result = await publishSitePageCore({
+    pageId,
+    entryId,
+    expectedRev,
+    userId: who.userId,
+    source: "editor",
+  });
+  if (result.ok) await published(pageId, who.userId);
+  return result;
+}
+
+/**
+ * Publish design (M15-10): theme, menu and profile go live; no page changes. `expectedRev` is the
+ * design's rev key (`pages.draft->>rev`) the editor holds; a stale one answers `conflict`. The same
+ * rate limit as Publish; the site's tag is expired on success only.
+ */
+export async function publishDesign(
+  pageId: string,
+  expectedRev: string | null,
+): Promise<PublishResult> {
+  const who = await publisher();
+  if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
+  const result = await publishDesignCore({ pageId, expectedRev, userId: who.userId });
+  if (result.ok) await published(pageId, who.userId);
   return result;
 }

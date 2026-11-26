@@ -57,6 +57,16 @@ export function adminClient(): SupabaseClient {
   });
 }
 
+/**
+ * Moves a site the old way (blocks in pages.draft/published) into page entries: Home's '/' entry
+ * plus sub-pages. The live renderer needs a published '/' entry, and the HL013 guard refuses block
+ * writes into pages on a moved site.
+ */
+export async function moveSite(siteId: string): Promise<void> {
+  const moved = await adminClient().rpc("move_site_content", { p_site: siteId });
+  if (moved.error) throw new Error(`move_site_content failed: ${moved.error.message}`);
+}
+
 export type Plan = "free" | "pro" | "studio";
 
 export interface SignedIn {
@@ -133,6 +143,7 @@ async function ensurePage(admin: SupabaseClient, userId: string, handle: string)
     .select("id")
     .single();
   if (inserted.error) throw new Error(`creating page ${handle} failed: ${inserted.error.message}`);
+  await moveSite(inserted.data.id as string);
   return inserted.data.id as string;
 }
 

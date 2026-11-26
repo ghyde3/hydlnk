@@ -1,7 +1,6 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
-import { setDraft, draftWith } from "../m2/editor-helpers";
+import { setDraft, draftWith, pageRow } from "../m2/editor-helpers";
 import {
   TEXT_ID,
   bold,
@@ -276,8 +275,7 @@ test.describe("M9-12 drafts the editor never produced", () => {
     await expect(editor).toContainText("x".repeat(100));
     expect(errors).toEqual([]);
     // Loading is read-only: the stored draft is as it was written.
-    const { data } = await adminClient().from("pages").select("draft").eq("id", user.pageId).single();
-    const stored = (data!.draft as { blocks: { marks: unknown[] }[] }).blocks[0]!;
+    const stored = (await pageRow(user.pageId)).draft.blocks[0] as unknown as { marks: unknown[] };
     expect(stored.marks).toHaveLength(404);
   });
 });

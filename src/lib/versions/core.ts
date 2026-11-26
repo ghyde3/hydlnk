@@ -2,13 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { checkBlocklist, readBlockedLinkError } from "@/lib/blocklist";
-import {
-  LIMITS,
-  draftDocSchema,
-  draftSubPageSchema,
-  publishedDocSchema,
-  type PublishDoc,
-} from "@/lib/document";
+import { LIMITS, draftDocSchema, publishedDocSchema, type PublishDoc } from "@/lib/document";
 import { jsonbTextBytes } from "@/lib/editor/size";
 import { PLAN_LIMITS, toPlanId } from "@/lib/limits";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
@@ -23,17 +17,10 @@ import {
   ownedImagePaths,
   restoredTheme,
   versionToDraft,
-  versionToSubPageDraft,
   type CheckedImages,
 } from "./restore";
 import { parseStoredSubPages } from "./site";
-import type {
-  NotRestoredPage,
-  PreviewResult,
-  PreviewSubPage,
-  RestoreResult,
-  VersionFailureReason,
-} from "./types";
+import type { PreviewResult, PreviewSubPage, RestoreResult, VersionFailureReason } from "./types";
 
 /**
  * Preview and restore of a published version (M6-49), everything except what a Server Action alone
@@ -304,33 +291,33 @@ export async function loadVersionPreviewCore(
 }
 
 /**
- * Restore (M6-49, M12-04): writes the version into the DRAFT and nothing else. From M2 a version
- * holds Home, the menu and every live sub-page, so Home's draft is written first (with its rev
- * guard, the one that stops everything) and then the draft of each of the version's pages that
- * still exists, each guarded by the `updated_at` it was read with. A page deleted since, saved
- * meanwhile, listed on the blocklist now or unreadable is returned in `notRestored` with the
- * reason and left as it is. Sub-page drafts have no rev, so a stale editor tab with unsaved
- * sub-page edits can still overwrite a restore on its next save (a known limit; fixing it
- * would need a rev on `site_pages`).
- * `pages.published`,
- * `published_at`, `page_versions`, the themes and Storage are untouched and no cache tag is
- * expired, so the live page does not change; the owner reviews the draft in the editor and
- * publishes when ready.
+ * Restore (M6-49; design only since M15-10): writes the version's DESIGN into `pages.draft` and
+ * nothing else. The design is everything of the site that is not a page's content: profile, theme,
+ * menu, banner, share card, UTM tags and redirect. No page entry is read for writing or written:
+ * Home's blocks and every sub-page stay exactly as they are, and each page is restored from its own
+ * revisions (src/lib/site-pages/entry-revisions-core.ts). M12-04 restored the pages too; M15-10
+ * replaced that, because pages now publish on their own and a site-wide restore would overwrite
+ * drafts the owner never asked about.
  *
- *   - the draft is the version's profile, blocks (ids kept, all visible, in order) and theme, with
- *     `rev` one past the stored one, so an editor tab open on the old draft meets the stale-tab
- *     guard on its next save instead of overwriting the restore;
+ * `pages.published`, every entry (draft and published copy), `published_at`, `page_versions`, the
+ * themes and Storage are untouched and no cache tag is expired, so the live site does not change;
+ * the owner reviews the design in the editor and publishes it when ready.
+ *
+ *   - the draft is the version's design with `rev` one past the stored one, so an editor tab open
+ *     on the old draft meets the stale-tab guard on its next save instead of overwriting the restore;
  *   - the theme resolves to the version's frozen tokens exactly (see `restoredTheme`);
- *   - the draft also carries the version's share card (M6-32) when it has one;
- *   - an image that is gone becomes null and is counted (a link thumbnail is removed from its link,
- *     the share image becomes null); a background image that is gone becomes `bgImage` null in the
- *     page-level overrides, so Publish does not stop on it;
- *   - the draft is parsed with `draftDocSchema` and checked against the draft size cap
- *     (`LIMITS.draftBytes`, the database's own line), and the link blocklist is asked about it
- *     (`blocked_link` with the hosts) before anything is written;
+ *   - an image of the design that is gone becomes null and is counted (photo, logo, share image); a
+ *     background image that is gone becomes `bgImage` null in the page-level overrides, so Publish
+ *     does not stop on it. Images inside blocks are not looked at: blocks are not restored;
+ *   - the design is parsed with `draftDocSchema` (with no blocks) and checked against the draft size
+ *     cap, and the link blocklist is asked about it (`blocked_link` with the hosts) before the write;
  *   - the write is filtered on the page id, the owner id and the draft rev read at the start, and
  *     goes through the same `pages` triggers as any draft save: a draft that changed in between
- *     (another tab saved, or a second restore ran first) matches no row and is `conflict`.
+ *     (another tab saved, or a second restore ran first) matches no row and is `conflict`. The
+ *     frozen `blocks` of `pages.draft` are sent back as they were stored, never the version's.
+ *
+ * The answer keeps the fields its readers know: `entries` is always empty and `pagesRestored`,
+ * `recreated` and `notRestored` are always 0, 0 and empty.
  */
 export async function restorePageVersionCore(
   input: VersionInput,
@@ -340,33 +327,57 @@ export async function restorePageVersionCore(
   if (!opened.ok) return opened;
   const open = opened.value;
   const ids = { page: open.pageId, version: open.version.id };
-  const failed = (reason: VersionFailureReason): RestoreResult => {
+  const failed = (reason: VersionFailureReason | "conflict"): RestoreResult => {
     logFailure("restore", reason, ids);
     return { ok: false, reason };
   };
 
-  let result: Awaited<ReturnType<typeof checkedVersion>>;
+  // The version's design: its document with no blocks. Only the design's own images are looked up.
+  const stored = publishedDocSchema.safeParse(open.version.document);
+  if (!stored.success) return failed("error");
+  const parsed: PublishDoc = { ...stored.data, blocks: [] };
+  let checked: CheckedImages;
   let themeTokens: Partial<TokenSet> | null;
   try {
-    result = await checkedVersion(open, deps);
-    themeTokens = result
-      ? await loadThemeTokens(open.admin, result.parsed.theme.ref, open.ownerId)
-      : null;
+    const origin = mediaOrigin();
+    const present = await presentPaths(
+      ownedImagePaths(parsed, open.ownerId, origin),
+      deps.mediaExists ?? storageExists(open.admin),
+    );
+    checked = nullMissingImages(parsed, open.ownerId, origin, (path) => present.has(path));
+    themeTokens = await loadThemeTokens(open.admin, parsed.theme.ref, open.ownerId);
   } catch {
     return failed("error");
   }
-  if (result === null) return failed("error");
-  const { parsed, checked } = result;
 
   const theme = restoredTheme(parsed, parsed.tokens, themeTokens, checked.backgroundMissing);
   const draft = draftDocSchema.safeParse(versionToDraft(checked.doc, theme, nextRev(open.draft)));
   if (!draft.success) return failed("error");
+
+  // The write carries the design and no blocks. For a moved site (Home is a page entry) the frozen
+  // copy in `pages.draft` is never read: the database keeps it for a draft that omits it
+  // (guard_frozen_page_blocks). Only a site that has NOT been moved, whose blocks still live in
+  // `pages.draft` with nothing guarding them, gets them sent back unchanged, or the restore would
+  // drop them.
+  const { blocks: _none, ...design } = draft.data;
+  void _none;
+  const moved = await open.admin.rpc("site_has_home_entry", { p_site: open.pageId });
+  if (moved.error) {
+    console.error("[versions] reading whether the site was moved failed", moved.error.code);
+    return failed("error");
+  }
+  let designDraft: Record<string, unknown> = design;
+  if (moved.data !== true) {
+    const unmovedDraft = (open.draft ?? {}) as Record<string, unknown>;
+    if ("blocks" in unmovedDraft) designDraft = { ...design, blocks: unmovedDraft.blocks };
+  }
   // The line the database holds (`pages_draft_integrity`, 20261002000001) and the editor's autosave
   // keeps: refused here, before any write, instead of failing there with 23514.
-  if (jsonbTextBytes(draft.data) > LIMITS.draftBytes) return failed("error");
+  if (jsonbTextBytes(designDraft) > LIMITS.draftBytes) return failed("error");
 
   // The same function the `pages` trigger runs on every draft write: a site listed since this
-  // version was published is caught here, with the hosts, before anything is written.
+  // version was published is caught here, with the hosts, before anything is written. Only the
+  // design is asked about: a link inside a page's blocks is not restored, so it cannot refuse this.
   try {
     const blocked = await checkBlocklist(open.admin, draft.data);
     if (blocked.hosts.length > 0) {
@@ -377,44 +388,10 @@ export async function restorePageVersionCore(
     return failed("error");
   }
 
-  // The sub-pages (M12-04): which of the version's pages still exist, and what each draft will be.
-  // A page that is gone, or whose draft cannot be written, is listed, never a reason to stop.
-  let siteRows: { id: string; updated_at: string }[];
-  try {
-    siteRows = await loadSiteRows(open);
-  } catch {
-    return failed("error");
-  }
-  const notRestored: NotRestoredPage[] = [];
-  const plans: { page: PreviewSubPage; rowUpdatedAt: string; draft: unknown }[] = [];
-  for (const page of result.subPages) {
-    const row = siteRows.find((candidate) => candidate.id === page.id);
-    const base = { id: page.id, path: page.path, title: page.title };
-    if (!row) {
-      notRestored.push({ ...base, reason: "deleted" });
-      continue;
-    }
-    const subDraft = draftSubPageSchema.safeParse(versionToSubPageDraft(page.doc));
-    if (!subDraft.success || jsonbTextBytes(subDraft.data) > LIMITS.draftBytes) {
-      notRestored.push({ ...base, reason: "error" });
-      continue;
-    }
-    try {
-      const blocked = await checkBlocklist(open.admin, subDraft.data);
-      if (blocked.hosts.length > 0) {
-        notRestored.push({ ...base, reason: "blocked_link", hosts: blocked.hosts });
-        continue;
-      }
-    } catch {
-      return failed("error");
-    }
-    plans.push({ page, rowUpdatedAt: row.updated_at, draft: subDraft.data });
-  }
-
-  // Home first, guarded by its rev: a conflict stops everything, nothing is written.
+  // The design to `pages.draft`, guarded by its rev (the stale-tab guard).
   const update = open.admin
     .from("pages")
-    .update({ draft: draft.data as unknown as Json })
+    .update({ draft: designDraft as unknown as Json })
     .eq("id", open.pageId)
     .eq("owner_id", open.ownerId);
   const written = await (
@@ -435,64 +412,15 @@ export async function restorePageVersionCore(
     );
     return { ok: false, reason: "error" };
   }
-  if (!written.data || written.data.length === 0) {
-    logFailure("restore", "conflict", ids);
-    return { ok: false, reason: "conflict" };
-  }
+  if (!written.data || written.data.length === 0) return failed("conflict");
 
-  // Then each page that still exists, guarded by the `updated_at` it had when it was read (sub-page
-  // drafts carry no rev). A page saved in between matches no row and is listed as changed.
-  let pagesRestored = 0;
-  for (const plan of plans) {
-    const base = { id: plan.page.id, path: plan.page.path, title: plan.page.title };
-    const res = await open.admin
-      .from("site_pages")
-      .update({ draft: plan.draft as Json })
-      .eq("id", plan.page.id)
-      .eq("page_id", open.pageId)
-      .eq("updated_at", plan.rowUpdatedAt)
-      .select("id");
-    if (res.error) {
-      const refusal = readBlockedLinkError(res.error);
-      if (refusal) {
-        notRestored.push({ ...base, reason: "blocked_link", hosts: refusal.hosts });
-      } else {
-        console.error(
-          `[versions] restore error write=${res.error.code ?? "unknown"} page=${open.pageId} version=${open.version.id}`,
-        );
-        notRestored.push({ ...base, reason: "error" });
-      }
-      continue;
-    }
-    if (res.data && res.data.length > 0) {
-      pagesRestored += 1;
-      continue;
-    }
-    // No row matched: deleted since it was read, or saved since.
-    let stillThere = true;
-    try {
-      stillThere = (await loadSiteRows(open)).some((row) => row.id === plan.page.id);
-    } catch {
-      // Cannot tell: "changed" is the safe word, the page was not written either way.
-    }
-    notRestored.push({ ...base, reason: stillThere ? "changed" : "deleted" });
-  }
-  if (notRestored.length > 0) logFailure("restore", "partial", ids);
   return {
     ok: true,
     restored: open.version.versionNo,
-    missingImages: result.missingImages,
-    pagesRestored,
-    notRestored: notRestored.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
+    missingImages: checked.missingImages,
+    pagesRestored: 0,
+    recreated: 0,
+    entries: [],
+    notRestored: [],
   };
-}
-
-/** The site's sub-pages as they are now: the ids and the exact `updated_at` strings (never parsed as dates). */
-async function loadSiteRows(open: OpenVersion): Promise<{ id: string; updated_at: string }[]> {
-  const { data, error } = await open.admin
-    .from("site_pages")
-    .select("id, updated_at")
-    .eq("page_id", open.pageId);
-  if (error) throw new Error(`reading the site's pages failed (${error.code ?? "unknown"})`);
-  return data;
 }

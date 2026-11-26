@@ -1,6 +1,6 @@
 /**
  * The plan limits, in one table (M4-02). Postgres holds the same numbers in `public.plan_limits(p_plan)`
- * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql and 20261011000001_site_pages.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
+ * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql and 20261011000001_site_pages.sql and 20261014000003_content_limits.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
  * tests/unit/limits-parity.test.ts calls that function for every plan and column and fails when the
  * two differ. Change a number here and in the migration (a new one) together.
  *
@@ -34,6 +34,14 @@ export interface PlanLimits {
   redirectMode: boolean;
   /** Pages in one site, Home included (M11-04): Free 3 is Home and two sub-pages. */
   pagesPerSite: number;
+  /** Entries of each non-page content type, trash included (HL010); pages keep pagesPerSite. */
+  entriesPerType: number;
+  /** Custom content types per site (HL011). */
+  customTypes: number;
+  /** Revisions kept per content entry, newest first; older ones are pruned. */
+  revisionsKept: number;
+  /** Bytes of entries and sub-pages per account (HL009). */
+  contentBytes: number;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -49,6 +57,10 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     versionsKept: 0,
     redirectMode: false,
     pagesPerSite: 3,
+    entriesPerType: 25,
+    customTypes: 0,
+    revisionsKept: 10,
+    contentBytes: 67108864,
   },
   pro: {
     pages: 3,
@@ -60,6 +72,10 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     versionsKept: 25,
     redirectMode: true,
     pagesPerSite: 10,
+    entriesPerType: 1000,
+    customTypes: 3,
+    revisionsKept: 50,
+    contentBytes: 1073741824,
   },
   studio: {
     pages: 15,
@@ -71,6 +87,10 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     versionsKept: 25,
     redirectMode: true,
     pagesPerSite: 500,
+    entriesPerType: 100000,
+    customTypes: 100,
+    revisionsKept: 200,
+    contentBytes: 5368709120,
   },
 };
 
@@ -85,6 +105,10 @@ export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
   versionsKept: "versions_kept",
   redirectMode: "redirect_mode",
   pagesPerSite: "pages_per_site",
+  entriesPerType: "entries_per_type",
+  customTypes: "custom_types",
+  revisionsKept: "revisions_kept",
+  contentBytes: "content_bytes",
 };
 
 export const PLAN_LABELS: Readonly<Record<PlanId, string>> = {

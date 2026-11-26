@@ -10,6 +10,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -58,14 +60,12 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
 
   const owner = async (label: string, blocks: Block[] = []) => {
     const made = await makeOwner(admin, label, (handle) => draftOf(handle, blocks));
+    await moveHome(admin, made.pageId);
     owners.push(made);
     return made;
   };
   const writeDraft = async (o: TestOwner, blocks: Block[]) => {
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draftOf(o.handle, blocks) as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, draftOf(o.handle, blocks));
     expect(error).toBeNull();
   };
   const publish = (o: TestOwner) =>
@@ -82,6 +82,25 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
   };
   const exists = async (path: string) =>
     (await admin.storage.from("page-media").exists(path)).data === true;
+  /** Home's live copy after the move: the '/' page entry's published document. */
+  const homePublished = async (o: TestOwner) => {
+    const { data, error } = await admin
+      .from("content_entries")
+      .select("published")
+      .eq("site_id", o.pageId)
+      .eq("published->>path", "/")
+      .maybeSingle();
+    expect(error).toBeNull();
+    return data?.published ?? null;
+  };
+  const queued = async (o: TestOwner) => {
+    const { data, error } = await admin
+      .from("image_cleanup_queue")
+      .select("path")
+      .eq("owner_id", o.userId);
+    expect(error).toBeNull();
+    return (data ?? []).map((r: { path: string }) => r.path);
+  };
 
   describe("a valid icon publishes", () => {
     it("a built-in name and a thumbnail in the owner's folder reach pages.published, canonical", async () => {
@@ -260,17 +279,23 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
 
   describe("replacing or removing a thumbnail changes only the draft", () => {
     it("the published page keeps its object until a Publish drops it; the cleanup keeps what a draft or the published page names", async () => {
-      const o = await owner("lp11");
+      // A site published before it moved (stage 1b): its frozen copy in pages.published never names
+      // the thumbnail, so after the move only Home's '/' entry (and its revisions) can hold it.
+      const o = await owner("lp11", [link("lnk-swap-00001")]);
+      expect((await publish(o)).ok).toBe(true);
       const first = await upload(o, "111111111111");
       const second = await upload(o, "222222222222");
       await writeDraft(o, [link("lnk-swap-00001", { icon: { type: "image", image: first } })]);
       expect((await publish(o)).ok).toBe(true);
       const published = await publishedOf(admin, o.pageId);
+      expect(JSON.stringify(published.published)).not.toContain(first.path);
+      expect(JSON.stringify(await homePublished(o))).toContain(first.path);
 
-      // The draft moves to the second thumbnail: pages.published is untouched and the first
+      // The draft moves to the second thumbnail: the live copies are untouched and the first
       // object is still readable (the live page shows it).
       await writeDraft(o, [link("lnk-swap-00001", { icon: { type: "image", image: second } })]);
       expect(await publishedOf(admin, o.pageId)).toEqual(published);
+      expect(JSON.stringify(await homePublished(o))).toContain(first.path);
       expect(await exists(first.path)).toBe(true);
       let result = await cleanup.cleanupMediaFor(o.userId, admin);
       expect(result.deleted).not.toContain(first.path);
@@ -280,12 +305,32 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
       // Removing the icon from the draft: the second one is only in the draft now... and it is
       // dropped, so the cleanup may take it, but the first is still held by the published page.
       await writeDraft(o, [link("lnk-swap-00001")]);
+      expect(await queued(o)).not.toContain(first.path);
       result = await cleanup.cleanupMediaFor(o.userId, admin);
       expect(result.deleted).not.toContain(first.path);
       expect(await exists(first.path)).toBe(true);
 
-      // The Publish that drops it queues it, and then the cleanup removes it.
+      // The Publish that drops it queues it. The page history still names it (the revision of the
+      // Publish that showed it, which a restore brings back), so the cleanup keeps it.
       expect((await publish(o)).ok).toBe(true);
+      expect(JSON.stringify(await homePublished(o))).not.toContain(first.path);
+      expect(await queued(o)).toContain(first.path);
+      result = await cleanup.cleanupMediaFor(o.userId, admin);
+      expect(result.deleted).not.toContain(first.path);
+      expect(await exists(first.path)).toBe(true);
+
+      // Once no revision names it either, the cleanup removes it.
+      const revisions = await admin
+        .from("content_entry_revisions")
+        .select("id, snapshot")
+        .eq("site_id", o.pageId);
+      expect(revisions.error).toBeNull();
+      const holders = (revisions.data ?? [])
+        .filter((r) => JSON.stringify(r.snapshot).includes(first.path))
+        .map((r) => r.id as string);
+      expect(holders.length).toBeGreaterThan(0);
+      const gone = await admin.from("content_entry_revisions").delete().in("id", holders);
+      expect(gone.error).toBeNull();
       result = await cleanup.cleanupMediaFor(o.userId, admin);
       expect(result.deleted).toContain(first.path);
       expect(await exists(first.path)).toBe(false);

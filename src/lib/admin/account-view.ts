@@ -3,6 +3,7 @@
  * parsing and a few formatters. No `server-only` and no database, so components and unit tests import
  * it freely; `account-queries.ts` has the reads.
  */
+import { PLAN_IDS, PLAN_LIMITS, type PlanId } from "@/lib/limits";
 
 /** Every action `admin_audit` accepts: the same list as the CHECK constraint of migration 20261013000001. */
 export const AUDIT_ACTIONS = [
@@ -100,8 +101,14 @@ export interface AuditRow {
 /** The actor of an audit row nobody acted on (the gift expiry sweep): the nil uuid. */
 export const SYSTEM_ACTOR_ID = "00000000-0000-0000-0000-000000000000";
 
-/** The sub-page total cap of an account (HL009, migration 20261011000001): 64 MiB. */
-export const SITE_BYTES_CAP = 67_108_864;
+/**
+ * The pages-and-entries byte cap of an account (HL009): by plan, PLAN_LIMITS[plan].contentBytes (64 MiB
+ * free, 1 GiB pro, 5 GiB studio). An unknown plan reads as free, like the uploads row.
+ */
+export function siteBytesCap(plan: string): number {
+  return PLAN_LIMITS[(PLAN_IDS as readonly string[]).includes(plan) ? (plan as PlanId) : "free"]
+    .contentBytes;
+}
 
 /**
  * The customer's page in Stripe's dashboard. Built from the stored id alone (no Stripe call). The

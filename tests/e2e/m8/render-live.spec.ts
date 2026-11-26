@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, rand } from "../fixtures/data";
-import { emptyUser } from "../m2/editor-helpers";
+import { emptyUser, setDraft } from "../m2/editor-helpers";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
   FRAMEWORK_MARKERS,
@@ -105,7 +105,7 @@ test.describe("M8-02 the published page is finished HTML", () => {
     const draft = JSON.parse(JSON.stringify(user.draft));
     draft.profile.bio = "DRAFT-ONLY-BIO-zq";
     draft.blocks.push(link("lnk-lv4-draft", "DRAFT-ONLY-LINK-zq"));
-    await adminClient().from("pages").update({ draft }).eq("id", user.pageId);
+    await setDraft(user.pageId, draft);
 
     const plain = await getTenant(user.handle);
     const variants: Array<Record<string, string>> = [

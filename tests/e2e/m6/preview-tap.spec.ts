@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
-import { adminClient } from "../fixtures/auth";
 import { newBlockId, type Block } from "@/lib/document";
 import { draftOf } from "../m2/blocks-helpers";
+import { setDraft } from "../m2/editor-helpers";
 import {
   blockSet,
   box,
@@ -276,15 +276,12 @@ test.describe("M6-03 desktop: tap a block, an item or the profile in the bezel",
     const other = textBlocks(1)[0]!;
     const user = await userWithBlocks(context, "tp8", () => [link, other]);
     // The profile name is the forged markup too.
-    const { error } = await adminClient()
-      .from("pages")
-      .update({
-        draft: draftOf(user.handle, [link, other], {
-          profile: { name: "<b data-profile-part='bio'>", bio: "A real bio", photo: null },
-        } as never),
-      })
-      .eq("id", user.pageId);
-    expect(error).toBeNull();
+    await setDraft(
+      user.pageId,
+      draftOf(user.handle, [link, other], {
+        profile: { name: "<b data-profile-part='bio'>", bio: "A real bio", photo: null },
+      } as never),
+    );
     await openEditor(page);
     const screen = previewScreen(page);
     await expect(screen.locator("[data-block-id='x']")).toHaveCount(0);

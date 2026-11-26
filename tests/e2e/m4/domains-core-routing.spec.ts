@@ -1,6 +1,13 @@
 import { chromium, expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly, makeUser, rand, signedInUser } from "../fixtures/data";
+import {
+  cleanupUsers,
+  desktopOnly,
+  makeUser,
+  rand,
+  setPublished,
+  signedInUser,
+} from "../fixtures/data";
 import { setOwnerSuspended, untilHostLookupExpires } from "../fixtures/expire";
 import { PRODUCTION_BUILD, rawRequest } from "../fixtures/http";
 import { url } from "../helpers";
@@ -52,10 +59,7 @@ test.beforeAll(async ({}, info) => {
   // A verified domain whose page has nothing published: a draft never leaks.
   draftSite = await makeSite("rtd");
   const admin = adminClient();
-  await admin
-    .from("pages")
-    .update({ published: null, published_at: null })
-    .eq("id", draftSite.pageId);
+  await setPublished(draftSite.pageId, false);
   await addDomainRow({ pageId: draftSite.pageId, hostname: draftHost, status: "verified" });
   // A verified row for a *.vercel.app hostname (the validator refuses to add one; a direct insert shows the proxy never honours it).
   await addDomainRow({ pageId: site.pageId, hostname: vercelAppHost, status: "verified" });
@@ -351,7 +355,11 @@ test.describe("M4-09 changes show at the next request", () => {
       .from("domains")
       .update({ status: "verified", verified_at: new Date().toISOString() })
       .eq("id", id);
-    const live1 = await untilHostLookupExpires(() => get(host), (r) => r.status === 200, "none");
+    const live1 = await untilHostLookupExpires(
+      () => get(host),
+      (r) => r.status === 200,
+      "none",
+    );
     expect(live1.status).toBe(200);
     expect(live1.body).toContain(site.name);
 
@@ -369,7 +377,11 @@ test.describe("M4-09 changes show at the next request", () => {
 
     // Removed: 404 immediately, no stale copy.
     await admin.from("domains").delete().eq("id", id);
-    const gone = await untilHostLookupExpires(() => get(host), (r) => r.status === 404, "found");
+    const gone = await untilHostLookupExpires(
+      () => get(host),
+      (r) => r.status === 404,
+      "found",
+    );
     expect(gone.status).toBe(404);
     expect(gone.body).not.toContain(site.name);
     expect(gone.body).not.toContain(otherName.profile.name);

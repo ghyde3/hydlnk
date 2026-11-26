@@ -1,7 +1,7 @@
 import { expect, test, type Request } from "@playwright/test";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient, signInAs } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly, makeUser, phoneOnly } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, makeUser, moveSite, phoneOnly } from "../fixtures/data";
 import { rawRequest, restAs } from "../fixtures/http";
 import { jsonbTextBytes } from "@/lib/editor/size";
 import { LIMITS, newBlockId } from "@/lib/document";
@@ -227,7 +227,6 @@ test.describe("M2-04 autosave", () => {
     page,
     context,
   }) => {
-    const user = await emptyUser(context, "big");
     // A valid draft just under the limit: social blocks full of long (but legal) URLs.
     const social = () => ({
       id: newBlockId(),
@@ -242,7 +241,7 @@ test.describe("M2-04 autosave", () => {
     const doc = {
       version: 1,
       rev: 0,
-      profile: { name: user.handle, bio: "", photo: null },
+      profile: { name: "Big", bio: "", photo: null },
       theme: { ref: null, overrides: {} },
       blocks: [social(), social(), social(), social(), social(), social(), social(), social()],
     };
@@ -252,7 +251,10 @@ test.describe("M2-04 autosave", () => {
     expect(gap).toBeLessThan(0); // the blocks as built are over the limit; trim to just under it
     last.url = last.url.slice(0, last.url.length + gap);
     expect(jsonbTextBytes(doc)).toBeLessThanOrEqual(LIMITS.draftBytes - 20);
-    await adminClient().from("pages").update({ draft: doc }).eq("id", user.pageId).throwOnError();
+    // The site is written in the old layout (the whole draft in pages.draft, where this size fits) and
+    // then moved: Home's blocks go into its entry as the mover copies them, past the entry's tighter cap.
+    const user = await emptyUser(context, "big", { draft: doc, move: false });
+    await moveSite(user.pageId);
 
     await openEditor(page);
     let patches = 0;

@@ -10,6 +10,7 @@ import type { DraftDoc, PublishDoc } from "@/lib/document";
 import type { PageChrome } from "@/lib/editor/contracts";
 import type { EditorState } from "@/lib/editor/state";
 import type { PublishStatus } from "@/lib/editor/status";
+import type { ItemPublishState } from "@/lib/publish/status";
 import type { PlanId } from "@/lib/limits/table";
 import type { TokenSet } from "@/lib/theme";
 import type { WorkspaceAction } from "./workspace-reducer";
@@ -34,6 +35,17 @@ export interface PublishNote {
   message: string;
   /** Whether pressing Publish again can help (a failure on the way) or not (signed out, suspended). */
   retry: boolean;
+}
+
+/** What a publish action is running on (M15-10): everything, the design, or a page ("home" or a sub-page's id). */
+export type PublishTarget = "all" | "design" | (string & {});
+
+/** Each part's own state against the live site (M15-10): what the publish bar lists. */
+export interface PublishState {
+  design: ItemPublishState;
+  home: ItemPublishState;
+  /** By sub-page id. */
+  pages: Readonly<Record<string, ItemPublishState>>;
 }
 
 /** What the saved-themes list needs when the server could not read it (M5-16). */
@@ -86,9 +98,33 @@ export interface WorkspaceValue {
   publishedAt: string | null;
   /** `{liveUrl}/og?v=...` once the page is published, else null: the share preview shows it. */
   liveOgUrl: string | null;
+  /** Any publish action is running. */
   publishing: boolean;
-  /** Writes pending edits, then publishes. Works from every tab; a refusal takes you to what failed. */
+  /** Which one (M15-10), or null: the bar marks that button busy and turns the others off. */
+  publishingItem: PublishTarget | null;
+  /** The design's, Home's and each page's own state: the rows of the publish bar. */
+  publishState: PublishState;
+  /** Writes pending edits, then publishes all changes. Works from every tab; a refusal takes you to what failed. */
   publish: () => void;
+  /**
+   * The three publish actions (M15-10). Each writes pending edits first and resolves true when it
+   * went live; on a refusal it resolves false after showing what failed (the fields, or the note).
+   * `publishAll` is what `publish` calls.
+   */
+  publishAll: () => Promise<boolean>;
+  /** One page: "home" or a sub-page's id. The design and every other page stay as they are. */
+  publishPageById: (id: string) => Promise<boolean>;
+  /** Theme, menu and profile. No page changes. */
+  publishDesignOnly: () => Promise<boolean>;
+  /** Runs the publish action that last failed again (the note's Retry). */
+  retryPublish: () => void;
+  /** Restores a page's revision into its draft ("home" or a sub-page's id), then reloads the workspace. Publishes nothing. */
+  restoreRevision: (
+    id: string,
+    rev: number,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Home's page entry id (its revisions are listed under it), or null when the site has none. */
+  homeEntryId: string | null;
   publishNote: PublishNote | null;
   /** Unpublish (M14-02): the site goes back to its placeholder; the draft stays. `message` is set on a refusal. */
   unpublish: () => Promise<{ ok: true } | { ok: false; message: string }>;

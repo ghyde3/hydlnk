@@ -60,11 +60,12 @@ test.describe("M6-50 the confirmation", () => {
     const confirm = confirmOf(page, 2);
     await expect(confirm).toBeVisible();
     await expect(confirm).toContainText(
-      "Restore version 2? Your draft is replaced with this version. Your live page doesn’t change until you publish.",
+      // M15-10: a restore brings back the design only, and the confirmation says so.
+      "Restore the design of version 2? Your draft’s theme, menu and profile are replaced. Your pages don’t change, and your live site doesn’t change until you publish.",
     );
     // the draft differs from the live page, so it says so
     await expect(page.getByTestId("restore-unpublished")).toHaveText(
-      "You have unpublished changes. They’ll be replaced.",
+      "You have unpublished changes. Design changes will be replaced.",
     );
     const confirmBtn = confirmButton(page, 2);
     const keep = keepButton(page, 2);
@@ -160,7 +161,7 @@ test.describe("M6-50 restoring", () => {
     const done = rowFor(page, 2).getByTestId("restore-done");
     await expect(done).toBeVisible();
     await expect(done).toContainText(
-      "Restored version 2 to your draft. Review it in the editor, then publish.",
+      "Restored the design of version 2 to your draft. Review it in the editor, then publish.",
     );
     expect(actions).toHaveLength(1);
     await page.unroute("**/*");
@@ -266,7 +267,9 @@ test.describe("M6-50 restoring", () => {
     expect(bioOf((await pageState(user.pageId)).draft)).toBe("Typed after the restore");
   });
 
-  test("M6-50 a restore with images that are gone adds the line about them to the success message", async ({
+  // M15-10: only the design's images are restored and counted (here the photo); the card's image
+  // lives in a block, and blocks are not restored. This test expected "2 images" before.
+  test("M6-50 a restore with a design image that is gone adds the line about it to the success message", async ({
     page,
     context,
   }) => {
@@ -295,7 +298,7 @@ test.describe("M6-50 restoring", () => {
     await restoreButton(page, 1).click();
     await confirmButton(page, 1).click();
     await expect(rowFor(page, 1).getByTestId("restore-done")).toContainText(
-      "Restored version 1 to your draft. Review it in the editor, then publish. 2 images from this version are no longer stored. Add them again before you publish.",
+      "Restored the design of version 1 to your draft. Review it in the editor, then publish. An image from this version is no longer stored. Add it again before you publish.",
     );
     const draft = (await pageState(user.pageId)).draft as { profile: { photo: unknown } };
     expect(draft.profile.photo).toBeNull();
@@ -303,25 +306,27 @@ test.describe("M6-50 restoring", () => {
 });
 
 test.describe("M6-50 failures keep the draft and say what to do", () => {
-  test("M6-50 a version with a link to a blocked site can't be restored, names the site and changes nothing", async ({
+  // M15-10: only a link of the DESIGN can refuse a restore now (the support banner's). The link
+  // used to sit in a block; blocks are not restored, so that would no longer be refused.
+  test("M6-50 a version whose design links to a blocked site can't be restored, names the site and changes nothing", async ({
     page,
     context,
   }) => {
     const user = await signedInUser(context, { label: "vr9", plan: "pro" });
     const host = `zq-blk-${rand(8)}.example.test`;
     await makeVersions(user.pageId, 2, {
-      extra: (i, base) => {
-        const blocks = [...(base.blocks as Record<string, unknown>[])];
-        if (i === 1)
-          blocks.push({
-            id: "blkLink0001",
-            type: "link",
-            visible: true,
-            label: "Shady",
-            url: `https://${host}/x`,
-          });
-        return { blocks };
-      },
+      extra: (i) =>
+        i === 1
+          ? {
+              banner: {
+                id: "blkBanner001",
+                visible: true,
+                text: "Support us",
+                label: "Shady",
+                url: `https://${host}/x`,
+              },
+            }
+          : {},
     });
     const admin = adminClient();
     expect(

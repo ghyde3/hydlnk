@@ -4,9 +4,11 @@ import { publishedSubPageSchema, type SubPagePublish } from "@/lib/document";
 import { countSiteIndexQuery } from "@/lib/publish/query-counter";
 import { PAGE_REVALIDATE_SECONDS, PUBLIC_READ_CACHE_VERSION, pageTag } from "@/lib/publish/tags";
 import type { SitePageSummary } from "./menu";
+import { getLivePageWithClient, listLivePagesWithClient } from "./page-entries";
 
 /**
- * The public reads of a site's sub-pages (M11-06). Both are cached in the Data Cache under the
+ * The public reads of a site's sub-pages (M11-06), from the site's page entries (1b1-12: the
+ * non-Home `page` entries of `content_entries`, through `page-entries.ts`). Both are cached in the Data Cache under the
  * site's own tag, `pageTag(pageId)`, the tag of Home's read: Publish (`updateTag`), a plan change, a
  * suspension and a domain change expire Home and every sub-page together, and a deleted page's
  * routes expire it with `invalidatePage`. Published only, never `draft`; the secret key, so these
@@ -32,21 +34,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function readIndex(pageId: string): Promise<SitePageSummary[]> {
   countSiteIndexQuery(pageId);
-  const { data, error } = await (
-    await adminClient()
-  )
-    .from("site_pages")
-    .select("id, live_path, title:published->>title")
-    .eq("page_id", pageId)
-    .not("published", "is", null)
-    .order("live_path", { ascending: true });
-  if (error) throw new Error(`Loading the pages of site ${pageId} failed: ${error.message}`);
-  const pages: SitePageSummary[] = [];
-  for (const row of data ?? []) {
-    if (typeof row.live_path !== "string" || typeof row.title !== "string") continue;
-    pages.push({ id: row.id, path: row.live_path, title: row.title });
-  }
-  return pages;
+  return listLivePagesWithClient(await adminClient(), pageId);
 }
 
 /**
@@ -66,19 +54,9 @@ export function getSiteIndex(pageId: string): Promise<SitePageSummary[]> {
 type SubPageRead = { published: unknown; publishedAt: string | null } | null;
 
 async function readSubPage(pageId: string, subPageId: string): Promise<SubPageRead> {
-  const { data, error } = await (
-    await adminClient()
-  )
-    .from("site_pages")
-    .select("published, published_at")
-    .eq("id", subPageId)
-    .eq("page_id", pageId)
-    .not("published", "is", null)
-    .maybeSingle();
-  if (error)
-    throw new Error(`Loading page ${subPageId} of site ${pageId} failed: ${error.message}`);
-  if (!data) return null;
-  return { published: data.published, publishedAt: data.published_at ?? null };
+  const page = await getLivePageWithClient(await adminClient(), pageId, subPageId);
+  if (!page) return null;
+  return { published: page.published, publishedAt: page.publishedAt };
 }
 
 export interface PublishedSubPage {

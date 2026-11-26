@@ -6,8 +6,8 @@ import { formatWhen } from "@/components/admin/format";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
 import { getAccountDetail } from "@/lib/admin/account-queries";
 import {
-  SITE_BYTES_CAP,
   formatDate,
+  siteBytesCap,
   stripeCustomerUrl,
   type AccountDetail,
 } from "@/lib/admin/account-view";
@@ -197,7 +197,7 @@ export default async function AdminAccount({ params }: { params: Promise<{ id: s
             </Fact>
             <Fact label="Sub-pages">
               <span data-site-bytes="">
-                {formatBytes(account.siteBytes)} of {formatLimitBytes(SITE_BYTES_CAP)}
+                {formatBytes(account.siteBytes)} of {formatLimitBytes(siteBytesCap(account.plan))}
               </span>
             </Fact>
           </dl>

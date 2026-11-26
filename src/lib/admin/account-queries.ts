@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
+import { listDraftPagesWithClient } from "@/lib/site/page-entries";
 import {
   ACCOUNT_AUDIT_LIMIT,
   AUDIT_PAGE_SIZE,
@@ -125,13 +126,13 @@ export async function getAccountDetail(
   const suspended = row.suspended_at !== null;
 
   const [subRows, domainRows, clientRows] = await Promise.all([
-    pageIds.length
-      ? db
-          .from("site_pages")
-          .select("id, page_id, published_at, path:draft->>path, title:draft->>title")
-          .in("page_id", pageIds)
-          .order("created_at", { ascending: true })
-      : Promise.resolve({ data: [], error: null }),
+    // The sub-pages are the sites' page entries (not Home, not trashed), oldest first.
+    Promise.all(
+      pageIds.map(async (siteId) => ({
+        siteId,
+        entries: await listDraftPagesWithClient(db, siteId),
+      })),
+    ),
     pageIds.length
       ? db
           .from("domains")
@@ -146,7 +147,6 @@ export async function getAccountDetail(
           .in("client_id", [...new Set((grants.data ?? []).map((g) => g.client_id))])
       : Promise.resolve({ data: [], error: null }),
   ]);
-  if (subRows.error) throw new Error(`Reading sub-pages failed: ${subRows.error.message}`);
   if (domainRows.error) throw new Error(`Reading domains failed: ${domainRows.error.message}`);
   if (clientRows.error) throw new Error(`Reading apps failed: ${clientRows.error.message}`);
 
@@ -155,17 +155,15 @@ export async function getAccountDetail(
     handle: page.handle,
     published: page.published !== null,
     live: page.published !== null && !suspended,
-    subPages: (subRows.data ?? [])
-      .filter((s) => s.page_id === page.id)
-      .map((s) => {
-        const { path, title } = s as unknown as { path: string | null; title: string | null };
-        return {
-          id: s.id,
-          title: typeof title === "string" && title.trim() !== "" ? title : "Untitled",
-          path: typeof path === "string" ? path : "",
-          live: s.published_at !== null && !suspended,
-        };
-      }),
+    subPages: (subRows.find((group) => group.siteId === page.id)?.entries ?? []).map((entry) => {
+      const { path, title } = entry.draft;
+      return {
+        id: entry.id,
+        title: typeof title === "string" && title.trim() !== "" ? title : "Untitled",
+        path: typeof path === "string" ? path : "",
+        live: entry.published !== null && !suspended,
+      };
+    }),
     domains: (domainRows.data ?? [])
       .filter((d) => d.page_id === page.id)
       .map((d) => ({ id: d.id, hostname: d.hostname, status: d.status })),

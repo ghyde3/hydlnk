@@ -1,12 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { ChevronDown } from "lucide-react";
 import { PageName } from "@/components/editor/page-name";
 import { StatusChip } from "@/components/editor/status-chip";
 import { UndoRedoButtons } from "@/components/editor/undo-redo-controls";
+import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import type { UndoRedo } from "@/components/editor/use-undo-redo";
 import type { SaveStatus } from "@/lib/editor/autosave";
-import type { PublishStatus } from "@/lib/editor/status";
+import { PUBLISH_STATUS_LABEL, type PublishStatus } from "@/lib/editor/status";
 import { MoreMenu } from "./more-menu";
 import { PIN_ATTRIBUTE, usePinnedHeight } from "./pinned-height";
 import { PreviewMenu } from "./preview-menu";
@@ -39,8 +41,21 @@ export interface WorkspaceToolbarProps {
   flush: () => Promise<boolean>;
   /** The live page's address, or null while the page has never been published ("View live page" is off). */
   liveUrl: string | null;
-  /** A Publish is running: the button reads "Publishing..." and is `aria-busy`. */
+  /** Publish all changes is running: the button reads "Publishing..." and is `aria-busy`. */
   publishing: boolean;
+  /** Another publish action (a page, the design) is running from the publish bar: Publish is off meanwhile. */
+  publishBusy?: boolean;
+  /**
+   * The publish bar (M15-10). With `onTogglePublishBar` the status chip is the bar's toggle;
+   * `publishBarSlot` is the bar itself (the caller mounts it only while open) and is placed under
+   * the toolbar from 760px. Without it the chip is a plain chip, as before.
+   */
+  onTogglePublishBar?: () => void;
+  publishBarOpen?: boolean;
+  publishToggleRef?: RefObject<HTMLButtonElement | null>;
+  /** The id of the bar's element, for `aria-controls`. */
+  publishBarId?: string;
+  publishBarSlot?: ReactNode;
   /**
    * Why Publish is off, or null: a suspended owner (M5-09) or a link to a blocked site (M5-03). It
    * is the button's title.
@@ -65,13 +80,20 @@ export const TOOLBAR_TEST_ID = "workspace-toolbar";
 export const TOOLBAR_ROW_TEST_ID = "workspace-toolbar-row";
 export const TOOLBAR_TABS_TEST_ID = "workspace-tabs-pin";
 
+/** The accessible name of the chip that opens the publish bar: the status it shows, then what it does. */
+export function publishToggleName(status: PublishStatus): string {
+  return `Status: ${PUBLISH_STATUS_LABEL[status]}, choose what to publish`;
+}
+
 function PublishButton({
   publishing,
+  busy,
   disabledReason,
   onPublish,
   className,
 }: {
   publishing: boolean;
+  busy: boolean;
   disabledReason: string | null;
   onPublish: () => void;
   className: string;
@@ -80,9 +102,10 @@ function PublishButton({
     <button
       type="button"
       onClick={onPublish}
-      disabled={publishing || disabledReason !== null}
+      disabled={publishing || busy || disabledReason !== null}
       aria-busy={publishing}
-      title={disabledReason ?? undefined}
+      // One tap publishes all changes (M15-10); the status chip opens the bar to pick a part.
+      title={disabledReason ?? "Publish all changes"}
       className={`min-h-11 shrink-0 cursor-pointer rounded-md bg-ink px-4 text-sm font-semibold whitespace-nowrap text-surface disabled:cursor-progress disabled:opacity-70 ${className}`}
     >
       {publishing ? "Publishing..." : "Publish"}
@@ -119,7 +142,8 @@ function NameBlock({ pageId, address, name }: { pageId: string; address: string;
  * "⋯" menu and Publish, the only charcoal control. From 760px to 1279px the same controls wrap into
  * two rows (the name and the tabs, then the rest) as one pinned block. Below 760px it is a 52px
  * pinned row of Undo, Redo, the status chip and Publish, with the tabs in a 48px strip pinned under
- * it; the page's name is the first line of the content and scrolls away, the save indicator is a
+ * it; the status chip is the toggle of the publish bar (M15-10: a panel under the toolbar from 760px,
+ * a sheet above the tab bar below it); the page's name is the first line of the content and scrolls away, the save indicator is a
  * small chip above the bottom tab bar, and QR code, history and preview links live in the Share
  * tab (the two menus are not drawn).
  *
@@ -131,10 +155,22 @@ function NameBlock({ pageId, address, name }: { pageId: string; address: string;
  * kept equal to its measured height. Nothing in the toolbar changes the draft or adds an undo step
  * except the buttons that are about doing so (Undo, Redo, Publish).
  */
+const noSubscription = () => () => {};
+
 export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
   const { pageId, address, name, tabs, status, saveStatus, undoRedo, flush, liveUrl } = props;
   const { publishing, publishDisabledReason = null, onPublish, onOpenShare } = props;
+  const { publishBusy = false, onTogglePublishBar, publishBarOpen = false } = props;
+  const { publishToggleRef, publishBarId, publishBarSlot } = props;
   usePinnedHeight();
+  const isDesktop = useIsDesktop();
+  // False on the server and for the first client render, when the width is not known yet.
+  const hydrated = useSyncExternalStore(
+    noSubscription,
+    () => true,
+    () => false,
+  );
+  const phoneOrder = hydrated && !isDesktop;
 
   return (
     <div
@@ -155,33 +191,89 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
       <div
         data-testid={TOOLBAR_ROW_TEST_ID}
         {...{ [PIN_ATTRIBUTE]: "" }}
-        className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-2 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
+        className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-1 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
       >
-        <div className="order-2 flex min-w-0 flex-1 hl:order-none hl:flex-none">
-          <StatusChip status={status} />
-        </div>
-        <SaveIndicator status={saveStatus} />
-        <div className="order-1 flex shrink-0 items-center gap-2 hl:order-none hl:ml-auto min-[1280px]:ml-0">
-          <UndoRedoButtons controls={undoRedo} />
-          <div className="hidden hl:block">
-            <PreviewMenu
-              pageId={pageId}
-              flush={flush}
-              liveUrl={liveUrl}
-              onOpenShare={onOpenShare}
-            />
-          </div>
-          <div className="hidden hl:block">
-            <MoreMenu flush={flush} onOpenShare={onOpenShare} />
-          </div>
-        </div>
+        {/*
+          The DOM order is the order the eye reads at each width, so Tab follows it (WCAG 2.4.3). At
+          760px and up that is the order written here: status, save indicator, then Undo, Redo and the
+          menus, then Publish. On a phone Undo and Redo are drawn first (`order-1`) and the status
+          chip after them, so there the chip's node is moved behind them once the viewport is known.
+          One set of controls, moved (the keys keep the nodes), never two. The server and the first
+          client render write the desktop order, and the `order-*` classes draw the phone row the
+          same before and after the move; at 760px and up no node ever moves, so focus in the menus
+          is never disturbed.
+
+          The phone row's gaps are 4px (row and Undo/Redo), not 6 and 8: at 390px that leaves the
+          status slot 174px for the 165px the longest chip, "Unpublished changes", and its chevron
+          need in Public Sans. With 6 and 8 the slot was 166px, and the chip wrapped to two lines
+          whenever the text ran 2px wider (a fallback font does, before the swap). Under about 381px
+          the chip wraps inside its 44px toggle; nothing is cut and the row does not scroll.
+        */}
+        {(phoneOrder
+          ? (["save", "history", "status"] as const)
+          : (["status", "save", "history"] as const)
+        ).map((part) =>
+          part === "status" ? (
+            <div key="status" className="order-2 flex min-w-0 flex-1 hl:order-none hl:flex-none">
+              {onTogglePublishBar ? (
+                <button
+                  ref={publishToggleRef}
+                  type="button"
+                  data-testid="publish-bar-toggle"
+                  // The name holds the visible text (WCAG 2.5.3, label in name), so "click Published"
+                  // finds it. It starts with "Status": no button but Publish has a name starting "Publish".
+                  aria-label={publishToggleName(status)}
+                  aria-haspopup="dialog"
+                  aria-expanded={publishBarOpen}
+                  aria-controls={publishBarOpen ? publishBarId : undefined}
+                  onClick={onTogglePublishBar}
+                  className="inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-0.5 rounded-sm border-0 bg-transparent p-0 text-ink hl:gap-1"
+                >
+                  <StatusChip status={status} />
+                  {/* At every width: without it the chip reads as a plain badge on a phone. */}
+                  <ChevronDown
+                    aria-hidden="true"
+                    focusable="false"
+                    data-testid="publish-bar-chevron"
+                    size={14}
+                    className={`shrink-0 text-text-2 ${publishBarOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+              ) : (
+                <StatusChip status={status} />
+              )}
+            </div>
+          ) : part === "save" ? (
+            <SaveIndicator key="save" status={saveStatus} />
+          ) : (
+            <div
+              key="history"
+              className="order-1 flex shrink-0 items-center gap-1 hl:order-none hl:ml-auto hl:gap-2 min-[1280px]:ml-0"
+            >
+              <UndoRedoButtons controls={undoRedo} />
+              <div className="hidden hl:block">
+                <PreviewMenu
+                  pageId={pageId}
+                  flush={flush}
+                  liveUrl={liveUrl}
+                  onOpenShare={onOpenShare}
+                />
+              </div>
+              <div className="hidden hl:block">
+                <MoreMenu flush={flush} onOpenShare={onOpenShare} />
+              </div>
+            </div>
+          ),
+        )}
         <PublishButton
           publishing={publishing}
+          busy={publishBusy}
           disabledReason={publishDisabledReason}
           onPublish={onPublish}
           className="order-3 min-w-[84px] hl:order-none hl:min-w-0"
         />
       </div>
+      {publishBarOpen ? publishBarSlot : null}
     </div>
   );
 }

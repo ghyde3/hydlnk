@@ -39,8 +39,10 @@ describe("M2-08 Storage stays server-only", () => {
     // cleanup-admin.ts (M5-14: objects nothing references any more are removed),
     // delete-media.ts (M4-34: an account's objects removed with it) and publish/core.ts (the
     // background object must exist) and versions/core.ts (M6-49: a version's photo and background
-    // object are looked up before they are shown or restored). Each imports "server-only", checked below.
+    // object are looked up before they are shown or restored) and content/images.ts (M15-03: post
+    // images are looked up and removed on the server). Each imports "server-only", checked below.
     expect(users).toEqual([
+      "src/lib/content/images.ts",
       "src/lib/media/cleanup-admin.ts",
       "src/lib/media/quota.ts",
       "src/lib/media/upload.ts",

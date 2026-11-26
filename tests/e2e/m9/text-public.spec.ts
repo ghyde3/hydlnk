@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
-import { cleanupUsers } from "../fixtures/data";
-import { restAs } from "../fixtures/http";
+import { cleanupUsers, publishHome } from "../fixtures/data";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { showView } from "../m2/blocks-helpers";
 import {
@@ -212,19 +211,17 @@ test.describe("M9-11 parity and the chip", () => {
 });
 
 test.describe("M9-11 abuse: hostile marks written straight to the draft", () => {
-  /** The draft written as the owner, with the publishable key and the JWT, as raw JSON. */
+  /**
+   * The hostile blocks as the owner's raw JSON write would have them: the database refuses the browser's
+   * write (M15-14), then they are planted in Home's entry with the secret key.
+   */
   async function writeDraft(
     context: import("@playwright/test").BrowserContext,
     user: { handle: string; pageId: string },
     blocks: unknown[],
   ) {
     const before = await pageRow(user.pageId);
-    const next = { ...draftWith(user.handle, blocks), rev: before.draft.rev + 1 };
-    const write = await restAs(await accessToken(context), `/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      body: { draft: next },
-    });
-    expect(write.status, JSON.stringify(write.body)).toBe(200);
+    await abuseHomeBlocks(await accessToken(context), user.pageId, blocks);
     return before;
   }
 
@@ -280,13 +277,7 @@ test.describe("M9-11 abuse: hostile marks written straight to the draft", () => 
       const seeded = textBlock("A safe sentence for the live page.");
       const user = await userWithBlocks(context, `m9ab-${name.slice(0, 6).replace(/\W/g, "")}`, [seeded]);
       const { toPublishForm } = await import("@/lib/document");
-      await adminClient()
-        .from("pages")
-        .update({
-          published: toPublishForm(draftWith(user.handle, [seeded]), null),
-          published_at: new Date().toISOString(),
-        })
-        .eq("id", user.pageId);
+      await publishHome(user.pageId, toPublishForm(draftWith(user.handle, [seeded]), null));
       const bad = textBlock(
         Array.from({ length: 25 }, (_, i) => `ab${i}`).join("\n").padEnd(100, "x"),
         make(),

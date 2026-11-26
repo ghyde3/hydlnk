@@ -3,7 +3,8 @@ import { expect, type BrowserContext, type Locator, type Page } from "@playwrigh
 import { adminClient } from "../fixtures/auth";
 import { newBlockId, type Block, type DraftDoc, type ImageRef } from "@/lib/document";
 import { draftOf, userWithDraft, type TestPage } from "../m2/blocks-helpers";
-import { openEditor, previewScreen } from "../m2/editor-helpers";
+import { openEditor, previewScreen, setDraft } from "../m2/editor-helpers";
+import { homeEntryOf } from "../fixtures/home-abuse";
 
 /**
  * Shared setup for the preview specs (M6-03, M7-09): the tab bar, the mini phone and its sheet, and
@@ -163,30 +164,30 @@ export async function userWithBlocks(
     plan: opts.plan,
   });
   const blocks = makeBlocks(user.userId);
-  const { error } = await adminClient()
-    .from("pages")
-    .update({ draft: draftOf(user.handle, blocks, opts.extra) })
-    .eq("id", user.pageId);
-  if (error) throw new Error(error.message);
+  // The design goes to pages.draft, the blocks to Home's entry (a moved site).
+  await setDraft(user.pageId, draftOf(user.handle, blocks, opts.extra));
   return { ...user, blocks };
 }
 
-/** The stored draft's `rev`. */
-export async function storedRev(pageId: string): Promise<number> {
+/** The stored revs, design and Home entry: "<design rev>/<entry rev>". Equal strings mean nothing was saved. */
+export async function storedRev(pageId: string): Promise<string> {
   const { data, error } = await adminClient()
     .from("pages")
     .select("draft")
     .eq("id", pageId)
     .single();
   if (error) throw new Error(error.message);
-  return (data.draft as DraftDoc).rev;
+  const home = await homeEntryOf(pageId);
+  return `${(data.draft as DraftDoc).rev}/${home.rev}`;
 }
 
-/** Counts PATCH requests to the pages table (the autosave write). */
+/** Counts the autosave writes: PATCH to the pages table (design) and POST to an entry's draft route (blocks). */
 export function countSaves(page: Page): { count: () => number } {
   let n = 0;
   page.on("request", (request) => {
     if (request.method() === "PATCH" && /\/rest\/v1\/pages/.test(request.url())) n += 1;
+    if (request.method() === "POST" && /\/api\/pages\/[^/]+\/entries\/[^/]+\/draft/.test(request.url()))
+      n += 1;
   });
   return { count: () => n };
 }

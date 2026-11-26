@@ -1,7 +1,6 @@
 import { expect, type BrowserContext } from "@playwright/test";
 import { emptyDraft, toPublishForm, type Block, type DraftDoc } from "@/lib/document";
-import { adminClient } from "../fixtures/auth";
-import { rand } from "../fixtures/data";
+import { publishHome, rand } from "../fixtures/data";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
 import { emptyUser, setDraft } from "../m2/editor-helpers";
 import { SERVER_PORT, rawBuffer, type RawBufferResponse } from "../m2/publish-helpers";
@@ -40,11 +39,7 @@ export const link = (id: string, label: string, url = "https://example.com/x"): 
 
 /** The published form of a draft, written the way Publish writes it. */
 export async function publishDraft(pageId: string, draft: DraftDoc, publishedAt = new Date()) {
-  const { error } = await adminClient()
-    .from("pages")
-    .update({ published: toPublishForm(draft, null), published_at: publishedAt.toISOString() })
-    .eq("id", pageId);
-  expect(error).toBeNull();
+  await publishHome(pageId, toPublishForm(draft, null), publishedAt.toISOString());
 }
 
 export interface LiveUser {

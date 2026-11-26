@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback, useRef, useState } from "react";
+import { PUBLISH_BAR_ID, PublishBar } from "../publish-bar/publish-bar";
 import { useWorkspace } from "../workspace-context";
 import { WorkspaceTabs } from "../workspace-tabs";
 import { WorkspaceToolbar } from "./workspace-toolbar";
@@ -19,6 +21,10 @@ export function ConnectedWorkspaceToolbar() {
         ? "conflict"
         : site.saveStatus
       : autosave.status;
+  // The publish bar (M15-10): view state only. It is mounted while open and nowhere else.
+  const [barOpen, setBarOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const closeBar = useCallback(() => setBarOpen(false), []);
   return (
     <WorkspaceToolbar
       pageId={pageId}
@@ -30,7 +36,13 @@ export function ConnectedWorkspaceToolbar() {
       undoRedo={undoRedo}
       flush={autosave.flush}
       liveUrl={workspace.hasPublished ? workspace.liveUrl : null}
-      publishing={workspace.publishing}
+      publishing={workspace.publishingItem === "all"}
+      publishBusy={workspace.publishing}
+      publishBarOpen={barOpen}
+      onTogglePublishBar={() => setBarOpen((open) => !open)}
+      publishToggleRef={toggleRef}
+      publishBarId={PUBLISH_BAR_ID}
+      publishBarSlot={<PublishBar toggleRef={toggleRef} onClose={closeBar} />}
       publishDisabledReason={workspace.publishDisabledReason}
       onPublish={workspace.publish}
       onOpenShare={workspace.openShare}

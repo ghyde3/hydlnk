@@ -103,29 +103,41 @@ describe("the draft is read in one place and written in one", () => {
     expect(source).toContain('.eq("owner_id", userId)');
   });
 
-  it("every site_pages read in page-access joins the site and filters on its owner in the same query (M12-05)", () => {
+  it("every page-entry read in page-access joins the site and filters on its owner in the same query (M12-05, 1b1-20)", () => {
     const source = code(`${MCP_DIR}/page-access.ts`);
+    expect(source).not.toMatch(/site_pages/);
     const chains = source
       .split("admin\n")
       .slice(1)
-      .filter((chain) => /\.from\("site_pages"\)/.test(chain.slice(0, 40)));
-    expect(chains.length).toBeGreaterThanOrEqual(3);
-    for (const chain of chains) {
-      const query = chain.slice(0, 600);
+      .filter((chain) => /\.from\("content_entries"\)/.test(chain.slice(0, 40)));
+    const joined = chains.filter((chain) =>
+      /SITE_JOIN|ENTRY_BASE|ENTRY_WITH_DOCS/.test(chain.slice(0, 200)),
+    );
+    expect(joined.length).toBeGreaterThanOrEqual(4);
+    for (const chain of joined) {
+      const query = chain.slice(0, 700);
       expect(query).toMatch(/\.eq\("site\.owner_id", userId\)/);
+      expect(query).toMatch(/\.is\("deleted_at", null\)/);
     }
+    // The one read without the join is Home's entry of sites the caller has just owner-checked.
+    expect(chains.length - joined.length).toBe(1);
     expect(source).toMatch(
       /SITE_JOIN = `site:pages\$\{String\.fromCharCode\(33\)\}inner\(owner_id\)`/,
     );
   });
 
-  it("the draft writer reads and writes a sub-page only under the site it just owner-checked", () => {
+  it("the draft writer reads a sub-page entry only under the site it just owner-checked, and writes it only through the content writer (1b1-19)", () => {
     const source = code(DRAFT_WRITER);
-    expect(source).toMatch(
-      /\.from\("site_pages"\)[\s\S]*?\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/,
+    // The read is one shared function that filters on id and site; the writer only delegates to it.
+    expect(source).toContain("readSubPageEntryWithClient(loose, siteId, entryId)");
+    const reader = code("src/lib/site/page-entries-core.ts");
+    expect(reader).toMatch(
+      /readSubPageEntryWithClient[\s\S]*?\.from\("content_entries"\)[\s\S]*?\.eq\("id", entryId\)\s*\.eq\("site_id", siteId\)/,
     );
-    expect(source).toMatch(/base\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/);
-    expect(source).toMatch(/\.eq\("updated_at", subRow\.updated_at\)/);
+    expect(source).toContain("readSubPageEntry(loose, pageId, subPageId)");
+    expect(source).toMatch(/updateEntryWithClient\(admin, \{\s*actor: \{ userId, source: "mcp" \}/);
+    expect(source).not.toMatch(/\.from\("site_pages"\)/);
+    expect(source).not.toMatch(/\.from\("content_entries"\)\s*\.update/);
   });
 
   it("the draft writer's update sets the draft column and nothing else, filtered on id, owner and rev", () => {

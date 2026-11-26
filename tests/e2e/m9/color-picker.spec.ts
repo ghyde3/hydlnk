@@ -384,9 +384,13 @@ test.describe("M9-07 picking", () => {
     const panel = await openPanel(page, "Accent");
     await drag(page, panel.locator(".react-colorful__saturation"), [0.2, 0.2], [0.7, 0.7]);
     await expect(saveStatus(page)).toHaveText("Saved", { timeout: 3_000 });
-    // Only the autosave of the draft (a PATCH of the page row) went out; nothing to any other host.
+    // Only the autosave of the draft went out: a PATCH of the page row, after the read of Home's
+    // revision a design-only save makes first (M15-17). Nothing to any other host.
     const foreign = requests.filter(
-      (entry) => !/^PATCH [^ ]+\/rest\/v1\/pages$/.test(entry) && !/app\.localhost/.test(entry),
+      (entry) =>
+        !/^PATCH [^ ]+\/rest\/v1\/pages$/.test(entry) &&
+        !/^GET [^ ]+\/rest\/v1\/content_entries$/.test(entry) &&
+        !/app\.localhost/.test(entry),
     );
     expect(foreign).toEqual([]);
     expect(await storage()).toEqual(storageBefore);

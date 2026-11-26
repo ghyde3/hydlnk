@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { adminClient, userClient } from "../fixtures/auth";
 import {
+  abuseHomeBlocks,
+  expectClientBlockWriteRefused,
+  writeHomeDraft,
+} from "../fixtures/home-abuse";
+import {
   cleanupUsers,
   desktopOnly,
   phoneOnly,
@@ -589,7 +594,7 @@ test.describe("M6-34 a page using every Wave G feature", () => {
 const IMG_PATH = (uid: string) => `${uid}/img-0123456789ab.webp`;
 
 test.describe("M6-34 crafted drafts are refused at Publish", () => {
-  test("M6-34 with the publishable key and another user's JWT, each crafted draft leaves the live page unchanged", async ({
+  test("M6-34 with another user's JWT, and a crafted draft planted in Home's entry (the owner's own write is refused, HL013), each leaves the live page unchanged", async ({
     browser,
     context,
   }, info) => {
@@ -778,12 +783,25 @@ test.describe("M6-34 crafted drafts are refused at Publish", () => {
     };
 
     for (const { name, draft, message } of crafted) {
-      const write = await userClient(token)
+      // M15-14: the browser write of the blocks is refused (HL013); the crafted blocks go into Home's
+      // entry, whose own checks accept them like any draft. A crafted design field (the share image)
+      // is still a PATCH of pages.draft, accepted like any draft.
+      const { blocks: craftedBlocks, ...craftedDesign } = draft(
+        before.draft as unknown as Record<string, unknown>,
+      ) as { blocks: unknown[] } & Record<string, unknown>;
+      await abuseHomeBlocks(token, b.pageId, craftedBlocks);
+      const frozen = await adminClient().from("pages").select("draft").eq("id", b.pageId).single();
+      const design = await userClient(token)
         .from("pages")
-        .update({ draft: draft(before.draft as unknown as Record<string, unknown>) })
+        .update({
+          draft: {
+            ...craftedDesign,
+            blocks: (frozen.data!.draft as { blocks?: unknown }).blocks,
+          } as never,
+        })
         .eq("id", b.pageId)
         .select("id");
-      expect(write.error, `${name}: the draft itself is accepted like any draft`).toBeNull();
+      expect(design.error, `${name}: the design part is accepted like any draft`).toBeNull();
       await dismiss();
       await publishAndWait();
       const alert = pageB.getByRole("alert").first();
@@ -818,11 +836,9 @@ test.describe("M6-34 crafted drafts are refused at Publish", () => {
           ]),
         ],
       };
-      const refused = await userClient(token)
-        .from("pages")
-        .update({ draft: blockedDraft as never })
-        .eq("id", b.pageId)
-        .select("id");
+      // M15-14: the browser write is refused (HL013); the entry's blocklist trigger refuses the planted one.
+      await expectClientBlockWriteRefused(token, b.pageId, blockedDraft.blocks);
+      const refused = await writeHomeDraft(b.pageId, blockedDraft.blocks);
       expect(refused.error?.message ?? "").toContain("blocked_link");
       expect(refused.error?.code).toBe("HL005");
       const stored = (await pageRow(b.pageId)).draft as { blocks: { id: string }[] };
@@ -839,12 +855,7 @@ test.describe("M6-34 crafted drafts are refused at Publish", () => {
         ]),
       ],
     };
-    const saved = await userClient(token)
-      .from("pages")
-      .update({ draft: lateDraft as never })
-      .eq("id", b.pageId)
-      .select("id");
-    expect(saved.error).toBeNull();
+    await abuseHomeBlocks(token, b.pageId, lateDraft.blocks);
     await adminClient().from("blocked_domains").insert({ domain: late, reason: "e2e" });
     try {
       await dismiss();
