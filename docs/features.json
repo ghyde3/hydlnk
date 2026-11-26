@@ -6250,6 +6250,163 @@
         "The findings and their fixes are written to PROGRESS.md with the commands and results."
       ],
       "passes": false
+    },
+    {
+      "id": "M20-01",
+      "milestone": 20,
+      "area": "data",
+      "title": "Schedule storage, plan columns and boundary columns",
+      "acceptance": [
+        "One migration adds `content_schedules`, `pages.schedule_clock`, `content_entries.next_boundary_at`, the `scheduling` and `scheduled_per_site` columns of `plan_limits`, the functions of section 4.1 and the job `run-schedules`; the table has RLS on, default grants revoked, owner SELECT only (without `claim` and `locked_until`), no client write; every function is service_role only with an empty `search_path`.",
+        "pgTAP 221: the owner reads their own schedule rows; another user and anon read nothing; INSERT, UPDATE and DELETE with the publishable key are refused for everyone; `pages.schedule_clock`, `content_entries.next_boundary_at` and `scheduled_at` cannot be written by `authenticated`.",
+        "pgTAP 221: `schedule_entry` for another owner's entry, a trashed entry and an unknown id all raise P0002; a stale rev raises 22023; a time in the past, less than one minute ahead, more than 366 days ahead or not on a whole minute raises 22023; an unpublish time not after the pending publish time raises 22023.",
+        "Unit: `limits-parity` passes with the two new columns (Free `false` and 0, Pro `true` and 50, Studio `true` and 500)."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-02",
+      "milestone": 20,
+      "area": "blocks",
+      "title": "A block's window in the draft and publish schemas",
+      "acceptance": [
+        "Every block type accepts an optional `schedule: { from?, until? }`; a draft keeps any short string in either; Publish requires each set time to be a UTC instant on a whole minute in the canonical form `YYYY-MM-DDTHH:MM:00Z`, `from` earlier than `until`, and names the block in the issue.",
+        "`toPublishForm` and `toSubPagePublishForm` write `schedule` only when at least one time is set, in canonical form, and stay pure (no clock read); a block with `visible: false` is dropped as before, whatever its window.",
+        "A scheduled link cannot be the redirect-mode target (`isEligibleRedirectLink` refuses it, with the existing message path); a scheduled featured link still counts toward `LIMITS.featuredLinks`.",
+        "Unit: schema accepts and refuses (seconds not `00`, an offset other than `Z`, `from >= until`, 41 characters, a non-string); the publish form of a windowed block; two drafts that differ only in key order publish to equal forms."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-03",
+      "milestone": 20,
+      "area": "publishing",
+      "title": "The live page shows a block only inside its window",
+      "acceptance": [
+        "A block whose window has not started or has ended is absent from the live HTML of Home and of every sub-page, on the handle host and on a verified custom domain: its text, URL, image address, block id, CSS and FAQ JSON-LD are not in the response.",
+        "The window is decided on the server when the HTML is generated, at `max(server clock, the site's schedule clock)`; no script and no CSS hides anything, and the one tenant script is unchanged.",
+        "Unit (renderer): for a document with a not-yet-started link, an ended card, an open-ended block and a hidden block, the HTML at three instants contains exactly the expected ids; a response body never contains the URL of an out-of-window block; `tests/unit/m6-pages-static.test.ts` still passes.",
+        "Playwright at 390x844 and 1440x900: publish Home with one link that starts in the past and one that ended; only the first is on `mara.localhost:3000`; no horizontal scroll."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-04",
+      "milestone": 20,
+      "area": "publishing",
+      "title": "The cached page changes at a boundary without a publish",
+      "acceptance": [
+        "When a boundary of any live page entry passes, the next `run-schedules` tick sets the site's `schedule_clock`, the cron route expires `page:<siteId>` and only then advances `next_boundary_at`; the next request regenerates Home and every sub-page with the new state.",
+        "pgTAP 222: `next_boundary_at` is the earliest future boundary of the published copy and is null with none; publish, unpublish and trash recompute it; `due_block_boundaries` returns each due site once, sets the clock and is safe to call twice; `advance_block_boundaries` moves past every boundary at or before the clock; a hostile value planted in `published` (`\"schedule\": {\"from\": \"2026-13-45T99:00:00Z\"}`, a number, an array) never raises and reads as no boundary.",
+        "Unit: the sweep expires a site, then acknowledges it; when expiry throws it does not acknowledge, answers 500, and the next call expires the same site again; a render with the server clock one second behind the boundary and the schedule clock at the boundary shows the post-boundary state (clock skew).",
+        "Playwright against a production build (CI, `full-ci`): a link scheduled to end is in the cached page, the test moves the boundary into the past in the database and POSTs the cron route with the secret, and the next GET no longer contains it."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-05",
+      "milestone": 20,
+      "area": "analytics",
+      "title": "Per-block routes refuse a block outside its window",
+      "acceptance": [
+        "`GET`, `HEAD` and `POST /r/{pageId}/{blockId}` for a link, card, image link, grid cell, social icon, text link, store button or map button whose top-level block is outside its window answer the same 404 notice as an unknown id: no `Location`, no lock interstitial, no click row. Inside the window the redirect is unchanged.",
+        "The vCard download of a contact block outside its window answers its existing 404.",
+        "The decision reads only the cached published copy and the clock: a click outside a window costs no Postgres query on a warm cache.",
+        "Unit: `resolveClickTarget` at instants before, inside and after a window for each link-bearing block type; a locked link outside its window never shows the interstitial; a HEAD records nothing; the request's query string, `Date` header and body cannot move the decision."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-06",
+      "milestone": 20,
+      "area": "editor",
+      "title": "Scheduling a block in the editor",
+      "acceptance": [
+        "Every block's editor has a \"Schedule\" section with \"Show from\" and \"Show until\", each a native date-and-time control at least 44px tall with 16px text and a Clear button; the section states the zone in words (\"Times are in Europe/London, GMT+0\") from the browser; the stored value is UTC.",
+        "The block row shows one chip: \"Starts 3 Dec, 09:00\", \"Until 24 Dec, 18:00\" or \"Ended 1 Dec\"; \"Show until\" earlier than \"Show from\" shows the field message and Publish names the block.",
+        "The editor preview draws every block that has not ended (the owner is editing it) and hides ended ones; the private share link draws the draft as a visitor would see it now.",
+        "On Free the section shows the plan notice with the upgrade link and its controls are disabled; a document that carries a window anyway is refused at Publish (M20-11).",
+        "Unit: local time to UTC and back across both DST changes of `Europe/London` and `America/New_York`; the chip text for each state. Playwright at 390x844 and 1440x900: set a window on a link, reload, the times and the chip are still there; no horizontal scroll."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-07",
+      "milestone": 20,
+      "area": "publishing",
+      "title": "Scheduling a page or a post to publish",
+      "acceptance": [
+        "\"Schedule\" in the post editor and in each page row of the publish bar validates the entry exactly as Publish does, stores a snapshot of the draft at that rev with the time, and changes nothing on the live site; the same issues list is shown when the draft is not publishable.",
+        "Reschedule replaces the pending time and snapshot; Cancel removes it; both need the current rev and answer the conflict notice for a stale one.",
+        "Publishing the entry by hand (Publish, Publish all changes, MCP), trashing it or turning its type off-and-publishing never leaves a pending publish behind: a hand publish and a trash cancel it in the same transaction.",
+        "Unit: the schedule routes refuse another user's entry with the same not-found as a missing one, a foreign Origin, a wrong content type, a suspended account, a page entry of another site and a Home entry for scheduled unpublish; a draft that fails the strict schema, the blocklist or the own-image check is refused at scheduling with typed issues.",
+        "Playwright at 390x844 and 1440x900: schedule a post for tomorrow, see \"Scheduled\", cancel it."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-08",
+      "milestone": 20,
+      "area": "publishing",
+      "title": "The schedule worker",
+      "acceptance": [
+        "`POST /api/cron/run-schedules` on the app host answers 401 without `Authorization: Bearer <CRON_SECRET>` (header only) and exports only POST; pg_cron calls it each minute, and only when something is due.",
+        "A due publish makes the stored snapshot live through the same gate as a hand publish, re-run at fire time (strict schema, URL schemes, blocklist, own images, block-id clash, slug and path rules, site live for a page, type enabled), with `published_at` equal to the scheduled time, then expires the entry's cache tags; the draft is untouched, so later edits read \"Unpublished changes\".",
+        "pgTAP 223: two concurrent claims never return the same row (`skip locked`); a fire with a stale claim token writes nothing; a fire is atomic with marking the row done, so a second fire of the same row raises and the entry's rev rises once; an expired lease is claimed again; the fifth failed attempt marks the row failed; at most 5 rows of one owner are in a claim; a claim returns at most 25 rows.",
+        "Unit (worker, spy client): the owner is suspended at fire -> failed `account_suspended`, nothing published; the plan no longer includes scheduling -> failed `plan`; the snapshot now holds a blocklisted link, a `javascript:` link or another user's image -> failed with that code; the entry was trashed, or published by hand, after scheduling -> the row is already canceled and is never claimed; a publish more than 24 hours late -> failed `missed`; a database error releases the lease for a retry; a run stops claiming after 40 seconds or 100 rows.",
+        "Playwright against `next dev` at 1440x900: schedule a post, move its time into the past in the database, POST the route with the local secret, and the post is on `mara.localhost:3000/blog/{slug}`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-09",
+      "milestone": 20,
+      "area": "publishing",
+      "title": "Scheduled unpublish",
+      "acceptance": [
+        "A live post or sub-page can carry \"Unpublish at\"; at that time the worker takes it down as Unpublish does (draft kept, tags expired); it runs however late it is; a post that is not live at that time ends as done with nothing changed.",
+        "Home cannot be scheduled to unpublish (the route and `schedule_entry` both refuse it); unpublishing by hand cancels the pending row.",
+        "pgTAP 223 and unit: the cases above; an unpublish time at or before the pending publish time is refused."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-10",
+      "milestone": 20,
+      "area": "editor",
+      "title": "Scheduled status, cancel and reschedule, edits after scheduling",
+      "acceptance": [
+        "The post editor bar, the Posts list and each publish-bar row show \"Scheduled\" with the local time and zone; the Posts status filter gains \"Scheduled\"; a failed schedule shows \"Didn't publish\" with the reason and a \"Schedule again\" action.",
+        "After an edit, the editor says \"Your scheduled version is from {time}. Newer edits are not scheduled.\" with \"Update scheduled version\" (one tap, same time) and \"Cancel schedule\".",
+        "When a schedule fires while the editor is open, the editor adopts the new rev without the conflict notice if the server draft is unchanged.",
+        "Unit: `postState` and the page row state with a pending, failed and canceled schedule; the list filter returns only entries with a pending publish. Playwright at 390x844 and 1440x900: schedule, edit, see the notice, update the scheduled version; every control at least 44px."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-11",
+      "milestone": 20,
+      "area": "billing",
+      "title": "Scheduling is a Pro and Studio feature, enforced on write",
+      "acceptance": [
+        "On Free, `schedule_entry` raises HL017 and any write of a published copy that holds a block window raises HL017 (a trigger on `content_entries`), whatever the client sends; the editor shows the upgrade notice instead of the controls.",
+        "A site holds at most `scheduled_per_site` pending schedules (Pro 50, Studio 500): the next one raises HL018 with the limit message.",
+        "A downgrade deletes nothing: windows already live keep being honored (a hidden block stays hidden), pending schedules fail at fire with `plan`, and the next publish of a copy with windows is refused with the upgrade message.",
+        "pgTAP 221 and 222: each refusal above for each plan; unit: HL017 and HL018 map to `schedule_plan` and `schedule_limit`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M20-12",
+      "milestone": 20,
+      "area": "security",
+      "title": "Security review of the scheduling wave",
+      "acceptance": [
+        "`security-reviewer` runs on the whole diff (the cron route, the worker, the SQL, the click and vCard paths, the renderer filter, the new app routes) and reports no critical or high finding; every medium is fixed or recorded in PLAN with Gary's decision.",
+        "Checked by name: no content of an out-of-window block in any public response, feed, sitemap, JSON-LD or redirect; the worker acts only as the entry's owner with source `system` and through the writer; the cron route is useless without the secret and never echoes it; RLS on the new table; no public read of `draft` or of `snapshot`.",
+        "`adversarial-verifier` tries: scheduling another user's entry by id, a schedule on a trashed entry, 500 schedules in one minute on one site, a window planted directly in `published` with a non-ISO string, `/r` for a link one second outside its window, a double POST of the cron route, a POST with the secret in the query string."
+      ],
+      "passes": false
     }
   ]
 }
