@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { FORM_BUTTON } from "@/components/blocks/field";
-import type { RevisionSummary } from "@/lib/content";
+import type { RevisionSummary } from "@/lib/content/schemas/summaries";
 import { POST_TEST_IDS } from "@/lib/blog/test-ids";
 import { fetchRevisions, refusalMessage } from "@/lib/posts/client";
 

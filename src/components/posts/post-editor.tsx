@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
-import type { TermSummary } from "@/lib/content";
+import type { TermSummary } from "@/lib/content/schemas/summaries";
 import { CONTENT_CONFLICT_MESSAGE } from "@/lib/posts/messages";
 import { POST_TEST_IDS } from "@/lib/blog/test-ids";
 import {
@@ -24,7 +24,7 @@ import {
   toStoredDraft,
   type PostForm,
 } from "@/lib/posts/draft";
-import type { PostEntry } from "@/lib/posts/routes-core";
+import type { PostEntry } from "@/lib/posts/types";
 import { suggestSlug } from "@/lib/posts/slug";
 import type { PostState } from "@/lib/posts/status";
 import { createPreviewLink } from "@/lib/previews/actions";

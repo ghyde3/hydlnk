@@ -7,6 +7,7 @@ import { failure } from "./errors";
 import { ownedEntry, ownedSite, siteType } from "./guards";
 import { LIST_SORTS, LIST_STATUSES } from "./schemas/enums";
 import type { EntryStatus, ListSort, ListStatus } from "./schemas/enums";
+import type { EntrySummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -51,20 +52,7 @@ export async function getEntryWithClient(
   };
 }
 
-export interface EntrySummary {
-  id: string;
-  rev: number;
-  status: EntryStatus;
-  title: string | null;
-  slug: string | null;
-  path: string | null;
-  publishedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
-  /** A live entry whose draft is not what is published. Always false for a draft or a trashed entry. */
-  hasUnpublishedChanges: boolean;
-}
+export type { EntrySummary };
 
 /** The draft against the published copy, key order aside (the compare a save uses to skip a no-op). */
 const differs = (draft: unknown, published: unknown) => canonical(draft) !== canonical(published);

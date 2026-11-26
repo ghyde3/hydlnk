@@ -1,6 +1,6 @@
-import type { EntrySummary, TermSummary, TypeSummary } from "@/lib/content";
-import type { RevisionSummary } from "@/lib/content";
-import type { PostEntry } from "./routes-core";
+import type { EntrySummary, TermSummary, TypeSummary } from "@/lib/content/schemas/summaries";
+import type { RevisionSummary } from "@/lib/content/schemas/summaries";
+import type { PostEntry } from "./types";
 
 /**
  * The browser side of the Posts routes (M16-12 to M16-15): one small fetch per route under

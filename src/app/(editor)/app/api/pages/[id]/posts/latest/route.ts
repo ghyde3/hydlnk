@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getLatestPosts, getSiteArchives, getTermIndex } from "@/lib/blog/published";
-import { ownedSite } from "@/lib/content/guards";
+import { ownedSite } from "@/lib/content";
 import { answer, failed, gate } from "@/lib/posts/route-http";
 import { postsArchiveOf } from "@/lib/site/live";
 import { createAdminSupabase } from "@/lib/supabase/admin";

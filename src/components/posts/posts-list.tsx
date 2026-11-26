@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FORM_BUTTON } from "@/components/blocks/field";
-import type { EntrySummary } from "@/lib/content";
+import type { EntrySummary } from "@/lib/content/schemas/summaries";
 import { POSTS_TEST_IDS } from "@/lib/blog/test-ids";
 import { postDateLabel, postState } from "@/lib/posts/status";
 import { PostChip } from "./post-chip";

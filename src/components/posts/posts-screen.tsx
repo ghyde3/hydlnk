@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { Field, FORM_BUTTON, FORM_BUTTON_DANGER, controlClass } from "@/components/blocks/field";
-import type { EntrySummary, TermSummary, TypeSummary } from "@/lib/content";
+import type { EntrySummary, TermSummary, TypeSummary } from "@/lib/content/schemas/summaries";
 import { POSTS_TEST_IDS } from "@/lib/blog/test-ids";
 import { postLimitMessage } from "@/lib/limits/messages";
 import { buildPostsMeter } from "@/lib/limits/meters";

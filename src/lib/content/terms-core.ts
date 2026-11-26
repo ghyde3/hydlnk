@@ -5,6 +5,7 @@ import { updateEntryWithClient } from "./entries-core";
 import { failure, mapDbError } from "./errors";
 import { TERMS_PER_TYPE } from "@/lib/blog/types";
 import { activeAccount, enabledType, ownedEntry, ownedSite, siteType } from "./guards";
+import type { TermSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -14,14 +15,7 @@ const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/;
 const MAX_NAME = 80;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export type TermSummary = {
-  id: string;
-  typeId: string;
-  taxonomy: Taxonomy;
-  name: string;
-  slug: string;
-  parentId: string | null;
-};
+export type { TermSummary };
 
 const COLUMNS = "id, type_id, taxonomy, name, slug, parent_id";
 

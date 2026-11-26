@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { Field, FORM_BUTTON, controlClass } from "@/components/blocks/field";
-import type { TypeSummary } from "@/lib/content";
+import type { TypeSummary } from "@/lib/content/schemas/summaries";
 import { PAGES_BLOG_TEST_IDS } from "@/lib/blog/test-ids";
 import { NAV_MAX_ITEMS, NAV_MESSAGES } from "@/lib/document/nav";
 import { fetchTypes, refusalMessage, setPostType } from "@/lib/posts/client";

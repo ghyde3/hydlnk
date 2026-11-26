@@ -130,7 +130,12 @@ export const DESIGN_READERS: Record<string, Reader> = {
       publishForm: "the publish form built from the assembled document",
       cleaned: "the sanitized assembled document",
     },
-    entryRows: { full: "a page entry of the link's own site" },
+    entryRows: {
+      full: "a page entry of the link's own site",
+      // M16-16: the post a share link shows is a content_entries row, read by id within the link's
+      // own site and the site's Post type; its draft is parsed by the post draft schema.
+      "entry.data": "a post entry of the link's own site",
+    },
   },
   "src/lib/publish/core.ts": {
     why: "the design Publish validates; the frozen blocks are dropped and Home's entry's used",

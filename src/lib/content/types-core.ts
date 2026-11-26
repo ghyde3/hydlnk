@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
 import { activeAccount, ownedSite } from "./guards";
+import type { TypeSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -11,14 +12,7 @@ type Admin = SupabaseClient<Database>;
 const ARCHIVE_PATH = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 const MAX_LABEL = 60;
 
-export type TypeSummary = {
-  typeId: string;
-  key: string;
-  label: string;
-  labelPlural: string;
-  enabled: boolean;
-  archivePath: string | null;
-};
+export type { TypeSummary };
 
 const COLUMNS = "id, key, label, label_plural, enabled, archive_path";
 

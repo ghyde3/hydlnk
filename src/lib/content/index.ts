@@ -203,5 +203,7 @@ export { countEntriesWithClient, listTermsWithClient, listTypesWithClient };
 export type { EntrySummary } from "./query-core";
 export type { EntryPlace } from "./publish-core";
 export { BODY_IMAGES_MAX } from "./images";
+// The ownership check itself, for an app route that reads published data with the secret key.
+export { ownedSite } from "./guards";
 export type { TermSummary } from "./terms-core";
 export type { TypeSummary } from "./types-core";

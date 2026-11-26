@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { controlClass } from "@/components/blocks/field";
-import type { TermSummary } from "@/lib/content";
+import type { TermSummary } from "@/lib/content/schemas/summaries";
 import { POSTS_TEST_IDS } from "@/lib/blog/test-ids";
 import { POST_FILTERS } from "@/lib/posts/status";
 

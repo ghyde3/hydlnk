@@ -2,7 +2,7 @@
 
 import { useId, useState, type FormEvent } from "react";
 import { FORM_BUTTON, FORM_BUTTON_DANGER, controlClass } from "@/components/blocks/field";
-import type { TermSummary } from "@/lib/content";
+import type { TermSummary } from "@/lib/content/schemas/summaries";
 import { POST_LIMITS } from "@/lib/content/schemas";
 import { POST_TEST_IDS } from "@/lib/blog/test-ids";
 import { createTerm, deleteTerm, refusalMessage, renameTerm } from "@/lib/posts/client";

@@ -30,6 +30,7 @@ import { isEntryOfSite } from "@/lib/site-pages/entry-revisions-core";
 import { fromFailure, type EntrySaveBody } from "@/lib/site-pages/entry-save-core";
 import type { Database } from "@/lib/supabase/database.types";
 import { termSlug } from "./slug";
+import type { PostEntry } from "./types";
 
 /**
  * The server side of the Posts screen and the post editor (M16-02, M16-12, M16-14, M16-15): one core
@@ -253,17 +254,7 @@ export async function createPostCore(
   };
 }
 
-export interface PostEntry {
-  id: string;
-  rev: number;
-  status: "draft" | "published" | "trashed";
-  hasUnpublishedChanges: boolean;
-  draft: unknown;
-  publishedAt: string | null;
-  firstPublishedAt: string | null;
-  updatedAt: string;
-  deletedAt: string | null;
-}
+export type { PostEntry };
 
 /** GET entries/{entryId}: one post of the site with its draft (trashed posts included). Never the live copy. */
 export async function getPostCore(input: {
