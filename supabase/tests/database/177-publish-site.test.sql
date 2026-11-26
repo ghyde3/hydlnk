@@ -277,12 +277,12 @@ select is(
 -- ---------------------------------------------------------------------------
 
 select ok(
-  has_function_privilege('service_role', 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz)', 'EXECUTE'),
+  has_function_privilege('service_role', 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz, jsonb)', 'EXECUTE'),
   'service_role may call publish_site'
 );
 select ok(
-  not has_function_privilege('authenticated', 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz)', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz)', 'EXECUTE'),
+  not has_function_privilege('authenticated', 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz, jsonb)', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz, jsonb)', 'EXECUTE'),
   'anon and authenticated may not'
 );
 select tests.authenticate_as('a');
@@ -295,7 +295,7 @@ select tests.clear_authentication();
 reset role;
 select is(
   (select p.prosecdef and p.proconfig @> array['search_path=""'] from pg_proc p
-    where p.oid = 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz)'::regprocedure),
+    where p.oid = 'public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz, jsonb)'::regprocedure),
   true,
   'it is security definer with an empty search_path'
 );

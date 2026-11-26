@@ -1842,6 +1842,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      page_block_ids: { Args: { p_blocks: Json }; Returns: string[] }
       plan_limits: {
         Args: { p_plan: string }
         Returns: {
@@ -1883,6 +1884,7 @@ export type Database = {
       }
       publish_site: {
         Args: {
+          p_expected_revs?: Json
           p_home: Json
           p_owner_id: string
           p_page_id: string

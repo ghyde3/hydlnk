@@ -8,6 +8,11 @@
 -- minutes. content-move-rollback.sql then puts the pre-1b-1 publish_site body back, so nothing else
 -- has to undo this file.
 
+-- Since 20261126063714 the live publish_site has a sixth argument (p_expected_revs). `create or
+-- replace` below would leave it standing beside this one, and the new code could go on publishing
+-- through it: it goes first, so there is exactly one publish_site afterwards.
+drop function if exists public.publish_site(uuid, uuid, jsonb, jsonb, timestamptz, jsonb);
+
 create or replace function public.publish_site(
   p_page_id uuid,
   p_owner_id uuid,

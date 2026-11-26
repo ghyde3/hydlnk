@@ -70,9 +70,9 @@ create function pg_temp.sub(p_id text, p_path text) returns jsonb language sql a
        jsonb_build_object('path', p_path, 'title', initcap(p_path), 'description', '', 'blocks', '[]'::jsonb)) $$;
 
 select ok(
-  not has_function_privilege('anon', 'public.publish_site(uuid,uuid,jsonb,jsonb,timestamptz)', 'EXECUTE')
-  and not has_function_privilege('authenticated', 'public.publish_site(uuid,uuid,jsonb,jsonb,timestamptz)', 'EXECUTE')
-  and has_function_privilege('service_role', 'public.publish_site(uuid,uuid,jsonb,jsonb,timestamptz)', 'EXECUTE'),
+  not has_function_privilege('anon', 'public.publish_site(uuid,uuid,jsonb,jsonb,timestamptz,jsonb)', 'EXECUTE')
+  and not has_function_privilege('authenticated', 'public.publish_site(uuid,uuid,jsonb,jsonb,timestamptz,jsonb)', 'EXECUTE')
+  and has_function_privilege('service_role', 'public.publish_site(uuid,uuid,jsonb,jsonb,timestamptz,jsonb)', 'EXECUTE'),
   'anon and authenticated cannot execute publish_site; service_role can');
 
 -- ---------------------------------------------------------------------------

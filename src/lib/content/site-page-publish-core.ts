@@ -8,13 +8,14 @@ type Admin = SupabaseClient<Database>;
 export type SitePagePublishWrite =
   | { ok: true; rev: number; publishedAt: string; unchanged: boolean }
   /** The database's refusal as raised (SQLSTATE and message): the Publish gate words it. */
-  | { ok: false; code: string | null; message: string | null };
+  | { ok: false; code: string | null; message: string | null; detail: string | null };
 
 /**
  * The one call of `publish_site_page` (M15-10): makes a validated published copy of ONE page entry
  * live. The Publish gate (`publishSitePageCore`, src/lib/publish/core.ts) validates the draft and
  * runs every check before it calls this; the function itself checks the owner, that the entry is a
- * page entry of that site and not in the trash, the entry's rev, and that the site is live. It
+ * page entry of that site and not in the trash, the entry's rev, that the site is live, and that no
+ * id of the copy is used by another page's live copy (HL014, under the site's lock). It
  * writes that entry and its revision and nothing else: no other entry, not `pages`, not a version.
  * It lives here because only the content writer calls the functions that write entries.
  */
@@ -39,10 +40,19 @@ export async function publishSitePageWithClient(
     p_published_at: input.publishedAt,
     p_source: input.source,
   });
-  if (error) return { ok: false, code: error.code ?? null, message: error.message ?? null };
+  if (error) {
+    return {
+      ok: false,
+      code: error.code ?? null,
+      message: error.message ?? null,
+      // HL014 names the clashing id here.
+      detail: error.details ?? null,
+    };
+  }
   const out = (data ?? {}) as { rev?: unknown; published_at?: unknown; unchanged?: unknown };
   const rev = Number(out.rev);
-  if (!Number.isSafeInteger(rev)) return { ok: false, code: null, message: "bad_answer" };
+  if (!Number.isSafeInteger(rev))
+    return { ok: false, code: null, message: "bad_answer", detail: null };
   return {
     ok: true,
     rev,

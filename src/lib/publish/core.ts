@@ -213,6 +213,7 @@ export async function publishPageCore(
     console.error("[publish] the site has no Home entry", pageId.data);
     return refuse("error");
   }
+  let expectedRevs: { design: string | null; entries: Record<string, number> } | null = null;
   // Publish all changes from the editor (M15-10): what it holds must be what is stored. A design or
   // page saved somewhere else since, or a page the site no longer has, is a conflict, nothing written.
   if (input.expected !== undefined) {
@@ -225,6 +226,13 @@ export async function publishPageCore(
     for (const [id, rev] of Object.entries(expected.data.entries)) {
       if (revs.get(id) !== rev) return refuse("conflict");
     }
+    // A page the editor does not hold (added through MCP or in another tab) would go live unseen.
+    for (const id of revs.keys()) {
+      if (!Object.hasOwn(expected.data.entries, id)) return refuse("conflict");
+    }
+    // The same comparison is made again by `publish_site`, under its locks (M15-12): a save that
+    // lands between the reads above and that call is a conflict there, and nothing is written.
+    expectedRevs = { design: expected.data.designRev, entries: expected.data.entries };
   }
   const { blocks: _frozen, ...design } = (page.data.draft ?? {}) as Record<string, unknown>;
   void _frozen;
@@ -364,11 +372,15 @@ export async function publishPageCore(
       published: page.form as unknown as Json,
     })),
     p_published_at: publishedAt,
+    // Absent (MCP, which holds no editor state): the function checks no rev.
+    ...(expectedRevs === null ? {} : { p_expected_revs: expectedRevs as unknown as Json }),
   });
   if (written.error) {
     const { code, message } = written.error;
     if (code === "P0002") return refuse("forbidden");
     if (code === "HL009") return refuse("storage_full");
+    // Saved, added or deleted somewhere else after the reads above: nothing was written.
+    if (code === "22023" && message === "stale_rev") return refuse("conflict");
     if (code === "22023" || code === "23505") {
       // A page was added or deleted since the read above, or two pages took one path meanwhile:
       // nothing was written, and publishing again sees the site as it is now.
@@ -828,6 +840,14 @@ export async function publishSitePageCore(
   }
   const { code, message } = written;
   if (code === "P0002") return refuse("not_found");
+  // The id rule again, by the function under the site's lock (M15-12): another page went live with
+  // one of this page's ids after the check above. The same notice, on the block it names.
+  if (code === "HL014") {
+    return refuse(
+      "invalid",
+      name([{ blockId: written.detail, field: "id", message: SHARED_ID_MESSAGE }]),
+    );
+  }
   if (code === "22023" && message === "stale_rev") {
     const reread = await admin.from("content_entries").select("rev").eq("id", wanted).maybeSingle();
     return reread.data
@@ -958,6 +978,13 @@ export async function publishDesignCore(
   );
 
   // Redirect mode (M9-31): the plan, and a target among Home's LIVE blocks.
+  // This check is made here, before `publish_design` takes its lock, so a Publish page of Home that
+  // drops the target can land in between (and Publish page checks the live redirect the same way,
+  // before its own lock). The function does not recheck it, and does not need to (M15-12): serving
+  // is gated at render. `redirectTargetId` (src/lib/tenant-render/redirect.ts) answers the 302 only
+  // when the live document holds that link, visible and unlocked, and draws the page otherwise, so a
+  // redirect whose target is gone is never followed; the next publish of either part reports it.
+  // tests/unit/m15-publish-concurrent.test.ts proves that a redirect to a missing block is not served.
   try {
     const liveBlocks = liveBlocksOf(liveHome) as unknown as PublishDoc["blocks"];
     const linkErrors = await checkLinkRules(admin, {
