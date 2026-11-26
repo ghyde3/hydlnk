@@ -24,6 +24,17 @@ die() {
   exit 1
 }
 
+# `scripts/cloud-init.sh image <name:tag>`: fetch one more Supabase image the same way, for a
+# command that fails on a public.ecr.aws pull (for example `pnpm db:types` wants its own
+# postgres-meta tag; the failing command's --debug output names it).
+if [ "${1:-}" = "image" ]; then
+  [ -n "${2:-}" ] || die "usage: scripts/cloud-init.sh image <name:tag>, e.g. postgres-meta:v0.96.1"
+  docker pull -q "ghcr.io/supabase/$2" >/dev/null || die "could not pull ghcr.io/supabase/$2"
+  docker tag "ghcr.io/supabase/$2" "public.ecr.aws/supabase/$2"
+  say "tagged public.ecr.aws/supabase/$2"
+  exit 0
+fi
+
 [ "$(uname -s)" = "Linux" ] || die "Linux only. On macOS use nvm and Docker Desktop, then ./scripts/init.sh."
 case ":$PATH:" in
   *":$BIN:"*) ;;

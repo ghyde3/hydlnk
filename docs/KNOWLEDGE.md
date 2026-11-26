@@ -23,7 +23,7 @@ Each line is a candidate for a deterministic check. Remove the line when the che
 
 ## Environment facts
 - **Cloud containers** have Node 22 and no Supabase CLI or running Docker daemon. `scripts/cloud-init.sh` fixes all three, then `./scripts/init.sh` works (verified 2026-11-26: init PASS in 75 s).
-- **Supabase images**: `public.ecr.aws` refuses anonymous pulls from shared cloud IPs ("Data limit exceeded"). The same tags exist on `ghcr.io/supabase/*`; the script pulls and retags them. The environment's network policy must allow `ghcr.io` and `pkg-containers.githubusercontent.com`.
+- **Supabase images**: `public.ecr.aws` refuses anonymous pulls from shared cloud IPs ("Data limit exceeded"). The same tags exist on `ghcr.io/supabase/*`; the script pulls and retags them. The environment's network policy must allow `ghcr.io` and `pkg-containers.githubusercontent.com`. A later command that needs another tag (`pnpm db:types` pulls its own postgres-meta) is fixed with `scripts/cloud-init.sh image <name:tag>`.
 - **Supabase CLI telemetry** times out in a locked-down container and makes a passing `pnpm test:db` exit 1 ("Timeout while shutting down PostHog"). `supabase telemetry disable` fixes it; `scripts/cloud-init.sh` runs it.
 - **DNS lookups** (dig, DNS over HTTPS) do not work from cloud containers, so DKIM, SPF and custom-domain DNS evidence comes from Gary's machine.
 - **Local sign-up under parallel load** can fail with "Database error creating new user"; `pnpm test --retry 2` covers that known flake.
