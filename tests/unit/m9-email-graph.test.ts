@@ -47,6 +47,8 @@ describe("M9-09 the template is imported by the domains server code and nowhere 
       "src/emails/domain-live.tsx",
       "src/emails/form-limit.tsx",
       "src/emails/form-message.tsx",
+      // Wave F (M19-08): the site invite, built by src/lib/team/invite-email.ts (server only).
+      "src/emails/site-invite.tsx",
     ]);
   });
 
@@ -55,8 +57,10 @@ describe("M9-09 the template is imported by the domains server code and nowhere 
     expect(importers.sort()).toEqual([
       "src/emails/form-limit.tsx",
       "src/emails/form-message.tsx",
+      "src/emails/site-invite.tsx",
       "src/lib/domains/live-email.ts",
       "src/lib/forms/email-content.ts",
+      "src/lib/team/invite-email.ts",
     ]);
   });
 
@@ -70,8 +74,10 @@ describe("M9-09 the template is imported by the domains server code and nowhere 
       "src/emails/domain-live.tsx",
       "src/emails/form-limit.tsx",
       "src/emails/form-message.tsx",
+      "src/emails/site-invite.tsx",
       "src/lib/domains/live-email.ts",
       "src/lib/forms/email-content.ts",
+      "src/lib/team/invite-email.ts",
     ]);
   });
 });
