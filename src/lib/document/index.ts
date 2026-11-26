@@ -44,6 +44,7 @@ export {
   type PageLinkBlock,
   type ItemsBlock,
   type HoursBlock,
+  type LatestPostsBlock,
   type ListItem,
   type PublishDoc,
   type SocialBlock,

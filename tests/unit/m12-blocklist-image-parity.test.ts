@@ -87,6 +87,7 @@ const fill: Record<BlockType, () => Block> = {
       ],
     }) as Block,
   hours: () => blockDefaults.hours(),
+  latest_posts: () => blockDefaults.latest_posts(),
 };
 
 /** Every string under a key named `url` (and `cover`, `image`, `icon` refs by path), anywhere in a value. */

@@ -137,6 +137,13 @@ export function blockRowSummary(block: Block): BlockRowSummary {
         title: line(block.heading ?? "", "Items"),
         sub: count(block.items.length, "item", "items"),
       };
+    case "latest_posts":
+      // M16-07: the heading when there is one, and how many posts it shows.
+      return {
+        typeLabel,
+        title: line(block.heading ?? "", "Latest posts"),
+        sub: count(block.count, "post", "posts"),
+      };
     case "hours":
       // M12-02: the renderer worker may refine this.
       return { typeLabel, title: "Opening hours", sub: block.timezone };

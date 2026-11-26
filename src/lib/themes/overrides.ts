@@ -172,6 +172,16 @@ export const STYLE_SPECS: Readonly<Record<StyleBlockType, StyleSpec>> = Object.f
       border: false,
     },
   },
+  // M16-07: the post titles (text), the card (surface) and its line (border).
+  latest_posts: {
+    controls: ["color", "radius"],
+    color: {
+      label: "Color",
+      keys: ["text", "border"],
+      source: "text",
+      border: false,
+    },
+  },
   // M12-01: the item names and prices (text), the Sold mark (accent) and the lines (border).
   items: {
     controls: ["color", "radius"],

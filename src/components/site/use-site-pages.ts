@@ -52,6 +52,7 @@ import {
 } from "@/lib/site-templates/catalog";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
 import type { WorkspaceAction } from "@/components/workspace/workspace-reducer";
+import { useLatestPosts } from "@/components/blocks/use-latest-posts";
 import { docOf, initSiteState, siteReducer, type SubPageSettings } from "./site-state";
 
 /** One sub-page as the workspace opens it (the layout's read of the site's page entries). */
@@ -628,6 +629,7 @@ export function useSitePages(args: {
     setLivePaths(new Map());
   }, []);
 
+  const { latest: latestPosts } = useLatestPosts(siteId);
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({
       id,
@@ -635,7 +637,8 @@ export function useSitePages(args: {
       title: titleOf({ title: state.settings[id]!.title }),
     }));
     const menu = buildMenu(nav, live, effectiveId, "links");
-    const site: SiteContext = { hrefs: hrefsOf(live), menu };
+    // What a latest-posts block draws (M16-07): the site's published posts, null while the blog is off.
+    const site: SiteContext = { hrefs: hrefsOf(live), menu, latestPosts };
     if (isHome) return { site };
     return {
       site,
@@ -644,7 +647,7 @@ export function useSitePages(args: {
         blocks: forms.get(effectiveId)?.blocks ?? [],
       },
     };
-  }, [state.ids, state.settings, nav, effectiveId, isHome, forms]);
+  }, [state.ids, state.settings, nav, effectiveId, isHome, forms, latestPosts]);
 
   const hrefToId = useCallback(
     (href: string) => {

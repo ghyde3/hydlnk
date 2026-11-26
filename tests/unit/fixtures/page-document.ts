@@ -191,6 +191,13 @@ export const blocks = {
       { id: "item-print-0002", name: "Canal print", price: "$35", description: "", sold: true },
     ],
   },
+  latest_posts: {
+    id: "latest-posts-001",
+    type: "latest_posts",
+    visible: true,
+    heading: "From the blog",
+    count: 3,
+  },
   hours: {
     id: "hours-block-001",
     type: "hours",

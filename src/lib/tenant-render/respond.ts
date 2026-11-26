@@ -13,8 +13,10 @@ import {
   getTenantSiteState,
   type PublishedPage,
 } from "@/app/(tenant)/published-page";
-import { homeUsesSiteIndex, siteContextFrom } from "@/lib/site/live";
-import { getSiteIndex } from "@/lib/site/published";
+import { getSiteArchives } from "@/lib/blog/published";
+import { homeUsesSiteIndex, postsArchiveOf } from "@/lib/site/live";
+import { getLiveSiteContext, getSiteIndex } from "@/lib/site/published";
+import { archiveFirstPage } from "./blog-respond";
 import { failureResponse } from "./failure";
 import { htmlResponse } from "./html-response";
 import { renderLivePage } from "./live-page";
@@ -49,7 +51,10 @@ export function plainNotFoundResponse(): Response {
  */
 async function homeSite(page: PublishedPage) {
   if (!homeUsesSiteIndex(page.document)) return undefined;
-  return siteContextFrom(await getSiteIndex(page.pageId), page.document, "home");
+  // Cached reads only. A Home with a latest-posts block also reads the newest posts, an
+  // `unstable_cache` under the type's tag: Next.js adds that tag to this static route's entry, so
+  // publishing a post regenerates Home without republishing it (M16-07).
+  return getLiveSiteContext(page.pageId, page.document, "home", page.document.blocks);
 }
 
 /** A handle host. `published`: the page. `unpublished`: the placeholder. Everything else is a 404. */
@@ -151,12 +156,31 @@ async function subPageOf(
   if (!isValidSubPagePath(path)) return plainNotFoundResponse();
   const index = await getSiteIndex(page.pageId);
   const entry = index.find((candidate) => candidate.path === path);
-  if (!entry) return plainNotFoundResponse();
+  // The site's archives (Wave B): one more cached read under the site's tag. A live page with this
+  // path wins (the path registry never lets a page and an archive share one); else an enabled
+  // archive answers its first page; else the plain 404, still with no read of its own.
+  const { archives, pagesWithPostLists } = await getSiteArchives(page.pageId);
+  if (!entry) {
+    const archive = archives.find((candidate) => candidate.path === path);
+    if (!archive) return plainNotFoundResponse();
+    const redirected = redirectModeResponse(page);
+    if (redirected) return redirected;
+    return archiveFirstPage(page, archive, handle);
+  }
 
   const redirected = redirectModeResponse(page);
   if (redirected) return redirected;
+  // A page that holds a latest-posts block also carries the Post type's tag (M16-07): tags of a
+  // nested `unstable_cache` do not reach the enclosing one, so the page's HTML names it itself.
+  const posts = pagesWithPostLists.includes(entry.id) ? postsArchiveOf(archives) : null;
   // The finished HTML of this real page (the index lookup above proved `entry.id` is one), cached.
-  const html = await getSubPageHtml(page.pageId, entry.id, entry.path, handle);
+  const html = await getSubPageHtml(
+    page.pageId,
+    entry.id,
+    entry.path,
+    handle,
+    ...(posts ? [posts.typeId] : []),
+  );
   if (html === null) return plainNotFoundResponse();
   return htmlResponse(html);
 }

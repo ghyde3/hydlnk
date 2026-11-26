@@ -52,6 +52,7 @@ const TYPE_NAMES: Record<BlockType, string> = {
   page_link: "page link",
   items: "items",
   hours: "hours",
+  latest_posts: "latest posts",
 };
 
 export type FieldMode = "add" | "update";
@@ -233,6 +234,15 @@ function fieldSchemas(mode: FieldMode): Record<BlockType, z.ZodType> {
       })
       .partial()
       .required(up ? {} : { items: true }),
+    // The newest posts of the site's blog (M16-07): nothing but a heading, a count and a category id.
+    latest_posts: z
+      .strictObject({
+        heading: nullable(text),
+        count: z.number().int().min(LIMITS.latestPostsMin).max(LIMITS.latestPostsMax),
+        categoryId: nullable(text),
+        overrides,
+      })
+      .partial(),
     hours: z
       .strictObject({
         timezone: text,
@@ -270,6 +280,7 @@ export const BLOCK_FIELD_KEYS: Readonly<Record<BlockType, readonly string[]>> = 
   page_link: ["label", "target", "overrides"],
   items: ["heading", "layout", "items", "overrides"],
   hours: ["timezone", "days", "note", "overrides"],
+  latest_posts: ["heading", "count", "categoryId", "overrides"],
 };
 
 export const BLOCK_OVERRIDE_NAMES: readonly string[] = BLOCK_OVERRIDE_KEYS;

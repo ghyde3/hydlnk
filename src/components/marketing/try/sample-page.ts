@@ -132,6 +132,8 @@ export function makeBlock(
         layout: "list",
         items: [{ id: `${id}-0`, name: "Print", price: "20", description: "", sold: false }],
       };
+    case "latest_posts":
+      return { ...blockDefaults.latest_posts(), id };
     case "hours":
       // M12-02: not a block the try-it page offers; the default keeps the switch total.
       return { ...blockDefaults.hours(), id };
@@ -340,6 +342,8 @@ export function blockSummary(block: Block): string {
     case "items":
       // M12-01: not offered by the try-it page.
       return clip(block.heading || "Items");
+    case "latest_posts":
+      return clip(block.heading ?? "") || "Latest posts";
     case "hours":
       // M12-02: not offered by the try-it page.
       return "Opening hours";

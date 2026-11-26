@@ -11,6 +11,7 @@ import { DiscountForm } from "./discount-form";
 import { FaqForm } from "./faq-form";
 import { HoursForm } from "./hours-form";
 import { ItemsForm } from "./items-form";
+import { LatestPostsForm } from "./latest-posts-form";
 import { PageLinkForm } from "./page-link-form";
 import type { BlockFormProps } from "./types";
 
@@ -42,4 +43,6 @@ export const BLOCK_FORMS: Record<BlockType, ComponentType<BlockFormProps>> = {
   // The item and price list and the opening hours (M12-01, M12-02).
   items: ItemsForm,
   hours: HoursForm,
+  // The newest posts of the blog (M16-07).
+  latest_posts: LatestPostsForm,
 };

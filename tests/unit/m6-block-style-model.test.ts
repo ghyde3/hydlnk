@@ -57,6 +57,7 @@ const CONTROLS: Record<BlockType, string[]> = {
   page_link: ["buttonStyle", "color", "radius"],
   items: ["color", "radius"],
   hours: ["color"],
+  latest_posts: ["color", "radius"],
 };
 
 const LABELS: Record<BlockType, string> = {
@@ -78,6 +79,7 @@ const LABELS: Record<BlockType, string> = {
   page_link: "Color",
   items: "Color",
   hours: "Color",
+  latest_posts: "Color",
 };
 
 /** The keys the Color control writes for a color, per block type. */
@@ -100,6 +102,7 @@ const WRITTEN: Record<BlockType, Record<string, string>> = {
   page_link: { buttonBg: COLOR, accent: COLOR, buttonText: "#F7F3EC" },
   items: { accent: COLOR, text: COLOR, border: COLOR },
   hours: { accent: COLOR, text: COLOR, border: COLOR },
+  latest_posts: { text: COLOR, border: COLOR },
 };
 
 describe("M6-46 each block type's controls", () => {

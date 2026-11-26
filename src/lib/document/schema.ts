@@ -99,6 +99,7 @@ export const BLOCK_TYPES = [
   "page_link",
   "items",
   "hours",
+  "latest_posts",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -121,6 +122,7 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   page_link: "Page link",
   items: "Items",
   hours: "Hours",
+  latest_posts: "Latest posts",
 };
 
 /** Social platforms, in the order of the platform select. `email` stores an address, not a URL. */
@@ -746,6 +748,27 @@ function buildBlocks(mode: Mode) {
     overrides: blockOverrides.optional(),
   });
 
+  // The newest posts of the site's blog (Wave B, M16-07): an optional heading, how many (1 to 6)
+  // and an optional category (a term id). The posts are never stored in the document: the renderer
+  // reads them from the site context, so the block holds no URL and no tenant text but the heading.
+  const latestPosts = z.object({
+    ...common,
+    type: z.literal("latest_posts"),
+    heading: text(mode, { max: LIMITS.latestPostsHeading }).optional(),
+    count: z
+      .number()
+      .int()
+      .min(LIMITS.latestPostsMin, {
+        error: `Show ${LIMITS.latestPostsMin} to ${LIMITS.latestPostsMax} posts.`,
+      })
+      .max(LIMITS.latestPostsMax, {
+        error: `Show ${LIMITS.latestPostsMin} to ${LIMITS.latestPostsMax} posts.`,
+      })
+      .default(LIMITS.latestPostsDefault),
+    categoryId: z.uuid({ error: "Choose a category." }).optional(),
+    overrides: blockOverrides.optional(),
+  });
+
   const block = z.discriminatedUnion("type", [
     link,
     card,
@@ -765,6 +788,7 @@ function buildBlocks(mode: Mode) {
     pageLink,
     items,
     hours,
+    latestPosts,
   ]);
 
   // The display options (M6-15, M6-17) are the same in both modes: a bad value fails the draft
@@ -872,6 +896,7 @@ export type MapBlock = Extract<Block, { type: "map" }>;
 export type PageLinkBlock = Extract<Block, { type: "page_link" }>;
 export type ItemsBlock = Extract<Block, { type: "items" }>;
 export type HoursBlock = Extract<Block, { type: "hours" }>;
+export type LatestPostsBlock = Extract<Block, { type: "latest_posts" }>;
 export type ListItem = ItemsBlock["items"][number];
 export type BookLink = BookBlock["links"][number];
 export type AppLink = AppsBlock["links"][number];

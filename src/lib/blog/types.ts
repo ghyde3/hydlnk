@@ -148,3 +148,53 @@ export function termHref(
   if (!TERM_SLUG.test(slug)) return null;
   return `/${archivePath}/${taxonomy}/${slug}${suffix}`;
 }
+
+/** The fields of a published post as the templates read them: every one present and of one type. */
+export interface PostFields {
+  title: string;
+  slug: string;
+  body: string;
+  excerpt: string;
+  featuredImage: { path: string; width: number; height: number } | null;
+  seoTitle: string;
+  seoDescription: string;
+  shareImage: { path: string; width: number; height: number } | null;
+  noindex: boolean;
+  categoryIds: string[];
+  tagIds: string[];
+}
+
+function imageOf(value: unknown): PostFields["featuredImage"] {
+  const image = value as { path?: unknown; width?: unknown; height?: unknown } | null | undefined;
+  if (!image || typeof image !== "object") return null;
+  if (typeof image.path !== "string") return null;
+  if (typeof image.width !== "number" || typeof image.height !== "number") return null;
+  return { path: image.path, width: image.width, height: image.height };
+}
+
+const textOf = (value: unknown): string => (typeof value === "string" ? value : "");
+const idsOf = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+
+/**
+ * A published copy read field by field. `postPublishSchema` has checked it; this only gives every
+ * field one type and a default, so a template never branches on `undefined`. Pure.
+ */
+export function postFieldsOf(post: PostPublish): PostFields {
+  const record = post as Record<string, unknown>;
+  const seo = (record.seo ?? {}) as Record<string, unknown>;
+  const terms = (record.terms ?? {}) as Record<string, unknown>;
+  return {
+    title: textOf(record.title),
+    slug: textOf(record.slug),
+    body: textOf(record.body),
+    excerpt: textOf(record.excerpt),
+    featuredImage: imageOf(record.featuredImage),
+    seoTitle: textOf(seo.title),
+    seoDescription: textOf(seo.description),
+    shareImage: imageOf(seo.ogImage),
+    noindex: seo.noindex === true,
+    categoryIds: idsOf(terms.categories),
+    tagIds: idsOf(terms.tags),
+  };
+}
