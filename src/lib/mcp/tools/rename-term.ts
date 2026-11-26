@@ -58,7 +58,7 @@ export const renameTermTool: ToolDefinition<typeof input> = {
       });
     }
     return {
-      sentence: `Renamed the ${out.taxonomy}. It is “${out.name}” on the live site now.`,
+      sentence: `Renamed the ${out.taxonomy}. The new name, in term.name, is on the live site now.`,
       data: {
         pageId: siteId,
         term: { id: out.id, taxonomy: out.taxonomy, name: out.name, slug: out.slug },

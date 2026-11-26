@@ -63,7 +63,7 @@ export const createTermTool: ToolDefinition<typeof input> = {
       });
     }
     return {
-      sentence: `Added the ${made.taxonomy} “${made.name}”.`,
+      sentence: `Added the ${made.taxonomy}. Its name is in term.name.`,
       data: {
         pageId: siteId,
         term: {

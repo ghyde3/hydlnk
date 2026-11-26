@@ -64,7 +64,7 @@ export const getEntryTool: ToolDefinition<typeof input> = {
     const more =
       view.nextOffset === null ? "" : " There is more of the body: pass nextOffset as offset.";
     return {
-      sentence: `Read the draft of the post “${String(view.title).slice(0, 80)}” (${entry.status}).${more}`,
+      sentence: `Read the draft of the post (${entry.status}).${more}`,
       data: view,
       exact: true,
     };

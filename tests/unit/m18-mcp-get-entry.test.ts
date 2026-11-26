@@ -106,7 +106,10 @@ describe.skipIf(!run)("get_entry (local Supabase)", () => {
     });
     // The prefix plus an imageId is exactly the address a body image must have.
     expect(`${out.json!.imageUrlPrefix}${image.imageId}`).toBe(storageUrl(image.path));
-    expect(out.text).toContain("A full post");
+    // The title is tenant text: it is in the data, never in the sentence the server writes.
+    expect(out.json!.title).toBe("A full post");
+    expect(out.text).not.toContain("A full post");
+    expect(out.text).toBe("Read the draft of the post (draft).");
   });
 
   it("reads the body in ranges that join to the stored body, byte for byte, with the hash", async () => {

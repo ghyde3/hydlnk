@@ -81,6 +81,10 @@ describe.skipIf(!run)("create_term, rename_term and delete_term (local Supabase)
         READ_WRITE,
       );
       expect(tag.json!.term).toMatchObject({ taxonomy: "tag", name: "Wood firing", slug: "wood" });
+      // The name is tenant text: it is in the data, never in the sentence the server writes.
+      expect(category.text).not.toContain("Studio Notes");
+      expect(tag.text).not.toContain("Wood firing");
+      expect(tag.text).toBe("Added the tag. Its name is in term.name.");
       expect(await term(tag.json!.term.id)).toMatchObject({ site_id: a.pageId, slug: "wood" });
       // A new term is on no live page yet: nothing to expire.
       expect(mocks.invalidateType).not.toHaveBeenCalled();
@@ -233,6 +237,8 @@ describe.skipIf(!run)("create_term, rename_term and delete_term (local Supabase)
         slug: "new-name",
       });
       expect(await term(made.id)).toMatchObject({ name: "New name", slug: "new-name" });
+      // The name is tenant text: it is in the data, never in the sentence the server writes.
+      expect(out.text).not.toContain("New name");
       expect(mocks.invalidateType).toHaveBeenCalledTimes(1);
       expect(mocks.invalidateType).toHaveBeenCalledWith({ siteId: a.pageId, typeId: type.id });
       const nothing = await h.call("rename_term", { pageId: a.pageId, termId: made.id }, a);
