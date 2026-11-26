@@ -263,3 +263,56 @@ test("M16-15 publishing a post changes no page and no design; trashing it live t
   await expect(live.locator(".hl-archive")).not.toContainText("Going live");
   await live.close();
 });
+
+test("M16-15 unpublishing a post changes no other post, no page and no design", async ({
+  page,
+  context,
+}) => {
+  const site = await ingestPage("pu", { plan: "pro" });
+  await signInAs(context, site.email);
+  await enableBlog(site.pageId);
+  const other = await seedPost(site.pageId, { title: "Stays live", slug: "stays", body: "Hi." });
+  const id = await seedPost(site.pageId, { title: "Goes away", slug: "goes", body: "Bye." });
+  await openPost(page, other);
+  await page.getByTestId(POST_TEST_IDS.publish).click();
+  await expect(chip(page)).toHaveAttribute("data-post-state", "live");
+  await openPost(page, id);
+  await page.getByTestId(POST_TEST_IDS.publish).click();
+  await expect(chip(page)).toHaveAttribute("data-post-state", "live");
+
+  const everythingElse = async () =>
+    adminClient()
+      .from("content_entries")
+      .select("id, rev, draft, published, published_at, first_published_at, deleted_at")
+      .eq("site_id", site.pageId)
+      .neq("id", id)
+      .order("id");
+  const design = async () =>
+    adminClient()
+      .from("pages")
+      .select("published, published_at, draft")
+      .eq("id", site.pageId)
+      .single();
+  const entriesBefore = await everythingElse();
+  const designBefore = await design();
+  const homeBefore = (await page.request.get(site.url)).status();
+  const live = await context.newPage();
+  expect((await live.goto(`${site.origin}/blog/goes`))?.status()).toBe(200);
+
+  await page.getByTestId(POST_TEST_IDS.unpublish).click();
+  await expect(chip(page)).toHaveAttribute("data-post-state", "draft");
+  expect((await postRow(id)).published).toBeNull();
+
+  // Only this post changed: every other post and page entry, and the design, are as they were.
+  const entriesAfter = await everythingElse();
+  expect(entriesAfter.data).toEqual(entriesBefore.data);
+  expect((await design()).data).toEqual(designBefore.data);
+  expect((await page.request.get(site.url)).status()).toBe(homeBefore);
+  // The other post is still live, this one is gone from its address and the archive at once.
+  expect((await live.goto(`${site.origin}/blog/stays`))?.status()).toBe(200);
+  expect((await live.goto(`${site.origin}/blog/goes`))?.status()).toBe(404);
+  await live.goto(`${site.origin}/blog`);
+  await expect(live.locator(".hl-archive")).toContainText("Stays live");
+  await expect(live.locator(".hl-archive")).not.toContainText("Goes away");
+  await live.close();
+});

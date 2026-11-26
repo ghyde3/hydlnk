@@ -1,54 +1,19 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
+import type { Token, Tokens } from "marked";
+import { decodeEntities, lexMarkdown } from "@/lib/blog/markdown";
 import {
   bodyBytes,
   canEditRich,
   fromMarkdown,
   toMarkdown,
 } from "@/components/posts/body-editor/markdown";
+import { LOSSY, SUPPORTED } from "./support/body-editor-corpus";
 
 /**
  * The post body is Markdown, edited in Tiptap (M16-13). What the rich editor can hold it must give
  * back byte for byte; everything else opens in the plain Markdown box and is never rewritten.
  */
-
-const IMAGE = "https://x.example/storage/v1/object/public/page-media/u/f.webp";
-
-const SUPPORTED: Record<string, string> = {
-  paragraph: "Just a paragraph.",
-  "two paragraphs": "One.\n\nTwo.",
-  "heading 2": "## A heading",
-  "headings 3 and 4": "### Third\n\n#### Fourth",
-  bold: "Some **bold** text.",
-  italic: "Some *italic* text.",
-  strike: "Some ~~struck~~ text.",
-  "bold and italic": "Both ***at once*** here.",
-  link: "A [link](https://example.com/a?b=1&c=2) here.",
-  "bold link": "A [**bold link**](https://example.com) here.",
-  "extra blank lines": "One.\n\n\n\nTwo.",
-  "bullet list": "- one\n- two\n- three",
-  "numbered list": "1. first\n2. second\n3. third",
-  "nested list": "- a\n  - nested\n- b",
-  quote: "> Quoted words.",
-  "code block": "```\nconst a = 1;\n```",
-  "code block with a language": "```js\nlet a = 1;\n```",
-  "inline code": "Run `pnpm verify` first.",
-  rule: "Above.\n\n---\n\nBelow.",
-  "hard break": "line one  \nline two",
-  image: `![A photo](${IMAGE})`,
-  "image in a paragraph": `Before ![alt](${IMAGE}) after.`,
-  everything: [
-    "## Heading",
-    "A paragraph with **bold**, *italic*, ~~strike~~ and a [link](https://example.com).",
-    "- one\n- two",
-    "1. first\n2. second",
-    "> quoted",
-    "```\ncode here\n```",
-    "---",
-    `![alt](${IMAGE})`,
-    "End.",
-  ].join("\n\n"),
-};
 
 describe("the Markdown round trip of the rich editor", () => {
   for (const [name, markdown] of Object.entries(SUPPORTED)) {
@@ -70,27 +35,6 @@ describe("the Markdown round trip of the rich editor", () => {
 });
 
 describe("the loss guard: what the rich editor cannot hold opens as plain Markdown", () => {
-  const LOSSY: Record<string, string> = {
-    table: "| a | b |\n| - | - |\n| 1 | 2 |",
-    "block HTML": '<div class="x">raw</div>',
-    "inline HTML": "Some <b>bold</b> text.",
-    "an HTML comment": "Text\n\n<!-- note -->",
-    "heading 1": "# Title",
-    "heading 5": "##### Small",
-    "setext heading": "Title\n-----",
-    "task list": "- [ ] todo\n- [x] done",
-    footnote: "A claim.[^1]\n\n[^1]: The source.",
-    "link with a title": '[a](https://example.com "Title")',
-    "reference link": "[a][ref]\n\n[ref]: https://example.com",
-    "javascript link": "[x](javascript:alert(1))",
-    "mailto link": "[x](mailto:a@example.com)",
-    "star bullets": "* one\n* two",
-    "underscore emphasis": "__bold__ and _it_",
-    "indented code": "    code by indent",
-    "image with a title": `![a](${IMAGE} "T")`,
-    "escaped characters the editor would rewrite": "Escapes 1\\. and \\<b>",
-    "bold around a link, the other way round": "A **[bold link](https://example.com)** here.",
-  };
   for (const [name, markdown] of Object.entries(LOSSY)) {
     it(name, () => {
       expect(canEditRich(markdown)).toBe(false);
@@ -219,9 +163,14 @@ describe("a URL typed in the rich editor is stored as typed (finding 2)", () => 
     expect(bareUrlOf(token!)).toBe(EMBED);
   });
 
-  it("a URL whose trailing punctuation the serializer escapes falls back to escaping (no backslash in the address)", () => {
+  it("a URL whose trailing punctuation the serializer would escape is written as typed when marked reads it back the same (no backslash in the address)", () => {
+    // Before: "www.example.com/a\\*b\\*", which marked read as a link to ".../a\\*b\\".
     const md = toMarkdown(typed("www.example.com/a*b*"));
-    expect(md).toBe("www.example.com/a\\*b\\*");
+    expect(md).toBe("www.example.com/a*b*");
+    expect(drawn(md)).toEqual({
+      text: "www.example.com/a*b*",
+      links: ["http://www.example.com/a*b"],
+    });
   });
 
   it("a link with its own text, and code, are written as before", () => {
@@ -230,5 +179,173 @@ describe("a URL typed in the rich editor is stored as typed (finding 2)", () => 
     expect(toMarkdown(fromMarkdown("Run `https://a.example/x_y` now."))).toBe(
       "Run `https://a.example/x_y` now.",
     );
+  });
+});
+
+/**
+ * One paragraph as `PostBody` draws it: its visible text, and the href of every link. Any token a
+ * typed text must never become (emphasis, a link with its own text, an image, HTML, a block other
+ * than one paragraph) is reported by name, so the comparison fails on it.
+ */
+function drawn(markdown: string): { text: string; links: string[] } {
+  const blocks = lexMarkdown(markdown);
+  if (blocks.length !== 1 || blocks[0]!.type !== "paragraph") {
+    return { text: `<blocks ${blocks.map((b) => b.type).join(",")}>`, links: [] };
+  }
+  let text = "";
+  const links: string[] = [];
+  for (const token of (blocks[0] as Tokens.Paragraph).tokens as Token[]) {
+    if (token.type === "text") text += decodeEntities((token as Tokens.Text).text);
+    else if (token.type === "escape") text += (token as Tokens.Escape).text;
+    else if (token.type === "link" && (token as Tokens.Link).text === token.raw) {
+      // An autolink: its text is what was typed, and nothing in it is read as an entity.
+      text += decodeEntities((token as Tokens.Link).text);
+      links.push((token as Tokens.Link).href);
+    } else text += `<${token.type} ${JSON.stringify(token.raw)}>`;
+  }
+  return { text, links };
+}
+
+const plain = (text: string) => ({
+  type: "doc",
+  content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+});
+
+/** The property: typed text is drawn as exactly that text, and writing it is stable. */
+function expectTypedStaysText(text: string) {
+  const md = toMarkdown(plain(text));
+  const out = drawn(md);
+  expect(out.text, JSON.stringify(md)).toBe(text);
+  for (const href of out.links) {
+    // An autolink only of an address typed verbatim (`www.` gains its http://, an email mailto:).
+    const typedAs = href.replace(/^http:\/\/(?=www\.)/, "").replace(/^mailto:/, "");
+    expect(text, `link ${href} in ${JSON.stringify(md)}`).toContain(typedAs);
+  }
+  expect(toMarkdown(fromMarkdown(md)), JSON.stringify(md)).toBe(md);
+}
+
+describe("typed text never becomes a link or emphasis it did not say (adversarial pass, finding 1)", () => {
+  const REPROS = [
+    "Contact WWW.a.co/[click](https://evil.example)",
+    "foo@www.a.co/[click](https://evil.example)",
+    "wwW.a.co/*x*y",
+    "HTTPS://a.co/[x](https://evil.example)",
+    "see www.a.co/![i](https://evil.example/i.png) now",
+    "https://a.co/?x=1&amp;y=2",
+    "https://a.co/?x=1&#38;y=2",
+    "https://a.co/x_",
+    "https://a.co/x*",
+    "https://a.co/x<b>*y*</b>",
+    "https://a.co/x)*_a_ and more",
+    "ftp://a.co/[x](https://evil.example)",
+    "a_b@c.co and foo@www.a.co",
+  ];
+  for (const text of REPROS) {
+    it(`${JSON.stringify(text)} is drawn as typed, with no link it did not type`, () => {
+      expectTypedStaysText(text);
+    });
+  }
+
+  it("the reported repros carry no link to evil.example and no emphasis", () => {
+    for (const text of REPROS.slice(0, 3)) {
+      const out = drawn(toMarkdown(plain(text)));
+      expect(out.links.filter((href) => href.includes("evil"))).toEqual([]);
+      expect(out.text).not.toMatch(/<em|<strong|<link|<image/);
+    }
+  });
+
+  it("a URL with an entity in it is text, not a link whose text differs from its address, and reopens rich", () => {
+    for (const text of ["https://a.co/?x=1&amp;y=2", "https://a.co/?x=1&#38;y=2"]) {
+      const md = toMarkdown(plain(text));
+      expect(drawn(md)).toEqual({ text, links: [] });
+      expect(canEditRich(md)).toBe(true);
+    }
+  });
+
+  it("a URL ending in _ or * is a link to the address marked takes, with no backslash in it", () => {
+    expect(drawn(toMarkdown(plain("https://a.co/x_")))).toEqual({
+      text: "https://a.co/x_",
+      links: ["https://a.co/x"],
+    });
+    expect(drawn(toMarkdown(plain("https://a.co/x*")))).toEqual({
+      text: "https://a.co/x*",
+      links: ["https://a.co/x"],
+    });
+  });
+
+  it("italic text holding a URL with * keeps its whole text in the emphasis (no truncated href)", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "see https://a.co/x*y more*z", marks: [{ type: "italic" }] },
+          ],
+        },
+      ],
+    };
+    const md = toMarkdown(doc);
+    const [para] = lexMarkdown(md) as Tokens.Paragraph[];
+    expect(para!.tokens.map((t) => t.type)).toEqual(["em"]);
+    const em = para!.tokens[0] as Tokens.Em;
+    expect(em.tokens.some((t) => t.type === "link")).toBe(false);
+    expect(fromMarkdown(md).content?.[0]?.content?.[0]).toMatchObject({
+      text: "see https://a.co/x*y more*z",
+    });
+    expect(toMarkdown(fromMarkdown(md))).toBe(md);
+  });
+
+  it("a URL right before another inline node is not left to run into it", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "go https://a.co/x" },
+            { type: "text", text: "bold", marks: [{ type: "bold" }] },
+          ],
+        },
+      ],
+    };
+    const md = toMarkdown(doc);
+    const [para] = lexMarkdown(md) as Tokens.Paragraph[];
+    expect(para!.tokens.filter((t) => t.type === "link")).toEqual([]);
+    expect(para!.tokens.at(-1)?.type).toBe("strong");
+  });
+
+  it("randomised: any mix of *_~[]()<>&\\, URL prefixes and @ is drawn as typed and written stably", () => {
+    const PIECES = [
+      ..."*_~[]()<>&\\".split(""),
+      "http://",
+      "https://",
+      "www.",
+      "WWW.",
+      "@",
+      "a",
+      "co",
+      ".",
+      "/",
+      " ",
+      "x.co",
+      "amp;",
+      "#38;",
+    ];
+    let seed = 0x5eed;
+    const random = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x80000000;
+    };
+    for (let i = 0; i < 2000; i += 1) {
+      let text = "";
+      const length = 1 + Math.floor(random() * 24);
+      for (let j = 0; j < length; j += 1) text += PIECES[Math.floor(random() * PIECES.length)];
+      // Leading and trailing spaces, and runs of them, are the paragraph's, not the text's. "t "
+      // first: a line that starts like "co) " is read by the editor's list tokenizer as an
+      // alphabetic list item (a line-start question, not a URL one; recorded for the owner).
+      text = `t ${text.replace(/ +/g, " ").trim()}`.trim();
+      expectTypedStaysText(text);
+    }
   });
 });

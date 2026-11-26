@@ -5,7 +5,7 @@ import { authCookies, cookieHeader, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll } from "../helpers";
 import { emptyUser, openEditor, pageRow, previewScreen, statusChip } from "../m2/editor-helpers";
 import { seedEntries } from "../m15/entry-helpers";
-import { publishNewPost } from "./owner-routes";
+import { expireBlog, publishNewPost } from "./owner-routes";
 import { POSTS_TEST_IDS, POSTS_URL, postTypeId } from "./posts-helpers";
 
 /**
@@ -110,4 +110,41 @@ test("M16-08 the blog's menu item survives Publish, links to the archive and hid
   await expect(page.getByTestId(POSTS_TEST_IDS.screen)).toHaveAttribute("data-blog", "on");
   await liveHome(host, (body) => MENU_LINK.test(body));
   expect((await rawRequest(host, "/blog")).status).toBe(200);
+});
+
+test("M16-08 renaming the archive path changes the live Home's menu link on the next request", async ({
+  page,
+  context,
+}) => {
+  const user = await emptyUser(context, "mr", { plan: "pro" });
+  await seedEntries(user.pageId);
+  const host = `${user.handle}.localhost:3000`;
+
+  await openEditor(page);
+  await page.getByTestId(PAGES_BLOG_TEST_IDS.addBlog).click();
+  await page.getByTestId("pages-blog-menu").click();
+  await expect(page.getByTestId("pages-blog-menu-state")).toHaveText("In menu");
+  await page
+    .getByTestId("workspace-toolbar")
+    .getByRole("button", { name: "Publish", exact: true })
+    .click();
+  await expect(statusChip(page)).toHaveText("Published", { timeout: 30_000 });
+  await liveHome(host, (body) => MENU_LINK.test(body));
+  expect((await rawRequest(host, "/blog")).status).toBe(200);
+
+  // The archive path is renamed through the real route; the menu item (stored by type id) follows.
+  const owner = { cookie: cookieHeader(await authCookies(context)), close: async () => {} };
+  await expireBlog(owner, user.pageId, "journal");
+  const home = await liveHome(host, (body) => body.includes('href="/journal"'));
+  expect(home).not.toContain('href="/blog"');
+  expect((await rawRequest(host, "/journal")).status).toBe(200);
+  expect((await rawRequest(host, "/blog")).status).toBe(404);
+
+  await page.goto(`http://${host}/`);
+  const link = page.locator('nav.pg-menu a[href="/journal"]');
+  await expect(link).toHaveText("Posts");
+  await link.click();
+  await expect(page).toHaveURL(`http://${host}/journal`);
+  await expect(page.locator(".hl-archive")).toBeVisible();
+  await expectNoHorizontalScroll(page);
 });

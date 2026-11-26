@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { ingestPage, type IngestPage } from "../m4/analytics-ingest-helpers";
@@ -27,6 +28,27 @@ let typeId: string;
 let news: string;
 let tag: string;
 let rich: { id: string; rev: number };
+
+/** Records every CSP violation and CSP console error of the page, from before its first script. */
+async function watchCsp(page: import("@playwright/test").Page) {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (/content security policy/i.test(message.text())) consoleErrors.push(message.text());
+  });
+  await page.addInitScript(() => {
+    document.addEventListener("securitypolicyviolation", (event) => {
+      (window as unknown as { __csp: string[] }).__csp ??= [];
+      (window as unknown as { __csp: string[] }).__csp.push(
+        `${event.violatedDirective} ${event.blockedURI}`,
+      );
+    });
+  });
+  return async () => {
+    const seen = await page.evaluate(() => (window as unknown as { __csp?: string[] }).__csp ?? []);
+    expect(seen, "securitypolicyviolation events").toEqual([]);
+    expect(consoleErrors, "CSP console errors").toEqual([]);
+  };
+}
 
 const BODY = (image: string) =>
   [
@@ -73,9 +95,25 @@ test.beforeAll(async () => {
 test("M16-04 a post page: theme-styled, finished HTML, hostile body shown as text", async ({
   page,
 }) => {
+  const noCspProblems = await watchCsp(page);
+  await page.goto(site.origin);
+  const tokenOf = (name: string) =>
+    page.evaluate(
+      (variable) =>
+        getComputedStyle(document.querySelector("[data-page-root]")!)
+          .getPropertyValue(variable)
+          .trim(),
+      name,
+    );
+  const homeTokens = { bg: await tokenOf("--t-bg"), accent: await tokenOf("--t-accent") };
+  expect(homeTokens.bg).not.toBe("");
   const response = await page.goto(`${site.origin}/blog/post-1`);
   expect(response?.status()).toBe(200);
   expect(response?.headers()["content-security-policy"]).toContain("script-src 'self'");
+  // The site's published tenant tokens and its header (name, menu) are the post page's too.
+  expect(await tokenOf("--t-bg")).toBe(homeTokens.bg);
+  expect(await tokenOf("--t-accent")).toBe(homeTokens.accent);
+  await expect(page.locator('header.pg-sitehead a[href="/"]')).toContainText("Mara Okafor");
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(page.locator("h1")).toHaveText("Post number 1");
   const article = page.locator("article.hl-post");
@@ -116,6 +154,7 @@ test("M16-04 a post page: theme-styled, finished HTML, hostile body shown as tex
   await expectTapTargets(page, ".pg-post-terms");
   await expectTapTargets(page, ".hl-post-nav");
   await expectTapTargets(page, ".hl-post-body");
+  await noCspProblems();
 });
 
 test("M16-04 a draft, an unpublished post and a trashed post are 404; an older post has both neighbours", async ({
@@ -145,11 +184,21 @@ test("M16-04 a draft, an unpublished post and a trashed post are 404; an older p
 });
 
 test("M16-05 the archive: 12 posts over two pages, a category and a tag page", async ({ page }) => {
+  const noCspProblems = await watchCsp(page);
   expect((await page.goto(`${site.origin}/blog`))?.status()).toBe(200);
   await expect(page.locator("h1")).toHaveText("Posts");
   const cards = page.locator(".hl-archive-card");
   await expect(cards).toHaveCount(10);
   await expect(cards.first().locator("h2")).toHaveText("Post number 1");
+  // A card shows its date and, when the post has one, its featured image.
+  await expect(cards.first().locator("time.pg-archive-date")).toHaveText("November 19, 2026");
+  await expect(cards.first().locator("img.pg-archive-img")).toHaveAttribute(
+    "src",
+    new RegExp(`/media/${site.userId}/fedcba9876543210\\.webp$`),
+  );
+  await expect(cards.nth(1).locator("time.pg-archive-date")).toHaveText("November 18, 2026");
+  await expect(cards.nth(1).locator("img")).toHaveCount(0);
+  await noCspProblems();
   await expect(cards.nth(1)).toContainText("Excerpt of post 2");
   await expect(cards.nth(9).locator("h2")).toHaveText("Post number 10");
   await expect(page.locator(".hl-archive")).not.toContainText("Still a draft");
@@ -194,6 +243,45 @@ test("M16-05 the archive: 12 posts over two pages, a category and a tag page", a
   await expect(page.locator(".hl-archive-card")).toHaveCount(1);
   // The archive's script reports the type's id (the beacon counts it as the blog).
   await expect(page.locator("script[data-page-id]")).toHaveAttribute("data-sub-page-id", typeId);
+});
+
+test("M16-05 republishing an older post keeps its place by first publish date, in the archive and the feed", async ({
+  page,
+  request,
+  browser,
+}) => {
+  const before = await adminClient()
+    .from("content_entries")
+    .select("id, first_published_at, published_at")
+    .eq("site_id", site.pageId)
+    .eq("live_slug", "post-7")
+    .single();
+  if (before.error) throw new Error(before.error.message);
+  const owner = await ownerSession(browser, site.email);
+  await republishPost(owner, site.pageId, before.data.id as string, {
+    body: "Edited today, long after it first went out.",
+  });
+  await owner.close();
+  const after = await adminClient()
+    .from("content_entries")
+    .select("first_published_at, published_at")
+    .eq("id", before.data.id)
+    .single();
+  if (after.error) throw new Error(after.error.message);
+  // It was published again (a new published copy), but its first date stays.
+  expect(after.data.first_published_at).toBe(before.data.first_published_at);
+
+  await page.goto(`${site.origin}/blog`);
+  const titles = await page.locator(".hl-archive-card h2").allTextContents();
+  expect(titles).toEqual(Array.from({ length: 10 }, (_, i) => `Post number ${i + 1}`));
+  await expect(page.locator(".hl-archive-card").nth(6).locator("time")).toHaveText(
+    "November 13, 2026",
+  );
+  const xml = await (await request.get(`${site.origin}/blog/feed.xml`)).text();
+  const order = Array.from({ length: 12 }, (_, i) => xml.indexOf(`Post number ${i + 1}<`));
+  expect(order.every((at) => at > 0)).toBe(true);
+  expect([...order].sort((a, b) => a - b)).toEqual(order);
+  expect(xml).toContain("<pubDate>Fri, 13 Nov 2026 12:00:00 GMT</pubDate>");
 });
 
 test("M16-03 M16-05 invented paths under the archive are 404s", async ({ page, request }) => {

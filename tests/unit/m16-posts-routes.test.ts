@@ -637,8 +637,9 @@ describe.skipIf(!run)("the Posts app routes", () => {
     try {
       const params = { id: a.pageId, entryId: post };
       const cases: Array<[string, string]> = [
-        ["*a ".repeat(32_000), BODY_SHAPE_MESSAGES.work],
-        ["*a **b ".repeat(8000), BODY_SHAPE_MESSAGES.work],
+        // Past the node limit (60,000 emphasised words: 180,000 tokens), not past a clock.
+        ["*a* ".repeat(60_000), BODY_SHAPE_MESSAGES.size],
+        [`|a|b|\n|-|-|\n${"a|b\n".repeat(80_000)}`, BODY_SHAPE_MESSAGES.size],
         [`${"> ".repeat(4000)}a`, BODY_SHAPE_MESSAGES.depth],
         [`${"- > ".repeat(2000)}a`, BODY_SHAPE_MESSAGES.depth],
         [`${"1. ".repeat(4000)}a`, BODY_SHAPE_MESSAGES.depth],
@@ -707,6 +708,41 @@ describe.skipIf(!run)("the Posts app routes", () => {
       await admin.from("content_entries").delete().eq("id", post);
     }
   });
+
+  it(
+    "expire is rate limited per account: past the limit a minute it answers 429 and expires nothing",
+    { timeout: 30_000 },
+    async () => {
+      const { EXPIRE_RATE_LIMIT, EXPIRE_RATE_LIMITED } = await import("@/lib/posts/routes-core");
+      const owner = await makeOwner(admin as never, "pr-limit");
+      owners.push(owner);
+      const on = await admin
+        .from("content_types")
+        .update({ enabled: true })
+        .eq("site_id", owner.pageId)
+        .eq("key", "post");
+      if (on.error) throw new Error(on.error.message);
+      as(owner);
+      const post = await insertPost(owner, { title: "Many", slug: "many", body: "Hello" });
+      mocks.invalidateEntry.mockReset();
+      const params = { id: owner.pageId, entryId: post };
+      const answers = await Promise.all(
+        Array.from({ length: EXPIRE_RATE_LIMIT + 20 }, () => call("expire", "POST", params)),
+      );
+      const statuses = answers.map((answer) => answer.status);
+      expect(statuses.filter((status) => status === 200)).toHaveLength(EXPIRE_RATE_LIMIT);
+      expect(statuses.filter((status) => status === 429)).toHaveLength(20);
+      expect(answers.find((answer) => answer.status === 429)).toMatchObject({
+        cache: "no-store",
+        json: { kind: "limit", message: EXPIRE_RATE_LIMITED },
+      });
+      // Only the allowed ones expired anything.
+      expect(mocks.invalidateEntry).toHaveBeenCalledTimes(EXPIRE_RATE_LIMIT);
+      // Another account's bucket is its own.
+      as(a);
+      expect((await call("expire", "POST", { id: a.pageId, entryId: postA })).status).toBe(200);
+    },
+  );
 
   it("revisions: a post of an enabled blog lists and restores; another account's does not", async () => {
     const recorded = await admin.rpc("record_entry_revision", {
