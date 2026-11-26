@@ -5777,7 +5777,7 @@
         "Playwright at 390x844: edit two pages and the theme; Publish page on one, and only it changes live; Publish design changes the theme only; Publish all changes publishes the rest; restore a page revision; no horizontal scroll.",
         "Playwright at 1440x900: the same steps pass, plus History restore of design and Undo."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-11",
@@ -5790,7 +5790,7 @@
         "Playwright at 390x844: a new page linked from the menu and a page_link block stays hidden until it is published, then both links appear; no horizontal scroll.",
         "Playwright at 1440x900: the same."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-12",
@@ -5811,7 +5811,7 @@
         "Supersedes, in this respect only (Gary, 2026-10-04: \"deleting a page is immediate\"; recorded for stage 1b in docs/PLAN.md, \"Stage 1b-1 build decisions\"): M15-07 step 3's \"delete (to trash)\". Until stage 3 brings a trash screen to the editor, deleting a sub-page from the editor purges its page entry and revisions at once, so the page limit frees immediately; posts keep the trash. Every other part of M15-07 step 3 stands, including HL008 counting Home plus page entries, trash included, for entries trashed by other means.",
         "Tests: on a Free site with 3 pages, deleting one lets a new page be created at once; the entry and its revisions are gone; a failed purge leaves the page fully in place (still listed, still live) and answers delete_failed; another user's sub-page cannot be deleted."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-14",
@@ -5822,7 +5822,7 @@
         "Supersedes, in these respects only (Gary, 2026-10-13): the steps that describe the owner's browser writing Home's blocks to `pages.draft` through PostgREST with the publishable key, namely M2-10 step 4 ('a PostgREST update of draft with 51 blocks is accepted by the database'), M2-12 step 4 ('a PostgREST draft write that sets visible: false on every block'), M2-23 step 3 ('PATCH pages.draft through PostgREST to include a link URL'), M6-22 step 2 ('A direct PostgREST draft with 5 featured links ... is accepted by the database'), M6-40 step 8 and M7-08 step 5 ('an apply is one kind of write, the draft PATCH under the user's session and the publishable key'). After the cutover a browser cannot write Home's blocks to the database: a PostgREST write of `pages.draft` blocks is refused with HL013 and content entries have no client write grant; the editor, and applying a template, save Home's blocks through the server save route, and design fields stay a PATCH of `pages.draft`. Every other part of those steps stands.",
         "Each affected test asserts that refusal, then plants the same hostile draft with a direct database write to the Home entry and keeps every downstream promise of its step: the database's own checks, Publish refusing with the same messages and naming the same blocks, nothing published, other users' rows unchanged, and for a template apply no request to /rest/v1/themes and no Storage call."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-15",
@@ -5834,7 +5834,7 @@
         "Where M2-12 step 4 and M6-45 step 5 say `pages.published`, they mean the live published copy, which after the cutover is Home's published entry together with the site design. The frozen pre-move blocks kept in `pages.published` for rollback are never served, and are removed in the later cleanup release.",
         "M13-02 step 1's '64 MiB sub-page total' is the plan's `content_bytes` cap since M15-02 (Gary, 2026-10-11, decision 13: 64 MiB Free, 1 GiB Pro, 5 GiB Studio). The admin account page shows the account's own plan cap."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-16",
@@ -5844,7 +5844,7 @@
       "acceptance": [
         "Supersedes, in the same respect as M15-14 (Gary, 2026-10-13): M3-18 step 6, where it describes the owner's browser writing block overrides into `pages.draft` through PostgREST. After the cutover a browser write of Home's blocks is refused (HL013). The test asserts that refusal, plants the same overrides (fontHeading 'Geist', bg '#000000', color '#C46A4F', radius -5 and colour 'red') with a direct database write to the Home entry, and keeps every downstream promise of the step: Publish stores only the accepted override, the live page shows it, and the invalid values never reach the live page. Every other part of M3-18 step 6 stands."
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "M15-17",
@@ -5855,7 +5855,7 @@
         "Supersedes, in this respect only (Gary, 2026-10-13): M6-33's and M7-04's 'calls nothing but the draft save' (and any equal wording). Before a design-only save, such as a share card or Share tab edit, the editor may make one read of Home's entry revision, a GET with no write. That read is how an AI or other-tab edit to Home's blocks made meanwhile is caught as a conflict (M15-07) instead of being silently overwritten. Every other part of those steps stands: the edit writes only the design fields, makes no entry write and calls no other endpoint.",
         "Tests: the M6-33 and M7-04 network checks allow exactly that one read and still assert no entry write and no other request; an AI write to Home's blocks while the editor is open, followed by a design-only edit, shows the conflict notice and overwrites nothing (M10-23)."
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }

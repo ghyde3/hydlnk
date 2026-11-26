@@ -2,6 +2,28 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-11-26 — Content model, stage 1b: the page move and per-page publishing (M15-05 to M15-17)
+
+On `m16-content` (draft PR #32, label `full-ci`), built in a cloud session by an orchestrator with builder, reviewer, security-reviewer, design-verifier and adversarial-verifier agents. Flipped to `passes: true`: M15-10, M15-11, M15-13, M15-14, M15-15, M15-16, M15-17. Features: 334 of 355. Nothing was merged or released.
+
+- **Built, still `passes: false`** (strict acceptance audit at e241163):
+  - **M15-05:** every step has a test except "refused with HL013 for every role": an authenticated write to a moved `site_pages` row is refused by RLS (0 rows, or 42501), so the HL013 trigger never runs for that role (pgTAP 202:145-150). Gary decides whether that counts.
+  - **M15-06:** the step "site_click_pairs returns the same set with Home at null" is deliberately not done (pgTAP 207:124 asserts the opposite): doing it in one release breaks click tracking on the deployed build. Needs two releases or a superseding row.
+  - **M15-07:** step 4 says a version restore writes blocks to entries; M15-10 made History design-only (ed05938). Needs a superseding row from Gary.
+  - **M15-08:** the production-copy dry runs cannot run here; no test pins "never reads .env.production".
+  - **M15-09, M15-12:** the reviews ran and every finding but one accepted low is fixed; the record is in PLAN ("Security review record, stages 1b-1 and 1b-2") and waits for Gary's decisions.
+- **M15-10:** migrations `20261126051628_per_page_publish.sql`, `20261126063714_per_page_publish_checks.sql`, `20261126074805_publish_site_revs.sql`; pgTAP 209, 210, 213, 215; unit `m15-publish-per-page`, `-design`, `-all-changes`, `-status`, `-races`, `-serialize`, `-concurrent`, `m15-publish-bar`, `m15-entry-revisions-route`, `m15-mcp-publish-scope`; e2e `tests/e2e/m15/per-page-publish.spec.ts`, `publish-races.spec.ts`, `publish-bar-design.spec.ts` at 390x844 and 1440x900. design-verifier, measured in the running app at 58115e8 (the two later commits change no markup): no gaps (12 pages: rows 109px, no overlap; phone sheet meets the tab bar at 787px; Tab order follows the toolbar; one status chip at 390, 759, 760 and 1440). The publish bar has no mockup: it was built from DESIGN.md, with a new token `--hl-good-text` and a 6px phone toolbar gap for Gary to confirm.
+- **M15-11:** `tests/unit/m15-hidden-links.test.ts`, `tests/e2e/m15/hidden-links.spec.ts`.
+- **M15-13:** `delete_page_entry` in one transaction, menu link included (migrations `20261126000001`, `20261126000002`; pgTAP 211, 212; `m11-editor-sub-pages-core.test.ts`).
+- **M15-14 to M15-17:** `tests/e2e/fixtures/home-abuse.ts` (asserts HL013) and the specs that use it; `m5/blocklist-api.spec.ts`, `m7/blocked-links-api.spec.ts`, `m13/admin-account-details.spec.ts`; `m3/themes-overrides.spec.ts:447`; `m6/share-card.spec.ts:640`, `m7/workspace-share.spec.ts:268`, `m10/mcp-tools.spec.ts`, `m15-editor-save-entries.test.ts`.
+- **Attack passes:** one on the move (five lows, fixed) and three on publishing. The second found a rollback file that left `publish_site` executable by clients (529ef0c) and two lost-edit orderings; the fix is that a save and a publish of the same entry never overlap and the editor adopts only the revs the publish function answers. The third found two more orderings (e241163, ad3ffcc). 13 of 14 deliberate mutations of the first fix round were caught; the survivor now has a test.
+- **Checks at e241163 (local, cloud container):** typecheck and lint pass; `pnpm test --retry 2` 10,833 passed; `pnpm test:db` 84 files, 3,016 tests; `tests/e2e/m15` plus the touched m7 and m9 specs pass at both sizes; `pnpm build` passes and its client chunks hold no publish function or key names. CI on this head: run 45794100401 (Verify and the eight browser shards), result in the line below when it finishes.
+- **Known:**
+  - `tests/e2e/m7/toolbar-menus.spec.ts:64` (desktop menu keyboard) fails now and then under load on `next dev`; 12 of 12 alone. `m6/wave-g-done.spec.ts:365` cannot pass in a container without access to example.com.
+  - Database-backed unit files can deadlock when the suite runs while another process uses the database; run them with `--retry 2` and nothing else on the database.
+  - A style-only commit of seven formatter-touched files is on the branch.
+- **Next:** the blog (stages 2 and 3) on a branch stacked on this one.
+
 ## 2026-10-12 — Content model, stages 0 and 1a (M15-01 to M15-04)
 
 On `m16-content` (draft PR #32). Flipped to `passes: true`: M15-01, M15-02, M15-03, M15-04. Features: 327 of 342. This is feature 1 of the CMS evolution (plan doc "HYDLNK Next Evolution Plan"; spec docs/PLAN.md "Content model (feature 1, Wave N)").
