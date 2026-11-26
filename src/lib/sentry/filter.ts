@@ -8,9 +8,12 @@
  * Pure: no Sentry import, no environment read. Relative imports only.
  */
 
-/** Paths that are never the app's, even on the app host. */
+/**
+ * Paths that are never the app's, even on the app host. `/invite/{token}` too (S6): its address IS the
+ * invite secret, so no event about it leaves (the token-free `/invite` page still reports).
+ */
 const EXCLUDED_PATH =
-  /^\/(?:t\/|sites\/|r\/|media\/|_t\/|api\/e(?:[/?#]|$))/;
+  /^\/(?:t\/|sites\/|r\/|media\/|_t\/|invite\/|api\/e(?:[/?#]|$))/;
 
 function normalizeHost(value: string): string {
   return value.trim().toLowerCase().replace(/\.(?=:|$)/, "");
