@@ -115,12 +115,12 @@ for (const { path, title, current } of PAGES) {
   });
 }
 
-test("features: the block catalog shows all eighteen blocks and nothing scrolls sideways", async ({
+test("features: the block catalog shows all nineteen blocks and nothing scrolls sideways", async ({
   page,
 }) => {
   await page.goto(url(null, "/features"));
   const cards = page.locator("#blocks ul > li");
-  await expect(cards).toHaveCount(18);
+  await expect(cards).toHaveCount(19);
   for (const name of [
     "FAQ",
     "Contact details",
@@ -131,10 +131,11 @@ test("features: the block catalog shows all eighteen blocks and nothing scrolls 
     "Page link",
     "Items",
     "Opening hours",
+    "Latest posts",
   ]) {
     await expect(page.locator("#blocks h3", { hasText: name })).toBeVisible();
   }
-  await expect(page.locator("#blocks")).toContainText("Eighteen blocks");
+  await expect(page.locator("#blocks")).toContainText("Nineteen blocks");
   await expect(page.locator("#links")).toContainText("Redirect mode on Pro and Studio");
   await expectNoHorizontalScroll(page);
 });
