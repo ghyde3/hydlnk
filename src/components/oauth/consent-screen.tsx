@@ -9,6 +9,7 @@ import {
   REGISTERED_NOT_VERIFIED,
   RETURN_LOOPBACK_LINE,
   SCOPE_LABELS,
+  SHARED_SITES_NOT_INCLUDED,
   STAYS_CONNECTED,
   SUSPENDED_NOTICE,
   allowedNow,
@@ -135,6 +136,7 @@ export function ConsentScreen({ view }: { view: ConsentView }) {
           {optional.includes(SCOPE_WRITE) ? <ScopeRow scope={SCOPE_WRITE} /> : null}
           {optional.includes(SCOPE_PUBLISH) ? <ScopeRow scope={SCOPE_PUBLISH} ticked={startsTicked(SCOPE_PUBLISH, view.previous)} /> : null}
         </fieldset>
+        <p className="after">{SHARED_SITES_NOT_INCLUDED}</p>
         <p className="after">{STAYS_CONNECTED}</p>
         <div className="actions">
           {view.suspended ? null : (
