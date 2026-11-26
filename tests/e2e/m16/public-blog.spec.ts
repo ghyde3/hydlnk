@@ -154,6 +154,16 @@ test("M16-05 the archive: 12 posts over two pages, a category and a tag page", a
   await expect(cards.nth(9).locator("h2")).toHaveText("Post number 10");
   await expect(page.locator(".hl-archive")).not.toContainText("Still a draft");
   await expect(page.locator(".pg-archive-count")).toHaveText("Page 1 of 2");
+  // The count is centred on the pager, with the next link at its end (no previous link on page 1).
+  const centreOf = async (selector: string) => {
+    const box = (await page.locator(selector).boundingBox())!;
+    return { mid: box.x + box.width / 2, right: box.x + box.width };
+  };
+  const pager = await centreOf(".pg-archive-pager");
+  expect(Math.abs((await centreOf(".pg-archive-count")).mid - pager.mid)).toBeLessThan(2);
+  expect(
+    Math.abs((await centreOf('.pg-archive-pager a[rel="next"]')).right - pager.right),
+  ).toBeLessThan(2);
   await expectNoHorizontalScroll(page);
   await expectTapTargets(page, ".hl-archive");
 
@@ -162,6 +172,15 @@ test("M16-05 the archive: 12 posts over two pages, a category and a tag page", a
   await expect(page.locator(".hl-archive-card")).toHaveCount(2);
   await expect(page.locator(".hl-archive-card").first().locator("h2")).toHaveText("Post number 11");
   await expect(page.locator('.pg-archive-pager a[rel="prev"]')).toHaveAttribute("href", "/blog");
+  {
+    const pagerBox = (await page.locator(".pg-archive-pager").boundingBox())!;
+    const countBox = (await page.locator(".pg-archive-count").boundingBox())!;
+    const prevBox = (await page.locator('.pg-archive-pager a[rel="prev"]').boundingBox())!;
+    expect(
+      Math.abs(countBox.x + countBox.width / 2 - (pagerBox.x + pagerBox.width / 2)),
+    ).toBeLessThan(2);
+    expect(Math.abs(prevBox.x - pagerBox.x)).toBeLessThan(2);
+  }
   await expectNoHorizontalScroll(page);
 
   expect((await page.goto(`${site.origin}/blog/category/news`))?.status()).toBe(200);
