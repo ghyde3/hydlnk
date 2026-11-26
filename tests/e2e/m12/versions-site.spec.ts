@@ -2,6 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { toSubPagePublishForm } from "@/lib/document";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, signedInUser } from "../fixtures/data";
+import { homeEntryOf } from "../fixtures/home-abuse";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { addPageEntry, subPageEntries, trashPageEntry, writeEntry } from "../m15/entry-helpers";
 import { makeVersions, openHistory, pageState, rowFor } from "../m6/versions-helpers";
@@ -208,4 +209,81 @@ test("M12-04 restore writes two sub-page drafts when both pages still exist, and
   const after = await pageState(site.pageId);
   expect(after.published).toEqual(liveBefore.published);
   expect(after.published_at).toBe(liveBefore.published_at);
+});
+
+test("M15-07 History restore writes Home's blocks and the pages to their entries, and Undo returns the previous drafts", async ({
+  page,
+  context,
+}) => {
+  const site = await siteWithTwoVersions(context, "vs4");
+  const liveBefore = await pageState(site.pageId);
+  const entriesOf = async () => {
+    const { data, error } = await adminClient()
+      .from("content_entries")
+      .select("id, draft, published, rev")
+      .eq("site_id", site.pageId);
+    if (error) throw new Error(error.message);
+    return new Map(
+      data.map((row) => [
+        row.id as string,
+        row as { draft: Record<string, unknown>; published: unknown; rev: number },
+      ]),
+    );
+  };
+
+  // After the second publish: Home's blocks (its entry) and both pages are edited, in the draft only.
+  const home = await homeEntryOf(site.pageId);
+  const versionBlocks = (home.draft as { blocks: Array<Record<string, unknown>> }).blocks;
+  const added = { id: "vsHomeAdded01", type: "header", visible: true, text: "Added after publish" };
+  await writeEntry(home.id, { draft: { ...home.draft, blocks: [...versionBlocks, added] } });
+  const itemsEdit = subDoc("items", "Items edited", "vsItemsLink01", "Open items edited");
+  const dirEdit = subDoc("directions", "Directions edited", "vsDirLink0001", "Open dir edited");
+  await writeEntry(site.itemsId, { draft: itemsEdit });
+  await writeEntry(site.directionsId, { draft: dirEdit });
+  const edited = await entriesOf();
+  const designBefore = (await pageState(site.pageId)).draft;
+  const frozenBefore = designBefore.blocks;
+  expect((designBefore.profile as { bio: string }).bio).not.toBe("First number 1");
+
+  await openHistory(page);
+  await rowFor(page, 1).getByRole("button", { name: "Restore version 1", exact: true }).click();
+  await rowFor(page, 1)
+    .getByTestId("restore-confirm")
+    .getByRole("button", { name: "Restore version 1", exact: true })
+    .click();
+  const done = rowFor(page, 1).getByTestId("restore-done");
+  await expect(done).toContainText("Restored version 1 and 2 other pages to your draft.");
+
+  // Restore: the design went to pages.draft, the blocks to Home's entry, the pages to their entries.
+  const restored = await entriesOf();
+  const restoredHome = restored.get(home.id)!;
+  // Version 1's Home blocks are the published ones (the live form of Home's entry), ids kept.
+  const liveIds = (home.published as { blocks: Array<{ id: string }> }).blocks.map((b) => b.id);
+  const restoredIds = (restoredHome.draft.blocks as Array<{ id: string }>).map((b) => b.id);
+  expect(restoredIds).toEqual(liveIds);
+  expect(restoredIds).not.toContain(added.id);
+  expect(Number(restoredHome.rev)).toBeGreaterThan(Number(edited.get(home.id)!.rev));
+  expect(restored.get(site.itemsId)!.draft.title).toBe("Items one");
+  expect(restored.get(site.directionsId)!.draft.title).toBe("Find the studio");
+  const afterRestore = await pageState(site.pageId);
+  expect((afterRestore.draft.profile as { bio: string }).bio).toBe("First number 1");
+  // The frozen copy of the blocks in pages.draft is not what restore writes.
+  expect(afterRestore.draft.blocks).toEqual(frozenBefore);
+
+  // Undo: every draft is the one from before the restore, and nothing was published on the way.
+  await done.getByRole("button", { name: "Undo" }).click();
+  await expect(rowFor(page, 1).getByTestId("restore-undone")).toHaveText("Undone.");
+  const undone = await entriesOf();
+  expect(undone.get(home.id)!.draft).toEqual(edited.get(home.id)!.draft);
+  expect(undone.get(site.itemsId)!.draft).toEqual(edited.get(site.itemsId)!.draft);
+  expect(undone.get(site.directionsId)!.draft).toEqual(edited.get(site.directionsId)!.draft);
+  for (const [id, row] of undone) expect(row.published, id).toEqual(edited.get(id)!.published);
+  const afterUndo = await pageState(site.pageId);
+  const { rev: _undoneRev, ...undoneDesign } = afterUndo.draft;
+  const { rev: _editedRev, ...editedDesign } = designBefore;
+  expect(undoneDesign).toEqual(editedDesign);
+  expect(Number(_undoneRev)).toBeGreaterThan(Number(_editedRev));
+  expect(afterUndo.published).toEqual(liveBefore.published);
+  expect(afterUndo.published_at).toBe(liveBefore.published_at);
+  await expectNoHorizontalScroll(page);
 });
