@@ -58,6 +58,7 @@ const CONTROLS: Record<BlockType, string[]> = {
   items: ["color", "radius"],
   hours: ["color"],
   latest_posts: ["color", "radius"],
+  form: ["buttonStyle", "color", "radius"],
 };
 
 const LABELS: Record<BlockType, string> = {
@@ -80,6 +81,7 @@ const LABELS: Record<BlockType, string> = {
   items: "Color",
   hours: "Color",
   latest_posts: "Color",
+  form: "Color",
 };
 
 /** The keys the Color control writes for a color, per block type. */
@@ -103,6 +105,7 @@ const WRITTEN: Record<BlockType, Record<string, string>> = {
   items: { accent: COLOR, text: COLOR, border: COLOR },
   hours: { accent: COLOR, text: COLOR, border: COLOR },
   latest_posts: { text: COLOR, border: COLOR },
+  form: { buttonBg: COLOR, accent: COLOR, buttonText: "#F7F3EC" },
 };
 
 describe("M6-46 each block type's controls", () => {
@@ -115,13 +118,13 @@ describe("M6-46 each block type's controls", () => {
     }
   });
 
-  it("no type has a font, spacing or background control, and only a link and a book have a button style", () => {
+  it("no type has a font, spacing or background control, and only a link, a book, a page link and a form have a button style", () => {
     for (const type of BLOCK_TYPES) {
       for (const control of STYLE_SPECS[type].controls) {
         expect(["buttonStyle", "color", "radius", "borderWidth"]).toContain(control);
       }
       expect(hasStyleControl(of(type), "buttonStyle"), type).toBe(
-        type === "link" || type === "book" || type === "page_link",
+        type === "link" || type === "book" || type === "page_link" || type === "form",
       );
     }
   });

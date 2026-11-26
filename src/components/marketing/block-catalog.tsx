@@ -261,6 +261,19 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
       </Icon>
     ),
   },
+  {
+    id: "form",
+    name: "Form",
+    short: "A sign-up or contact form: collect email addresses and messages on your page.",
+    detail:
+      "Sign-ups keep each address once; contact messages can be emailed to you. Plain HTML that works with JavaScript off; read and export what people sent from Audience.",
+    icon: (
+      <Icon>
+        <rect x="4" y="5" width="16" height="14" rx="2" />
+        <path d="m4.5 6.5 7.5 6 7.5-6" />
+      </Icon>
+    ),
+  },
 ];
 
 const NUMBER_WORDS = [

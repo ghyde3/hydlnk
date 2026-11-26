@@ -191,6 +191,12 @@ describe("M2-05 renderer code: untrusted content", () => {
       // of the archive path and the slug. Neither module imports a client or reads a database.
       /^@\/lib\/blog\/test-ids$/,
       /^@\/lib\/blog\/types$/,
+      // M17-04: the form block's paths, field names, fixed labels and result-page states. Pure: it
+      // imports only the document module.
+      /^@\/lib\/forms\/contract$/,
+      // M17-04: the form block's paths, field names, fixed labels and result-page states. Pure: it
+      // imports only the document module.
+      /^@\/lib\/forms\/contract$/,
       // M9-04: the brand marks' path data (plain data, CC0), imported by name in brand-marks.ts only.
       /^simple-icons$/,
     ];

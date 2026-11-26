@@ -248,7 +248,35 @@ export const blocks = {
     description: "10% off your first print",
     url: "https://maraokafor.com/prints",
   },
+  form: {
+    id: "form-signup-001",
+    type: "form",
+    visible: true,
+    kind: "signup",
+    heading: "Studio notes",
+    description: "A short letter when a new series is out.",
+    askName: true,
+    buttonLabel: "Subscribe",
+    successMessage: "Thanks. You’re on the list.",
+    consent: "Your details go to the owner of this page, who may contact you.",
+    notify: false,
+  },
 } satisfies Record<string, Block>;
+
+/** The second kind of form block (M17-03): a contact form that emails the owner. */
+export const contactFormBlock = {
+  id: "form-contact-001",
+  type: "form",
+  visible: true,
+  kind: "contact",
+  heading: "",
+  description: "",
+  askName: false,
+  buttonLabel: "Send",
+  successMessage: "Thanks. Your message was sent.",
+  consent: "Your details go to the owner of this page, who may contact you.",
+  notify: true,
+} satisfies Block;
 
 /** A valid draft with one block of every type, a hidden block, a block override and a page override. */
 export const fullDraft: DraftDoc = {
@@ -285,6 +313,8 @@ export const fullDraft: DraftDoc = {
     blocks.page_link,
     blocks.items,
     blocks.hours,
+    blocks.form,
+    contactFormBlock,
     { id: "header-hidden-1", type: "header", visible: false, text: "Coming soon" },
   ],
 };

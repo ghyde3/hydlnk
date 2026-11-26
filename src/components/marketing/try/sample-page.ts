@@ -2,6 +2,7 @@ import {
   BLOCK_TYPES,
   BLOCK_TYPE_LABELS,
   blockDefaults,
+  FORM_KIND_LABELS,
   SOCIAL_PLATFORM_LABELS,
   type Block,
   type BlockType,
@@ -134,6 +135,9 @@ export function makeBlock(
       };
     case "latest_posts":
       return { ...blockDefaults.latest_posts(), id };
+    case "form":
+      // M17-03: not a block the try-it page offers; the default keeps the switch total.
+      return { ...blockDefaults.form(), id };
     case "hours":
       // M12-02: not a block the try-it page offers; the default keeps the switch total.
       return { ...blockDefaults.hours(), id };
@@ -344,6 +348,9 @@ export function blockSummary(block: Block): string {
       return clip(block.heading || "Items");
     case "latest_posts":
       return clip(block.heading ?? "") || "Latest posts";
+    case "form":
+      // M17-03: not offered by the try-it page.
+      return clip(block.heading ?? "") || FORM_KIND_LABELS[block.kind];
     case "hours":
       // M12-02: not offered by the try-it page.
       return "Opening hours";

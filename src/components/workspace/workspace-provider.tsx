@@ -73,6 +73,8 @@ export interface WorkspaceProviderProps {
   // Page identity: live, the layout passes them on every render (a rename refreshes the route).
   pageId: string;
   ownerId: string;
+  /** The signed-in user's sign-in address (the form block's "Email me each message" helper line). */
+  accountEmail?: string;
   plan: PlanId;
   handle: string;
   address: string;
@@ -753,6 +755,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     () => ({
       pageId,
       ownerId,
+      ...(props.accountEmail ? { accountEmail: props.accountEmail } : {}),
       plan,
       handle: props.handle,
       address: props.address,
@@ -810,6 +813,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [
       pageId,
       ownerId,
+      props.accountEmail,
       plan,
       props.handle,
       props.address,

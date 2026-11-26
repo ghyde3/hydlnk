@@ -110,6 +110,7 @@ describe("M8-02 step 3: the renderer rules a page needs", () => {
         items: [".pg-items", ".pg-item-body", ".pg-item-sold"],
         hours: [".pg-hours", ".pg-hours-table", ".pg-hours-row"],
         latest_posts: [".pg-latest", ".pg-latest-link", ".pg-latest-title"],
+        form: [".pg-form", ".pg-form-input", ".pg-form-submit", ".pg-form-hp"],
       };
       for (const prefix of prefixes[type]!) expect(all, `${type}: ${prefix}`).toContain(prefix);
     }

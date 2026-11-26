@@ -127,6 +127,7 @@ const EXPECTED: Record<BlockType, string[]> = {
   items: ["Color", "Corner radius"],
   hours: ["Color"],
   latest_posts: ["Color", "Corner radius"],
+  form: ["Button style", "Color", "Corner radius"],
 };
 
 // M11-07: page_link has no editor form or renderer yet; those workers drop this filter with theirs.

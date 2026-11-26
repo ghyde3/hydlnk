@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Block, PublishDoc } from "@/lib/document";
+import type { FormRenderState } from "@/lib/forms/contract";
 import type { SiteContext } from "@/lib/site/menu";
 import { tokensToCssVars } from "@/lib/theme";
 import { backgroundImageUrl, gradientIsCustom } from "./background";
@@ -49,6 +50,8 @@ export interface PageRendererProps {
    * `title` is the page's one `<h1>`; a post draws its own title inside its article.
    */
   main?: { kind: "post" | "archive"; title: string; node: ReactNode };
+  /** A form block's result page (Wave D, M17-06): see `BlockContext.form`. */
+  formState?: FormRenderState;
 }
 
 /**
@@ -75,6 +78,7 @@ export function PageRenderer({
   site,
   subPage,
   main,
+  formState,
 }: PageRendererProps) {
   const { tokens } = doc;
   const ctx: BlockContext = {
@@ -84,6 +88,7 @@ export function PageRenderer({
     ...(thumbnail ? { thumbnail } : {}),
     ...(inertEmbeds ? { inertEmbeds } : {}),
     ...(inertLinks ? { inertLinks } : {}),
+    ...(formState ? { form: formState } : {}),
     ...(site
       ? {
           site: {

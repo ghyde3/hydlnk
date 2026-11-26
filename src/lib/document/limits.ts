@@ -62,6 +62,12 @@ export const LIMITS = {
   latestPostsMin: 1,
   latestPostsMax: 6,
   latestPostsDefault: 3,
+  /** Form block (Wave D, M17-03): an optional heading and description, and three required texts. */
+  formHeading: 80,
+  formDescription: 200,
+  formButton: 30,
+  formSuccess: 160,
+  formConsent: 200,
   /** Most visible featured links (`featured` on a link block, M6-22) one page may publish. */
   featuredLinks: 3,
   /** The share card's title and description (M6-32): one line each, in code points. */

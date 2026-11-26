@@ -68,6 +68,8 @@ Each page is one JSON document (profile + blocks + theme reference + token overr
 | `oauth_grants` | `id`, `user_id`, `client_id`, `scopes`, `authorized_at`, `revoked_at` | Server only. One row per person and app; at most 20 active per person (trigger HL007). Deleted with the account. |
 | `oauth_tokens` | `id`, `grant_id`, `user_id`, `kind` (access/refresh), `token_hash` unique, `scopes`, `resource`, `expires_at`, `last_used_at` | Server only. Opaque tokens, only the SHA-256 stored; one live refresh token per grant (partial unique index); a reused refresh token ends the grant. Expired rows purged by cron. |
 | `mcp_activity` | `id`, `user_id`, `client_id`, `grant_id`, `tool`, `page_id`, `ok`, `error_code`, `at` | Server only. One row per tool call and never any content (no column could hold an argument, a result, a URL or an address); rows go after `MCP_ACTIVITY_RETENTION_DAYS` days (`src/lib/mcp/constants.ts`). |
+| `form_submissions` | `id`, `site_id`, `entry_id` (null for Home), `block_id`, `kind` (signup/contact), `email`, `name`, `message`, `visitor_hash`, `created_at` | Owner reads own (via the site) except `visitor_hash`, and deletes own. Insert is server only, through `record_form_submission` after the public route's checks; no client insert or update. No IP address or user agent is stored. |
+| `form_submission_usage` | `owner_id`, `month`, `stored`, `refused` | Server only. One row per account and UTC month; the trigger behind HL016 counts here. |
 
 - **Handles belong to pages.** `pages.handle` is the subdomain: unique and checked against `reserved_handles` (which includes `www`, `app`, `api` and other system names). Signup claims the handle for the user's first page. Profile content (photo, name, bio) lives in the page document.
 - **Seed vs migration.** Reserved handles and system themes ship in migrations so they reach production; `seed.sql` is local demo data only.
@@ -102,6 +104,18 @@ Views via client beacon (sent by the page's one script, after `load`), clicks vi
 - **Uniques without cookies.** `visitor_hash` = hash of IP + user agent + daily rotating salt. No cookie banner.
 - **Bots.** Drop known bot user agents and HEAD requests before insert.
 - **Dashboard.** 7/30/90-day/1-year views, clicks and CTR per link, top referrers, device and country splits, from `daily_stats` plus today's raw events.
+
+## Forms and audience (Wave D)
+
+One block type, `form`, with two kinds: `signup` (an email address, and a name when the owner asks for one) and `contact` (a name, an email address and a message). It is not the `contact` block type (contact details); in copy it is "Sign-up form" or "Contact form".
+
+- **The block.** `kind`, an optional `heading` (80) and `description` (200), `askName` (sign-up only), `buttonLabel` (30), `successMessage` (160) and `consent` (200), the three required at Publish, and `notify` (contact only: email each message to the account's own sign-in address; never another recipient). A new block is a sign-up with "Subscribe", "Thanks. You’re on the list." and the consent line "Your details go to the owner of this page, who may contact you."
+- **Plain HTML, no script.** The block is a `<form method="post" action="/f/{pageId}/{blockId}">` drawn by the one renderer; the tenant script is unchanged (M8-05). The confirm, error and sent states are small themed pages of their own (`src/lib/tenant-render/form-page.tsx`), never states of the cached live page. The tenant policy's `form-action` is `'self'`.
+- **Routes**, on a page's own hosts only (`isTrackingPath`, `hostServesPage` on the real Host header), all `force-dynamic`: `GET /f/{pageId}/o` (the open marker, a 43-byte image the live page loads only when it holds a visible form), `POST /f/{pageId}/{blockId}` (a submission) and `GET`/`HEAD` of the same path (the sent page). Every `/f` page is `no-store`, `noindex`, sets no cookie and loads no script.
+- **A submission**, cheapest checks first and nothing stored before the last step: ids, cross-site POST (403), 10 POSTs per client in 10 minutes, `application/x-www-form-urlencoded` and 32 KB, a visible form block in the PUBLISHED document of a site whose owner is not suspended, the host, then bot user agents and the honeypot (answered exactly like a success), the field rules (422 with the values typed), the fill time (the open marker at least 3 seconds old, or a signed single-use token from the confirm page at least 2 seconds and at most an hour old), blocked link hosts in a message (dropped like a success; 503 when the blocklist cannot answer), 3 accepted per client and form in 10 minutes and 600 per site an hour, then `record_form_submission`. A stored submission answers 303 to the sent page; after the response one click event is recorded with the block's id and, for a contact form with `notify`, the owner email is sent. Nothing a visitor typed, and no IP address or user agent, is ever logged.
+- **Limits.** Submissions accepted for storage per account and UTC month: Free 100, Pro 5,000, Studio 50,000 (HL016, a `BEFORE INSERT` trigger, so even the secret key cannot pass it). Deleting a submission gives nothing back; a duplicate sign-up (same form, same address in any letter case) is not stored and not counted. Over the limit the visitor still sees the sent page, nothing is stored and no message email goes out; the owner sees a notice on Audience and gets one email on the first refusal of a month.
+- **Audience** (`/audience` on the app host, the current site): the month's meter and the over-limit notice, a filter by form, 50 a page newest first, Delete and "Delete all from this form" (Server Actions under RLS, 60 a minute), and CSV export on every plan (`/audience/export`, `csvCell` on every cell, at most the newest 50,000 rows). Reads go through the signed-in user's session under RLS.
+- **What is stored about a visitor:** what they typed, the time, and the daily visitor hash analytics already uses.
 
 ## Sites with pages (Wave M)
 
@@ -402,6 +416,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 | Footer badge | "Made with HYDLNK" | Removable | Removable |
 | Uploads | 10 MB | 100 MB | 1 GB |
 | Analytics | Per-link clicks, 30 days; CSV export of that range | 1 year, referrers, country, device; CSV export | Same as Pro (CSV export is on every plan since Wave K, M9-26) |
+| Form submissions per month | 100 | 5,000 | 50,000 |
 | Version history | — | Last 25 published versions: preview and restore | Last 25 published versions: preview and restore |
 | Scheduled links (not in v1) | — | Later | Later |
 | Team access | — | — | Invite editors per page |
@@ -462,6 +477,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Content model, feature 1 (Gary, 2026-10-11; the plan doc "HYDLNK Next Evolution Plan", section 7): one shared table for pages, posts and later custom types, with sub-pages and Home moved in now; Home is the page at `/`; every page and post publishes on its own, with Publish design and Publish all changes; menu links to unpublished pages hidden; posts written in rich text and stored as Markdown; URLs `/{archive path}/{slug}`; categories and tags in v1; scheduling in stage 5; no byline; simple comments later; import after the MVP; posts Free 25, Pro 1,000, Studio unlimited (100,000 safety cap); custom types Pro 3, Studio unlimited; revisions Free 10, Pro 50, Studio 200; the larger MCP and page limits approved. See "Content model (feature 1, Wave N)".
 - Content model security review, M15-04 (Gary, 2026-10-12): revision snapshots stay within the plan's content_bytes by pruning the oldest first (history is bounded at about one extra cap per account), and the six low known items in "Content model" are fixed before the writer is reachable from the editor (stage 3) or MCP (stage 4).
 - Stage 1b of the content model (Gary, 2026-10-12): one cutover after a byte-identical dry run on a copy of production (no per-account flag), copy-only move with Vercel Instant Rollback as the way back; per-page publishing with Publish design and Publish all changes; links to unpublished pages hidden; History restores design, pages restore from their own revisions; MCP publish_page = publish all changes until stage 4; Home's title stays the profile name until stage 3; publish bar from DESIGN.md, checked by design-verifier. See "Content model".
+- Forms and email capture (Gary, 2026-11-26; Wave D, M17-01 to M17-12): moved from Deferred into scope. One `form` block (sign-up, contact); plain HTML with no script (M8-05 stays as it is); the tenant policy's form-action becomes 'self'; submissions per month Free 100, Pro 5,000, Studio 50,000, counted on intake and not given back by deleting; over the limit the visitor still sees the success page and the owner sees a notice; CSV on every plan; message emails only to the account's own address.
 
 ## Open
 
@@ -469,3 +485,10 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Auth email provider. Supabase's built-in email only reaches the team's own addresses (about 2 per hour), which is fine while Gary is the only user. Custom SMTP (Resend recommended) must be in place before signup opens.
 - Custom domain for Supabase Auth (a paid Supabase add-on). Until then, sign-in emails and Google's consent screen show the `supabase.co` address.
 - Publish the Google OAuth app before signup opens. It's in Testing, so only listed test users can sign in with Google.
+- Forms (Wave D), for Gary before release: the Privacy Policy sentence about form submissions and the open marker (blocks the release; the wave does not edit the policy), and whether the Terms need a line that owners must have a lawful reason to contact people.
+- Forms (Wave D): over the month's limit the visitor still sees the success page (their message is lost without their knowing); confirm, or show "This form isn’t taking responses right now."
+- Forms (Wave D): deleting a submission does not give the month's allowance back; confirm, or count "rows stored this month".
+- Forms (Wave D): submissions are kept until the owner deletes them or the account is deleted; say if they should expire.
+- Forms (Wave D): Audience as a fourth sidebar item and a fifth phone tab (supersedes M7-01's lists); confirm, or put it under Analytics.
+- Forms (Wave D): inline success without leaving the page is not built (M8-05 forbids `fetch` in the tenant script); it needs a row that supersedes M8-05 and a larger size cap.
+- Forms (Wave D): message emails stay off in production until `SMTP_HOST` is set (M5-22 is open); the pricing table, FAQ and features page do not mention forms yet.

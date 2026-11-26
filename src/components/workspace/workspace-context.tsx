@@ -60,6 +60,8 @@ export interface WorkspaceValue {
   pageId: string;
   /** The signed-in user's id: the first path segment of the page's uploaded media. */
   ownerId: string;
+  /** The signed-in user's sign-in address: where a contact form's message emails go (M17-07, M17-10). */
+  accountEmail?: string;
   plan: PlanId;
   handle: string;
   /** `{handle}.hydlnk.com`, the display address (the mono line above the page name). */

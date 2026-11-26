@@ -45,6 +45,7 @@ export {
   type ItemsBlock,
   type HoursBlock,
   type LatestPostsBlock,
+  type FormBlock,
   type ListItem,
   type PublishDoc,
   type SocialBlock,
@@ -54,6 +55,15 @@ export {
   type TextBlock,
 } from "./schema";
 export { LIMITS, codePointLength, singleLine, truncateToCodePoints } from "./limits";
+export {
+  DEFAULT_CONSENT,
+  FORM_DEFAULTS,
+  FORM_KINDS,
+  FORM_KIND_LABELS,
+  FORM_KIND_MESSAGE,
+  switchFormKind,
+  type FormKind,
+} from "./form";
 export {
   APP_STORES,
   APP_STORE_LABELS,

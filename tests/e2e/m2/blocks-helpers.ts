@@ -42,6 +42,7 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   items: "Items",
   hours: "Hours",
   latest_posts: "Latest posts",
+  form: "Form",
 };
 
 export interface TestPage {

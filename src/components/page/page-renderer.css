@@ -2482,3 +2482,166 @@
   font-size: calc(12px * var(--t-scale));
   line-height: 1.3;
 }
+
+/* Form block (Wave D, M17-04) ------------------------------------------------------------------- */
+
+/* A card of labeled fields, the button and the consent line under it. Plain HTML, no script: the
+   controls take the page's colors, fonts and radius, 16px text (so phones do not zoom) and at least
+   44px of height. The honeypot field is moved off screen (never `display: none`, which some bots
+   read as a hint), and out of the tab order by its own tabindex. */
+[data-page-root] .pg-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+  color: var(--t-text);
+  text-align: left;
+}
+
+[data-page-root] .pg-form-heading {
+  margin: 0 0 4px;
+  font-family: var(--t-font-heading);
+  font-size: calc(20px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-desc,
+[data-page-root] .pg-form-note {
+  margin: 0 0 8px;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-label {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+[data-page-root] .pg-form-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border: max(var(--t-border-width), 1px) solid var(--t-border);
+  border-radius: min(var(--t-radius), 12px);
+  background: var(--t-bg);
+  color: var(--t-text);
+  font-family: var(--t-font-body);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+[data-page-root] .pg-form-message {
+  min-height: 120px;
+  resize: vertical;
+}
+
+[data-page-root] .pg-form-input[aria-invalid="true"] {
+  border-color: var(--t-accent);
+  border-width: 2px;
+}
+
+[data-page-root] .pg-form-error {
+  margin: 4px 0 0;
+  color: var(--t-text);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+[data-page-root] .pg-form-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* The button is a link button (the page's button style), at least 44px tall. */
+[data-page-root] .pg-form-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  margin-top: 16px;
+  padding: 10px 18px;
+  border: var(--t-border-width) solid var(--t-button-bg);
+  border-radius: var(--t-radius);
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+  font: inherit;
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+[data-page-root] .pg-form[data-button-style="outline"] .pg-form-submit {
+  border-color: var(--t-accent);
+  border-width: max(var(--t-border-width), 1px);
+  background: transparent;
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+[data-page-root] .pg-form[data-button-style="soft"] .pg-form-submit {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--t-accent) 16%, transparent);
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+[data-page-root] .pg-form[data-button-style="shadow"] .pg-form-submit {
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+}
+
+[data-page-root] .pg-form[data-button-style="pill"] .pg-form-submit {
+  border-radius: 999px;
+}
+
+[data-page-root] .pg-form-consent {
+  margin: 8px 0 0;
+  color: var(--t-text-muted);
+  font-size: calc(12px * var(--t-scale));
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-sent {
+  margin: 0;
+  font-size: calc(16px * var(--t-scale));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: 8px;
+  font-size: calc(15px * var(--t-scale));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}

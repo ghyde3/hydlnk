@@ -13,8 +13,8 @@ describe("marketing block catalog", () => {
   });
 
   it("the count in the copy is a word derived from the catalog", () => {
-    expect(BLOCK_CATALOG).toHaveLength(19);
-    expect(BLOCK_COUNT_WORD).toBe("nineteen");
-    expect(BLOCK_COUNT_WORD_CAP).toBe("Nineteen");
+    expect(BLOCK_CATALOG).toHaveLength(20);
+    expect(BLOCK_COUNT_WORD).toBe("twenty");
+    expect(BLOCK_COUNT_WORD_CAP).toBe("Twenty");
   });
 });

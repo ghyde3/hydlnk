@@ -36,6 +36,7 @@ import { inkFor, isHexColor } from "./color";
  *   items    "Color"         accent, text and border (Sold mark, names, lines)
  *   hours    "Color"         accent, text and border (Open now mark, table, lines)
  *   map      "Border color"  border (the card's line, drawn once it has a thickness)
+ *   form     "Color"         buttonBg and accent = the color, buttonText = its ink (as a link)
  *
  * Every function is pure and returns the same block object when nothing changes.
  */
@@ -182,6 +183,16 @@ export const STYLE_SPECS: Readonly<Record<StyleBlockType, StyleSpec>> = Object.f
       border: false,
     },
   },
+  // The form's button is its one solid element (M17-03): the link's controls, on the button.
+  form: {
+    controls: ["buttonStyle", "color", "radius"],
+    color: {
+      label: "Color",
+      keys: ["buttonBg", "accent", "buttonText"],
+      source: "buttonBg",
+      border: false,
+    },
+  },
   // M12-01: the item names and prices (text), the Sold mark (accent) and the lines (border).
   items: {
     controls: ["color", "radius"],
@@ -285,13 +296,13 @@ export function hasColorOverride(block: Block): boolean {
   return spec.color.keys.some((key) => overrides[key] !== undefined);
 }
 
-/** The keys a color writes for one block type (a link also gets the ink that reads on it). */
+/** The keys a color writes for one block type (a button also gets the ink that reads on it). */
 function colorValues(block: Block, color: string): Record<string, string> {
   const spec = styleSpecOf(block)!;
   const out: Record<string, string> = {};
   for (const key of spec.color.keys) out[key] = color;
-  if (block.type === "link" || block.type === "book" || block.type === "page_link")
-    out.buttonText = inkFor(color);
+  // A button's fill (link, book, page link, form) gets the ink that reads on it.
+  if (spec.color.keys.includes("buttonText")) out.buttonText = inkFor(color);
   return out;
 }
 
