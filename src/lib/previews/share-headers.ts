@@ -96,7 +96,8 @@ export function shareNonce(): string {
  * keeps them readable). Today only the renderer's escaping stands between a draft's text and a
  * script running there; this makes a second wall. With a nonce, only the scripts Next.js renders
  * itself run (`strict-dynamic` lets those load their own chunks), no inline event handler runs
- * (`script-src-attr 'none'`) and no form can post anywhere (`form-action 'none'`, there is none).
+ * (`script-src-attr 'none'`) and no form can post anywhere (`form-action 'none'`: a form block in the
+ * draft is drawn with its `/f/...` action, and posts nowhere from here; previews post nowhere, M17-07).
  * The route is always dynamic, so a nonce per request costs nothing in caching.
  *
  * `nonce` null: a page with no script at all (the 429), where no script may run. `development` adds

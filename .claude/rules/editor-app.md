@@ -22,8 +22,8 @@ Applies to the `(editor)` route group (`src/app/(editor)/app/**`).
 
 _*Layout (docs/DESIGN.md wins over mockups; see design/mockups/Editor*.dc.html, Design_.dc.html)**
 
-- Mobile first, one breakpoint at 760px. At 760px and up: 240px charcoal sidebar (nav: Editor, Analytics, Domains; Settings & billing and Sign out are in the account menu, the user block at the bottom) plus a white header bar and a `--hl-page` content area.
-- Below 760px: charcoal top bar (logo and page switcher chip) and a fixed white bottom tab bar (Editor, Stats, Domains, Account; active has ink text and a 2px brass top marker; respect the safe-area inset). Main content gets bottom padding to clear it.
+- Mobile first, one breakpoint at 760px. At 760px and up: 240px charcoal sidebar (nav: Editor, Analytics, Audience, Domains since Wave D, M17-08; Settings & billing and Sign out are in the account menu, the user block at the bottom) plus a white header bar and a `--hl-page` content area.
+- Below 760px: charcoal top bar (logo and page switcher chip) and a fixed white bottom tab bar (Editor, Stats, Audience, Domains, Account since Wave D; active has ink text and a 2px brass top marker; respect the safe-area inset). Main content gets bottom padding to clear it.
 - The Editor is one workspace (`src/app/(editor)/app/(screens)/(workspace)/`, `src/components/workspace/`) with three tabs, Edit, Design and Share (/editor, /design, /share), one shared draft, history and save queue, and one pinned toolbar; at 760px and up the preview sits beside the content in a phone bezel, and below 760px it is a floating mini phone above the tab bar that opens a full-size preview (no dock, no Blocks | Preview tabs, no bezel on a phone).
 - Touch targets at least 44px. Inputs use 16px text. Focus is a 2px brass outline with a 2px offset on `:focus-visible`. Radius 6px (4px for chips and small buttons), 1px borders, no shadows. Public Sans for UI, Geist Mono for data.
 - Copy: sentence case, verb-first buttons, no "please", no exclamation marks, no "successfully". Errors say what happened and what to do.
