@@ -405,6 +405,7 @@ export function legacyReads(source: string, file = "x.ts"): string[] {
               )
             : undefined;
         if (key !== "draft" && key !== "published") continue;
+        if (!ts.isPropertyAccessExpression(value) && !ts.isElementAccessExpression(value)) continue;
         handOvers.push({
           holder: norm(value.expression, sf),
           callee: norm(node.expression, sf),
