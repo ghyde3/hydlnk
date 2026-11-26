@@ -318,8 +318,10 @@ test.describe("M8-04 abuse and cost", () => {
   });
 
   // M11-06 step 2: a single valid lowercase segment on a live site goes to the force-dynamic sub-page route
-  // (a 404 after one cached index read, nothing stored, so no cache HIT); the rest still share /sites/unknown.
-  test("M8-04 invented sub-paths store nothing: single segments read the site index once in total, the rest share one cached 404", async ({
+  // (a 404 after one cached index read, nothing stored, so no cache HIT). M16-03: so does each archive
+  // shape (`/{archive}/{slug}` is two lowercase segments), to its own force-dynamic route, a 404 after
+  // cached reads when the first segment is no live archive. The rest still share /sites/unknown.
+  test("M8-04 invented sub-paths store nothing: single segments and archive shapes read the site index once in total, the rest share one cached 404", async ({
     context,
   }) => {
     const user = await liveUser(context, "ca4", { plan: "studio" });
@@ -333,24 +335,29 @@ test.describe("M8-04 abuse and cost", () => {
       expect(res.text, path).toContain("Page not found");
       expect(res.text, path).not.toContain(user.draft.profile.name);
     };
-    // Single lowercase segments on the handle host and the custom host: dynamic route, no cache state.
+    // Single lowercase segments and two (a post's shape under an archive) on the handle host and the
+    // custom host: dynamic routes, no cache state.
     for (let i = 0; i < 30; i++) {
       const token = rand(10).toLowerCase();
       tokens.push(token);
-      expect404(await getTenant(user.handle, `/${token}`), `handle /${token}`);
-      expect404(await getCustom(host, `/${token}`), `custom /${token}`);
+      for (const path of [`/${token}`, `/${token}/${rand(6).toLowerCase()}`]) {
+        expect404(await getTenant(user.handle, path), `handle ${path}`);
+        expect404(await getCustom(host, path), `custom ${path}`);
+      }
     }
     // The index is cached under the page tag: dozens of invented paths add no read per path. Home's
     // render may have read it once; nothing after that.
     expect(await queryCount(user.handle), "the page read").toBe(pageReads);
     expect(await indexQueryCount(user.handle), "the site index read").toBeLessThanOrEqual(1);
 
-    // Two segments, another handle's host and a host nobody owns still land on the one shared cached 404.
+    // Three segments that are no archive shape (the second is not `page`, `category` or `tag`), another
+    // handle's host and a host nobody owns still land on the one shared cached 404.
     const states: string[] = [];
     for (let i = 0; i < 30; i++) {
       const token = rand(10).toLowerCase();
       tokens.push(token);
-      const path = `/${token}/${rand(6).toLowerCase()}${i % 5 === 0 ? `?q=${rand(6)}` : ""}`;
+      const deeper = `${rand(6).toLowerCase()}/${rand(6).toLowerCase()}`;
+      const path = `/${token}/${deeper}${i % 5 === 0 ? `?q=${rand(6)}` : ""}`;
       for (const [label, res] of [
         ["handle", await getTenant(user.handle, path)],
         ["custom", await getCustom(host, path)],
