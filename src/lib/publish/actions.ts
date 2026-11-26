@@ -37,9 +37,11 @@ import { PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS, publishRateKey } from 
  */
 /**
  * The session user and the shared publish rate limit (M11-12): 60 an hour per account, all three
- * actions together. Wave F (G18): a member's publish counts on their own key AND on the site owner's,
- * so members cannot spend more than the owner's budget between them; the owner counts once. The
- * owner comes from the access helper (a read; the core decides publish access itself).
+ * actions together. Wave F (G18): a publish by someone who MAY publish the site counts on their own
+ * key AND on the site owner's, so publishers cannot spend more than the owner's budget between them;
+ * the owner counts once. Anyone else (an editor, a stranger) is asked with need `publish`, refused,
+ * and counts on their own key only (S2): they can never spend the owner's budget. The core decides
+ * publish access itself again.
  */
 async function publisher(pageId: string): Promise<{
   userId: string | null;
@@ -51,7 +53,7 @@ async function publisher(pageId: string): Promise<{
   const site = await siteAccessFor({
     actorId: user.id,
     siteId: typeof pageId === "string" ? pageId.toLowerCase() : pageId,
-    need: "read",
+    need: "publish",
     source: "editor",
   });
   const ownerId = site.ok ? site.access.ownerId : null;
