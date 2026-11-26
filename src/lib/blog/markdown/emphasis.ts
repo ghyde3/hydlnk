@@ -1,5 +1,6 @@
 import type { Token } from "marked";
 import {
+  BACKSLASH,
   STAR,
   TILDE,
   UNDERSCORE,
@@ -60,14 +61,30 @@ export interface Delimiter {
   open: boolean;
   close: boolean;
   index: number;
+  /** Its kind as a closer of a bare URL (`kindOf`). */
+  kind: number;
   prev: Delimiter | null;
   next: Delimiter | null;
+}
+
+/**
+ * The kinds of run that close each other: `*`, `_`, and `~` by its length (a `~` run closes only a
+ * run of the same length; one of three or more is not a delimiter). -1 for none.
+ */
+export const RUN_KINDS = 4;
+export function kindOf(char: number, length: number): number {
+  if (char === STAR) return 0;
+  if (char === UNDERSCORE) return 1;
+  return length === 1 ? 2 : length === 2 ? 3 : -1;
 }
 
 export class DelimiterStack {
   first: Delimiter | null = null;
   top: Delimiter | null = null;
   private count = 0;
+  /** The openers on the stack, by kind: what may cut a bare URL short. */
+  private readonly openers = new Array<number>(RUN_KINDS).fill(0);
+  private anyOpeners = 0;
 
   push(node: TextNode, char: number, length: number, sides: number): Delimiter {
     const entry: Delimiter = {
@@ -78,6 +95,7 @@ export class DelimiterStack {
       open: (sides & OPENS) !== 0,
       close: (sides & CLOSES) !== 0,
       index: this.count,
+      kind: kindOf(char, length),
       prev: this.top,
       next: null,
     };
@@ -85,6 +103,7 @@ export class DelimiterStack {
     if (this.top) this.top.next = entry;
     else this.first = entry;
     this.top = entry;
+    if (entry.open) this.countOpener(entry, 1);
     return entry;
   }
 
@@ -93,6 +112,75 @@ export class DelimiterStack {
     else this.first = entry.next;
     if (entry.next) entry.next.prev = entry.prev;
     else this.top = entry.prev;
+    if (entry.open) this.countOpener(entry, -1);
+  }
+
+  /** Whether an opener of `kind` is on the stack. */
+  opens(kind: number): boolean {
+    return this.openers[kind]! > 0;
+  }
+
+  hasOpeners(): boolean {
+    return this.anyOpeners > 0;
+  }
+
+  private countOpener(entry: Delimiter, delta: number): void {
+    if (entry.kind === -1) return;
+    this.openers[entry.kind]! += delta;
+    this.anyOpeners += delta;
+  }
+}
+
+/**
+ * The next run of one kind that may close (`flanking`, with no token before it, unescaped) at or
+ * after a position, in the inline run `[start, stop)`: where a bare URL must stop for emphasis
+ * (`closingRunIn` in inline.ts). `stop` when there is none.
+ *
+ * WHY IT IS LINEAR. The answer found from `from` holds for every start up to it (no closing run of
+ * this kind lies between), so it is remembered; a question past it scans only text no earlier
+ * question did. The URL starts that ask only move forward, so over one cursor pass each character
+ * is scanned at most once per kind (four kinds).
+ */
+export class NextClosingRun {
+  private from = -1;
+  private found = -1;
+  private readonly char: number;
+  private readonly needle: string;
+  /** The run's exact length (`~`), or 0 for any (`*`, `_`). */
+  private readonly length: number;
+
+  constructor(
+    private readonly text: string,
+    private readonly start: number,
+    private readonly stop: number,
+    kind: number,
+  ) {
+    this.char = kind === 0 ? STAR : kind === 1 ? UNDERSCORE : TILDE;
+    this.length = kind === 2 ? 1 : kind === 3 ? 2 : 0;
+    this.needle = String.fromCharCode(this.char);
+  }
+
+  at(from: number): number {
+    if (this.from !== -1 && from >= this.from && from <= this.found) return this.found;
+    const s = this.text;
+    let k = from;
+    while (k < this.stop) {
+      k = s.indexOf(this.needle, k);
+      if (k === -1 || k >= this.stop) {
+        k = this.stop;
+        break;
+      }
+      let end = k;
+      while (end < this.stop && s.charCodeAt(end) === this.char) end += 1;
+      const fits = this.length === 0 || end - k === this.length;
+      // An escaped mark (`\*`) is text to marked's emphasis rules.
+      const escaped = s.charCodeAt(k - 1) === BACKSLASH;
+      if (fits && !escaped && (flanking(s, k, end, this.char, this.start, this.stop, false) & CLOSES) !== 0) break;
+      k = end;
+    }
+    this.from = from;
+    this.found = k;
+    return k;
   }
 }
 

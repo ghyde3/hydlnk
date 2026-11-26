@@ -118,6 +118,16 @@ export function fit(body: string, cap = BODY_CAP): string {
 const NBSP = "\u00a0";
 const IDEO = "\u3000";
 
+/** Each unit repeated in one word after "x", and the same after an open `*` ("*x "). */
+function urlPrefixFamilies(units: Record<string, string>): Record<string, (n: number) => string> {
+  const out: Record<string, (n: number) => string> = {};
+  for (const [name, unit] of Object.entries(units)) {
+    out[name] = (n) => `x${unit.repeat(n / unit.length)}`;
+    out[`*x ${name}`] = (n) => `*x x${unit.repeat(n / unit.length)}`;
+  }
+  return out;
+}
+
 /**
  * The attack families: each makes a body of about `n` characters (cut to the cap by `fit`). From the
  * attacker's probes (one.mts, two.mts), the metered lexer's benchmark and the advisor's lists.
@@ -139,6 +149,7 @@ export const ATTACKS: Record<string, (n: number) => string> = {
   "table rows": (n) => `|a|b|\n|-|-|\n${"a\n".repeat(n / 2)}`,
   "wide header": (n) => `${"|a".repeat(n / 4)}|\n${"|-".repeat(n / 4)}|\n`,
   "pipes": (n) => "|".repeat(n),
+  "table rows with no cells": (n) => `|a|\n|-|\n${"|\n".repeat(n / 2)}`,
   // Emphasis and strikethrough.
   "*a ": (n) => "*a ".repeat(n / 3),
   "*a **b ": (n) => "*a **b ".repeat(n / 7),
@@ -195,6 +206,16 @@ export const ATTACKS: Record<string, (n: number) => string> = {
   "a@b.c repeated": (n) => "a@b.c ".repeat(n / 6),
   "a@b.b.b...": (n) => `a@${"b.".repeat(n / 2)}`,
   "a_a_..@b.co": (n) => `${"a_".repeat(n / 2)}@b.co`,
+  // URL prefixes inside one word, each with and without an opener before it (finding 1): a prefix
+  // after a local-part character asked for the run's `@` again, a prefix with no host character
+  // after it scanned for a closing run first, and a URL that ends at an unclosed `(` left its tail
+  // to be scanned again by the next prefix.
+  ...urlPrefixFamilies({
+    "x + www.. (a local part, no host character)": "www..",
+    "x + www.._ (no host character, a `_` run)": "www._",
+    "x + ftp://* (no host character, a `*` run)": "ftp://*",
+    "x + www.a( (ends at an unclosed `(`)": "www.a(",
+  }),
   // Blocks: nesting, lazy lines, setext lookahead, lists.
   "> deep (262,144)": () => "> ".repeat(262144),
   "> x 31 deep, repeated": (n) => `${"> ".repeat(31)}a\n`.repeat(n / 64),
