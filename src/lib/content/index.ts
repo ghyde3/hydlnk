@@ -30,6 +30,7 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } from "./query-core";
 import { unsafeBodySchemes } from "./blocklist";
+import { bodyShapeIssue } from "./body-shape";
 import { failure } from "./errors";
 import { POST_BODY_TOO_LARGE, postBodyTooLarge } from "./schemas";
 import { bodyImageIssue, bodyImages, checkOwnImages, postImages } from "./images";
@@ -49,8 +50,9 @@ import type { ContentActor, ContentFailure } from "./types";
 
 /**
  * What Publish checks on a post body, for a caller that wants it at save (the MCP tools, M18-05):
- * only http, https, mailto and tel addresses, every image an upload, at most `BODY_IMAGES_MAX` of
- * them, each in the actor's own folder and present in Storage. Reads only; it stores nothing. The
+ * a body the bounded lexer reads (`bodyShapeIssue`), only http, https, mailto and tel addresses,
+ * every image an upload, at most `BODY_IMAGES_MAX` of them, each in the actor's own folder and
+ * present in Storage. Reads only; it stores nothing. The
  * editor's lenient draft save does not call it, and Publish runs every check again.
  */
 export async function checkPostBody(input: {
@@ -65,6 +67,9 @@ export async function checkPostBody(input: {
       issues: [{ path: "body", message: POST_BODY_TOO_LARGE }],
     };
   }
+  // A body the bounded lexer refuses is refused here, before the readers below would skip it.
+  const shape = bodyShapeIssue(input.draft);
+  if (shape) return shape;
   const unsafe = unsafeBodySchemes(input.draft);
   if (unsafe) return unsafe;
   const foreign = bodyImageIssue(input.draft);
@@ -77,7 +82,7 @@ export async function checkPostBody(input: {
 
 /**
  * What Publish would refuse in a post draft that needs no read (`get_entry`'s `publishIssues`,
- * M18-04), as `{path, message}` rows: a body over the limit, a link or image with a scheme that is
+ * M18-04), as `{path, message}` rows: a body over the limit or one the bounded lexer refuses, a link or image with a scheme that is
  * not allowed, a body image that is not an upload or one image too many, and an image (body,
  * featured or share) outside the owner's own folder. Not here, because each needs a read that only
  * Publish makes: the link blocklist, whether each file still exists in Storage, and a live slug
@@ -91,7 +96,8 @@ export function postDraftIssues(input: {
   if (typeof raw === "string" && postBodyTooLarge(raw)) {
     return [{ path: "body", message: POST_BODY_TOO_LARGE }];
   }
-  const issues: Array<{ path: string; message: string }> = [];
+  const shape = bodyShapeIssue(input.draft);
+  const issues: Array<{ path: string; message: string }> = [...(shape?.issues ?? [])];
   issues.push(...(unsafeBodySchemes(input.draft)?.issues ?? []));
   issues.push(...(bodyImageIssue(input.draft)?.issues ?? []));
   for (const use of postImages(input.draft)) {

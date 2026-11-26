@@ -2,7 +2,14 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { stackIsUp } from "./publish-support";
-import { contentHarness, type BlogOwner, type ContentHarness } from "./support/mcp-content-db";
+import {
+  ALL,
+  READ,
+  READ_WRITE,
+  contentHarness,
+  type BlogOwner,
+  type ContentHarness,
+} from "./support/mcp-content-db";
 
 const mocks = vi.hoisted(() => ({
   admin: undefined as unknown,
@@ -248,11 +255,126 @@ describe.skipIf(!run)(
       expect(html).toContain("&lt;img");
     });
 
+    describe("a body the bounded lexer refuses (M17's one lexer)", () => {
+      const HEAVY = "*a ".repeat(8000);
+      const DEEP = `${"> ".repeat(4000)}a`;
+      const cases: Array<[string, string, string]> = [
+        ["too heavy", HEAVY, "This post’s formatting is too heavy to save."],
+        ["too deep", DEEP, "This post nests quotes or lists too deeply to save."],
+      ];
+
+      /** One tool call, timed: a refusal is a fast, final answer. */
+      async function timed(tool: string, args: Record<string, unknown>, scopes = ALL) {
+        const started = performance.now();
+        const out = await h.call(tool, args, a, scopes);
+        return { out, ms: performance.now() - started };
+      }
+      const onBody = (out: Awaited<ReturnType<ContentHarness["call"]>>, words: string) => {
+        expect(out.error!.issues![0]!.path).toBe("body");
+        expect(out.error!.issues![0]!.message).toContain(words);
+        expect(out.error!.retryAfterSeconds).toBeUndefined();
+      };
+
+      it.each(cases)(
+        "%s: create_entry, update_entry and bodyEdits answer invalid_input on body, fast",
+        async (_label, body, words) => {
+          const before = await h.row(target.id);
+          const entries = await count();
+          for (const [tool, args] of [
+            ["create_entry", { pageId: a.pageId, title: "Bound", body }],
+            ["update_entry", { entryId: target.id, ifRev: before.rev, body }],
+            [
+              "update_entry",
+              { entryId: target.id, ifRev: before.rev, bodyEdits: [{ find: "MARK", replace: body }] },
+            ],
+          ] as const) {
+            const { out, ms } = await timed(tool, args);
+            expect(out.error?.code, tool).toBe("invalid_input");
+            onBody(out, words);
+            expect(ms, tool).toBeLessThan(500);
+          }
+          expect(await h.row(target.id)).toEqual(before);
+          expect(await count()).toBe(entries);
+        },
+      );
+
+      it.each(cases)(
+        "%s: a version with that body is invalid_input on body for restore_revision, and nothing is kept",
+        async (_label, body, words) => {
+          const made = await h.post(a, { body: "Safe body" });
+          const before = await h.row(made.id);
+          const rev = 950 + cases.findIndex(([, b]) => b === body);
+          const inserted = await h.admin.from("content_entry_revisions").insert({
+            entry_id: made.id,
+            site_id: a.pageId,
+            rev,
+            snapshot: { title: "Old", slug: "old", body },
+            source: "editor",
+          });
+          expect(inserted.error).toBeNull();
+          const revisionsBefore = await h.revisions(made.id);
+          const { out, ms } = await timed(
+            "restore_revision",
+            { entryId: made.id, revision: rev, ifRev: before.rev },
+            READ_WRITE,
+          );
+          expect(out.error?.code).toBe("invalid_input");
+          onBody(out, words);
+          expect(ms).toBeLessThan(500);
+          expect(await h.row(made.id)).toEqual(before);
+          // Refused before the current draft is kept as a version of its own.
+          expect(await h.revisions(made.id)).toEqual(revisionsBefore);
+        },
+      );
+
+      it.each(cases)(
+        "%s: a stored draft with that body is in get_entry's publishIssues and publish_entry refuses it on body",
+        async (_label, body, words) => {
+          // A draft saved before the bound existed: written straight to the row.
+          const made = await h.post(a, { body: "Safe body" });
+          const stored = await h.row(made.id);
+          const written = await h.admin
+            .from("content_entries")
+            .update({ draft: { ...stored.draft, body } })
+            .eq("id", made.id);
+          expect(written.error).toBeNull();
+          const read = await timed("get_entry", { entryId: made.id }, READ);
+          expect(read.out.isError, JSON.stringify(read.out.error)).toBe(false);
+          expect(read.ms).toBeLessThan(500);
+          expect(read.out.json!.publishIssues).toContainEqual({
+            path: "body",
+            message: expect.stringContaining(words),
+          });
+          const before = await h.row(made.id);
+          const { out, ms } = await timed("publish_entry", { entryId: made.id, ifRev: before.rev });
+          // A publish's content refusal is publish_refused (M18-08), with the issue on body.
+          expect(out.error?.code).toBe("publish_refused");
+          expect(out.error!.message).toContain(words);
+          onBody(out, words);
+          expect(ms).toBeLessThan(500);
+          expect(await h.liveState(made.id)).toEqual({
+            published: before.published,
+            published_at: before.published_at,
+            first_published_at: before.first_published_at,
+            live_slug: before.live_slug,
+            live_path: before.live_path,
+            deleted_at: before.deleted_at,
+          });
+          expect(mocks.invalidateEntry).not.toHaveBeenCalledWith(
+            expect.objectContaining({ entryId: made.id }),
+          );
+        },
+      );
+    });
+
     describe("oversized input", () => {
       const KIB_512 = 512 * 1024;
 
       it("a 512 KiB body can be created and replaced; one byte more is invalid_input on body", async () => {
-        const full = "a".repeat(KIB_512);
+        // 512 KiB of short lines: one unbroken 512 KiB word is refused by the lexer's bound (M17,
+        // "too heavy"), which is not the size limit this test is about.
+        const lines = (char: string) => `${char.repeat(63)}\n`.repeat(KIB_512 / 64);
+        const full = lines("a");
         const created = await h.call(
           "create_entry",
           { pageId: a.pageId, title: "Full", body: full },
@@ -260,7 +382,7 @@ describe.skipIf(!run)(
         );
         expect(created.isError, JSON.stringify(created.error)).toBe(false);
         expect(created.json!.bodyChars).toBe(KIB_512);
-        const other = "b".repeat(KIB_512);
+        const other = lines("b");
         const replaced = await h.call(
           "update_entry",
           { entryId: created.json!.id, ifRev: 1, body: other },
