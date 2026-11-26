@@ -646,6 +646,9 @@ test.describe("M6-33 safety", () => {
         !allowed.some((pattern) => pattern.test(request.url)),
     );
     expect(stray).toEqual([]);
+    // M15-17: exactly one read of the entry revs before the design-only saves, however many follow.
+    expect(seen.filter(entryRevRead).map((r) => r.method)).toEqual(["GET"]);
+    expect(seen.filter((r) => /\/content_entries\b/.test(r.url))).toHaveLength(1);
     // The draft save is a PATCH of pages and nothing else is written.
     const writes = seen.filter(
       (r) => r.method !== "GET" && r.method !== "HEAD" && r.method !== "OPTIONS",
