@@ -13,9 +13,16 @@ import { describe, expect, it } from "vitest";
  * What fails, per file: the word site_pages; on `.from("pages")`, a select of `*` (or no columns), of
  * `blocks`, with an argument the file does not spell out (a literal, a same-file constant or a choice
  * between them), or built away from the `.from`; a select of the whole `draft` or `published` column
- * (also through `pages!inner(...)`) in a file that is not a listed design reader; and, in a file that
- * does select them, any `.draft.blocks` or `.published.blocks` on something that is not a listed
- * entry row.
+ * (also through `pages!inner(...)`) in a file that is not a listed design reader; a `.from(x)` whose
+ * table this file does not spell out (anywhere under src/, so a table name cannot be hidden in a
+ * variable); and, in a file that does select them, EVERY read of a `blocks` key (`.blocks`,
+ * `["blocks"]`, a key built from pieces, a destructuring) on a receiver the list does not name for
+ * that file, every computed key on something called draft or published, and every hand-over of a
+ * `.draft` / `.published` value that is not an entry's to a function the list does not name.
+ *
+ * What a per-file scan cannot see: a frozen document handed to another file under another name. The
+ * hand-over rule is the guard there: each function that takes the site row's document is listed, with
+ * what it does with it.
  */
 
 const ROOT = process.cwd();
@@ -63,45 +70,103 @@ const WRITES = new Set(["insert", "update", "upsert", "delete"]);
 /**
  * The files that may select the whole `draft` or `published` column of `pages`, each with why: they
  * read the site's design (theme, profile, menu, rev) and take the blocks from Home's page entry.
- * `entries` names the variables in that file that hold a page ENTRY row, so `<name>.draft.blocks`
- * and `<name>.published.blocks` there are entry reads; the same access on anything else fails.
+ *
+ * `blocksOn` names, per file, every receiver a `blocks` key may be read from there, with what the
+ * receiver is (a page ENTRY's document, a document already assembled from one, or something that is
+ * not a document at all); the same read on anything else fails. A `.draft` or `.published` value may
+ * be handed to a function only when its holder is in `entryRows` (rows of page entries, or a
+ * document already assembled from one) or the function is in `handsTo`, with what it does with it.
  */
-export const DESIGN_READERS: Record<string, { why: string; entries?: string[] }> = {
+type Reader = {
+  why: string;
+  blocksOn?: Record<string, string>;
+  entryRows?: Record<string, string>;
+  handsTo?: Record<string, string>;
+};
+const MERGE = "puts Home's entry's blocks over the design; the design's own are never read";
+const GUARD = "a type guard: is it an object";
+export const DESIGN_READERS: Record<string, Reader> = {
   "src/app/(tenant)/published-page.ts": {
     why: "the live design; the blocks are replaced by Home's entry's before anything renders",
-    entries: ["home"],
+    blocksOn: { "home.published": "Home's page entry, live copy" },
+    entryRows: { read: "the cached public read, already carrying Home's entry's blocks" },
   },
   "src/lib/admin/account-queries.ts": { why: "published is only tested for null (is it live)" },
   "src/lib/admin/draft-view.ts": { why: "the admin draft view's design; blocks come from entries" },
-  "src/lib/analytics/dashboard/source.ts": { why: "the plan and whether the site is live" },
-  "src/lib/analytics/ingest/pages.ts": { why: "the live design; Home's blocks are its entry's" },
+  "src/lib/analytics/dashboard/source.ts": {
+    why: "the plan and whether the site is live",
+    blocksOn: { published: "a page entry's live copy (the rows are content_entries)" },
+    handsTo: { mergeHomePublished: MERGE },
+  },
+  "src/lib/analytics/ingest/pages.ts": {
+    why: "the live design; Home's blocks are its entry's",
+    blocksOn: { "holder.doc": "the document assembled from the design and Home's entry" },
+    handsTo: { mergeHomePublished: MERGE },
+  },
   "src/lib/editor/draft-write.ts": {
     why: "the design a tool edits; blocks are read from and written to the entry",
-    entries: ["entry"],
+    blocksOn: {
+      "entry.draft": "the page entry",
+      "doc??{}": "designPart: takes the blocks OUT of a document to compare the rest",
+      after: "the document the change returned",
+      rawStored: "the document assembled from the design and the entry",
+      LIMITS: "the block limit, not a document",
+    },
   },
   "src/lib/editor/page-data.ts": {
     why: "the editor's design; Home's blocks are loaded from its entry",
-    entries: ["homeDraft", "homeEntry", "home"],
+    blocksOn: { "homeDraft.draft": "Home's page entry" },
+    handsTo: { mergeHomePublished: MERGE, "Array.isArray": GUARD },
   },
   "src/lib/mcp/page-access.ts": {
     why: "the tools' design; Home's blocks are joined from its entry",
+    blocksOn: { doc: "blocksOf, which is only ever given Home's entry's documents" },
+    entryRows: { home: "Home's page entry" },
   },
   "src/lib/previews/shared.ts": {
     why: "the shared draft link's design; Home's blocks are its entry's draft",
-    entries: ["home"],
+    blocksOn: {
+      "home.draft": "Home's page entry",
+      publishForm: "the publish form built from the assembled document",
+      cleaned: "the sanitized assembled document",
+    },
+    entryRows: { full: "a page entry of the link's own site" },
   },
   "src/lib/publish/core.ts": {
     why: "the design Publish validates; the frozen blocks are dropped and Home's entry's used",
-    entries: ["homeDraft"],
+    blocksOn: {
+      "page.data.draft??{}": "takes the frozen blocks OUT of the design (the value is discarded)",
+      "homeDraft.draft": "Home's page entry",
+      "page.form": "a publish form built from an entry",
+      form: "a publish form built from an entry",
+    },
+    entryRows: { row: "a sub-page's entry row" },
   },
-  "src/lib/site-pages/sub-pages-core.ts": { why: "Home's draft menu (nav) only" },
+  "src/lib/site-pages/sub-pages-core.ts": {
+    why: "Home's draft menu (nav) only",
+    blocksOn: { input: "the caller's new page, not a stored document" },
+  },
   "src/lib/versions/client.ts": {
     why: "the stored design a restore keeps for Undo; blocks are Home's entry's",
-    entries: ["home"],
+    blocksOn: { "home.draft": "Home's page entry" },
+    entryRows: { row: "a page entry row", entry: "a page entry kept for Undo" },
+    handsTo: { isRecord: GUARD, nextRev: "reads the design's rev, nothing else" },
   },
-  "src/lib/versions/core.ts": { why: "the design and its rev for record and restore" },
-  "src/lib/versions/load.ts": { why: "the live design for History; blocks are Home's entry's" },
+  "src/lib/versions/core.ts": {
+    why: "the design and its rev for record and restore",
+    blocksOn: { "draft.data": "the parsed version being restored, not the site row" },
+    entryRows: { row: "a page entry row" },
+    handsTo: { nextRev: "reads the design's rev, nothing else" },
+  },
+  "src/lib/versions/load.ts": {
+    why: "the live design for History; blocks are Home's entry's",
+    entryRows: { editor: "the editor's data, assembled from the design and Home's entry" },
+    handsTo: { mergeHomePublished: MERGE },
+  },
 };
+
+/** `.from(x)` on these is not a database table: built-ins, ProseMirror, and a Storage bucket. */
+const NOT_A_TABLE = /^(Array|Buffer|Uint8Array|Fragment)$|\.storage$/;
 
 function unwrap(node: ts.Expression): ts.Expression {
   let current = node;
@@ -117,6 +182,13 @@ function unwrap(node: ts.Expression): ts.Expression {
   return current;
 }
 
+/** A receiver as text, without casts, `!`, `?.`, parentheses or whitespace: `(a!.b as X)` is `a.b`. */
+function norm(node: ts.Expression, sf: ts.SourceFile): string {
+  const expr = unwrap(node);
+  if (ts.isPropertyAccessExpression(expr)) return `${norm(expr.expression, sf)}.${expr.name.text}`;
+  return expr.getText(sf).replace(/\s+/g, "");
+}
+
 /** Every string a select argument can be, or null when it cannot be known from this file alone. */
 function literalValues(node: ts.Expression, sf: ts.SourceFile, depth = 0): string[] | null {
   const expr = unwrap(node);
@@ -126,6 +198,11 @@ function literalValues(node: ts.Expression, sf: ts.SourceFile, depth = 0): strin
     const a = literalValues(expr.whenTrue, sf, depth + 1);
     const b = literalValues(expr.whenFalse, sf, depth + 1);
     return a && b ? [...a, ...b] : null;
+  }
+  if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const a = literalValues(expr.left, sf, depth + 1);
+    const b = literalValues(expr.right, sf, depth + 1);
+    return a && b ? a.flatMap((left) => b.map((right) => left + right)) : null;
   }
   if (ts.isTemplateExpression(expr)) {
     let out = [expr.head.text];
@@ -225,19 +302,27 @@ export function legacyReads(source: string, file = "x.ts"): string[] {
     if (verdict.wholeDoc) wholeDoc = true;
   };
   const blockReads: Array<{ receiver: string; text: string }> = [];
+  const handOvers: Array<{ holder: string; callee: string; text: string }> = [];
+  const show = (node: ts.Node) => node.getText(sf).replace(/\s+/g, " ").slice(0, 120);
 
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const method = node.expression.name.text;
       const first = node.arguments[0];
-      // .from("pages") and everything chained on it.
+      // .from(<table>): the table must be spelled out in this file, so "pages" cannot hide in a variable.
+      const tables =
+        method === "from" && node.arguments.length === 1 && first ? literalValues(first, sf) : null;
       if (
         method === "from" &&
         node.arguments.length === 1 &&
         first &&
-        ts.isStringLiteralLike(first) &&
-        first.text === "pages"
+        !tables &&
+        !NOT_A_TABLE.test(norm(node.expression.expression, sf))
       ) {
+        found.push(`reads from a table this file does not spell out: .from(${first.getText(sf)})`);
+      }
+      // .from("pages") and everything chained on it.
+      if (tables?.includes("pages")) {
         let current: ts.Node = node;
         let selects = 0;
         let writes = 0;
@@ -275,24 +360,59 @@ export function legacyReads(source: string, file = "x.ts"): string[] {
         }
       }
     }
-    // <x>.draft.blocks and <x>.published.blocks (also ?. and ["blocks"], through casts).
-    const named =
-      ts.isPropertyAccessExpression(node) && node.name.text === "blocks"
-        ? node.expression
-        : ts.isElementAccessExpression(node) &&
-            ts.isStringLiteralLike(node.argumentExpression) &&
-            node.argumentExpression.text === "blocks"
-          ? node.expression
-          : null;
-    if (named) {
-      const holder = unwrap(named);
-      if (
-        ts.isPropertyAccessExpression(holder) &&
-        (holder.name.text === "draft" || holder.name.text === "published")
+    // Every read of a `blocks` key: .blocks, ?.blocks, ["blocks"], ["blo" + "cks"], through casts.
+    if (ts.isPropertyAccessExpression(node) && node.name.text === "blocks") {
+      blockReads.push({ receiver: norm(node.expression, sf), text: show(node) });
+    }
+    if (ts.isElementAccessExpression(node)) {
+      const keys = literalValues(node.argumentExpression, sf);
+      const receiver = norm(node.expression, sf);
+      if (keys?.includes("blocks")) blockReads.push({ receiver, text: show(node) });
+      // A key this file does not spell out, on something called a draft or a published copy.
+      else if (
+        !keys &&
+        !ts.isNumericLiteral(node.argumentExpression) &&
+        /draft|published/i.test(receiver)
       ) {
-        blockReads.push({
-          receiver: unwrap(holder.expression).getText(sf).replace(/\s+/g, ""),
-          text: node.getText(sf).replace(/\s+/g, " "),
+        blockReads.push({ receiver: `${receiver}[?]`, text: show(node) });
+      }
+    }
+    // const { blocks } = <x>, const { blocks: b, ...rest } = <x>, ({ blocks }) => ...
+    if (ts.isObjectBindingPattern(node)) {
+      const takes = node.elements.some((element) => {
+        const key = element.propertyName ?? element.name;
+        return (
+          ((ts.isIdentifier(key) || ts.isStringLiteralLike(key)) && key.text === "blocks") ||
+          (ts.isComputedPropertyName(key) &&
+            (literalValues(key.expression, sf)?.includes("blocks") ?? true))
+        );
+      });
+      if (takes) {
+        const from = node.parent;
+        const receiver =
+          ts.isVariableDeclaration(from) && from.initializer
+            ? norm(from.initializer, sf)
+            : "(a parameter)";
+        blockReads.push({ receiver, text: show(from) });
+      }
+    }
+    // A `.draft` or `.published` value handed to a function: the callee must be listed, unless the
+    // value is an entry's (its `blocks` may be read here anyway).
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      for (const arg of node.arguments ?? []) {
+        const value = unwrap(ts.isSpreadElement(arg) ? arg.expression : arg);
+        const key = ts.isPropertyAccessExpression(value)
+          ? value.name.text
+          : ts.isElementAccessExpression(value) && !ts.isNumericLiteral(value.argumentExpression)
+            ? (literalValues(value.argumentExpression, sf) ?? ["draft"]).find(
+                (k) => k === "draft" || k === "published",
+              )
+            : undefined;
+        if (key !== "draft" && key !== "published") continue;
+        handOvers.push({
+          holder: norm(value.expression, sf),
+          callee: norm(node.expression, sf),
+          text: show(node),
         });
       }
     }
@@ -305,16 +425,26 @@ export function legacyReads(source: string, file = "x.ts"): string[] {
     if (!allowed) {
       found.push("selects pages.draft or pages.published whole and is not a listed design reader");
     }
-    const entries = new Set(allowed?.entries ?? []);
+    const blocksOn = allowed?.blocksOn ?? {};
     for (const read of blockReads) {
-      if (!entries.has(read.receiver)) {
-        found.push(
-          `reads the blocks of a draft or published copy next to a pages select: ${read.text}`,
-        );
+      if (!Object.hasOwn(blocksOn, read.receiver)) {
+        found.push(`reads a blocks key next to a pages select, on ${read.receiver}: ${read.text}`);
       }
     }
+    const handsTo = allowed?.handsTo ?? {};
+    for (const hand of handOvers) {
+      if (
+        Object.hasOwn(allowed?.entryRows ?? {}, hand.holder) ||
+        Object.hasOwn(handsTo, hand.callee)
+      ) {
+        continue;
+      }
+      found.push(
+        `hands a draft or published copy to a function the list does not name, ${hand.callee}: ${hand.text}`,
+      );
+    }
   }
-  return found;
+  return [...new Set(found)];
 }
 
 describe("M15-05: no code reads the frozen copies", () => {
@@ -389,6 +519,66 @@ describe("M15-05: no code reads the frozen copies", () => {
     expect(
       legacyReads(`${select}use(page.draft.blocks);`, "src/lib/versions/client.ts"),
     ).toHaveLength(1);
+  });
+
+  it("fails on every way around the blocks rule the verifier found, in a listed reader", () => {
+    const reader = "src/lib/versions/load.ts";
+    const select = `const row = await admin.from("pages").select("draft, published").single();\n`;
+    const bypasses: Record<string, string> = {
+      "a destructuring": `const { blocks } = row.data.draft; use(blocks);`,
+      "a renamed destructuring": `const { blocks: b, ...rest } = row.data.draft; use(b, rest);`,
+      "a destructured parameter": `const pick = ({ blocks }: Doc) => blocks; use(pick);`,
+      "a cast first, then .blocks": `const doc = row.data.draft as Doc; use(doc.blocks);`,
+      "a parse, then .blocks": `use(schema.parse(row.data.draft).blocks);`,
+      "a key built from pieces": `use(row.data.draft["blo" + "cks"]);`,
+      "a key from a template": `const K = "blocks"; use(row.data.published[\`\${K}\`]);`,
+      "a key this file does not spell out": `use(row.data.draft[key]);`,
+      "a helper of the same file": `const take = (d: Doc) => d.blocks; use(take(row.data.draft));`,
+      "a helper of another file": `use(readBlocksElsewhere(row.data.draft));`,
+      "a helper given the live copy": `use(helpers.count(row.data.published!));`,
+    };
+    for (const [name, code] of Object.entries(bypasses)) {
+      expect(legacyReads(select + code, reader).length, name).toBeGreaterThan(0);
+      // Without the pages select the same code is nobody's frozen copy.
+      expect(legacyReads(code, reader), name).toEqual([]);
+    }
+    // What a listed reader may still do: its named entry rows, its named functions, a numeric index.
+    expect(
+      legacyReads(
+        `${select}use(mergeHomePublished(row.data.published, home), toPublishForm(editor.draft, t), rows[0]);`,
+        reader,
+      ),
+    ).toEqual([]);
+  });
+
+  it("fails on a .from() whose table the file does not spell out, anywhere under src/", () => {
+    // The verifier's: the table in a constant, in a file that is on no list.
+    expect(
+      legacyReads(`const T = "pages";\nadmin.from(T).select("*")`, "src/lib/new/thing.ts"),
+    ).toHaveLength(1);
+    expect(
+      legacyReads(`const T = "pages";\nadmin.from(T).select("id, draft")`, "src/lib/new/thing.ts"),
+    ).toEqual(["selects pages.draft or pages.published whole and is not a listed design reader"]);
+    expect(legacyReads(`const T = "pa" + "ges";\nadmin.from(T).select("id, blocks")`)).toHaveLength(
+      1,
+    );
+    // A table that cannot be known from the file: a parameter, a local, an import, a call.
+    expect(
+      legacyReads(`function f(table: string) { return admin.from(table).select("id"); }`),
+    ).toEqual(["reads from a table this file does not spell out: .from(table)"]);
+    expect(
+      legacyReads(`function f() { const t = "pages"; return admin.from(t).select("*"); }`),
+    ).toHaveLength(1);
+    expect(legacyReads(`import { T } from "./t";\nadmin.from(T).select("*")`)).toHaveLength(1);
+    expect(legacyReads(`admin.from(name()).select("*")`)).toHaveLength(1);
+    // Not tables: built-ins, ProseMirror fragments, a Storage bucket.
+    expect(
+      legacyReads(
+        `Array.from(set); Buffer.from(text); Fragment.from(nodes); admin.storage.from(BUCKET).remove(p);`,
+      ),
+    ).toEqual([]);
+    // A constant of the same file that names another table is spelled out.
+    expect(legacyReads(`const T = "domains";\nadmin.from(T).select("*")`)).toEqual([]);
   });
 
   it("every listed design reader exists, says why, and still selects draft or published from pages", () => {

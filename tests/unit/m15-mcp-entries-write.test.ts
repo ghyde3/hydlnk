@@ -257,6 +257,63 @@ describe.skipIf(!run)("the MCP draft writer on page entries (local Supabase)", (
       expect((await site(o.pageId)).profile.name).toBe("Mara O.");
     });
 
+    it("a design save sends no blocks: the frozen blocks stay and the write is not refused (HL013)", async () => {
+      const o = await movedOwner("e19-noblocks");
+      // Home's entry moves on first, so the frozen copy and the entry no longer hold the same blocks.
+      const added = await rt.call(
+        "add_block",
+        { pageId: o.pageId, type: "header", fields: { text: "After the move" } },
+        who(o),
+      );
+      expect(added.isError, JSON.stringify(added.error)).toBe(false);
+      const siteBefore = await site(o.pageId);
+      const entryBefore = await entry(o.homeId);
+      expect(entryBefore.draft.blocks).not.toEqual(siteBefore.blocks);
+
+      // Every document the writer sends to the site row.
+      const sent: Array<Record<string, unknown>> = [];
+      const spied = new Proxy(admin, {
+        get(target, key, receiver) {
+          if (key !== "from") return Reflect.get(target, key, receiver);
+          return (table: string) => {
+            const builder = target.from(table);
+            if (table !== "pages") return builder;
+            return new Proxy(builder, {
+              get(inner, method) {
+                const value = Reflect.get(inner, method);
+                if (method !== "update")
+                  return typeof value === "function" ? value.bind(inner) : value;
+                return (payload: { draft: Record<string, unknown> }) => {
+                  sent.push(payload.draft);
+                  return inner.update(payload as never);
+                };
+              },
+            });
+          };
+        },
+      });
+      const out = await writeDraft({
+        admin: spied as never,
+        userId: o.userId,
+        pageId: o.pageId,
+        scope: "design",
+        change: (doc) => ({
+          kind: "write",
+          doc: { ...doc, profile: { ...doc.profile, name: "No blocks sent" } },
+          value: null,
+        }),
+      });
+      expect(out.unchanged).toBe(false);
+      expect(sent).toHaveLength(1);
+      expect(Object.keys(sent[0]!)).not.toContain("blocks");
+
+      const siteAfter = await site(o.pageId);
+      expect(siteAfter.profile.name).toBe("No blocks sent");
+      expect(siteAfter.rev).toBe(siteBefore.rev + 1);
+      expect(siteAfter.blocks).toEqual(siteBefore.blocks);
+      expect(await entry(o.homeId)).toEqual(entryBefore);
+    });
+
     it("a change that touches the other half is refused and nothing is written", async () => {
       const o = await movedOwner("e19-half");
       const siteBefore = await site(o.pageId);

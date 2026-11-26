@@ -306,9 +306,14 @@ export async function writeDraft<T, D extends BlocksDoc = DraftDoc>(
     newRev = written.rev;
   } else {
     // 7b. The site row: the draft column only, guarded by the rev the change started from. With a
-    // Home entry the blocks there are the frozen copy and stay as they are.
-    const frozen = (pagesDraft as { blocks?: unknown } | null)?.blocks;
-    const next: D = homeEntry ? ({ ...after, blocks: frozen } as unknown as D) : after;
+    // Home entry the write carries no blocks: the frozen copy there is never read, and the database
+    // keeps it as it is for a draft that omits them (guard_frozen_page_blocks).
+    let next: Record<string, unknown> = after as unknown as Record<string, unknown>;
+    if (homeEntry) {
+      const { blocks: _entryBlocks, ...design } = after;
+      void _entryBlocks;
+      next = design;
+    }
     const base = loose.from("pages").update({ draft: next as unknown as Json });
     const scoped = base.eq("id", pageId).eq("owner_id", userId);
     const guarded =
