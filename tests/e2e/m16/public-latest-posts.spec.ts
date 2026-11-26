@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import type { Block } from "@/lib/document";
 import { cleanupUsers } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { addBlock, openEditor, previewScreen, showView, userWithDraft } from "../m2/blocks-helpers";
+import { emptyUser, statusChip } from "../m2/editor-helpers";
 import { ingestPage } from "../m4/analytics-ingest-helpers";
 import { ownerSession, publishNewPost, setBlog } from "./owner-routes";
 import { addPost, daysBefore, enableBlog } from "./public-helpers";
@@ -123,4 +124,53 @@ test("the latest-posts route answers only the owner, with published posts only",
   expect((await page.request.get(`${app}/api/pages/not-an-id/posts/latest`)).status()).toBe(404);
   const anonymous = await request.get(`${app}/api/pages/${user.pageId}/posts/latest`);
   expect(anonymous.status()).toBe(401);
+});
+
+test("M16-07 add the block in the editor, Publish through the UI, and a later post shows on the next request", async ({
+  page,
+  context,
+  browser,
+}) => {
+  const user = await emptyUser(context, "lpub", { plan: "pro" });
+  const site = { pageId: user.pageId, userId: user.id };
+  const typeId = await enableBlog(user.pageId);
+  await addPost(site, typeId, {
+    title: "Already live",
+    slug: "already",
+    publishedAt: daysBefore(2),
+  });
+
+  await openEditor(page);
+  const { panel } = await addBlock(page, "latest_posts");
+  await panel.locator('[data-field="heading"]').fill("Fresh from the blog");
+  await page
+    .getByTestId("workspace-toolbar")
+    .getByRole("button", { name: "Publish", exact: true })
+    .click();
+  await expect(statusChip(page)).toHaveText("Published", { timeout: 30_000 });
+
+  const visitor = await browser.newContext({ viewport: page.viewportSize() });
+  const owner = await ownerSession(browser, user.email);
+  try {
+    const tab = await visitor.newPage();
+    await tab.goto(url(user.handle, "/"));
+    const block = tab.locator(".hl-latest-posts");
+    await expect(block.locator("h2")).toHaveText("Fresh from the blog");
+    await expect(block.locator("a")).toHaveCount(1);
+    await expect(block).toContainText("Already live");
+    await expectNoHorizontalScroll(tab);
+
+    // Another post, published without touching the page: the next request lists it first.
+    await publishNewPost(owner, site, typeId, {
+      title: "Published afterwards",
+      slug: "afterwards",
+    });
+    await tab.reload();
+    await expect(block.locator("a")).toHaveCount(2);
+    await expect(block.locator("a").first()).toContainText("Published afterwards");
+    await expect(block.locator("a").first()).toHaveAttribute("href", "/blog/afterwards");
+  } finally {
+    await owner.close();
+    await visitor.close();
+  }
 });
