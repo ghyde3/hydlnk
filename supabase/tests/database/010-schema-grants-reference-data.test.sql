@@ -67,7 +67,9 @@ select tables_are(
     'content_types', 'content_entries', 'content_entry_revisions', 'content_terms', 'content_entry_terms',
     'site_paths', 'content_slug_redirects',
     -- Wave D: form submissions (owners read and delete) and the month counter, server only (219, 220)
-    'form_submissions', 'form_submission_usage'
+    'form_submissions', 'form_submission_usage',
+    -- Wave E: scheduled publishing, owners read (not snapshot, claim, lease), the server writes (221)
+    'content_schedules'
   ],
   'public holds exactly the contract tables'
 );
@@ -251,7 +253,13 @@ select set_eq(
       ('form_submissions|authenticated|DELETE|*'),
       ('form_submissions|service_role|SELECT|*'),
       ('form_submissions|service_role|INSERT|*'),
-      ('form_submissions|service_role|DELETE|*')
+      ('form_submissions|service_role|DELETE|*'),
+      -- Wave E (221): the owner reads every column but snapshot, claim and locked_until.
+      ('content_schedules|authenticated|SELECT|action,attempts,created_at,created_by,entry_id,finished_at,id,result_code,run_at,scheduled_rev,site_id,source,status'),
+      ('content_schedules|service_role|SELECT|*'),
+      ('content_schedules|service_role|INSERT|*'),
+      ('content_schedules|service_role|UPDATE|*'),
+      ('content_schedules|service_role|DELETE|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );
@@ -294,17 +302,17 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, false, 0) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, true, 50) $$,
   'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, true, 500) $$,
   'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns, 25 versions'
 );
 select throws_ok(

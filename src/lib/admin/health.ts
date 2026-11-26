@@ -9,6 +9,7 @@ const HOUR = 3600;
 
 /** Seconds a job may go without starting before it is late: about three times its schedule. */
 export const LATE_AFTER_SECONDS: Readonly<Record<string, number>> = {
+  "run-schedules": 5 * MINUTE, // every minute (Wave E: block boundaries and scheduled publishing)
   "verify-pending-domains": 15 * MINUTE, // every 5 minutes
   "end-expired-gifts": 30 * MINUTE, // every 10 minutes
   "purge-oauth-requests": 30 * MINUTE, // every 10 minutes
