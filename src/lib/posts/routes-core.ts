@@ -28,6 +28,7 @@ import { LIST_STATUSES, POST_LIMITS, type ListStatus } from "@/lib/content/schem
 import { postLimitMessage } from "@/lib/limits/messages";
 import { PLAN_LIMITS } from "@/lib/limits/table";
 import { toPlan, type Plan } from "@/lib/pages/plans";
+import { rateLimit } from "@/lib/rate-limit";
 import { isEntryOfSite } from "@/lib/site-pages/entry-revisions-core";
 import { fromFailure, type EntrySaveBody } from "@/lib/site-pages/entry-save-core";
 import type { Database } from "@/lib/supabase/database.types";
@@ -352,15 +353,27 @@ export async function postActionCore(
   return { status: 200, body: { kind: "ok", rev: out.rev, ...stale(out) } };
 }
 
+/** Expire retries per account per minute (adversarial pass, finding 3): each one expires cache tags. */
+export const EXPIRE_RATE_LIMIT = 30;
+export const EXPIRE_RATE_WINDOW_SECONDS = 60;
+export const EXPIRE_RATE_LIMITED = "Too many tries. Wait a minute and try again.";
+
 /**
  * POST entries/{entryId}/expire: expire the post's cache again, after an action answered
- * `cacheStale`. Any post of the site, trashed ones included. 200 `{kind: "ok", expired}`.
+ * `cacheStale`. Any post of the site, trashed ones included. 200 `{kind: "ok", expired}`; past
+ * `EXPIRE_RATE_LIMIT` a minute for the account, 429 `{kind: "limit"}` and nothing is expired.
  */
 export async function expirePostCore(
   admin: Admin,
   input: { userId: string; siteId: string; entryId: string },
 ): Promise<Answer<{ kind: "ok"; expired: boolean }>> {
   if (!UUID.test(input.siteId) || !UUID.test(input.entryId)) return MISSING;
+  const limit = await rateLimit(
+    `posts-expire:${input.userId}`,
+    EXPIRE_RATE_LIMIT,
+    EXPIRE_RATE_WINDOW_SECONDS,
+  );
+  if (!limit.allowed) return { status: 429, body: { kind: "limit", message: EXPIRE_RATE_LIMITED } };
   if (!(await isEntryOfSite(admin, input.siteId, input.entryId, POST, "any"))) return MISSING;
   const out = await expireEntryAgain({ actor: actor(input.userId), entryId: input.entryId });
   if (!out.ok) return refused(out);
