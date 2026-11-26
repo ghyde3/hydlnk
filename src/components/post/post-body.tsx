@@ -20,10 +20,11 @@ import { mediaUrl } from "@/lib/media/url";
  *
  * This is the wave's main surface for hostile content, so it trusts nothing about the body, not
  * even that it passed the publish check:
- *   - `marked` only lexes (`lexMarkdown`). Every token type is drawn by a case below as a fixed
- *     element with fixed attributes; raw HTML (`html` tokens) and any token type without a case are
- *     drawn as their source text. There is no `marked.parse` and no `dangerouslySetInnerHTML`, so
- *     the only markup on the page is what this file spells out;
+ *   - the body is only lexed (`lexMarkdown`: the bounded lexer, marked-shaped tokens). Every token
+ *     type is drawn by a case below as a fixed element with fixed attributes; raw HTML (`html`
+ *     tokens) and any token type without a case are drawn as their source text. There is no
+ *     `marked.parse` and no `dangerouslySetInnerHTML`, so the only markup on the page is what this
+ *     file spells out;
  *   - an anchor's `href` is `safeHref(token.href)`: http and https only. Anything else (a
  *     `javascript:`, `data:` or `mailto:` address, a relative path) draws the link's text alone.
  *     Body links are plain anchors with `rel`, never routed through `/r`;
