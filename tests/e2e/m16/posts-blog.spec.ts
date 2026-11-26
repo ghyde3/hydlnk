@@ -4,7 +4,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll } from "../helpers";
 import { emptyUser, openEditor } from "../m2/editor-helpers";
-import { POSTS_TEST_IDS, POSTS_URL, expectTargets44 } from "./posts-helpers";
+import { POSTS_TEST_IDS, POSTS_URL, blogUser, expectTargets44 } from "./posts-helpers";
 
 /**
  * M16-02: "Add blog" in the Pages panel turns the site's blog on; the Blog row opens the empty Posts
@@ -160,4 +160,32 @@ test("M16-02 'Add blog' in the Pages panel says when /blog is a page's address, 
     .eq("key", "post")
     .single();
   expect(type.data).toEqual({ enabled: true, archive_path: "journal" });
+});
+
+test("M16-02 with the blog on, the Pages panel does not move when the types arrive", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "pbs");
+  // Hold `GET types` until the panel has been measured, so the drawing before the answer is seen.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(`**/api/pages/${user.pageId}/types`, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await openEditor(page);
+  const onPage = (testId: string) =>
+    page.getByTestId(testId).evaluate((el) => {
+      const { x, y, width, height } = el.getBoundingClientRect();
+      return { x: x + scrollX, y: y + scrollY, width, height };
+    });
+  // Before the answer: the Blog row is already there (from the layout's read), with no count yet.
+  await expect(page.getByTestId(PAGES_BLOG_TEST_IDS.blogRow)).toBeVisible();
+  await expect(page.getByTestId("pages-blog-count")).toHaveCount(0);
+  const before = [await onPage("pages-card"), await onPage("profile-card")];
+  release();
+  await expect(page.getByTestId("pages-blog-count")).toHaveText("0 posts");
+  const after = [await onPage("pages-card"), await onPage("profile-card")];
+  expect(after).toEqual(before);
 });

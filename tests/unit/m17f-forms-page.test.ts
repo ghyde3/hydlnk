@@ -101,7 +101,7 @@ describe("M17-06 the result pages", () => {
   mocks.index.mockResolvedValue([
     { id: "e1e1e1e1-0000-4000-8000-000000000001", path: "about", title: "About" },
   ]);
-  const target = { block: FORM, handle: "mara", customHosts: [] };
+  const target = { block: FORM, plan: "free" as const, handle: "mara", customHosts: [] };
 
   it.each([
     ["confirm", "Check and send"],

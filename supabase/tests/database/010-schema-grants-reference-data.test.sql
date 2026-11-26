@@ -2,7 +2,7 @@
 -- a loosened grant or a function that became callable through the API.
 
 begin;
-select plan(46);
+select plan(47);
 
 -- ---------------------------------------------------------------------------
 -- RLS is on for every public table
@@ -246,10 +246,13 @@ select set_eq(
       ('announcements|service_role|INSERT|*'),
       ('announcements|service_role|UPDATE|*'),
       ('announcements|service_role|DELETE|*'),
-      -- Wave D: form submissions. Owners read every column but visitor_hash and delete; nobody
-      -- updates; the secret key reads, deletes and inserts (HL016 counts it). The month counter
+      -- Wave D: form submissions. Owners read and delete; nobody updates; the secret key reads,
+      -- deletes and inserts (HL016 counts it). The owner's grant is still a column grant (id,
+      -- site_id, entry_id, block_id, kind, email, name, message, created_at); since visitor_hash was
+      -- dropped (20261126185204) it covers every column, which this listing prints as '*' (a column
+      -- added later is not in it and would show here as a column list). The usage table
       -- (form_submission_usage) is deliberately absent: only the definer functions reach it.
-      ('form_submissions|authenticated|SELECT|block_id,created_at,email,entry_id,id,kind,message,name,site_id'),
+      ('form_submissions|authenticated|SELECT|*'),
       ('form_submissions|authenticated|DELETE|*'),
       ('form_submissions|service_role|SELECT|*'),
       ('form_submissions|service_role|INSERT|*'),
@@ -280,6 +283,13 @@ select set_eq(
   $$ values ('plan_limits'), ('form_submission_counts') $$,
   'the only functions in public executable by anon or authenticated are plan_limits and the security invoker form_submission_counts'
 );
+-- The exception holds only while it stays security invoker: a definer rewrite would read every site.
+select is(
+  (select p.prosecdef from pg_proc p
+   where p.oid = 'public.form_submission_counts(uuid)'::regprocedure),
+  false,
+  'form_submission_counts is security invoker (prosecdef = false), so RLS decides what it counts'
+);
 
 select is_empty(
   $$ select tablename, policyname from pg_policies where schemaname = 'public' and roles = '{public}' $$,
@@ -302,17 +312,17 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, false, 0) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, 20, false, 0) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, true, 50) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, 500, true, 50) $$,
   'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, true, 500) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, 5000, true, 500) $$,
   'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns, 25 versions'
 );
 select throws_ok(

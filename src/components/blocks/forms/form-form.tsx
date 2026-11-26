@@ -4,7 +4,6 @@ import { useOptionalWorkspace } from "@/components/workspace/workspace-context";
 import { FORM_KINDS, LIMITS, switchFormKind, type FormBlock, type FormKind } from "@/lib/document";
 import { FORM_TEST_IDS } from "@/lib/forms/contract";
 import { Field, controlClass } from "../field";
-import { TextField } from "../text-field";
 import { CountedField } from "./counted-field";
 import { OverrideControls } from "./override-controls";
 import { SwitchRow } from "./switch-row";
@@ -48,7 +47,7 @@ export function FormForm({ block, onChange, errors }: BlockFormProps) {
           </select>
         )}
       </Field>
-      <TextField
+      <CountedField
         label="Heading (optional)"
         field="heading"
         max={LIMITS.formHeading}
@@ -56,7 +55,7 @@ export function FormForm({ block, onChange, errors }: BlockFormProps) {
         error={fieldError(errors, form.id, "heading")}
         onChange={(heading) => optional("heading", heading)}
       />
-      <TextField
+      <CountedField
         label="Description (optional)"
         field="description"
         max={LIMITS.formDescription}
@@ -81,7 +80,7 @@ export function FormForm({ block, onChange, errors }: BlockFormProps) {
         error={fieldError(errors, form.id, "buttonLabel")}
         onChange={(buttonLabel) => onChange({ ...form, buttonLabel })}
       />
-      <TextField
+      <CountedField
         label="Message after sending"
         field="successMessage"
         max={LIMITS.formSuccess}
@@ -89,7 +88,7 @@ export function FormForm({ block, onChange, errors }: BlockFormProps) {
         error={fieldError(errors, form.id, "successMessage")}
         onChange={(successMessage) => onChange({ ...form, successMessage })}
       />
-      <TextField
+      <CountedField
         label="Consent line"
         field="consent"
         max={LIMITS.formConsent}

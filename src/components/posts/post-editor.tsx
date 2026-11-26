@@ -35,7 +35,13 @@ import { ScheduleControls } from "@/components/schedule/schedule-controls";
 import { useAccountPlan } from "@/components/versions/plan-context";
 import type { EntryScheduleSummary, ScheduleAction } from "@/lib/schedule/types";
 import { createPreviewLink, listPreviewLinks } from "@/lib/previews/actions";
-import { choosePreviewLink, HAS_PREVIEW_LINK_MESSAGE } from "@/lib/posts/preview-link";
+import {
+  choosePreviewLink,
+  forgetPreview,
+  HAS_PREVIEW_LINK_MESSAGE,
+  rememberedPreview,
+  rememberPreview,
+} from "@/lib/posts/preview-link";
 import { BodyEditor } from "./body-editor/body-editor";
 import { bodyBytes } from "./body-editor/markdown";
 import {
@@ -80,21 +86,6 @@ interface Meta {
   everPublished: boolean;
   /** The stored form of the draft that is live, or null when it is not known to match anything. */
   liveJson: string | null;
-}
-
-const PREVIEW_KEY = (siteId: string) => `hl-post-preview:${siteId}`;
-
-/** The share link made for this site in this tab, while it has not run out. */
-function rememberedPreview(siteId: string): string | null {
-  try {
-    const raw = window.sessionStorage.getItem(PREVIEW_KEY(siteId));
-    if (!raw) return null;
-    const saved = JSON.parse(raw) as { url?: unknown; expiresAt?: unknown };
-    if (typeof saved.url !== "string" || typeof saved.expiresAt !== "string") return null;
-    return Date.parse(saved.expiresAt) > Date.now() + 60_000 ? saved.url : null;
-  } catch {
-    return null;
-  }
 }
 
 export function PostEditor({
@@ -294,12 +285,14 @@ export function PostEditor({
     const tab = window.open("about:blank", "_blank");
     try {
       await queue.flush();
-      let link = rememberedPreview(siteId);
-      const listed = link === null ? await listPreviewLinks(siteId).catch(() => null) : null;
+      const remembered = rememberedPreview(siteId);
+      const listed = await listPreviewLinks(siteId).catch(() => null);
       const choice = choosePreviewLink({
-        remembered: link,
-        activeLinks: listed?.ok ? listed.links.length : null,
+        remembered,
+        activeLinkIds: listed?.ok ? listed.links.map((l) => l.id) : null,
       });
+      // A remembered link that is no longer active (turned off, run out) is never opened again.
+      if (remembered !== null && listed?.ok && choice !== "use-remembered") forgetPreview(siteId);
       if (choice === "has-link" || choice === "unknown") {
         tab?.close();
         setNotice(
@@ -309,6 +302,7 @@ export function PostEditor({
         );
         return;
       }
+      let link = choice === "use-remembered" ? (remembered?.url ?? null) : null;
       if (link === null) {
         const made = await createPreviewLink(siteId);
         if (!made.ok) {
@@ -317,14 +311,7 @@ export function PostEditor({
           return;
         }
         link = made.url;
-        try {
-          window.sessionStorage.setItem(
-            PREVIEW_KEY(siteId),
-            JSON.stringify({ url: made.url, expiresAt: made.expiresAt }),
-          );
-        } catch {
-          // Without storage the next Preview makes another link.
-        }
+        rememberPreview(siteId, made);
       }
       const target = `${link.replace(/\/+$/, "")}/entry/${entry.id}`;
       setPreviewUrl(target);

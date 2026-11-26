@@ -1,5 +1,5 @@
 import { csv } from "@/lib/analytics/export";
-import { AUDIENCE_COPY, FORM_KIND_LABELS, type SubmissionRow } from "./contract";
+import { AUDIENCE_COPY, formKindLabel, type SubmissionRow } from "./contract";
 
 /**
  * The Audience export (M17-09): every cell through `csvCell` (M9-26), so a name of
@@ -45,8 +45,6 @@ export function formLabel(
   block: { heading?: string | undefined; kind: string },
   pageTitle: string,
 ): string {
-  const name =
-    (block.heading ?? "").trim() ||
-    FORM_KIND_LABELS[block.kind === "contact" ? "contact" : "signup"];
+  const name = (block.heading ?? "").trim() || formKindLabel(block.kind);
   return `${name} · ${pageTitle}`;
 }

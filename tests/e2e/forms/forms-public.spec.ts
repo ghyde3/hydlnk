@@ -5,12 +5,17 @@ import { rawRequest } from "../fixtures/http";
 import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { addDomainRow } from "../m4/domains-core-helpers";
 import { randomIp } from "../m4/analytics-ingest-helpers";
-import { publishDocOf } from "../m2/blocks-helpers";
+import { draftOf, publishDocOf, userWithDraft } from "../m2/blocks-helpers";
+import { makeLink, sharePath } from "../m6/pages-helpers";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { usesProductionServer } from "../../../scripts/lib/e2e-server";
 import {
   CONTACT_ID,
   SIGNUP_ID,
   expectFormControls,
   formPage,
+  signupForm,
   storedRows,
   waitForRows,
 } from "./forms-helpers";
@@ -29,6 +34,19 @@ test.beforeEach(async ({ context }) => {
 });
 
 test.describe("M17-04 the form on the live page", () => {
+  test("the share link draws the form and loads no marker", async ({ page, context }) => {
+    const owner = await userWithDraft(context, "fsh", (handle) => draftOf(handle, [signupForm()]));
+    const link = await makeLink(owner.userId, owner.pageId);
+    const requests: string[] = [];
+    page.on("request", (request) => requests.push(new URL(request.url()).pathname));
+    const response = await page.goto(url("app", sharePath(link.token)));
+    expect(response!.status()).toBe(200);
+    await expect(form(page, SIGNUP_ID)).toBeVisible();
+    expect(requests.filter((path) => path.startsWith("/f/"))).toEqual([]);
+    expect(await page.content()).not.toContain(`/f/${owner.pageId}/o`);
+    await expectNoHorizontalScroll(page);
+  });
+
   test("labelled fields, the button and the consent line; the marker loads once; 44px controls, 16px text, no sideways scroll", async ({
     page,
   }) => {
@@ -176,6 +194,38 @@ for (const javaScriptEnabled of [true, false]) {
   });
 }
 
+test.describe("M17-06 a field error, JavaScript off", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("an empty email (the browser's check passed by, as a non-browser client would) shows the error and keeps the other values", async ({
+    page,
+  }) => {
+    const live = await formPage("fe2");
+    await page.goto(live.url);
+    await page.waitForTimeout(3200);
+    // No script runs on this page: the request itself is rewritten on its way out, email emptied.
+    await page.route(`**/f/${live.pageId}/${CONTACT_ID}`, async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      const body = new URLSearchParams(route.request().postData() ?? "");
+      body.set("email", "");
+      await route.continue({ postData: body.toString() });
+    });
+    const contact = form(page, CONTACT_ID);
+    await contact.getByLabel("Name").fill("Vera Visitor");
+    await contact.getByLabel("Email").fill("placeholder@example.test");
+    await contact.getByLabel("Message").fill("Kept as typed");
+    await contact.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Fix and send");
+    await expect(page.getByText("Enter an email address.")).toBeVisible();
+    await expect(page.getByLabel("Email")).toHaveAttribute("aria-invalid", "true");
+    await expect(page.getByLabel("Name")).toHaveValue("Vera Visitor");
+    await expect(page.getByLabel("Message")).toHaveValue("Kept as typed");
+    await expectFormControls(page);
+    await expectNoHorizontalScroll(page);
+    expect(await storedRows(live.pageId)).toEqual([]);
+  });
+});
+
 test.describe("M17-06 a field error", () => {
   test("an empty email shows the error on its field and keeps the other values", async ({
     page,
@@ -201,8 +251,10 @@ test.describe("M17-06 a field error", () => {
 });
 
 test.describe("M17-05 the routes and their hosts", () => {
-  test("answer on the handle host and a verified custom host; 404 on the root and app hosts", async ({}, info) => {
-    test.skip(!desktopOnly(info), "raw HTTP, no UI");
+  test("answer on the handle host and a verified custom host; 404 on the root and app hosts", async ({
+    page,
+  }) => {
+    // Both sizes (M17-05 step 6): the raw answers, then the sent page in the browser at this size.
     const live = await formPage("fr1", { plan: "pro" });
     const handleHost = `${live.handle}.localhost:3000`;
     const hostname = `links-${rand(6)}.example.test`;
@@ -228,6 +280,62 @@ test.describe("M17-05 the routes and their hosts", () => {
     // A POST to / is still 405; to a path that is no route, the plain 404.
     expect((await rawRequest(handleHost, "/", { method: "POST" })).status).toBe(405);
     expect((await rawRequest(handleHost, "/about-x", { method: "POST" })).status).toBe(404);
+    // In the browser at this size: the sent page, its Back link 44px tall, no sideways scroll.
+    const sentPage = await page.goto(
+      `${live.url.replace(/\/$/, "")}/f/${live.pageId}/${SIGNUP_ID}`,
+    );
+    expect(sentPage!.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Sent");
+    await expectFormControls(page);
+    await expectNoHorizontalScroll(page);
+    const notFound = await page.goto(url(null, `/f/${live.pageId}/${SIGNUP_ID}`));
+    expect(notFound!.status()).toBe(404);
+  });
+
+  test("fifty invented /f/<uuid>/<id> paths are the 404 notice, dynamic, never cached, and make no data-cache entry", async ({}, info) => {
+    test.skip(!desktopOnly(info), "raw HTTP, no UI");
+    test.setTimeout(120_000);
+    const live = await formPage("fr5");
+    const host = `${live.handle}.localhost:3000`;
+    const uuid = () => crypto.randomUUID();
+    const invented: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      const pageId = uuid();
+      invented.push(pageId);
+      const path = i % 3 === 0 ? `/f/${pageId}/o` : `/f/${pageId}/form${rand(8)}`;
+      const res =
+        i % 3 === 2
+          ? await rawRequest(host, path, {
+              method: "POST",
+              body: "email=x%40example.test&hl_confirm=&t=",
+              headers: {
+                "content-type": "application/x-www-form-urlencoded",
+                origin: `http://${host.replace(/:3000$/, `:${DEV_PORT}`)}`,
+                "x-forwarded-for": randomIp(),
+              },
+            })
+          : await rawRequest(host, path, { headers: { "x-forwarded-for": randomIp() } });
+      expect(res.status, path).toBe(404);
+      expect(res.headers["cache-control"]).toBe("no-store");
+      expect(res.headers["x-nextjs-cache"]).toBeUndefined();
+      expect(res.headers["x-robots-tag"]).toBe("noindex");
+      expect(String(res.headers["content-security-policy"])).toContain("form-action 'self'");
+    }
+    // On a production build (next start) the data cache is on disk: no entry names an invented
+    // page id (each entry carries its page tag, so this holds while other workers fill the cache).
+    if (usesProductionServer(process.env)) {
+      const dir = join(process.cwd(), ".next", "cache", "fetch-cache");
+      const entries = () => readdirSync(dir).map((name) => readFileSync(join(dir, name), "utf8"));
+      const named = (pageId: string) => entries().filter((text) => text.includes(pageId)).length;
+      const all = entries();
+      expect(all.length).toBeGreaterThan(0);
+      const anyInvented = new RegExp(invented.join("|"));
+      expect(all.filter((text) => anyInvented.test(text))).toEqual([]);
+      // A real site through /f is cached (the cache is in play, so the negative above is real).
+      await rawRequest(host, `/f/${live.pageId}/${SIGNUP_ID}`);
+      expect(named(live.pageId)).toBeGreaterThan(0);
+    }
+    expect(await storedRows(live.pageId)).toEqual([]);
   });
 
   test("a cross-site POST is 403 and a POST with the wrong type 415; nothing is stored", async ({}, info) => {

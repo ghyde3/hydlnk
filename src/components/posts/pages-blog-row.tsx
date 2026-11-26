@@ -13,19 +13,25 @@ import { fetchTypes, refusalMessage, setPostType } from "@/lib/posts/client";
  * The blog's place in the Pages panel (M16-02): "Add blog" while the site has none, and once it is
  * on a "Blog" row that opens the Posts screen, with the offer to put Blog in the site's menu.
  *
- * It loads its own data from `GET types` (the workspace's layout knows nothing of the blog). "Add
+ * It loads its own data from `GET types`. The workspace's layout already read the site's archives
+ * (`initial`, the Post type's when it has an address): while that says the blog is on, the "Blog"
+ * row is drawn from it at once, so nothing below moves when the answer arrives (only the post count
+ * fills in, on the same line). "Add
  * blog" turns the built-in Post type on at `/blog`; when a page of the site already uses that
  * address the server says so (HL012) and the row asks for another one. The menu item is the Post
  * type's id, added to Home's draft menu like a page's: it shows on the site after Publish.
  */
 export function PagesBlogRow({
   siteId,
+  initial,
   menuItems,
   onAddToMenu,
   onRemoveFromMenu,
   onType,
 }: {
   siteId: string;
+  /** The Post type as the workspace's layout read it (its archive), if it has an address. */
+  initial?: { typeId: string; labelPlural: string; path: string; enabled: boolean } | null;
   /** The ids in the site's draft menu. */
   menuItems: readonly string[];
   /** Appends the Post type's id to the draft menu. */
@@ -94,11 +100,22 @@ export function PagesBlogRow({
     setError(refusalMessage(out));
   }
 
-  // Nothing is drawn until the answer is in, so the panel does not jump from "Add blog" to the row.
-  if (!ready || type === null) return null;
+  // Until the answer is in: the "Blog" row from the layout's read when that says the blog is on;
+  // else a blank the height of the "Add blog" button holds the place, so the Profile card below does
+  // not jump when the button arrives. An error draws nothing.
+  const blog = ready
+    ? type?.enabled
+      ? { typeId: type.typeId, labelPlural: type.labelPlural, path: type.archivePath ?? "blog" }
+      : null
+    : initial?.enabled
+      ? initial
+      : null;
+  if (!ready && blog === null)
+    return <div aria-hidden="true" data-testid="pages-blog-pending" className="min-h-11" />;
+  if (type === null && blog === null) return null;
 
-  if (type.enabled) {
-    const inMenu = menuItems.includes(type.typeId);
+  if (blog !== null) {
+    const inMenu = menuItems.includes(blog.typeId);
     const menuFull = menuItems.length >= NAV_MAX_ITEMS;
     return (
       <div data-testid="pages-blog" className="flex min-w-0 flex-col gap-1.5">
@@ -108,15 +125,20 @@ export function PagesBlogRow({
           className="flex min-h-11 w-full min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-md border border-line-3 bg-surface px-3 py-1.5 text-left"
         >
           <span className="min-w-0 text-sm font-semibold [overflow-wrap:anywhere] text-ink">
-            {type.labelPlural === "Posts" ? "Blog" : type.labelPlural}
+            {blog.labelPlural === "Posts" ? "Blog" : blog.labelPlural}
           </span>
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-text-2">
-            <span className="font-mono [overflow-wrap:anywhere]">
-              /{type.archivePath ?? "blog"}
-            </span>
-            <span data-testid="pages-blog-count">
-              {posts.toLocaleString("en-US")} {posts === 1 ? "post" : "posts"}
-            </span>
+            <span className="font-mono [overflow-wrap:anywhere]">/{blog.path}</span>
+            {ready ? (
+              <span data-testid="pages-blog-count">
+                {posts.toLocaleString("en-US")} {posts === 1 ? "post" : "posts"}
+              </span>
+            ) : (
+              // The count's place, so the line wraps as it will once the count is in.
+              <span aria-hidden="true" className="invisible">
+                0 posts
+              </span>
+            )}
             <span data-testid="pages-blog-menu-state">{inMenu ? "In menu" : "Not in menu"}</span>
           </span>
         </Link>
@@ -126,7 +148,7 @@ export function PagesBlogRow({
             data-testid="pages-blog-menu-remove"
             disabled={suspended}
             title={suspended ? SUSPENDED_REASON : undefined}
-            onClick={() => onRemoveFromMenu?.(type.typeId)}
+            onClick={() => onRemoveFromMenu?.(blog.typeId)}
             className={`${FORM_BUTTON} self-start`}
           >
             Remove Blog from the menu
@@ -138,7 +160,7 @@ export function PagesBlogRow({
               data-testid="pages-blog-menu"
               disabled={suspended || menuFull}
               title={suspended ? SUSPENDED_REASON : menuFull ? NAV_MESSAGES.menuFull : undefined}
-              onClick={() => onAddToMenu(type.typeId)}
+              onClick={() => onAddToMenu(blog.typeId)}
               className={FORM_BUTTON}
             >
               Add Blog to the menu

@@ -41,7 +41,8 @@ describe("M17-05 the form routes", () => {
   it("the resolver reads the published documents (the click's cached read), never a draft", () => {
     const pages = read("src/lib/analytics/ingest/pages.ts");
     const body = pages.slice(pages.indexOf("export async function resolveFormBlock"));
-    expect(body).toContain("readPublishedCached(pageId, blockId)");
+    // The click's cached read, with misses never stored (an invented /f path makes no cache entry).
+    expect(body).toContain("readPublishedCached(pageId, blockId, { cacheMisses: false })");
     expect(body).toContain('block.type !== "form"');
     expect(body).toContain("block.visible === false");
   });

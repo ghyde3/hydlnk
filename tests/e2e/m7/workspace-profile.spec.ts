@@ -293,9 +293,16 @@ test.describe("M7-03 Profile card with a collapsed options section", () => {
     await openEditor(page);
     const name = page.getByLabel("Display name", { exact: true });
     const bio = page.getByLabel("Bio", { exact: true });
-    const before = [(await name.boundingBox())!, (await bio.boundingBox())!];
+    // Positions on the page, not in the viewport: the click may scroll the toggle into view, which
+    // moves every box on screen and no box on the page.
+    const onPage = (locator: Locator) =>
+      locator.evaluate((el) => {
+        const { x, y, width, height } = el.getBoundingClientRect();
+        return { x: x + scrollX, y: y + scrollY, width, height };
+      });
+    const before = [await onPage(name), await onPage(bio)];
     await toggle(page).click();
-    const after = [(await name.boundingBox())!, (await bio.boundingBox())!];
+    const after = [await onPage(name), await onPage(bio)];
     expect(after).toEqual(before);
     const column = (await card(page).boundingBox())!;
     expect(column.width).toBeLessThanOrEqual(720);

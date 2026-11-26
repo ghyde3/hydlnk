@@ -51,7 +51,7 @@ import {
   type SiteTemplateId,
 } from "@/lib/site-templates/catalog";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
-import { latestPostsCategories } from "@/lib/site/live";
+import { latestPostsCategories, usesLatestPosts } from "@/lib/site/live";
 import { previewBlocks } from "@/lib/document/schedule";
 import { useMinuteClock } from "@/lib/schedule/use-minute-clock";
 import type { WorkspaceAction } from "@/components/workspace/workspace-reducer";
@@ -214,9 +214,11 @@ export function useSitePages(args: {
   initialArchives?: readonly SiteArchive[];
   homeTitle: string;
   nav: DraftDoc["nav"];
+  /** Home's blocks: a latest-posts block there needs the posts too. */
+  homeBlocks: DraftDoc["blocks"];
   editDraft: (update: (draft: DraftDoc) => DraftDoc, group?: string) => void;
 }): SiteValue {
-  const { siteId, plan, homeTitle, nav, editDraft } = args;
+  const { siteId, plan, homeTitle, nav, homeBlocks, editDraft } = args;
   const [initial] = useState(() => args.initial);
   // Trashed pages keep a place in the limit until they are purged; a delete here adds one.
   const [trashed, setTrashed] = useState(() => args.trashedPages ?? 0);
@@ -665,11 +667,17 @@ export function useSitePages(args: {
   }, []);
 
   // The categories the latest-posts blocks of every page filter by: their older posts are read too.
-  const latestCategories = useMemo(
-    () => latestPostsCategories([...forms.values()].flatMap((form) => form.blocks)),
-    [forms],
+  // The posts are read only while some page holds such a block (a site without one never asks).
+  const allBlocks = useMemo(
+    () => [...homeBlocks, ...[...forms.values()].flatMap((form) => form.blocks)],
+    [homeBlocks, forms],
   );
-  const { latest: latestPosts } = useLatestPosts(siteId, latestCategories);
+  const latestCategories = useMemo(() => latestPostsCategories(allBlocks), [allBlocks]);
+  const { latest: latestPosts } = useLatestPosts(
+    siteId,
+    latestCategories,
+    usesLatestPosts(allBlocks),
+  );
   const minute = useMinuteClock();
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({

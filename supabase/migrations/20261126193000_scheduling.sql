@@ -1,7 +1,7 @@
 -- HYDLNK Wave E (M20-01, M20-04, M20-08, M20-09, M20-11): scheduled links and scheduled publishing.
 -- Tests: supabase/tests/database/221-content-schedules, 222-block-boundaries, 223-schedule-worker.
 --
---   * plan_limits(p_plan) gains two columns (drop and recreate from 20261126162408, as it did):
+--   * plan_limits(p_plan) gains two columns (drop and recreate from 20261126185204, as it did):
 --       scheduling           false / true / true   HL017 schedule_plan
 --       scheduled_per_site   0 / 50 / 500          HL018 schedule_limit, pending rows per site
 --     src/lib/limits/table.ts mirrors it (tests/unit/limits-parity.test.ts).
@@ -50,6 +50,7 @@ returns table (
   revisions_kept integer,
   content_bytes bigint,
   form_submissions_per_month integer,
+  form_submissions_per_site_day integer,
   scheduling boolean,
   scheduled_per_site integer
 )
@@ -62,13 +63,13 @@ begin
   case p_plan
     when 'free' then
       return query select 1, 3, 0, 10485760::bigint, 30, false, 0, false, 3,
-        25, 0, 10, 67108864::bigint, 100, false, 0;
+        25, 0, 10, 67108864::bigint, 100, 20, false, 0;
     when 'pro' then
       return query select 3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10,
-        1000, 3, 50, 1073741824::bigint, 5000, true, 50;
+        1000, 3, 50, 1073741824::bigint, 5000, 500, true, 50;
     when 'studio' then
       return query select 15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500,
-        100000, 100, 200, 5368709120::bigint, 50000, true, 500;
+        100000, 100, 200, 5368709120::bigint, 50000, 5000, true, 500;
     else
       raise exception 'unknown plan: %', p_plan using errcode = '22023';
   end case;
@@ -535,7 +536,8 @@ comment on function public.schedule_entry(uuid, uuid, bigint, text, timestamptz,
 -- 7. The worker's functions
 -- ---------------------------------------------------------------------------
 
--- Due rows with no live lease, oldest first, at most 5 per owner, never waiting on a locked row. Each
+-- Due rows with no live lease, oldest first, at most 5 per owner, never waiting on a locked row (the
+-- limit applies to the rows actually locked, so an overlapping run still finds the others). Each
 -- returned row gets a fresh claim token, a lease and one more attempt. Rows whose lease ran out on
 -- the fifth attempt are ended as failed 'retries' instead of returned.
 create function public.claim_due_schedules(
@@ -597,11 +599,13 @@ begin
       ) c
       where c.n <= 5
       order by c.crun, c.cid
-      limit v_limit
+      limit 1000
   ), locked as (
     select s.id as lid from public.content_schedules s
       where s.id in (select candidates.cid from candidates)
         and s.status = 'pending' and (s.locked_until is null or s.locked_until < now())
+      order by s.run_at, s.id
+      limit v_limit
       for update of s skip locked
   )
   update public.content_schedules s

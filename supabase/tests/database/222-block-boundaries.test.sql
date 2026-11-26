@@ -1,5 +1,5 @@
 -- M20-04, M20-11: block window boundaries and the plan gate on windows
--- (migration 20261126184409_scheduling).
+-- (migration 20261126193000_scheduling).
 --
 --   * next_boundary_at is the earliest boundary of a live page entry's published copy later than
 --     now (and the site's clock), null with none, null for a post, recomputed by publish, unpublish

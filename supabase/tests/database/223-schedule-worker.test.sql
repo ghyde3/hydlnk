@@ -1,4 +1,4 @@
--- M20-08, M20-09: the schedule worker's functions (migration 20261126184409_scheduling).
+-- M20-08, M20-09: the schedule worker's functions (migration 20261126193000_scheduling).
 --
 --   * claim_due_schedules: due rows only, a fresh claim token, a lease and one more attempt; a row
 --     under a live lease is not returned again; an expired lease is claimed again with a new token;

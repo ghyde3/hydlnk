@@ -11,7 +11,7 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 /**
  * POST /api/cron/run-schedules on the app host (Wave E, M20-04, M20-08): the one-minute tick of block
  * boundaries and scheduled publishing. pg_cron calls it through pg_net (`run_schedule_sweep`,
- * migration 20261126184409) only when a boundary or a schedule is due, with
+ * migration 20261126193000) only when a boundary or a schedule is due, with
  * `Authorization: Bearer <CRON_SECRET>`, like the other sweeps. Without the secret (read from the
  * header only, never the query string or the body) it answers 401 and runs nothing; the secret is
  * never echoed or logged. Answers `{sites, published, unpublished, failed, retried}`; 500 when a cache

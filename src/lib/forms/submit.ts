@@ -1,15 +1,11 @@
-import { rateLimitClientKey, ipForHash } from "@/lib/analytics/ingest/client-ip";
+import { rateLimitClientKey } from "@/lib/analytics/ingest/client-ip";
 import { isBot } from "@/lib/analytics/ingest/bot";
-import {
-  errorMessage,
-  notice,
-  readBodyUpTo,
-  recordClick,
-} from "@/lib/analytics/ingest/click-common";
+import { notice, readBodyUpTo, recordClick } from "@/lib/analytics/ingest/click-common";
 import { hostServesPage } from "@/lib/analytics/ingest/host";
 import { isCrossSitePost } from "@/lib/analytics/ingest/lock-gate";
 import type { EventRow, FormTarget } from "@/lib/analytics/ingest/types";
 import type { VisitorHashInput } from "@/lib/analytics/ingest/hash";
+import { PLAN_LIMITS, type PlanId } from "@/lib/limits";
 import type { RateLimitResult } from "@/lib/rate-limit";
 import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import {
@@ -21,6 +17,8 @@ import {
   isUuid,
   linksIn,
   parseSubmission,
+  refusedField,
+  SUBMISSION_MESSAGES,
   type FormRenderState,
   type RecordStatus,
   type SubmissionValues,
@@ -35,8 +33,8 @@ import { issueFormToken, readFormToken } from "./token";
  * answer is a page or a same-origin 303. The order of a POST is fixed, cheapest first, nothing stored
  * before the last step, and every "dropped" case answers exactly like a success:
  *
- *    1  ids                pageId a UUID, blockId 8-24 of [A-Za-z0-9_-]        404 notice, no query
- *    2  cross-site POST    Origin / Sec-Fetch-Site (as the link lock)           403 notice
+ *    1  cross-site POST    Origin / Sec-Fetch-Site (as the link lock)           403 notice, first
+ *    2  ids                pageId a UUID, blockId 8-24 of [A-Za-z0-9_-]        404 notice, no query
  *    3  limit              10 POSTs per client in 10 minutes                    429 + Retry-After
  *    4  body               x-www-form-urlencoded, at most 32,768 bytes          415, 413 notice
  *    5  block              a visible form in the PUBLISHED documents            404; 503 on a db error
@@ -44,15 +42,22 @@ import { issueFormToken, readFormToken } from "./token";
  *    7  bot user agent     dropped                                              303 to the sent page
  *    8  honeypot           dropped                                              303 to the sent page
  *    9  fields             parseSubmission                                      422 error page
- *   10  fill time          the open marker >= 3 s, or a valid token 2 s to 1 h  200 confirm page
+ *   10  fill time          the open marker >= 3 s (read only: only GET /o      200 confirm page
+ *                          starts it), or a valid token 2 s to 1 h
  *   11  token once         form-token:{signature}, 1 an hour                    200 confirm page
  *   12  blocked link       a contact message linking a blocked host: dropped    303; 503 if unknown
- *   13  limits             3 per client and form in 10 min, 600 per site an hour  429 + Retry-After
- *   14  store              record_form_submission                               303; 503 on a db error
+ *   13  limits             3 per client and form in 10 min; per site an hour a  429 + Retry-After
+ *                          quarter of the plan's daily cap (5 / 125 / 1,250)
+ *   14  store              record_form_submission: stored, duplicate and over   303; 404 if the site
+ *                          a cap answer 303; a field a check refused, 422       went away; 503 on a
+ *                                                                               db error
  *   15  after the answer   the click row, the owner's message or limit email
  *
+ * Every response of the form routes, whatever its status, goes through `formResponse`: the tenant
+ * page policy, `no-store`, `noindex`, no framing (M17-05 step 3).
+ *
  * Nothing a visitor typed, and no IP address or user agent, is ever logged: a failure logs a constant
- * message and an error code. The 303's Location is built from the two validated ids, never from
+ * message, the error's class and its code (`logReason`), never the error's message. The 303's Location is built from the two validated ids, never from
  * the request. The limiter fails open; the monthly cap in the database is the hard bound.
  */
 
@@ -60,8 +65,16 @@ export const FORM_POST_LIMIT = 10;
 export const FORM_POST_WINDOW_SECONDS = 600;
 export const FORM_BLOCK_LIMIT = 3;
 export const FORM_BLOCK_WINDOW_SECONDS = 600;
-export const FORM_SITE_LIMIT = 600;
+/**
+ * Accepted submissions per site an hour: a quarter of the plan's daily cap per site (the hard bound
+ * in the database), so a burst of junk needs four hours to take a day and the 429 a person may see
+ * comes from the same numbers as the caps (security review A1).
+ */
+export const FORM_SITE_HOURLY_SHARE = 4;
 export const FORM_SITE_WINDOW_SECONDS = 3600;
+export function formSiteHourlyLimit(plan: PlanId): number {
+  return Math.ceil(PLAN_LIMITS[plan].formSubmissionsPerSiteDay / FORM_SITE_HOURLY_SHARE);
+}
 export const FORM_GET_LIMIT = 120;
 export const FORM_GET_WINDOW_SECONDS = 60;
 export const MIN_FILL_SECONDS = 3;
@@ -81,7 +94,10 @@ export const FORM_NOTICES = {
 /** Everything the handlers touch outside the request; the routes pass the real ones (`./deps`). */
 export interface FormDeps {
   rateLimit: (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult>;
+  /** Reads a limiter bucket without counting (`rateLimitAge`): the open marker's read. */
+  rateLimitAge: (key: string, windowSeconds: number) => Promise<number | null>;
   now: () => Date;
+  /** For the click row only (`recordClick`); a submission stores no hash. */
   visitorHash: (input: VisitorHashInput) => string;
   /** The token's HMAC key (the visitor-hash secret). */
   tokenSecret: () => string;
@@ -112,6 +128,19 @@ export interface FormParams {
   blockId: string;
 }
 
+/**
+ * What a failure logs: the error's class and, when it carries one, its short code (a SQLSTATE such
+ * as 23514, FormStoreError's code), never its message, which a dependency may have built from the
+ * row it failed on (the visitor's address).
+ */
+function logReason(error: unknown): string {
+  if (!(error instanceof Error)) return "unknown error";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && /^[A-Za-z0-9_]{1,32}$/.test(code)
+    ? `${error.name} (${code})`
+    : error.name;
+}
+
 /** The transparent 1x1 GIF of the open marker: 43 bytes. */
 const PIXEL = Uint8Array.from(
   Buffer.from("R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==", "base64"),
@@ -134,15 +163,32 @@ function sentRedirect(pageId: string, blockId: string): Response {
   });
 }
 
-/** A themed form page: the tenant policy, never cached, never indexed, no cookie, no script. */
+/**
+ * The headers of EVERY form route response (M17-05 step 3), whatever built it: the themed pages, the
+ * HYDLNK notices of 403 to 503 (`notice`, shared with `/r` and `/c`, whose own headers stay as they
+ * are), the 303 and the marker image. The tenant page policy (`TENANT_PAGE_CSP`, nosniff, no
+ * framing), never cached, never indexed. A response that chose its Referrer-Policy keeps it (a
+ * notice's `no-referrer`, a themed page's `same-origin`). Nothing here sets a cookie.
+ */
+function formResponse(response: Response): Response {
+  const referrer = response.headers.get("Referrer-Policy");
+  setTenantHeaders(response.headers);
+  if (referrer) response.headers.set("Referrer-Policy", referrer);
+  response.headers.set("Cache-Control", "no-store");
+  response.headers.set("X-Robots-Tag", "noindex");
+  return response;
+}
+
+/** A themed form page (the headers come from `formResponse`): no cookie, no script. */
 function pageResponse(status: number, html: string | null, head: boolean): Response {
-  const headers = new Headers({ "Content-Type": "text/html; charset=utf-8" });
-  setTenantHeaders(headers);
-  headers.set("Cache-Control", "no-store");
-  headers.set("X-Robots-Tag", "noindex");
-  // Same origin keeps the confirm page's POST carrying a real Origin header.
-  headers.set("Referrer-Policy", "same-origin");
-  return new Response(head ? null : html, { status, headers });
+  return new Response(head ? null : html, {
+    status,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      // Same origin keeps the confirm page's POST carrying a real Origin header.
+      "Referrer-Policy": "same-origin",
+    },
+  });
 }
 
 /** Steps 5 and 6, shared by every route: the block from the published documents, on its own host. */
@@ -157,7 +203,7 @@ async function openForm(
   try {
     target = await deps.resolveFormBlock(pageId, params.blockId, deps.now().getTime());
   } catch (error) {
-    console.error("[forms] loading the form failed:", errorMessage(error));
+    console.error("[forms] loading the form failed:", logReason(error));
     return notice(503, FORM_NOTICES.unavailable, deps.homeHref, head);
   }
   if (target === null || !hostServesPage(request.headers.get("host"), target, deps.rootDomain)) {
@@ -195,6 +241,10 @@ export async function handleFormSent(
   params: FormParams,
   deps: FormDeps,
 ): Promise<Response> {
+  return formResponse(await formSent(request, params, deps));
+}
+
+async function formSent(request: Request, params: FormParams, deps: FormDeps): Promise<Response> {
   const head = request.method === "HEAD";
   if (!validIds(params)) return notice(404, FORM_NOTICES.notFound, deps.homeHref, head);
   const client = rateLimitClientKey(request.headers);
@@ -212,6 +262,14 @@ export async function handleFormOpen(
   params: { pageId: string },
   deps: FormDeps,
 ): Promise<Response> {
+  return formResponse(await formOpen(request, params, deps));
+}
+
+async function formOpen(
+  request: Request,
+  params: { pageId: string },
+  deps: FormDeps,
+): Promise<Response> {
   const head = request.method === "HEAD";
   if (!isUuid(params.pageId)) return notice(404, FORM_NOTICES.notFound, deps.homeHref, head);
   const client = rateLimitClientKey(request.headers);
@@ -222,7 +280,7 @@ export async function handleFormOpen(
   try {
     site = await deps.lookupSite(pageId);
   } catch (error) {
-    console.error("[forms] loading the site for the open marker failed:", errorMessage(error));
+    console.error("[forms] loading the site for the open marker failed:", logReason(error));
     return notice(503, FORM_NOTICES.unavailable, deps.homeHref, head);
   }
   if (site === null || !hostServesPage(request.headers.get("host"), site, deps.rootDomain)) {
@@ -234,17 +292,15 @@ export async function handleFormOpen(
     headers: {
       "Content-Type": "image/gif",
       "Content-Length": String(PIXEL.byteLength),
-      "Cache-Control": "no-store",
-      "X-Content-Type-Options": "nosniff",
     },
   });
 }
 
 /** Any other method of a form route: 405 with `Allow`. */
 export function formMethodNotAllowed(marker: boolean): Response {
-  return notice(405, FORM_NOTICES.method, "/", false, {
-    Allow: marker ? ALLOW_MARKER : ALLOW_FORM,
-  });
+  return formResponse(
+    notice(405, FORM_NOTICES.method, "/", false, { Allow: marker ? ALLOW_MARKER : ALLOW_FORM }),
+  );
 }
 
 /** POST /f/{pageId}/{blockId}: a submission. */
@@ -253,10 +309,14 @@ export async function handleFormPost(
   params: FormParams,
   deps: FormDeps,
 ): Promise<Response> {
+  return formResponse(await formPost(request, params, deps));
+}
+
+async function formPost(request: Request, params: FormParams, deps: FormDeps): Promise<Response> {
   const { homeHref } = deps;
-  // 1. ids, 2. cross-site, 3. the client's POSTs.
-  if (!validIds(params)) return notice(404, FORM_NOTICES.notFound, homeHref, false);
+  // 1. cross-site, before anything else (M17-06 step 3), 2. ids, 3. the client's POSTs.
   if (isCrossSitePost(request)) return notice(403, FORM_NOTICES.crossSite, homeHref, false);
+  if (!validIds(params)) return notice(404, FORM_NOTICES.notFound, homeHref, false);
   const client = rateLimitClientKey(request.headers);
   const posts = await deps.rateLimit(
     `form-post:${client}`,
@@ -312,7 +372,7 @@ export async function handleFormPost(
     const spent = await deps.rateLimit(`form-token:${read.signature}`, 1, 3600);
     if (!spent.allowed) return again("confirm", values, 200);
   } else {
-    const age = await openedSecondsAgo(deps.rateLimit, client, pageId);
+    const age = await openedSecondsAgo(deps.rateLimitAge, client, pageId);
     if (age === null || age < MIN_FILL_SECONDS) return again("confirm", values, 200);
   }
 
@@ -322,7 +382,7 @@ export async function handleFormPost(
     try {
       blocked = await deps.hasBlockedLink(linksIn(values.message));
     } catch (error) {
-      console.error("[forms] checking the links of a message failed:", errorMessage(error));
+      console.error("[forms] checking the links of a message failed:", logReason(error));
       return notice(503, FORM_NOTICES.unavailable, homeHref, false);
     }
     if (blocked) return done();
@@ -337,7 +397,7 @@ export async function handleFormPost(
   if (!perForm.allowed) return retryNotice(deps, perForm);
   const perSite = await deps.rateLimit(
     `form-site:${pageId}`,
-    FORM_SITE_LIMIT,
+    formSiteHourlyLimit(target.plan),
     FORM_SITE_WINDOW_SECONDS,
   );
   if (!perSite.allowed) return retryNotice(deps, perSite);
@@ -353,19 +413,21 @@ export async function handleFormPost(
       email: values.email,
       name: values.name,
       message: values.message,
-      visitorHash: deps.visitorHash({
-        ip: ipForHash(request.headers),
-        userAgent: userAgent ?? "",
-        now,
-      }),
     });
   } catch (error) {
-    console.error("[forms] storing a submission failed:", errorMessage(error));
+    console.error("[forms] storing a submission failed:", logReason(error));
     return notice(503, FORM_NOTICES.unavailable, homeHref, false);
   }
 
-  // 15. after the answer.
+  // 15. after the answer. A site unpublished or suspended since step 5 is gone, not "sent"; a value
+  // a check of the table refused (never expected: the app strips what the checks refuse) is that
+  // field's error, never a 503 that loses the message.
   const { status, ownerId } = result;
+  if (status === "unavailable") return notice(404, FORM_NOTICES.notFound, homeHref, false);
+  const refused = refusedField(status);
+  if (refused !== null) {
+    return again("error", values, 422, { errors: { [refused]: SUBMISSION_MESSAGES.unsupported } });
+  }
   if (status === "stored") {
     recordClick(request, pageId, block.id, deps, target.subPageId);
     if (block.kind === "contact" && block.notify === true && ownerId) {

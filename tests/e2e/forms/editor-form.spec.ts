@@ -53,6 +53,32 @@ test("M17-07 add, edit and publish a form block; the preview posts nowhere", asy
   await field("askName").click();
   await field("kind").selectOption("contact");
   await expect(row).toContainText("Write to me");
+  // Each text field counts its own code points.
+  for (const [name, counter] of [
+    ["heading", "11 / 80"],
+    ["description", "22 / 200"],
+    ["buttonLabel", "7 / 30"],
+    ["successMessage", "18 / 160"],
+    ["consent", "24 / 200"],
+  ] as const) {
+    await expect
+      .poll(() =>
+        field(name).evaluate((el) => el.closest("label, div")?.parentElement?.textContent ?? ""),
+      )
+      .toContain(counter);
+  }
+
+  // The row's visibility toggle hides the block in the draft and shows it again.
+  const visible = row.getByRole("button", { name: "Visible on page" });
+  await expect(visible).toHaveAttribute("aria-pressed", "true");
+  await visible.click();
+  await expect(visible).toHaveAttribute("aria-pressed", "false");
+  await expectDraft(
+    user.pageId,
+    (draft) => draft.blocks.find((b) => b.id === id)?.visible === false,
+  );
+  await visible.click();
+  await expect(visible).toHaveAttribute("aria-pressed", "true");
 
   await expectDraft(user.pageId, (draft) => {
     const block = draft.blocks.find((b) => b.id === id) as FormBlock | undefined;
@@ -67,7 +93,7 @@ test("M17-07 add, edit and publish a form block; the preview posts nowhere", asy
 
   // Controls of the panel: 44px, 16px inputs, no sideways scroll.
   await expectTapTargets(page, '[id^="block-panel-"]');
-  for (const input of await panel.locator("input, select").all()) {
+  for (const input of await panel.locator("input:not([type=hidden]), select, textarea").all()) {
     expect(await input.evaluate((el) => getComputedStyle(el).fontSize)).toBe("16px");
   }
   await expectNoHorizontalScroll(page);

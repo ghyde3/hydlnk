@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { blockDefaults, type FormBlock } from "@/lib/document";
 import type { FormTarget } from "@/lib/analytics/ingest/types";
+import type { PlanId } from "@/lib/limits";
 import type { RateLimitResult } from "@/lib/rate-limit";
 import type { FormRenderState, RecordStatus } from "@/lib/forms/contract";
 import { contactFormBlock } from "./fixtures/page-document";
@@ -14,8 +15,24 @@ vi.mock("@/lib/env/client", () => ({
   },
 }));
 
-const { handleFormOpen, handleFormPost, handleFormSent, formMethodNotAllowed, MIN_FILL_SECONDS } =
-  await import("@/lib/forms/submit");
+// The real limiter runs in two tests below with in-memory stores: no secret, no database.
+vi.mock("@/lib/analytics/ingest/secret", () => ({ visitorHashSecret: () => "unused" }));
+vi.mock("@/lib/rate-limit/store", () => ({
+  createSupabaseRateLimitStore: () => {
+    throw new Error("the tests pass their own store");
+  },
+}));
+
+const {
+  handleFormOpen,
+  handleFormPost,
+  handleFormSent,
+  formMethodNotAllowed,
+  formSiteHourlyLimit,
+  MIN_FILL_SECONDS,
+} = await import("@/lib/forms/submit");
+const { notice } = await import("@/lib/analytics/ingest/click-common");
+const { rateLimit, rateLimitAge } = await import("@/lib/rate-limit");
 const { issueFormToken } = await import("@/lib/forms/token");
 const { TENANT_PAGE_CSP } = await import("@/lib/routing/tenant-headers");
 
@@ -37,9 +54,12 @@ const NOW = new Date("2026-11-26T12:00:00.000Z");
 
 const PII = ["visitor@example.test", "Vera Visitor", "secret message text", IP, UA];
 
+/** A target as the tests write it: the plan defaults to Free. */
+type TestTarget = Omit<FormTarget, "plan"> & { plan?: PlanId };
+
 interface Setup {
   block?: FormBlock;
-  target?: FormTarget | null | Error;
+  target?: TestTarget | null | Error;
   /** Seconds since the open marker; null = none. */
   openedAgo?: number | null;
   limits?: Record<string, RateLimitResult>;
@@ -51,23 +71,23 @@ interface Setup {
 function setup(over: Setup = {}) {
   const calls: string[] = [];
   const block = over.block ?? SIGNUP;
-  const target: FormTarget | null | Error =
+  const raw: TestTarget | null | Error =
     over.target === undefined
       ? { block, handle: "mara", customHosts: ["links.example.test"] }
       : over.target;
+  const target: FormTarget | null | Error =
+    raw === null || raw instanceof Error ? raw : { plan: "free", ...raw };
   const scheduled: (() => Promise<void>)[] = [];
   const rendered: FormRenderState[] = [];
   const deps = {
-    rateLimit: vi.fn(async (key: string): Promise<RateLimitResult> => {
+    rateLimit: vi.fn(async (key: string, ..._rest: number[]): Promise<RateLimitResult> => {
       const prefix = key.split(":")[0]!;
       calls.push(`limit:${prefix}`);
-      if (prefix === "form-open") {
-        const ago = over.openedAgo === undefined ? 10 : over.openedAgo;
-        return ago === null
-          ? { allowed: true, retryAfter: 0 }
-          : { allowed: false, retryAfter: 3600 - ago };
-      }
       return over.limits?.[prefix] ?? { allowed: true, retryAfter: 0 };
+    }),
+    rateLimitAge: vi.fn(async (key: string, ..._rest: number[]): Promise<number | null> => {
+      calls.push(`age:${key.split(":")[0]!}`);
+      return over.openedAgo === undefined ? 10 : over.openedAgo;
     }),
     now: () => NOW,
     visitorHash: vi.fn(() => "a".repeat(64)),
@@ -189,7 +209,6 @@ describe("M17-06 a stored submission", () => {
       email: "visitor@example.test",
       name: "",
       message: "",
-      visitorHash: "a".repeat(64),
     });
     expect(s.deps.insertEvent).not.toHaveBeenCalled();
     await s.flush();
@@ -198,7 +217,7 @@ describe("M17-06 a stored submission", () => {
     );
   });
 
-  it("the order: ids, limiter, body, block, then checks, then the per-form and per-site limits, then the store", async () => {
+  it("the order: cross-site and ids, limiter, body, block, then checks, then the per-form and per-site limits, then the store", async () => {
     const s = setup({
       block: CONTACT,
       target: { block: CONTACT, handle: "mara", customHosts: [] },
@@ -207,7 +226,7 @@ describe("M17-06 a stored submission", () => {
     expect(s.calls).toEqual([
       "limit:form-post",
       "resolve",
-      "limit:form-open",
+      "age:form-open",
       "blocklist",
       "limit:form-block",
       "limit:form-site",
@@ -392,7 +411,7 @@ describe("M17-06 dropped like a success, byte for byte", () => {
     }
   });
 
-  it.each(["duplicate", "over_limit", "over_limit_first", "unavailable"] as const)(
+  it.each(["duplicate", "over_limit", "over_limit_first", "over_daily_limit"] as const)(
     "%s answers the same 303 as stored, records no click and sends no message email",
     async (status) => {
       const stored = await shape(await handleFormPost(post(signupBody), params(), setup().deps));
@@ -426,10 +445,17 @@ describe("M17-06 dropped like a success, byte for byte", () => {
 
   it("a database error while storing is the 503 notice; the log holds the code only", async () => {
     spyConsole();
-    const s = setup({ status: new Error("record_form_submission failed (23514)") });
+    const failure = Object.assign(
+      new Error("record_form_submission failed: visitor@example.test"),
+      {
+        code: "57014",
+      },
+    );
+    const s = setup({ status: failure });
     const response = await handleFormPost(post(signupBody), params(), s.deps);
     expect(response.status).toBe(503);
-    expect(logged.join("\n")).toContain("23514");
+    expect(logged.join("\n")).toContain("57014");
+    expect(logged.join("\n")).not.toContain("visitor@example.test");
   });
 });
 
@@ -526,7 +552,7 @@ describe("M17-06 the fill time and the token", () => {
       303,
     );
     expect(s.deps.rateLimit).toHaveBeenCalledWith(`form-token:${token.split(".")[2]}`, 1, 3600);
-    expect(s.calls).not.toContain("limit:form-open");
+    expect(s.calls).not.toContain("age:form-open");
     const reused = setup({
       openedAgo: null,
       limits: { "form-token": { allowed: false, retryAfter: 3000 } },
@@ -556,7 +582,7 @@ describe("M17-06 the fill time and the token", () => {
 });
 
 describe("M17-06 the per-form and per-site limits", () => {
-  it("3 per client and form in 10 minutes, then 600 per site an hour: 429 with Retry-After, nothing stored", async () => {
+  it("3 per client and form in 10 minutes, then a quarter of the plan's daily cap per site an hour: 429 with Retry-After, nothing stored", async () => {
     const perForm = setup({ limits: { "form-block": { allowed: false, retryAfter: 100 } } });
     const a = await handleFormPost(post(signupBody), params(), perForm.deps);
     expect(a.status).toBe(429);
@@ -568,7 +594,7 @@ describe("M17-06 the per-form and per-site limits", () => {
     );
     const perSite = setup({ limits: { "form-site": { allowed: false, retryAfter: 7 } } });
     expect((await handleFormPost(post(signupBody), params(), perSite.deps)).status).toBe(429);
-    expect(perSite.deps.rateLimit).toHaveBeenCalledWith(`form-site:${PAGE}`, 600, 3600);
+    expect(perSite.deps.rateLimit).toHaveBeenCalledWith(`form-site:${PAGE}`, 5, 3600);
     expect(perForm.deps.recordSubmission).not.toHaveBeenCalled();
     expect(perSite.deps.recordSubmission).not.toHaveBeenCalled();
   });
@@ -709,6 +735,423 @@ describe("M17-06 nothing personal reaches the console on any branch", () => {
       await handleFormPost(post(body), params(blockId), s.deps);
       await s.flush();
     }
+    expect(logged.length).toBeGreaterThan(0);
+  });
+});
+
+describe("M17-05 step 3 every /f response carries the tenant policy and noindex (review B5)", () => {
+  const get = (path: string, method = "GET", headers: Record<string, string> = {}) =>
+    new Request(`http://mara.localhost:3000${path}`, {
+      method,
+      headers: { host: "mara.localhost:3000", "user-agent": UA, "x-forwarded-for": IP, ...headers },
+    });
+  const expectFormHeaders = (response: Response, label: string) => {
+    expect(response.headers.get("content-security-policy"), label).toBe(TENANT_PAGE_CSP);
+    expect(response.headers.get("x-robots-tag"), label).toBe("noindex");
+    expect(response.headers.get("cache-control"), label).toBe("no-store");
+    expect(response.headers.get("x-frame-options"), label).toBe("DENY");
+    expect(response.headers.get("x-content-type-options"), label).toBe("nosniff");
+    expect(response.headers.get("set-cookie"), label).toBeNull();
+  };
+
+  it("403, 404, 405, 413, 415, 422, 429, 503, 200, 303 and the marker image", async () => {
+    const cases: [string, number, () => Promise<Response>][] = [
+      [
+        "cross-site",
+        403,
+        async () =>
+          handleFormPost(
+            post(signupBody, { "sec-fetch-site": "cross-site" }),
+            params(),
+            setup().deps,
+          ),
+      ],
+      [
+        "bad ids",
+        404,
+        async () => handleFormPost(post(signupBody), { pageId: "x", blockId: "y" }, setup().deps),
+      ],
+      [
+        "unknown block",
+        404,
+        async () => handleFormPost(post(signupBody), params(), setup({ target: null }).deps),
+      ],
+      [
+        "sent page unknown",
+        404,
+        async () =>
+          handleFormSent(get(`/f/${PAGE}/formSign01`), params(), setup({ target: null }).deps),
+      ],
+      [
+        "marker unknown",
+        404,
+        async () =>
+          handleFormOpen(get(`/f/${PAGE}/o`), { pageId: PAGE }, setup({ target: null }).deps),
+      ],
+      ["method", 405, async () => formMethodNotAllowed(false)],
+      ["marker method", 405, async () => formMethodNotAllowed(true)],
+      [
+        "too large",
+        413,
+        async () =>
+          handleFormPost(post(signupBody, { "content-length": "40000" }), params(), setup().deps),
+      ],
+      [
+        "wrong type",
+        415,
+        async () =>
+          handleFormPost(
+            post("{}", { "content-type": "application/json" }),
+            params(),
+            setup().deps,
+          ),
+      ],
+      [
+        "bad field",
+        422,
+        async () => handleFormPost(post({ ...signupBody, email: "" }), params(), setup().deps),
+      ],
+      [
+        "post limit",
+        429,
+        async () =>
+          handleFormPost(
+            post(signupBody),
+            params(),
+            setup({ limits: { "form-post": { allowed: false, retryAfter: 5 } } }).deps,
+          ),
+      ],
+      [
+        "get limit",
+        429,
+        async () =>
+          handleFormSent(
+            get(`/f/${PAGE}/formSign01`),
+            params(),
+            setup({ limits: { "form-get": { allowed: false, retryAfter: 5 } } }).deps,
+          ),
+      ],
+      [
+        "marker limit",
+        429,
+        async () =>
+          handleFormOpen(
+            get(`/f/${PAGE}/o`),
+            { pageId: PAGE },
+            setup({ limits: { "form-get": { allowed: false, retryAfter: 5 } } }).deps,
+          ),
+      ],
+      [
+        "db down",
+        503,
+        async () =>
+          handleFormPost(post(signupBody), params(), setup({ target: new Error("x") }).deps),
+      ],
+      [
+        "store down",
+        503,
+        async () =>
+          handleFormPost(post(signupBody), params(), setup({ status: new Error("x") }).deps),
+      ],
+      [
+        "confirm",
+        200,
+        async () => handleFormPost(post(signupBody), params(), setup({ openedAgo: null }).deps),
+      ],
+      [
+        "sent page",
+        200,
+        async () => handleFormSent(get(`/f/${PAGE}/formSign01`), params(), setup().deps),
+      ],
+      [
+        "sent page HEAD",
+        200,
+        async () => handleFormSent(get(`/f/${PAGE}/formSign01`, "HEAD"), params(), setup().deps),
+      ],
+      ["stored", 303, async () => handleFormPost(post(signupBody), params(), setup().deps)],
+      [
+        "marker",
+        200,
+        async () => handleFormOpen(get(`/f/${PAGE}/o`), { pageId: PAGE }, setup().deps),
+      ],
+    ];
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    for (const [label, status, run] of cases) {
+      const response = await run();
+      expect(response.status, label).toBe(status);
+      expectFormHeaders(response, label);
+    }
+  });
+
+  it("the HYDLNK notice of /r and /c keeps its own stricter policy (only the form routes change it)", () => {
+    const shared = notice(404, "x", "http://localhost:3000/", false);
+    expect(shared.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+    );
+    expect(shared.headers.get("x-robots-tag")).toBeNull();
+    expect(shared.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("a notice of the form routes keeps its no-referrer; a themed page keeps same-origin", async () => {
+    const refused = await handleFormPost(post(signupBody), params(), setup({ target: null }).deps);
+    expect(refused.headers.get("referrer-policy")).toBe("no-referrer");
+    const confirm = await handleFormPost(
+      post(signupBody),
+      params(),
+      setup({ openedAgo: null }).deps,
+    );
+    expect(confirm.headers.get("referrer-policy")).toBe("same-origin");
+  });
+});
+
+describe("M17-06 review fixes: order, unavailable and a check the database refuses", () => {
+  it("a cross-site POST to a malformed id is 403, before the ids are looked at (review B9)", async () => {
+    const s = setup();
+    const response = await handleFormPost(
+      post(signupBody, { "sec-fetch-site": "cross-site" }),
+      { pageId: "not-a-uuid", blockId: "x" },
+      s.deps,
+    );
+    expect(response.status).toBe(403);
+    expect(s.calls).toEqual([]);
+  });
+
+  it("'unavailable' from the store (unpublished since the lookup) is the 404 notice, not the sent 303", async () => {
+    const s = setup({ status: "unavailable" });
+    const response = await handleFormPost(post(signupBody), params(), s.deps);
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain("This form isn’t available.");
+    await s.flush();
+    expect(s.deps.insertEvent).not.toHaveBeenCalled();
+    expect(s.deps.notifyOwnerOfMessage).not.toHaveBeenCalled();
+    expect(s.deps.notifyOwnerOfLimit).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["invalid_email", "email"],
+    ["invalid_name", "name"],
+    ["invalid_message", "message"],
+  ] as const)(
+    "%s (a 23514 the store answered) is the 422 error page on its field with the values typed, never a 503 (review B8)",
+    async (status, field) => {
+      const s = setup({
+        block: CONTACT,
+        target: { block: CONTACT, handle: "mara", customHosts: [] },
+        status,
+      });
+      const response = await handleFormPost(post(contactBody), params("formCont01"), s.deps);
+      expect(response.status).toBe(422);
+      expect(s.rendered.at(-1)).toMatchObject({
+        view: "error",
+        values: {
+          email: "visitor@example.test",
+          name: "Vera Visitor",
+          message: "secret message text",
+        },
+        errors: { [field]: "This has characters the form can’t take. Remove them and send again." },
+      });
+      expect(s.rendered.at(-1)!.token).toMatch(/^v1\./);
+      await s.flush();
+      expect(s.deps.insertEvent).not.toHaveBeenCalled();
+      expect(s.deps.notifyOwnerOfMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a message holding U+2028 and U+2029 reaches the store unchanged (Postgres stores them: pgTAP 219)", async () => {
+    const s = setup({
+      block: CONTACT,
+      target: { block: CONTACT, handle: "mara", customHosts: [] },
+    });
+    const response = await handleFormPost(
+      post({ ...contactBody, message: "one two three" }),
+      params("formCont01"),
+      s.deps,
+    );
+    expect(response.status).toBe(303);
+    expect(s.deps.recordSubmission).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "one two three" }),
+    );
+  });
+
+  it("the per-site hour follows the plan's daily cap: 5 on Free, 125 on Pro, 1,250 on Studio", async () => {
+    expect(formSiteHourlyLimit("free")).toBe(5);
+    expect(formSiteHourlyLimit("pro")).toBe(125);
+    expect(formSiteHourlyLimit("studio")).toBe(1250);
+    for (const plan of ["pro", "studio"] as const) {
+      const s = setup({ target: { block: SIGNUP, handle: "mara", customHosts: [], plan } });
+      await handleFormPost(post(signupBody), params(), s.deps);
+      expect(s.deps.rateLimit).toHaveBeenCalledWith(
+        `form-site:${PAGE}`,
+        formSiteHourlyLimit(plan),
+        3600,
+      );
+    }
+  });
+});
+
+describe("M17-06 the open marker is set by GET /o only (review B7)", () => {
+  /** One in-memory store behind both limiter calls, like rate_limit_hit and rate_limit_age. */
+  function sharedStore(clock: () => number) {
+    const hits = new Map<string, number[]>();
+    const live = (bucket: string, window: number) =>
+      (hits.get(bucket) ?? []).filter((at) => at > clock() - window * 1000);
+    return {
+      async hit(bucket: string, limit: number, window: number) {
+        const rows = live(bucket, window);
+        hits.set(bucket, rows);
+        if (rows.length >= limit) return { allowed: false, retryAfter: 1 };
+        rows.push(clock());
+        return { allowed: true, retryAfter: 0 };
+      },
+      async age(bucket: string, window: number) {
+        const rows = live(bucket, window);
+        return rows.length === 0 ? null : Math.floor((clock() - rows[0]!) / 1000);
+      },
+    };
+  }
+
+  it("POST, wait, POST with no token and no marker: both are the confirm page, nothing stored", async () => {
+    let now = 5_000_000;
+    const store = sharedStore(() => now);
+    const s = setup();
+    s.deps.rateLimit = vi.fn((key: string, limit: number, window: number) =>
+      rateLimit(key, limit, window, { store, secret: SECRET }),
+    );
+    s.deps.rateLimitAge = vi.fn((key: string, window: number) =>
+      rateLimitAge(key, window, { store, secret: SECRET }),
+    );
+    expect((await handleFormPost(post(signupBody), params(), s.deps)).status).toBe(200);
+    now += 10_000;
+    expect((await handleFormPost(post(signupBody), params(), s.deps)).status).toBe(200);
+    expect(s.rendered.map((state) => state.view)).toEqual(["confirm", "confirm"]);
+    expect(s.deps.recordSubmission).not.toHaveBeenCalled();
+
+    // Once the page's image was loaded, the same client is stored after 3 seconds.
+    const get = new Request(`http://mara.localhost:3000/f/${PAGE}/o`, {
+      headers: { host: "mara.localhost:3000", "user-agent": UA, "x-forwarded-for": IP },
+    });
+    expect((await handleFormOpen(get, { pageId: PAGE }, s.deps)).status).toBe(200);
+    now += 3_000;
+    expect((await handleFormPost(post(signupBody), params(), s.deps)).status).toBe(303);
+    expect(s.deps.recordSubmission).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("M17-06 step 6 a limiter that cannot answer lets the request through", () => {
+  it("every forms key (form-post, form-token, form-block, form-site, form-get, the marker) fails open", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const broken = {
+      hit: async () => Promise.reject(new Error("down")),
+      age: async () => Promise.reject(new Error("down")),
+    };
+    const s = setup();
+    const keys: string[] = [];
+    s.deps.rateLimit = vi.fn((key: string, limit: number, window: number) => {
+      keys.push(key.split(":")[0]!);
+      return rateLimit(key, limit, window, { store: broken, secret: SECRET });
+    });
+    s.deps.rateLimitAge = vi.fn((key: string, window: number) =>
+      rateLimitAge(key, window, { store: broken, secret: SECRET }),
+    );
+    // A valid token: the marker that cannot be read reads as "none", the token carries the post.
+    const token = issueFormToken({
+      pageId: PAGE,
+      blockId: "formSign01",
+      client: IP,
+      secret: SECRET,
+      now: new Date(NOW.getTime() - 5000),
+    });
+    const stored = await handleFormPost(post({ ...signupBody, t: token }), params(), s.deps);
+    expect(stored.status).toBe(303);
+    expect(s.deps.recordSubmission).toHaveBeenCalledTimes(1);
+    expect(keys).toEqual(["form-post", "form-token", "form-block", "form-site"]);
+    // Without a token, a marker that cannot be read is the confirm page, never a silent drop.
+    const confirm = await handleFormPost(post(signupBody), params(), s.deps);
+    expect(confirm.status).toBe(200);
+    const get = (path: string) =>
+      new Request(`http://mara.localhost:3000${path}`, {
+        headers: { host: "mara.localhost:3000", "user-agent": UA, "x-forwarded-for": IP },
+      });
+    expect((await handleFormSent(get(`/f/${PAGE}/formSign01`), params(), s.deps)).status).toBe(200);
+    expect((await handleFormOpen(get(`/f/${PAGE}/o`), { pageId: PAGE }, s.deps)).status).toBe(200);
+  });
+});
+
+describe("M17-06 step 8 nothing personal reaches the console on EVERY branch", () => {
+  it("403, 404, 405, 413, 415, 422, 429 (each limit), bot, honeypot, blocked link, token reuse, the store's answers, HEAD and the marker", async () => {
+    spyConsole();
+    const contactTarget = { block: CONTACT, handle: "mara", customHosts: [] };
+    const token = issueFormToken({
+      pageId: PAGE,
+      blockId: "formSign01",
+      client: IP,
+      secret: SECRET,
+      now: new Date(NOW.getTime() - 5000),
+    });
+    const denied = { allowed: false, retryAfter: 5 };
+    const runs: [Setup, Record<string, string> | string, Record<string, string | null>][] = [
+      [{}, signupBody, { "sec-fetch-site": "cross-site" }],
+      [{}, "{}", { "content-type": "application/json" }],
+      [{}, signupBody, { "content-length": "40000" }],
+      [{ limits: { "form-post": denied } }, signupBody, {}],
+      [{ limits: { "form-block": denied } }, signupBody, {}],
+      [{ limits: { "form-site": denied } }, signupBody, {}],
+      [{ limits: { "form-token": denied }, openedAgo: null }, { ...signupBody, t: token }, {}],
+      [{}, signupBody, { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }],
+      [{}, { ...signupBody, hl_confirm: "Vera Visitor" }, {}],
+      [{ block: CONTACT, target: contactTarget, blocked: true }, contactBody, {}],
+      [
+        { block: CONTACT, target: contactTarget, blocked: new Error("visitor@example.test") },
+        contactBody,
+        {},
+      ],
+      [{ target: null }, signupBody, {}],
+      [{ target: new Error("visitor@example.test") }, signupBody, {}],
+      [{ openedAgo: null }, signupBody, {}],
+      [{}, { ...signupBody, email: "bad" }, {}],
+      ...(
+        [
+          "duplicate",
+          "over_limit",
+          "over_limit_first",
+          "over_daily_limit",
+          "unavailable",
+          "invalid_email",
+          "invalid_name",
+          "invalid_message",
+        ] as const
+      ).map((status): [Setup, Record<string, string>, Record<string, string | null>] => [
+        { block: CONTACT, target: contactTarget, status },
+        contactBody,
+        {},
+      ]),
+      [
+        { status: new Error("record_form_submission failed (visitor@example.test)") },
+        signupBody,
+        {},
+      ],
+    ];
+    for (const [over, body, headers] of runs) {
+      const s = setup(over);
+      const blockId = over.block?.id ?? "formSign01";
+      await handleFormPost(post(body, headers), params(blockId), s.deps);
+      await s.flush();
+    }
+    const get = (path: string, method = "GET") =>
+      new Request(`http://mara.localhost:3000${path}`, {
+        method,
+        headers: { host: "mara.localhost:3000", "user-agent": UA, "x-forwarded-for": IP },
+      });
+    await handleFormSent(get(`/f/${PAGE}/formSign01`, "HEAD"), params(), setup().deps);
+    await handleFormSent(
+      get(`/f/${PAGE}/formSign01`),
+      params(),
+      setup({ target: new Error("x") }).deps,
+    );
+    await handleFormOpen(get(`/f/${PAGE}/o`), { pageId: PAGE }, setup().deps);
+    await handleFormOpen(get(`/f/${PAGE}/o`, "HEAD"), { pageId: PAGE }, setup().deps);
+    formMethodNotAllowed(false);
+    // Some branches log (a constant line and a code); none of them logs what was typed.
     expect(logged.length).toBeGreaterThan(0);
   });
 });

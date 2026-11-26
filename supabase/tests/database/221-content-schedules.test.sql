@@ -1,5 +1,5 @@
 -- M20-01, M20-11: content_schedules storage, its access rules and schedule_entry / cancel_schedule
--- (migration 20261126184409_scheduling).
+-- (migration 20261126193000_scheduling).
 --
 --   * RLS on; the owner reads their own rows (not snapshot, claim, locked_until); another user reads
 --     nothing; anon has no grant; INSERT, UPDATE and DELETE are refused for every client role;

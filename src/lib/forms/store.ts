@@ -17,7 +17,6 @@ export interface SubmissionRecord {
   email: string;
   name: string;
   message: string;
-  visitorHash: string;
 }
 
 export class FormStoreError extends Error {
@@ -42,7 +41,6 @@ export async function recordSubmission(
     p_email: row.email,
     p_name: row.name,
     p_message: row.message,
-    p_visitor_hash: row.visitorHash,
   });
   if (error) throw new FormStoreError("record_form_submission", error.code ?? "unknown");
   const first = Array.isArray(data) ? data[0] : undefined;

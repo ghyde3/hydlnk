@@ -103,7 +103,6 @@ export async function recordRow(
     p_email: row.email,
     p_name: row.name ?? "",
     p_message: row.message ?? "",
-    p_visitor_hash: "d".repeat(64),
   });
   if (error) throw new Error(`record_form_submission failed: ${error.code}`);
   return (data as { status: string }[])[0]!.status;
