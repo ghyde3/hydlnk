@@ -124,6 +124,10 @@ function answer(query: Query): { data: unknown; error: null; count?: number } {
     }
     if (select.includes("content_types!inner")) return { data: [], error: null };
     if (select.startsWith("id, live_path")) return { data: [], error: null };
+    if (select === "live_slug") {
+      const n = all.find((candidate) => post(candidate) === filters.id);
+      return { data: n ? { live_slug: `post-${n}` } : null, error: null };
+    }
     if (select === "id") {
       const slug = filters.live_slug as string | undefined;
       const n = all.find((candidate) => `post-${candidate}` === slug);
@@ -470,6 +474,27 @@ describe("M16-10 a changed slug redirects, from the vetted slug only", () => {
     expect((await get("/blog/tostring")).status).toBe(404);
     expect((await get("/blog/constructor")).status).toBe(301);
     expect((await get("/blog/valueof")).status).toBe(404);
+  });
+
+  it("past the index (more than 5,000 live posts): the target is found by one published-only read, cached under the type's tag", async () => {
+    db.posts = 5001;
+    // post(5001) is the oldest live post: it is not in the index of the newest 5,000.
+    db.redirects = [
+      { from_slug: "very-old-name", entry_id: post(5001) },
+      { from_slug: "gone-name", entry_id: post(9999) },
+    ];
+    const moved = await get("/blog/very-old-name");
+    expect(moved.status).toBe(301);
+    expect(moved.headers.get("location")).toBe("/blog/post-5001");
+    expect(await reads(() => get("/blog/very-old-name"))).toEqual([]);
+    const read = cacheCalls.find((call) => call.key[0] === "tenant-redirect-target");
+    expect(read?.key).toEqual(["tenant-redirect-target", V, TYPE, post(5001)]);
+    expect(read?.tags).toEqual([`type:${TYPE}`]);
+    // A row naming a post that is not live: the 404, and a warm cache reads nothing for it either.
+    expect((await get("/blog/gone-name")).status).toBe(404);
+    expect(await reads(() => get("/blog/gone-name"))).toEqual([]);
+    // A live post past the index is still found by its own slug.
+    expect((await get("/blog/post-5001")).status).toBe(200);
   });
 
   it("the lookup is a cached read under the type's tag", async () => {

@@ -46,6 +46,7 @@ import {
  *   getPostIndex      ["tenant-post-index", v, typeId]        type:<typeId>, page:<siteId>
  *   getTermIndex      ["tenant-term-index", v, typeId]        type:<typeId>
  *   getSlugRedirects  ["tenant-slug-redirects", v, typeId]    type:<typeId>
+ *   getRedirectTargetSlug ["tenant-redirect-target", v, typeId, entryId]  type:<typeId> (past the index only)
  *   getLatestPosts    ["tenant-latest-posts", v, typeId]      type:<typeId>, page:<siteId>
  *                     ["tenant-latest-posts", v, typeId, categoryId]  (one per category a block names)
  *
@@ -590,13 +591,59 @@ export async function findLivePostId(
   siteId: string,
   typeId: string,
   slug: string,
+  /** false: answer from the index only (the caller knows the slug has a redirect row, see blog-respond). */
+  readPastIndex = true,
 ): Promise<string | null> {
   if (!isUuid(siteId) || !isUuid(typeId) || postHref("x", slug) === null) return null;
   const index = await getPostIndex(siteId, typeId);
   const found = index.posts.find((post) => post.slug === slug);
   if (found) return found.id;
-  if (index.complete) return null;
+  if (index.complete || !readPastIndex) return null;
   return readLiveIdBySlug(siteId, typeId, slug);
+}
+
+async function readLiveSlugOf(
+  siteId: string,
+  typeId: string,
+  entryId: string,
+): Promise<string | null> {
+  const { data, error } = await (
+    await adminClient()
+  )
+    .from("content_entries")
+    .select("live_slug")
+    .eq("id", entryId)
+    .eq("site_id", siteId)
+    .eq("type_id", typeId)
+    .is("deleted_at", null)
+    .not("published", "is", null)
+    .maybeSingle();
+  if (error) throw new Error(`Looking up entry ${entryId} failed: ${error.message}`);
+  return typeof data?.live_slug === "string" ? data.live_slug : null;
+}
+
+/**
+ * The live slug of the post an old slug's redirect row names (M16-10), or null when that post is not
+ * live. The cached index answers; when it is not complete (more than `POST_INDEX_MAX` live posts)
+ * and does not hold the post, one published-only read by id, cached under the type's tag
+ * (`["tenant-redirect-target", v, typeId, entryId]`): the ids come from the redirect rows (at most
+ * 200 per type), never from the request, so the entries are bounded and a warm cache reads nothing.
+ */
+export async function getRedirectTargetSlug(
+  siteId: string,
+  typeId: string,
+  entryId: string,
+): Promise<string | null> {
+  if (!isUuid(siteId) || !isUuid(typeId) || !isUuid(entryId)) return null;
+  const index = await getPostIndex(siteId, typeId);
+  const found = index.posts.find((post) => post.id === entryId);
+  if (found) return found.slug;
+  if (index.complete) return null;
+  return cached(
+    readLiveSlugOf,
+    ["tenant-redirect-target", PUBLIC_READ_CACHE_VERSION, typeId, entryId],
+    [typeTag(typeId)],
+  )(siteId, typeId, entryId);
 }
 
 async function readIsLive(siteId: string, typeId: string, entryId: string): Promise<boolean> {
