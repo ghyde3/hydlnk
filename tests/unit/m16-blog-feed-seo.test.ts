@@ -21,7 +21,8 @@ vi.mock("@/lib/site/published", () => ({}));
 
 const { feedXml, xmlText, FEED_CONTENT_TYPE } = await import("@/lib/tenant-render/feed");
 const { postJsonLd, blogPostingData } = await import("@/lib/tenant-render/post-json-ld");
-const { postMetadata, siteOrigin, postTerms } = await import("@/lib/tenant-render/post-html");
+const { postMetadata, postShareImage, siteOrigin, postTerms } =
+  await import("@/lib/tenant-render/post-html");
 const { metadataTags, renderHead } = await import("@/lib/tenant-render/head");
 const { postFieldsOf, postHref, archiveHref, termHref } = await import("@/lib/blog/types");
 const { plainExcerpt, readingMinutes, decodeEntities, bareUrlOf, lexMarkdown } =
@@ -225,6 +226,50 @@ describe("the head of a post", () => {
     expect(tags).toContain('<link rel="canonical" href="https://e.com/blog/my-post">');
     expect(tags).toContain('<meta property="og:image" content="https://e.com/media/x.webp">');
     expect(tags).toContain('<meta property="og:type" content="article">');
+  });
+
+  it("og:image: the share image, then the featured image, then the site's image (each only the owner's own file)", () => {
+    const OWNER = "11111111-1111-4111-8111-111111111111";
+    const OTHER = "22222222-2222-4222-8222-222222222222";
+    const share = { path: `${OWNER}/sharesha.webp`, width: 1200, height: 630 };
+    const featured = { path: `${OWNER}/featured.webp`, width: 1600, height: 900 };
+    const site = "https://e.com/og/site.png";
+    const pick = (over: Record<string, unknown>, siteImage: string | null = site) =>
+      postShareImage(fields(over), OWNER, siteImage);
+    expect(pick({ seo: { ogImage: share }, featuredImage: featured })).toEqual({
+      url: "http://localhost:3000/media/" + share.path,
+      width: 1200,
+      height: 630,
+    });
+    expect(pick({ featuredImage: featured })).toEqual({
+      url: "http://localhost:3000/media/" + featured.path,
+      width: 1600,
+      height: 900,
+    });
+    expect(pick({})).toEqual({ url: site, width: 1200, height: 630 });
+    expect(pick({}, null)).toBeNull();
+    // Another owner's file is skipped at each step, so the chain falls through.
+    expect(
+      pick({
+        seo: { ogImage: { ...share, path: `${OTHER}/sharesha.webp` } },
+        featuredImage: featured,
+      })?.url,
+    ).toBe("http://localhost:3000/media/" + featured.path);
+    expect(pick({ featuredImage: { ...featured, path: `${OTHER}/featured.webp` } })?.url).toBe(
+      site,
+    );
+    // In the head: the og:image tag is the chosen one.
+    const tags = metadataTags(
+      postMetadata({
+        post: fields({ featuredImage: featured }),
+        profileName: "Mara",
+        url: "https://e.com/blog/my-post",
+        image: pick({ featuredImage: featured }),
+      }),
+    );
+    expect(tags).toContain(
+      `<meta property="og:image" content="http://localhost:3000/media/${featured.path}">`,
+    );
   });
 
   it("a hostile title is escaped in every tag", () => {

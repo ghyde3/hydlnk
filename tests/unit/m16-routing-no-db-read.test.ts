@@ -453,6 +453,31 @@ describe("M16-05 an archive page reads the cached index and one page of cards", 
   });
 });
 
+describe("M16-02 turning the blog off", () => {
+  /** What `invalidateType` does to the cache: every entry under the type's or the site's tag goes. */
+  function expireTags(tags: string[]) {
+    for (const call of cacheCalls) {
+      if (call.tags.some((tag) => tags.includes(tag)))
+        memo.delete(JSON.stringify([call.key, call.args]));
+    }
+  }
+
+  it("a post, the archive and the feed served from the cache are the 404 on the next request once the type is expired", async () => {
+    for (const path of ["/blog/post-1", "/blog/page/2", "/blog/feed.xml", "/blog/category/news"]) {
+      expect((await get(path)).status, path).toBe(200);
+      expect(await reads(() => get(path)), path).toEqual([]);
+    }
+    db.enabled = false;
+    // Without the expiry the cache still answers (what a write behind the server's back gets)...
+    expect((await get("/blog/post-1")).status).toBe(200);
+    // ...the blog-off route expires the type and the site (invalidateType), and the next request is the 404.
+    expireTags([`type:${TYPE}`, `page:${SITE}`]);
+    for (const path of ["/blog/post-1", "/blog/page/2", "/blog/feed.xml", "/blog/category/news"]) {
+      expect((await get(path)).status, path).toBe(404);
+    }
+  });
+});
+
 describe("M16-10 a changed slug redirects, from the vetted slug only", () => {
   it("an old slug of a live post answers 301 to its current address; a live post with that slug wins", async () => {
     db.redirects = [

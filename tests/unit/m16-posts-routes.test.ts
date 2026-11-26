@@ -365,6 +365,21 @@ describe.skipIf(!run)("the Posts app routes", () => {
     await call("typePost", "POST", { id: a.pageId }, { body: { archivePath: "blog" } });
   });
 
+  it("types/post: a reserved word is refused as an archive path with the path message, and nothing moves", async () => {
+    for (const word of ["api", "share", "media", "og", "r", "sitemap", "hl-anything"]) {
+      const out = await call("typePost", "POST", { id: a.pageId }, { body: { archivePath: word } });
+      expect([word, out.status, out.json.kind]).toEqual([word, 409, "path"]);
+      expect(typeof out.json.message).toBe("string");
+    }
+    const stored = await admin
+      .from("content_types")
+      .select("archive_path")
+      .eq("site_id", a.pageId)
+      .eq("key", "post")
+      .single();
+    expect(stored.data?.archive_path).toBe("blog");
+  });
+
   it("types/post: a refused turn on at an address leaves the stored archive path as it was", async () => {
     const pathOf = async () =>
       (

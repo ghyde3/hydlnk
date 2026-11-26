@@ -244,3 +244,65 @@ test("M16-13 a video URL typed in the rich editor is stored as typed, plays live
   await expect(page.getByTestId(POST_TEST_IDS.bodySource)).toHaveCount(0);
   await expect(page.getByTestId(POST_TEST_IDS.body)).toContainText(VIDEO);
 });
+
+test("M16-13 the link tool takes http and https only; a body over 512 KiB is refused on screen before any request", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "pq");
+  const id = await seedPost(user.pageId, { title: "Links", slug: "links", body: "" });
+  await openPost(page, id);
+  const body = page.getByTestId(POST_TEST_IDS.body);
+  await body.click();
+  await page.keyboard.type("Read this");
+  await page.keyboard.press("Shift+Home");
+  await page.locator('[data-tool="link"]').click();
+  const href = page.locator('[data-field="post-link-href"]');
+  for (const bad of [
+    "javascript:alert(1)",
+    "ftp://files.example/x",
+    "mailto:a@b.example",
+    "example.com",
+  ]) {
+    await href.fill(bad);
+    await page.getByRole("button", { name: "Apply link" }).click();
+    await expect(
+      page.getByText("Use a full address that starts with https:// or http://."),
+    ).toBeVisible();
+    await expect(body.locator("a")).toHaveCount(0);
+  }
+  await href.fill("https://ok.example/page");
+  await page.getByRole("button", { name: "Apply link" }).click();
+  await expect(body.locator("a")).toHaveAttribute("href", "https://ok.example/page");
+  await expectSaved(page);
+  expect((await postRow(id)).draft.body).toBe("[Read this](https://ok.example/page)");
+
+  // Over 512 KiB: the size shows in red, the field says why, and no save request leaves the page.
+  const saves: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes(`/entries/${id}/draft`))
+      saves.push(request.url());
+  });
+  const before = (await postRow(id)).rev;
+  await body.click();
+  await page.keyboard.press("End");
+  await page.evaluate(
+    async (text) => {
+      // A paste of 513 KiB of text, as a person would make it.
+      const target = document.querySelector("[data-testid='post-body']") as HTMLElement;
+      const data = new DataTransfer();
+      data.setData("text/plain", text);
+      target.dispatchEvent(
+        new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+      );
+    },
+    "x".repeat(513 * 1024),
+  );
+  await expect(page.getByTestId("post-body-size")).toHaveClass(/text-bad/);
+  await expect(
+    page.getByText("The body is over 512 KiB, so it isn’t being saved. Shorten it."),
+  ).toBeVisible();
+  await page.waitForTimeout(3_000);
+  expect(saves).toEqual([]);
+  expect((await postRow(id)).rev).toBe(before);
+});
