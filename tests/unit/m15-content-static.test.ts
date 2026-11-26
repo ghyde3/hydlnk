@@ -48,7 +48,7 @@ const code = (file: string) => strip(readFileSync(resolve(ROOT, file), "utf8"), 
 export const TABLE_WRITE =
   /\.from\(\s*["'`](?:content_(?:types|entries|entry_revisions|terms|entry_terms)|site_paths)["'`]\s*\)\s*\.(?:insert|update|upsert|delete)\b/;
 export const WRITER_RPC =
-  /\.rpc\(\s*["'`](?:(?:publish|unpublish|trash|restore)_entry|record_entry_revision|purge_trashed_entries|claim_site_path)["'`]/;
+  /\.rpc\(\s*["'`](?:(?:publish|unpublish|trash|restore)_entry|publish_site_page|record_entry_revision|purge_trashed_entries|claim_site_path)["'`]/;
 /** Any `.from(` of a content table that is not directly a read; catches `const t = admin.from(...)`. */
 export const TABLE_FROM_NOT_READ =
   /\.from\(\s*["'`](?:content_(?:types|entries|entry_revisions|terms|entry_terms)|site_paths)["'`]\s*\)(?!\s*\.select\b)/;
@@ -73,6 +73,8 @@ describe("the scan patterns", () => {
     expect(WRITER_RPC.test(`admin.rpc('publish_entry', {})`)).toBe(true);
     expect(WRITER_RPC.test(`admin.rpc("record_entry_revision")`)).toBe(true);
     expect(WRITER_RPC.test(`admin.rpc('publish_site')`)).toBe(false);
+    // Publish page (M15-10) writes one entry, so it is the writer's call; the whole-site one is not.
+    expect(WRITER_RPC.test(`admin.rpc("publish_site_page", {})`)).toBe(true);
   });
   it("flags a write made through a variable or a constant", () => {
     expect(

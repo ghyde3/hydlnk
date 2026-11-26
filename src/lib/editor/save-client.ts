@@ -13,6 +13,19 @@ export interface HomeEntryRef {
 }
 
 /**
+ * The draft save function, with Home's entry rev as this tab holds it (M15-10). Publish page and
+ * Publish all changes can move Home's entry rev without changing its draft; the editor adopts the
+ * rev the server answered (`adoptHomeRev`), or its next save of Home's blocks would be a conflict.
+ */
+export type DraftSaver = SaveFn & {
+  /** Home's entry rev the next save is checked against, or null when the site has no Home entry. */
+  homeRev: () => number | null;
+  adoptHomeRev: (rev: number) => void;
+  /** Re-read Home's entry rev (after Publish all changes, which can move it) and adopt it. */
+  refreshHomeRev: () => Promise<void>;
+};
+
+/**
  * The browser-side write of the draft (M2-04, 1b1-17). Home is two stored documents since the move:
  *
  *   - the design (profile, theme, menu, banner, share card) is `pages.draft` without `blocks`: a PATCH
@@ -42,13 +55,13 @@ export function createDraftSaver(
   home: HomeEntryRef | null = null,
   /** Home's blocks as the editor loaded them: the first save then sends them only if they changed. */
   loadedBlocks?: unknown,
-): SaveFn {
+): DraftSaver {
   let homeRev = home?.rev ?? 0;
   // The blocks as last stored (or sent and accepted), compared as text.
   let storedBlocks: string | null =
     home && loadedBlocks !== undefined ? JSON.stringify(loadedBlocks) : null;
 
-  return async (doc, expectedRevKey) => {
+  const save: SaveFn = async (doc, expectedRevKey) => {
     let design: unknown = doc;
     if (home) {
       const { blocks, ...rest } = doc;
@@ -98,6 +111,17 @@ export function createDraftSaver(
     scheduleMediaCleanup();
     return { kind: "ok" };
   };
+  return Object.assign(save, {
+    homeRev: () => (home ? homeRev : null),
+    adoptHomeRev: (rev: number) => {
+      if (home && Number.isSafeInteger(rev) && rev >= 1) homeRev = rev;
+    },
+    refreshHomeRev: async () => {
+      if (!home) return;
+      const row = (await readEntryRevs(pageId))?.find((entry) => entry.id === home.entryId);
+      if (row) homeRev = row.rev;
+    },
+  });
 }
 
 /** The queue's result for a refused write of Home's blocks, or null when it was stored. */

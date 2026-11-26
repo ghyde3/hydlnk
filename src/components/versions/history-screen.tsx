@@ -6,14 +6,11 @@ import type { PageChrome } from "@/components/page/page-renderer";
 import { readDraft, undoRestore, type SavedDraft } from "@/lib/versions/client";
 import { loadVersionPreview, restorePageVersion } from "@/lib/versions/actions";
 import type { HistoryRow } from "@/lib/versions/load";
-import type { RestoredEntry } from "@/lib/versions/types";
 import {
   EMPTY_MESSAGE,
+  RESTORE_SCOPE_NOTE,
   UNDONE,
   UNDO_FAILED,
-  UNDO_UNAVAILABLE_PAGES,
-  notRestoredHeading,
-  notRestoredLine,
   restoreFailureMessage,
   restoredMessage,
 } from "@/lib/versions/messages";
@@ -38,9 +35,11 @@ type Restore =
  *
  *   Preview  `loadVersionPreview` (a read): drawn in the sticky 330px column at 760px and up, in a
  *            full-screen sheet on a phone. Previewing writes nothing.
- *   Restore  an inline confirmation, then `restorePageVersion`. Just before it the screen reads the
- *            draft with its own session; Undo writes that draft back through the normal draft save,
- *            guarded by the rev the restore left behind. A second press while it runs sends nothing.
+ *   Restore  an inline confirmation, then `restorePageVersion`, which restores the site's DESIGN
+ *            (theme, menu and profile) and no page (M15-10): pages are restored from their own
+ *            revisions, in the publish bar. Just before it the screen reads the design draft with
+ *            its own session; Undo writes that draft back, guarded by the rev the restore left
+ *            behind. A second press while it runs sends nothing.
  *
  * Both actions re-check everything on the server (the page and version ids travel only as
  * arguments); a `plan_required` answer, a downgrade while the screen was open, turns the screen
@@ -67,12 +66,7 @@ export function HistoryScreen({
   /** A restore is on its way: a second press (double click) sends nothing. */
   const running = useRef(false);
   /** The draft read just before the restore, and what `hasUnpublished` was then: what Undo puts back. */
-  const undoState = useRef<{
-    saved: SavedDraft;
-    unpublished: boolean;
-    id: string;
-    entries: RestoredEntry[];
-  } | null>(null);
+  const undoState = useRef<{ saved: SavedDraft; unpublished: boolean; id: string } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(
@@ -125,39 +119,18 @@ export function HistoryScreen({
         const saved = await readDraft(pageId);
         const result = await restorePageVersion(pageId, row.id);
         if (result.ok) {
-          undoState.current = saved
-            ? { saved, unpublished, id: row.id, entries: result.entries }
-            : null;
-          // The draft is now this version: it differs from the live page unless this is the live one.
+          undoState.current = saved ? { saved, unpublished, id: row.id } : null;
+          // The design draft is now this version's: it differs from the live site unless this is the live one.
           setUnpublished(!row.live);
-          const message = restoredMessage(
-            result.restored,
-            result.missingImages,
-            result.pagesRestored,
-          );
-          // Undo puts drafts back: after a deleted page was brought back it is not offered.
-          const canUndo = saved !== null && result.recreated === 0;
-          if (!canUndo) undoState.current = null;
+          const canUndo = saved !== null;
           setRestore({
             phase: "finished",
             id: row.id,
             outcome: {
               kind: "done",
-              message,
+              message: restoredMessage(result.restored, result.missingImages),
               canUndo,
               undoing: false,
-              ...(result.recreated > 0 ? { note: UNDO_UNAVAILABLE_PAGES } : {}),
-              ...(result.notRestored.length > 0
-                ? {
-                    notRestored: {
-                      heading: notRestoredHeading(result.notRestored.length),
-                      lines: result.notRestored.map((page) => ({
-                        id: page.id,
-                        text: notRestoredLine(page),
-                      })),
-                    },
-                  }
-                : {}),
             },
           });
           if (canUndo) {
@@ -205,7 +178,7 @@ export function HistoryScreen({
     );
     if (undoTimer.current) clearTimeout(undoTimer.current);
     try {
-      const outcome = await undoRestore(pageId, kept.saved, kept.entries);
+      const outcome = await undoRestore(pageId, kept.saved);
       if (outcome === "ok") {
         undoState.current = null;
         setUnpublished(kept.unpublished);
@@ -255,32 +228,39 @@ export function HistoryScreen({
 
   return (
     <div className="flex flex-col gap-4 hl:flex-row hl:items-start hl:gap-6">
-      <ol
-        aria-label="Published versions"
-        data-testid="version-list"
-        className="m-0 flex min-w-0 list-none flex-col gap-2 p-0 hl:w-[720px] hl:max-w-full"
-      >
-        {versions.map((row) => (
-          <VersionRow
-            key={row.id}
-            row={row}
-            selected={previewed?.id === row.id}
-            confirming={
-              (restore.phase === "confirming" || restore.phase === "restoring") &&
-              restore.id === row.id
-            }
-            restoring={restore.phase === "restoring" && restore.id === row.id}
-            hasUnpublished={unpublished}
-            outcome={restore.phase === "finished" && restore.id === row.id ? restore.outcome : null}
-            onPreview={() => openPreview(row)}
-            onAskRestore={() => askRestore(row)}
-            onCancelRestore={cancelConfirm}
-            onConfirmRestore={() => void startRestore(row)}
-            onRetry={() => void startRestore(row)}
-            onUndo={() => void undo(row)}
-          />
-        ))}
-      </ol>
+      <div className="flex min-w-0 flex-col gap-3 hl:w-[720px] hl:max-w-full">
+        <p data-testid="history-scope" className="m-0 text-sm leading-relaxed text-text-2">
+          {RESTORE_SCOPE_NOTE}
+        </p>
+        <ol
+          aria-label="Published versions"
+          data-testid="version-list"
+          className="m-0 flex min-w-0 list-none flex-col gap-2 p-0"
+        >
+          {versions.map((row) => (
+            <VersionRow
+              key={row.id}
+              row={row}
+              selected={previewed?.id === row.id}
+              confirming={
+                (restore.phase === "confirming" || restore.phase === "restoring") &&
+                restore.id === row.id
+              }
+              restoring={restore.phase === "restoring" && restore.id === row.id}
+              hasUnpublished={unpublished}
+              outcome={
+                restore.phase === "finished" && restore.id === row.id ? restore.outcome : null
+              }
+              onPreview={() => openPreview(row)}
+              onAskRestore={() => askRestore(row)}
+              onCancelRestore={cancelConfirm}
+              onConfirmRestore={() => void startRestore(row)}
+              onRetry={() => void startRestore(row)}
+              onUndo={() => void undo(row)}
+            />
+          ))}
+        </ol>
+      </div>
 
       {isDesktop ? (
         <PreviewColumn state={preview} pageId={pageId} chrome={chrome} onRetry={retryPreview} />

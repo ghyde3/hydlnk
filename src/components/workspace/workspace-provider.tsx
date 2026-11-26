@@ -20,22 +20,29 @@ import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { useUndoRedo } from "@/components/editor/use-undo-redo";
 import { useSitePages, type SubPageInit } from "@/components/site/use-site-pages";
 import { useThemeLibrary, useThemePreview } from "@/components/themes";
-import { toPublishForm, type DraftDoc, type PublishDoc } from "@/lib/document";
-import { publishPage, unpublishSite, type PageChrome } from "@/lib/editor/contracts";
+import { toPublishForm, type DraftDoc, type PublishDoc, type PublishError } from "@/lib/document";
+import {
+  publishDesign,
+  publishPage,
+  publishSitePage,
+  unpublishSite,
+  type PageChrome,
+} from "@/lib/editor/contracts";
 import {
   BLOCKED_PUBLISH_DISABLED_REASON,
   BLOCKED_PUBLISH_NOTE,
   PUBLISH_FAILED_MESSAGE,
-  PUBLISH_RATE_LIMITED_MESSAGE,
   UNPUBLISH_RATE_LIMITED_MESSAGE,
-  STORAGE_FULL_MESSAGE,
   UNPUBLISH_FAILED_MESSAGE,
   UNPUBLISH_SIGNED_OUT_MESSAGE,
   UNPUBLISH_SUSPENDED_MESSAGE,
 } from "@/lib/editor/messages";
 import { initialEditorState } from "@/lib/editor/state";
-import { computePublishStatus } from "@/lib/editor/status";
+import type { PublishStatus } from "@/lib/editor/status";
 import { homeForSite } from "@/lib/publish/site-checks";
+import { splitPublishState, type ItemPublishState } from "@/lib/publish/status";
+import { restorePageRevision } from "@/lib/site-pages/entry-revisions-client";
+import { HOME_PAGE_ID, itemStateOf } from "@/lib/site-pages/pages";
 import type { PlanId } from "@/lib/limits/table";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { TokenSet } from "@/lib/theme";
@@ -45,11 +52,20 @@ import {
   WORKSPACE_TABS,
   WorkspaceContextProvider,
   type PublishNote,
+  type PublishState,
+  type PublishTarget,
   type ShareTarget,
   type WorkspaceTab,
   type WorkspaceValue,
 } from "./workspace-context";
 import { failureTab } from "./failure-tab";
+import {
+  PUBLISH_CONFLICT_MESSAGE,
+  PUBLISH_SIGNED_OUT_MESSAGE,
+  PUBLISH_UNSAVED_MESSAGE,
+  publishFailureNote,
+  restoreRevisionMessage,
+} from "./publish-note";
 import { workspaceReducer, type WorkspaceAction } from "./workspace-reducer";
 
 export interface WorkspaceProviderProps {
@@ -257,7 +273,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     doc: initial.published,
   });
   const [publishedAt, setPublishedAt] = useState(initial.publishedAt);
-  const [publishing, setPublishing] = useState(false);
+  // What is being published right now (M15-10): everything, the design, Home, or one page's id.
+  const [publishingItem, setPublishingItem] = useState<PublishTarget | null>(null);
+  const publishing = publishingItem !== null;
   const [publishNote, setPublishNote] = useState<PublishNote | null>(null);
   const [publishedToken, setPublishedToken] = useState<number | null>(null);
   // Publish stores Home's menu without entries for pages no longer in the site (`homeForSite`), so
@@ -265,51 +283,130 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const siteIds = site.titles.map((page) => page.id);
   const storedForm = homeForSite(form, siteIds);
   const storedPublished = published.doc ? homeForSite(published.doc, siteIds) : null;
-  const homeStatus = computePublishStatus({
+  // The site publishes in parts (M15-10): the design, Home's blocks and each page have their own state.
+  const split = splitPublishState({
     hasPublished: published.has,
     published: storedPublished,
     form: storedForm,
   });
-  // A sub-page edited, added or never published is a change to publish too.
-  const status = homeStatus === "published" && site.dirty ? "unpublished-changes" : homeStatus;
+  const homeStatus: PublishStatus =
+    split.home === "live"
+      ? "published"
+      : split.home === "draft"
+        ? "not-published"
+        : "unpublished-changes";
+  const { pageStates } = site;
+  const publishState = useMemo<PublishState>(() => {
+    const pages: Record<string, ItemPublishState> = {};
+    // A site that is not live has no live page, whatever a page's own copy says.
+    for (const [id, state] of Object.entries(pageStates)) {
+      pages[id] = published.has ? itemStateOf(state) : "draft";
+    }
+    return { design: split.design, home: split.home, pages };
+  }, [split.design, split.home, pageStates, published.has]);
+  // The toolbar chip keeps the three site-level values: live only when every part is.
+  const status: PublishStatus = !published.has
+    ? "not-published"
+    : split.design === "live" && split.home === "live" && !site.dirty
+      ? "published"
+      : "unpublished-changes";
 
   const draftRef = useRef(draft);
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
 
-  const publish = useCallback(async () => {
-    if (publishing) return;
-    setPublishing(true);
-    setPublishNote(null);
-    try {
-      // Publish freezes what is stored, so the newest edits are written first.
-      const stored = await flush();
-      if (!stored) {
-        // A signed-out session has its own banner; a link to a blocked site has its message under
-        // the field (retrying cannot help); anything else can be tried again.
-        const why = currentStatus();
-        setPublishNote(
-          why === "signed-out"
-            ? { message: "Couldn’t publish. Sign in again, then try again.", retry: false }
-            : why === "blocked"
-              ? { message: BLOCKED_PUBLISH_NOTE, retry: false }
-              : { message: "Couldn’t publish. Your latest changes aren’t saved yet.", retry: true },
-        );
-        return;
+  const { revKey, homeRev, adoptHomeRev, refreshHomeRev } = autosave;
+  const { markPagePublished: markSitePagePublished, revisions: siteRevisions } = site;
+  const homeEntryId = initial.home?.entryId ?? null;
+
+  const publishingRef = useRef(false);
+  const lastPublish = useRef<PublishTarget>("all");
+
+  /** Publish freezes what is stored, so both queues write their newest edits first. False: a note says why. */
+  const storeEdits = useCallback(async (): Promise<boolean> => {
+    const stored = await flush();
+    if (!stored) {
+      // A signed-out session has its own banner; a link to a blocked site has its message under
+      // the field (retrying cannot help); anything else can be tried again.
+      const why = currentStatus();
+      setPublishNote(
+        why === "signed-out"
+          ? { message: PUBLISH_SIGNED_OUT_MESSAGE, retry: false }
+          : why === "blocked"
+            ? { message: BLOCKED_PUBLISH_NOTE, retry: false }
+            : { message: PUBLISH_UNSAVED_MESSAGE, retry: true },
+      );
+      return false;
+    }
+    // The sub-pages' newest edits are stored first too.
+    if (!(await flushSite())) {
+      setPublishNote({ message: PUBLISH_UNSAVED_MESSAGE, retry: true });
+      return false;
+    }
+    return true;
+  }, [flush, flushSite, currentStatus]);
+
+  /**
+   * A refused publish: show what failed, on the tab that holds it (a soft navigation: the toolbar,
+   * the preview and the draft stay). The reducer asks for focus on the first field. Errors on a
+   * sub-page (M11-05) go to that page's editor, which opens; Home's stay here. A refusal with no
+   * field to point at (a conflict, a suspended account) is the publish note.
+   */
+  const showRefusal = useCallback(
+    (result: { errors: PublishError[]; reason?: string }) => {
+      const homeErrors = result.errors.filter((error) => !error.subPageId);
+      dispatch({ type: "publish/errors", errors: homeErrors });
+      applySiteErrors(result.errors);
+      const tab =
+        homeErrors.length === 0 && result.errors.length > 0 ? "edit" : failureTab(homeErrors);
+      if (tab !== null && tab !== activeTabRef.current) router.push(hrefOf(tab));
+      if (result.errors.length === 0) setPublishNote(publishFailureNote(result.reason));
+    },
+    [applySiteErrors, router],
+  );
+
+  /** One publish action at a time; the request failing (a 5xx, the network) is the retryable note. */
+  const runPublish = useCallback(
+    async (target: PublishTarget, action: () => Promise<boolean>): Promise<boolean> => {
+      if (publishingRef.current) return false;
+      publishingRef.current = true;
+      setPublishingItem(target);
+      setPublishNote(null);
+      lastPublish.current = target;
+      try {
+        return await action();
+      } catch {
+        // Nothing was published, the draft is stored, the status keeps saying "Unpublished changes".
+        setPublishNote({ message: PUBLISH_FAILED_MESSAGE, retry: true });
+        return false;
+      } finally {
+        publishingRef.current = false;
+        setPublishingItem(null);
       }
-      // The sub-pages' newest edits are stored first too: Publish freezes what the database holds.
-      if (!(await flushSite())) {
-        setPublishNote({
-          message: "Couldn’t publish. Your latest changes aren’t saved yet.",
-          retry: true,
-        });
-        return;
-      }
-      const snapshot = savedDraft() ?? draftRef.current;
-      const result = await publishPage(pageId);
-      if (result.ok) {
+    },
+    [],
+  );
+  /** Publish all changes: the design and every page that changed, in one transaction. */
+  const publishAll = useCallback(
+    () =>
+      runPublish("all", async () => {
+        if (!(await storeEdits())) return false;
+        const snapshot = savedDraft() ?? draftRef.current;
+        // What this tab holds: the gate refuses (`conflict`) when any of it was saved elsewhere since.
+        const heldHome = homeRev();
+        const expected =
+          homeEntryId !== null && heldHome !== null
+            ? { designRev: revKey(), entries: { ...siteRevisions(), [homeEntryId]: heldHome } }
+            : undefined;
+        const result = await publishPage(pageId, expected);
+        if (!result.ok) {
+          showRefusal(result);
+          return false;
+        }
         markSitePublished();
+        // Publish can move Home's entry rev without changing its draft: take the stored one.
+        await refreshHomeRev();
         setPublished({
           has: true,
           doc: toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)),
@@ -318,50 +415,132 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         dispatch({ type: "publish/clear-errors" });
         clearSiteErrors();
         setPublishedToken((token) => (token ?? 0) + 1);
-        return;
+        return true;
+      }),
+    [
+      runPublish,
+      storeEdits,
+      savedDraft,
+      homeRev,
+      homeEntryId,
+      revKey,
+      siteRevisions,
+      pageId,
+      showRefusal,
+      markSitePublished,
+      refreshHomeRev,
+      themeTokensOf,
+      clearSiteErrors,
+    ],
+  );
+
+  /** Publish page: Home ("home") or one sub-page. Nothing else goes live. */
+  const publishPageById = useCallback(
+    (id: string) =>
+      runPublish(id, async () => {
+        if (!(await storeEdits())) return false;
+        const isHome = id === HOME_PAGE_ID;
+        const entryId = isHome ? homeEntryId : id;
+        const rev = isHome ? homeRev() : siteRevisions()[id];
+        if (entryId === null || rev === null || rev === undefined) {
+          setPublishNote(publishFailureNote("conflict"));
+          return false;
+        }
+        const snapshot = savedDraft() ?? draftRef.current;
+        const result = await publishSitePage(pageId, entryId, rev);
+        if (!result.ok) {
+          showRefusal(result);
+          return false;
+        }
+        if (isHome) {
+          // The rev the server answered: the next save of Home's blocks is checked against it.
+          adoptHomeRev(result.rev);
+          const blocks = toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)).blocks;
+          setPublished((current) =>
+            current.doc ? { has: true, doc: { ...current.doc, blocks } } : current,
+          );
+          dispatch({ type: "publish/clear-errors" });
+        } else {
+          markSitePagePublished(id, result.rev);
+          clearSiteErrors();
+        }
+        setPublishedToken((token) => (token ?? 0) + 1);
+        return true;
+      }),
+    [
+      runPublish,
+      storeEdits,
+      homeEntryId,
+      homeRev,
+      siteRevisions,
+      savedDraft,
+      pageId,
+      showRefusal,
+      adoptHomeRev,
+      themeTokensOf,
+      markSitePagePublished,
+      clearSiteErrors,
+    ],
+  );
+
+  /** Publish design: theme, menu and profile. No page changes. */
+  const publishDesignOnly = useCallback(
+    () =>
+      runPublish("design", async () => {
+        if (!(await storeEdits())) return false;
+        const snapshot = savedDraft() ?? draftRef.current;
+        const result = await publishDesign(pageId, revKey());
+        if (!result.ok) {
+          showRefusal(result);
+          return false;
+        }
+        const next = toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref));
+        setPublished((current) => ({
+          has: true,
+          doc: { ...next, blocks: current.doc?.blocks ?? [] },
+        }));
+        setPublishedAt(result.publishedAt);
+        dispatch({ type: "publish/clear-errors" });
+        setPublishedToken((token) => (token ?? 0) + 1);
+        return true;
+      }),
+    [runPublish, storeEdits, savedDraft, pageId, revKey, showRefusal, themeTokensOf],
+  );
+
+  /** Retry on the publish note: the action that failed, not always Publish all. */
+  const retryPublish = useCallback(() => {
+    const target = lastPublish.current;
+    if (target === "all") void publishAll();
+    else if (target === "design") void publishDesignOnly();
+    else void publishPageById(target);
+  }, [publishAll, publishDesignOnly, publishPageById]);
+
+  /**
+   * Restore one of a page's revisions into its DRAFT (M15-10). Both queues write first (the restore
+   * is checked against the rev the editor holds), then the workspace reloads: the provider reads the
+   * drafts once, on mount. Nothing is published; the page then reads "Unpublished changes".
+   */
+  const restoreRevision = useCallback(
+    async (id: string, rev: number): Promise<{ ok: true } | { ok: false; message: string }> => {
+      const stored = (await flush()) && (await flushSite());
+      if (!stored) {
+        return { ok: false, message: "Couldn’t restore. Your latest changes aren’t saved yet." };
       }
-      // The gate refused: show what failed, on the tab that holds it (a soft navigation: the
-      // toolbar, the preview and the draft stay). The reducer asks for focus on the first field.
-      // Errors on a sub-page (M11-05) go to that page's editor, which opens; Home's stay here.
-      const homeErrors = result.errors.filter((error) => !error.subPageId);
-      dispatch({ type: "publish/errors", errors: homeErrors });
-      applySiteErrors(result.errors);
-      const tab =
-        homeErrors.length === 0 && result.errors.length > 0 ? "edit" : failureTab(homeErrors);
-      if (tab !== null && tab !== activeTabRef.current) router.push(hrefOf(tab));
-      if (result.errors.length === 0) {
-        setPublishNote(
-          result.reason === "unauthorized"
-            ? { message: "Couldn’t publish. Sign in again, then try again.", retry: false }
-            : result.reason === "account_suspended"
-              ? { message: "Couldn’t publish. Your account is suspended.", retry: false }
-              : result.reason === "rate_limited"
-                ? { message: PUBLISH_RATE_LIMITED_MESSAGE, retry: false }
-                : result.reason === "storage_full"
-                  ? { message: STORAGE_FULL_MESSAGE, retry: false }
-                  : { message: PUBLISH_FAILED_MESSAGE, retry: true },
-        );
+      const isHome = id === HOME_PAGE_ID;
+      const entryId = isHome ? homeEntryId : id;
+      const held = isHome ? homeRev() : siteRevisions()[id];
+      if (entryId === null || held === null || held === undefined) {
+        return { ok: false, message: PUBLISH_CONFLICT_MESSAGE };
       }
-    } catch {
-      // The request itself failed (a 5xx from the action, the network dropped): nothing was
-      // published, the draft is stored, the status chip keeps saying "Unpublished changes".
-      setPublishNote({ message: PUBLISH_FAILED_MESSAGE, retry: true });
-    } finally {
-      setPublishing(false);
-    }
-  }, [
-    publishing,
-    flush,
-    flushSite,
-    markSitePublished,
-    applySiteErrors,
-    clearSiteErrors,
-    savedDraft,
-    currentStatus,
-    pageId,
-    themeTokensOf,
-    router,
-  ]);
+      const answer = await restorePageRevision(pageId, entryId, rev, held);
+      if (answer.kind === "ok") {
+        window.location.reload();
+        return { ok: true };
+      }
+      return { ok: false, message: restoreRevisionMessage(answer.kind) };
+    },
+    [flush, flushSite, homeEntryId, homeRev, siteRevisions, pageId],
+  );
 
   // Unpublish (M14-02): the site goes back to its placeholder, the draft stays. Nothing here
   // flushes: the draft is untouched by it, so edits in flight keep saving as they do.
@@ -500,7 +679,15 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       publishedAt,
       liveOgUrl,
       publishing,
-      publish: () => void publish(),
+      publishingItem,
+      publishState,
+      publish: () => void publishAll(),
+      publishAll,
+      publishPageById,
+      publishDesignOnly,
+      retryPublish,
+      restoreRevision,
+      homeEntryId,
       unpublish,
       unpublishing,
       publishNote: shownNote,
@@ -548,7 +735,14 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       publishedAt,
       liveOgUrl,
       publishing,
-      publish,
+      publishingItem,
+      publishState,
+      publishAll,
+      publishPageById,
+      publishDesignOnly,
+      retryPublish,
+      restoreRevision,
+      homeEntryId,
       unpublish,
       unpublishing,
       shownNote,

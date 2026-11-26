@@ -18,10 +18,13 @@ vi.mock("next/cache", () => ({ revalidateTag: () => undefined, updateTag: () => 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 /**
- * 1b1-21 (M15-05) against the local database: Restore and Undo on page entries. A version keeps its
- * shape (document with Home's blocks, sub_pages), and a restore writes the design to `pages.draft`
- * (frozen blocks untouched), Home's blocks to the '/' entry and each page's draft to its entry
- * (source system); a missing page is recreated under its old id; Undo puts the drafts back.
+ * 1b1-21 (M15-05) against the local database: Restore and Undo on a site whose pages are entries. A
+ * version keeps its shape (document with Home's blocks, sub_pages).
+ *
+ * Rewritten for M15-10 (History restores the site design only): a restore writes the design to
+ * `pages.draft` (frozen blocks untouched) and NO page entry, where M12-04 / 1b1-21 also wrote Home's
+ * blocks and every sub-page and brought deleted pages back. Each test below keeps its setup and now
+ * asserts the new rule: the pages are exactly as they were. Undo puts the design back and writes no entry.
  */
 const { run } = await stackIsUp();
 
@@ -180,12 +183,23 @@ describe.skipIf(!run || !dockerDb())(
       await removeOwners(admin, owners);
     });
 
-    it("restores the design to pages.draft and each page's blocks to its entry", async () => {
+    it("restores the design to pages.draft and leaves every page entry as it is", async () => {
       const w = await world("v21-basic");
       const frozen = (await site(w.o.pageId)).blocks;
-      const homeBefore = (await entry(w.homeId))!;
+      const before = {
+        home: (await entry(w.homeId))!,
+        about: (await entry(w.aboutId))!,
+        shop: (await entry(w.shopId))!,
+      };
       const result = await core.restorePageVersionCore(input(w), deps());
-      expect(result).toMatchObject({ ok: true, restored: 1, pagesRestored: 2, notRestored: [] });
+      expect(result).toMatchObject({
+        ok: true,
+        restored: 1,
+        pagesRestored: 0,
+        recreated: 0,
+        entries: [],
+        notRestored: [],
+      });
 
       // Design: the version's profile and menu, rev one past, blocks still the frozen copy.
       const design = await site(w.o.pageId);
@@ -194,26 +208,16 @@ describe.skipIf(!run || !dockerDb())(
       expect(design.nav).toEqual({ show: true, items: [w.aboutId, w.shopId] });
       expect(design.blocks).toEqual(frozen);
 
-      // Home's entry: the version's blocks, its own path, title and description.
-      const home = (await entry(w.homeId))!;
-      expect(home.rev).toBe(homeBefore.rev + 1);
-      expect(home.draft).toMatchObject({ path: "/", title: "", description: "" });
-      expect(home.draft.blocks.map((b: any) => b.label)).toEqual(["Old home", "Second"]);
-
-      // The pages: the drafts of the version, nothing published.
-      const about = (await entry(w.aboutId))!;
-      expect(about.draft).toMatchObject({ path: "about", title: "About then" });
-      expect(about.draft.blocks.map((b: any) => b.label)).toEqual(["Then"]);
-      const shop = (await entry(w.shopId))!;
-      expect(shop.draft.title).toBe("Shop then");
-
-      // The revisions were recorded by the system, and nothing was published.
+      // Home's entry and both pages: draft and rev exactly as before (M15-10), and no system revision.
+      expect(await entry(w.homeId)).toEqual(before.home);
+      expect(await entry(w.aboutId)).toEqual(before.about);
+      expect(await entry(w.shopId)).toEqual(before.shop);
+      expect(before.about.draft.title).toBe("About now");
       const revs = await admin
         .from("content_entry_revisions")
         .select("source")
-        .eq("entry_id", w.aboutId);
-      expect(revs.data?.some((r: any) => r.source === "system")).toBe(true);
-      expect(about.published ?? null).toBeNull();
+        .in("entry_id", [w.homeId, w.aboutId, w.shopId]);
+      expect(revs.data?.some((r: any) => r.source === "system")).toBe(false);
     });
 
     it("answers conflict when the design draft moved, and writes no page", async () => {
@@ -226,23 +230,24 @@ describe.skipIf(!run || !dockerDb())(
       ]);
       const reasons = [a, b].map((r) => (r.ok ? "ok" : r.reason));
       expect(reasons).toContain("ok");
-      // Whoever lost either conflicted or (the other already finished) wrote the same drafts.
+      // Whoever lost either conflicted or (the other already finished) wrote the same design.
       for (const r of [a, b]) if (!r.ok) expect(r.reason).toBe("conflict");
+      // No page is written either way (M15-10).
       const about = (await entry(w.aboutId))!;
-      expect(about.draft.title).toBe("About then");
+      expect(about.draft.title).toBe("About now");
     });
 
-    it("a conflict on the design write puts Home's blocks back: nothing changes", async () => {
+    it("a conflict on the design write changes nothing: the design and Home stay as they were", async () => {
       const w = await world("v21-conflict-home");
       const before = (await entry(w.homeId))!;
-      // Another tab autosaves the design right after the restore wrote Home's blocks.
+      // Another tab autosaves the design after the restore read it (during its blocklist check).
       let bumped = false;
       const racing = new Proxy(admin, {
         get(target, prop, receiver) {
           if (prop !== "rpc") return Reflect.get(target, prop, receiver);
           return async (...args: Parameters<typeof admin.rpc>) => {
             const out = await target.rpc(...args);
-            if (!bumped && args[0] === "record_entry_revision") {
+            if (!bumped) {
               bumped = true;
               const row = (await site(w.o.pageId)) as any;
               await target
@@ -260,13 +265,11 @@ describe.skipIf(!run || !dockerDb())(
       });
       expect(bumped).toBe(true);
       expect(result).toMatchObject({ ok: false, reason: "conflict" });
-      const after = (await entry(w.homeId))!;
-      expect(after.draft.blocks.map((b: any) => b.label)).toEqual(
-        before.draft.blocks.map((b: any) => b.label),
-      );
+      expect((await site(w.o.pageId)).profile.name).toBe("Current");
+      expect(await entry(w.homeId)).toEqual(before);
     });
 
-    it("brings a trashed page back and recreates a purged one under its old id", async () => {
+    it("does not bring a trashed page back or recreate a purged one (M15-10)", async () => {
       const w = await world("v21-recreate");
       const about = (await entry(w.aboutId))!;
       const trashed = await admin.rpc("trash_entry", {
@@ -279,16 +282,15 @@ describe.skipIf(!run || !dockerDb())(
       expect(del.error).toBeNull();
 
       const result = await core.restorePageVersionCore(input(w), deps());
-      expect(result).toMatchObject({ ok: true, pagesRestored: 2, recreated: 2, notRestored: [] });
-      const backAbout = (await entry(w.aboutId))!;
-      expect(backAbout.deleted_at).toBeNull();
-      expect(backAbout.draft.title).toBe("About then");
-      const backShop = (await entry(w.shopId))!;
-      expect(backShop.deleted_at).toBeNull();
-      expect(backShop.draft).toMatchObject({ path: "shop", title: "Shop then" });
+      expect(result).toMatchObject({ ok: true, pagesRestored: 0, recreated: 0, notRestored: [] });
+      // The design is restored; the deleted pages stay deleted.
+      expect((await site(w.o.pageId)).profile.name).toBe("Restored");
+      expect((await entry(w.aboutId))!.deleted_at).not.toBeNull();
+      expect((await entry(w.aboutId))!.draft.title).toBe("About now");
+      expect(await entry(w.shopId)).toBeNull();
     });
 
-    it("lists a page whose links are blocked now, leaves it as it is and writes the rest", async () => {
+    it("a version page whose links are blocked now does not stop the design restore; no page is written", async () => {
       const w = await world("v21-blocked");
       const domain = `blocked-${Math.random().toString(36).slice(2, 8)}.example`;
       expect(
@@ -305,12 +307,11 @@ describe.skipIf(!run || !dockerDb())(
         `update public.page_versions set sub_pages = $j$${JSON.stringify([{ id: w.shopId, published: bad }])}$j$::jsonb where id = '${w.versionId}';`,
       );
       const result = await core.restorePageVersionCore(input(w), deps());
-      expect(result).toMatchObject({ ok: true, pagesRestored: 0 });
-      expect(result.ok && result.notRestored).toEqual([
-        { id: w.shopId, path: "shop", title: "Shop then", reason: "blocked_link", hosts: [domain] },
-      ]);
+      // Pages are not restored, so the page is not listed as left behind: there is nothing to list.
+      expect(result).toMatchObject({ ok: true, pagesRestored: 0, notRestored: [] });
+      expect((await site(w.o.pageId)).profile.name).toBe("Restored");
       expect((await entry(w.shopId))!.draft.title).toBe("Shop now");
-      expect((await entry(w.homeId))!.draft.blocks).toHaveLength(2);
+      expect((await entry(w.homeId))!.draft.blocks).toHaveLength(1);
     });
 
     it("refuses another owner's site and a suspended account before writing", async () => {
@@ -331,13 +332,13 @@ describe.skipIf(!run || !dockerDb())(
       expect((await entry(w.homeId))!.draft.blocks).toHaveLength(1);
     });
 
-    it("Undo puts the design, Home's blocks and each page back to the drafts before the restore", async () => {
+    it("Undo puts the design back to the draft before the restore and writes no page", async () => {
       const w = await world("v21-undo");
       const before = {
         design: await site(w.o.pageId),
-        home: (await entry(w.homeId))!.draft,
-        about: (await entry(w.aboutId))!.draft,
-        shop: (await entry(w.shopId))!.draft,
+        home: await entry(w.homeId),
+        about: await entry(w.aboutId),
+        shop: await entry(w.shopId),
       };
       const saved = await client.readDraft(w.o.pageId);
       expect(saved).not.toBeNull();
@@ -345,25 +346,28 @@ describe.skipIf(!run || !dockerDb())(
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.recreated).toBe(0);
-      expect(result.entries.length).toBe(3);
+      expect(result.entries).toEqual([]);
 
-      const outcome = await client.undoRestore(w.o.pageId, saved!, result.entries);
+      entryWrites.length = 0;
+      const outcome = await client.undoRestore(w.o.pageId, saved!);
       expect(outcome).toBe("ok");
-      expect((await entry(w.homeId))!.draft).toEqual(before.home);
-      expect((await entry(w.aboutId))!.draft).toEqual(before.about);
-      expect((await entry(w.shopId))!.draft).toEqual(before.shop);
+      expect(entryWrites).toEqual([]);
+      expect(await entry(w.homeId)).toEqual(before.home);
+      expect(await entry(w.aboutId)).toEqual(before.about);
+      expect(await entry(w.shopId)).toEqual(before.shop);
       const design = await site(w.o.pageId);
       expect({ ...design, rev: 0 }).toEqual({ ...before.design, rev: 0 });
       // A newer rev than the restore left, so a stale editor tab still meets its guard.
       expect(design.rev).toBeGreaterThan(5);
     });
 
-    it("Undo does not overwrite what was saved after the restore", async () => {
+    it("Undo leaves a page that was saved after the restore as it is", async () => {
       const w = await world("v21-undo-conflict");
       const saved = await client.readDraft(w.o.pageId);
       const result = await core.restorePageVersionCore(input(w), deps());
       if (!result.ok) throw new Error("restore failed");
-      // The editor saves Home's blocks after the restore.
+      // The editor saves Home's blocks after the restore. Pages are not part of a restore any more
+      // (M15-10), so this is no conflict for Undo: the design goes back and Home keeps the later save.
       const home = (await entry(w.homeId))!;
       await admin
         .from("content_entries")
@@ -372,20 +376,15 @@ describe.skipIf(!run || !dockerDb())(
           rev: home.rev + 1,
         })
         .eq("id", w.homeId);
-      const afterRestore = {
-        about: await entry(w.aboutId),
-        shop: await entry(w.shopId),
-        design: await site(w.o.pageId),
-      };
+      const afterRestore = { about: await entry(w.aboutId), shop: await entry(w.shopId) };
       entryWrites.length = 0;
-      const outcome = await client.undoRestore(w.o.pageId, saved!, result.entries);
-      expect(outcome).toBe("conflict");
-      expect((await entry(w.homeId))!.draft.blocks[0].label).toBe("Later");
-      // A conflict changes nothing: the other pages and the design stay as the restore left them.
+      const outcome = await client.undoRestore(w.o.pageId, saved!);
+      expect(outcome).toBe("ok");
       expect(entryWrites).toEqual([]);
+      expect((await entry(w.homeId))!.draft.blocks[0].label).toBe("Later");
       expect(await entry(w.aboutId)).toEqual(afterRestore.about);
       expect(await entry(w.shopId)).toEqual(afterRestore.shop);
-      expect(await site(w.o.pageId)).toEqual(afterRestore.design);
+      expect((await site(w.o.pageId)).profile.name).toBe("Current");
     });
 
     it("Undo after the design rev moved (another tab, set_theme) is a conflict with zero entry writes", async () => {
@@ -418,7 +417,7 @@ describe.skipIf(!run || !dockerDb())(
       expect(after.design.rev).toBe(restored.rev + 1);
 
       entryWrites.length = 0;
-      const outcome = await client.undoRestore(w.o.pageId, saved!, result.entries);
+      const outcome = await client.undoRestore(w.o.pageId, saved!);
       expect(outcome).toBe("conflict");
       expect(entryWrites).toEqual([]);
       // Not a mixed state: the pages are not pre-restore while the design stays restored.

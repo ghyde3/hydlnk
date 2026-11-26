@@ -6,7 +6,7 @@
  *   renderer     PageRenderer (src/components/page/page-renderer.tsx)
  *   block forms  BLOCK_FORMS, BlockFormProps, blockRowSummary
  *   media        mediaUrl
- *   publishing   publishPage and unpublishSite (Server Actions)
+ *   publishing   publishPage, publishSitePage, publishDesign and unpublishSite (Server Actions)
  */
 import { EmbedFacade } from "@/components/page/embed-facade";
 import { provideEmbedFacade } from "@/components/page/embed-slot";
@@ -20,5 +20,5 @@ export type { PageChrome } from "@/components/page/page-renderer";
 export { BLOCK_FORMS, type BlockFormProps } from "@/components/blocks/forms";
 export { blockRowSummary } from "@/components/blocks/summary";
 export { mediaUrl } from "@/lib/media/url";
-export { publishPage } from "@/lib/publish/actions";
+export { publishDesign, publishPage, publishSitePage } from "@/lib/publish/actions";
 export { unpublishSite } from "@/lib/publish/unpublish-action";

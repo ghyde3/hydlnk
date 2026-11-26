@@ -51,15 +51,16 @@ describe("M6-50 the words of the screen", () => {
     expect(missingImagesNote(7)).toBe("7 images in this version are no longer stored.");
   });
 
+  // M15-10 rewrote the sentences: a restore brings back the design only, and says so.
   it("M6-50 the confirmation and the success line", () => {
     expect(confirmQuestion(8)).toBe(
-      "Restore version 8? Your draft is replaced with this version. Your live page doesn’t change until you publish.",
+      "Restore the design of version 8? Your draft’s theme, menu and profile are replaced. Your pages don’t change, and your live site doesn’t change until you publish.",
     );
     expect(restoredMessage(8, 0)).toBe(
-      "Restored version 8 to your draft. Review it in the editor, then publish.",
+      "Restored the design of version 8 to your draft. Review it in the editor, then publish.",
     );
     expect(restoredMessage(8, 2)).toBe(
-      "Restored version 8 to your draft. Review it in the editor, then publish. 2 images from this version are no longer stored. Add them again before you publish.",
+      "Restored the design of version 8 to your draft. Review it in the editor, then publish. 2 images from this version are no longer stored. Add them again before you publish.",
     );
     expect(restoredMessage(8, 1)).toContain("An image from this version is no longer stored.");
   });

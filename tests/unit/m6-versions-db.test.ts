@@ -366,10 +366,14 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       const draft = draftDocSchema.parse(after.draft);
       expect(draft.rev).toBe((before.draft as { rev: number }).rev + 1);
       expect(draft.profile.name).toBe("Version one");
-      expect(draft.blocks.map((b) => b.id)).toEqual(["lnk-aaaaaaaa"]);
-      expect(draft.blocks.every((b) => b.visible)).toBe(true);
-      // and what Publish would write from it is version one's document again
-      expect(publishFormsEqual(toPublishForm(draft, null), v1!.document)).toBe(true);
+      // M15-10: History restores the design only. The blocks are the draft's own, as they were
+      // (this test used to expect version one's single link back).
+      expect(draft.blocks).toEqual((before.draft as { blocks: unknown[] }).blocks);
+      // and the design Publish would write from it is version one's design again
+      const designOf = (doc: unknown) => ({ ...(doc as object), blocks: [] });
+      expect(publishFormsEqual(designOf(toPublishForm(draft, null)), designOf(v1!.document))).toBe(
+        true,
+      );
     });
 
     it("M6-49 an editor tab holding the old draft meets the stale-tab guard, and two simultaneous restores leave one consistent draft", async () => {
@@ -428,13 +432,21 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       expect((await draftOfPage(a)).draft).toEqual(typed);
     });
 
-    it("M6-49 a version with a link to a site blocked since returns blocked_link with the host and changes nothing", async () => {
+    // M15-10 rewrote this test: History restores the design only, so only a link of the DESIGN (the
+    // support banner's) can refuse a restore. A blocked link inside a block is not restored at all.
+    it("M6-49 a version whose design links to a site blocked since returns blocked_link with the host and changes nothing", async () => {
       const a = await owner("res4");
       const host = `zq-blk-${rand(8)}.example.test`;
-      await publishDoc(
-        a,
-        formOf("Linked", [link("lnk-aaaaaaaa", "Shady", `https://${host}/promo`)]),
-      );
+      await publishDoc(a, {
+        ...formOf("Linked", [link("lnk-aaaaaaaa", "Fine")]),
+        banner: {
+          id: "bnr-aaaaaaaa",
+          visible: true,
+          text: "Support us",
+          label: "Give",
+          url: `https://${host}/promo`,
+        },
+      } as never);
       const [version] = await versionsOf(a);
       const draftBefore = (await draftOfPage(a)).draft;
       const added = await admin.from("blocked_domains").insert({ domain: host, reason: "test" });
@@ -443,6 +455,218 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
       const result = await restore(a, version!.id);
       expect(result).toEqual({ ok: false, reason: "blocked_link", hosts: [host] });
       expect((await draftOfPage(a)).draft).toEqual(draftBefore);
+    });
+
+    it("M15-10 a version whose BLOCK links to a site blocked since still restores its design; the blocks stay", async () => {
+      const a = await owner("res4b");
+      const host = `zq-blk-${rand(8)}.example.test`;
+      await publishDoc(
+        a,
+        formOf("Linked", [link("lnk-aaaaaaaa", "Shady", `https://${host}/promo`)]),
+      );
+      const [version] = await versionsOf(a);
+      // The draft moves on to a clean link; then the host is listed.
+      const clean = draftOf("Now", [link("lnk-bbbbbbbb", "Clean")]);
+      expect(
+        (
+          await admin
+            .from("pages")
+            .update({ draft: { ...clean, rev: 9 } as never })
+            .eq("id", a.pageId)
+        ).error,
+      ).toBeNull();
+      const added = await admin.from("blocked_domains").insert({ domain: host, reason: "test" });
+      expect(added.error).toBeNull();
+      blockedDomains.push(host);
+      const result = await restore(a, version!.id);
+      expect(result).toMatchObject({ ok: true, restored: 1 });
+      const draft = draftDocSchema.parse((await draftOfPage(a)).draft);
+      expect(draft.profile.name).toBe("Linked");
+      expect(draft.blocks.map((b) => b.id)).toEqual(["lnk-bbbbbbbb"]);
+    });
+
+    it("M6-49 a stored version whose photo and background point into another user's folder previews with both null and counted", async () => {
+      const a = await owner("pre2");
+      const b = await owner("pre3");
+      const base = formOf("Tampered");
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const tampered = {
+        ...base,
+        profile: {
+          ...base.profile,
+          photo: { path: `${b.userId}/avatar-aaaaaaaa.webp`, width: 400, height: 400 },
+        },
+        tokens: {
+          ...base.tokens,
+          bgType: "image",
+          bgImage: `${url}/storage/v1/object/public/page-media/${b.userId}/bg-aaaaaaaa.webp`,
+        },
+      };
+      await publishDoc(a, tampered);
+      const [version] = await versionsOf(a);
+      const asked: string[] = [];
+      const result = await core.loadVersionPreviewCore(
+        { pageId: a.pageId, versionId: version!.id, userId: a.userId },
+        { admin, mediaExists: async (path) => (asked.push(path), true) },
+      );
+      if (!result.ok) throw new Error(`preview failed: ${result.reason}`);
+      expect(result.doc.profile.photo).toBeNull();
+      expect(result.doc.tokens.bgImage).toBeNull();
+      expect(result.doc.tokens.bgType).toBe("solid");
+      expect(result.missingImages).toBe(2);
+      expect(asked.some((path) => path.startsWith(b.userId))).toBe(false);
+      expect(JSON.stringify(result)).not.toContain(b.userId);
+    });
+
+    it("M6-49 a stored document that does not parse is an error and never the raw JSON", async () => {
+      const a = await owner("pre4");
+      await publishDoc(a, formOf("Fine"));
+      // as the owner role would: a row the strict schema cannot read (tests need a different row)
+      const { data } = await admin
+        .from("page_versions")
+        .select("id")
+        .eq("page_id", a.pageId)
+        .single();
+      // The secret key cannot write the table, so the bad row arrives as a published document instead.
+      await publishDoc(a, { version: 1, marker: "RAW-JSON-MARKER", profile: "nope" });
+      const rows = await versionsOf(a);
+      const bad = rows.at(-1)!;
+      expect(data).not.toBeNull();
+      const result = await preview(a, bad.id);
+      expect(result).toEqual({ ok: false, reason: "error" });
+      expect(JSON.stringify(result)).not.toContain("RAW-JSON-MARKER");
+    });
+  });
+
+  // -----------------------------------------------------------------------------------------
+  describe("M6-49 restore", () => {
+    beforeAll(() => {
+      preMoveSites = true;
+    });
+    afterAll(() => {
+      preMoveSites = false;
+    });
+    it("M6-49 writes the draft and nothing else: published, versions and the live document are untouched", async () => {
+      const a = await owner("res1");
+      await publishDoc(a, formOf("Version one", [link("lnk-aaaaaaaa", "Old link")]));
+      await publishDoc(
+        a,
+        formOf("Version two", [link("lnk-aaaaaaaa", "New link"), link("lnk-cccccccc", "Another")]),
+      );
+      const [v1, v2] = await versionsOf(a);
+      const before = await draftOfPage(a);
+      const versionsBefore = await versionsOf(a);
+
+      const result = await restore(a, v1!.id);
+      expect(result).toEqual({
+        ok: true,
+        restored: 1,
+        missingImages: 0,
+        pagesRestored: 0,
+        recreated: 0,
+        entries: [],
+        notRestored: [],
+      });
+
+      const after = await draftOfPage(a);
+      // pages.published and published_at are exactly as they were: the live page does not change
+      expect(after.published).toEqual(before.published);
+      expect(after.published_at).toEqual(before.published_at);
+      expect(await versionsOf(a)).toEqual(versionsBefore);
+      expect(v2!.version_no).toBe(2);
+
+      const draft = draftDocSchema.parse(after.draft);
+      expect(draft.rev).toBe((before.draft as { rev: number }).rev + 1);
+      expect(draft.profile.name).toBe("Version one");
+      // M15-10: History restores the design only. The blocks are the draft's own, as they were
+      // (this test used to expect version one's single link back).
+      expect(draft.blocks).toEqual((before.draft as { blocks: unknown[] }).blocks);
+      // and the design Publish would write from it is version one's design again
+      const designOf = (doc: unknown) => ({ ...(doc as object), blocks: [] });
+      expect(publishFormsEqual(designOf(toPublishForm(draft, null)), designOf(v1!.document))).toBe(
+        true,
+      );
+    });
+
+    it("M6-49 an editor tab holding the old draft meets the stale-tab guard, and two simultaneous restores leave one consistent draft", async () => {
+      const a = await owner("res2");
+      await publishDoc(a, formOf("One", [link("lnk-aaaaaaaa", "First")]));
+      await publishDoc(a, formOf("Two", [link("lnk-bbbbbbbb", "Second")]));
+      const [v1, v2] = await versionsOf(a);
+      const old = (await draftOfPage(a)).draft as { rev: number };
+
+      const [x, y] = await Promise.all([restore(a, v1!.id), restore(a, v2!.id)]);
+      const outcomes = [x, y].map((r) => (r.ok ? "ok" : r.reason)).sort();
+      expect(outcomes).toEqual(["conflict", "ok"]);
+      const draft = draftDocSchema.parse((await draftOfPage(a)).draft);
+      expect(draft.rev).toBe(old.rev + 1);
+      expect(["One", "Two"]).toContain(draft.profile.name);
+
+      // the old tab saves with rev + 1 filtered on the rev it knew: no row matches
+      const stale = await admin
+        .from("pages")
+        .update({ draft: { ...old, rev: old.rev + 1 } as never })
+        .eq("id", a.pageId)
+        .eq("draft->>rev", String(old.rev))
+        .select("id");
+      expect(stale.data).toEqual([]);
+    });
+
+    it("M6-49 a draft that changed between the read and the write is a conflict and changes nothing", async () => {
+      const a = await owner("res3");
+      const base = formOf("One");
+      // a photo of the owner's own, so the restore asks Storage (after it has read the draft's rev)
+      await publishDoc(a, {
+        ...base,
+        profile: {
+          ...base.profile,
+          photo: { path: `${a.userId}/avatar-aaaaaaaa.webp`, width: 400, height: 400 },
+        },
+      });
+      const [v1] = await versionsOf(a);
+      const typed = { ...draftOf("Typed in another tab"), rev: 50 };
+      const result = await core.restorePageVersionCore(
+        { pageId: a.pageId, versionId: v1!.id, userId: a.userId },
+        {
+          admin,
+          // another tab saves after the read at the start, before the write
+          mediaExists: async () => {
+            const { error } = await admin
+              .from("pages")
+              .update({ draft: typed as never })
+              .eq("id", a.pageId);
+            expect(error).toBeNull();
+            return true;
+          },
+        },
+      );
+      expect(result).toEqual({ ok: false, reason: "conflict" });
+      expect((await draftOfPage(a)).draft).toEqual(typed);
+    });
+
+    // M15-10 rewrote this test (it expected blocked_link): History restores the design only, so a
+    // blocked link inside one of the version's BLOCKS is never written and cannot refuse the restore.
+    it("M6-49 a version whose block links to a site blocked since restores its design and leaves the blocks", async () => {
+      const a = await owner("res4");
+      const host = `zq-blk-${rand(8)}.example.test`;
+      await publishDoc(
+        a,
+        formOf("Linked", [link("lnk-aaaaaaaa", "Shady", `https://${host}/promo`)]),
+      );
+      const [version] = await versionsOf(a);
+      const draftBefore = (await draftOfPage(a)).draft as { blocks: unknown[] };
+      const added = await admin.from("blocked_domains").insert({ domain: host, reason: "test" });
+      expect(added.error).toBeNull();
+      blockedDomains.push(host);
+      const result = await restore(a, version!.id);
+      expect(result).toMatchObject({ ok: true, restored: 1 });
+      const after = (await draftOfPage(a)).draft as {
+        blocks: unknown[];
+        profile: { name: string };
+      };
+      expect(after.profile.name).toBe("Linked");
+      expect(after.blocks).toEqual(draftBefore.blocks);
+      expect(JSON.stringify(after)).not.toContain(host);
     });
 
     it("M6-49 a stored version whose photo and background are in another user's folder restores with both null, counted", async () => {

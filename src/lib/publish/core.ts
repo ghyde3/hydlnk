@@ -3,23 +3,35 @@ import { placedBlockImages, type Placed } from "./placed-images";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { blockedLinksInPublished, checkBlocklist, loadBlockedDomains } from "@/lib/blocklist";
+import { publishSitePageWithClient } from "@/lib/content";
+import { designPublishSchema, prepareHomeEntryPublish } from "@/lib/content/schemas/page";
 import {
+  PATH_MESSAGES,
   collectPublishErrors,
   collectSubPagePublishErrors,
+  pageLinkTargetErrors,
   publishDocSchema,
   publishSubPageSchema,
   publishedDocSchema,
   publishedSubPageSchema,
+  redirectTargetIssue,
+  siteBlockIdClashes,
   toPublishForm,
   toSubPagePublishForm,
-  type Block,
-  type ImageRef,
+  type DraftDoc,
   type PublishDoc,
   type PublishError,
 } from "@/lib/document";
-import { listDraftPagesWithClient, getHomeDraftWithClient } from "@/lib/site/page-entries";
+import { mapPublishIssues } from "@/lib/document/publish";
+import {
+  getHomeDraftWithClient,
+  getPublishedHomeWithClient,
+  listDraftPagesWithClient,
+  type DraftPage,
+  type HomeDraft,
+} from "@/lib/site/page-entries";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
-import { checkLinkRules, misplacedLockErrors } from "./link-rules";
+import { checkLinkRules, misplacedLockErrors, ownHostsOf } from "./link-rules";
 import { homeForSite, nameErrors, pageTitleOf, siteErrors, type SiteSubPage } from "./site-checks";
 import { mediaOrigin } from "@/lib/media/url";
 import { createAdminSupabase } from "@/lib/supabase/admin";
@@ -41,11 +53,38 @@ export type PublishFailureReason =
   /** Too many publishes in the last hour (M11-12): nothing was read or written; try again later. */
   | "rate_limited"
   /** The account's sub-pages would pass the 64 MiB byte cap (HL009): not retryable until content is removed. */
-  | "storage_full";
+  | "storage_full"
+  /** The design or a page was saved somewhere else since the editor read it (M15-10): nothing was written. */
+  | "conflict"
+  /** Publish page and Publish design: a site that is not the caller's, an unknown one, an entry outside it. */
+  | "not_found";
 
 export type PublishResult =
   | { ok: true; publishedAt: string }
   | { ok: false; errors: PublishError[]; reason?: PublishFailureReason };
+
+/**
+ * What the editor last loaded or saved (M15-10): the design's rev key (`pages.draft->>rev`) and the
+ * rev of each page entry it holds, Home's included. Publish all changes refuses with `conflict` when
+ * any of them moved. Absent (MCP): no rev is checked.
+ */
+export type PublishExpected = { designRev: string | null; entries: Record<string, number> };
+
+/** The answer of Publish page: the entry's rev afterwards, and whether the live copy was already this. */
+export type PagePublishResult =
+  | { ok: true; publishedAt: string; rev: number; unchanged: boolean }
+  | { ok: false; errors: PublishError[]; reason?: PublishFailureReason; currentRev?: number };
+
+const expectedSchema = z.object({
+  designRev: z.string().max(40).nullable(),
+  entries: z.record(z.string(), z.number().int().min(1)),
+});
+
+/** What Publish page and Publish design say on a site that was never published. */
+export const SITE_NOT_LIVE_MESSAGE = "This site isn’t live yet. Use Publish all changes first.";
+const TOO_LARGE_MESSAGE = "This is too large to publish. Remove some content and try again.";
+const siteNotLive = () =>
+  refuse("invalid", [{ blockId: null, field: "document", message: SITE_NOT_LIVE_MESSAGE }]);
 
 export interface PublishDeps {
   /** Secret-key client (RLS does not apply: every check below is ours). */
@@ -109,7 +148,7 @@ const refuse = (
  * A failed gate writes nothing, so a failed Publish leaves the live page and its cache as they were.
  */
 export async function publishPageCore(
-  input: { pageId: unknown; userId: string | null },
+  input: { pageId: unknown; userId: string | null; expected?: PublishExpected },
   deps: PublishDeps = {},
 ): Promise<PublishResult> {
   if (!input.userId || !UID.test(input.userId)) return refuse("unauthorized");
@@ -122,7 +161,7 @@ export async function publishPageCore(
   // Ownership first: the secret key bypasses RLS, so the owner filter below is the access rule.
   const page = await admin
     .from("pages")
-    .select("id, owner_id, draft")
+    .select("id, owner_id, draft, draft_rev:draft->>rev")
     .eq("id", pageId.data)
     .maybeSingle();
   if (page.error) {
@@ -173,6 +212,19 @@ export async function publishPageCore(
   if (!homeDraft) {
     console.error("[publish] the site has no Home entry", pageId.data);
     return refuse("error");
+  }
+  // Publish all changes from the editor (M15-10): what it holds must be what is stored. A design or
+  // page saved somewhere else since, or a page the site no longer has, is a conflict, nothing written.
+  if (input.expected !== undefined) {
+    const expected = expectedSchema.safeParse(input.expected);
+    if (!expected.success) return refuse("conflict");
+    const storedRev = (page.data as { draft_rev?: string | null }).draft_rev ?? null;
+    if (expected.data.designRev !== storedRev) return refuse("conflict");
+    const revs = new Map<string, number>([[homeDraft.entryId, homeDraft.rev]]);
+    for (const row of subDrafts) revs.set(row.id, row.rev);
+    for (const [id, rev] of Object.entries(expected.data.entries)) {
+      if (revs.get(id) !== rev) return refuse("conflict");
+    }
   }
   const { blocks: _frozen, ...design } = (page.data.draft ?? {}) as Record<string, unknown>;
   void _frozen;
@@ -511,4 +563,448 @@ function prepareSubPages(rows: readonly SubDraftRow[]): {
     subPages.push({ ...page, title: checked.data.title, form: checked.data });
   }
   return { subPages, errors };
+}
+
+// Publish page and Publish design (M15-10) ------------------------------------------------------------
+
+interface OwnedSite {
+  admin: SupabaseClient<Database>;
+  pageId: string;
+  userId: string;
+  /** The site row as read: its design draft, the draft's rev and the two facts of the live design this needs. */
+  page: {
+    data: {
+      id: string;
+      draft: Json | null;
+      /** `pages.draft->>rev` as Postgres reads it. */
+      draft_rev: string | null;
+      /** The live design's redirect (M9-31), or null: the one key of it Publish page reads. */
+      live_redirect: Json | null;
+    };
+  };
+}
+
+type Refusal = { ok: false; errors: PublishError[]; reason: PublishFailureReason };
+
+/**
+ * The first checks of Publish page and Publish design, in order: a session; a site that is the
+ * caller's (another owner's, an unknown or malformed id: `not_found`, one answer, so ids cannot be
+ * probed); the account is not suspended; the site was published at least once. Of the live design
+ * only its `version` (is there one) and its `redirect` are read, never the whole document.
+ */
+async function openOwnedSite(
+  input: { pageId: unknown; userId: string | null },
+  deps: PublishDeps,
+): Promise<{ ok: true; site: OwnedSite } | Refusal> {
+  if (!input.userId || !UID.test(input.userId)) return refuse("unauthorized");
+  const userId = input.userId;
+  const pageId = pageIdSchema.safeParse(input.pageId);
+  if (!pageId.success) return refuse("not_found");
+  const admin = deps.admin ?? createAdminSupabase();
+
+  // Ownership first: the secret key bypasses RLS, so the owner filter is the access rule.
+  const page = await admin
+    .from("pages")
+    .select(
+      "id, owner_id, draft, draft_rev:draft->>rev, live_version:published->>version, live_redirect:published->redirect",
+    )
+    .eq("id", pageId.data.toLowerCase())
+    .maybeSingle();
+  if (page.error) {
+    console.error("[publish] reading the site failed", page.error.message);
+    return refuse("error");
+  }
+  const found = page.data as {
+    id: string;
+    owner_id: string;
+    draft: Json | null;
+    draft_rev: string | null;
+    live_version: string | null;
+    live_redirect: Json | null;
+  } | null;
+  if (!found || found.owner_id !== userId) return refuse("not_found");
+
+  const account = await admin
+    .from("accounts")
+    .select("suspended_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (account.error) {
+    console.error("[publish] reading the account failed", account.error.message);
+    return refuse("error");
+  }
+  if (!account.data || account.data.suspended_at !== null) return refuse("account_suspended");
+
+  // Every published design carries `version`; none means `pages.published` is null: not live.
+  if (found.live_version === null) return siteNotLive();
+  return { ok: true, site: { admin, pageId: found.id, userId, page: { data: found } } };
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+type IdBlocks = Parameters<typeof siteBlockIdClashes>[1][number]["blocks"];
+/** The blocks of a page ENTRY's live copy (its stored publish form), for the id check and the redirect rule. */
+function liveBlocksOf(row: { published: unknown }): IdBlocks {
+  const form = isRecord(row.published) ? row.published : {};
+  return Array.isArray(form.blocks) ? (form.blocks as IdBlocks) : [];
+}
+
+const SHARED_ID_MESSAGE =
+  "This block shares its id with another block of the site. Remove it and add it again.";
+
+/**
+ * Publish page (M15-10): makes ONE page's draft live, Home's or a sub-page's, and nothing else. The
+ * design, every other page's live copy and their `published_at` stay as they are.
+ *
+ *   1. a session, a uuid, a site the caller owns: else `not_found` (one answer for another owner's
+ *      site, an unknown one, an entry outside it and a trashed entry);
+ *   2. suspension; 3. the site must be live already (`SITE_NOT_LIVE_MESSAGE`): a page cannot be live
+ *      on a site that is not;
+ *   4. the entry is a page entry of that site, not in the trash;
+ *   5. `expectedRev` is the entry's rev, else `conflict` with `currentRev`, nothing written;
+ *   6. the gate the whole-site Publish runs for that one page (schema, images, the lock rule, both
+ *      blocklist checks). Only this page's own problems are reported: a design problem never blocks
+ *      it. For Home, a live redirect must still find its target among the new blocks;
+ *   7. the rules that span the site, against what is LIVE: a block id used by another page's live
+ *      copy, and `page_link` targets that are pages of the site (draft or live: a link to a page that
+ *      is not live is hidden on the live site, never an error);
+ *   8. `publish_site_page`, through the content writer.
+ */
+export async function publishSitePageCore(
+  input: {
+    pageId: unknown;
+    entryId: unknown;
+    expectedRev: unknown;
+    userId: string | null;
+    source?: "editor" | "mcp";
+  },
+  deps: PublishDeps = {},
+): Promise<PagePublishResult> {
+  const opened = await openOwnedSite(input, deps);
+  if (!opened.ok) return opened;
+  const { admin, pageId, userId } = opened.site;
+  const entryId = pageIdSchema.safeParse(input.entryId);
+  if (!entryId.success) return refuse("not_found");
+  const wanted = entryId.data.toLowerCase();
+
+  let homeDraft: HomeDraft | null;
+  let subDrafts: DraftPage[];
+  let liveHome;
+  try {
+    homeDraft = await getHomeDraftWithClient(admin, pageId);
+    subDrafts = await listDraftPagesWithClient(admin, pageId);
+    liveHome = await getPublishedHomeWithClient(admin, pageId);
+  } catch (error) {
+    console.error("[publish] reading the page entries failed", error);
+    return refuse("error");
+  }
+  const isHome = homeDraft !== null && homeDraft.entryId === wanted;
+  // The entry's row: Home's, or one of the site's sub-pages. Anything else is not found.
+  const row: { rev: number; draft: Record<string, unknown> } | null = isHome
+    ? { rev: homeDraft!.rev, draft: homeDraft!.draft }
+    : (subDrafts.find((candidate) => candidate.id === wanted) ?? null);
+  if (!row) return refuse("not_found");
+
+  const expectedRev = input.expectedRev;
+  if (typeof expectedRev !== "number" || !Number.isSafeInteger(expectedRev) || expectedRev < 1) {
+    return refuse("invalid", [
+      { blockId: null, field: "document", message: "Send the revision you are editing." },
+    ]);
+  }
+  if (row.rev !== expectedRev) return { ...refuse("conflict"), currentRev: row.rev };
+
+  // The early blocklist check on the stored draft (the database's own reading), as for the whole site.
+  const named = { id: wanted, title: pageTitleOf(row.draft) };
+  const name = <T extends PublishError>(errors: readonly T[]): T[] =>
+    isHome ? [...errors] : nameErrors(errors, named);
+  try {
+    const blocked = await checkBlocklist(admin, row.draft);
+    if (blocked.errors.length > 0) return refuse("blocked_link", name(blocked.errors));
+  } catch (error) {
+    console.error("[publish] checking the link blocklist failed", error);
+    return refuse("error");
+  }
+
+  // The page through the gate's schema: `form` is what is stored, the shape `publish_site` writes.
+  let form: Record<string, unknown> & { blocks: PublishDoc["blocks"] };
+  if (isHome) {
+    const ready = prepareHomeEntryPublish(row.draft);
+    if (!ready.ok) {
+      const errors = friendlyPublishErrors(mapPublishIssues(ready.issues, row.draft));
+      return refuse(
+        "invalid",
+        errors.length > 0
+          ? errors
+          : [{ blockId: null, field: "document", message: "Fix this page before publishing." }],
+      );
+    }
+    form = ready.published;
+  } else {
+    const prepared = prepareSubPages([{ id: wanted, draft: row.draft }]);
+    if (prepared.errors.length > 0) return refuse("invalid", prepared.errors);
+    named.title = prepared.subPages[0]!.title;
+    form = prepared.subPages[0]!.form;
+  }
+  const blocks = form.blocks;
+
+  try {
+    const exists = deps.mediaExists ?? storageExists(admin);
+    const mediaErrors = await checkPlaced(placedBlockImages(blocks), userId, exists);
+    if (mediaErrors.length > 0) return refuse("invalid", name(mediaErrors));
+  } catch (error) {
+    console.error("[publish] checking the images failed", error);
+    return refuse("error");
+  }
+
+  const ruleErrors: PublishError[] = name(misplacedLockErrors(row.draft));
+  if (isHome) {
+    // A live redirect must keep its target (M9-31): the rule runs against the LIVE design, with the
+    // new blocks. The plan is the design's matter and is not asked here.
+    const redirect = opened.site.page.data.live_redirect;
+    if (isRecord(redirect)) {
+      try {
+        const issue = redirectTargetIssue(blocks, redirect.linkId, await ownHostsOf(admin, pageId));
+        if (issue !== null) {
+          ruleErrors.push({ blockId: null, field: "redirect.linkId", message: issue });
+        }
+      } catch (error) {
+        console.error("[publish] checking the redirect failed", error);
+        return refuse("error");
+      }
+    }
+  }
+
+  // Site-wide rules against what is live: this page's ids against the other pages' live copies, and
+  // its page links against the pages the site has (a draft page counts: the link is hidden until then).
+  const others = subDrafts
+    .filter((other) => other.id !== wanted && other.published !== null)
+    .map((other) => ({ id: other.id, blocks: liveBlocksOf(other) }));
+  const mine = isHome ? HOME_KEY : wanted;
+  const clashes = siteBlockIdClashes(
+    isHome ? { blocks } : liveHome ? { blocks: liveBlocksOf(liveHome) } : null,
+    isHome ? others : [...others, { id: wanted, blocks }],
+  );
+  for (const clash of clashes) {
+    if (clash.pages.includes(mine)) {
+      ruleErrors.push(...name([{ blockId: clash.id, field: "id", message: SHARED_ID_MESSAGE }]));
+    }
+  }
+  for (const error of pageLinkTargetErrors(
+    [{ pageId: mine, ...(isHome ? {} : { title: named.title }), blocks }],
+    subDrafts.map((other) => other.id),
+  )) {
+    const base: PublishError = { blockId: error.blockId, field: "target", message: error.message };
+    ruleErrors.push(isHome ? base : { ...base, subPageId: wanted, pageTitle: named.title });
+  }
+  if (ruleErrors.length > 0) return refuse("invalid", ruleErrors);
+
+  // The authoritative blocklist check, on the exact copy about to be served. Fails closed.
+  try {
+    const blockedFinal = blockedLinksInPublished({ blocks }, await loadBlockedDomains(admin));
+    if (blockedFinal.length > 0) return refuse("blocked_link", name(blockedFinal));
+  } catch (error) {
+    console.error("[publish] reading the blocked domains failed", error);
+    return refuse("error");
+  }
+
+  const publishedAt = (deps.now?.() ?? new Date()).toISOString();
+  const written = await publishSitePageWithClient(admin, {
+    siteId: pageId,
+    ownerId: userId,
+    entryId: wanted,
+    expectedRev,
+    published: form,
+    publishedAt,
+    source: input.source ?? "editor",
+  });
+  if (written.ok) {
+    return {
+      ok: true,
+      publishedAt: written.publishedAt,
+      rev: written.rev,
+      unchanged: written.unchanged,
+    };
+  }
+  const { code, message } = written;
+  if (code === "P0002") return refuse("not_found");
+  if (code === "22023" && message === "stale_rev") {
+    const reread = await admin.from("content_entries").select("rev").eq("id", wanted).maybeSingle();
+    return reread.data
+      ? { ...refuse("conflict"), currentRev: Number(reread.data.rev) }
+      : refuse("conflict");
+  }
+  if (code === "22023" && message === "site_not_published") return siteNotLive();
+  if (code === "HL012" || code === "23505") {
+    return refuse(
+      "invalid",
+      name([{ blockId: null, field: "path", message: PATH_MESSAGES.taken }]),
+    );
+  }
+  if (code === "HL009") return refuse("storage_full");
+  if (code === "23514") {
+    return refuse(
+      "invalid",
+      name([{ blockId: null, field: "document", message: TOO_LARGE_MESSAGE }]),
+    );
+  }
+  console.error("[publish] writing the published page failed", code, message);
+  return refuse("error");
+}
+
+/** How `siteBlockIdClashes` names Home among the pages holding an id. */
+const HOME_KEY = "home";
+
+/**
+ * Publish design (M15-10): makes the design live (theme, menu, profile, banner, share card, UTM tags,
+ * redirect: every key of the publish form except `blocks`) and leaves every page as it is.
+ *
+ *   1. to 3. as Publish page (`not_found`, suspension, the site and Home must be live already);
+ *   4. `expectedRev` is `pages.draft->>rev`, else `conflict`, nothing written;
+ *   5. the design through the gate's schema (`designPublishSchema`), the theme's tokens resolved and
+ *      frozen as the whole-site Publish does, the images of the design (photo, logo, share image,
+ *      background). A problem in Home's blocks never blocks it: they are not read;
+ *   6. the menu keeps every item that names a page of the site, live or not (an item to a page that
+ *      is not live is hidden on the live site); the redirect rule runs against Home's LIVE blocks;
+ *   7. both blocklist checks, then `publish_design` with the form, which holds no `blocks` key.
+ */
+export async function publishDesignCore(
+  input: { pageId: unknown; expectedRev: string | null; userId: string | null },
+  deps: PublishDeps = {},
+): Promise<PublishResult> {
+  const opened = await openOwnedSite(input, deps);
+  if (!opened.ok) return opened;
+  const { admin, pageId, userId, page } = opened.site;
+  const draftRev = page.data.draft_rev;
+
+  let liveHome;
+  let subDrafts: DraftPage[];
+  try {
+    liveHome = await getPublishedHomeWithClient(admin, pageId);
+    subDrafts = await listDraftPagesWithClient(admin, pageId);
+  } catch (error) {
+    console.error("[publish] reading the page entries failed", error);
+    return refuse("error");
+  }
+  if (!liveHome) return siteNotLive();
+
+  if (input.expectedRev !== null && typeof input.expectedRev !== "string")
+    return refuse("conflict");
+  if (input.expectedRev !== draftRev) return refuse("conflict");
+
+  // The design is `pages.draft` without its frozen blocks, which are dropped unread.
+  const { blocks: _frozen, ...design } = (page.data.draft ?? {}) as Record<string, unknown>;
+  void _frozen;
+  const raw = { ...design, blocks: [] };
+
+  try {
+    const blocked = await checkBlocklist(admin, raw);
+    if (blocked.errors.length > 0) return refuse("blocked_link", blocked.errors);
+  } catch (error) {
+    console.error("[publish] checking the link blocklist failed", error);
+    return refuse("error");
+  }
+
+  const parsed = designPublishSchema.safeParse(design);
+  if (!parsed.success) {
+    const errors = friendlyPublishErrors(mapPublishIssues(parsed.error.issues, raw));
+    return refuse(
+      "invalid",
+      errors.length > 0
+        ? errors
+        : [{ blockId: null, field: "document", message: "Fix the design before publishing." }],
+    );
+  }
+  const draft = { ...parsed.data, blocks: [] } as DraftDoc;
+
+  let themeTokens: Partial<TokenSet> | null;
+  try {
+    themeTokens = await loadThemeTokens(admin, draft.theme.ref, userId);
+  } catch (error) {
+    console.error("[publish] reading the theme failed", error);
+    return refuse("error");
+  }
+  const built = toPublishForm(draft, themeTokens);
+
+  try {
+    const exists = deps.mediaExists ?? storageExists(admin);
+    const mediaErrors = [
+      ...(await checkImages(built, userId, exists)),
+      ...(await checkBackground(
+        built,
+        draft.theme.overrides.bgImage !== undefined,
+        userId,
+        exists,
+      )),
+    ];
+    if (mediaErrors.length > 0) return refuse("invalid", mediaErrors);
+  } catch (error) {
+    console.error("[publish] checking the images failed", error);
+    return refuse("error");
+  }
+
+  const checked = publishedDocSchema.safeParse(built);
+  if (!checked.success) {
+    console.error("[publish] the design's publish form failed validation", checked.error.issues);
+    return refuse("invalid", [
+      { blockId: null, field: "document", message: "Fix the design before publishing." },
+    ]);
+  }
+  // The menu keeps every page of the site, drafts included: an item to a page that is not live is
+  // hidden on the live site and comes back when that page is published.
+  const form = homeForSite(
+    checked.data,
+    subDrafts.map((other) => other.id),
+  );
+
+  // Redirect mode (M9-31): the plan, and a target among Home's LIVE blocks.
+  try {
+    const liveBlocks = liveBlocksOf(liveHome) as unknown as PublishDoc["blocks"];
+    const linkErrors = await checkLinkRules(admin, {
+      pageId,
+      userId,
+      form: { ...form, blocks: liveBlocks },
+      raw,
+    });
+    if (linkErrors.length > 0) return refuse("invalid", linkErrors);
+  } catch (error) {
+    console.error("[publish] checking the link rules failed", error);
+    return refuse("error");
+  }
+
+  try {
+    const blockedFinal = blockedLinksInPublished(form, await loadBlockedDomains(admin));
+    if (blockedFinal.length > 0) return refuse("blocked_link", blockedFinal);
+  } catch (error) {
+    console.error("[publish] reading the blocked domains failed", error);
+    return refuse("error");
+  }
+
+  // What is sent holds no `blocks` key: the function keeps Home's live blocks as they are.
+  const { blocks: _none, ...designForm } = form;
+  void _none;
+  const publishedAt = (deps.now?.() ?? new Date()).toISOString();
+  const written = await admin.rpc("publish_design", {
+    p_page_id: pageId,
+    p_owner_id: userId,
+    p_design: designForm as unknown as Json,
+    // The rev compared above; the function checks it again under its row lock.
+    ...(draftRev === null ? {} : { p_expected_rev: draftRev }),
+    p_published_at: publishedAt,
+  });
+  if (written.error) {
+    const { code, message } = written.error;
+    if (code === "P0002") return refuse("not_found");
+    if (code === "22023" && message === "stale_rev") return refuse("conflict");
+    if (code === "22023" && (message === "site_not_published" || message === "site_not_moved")) {
+      return siteNotLive();
+    }
+    if (code === "23514") {
+      return refuse("invalid", [{ blockId: null, field: "document", message: TOO_LARGE_MESSAGE }]);
+    }
+    // `design_has_blocks`, `unknown_design_key`: the form sent a key the function refuses. Our bug.
+    console.error("[publish] writing the published design failed", code, message);
+    return refuse("error");
+  }
+  return { ok: true, publishedAt };
 }

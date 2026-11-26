@@ -22,7 +22,7 @@ export function WorkspaceNotices() {
     undoRedo,
     repaired,
     publishNote,
-    publish,
+    retryPublish,
     publishing,
     activeTab,
   } = useWorkspace();
@@ -54,7 +54,7 @@ export function WorkspaceNotices() {
           kind="publish"
           action={
             publishNote.retry
-              ? { label: "Retry", onClick: publish, disabled: publishing }
+              ? { label: "Retry", onClick: retryPublish, disabled: publishing }
               : undefined
           }
         >

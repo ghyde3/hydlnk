@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
+import { ChevronDown } from "lucide-react";
 import { PageName } from "@/components/editor/page-name";
 import { StatusChip } from "@/components/editor/status-chip";
 import { UndoRedoButtons } from "@/components/editor/undo-redo-controls";
@@ -39,8 +40,21 @@ export interface WorkspaceToolbarProps {
   flush: () => Promise<boolean>;
   /** The live page's address, or null while the page has never been published ("View live page" is off). */
   liveUrl: string | null;
-  /** A Publish is running: the button reads "Publishing..." and is `aria-busy`. */
+  /** Publish all changes is running: the button reads "Publishing..." and is `aria-busy`. */
   publishing: boolean;
+  /** Another publish action (a page, the design) is running from the publish bar: Publish is off meanwhile. */
+  publishBusy?: boolean;
+  /**
+   * The publish bar (M15-10). With `onTogglePublishBar` the status chip is the bar's toggle;
+   * `publishBarSlot` is the bar itself (the caller mounts it only while open) and is placed under
+   * the toolbar from 760px. Without it the chip is a plain chip, as before.
+   */
+  onTogglePublishBar?: () => void;
+  publishBarOpen?: boolean;
+  publishToggleRef?: RefObject<HTMLButtonElement | null>;
+  /** The id of the bar's element, for `aria-controls`. */
+  publishBarId?: string;
+  publishBarSlot?: ReactNode;
   /**
    * Why Publish is off, or null: a suspended owner (M5-09) or a link to a blocked site (M5-03). It
    * is the button's title.
@@ -67,11 +81,13 @@ export const TOOLBAR_TABS_TEST_ID = "workspace-tabs-pin";
 
 function PublishButton({
   publishing,
+  busy,
   disabledReason,
   onPublish,
   className,
 }: {
   publishing: boolean;
+  busy: boolean;
   disabledReason: string | null;
   onPublish: () => void;
   className: string;
@@ -80,9 +96,10 @@ function PublishButton({
     <button
       type="button"
       onClick={onPublish}
-      disabled={publishing || disabledReason !== null}
+      disabled={publishing || busy || disabledReason !== null}
       aria-busy={publishing}
-      title={disabledReason ?? undefined}
+      // One tap publishes all changes (M15-10); the status chip opens the bar to pick a part.
+      title={disabledReason ?? "Publish all changes"}
       className={`min-h-11 shrink-0 cursor-pointer rounded-md bg-ink px-4 text-sm font-semibold whitespace-nowrap text-surface disabled:cursor-progress disabled:opacity-70 ${className}`}
     >
       {publishing ? "Publishing..." : "Publish"}
@@ -119,7 +136,8 @@ function NameBlock({ pageId, address, name }: { pageId: string; address: string;
  * "⋯" menu and Publish, the only charcoal control. From 760px to 1279px the same controls wrap into
  * two rows (the name and the tabs, then the rest) as one pinned block. Below 760px it is a 52px
  * pinned row of Undo, Redo, the status chip and Publish, with the tabs in a 48px strip pinned under
- * it; the page's name is the first line of the content and scrolls away, the save indicator is a
+ * it; the status chip is the toggle of the publish bar (M15-10: a panel under the toolbar from 760px,
+ * a sheet above the tab bar below it); the page's name is the first line of the content and scrolls away, the save indicator is a
  * small chip above the bottom tab bar, and QR code, history and preview links live in the Share
  * tab (the two menus are not drawn).
  *
@@ -134,6 +152,8 @@ function NameBlock({ pageId, address, name }: { pageId: string; address: string;
 export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
   const { pageId, address, name, tabs, status, saveStatus, undoRedo, flush, liveUrl } = props;
   const { publishing, publishDisabledReason = null, onPublish, onOpenShare } = props;
+  const { publishBusy = false, onTogglePublishBar, publishBarOpen = false } = props;
+  const { publishToggleRef, publishBarId, publishBarSlot } = props;
   usePinnedHeight();
 
   return (
@@ -158,7 +178,28 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
         className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-2 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
       >
         <div className="order-2 flex min-w-0 flex-1 hl:order-none hl:flex-none">
-          <StatusChip status={status} />
+          {onTogglePublishBar ? (
+            <button
+              ref={publishToggleRef}
+              type="button"
+              data-testid="publish-bar-toggle"
+              aria-label="Choose what to publish"
+              aria-haspopup="dialog"
+              aria-expanded={publishBarOpen}
+              aria-controls={publishBarOpen ? publishBarId : undefined}
+              onClick={onTogglePublishBar}
+              className="inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent p-0 text-ink"
+            >
+              <StatusChip status={status} />
+              <ChevronDown
+                aria-hidden="true"
+                size={14}
+                className={`hidden shrink-0 text-text-2 hl:block ${publishBarOpen ? "rotate-180" : ""}`}
+              />
+            </button>
+          ) : (
+            <StatusChip status={status} />
+          )}
         </div>
         <SaveIndicator status={saveStatus} />
         <div className="order-1 flex shrink-0 items-center gap-2 hl:order-none hl:ml-auto min-[1280px]:ml-0">
@@ -177,11 +218,13 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
         </div>
         <PublishButton
           publishing={publishing}
+          busy={publishBusy}
           disabledReason={publishDisabledReason}
           onPublish={onPublish}
           className="order-3 min-w-[84px] hl:order-none hl:min-w-0"
         />
       </div>
+      {publishBarOpen ? publishBarSlot : null}
     </div>
   );
 }

@@ -150,7 +150,13 @@ export const DESIGN_READERS: Record<string, Reader> = {
   },
   "src/lib/versions/core.ts": {
     why: "the design and its rev for record and restore",
-    blocksOn: { "draft.data": "the parsed version being restored, not the site row" },
+    blocksOn: {
+      "draft.data": "the parsed version being restored, not the site row",
+      // M15-10: a restore writes the design only, and sends the frozen blocks back exactly as
+      // stored (a write that changed them is refused, HL013). They are carried, never used.
+      storedDraft:
+        "restore: the frozen blocks go back unchanged in the same write; never read for content",
+    },
     entryRows: { row: "a page entry row" },
     handsTo: { nextRev: "reads the design's rev, nothing else" },
   },

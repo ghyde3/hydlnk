@@ -187,16 +187,25 @@ export function pageLimitState(plan: PlanId, subPageCount: number): PageLimitSta
 /** Where a page stands against the live site (M12-08). */
 export type PageState = "live" | "unpublished" | "changed";
 
+/**
+ * The one vocabulary of a page's state (M15-10), the words of `ITEM_STATE_LABEL`
+ * (src/lib/publish/status.ts): the pages card and the publish bar say the same thing.
+ */
 export const PAGE_STATE_LABEL: Record<PageState, string> = {
   live: "Live",
-  unpublished: "Not published yet",
-  changed: "Changes not published",
+  unpublished: "Draft",
+  changed: "Unpublished changes",
 };
+
+/** A page's state in the publish bar's terms. */
+export function itemStateOf(state: PageState): "live" | "changed" | "draft" {
+  return state === "unpublished" ? "draft" : state;
+}
 
 /**
  * A sub-page's state from its draft's publish form and what is live (`null` when it was never
- * published): never published is "Not published yet", equal is "Live" (hidden blocks and key order
- * do not count, the form is compared the way Publish compares), anything else is "Changes not published".
+ * published): never published is "Draft", equal is "Live" (hidden blocks and key order do not
+ * count, the form is compared the way Publish compares), anything else is "Unpublished changes".
  */
 export function subPageState(form: SubPagePublish, published: SubPagePublish | null): PageState {
   if (published === null) return "unpublished";

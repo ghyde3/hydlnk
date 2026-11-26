@@ -754,7 +754,7 @@ test.describe("M2-13 delete with undo", () => {
     expect(box.x + box.width).toBeLessThanOrEqual(390);
     const publish = (await page
       .getByTestId("workspace-toolbar")
-      .getByRole("button", { name: "Publish" })
+      .getByRole("button", { name: "Publish", exact: true })
       .boundingBox())!;
     expect(box.y).toBeGreaterThan(publish.y + publish.height);
     await expectNoHorizontalScroll(page);

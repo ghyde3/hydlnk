@@ -6,6 +6,7 @@ import {
   blockSchema,
   draftDocObject,
   publishBlockSchema,
+  publishedDocSchema,
   refinePublishDesign,
   requireUniqueIds,
   text,
@@ -93,6 +94,32 @@ export function toHomeEntryPublishForm(blocks: readonly Block[]): Block[] {
     if (form) out.push(form);
   }
   return out;
+}
+
+/** Home's published copy, in the shape `publish_site` stores it. */
+export type HomeEntryPublished = {
+  path: "/";
+  title: "";
+  description: "";
+  blocks: z.infer<typeof publishedDocSchema>["blocks"];
+};
+
+/**
+ * Home's entry draft through the Publish gate, on its own (M15-10, Publish page on Home): the
+ * publish schema on the draft, the publish form of its blocks, then the published document's own
+ * block schema on the result, so what is stored is exactly what a whole-site Publish stores. The
+ * zod issues come back as they are (paths `blocks.N.field`), for the gate to word.
+ */
+export function prepareHomeEntryPublish(
+  draft: unknown,
+): { ok: true; published: HomeEntryPublished } | { ok: false; issues: z.core.$ZodIssue[] } {
+  const parsed = homeEntryPublishSchema.safeParse(draft);
+  if (!parsed.success) return { ok: false, issues: parsed.error.issues };
+  const checked = publishedDocSchema.shape.blocks.safeParse(
+    toHomeEntryPublishForm(parsed.data.blocks),
+  );
+  if (!checked.success) return { ok: false, issues: [] };
+  return { ok: true, published: { path: "/", title: "", description: "", blocks: checked.data } };
 }
 
 /** Whether a page entry's draft is Home's: its path, trimmed, is '/'. Spaces are refused elsewhere. */

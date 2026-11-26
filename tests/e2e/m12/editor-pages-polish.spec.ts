@@ -6,7 +6,7 @@ import { addPageEntry, seedHome, subPageEntries } from "../m15/entry-helpers";
 import { emptyUser, openEditor, pageRow, setDraft } from "../m2/editor-helpers";
 
 /**
- * M12-08: each page shows Live, Not published yet or Changes not published; Duplicate page makes a
+ * M12-08: each page shows Live, Draft or Unpublished changes (the one vocabulary since M15-10; it said "Not published yet" and "Changes not published"); Duplicate page makes a
  * new draft with fresh ids and a free path; the menu pages can be dragged (here by keyboard) as well
  * as moved with the buttons. A Pro account, so there is room for more than Home and two pages. Every
  * test makes its own user and site. Runs at 390x844 and 1440x900.
@@ -59,13 +59,13 @@ test("M12-08 states, duplicate and drag to reorder", async ({ page, context }) =
 
   // Nothing is published yet: every page says so.
   for (const title of ["Alpha", "Beta", "Gamma"]) {
-    await expect(stateOf(page, title)).toHaveText("Not published yet");
+    await expect(stateOf(page, title)).toHaveText("Draft");
   }
-  await expect(page.getByTestId("page-state").first()).toHaveText("Not published yet");
+  await expect(page.getByTestId("page-state").first()).toHaveText("Draft");
   await expectNoHorizontalScroll(page);
   await expectTapTargets(page, '[data-testid="pages-card"]');
 
-  // Publish: all Live. An edit to one page is "Changes not published" on that page only.
+  // Publish: all Live. An edit to one page is "Unpublished changes" on that page only.
   await page.getByRole("button", { name: "Publish", exact: true }).first().click();
   await expect
     .poll(async () => (await pageRow(user.pageId)).published !== null, { timeout: 30_000 })
@@ -76,14 +76,14 @@ test("M12-08 states, duplicate and drag to reorder", async ({ page, context }) =
   await expect(page.getByTestId("page-state").first()).toHaveText("Live");
   await rowTitled(page, "Beta").click();
   await page.locator('[data-field="page-title"]').fill("Beta two");
-  await expect(stateOf(page, "Beta two")).toHaveText("Changes not published");
+  await expect(stateOf(page, "Beta two")).toHaveText("Unpublished changes");
   await expect(stateOf(page, "Alpha")).toHaveText("Live");
 
   // Duplicate Alpha: a new draft, fresh ids, a free path, never published; the original is intact.
   await rowTitled(page, "Alpha").click();
   await page.getByTestId("duplicate-page").click();
   await expect(rowTitled(page, "Alpha copy")).toBeVisible();
-  await expect(stateOf(page, "Alpha copy")).toHaveText("Not published yet");
+  await expect(stateOf(page, "Alpha copy")).toHaveText("Draft");
   await expect(rowTitled(page, "Alpha copy")).toContainText("/alpha-copy");
   await expect.poll(async () => (await subPageEntries(user.pageId)).length).toBe(4);
   const all = await subPageEntries(user.pageId);

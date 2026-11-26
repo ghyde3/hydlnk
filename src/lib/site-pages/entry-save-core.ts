@@ -31,7 +31,8 @@ export interface EntrySaveResponse {
   body: EntrySaveBody;
 }
 
-function fromFailure(f: ContentFailure): EntrySaveResponse {
+/** A content writer refusal in the editor's save vocabulary (the save route and the revisions routes). */
+export function fromFailure(f: ContentFailure): EntrySaveResponse {
   const status = f.status;
   switch (f.error) {
     case "conflict":

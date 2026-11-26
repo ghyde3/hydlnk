@@ -1,124 +1,54 @@
 import { createBrowserSupabase } from "@/lib/supabase/browser";
-import { createDraftSaver } from "@/lib/editor/save-client";
-import { readEntryRevs } from "@/lib/site-pages/entry-revs-client";
-import { postEntryDraft } from "@/lib/site-pages/entry-save-client";
-import type { DraftDoc } from "@/lib/document";
+import type { Json } from "@/lib/supabase/database.types";
 import { nextRev } from "./restore";
-import type { RestoredEntry } from "./types";
 
 /**
- * The browser side of Restore's Undo (M6-50, 1b1-21). Both calls use the signed-in user's own session
- * and the publishable key, so RLS decides, exactly as the editor's own saves do.
+ * The browser side of Restore's Undo (M6-50; design only since M15-10). Both calls use the signed-in
+ * user's own session and the publishable key, so RLS decides, exactly as the editor's own saves do.
  *
- * Before the screen calls `restorePageVersion` it reads the site's drafts here (`readDraft`): the
- * design (`pages.draft`) and every page entry (Home's blocks and the sub-pages) with its draft. Undo
- * writes them back (`undoRestore`) through the normal saves, each with its rev guard: a write is
+ * A restore writes the site's design (`pages.draft`) and no page. Before the screen calls
+ * `restorePageVersion` it reads that draft here (`readDraft`); Undo writes it back (`undoRestore`),
  * conditional on the rev the restore left behind, so it never overwrites anything saved after the
- * restore (the editor, another tab), and the design carries a newer rev than the restore did, so an
- * editor tab open on the old draft still meets its stale-tab guard afterwards.
+ * restore (the editor, another tab), and it carries a newer rev than the restore did, so an editor
+ * tab open on the old draft still meets its stale-tab guard afterwards. No page entry is read or
+ * written: the pages were not restored, so there is nothing of theirs to put back.
  */
 
-export interface SavedEntry {
-  id: string;
-  /** The entry's draft as stored. */
-  draft: Record<string, unknown>;
-}
-
 export interface SavedDraft {
-  /** The stored `pages.draft`, as it was, rev included (its `blocks` are the frozen copy once Home is an entry). */
+  /** The stored `pages.draft`, as it was, rev and frozen `blocks` included. */
   draft: Record<string, unknown>;
-  /** The site's live page entries as they were: Home ('/') and the sub-pages. Empty on a site with no entries. */
-  entries: SavedEntry[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** The drafts as stored, or null when they cannot be read (then the restore is not offered an Undo). */
+/** The design draft as stored, or null when it cannot be read (then the restore is not offered an Undo). */
 export async function readDraft(pageId: string): Promise<SavedDraft | null> {
-  const supabase = createBrowserSupabase();
-  const { data, error } = await supabase
+  const { data, error } = await createBrowserSupabase()
     .from("pages")
     .select("draft")
     .eq("id", pageId)
     .maybeSingle();
   if (error || !data || !isRecord(data.draft)) return null;
-  const found = await supabase
-    .from("content_entries")
-    .select("id, draft, content_types!inner(key)")
-    .eq("site_id", pageId)
-    .eq("content_types.key", "page")
-    .is("deleted_at", null);
-  if (found.error) return null;
-  const entries: SavedEntry[] = [];
-  for (const row of found.data) {
-    if (!isRecord(row.draft)) return null;
-    entries.push({ id: row.id, draft: row.draft });
-  }
-  return { draft: data.draft, entries };
+  return { draft: data.draft };
 }
 
 export type UndoOutcome = "ok" | "conflict" | "error";
 
 /**
- * Put the snapshot back. `restored` is the restore's answer: each entry it wrote, with the rev it has
- * now. Pages first, Home with the design last.
- *
- * A conflict changes nothing: before the first write, the design's rev and the rev of every entry
- * Undo would write are read and compared with what the restore left. Anything saved since (another
- * tab, an MCP tool) answers `conflict` with no page written, so the pages never go back while the
- * design stays restored. Each write is still conditional on its own rev, for a save that lands
- * between this check and the write.
+ * Put the design back. The restore wrote `rev + 1`; the write back carries one more and matches only
+ * a draft still at the restore's rev. Anything saved since (another tab, an MCP tool) matches no row
+ * and answers `conflict`, with nothing written. The frozen `blocks` go back exactly as they were
+ * read, which is what the database still holds (a restore never changes them).
  */
-export async function undoRestore(
-  pageId: string,
-  saved: SavedDraft,
-  restored: readonly RestoredEntry[],
-): Promise<UndoOutcome> {
-  const revOf = new Map(restored.map((entry) => [entry.id, entry.rev]));
-  const home = saved.entries.find((entry) => entry.draft.path === "/") ?? null;
-
-  const homeRev = home ? revOf.get(home.id) : undefined;
-  if (home && homeRev === undefined) return "error";
-  // The restore wrote `rev + 1`; the write back carries one more and is conditional on that.
+export async function undoRestore(pageId: string, saved: SavedDraft): Promise<UndoOutcome> {
   const restoredRev = nextRev(saved.draft);
-
-  // Nothing is written unless everything can be: the design first, then each entry.
-  const design = await createBrowserSupabase()
+  const { data, error } = await createBrowserSupabase()
     .from("pages")
-    .select("rev:draft->>rev")
+    .update({ draft: { ...saved.draft, rev: restoredRev + 1 } as unknown as Json })
     .eq("id", pageId)
-    .maybeSingle();
-  if (design.error || !design.data) return "error";
-  if (design.data.rev !== String(restoredRev)) return "conflict";
-  const stored = await readEntryRevs(pageId);
-  if (!stored) return "error";
-  const storedRev = new Map(stored.map((row) => [row.id, row.rev]));
-  for (const entry of saved.entries) {
-    const rev = revOf.get(entry.id);
-    if (rev !== undefined && storedRev.get(entry.id) !== rev) return "conflict";
-  }
-
-  for (const entry of saved.entries) {
-    if (entry === home) continue;
-    const rev = revOf.get(entry.id);
-    if (rev === undefined) continue;
-    const answer = await postEntryDraft(pageId, entry.id, rev, entry.draft);
-    if (answer.kind === "ok") continue;
-    return answer.kind === "conflict" ? "conflict" : "error";
-  }
-
-  const doc = {
-    ...saved.draft,
-    // With a Home entry the saver sends the blocks there; the frozen copy is never sent back.
-    ...(home ? { blocks: home.draft.blocks } : {}),
-    rev: restoredRev + 1,
-  } as unknown as DraftDoc;
-  const saver = createDraftSaver(
-    pageId,
-    home && homeRev !== undefined ? { entryId: home.id, rev: homeRev } : null,
-  );
-  const result = await saver(doc, String(restoredRev));
-  if (result.kind === "ok") return "ok";
-  return result.kind === "conflict" ? "conflict" : "error";
+    .eq("draft->>rev", String(restoredRev))
+    .select("id");
+  if (error) return "error";
+  return data.length === 0 ? "conflict" : "ok";
 }

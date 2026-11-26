@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DraftDoc } from "@/lib/document";
 import { AutosaveQueue, type BlockedSave, type SaveStatus } from "@/lib/editor/autosave";
-import { createDraftSaver, type HomeEntryRef } from "@/lib/editor/save-client";
+import { createDraftSaver, type DraftSaver, type HomeEntryRef } from "@/lib/editor/save-client";
 
 /** Statuses with edits that are not stored: the browser asks before the tab is closed. */
 const UNSAVED: readonly SaveStatus[] = [
@@ -30,6 +30,14 @@ export interface Autosave {
   savedDraft: () => DraftDoc | null;
   /** The queue's status right now (a callback that outlives a render reads this, not `status`). */
   currentStatus: () => SaveStatus;
+  /** The design's rev key as stored (`pages.draft->>rev`): what Publish design and Publish all are checked against (M15-10). */
+  revKey: () => string | null;
+  /** Home's entry rev this tab holds, or null when the site has no Home entry. */
+  homeRev: () => number | null;
+  /** Take the rev a Publish page of Home answered: the next save of Home's blocks is checked against it. */
+  adoptHomeRev: (rev: number) => void;
+  /** Re-read Home's entry rev (after Publish all changes, which can move it). The editor has flushed first. */
+  refreshHomeRev: () => Promise<void>;
 }
 
 /**
@@ -56,6 +64,9 @@ export function useAutosave(args: {
   const [status, setStatus] = useState<SaveStatus>("idle");
   const [blocked, setBlocked] = useState<BlockedSave | null>(null);
   const queueRef = useRef<AutosaveQueue | null>(null);
+  const saverRef = useRef<DraftSaver | null>(null);
+  // The design's rev as stored: the one the screen loaded with, then the rev of each write that went through.
+  const revKeyRef = useRef<string | null>(initialRevKey);
   // What the screen loaded with: the baseline for "has the user edited yet".
   const [loaded] = useState(() => draft);
   const initialRev = loaded.rev;
@@ -63,12 +74,18 @@ export function useAutosave(args: {
   const [loadedHomeRev] = useState(() => home?.rev ?? null);
 
   useEffect(() => {
+    const saver = createDraftSaver(
+      pageId,
+      home,
+      home && !repaired && home.rev === loadedHomeRev ? loaded.blocks : undefined,
+    );
+    saverRef.current = saver;
     const queue = new AutosaveQueue({
-      save: createDraftSaver(
-        pageId,
-        home,
-        home && !repaired && home.rev === loadedHomeRev ? loaded.blocks : undefined,
-      ),
+      save: async (doc, expectedRevKey) => {
+        const result = await saver(doc, expectedRevKey);
+        if (result.kind === "ok") revKeyRef.current = String(doc.rev);
+        return result;
+      },
       onStatus: setStatus,
       onBlocked: setBlocked,
       initial: { rev: initialRev, revKey: initialRevKey },
@@ -114,5 +131,19 @@ export function useAutosave(args: {
   const flush = useCallback(async () => (await queueRef.current?.flush()) ?? true, []);
   const savedDraft = useCallback(() => queueRef.current?.savedDraft ?? null, []);
   const currentStatus = useCallback(() => queueRef.current?.status ?? "idle", []);
-  return { status, blocked, flush, savedDraft, currentStatus };
+  const revKey = useCallback(() => revKeyRef.current, []);
+  const homeRev = useCallback(() => saverRef.current?.homeRev() ?? home?.rev ?? null, [home]);
+  const adoptHomeRev = useCallback((rev: number) => saverRef.current?.adoptHomeRev(rev), []);
+  const refreshHomeRev = useCallback(async () => saverRef.current?.refreshHomeRev(), []);
+  return {
+    status,
+    blocked,
+    flush,
+    savedDraft,
+    currentStatus,
+    revKey,
+    homeRev,
+    adoptHomeRev,
+    refreshHomeRev,
+  };
 }

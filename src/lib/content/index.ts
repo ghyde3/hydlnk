@@ -19,6 +19,11 @@ export type {
  */
 export { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 export { purgeEntryWithClient, restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
+export { listRevisionsWithClient, restoreRevisionWithClient } from "./revisions-core";
+export type { RevisionSummary } from "./revisions-core";
+/** Publish page (M15-10): the one call of `publish_site_page`, for the Publish gate. */
+export { publishSitePageWithClient } from "./site-page-publish-core";
+export type { SitePagePublishWrite } from "./site-page-publish-core";
 
 import { invalidatePage } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";

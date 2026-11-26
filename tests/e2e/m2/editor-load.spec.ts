@@ -274,7 +274,9 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     await expectTapTargets(page);
 
     const chip = (await page.locator("[data-publish-status]").boundingBox())!;
-    const publish = (await toolbar(page).getByRole("button", { name: "Publish" }).boundingBox())!;
+    const publish = (await toolbar(page)
+      .getByRole("button", { name: "Publish", exact: true })
+      .boundingBox())!;
     expect(publish.height).toBeGreaterThanOrEqual(44);
     expect(chip.x + chip.width).toBeLessThanOrEqual(390);
     expect(publish.x + publish.width).toBeLessThanOrEqual(390);
@@ -295,7 +297,9 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
     const preview = (await toolbar(page)
       .getByRole("button", { name: "Preview", exact: true })
       .boundingBox())!;
-    const publish = (await toolbar(page).getByRole("button", { name: "Publish" }).boundingBox())!;
+    const publish = (await toolbar(page)
+      .getByRole("button", { name: "Publish", exact: true })
+      .boundingBox())!;
     const mid = (b: { y: number; height: number }) => b.y + b.height / 2;
     for (const box of [chip, preview, publish]) {
       expect(Math.abs(mid(box) - mid(preview))).toBeLessThan(8);

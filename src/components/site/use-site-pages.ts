@@ -125,6 +125,11 @@ export interface SiteValue {
   dirty: boolean;
   /** Called after a successful Publish with the sub-pages as they were saved. */
   markPublished: () => void;
+  /** Called after Publish page on one sub-page (M15-10): it is live as saved, at the rev the server answered. */
+  markPagePublished: (id: string, rev: number) => void;
+  /** The entry rev the editor holds for each sub-page: what its saves, Publish page and Publish all are checked against. */
+  revisions: () => Record<string, number>;
+
   /** Called after a successful Unpublish (M14-02): no sub-page is live any more, every draft stays. */
   markUnpublished: () => void;
   preview: PreviewSite;
@@ -548,6 +553,30 @@ export function useSitePages(args: {
     void revisions.refresh(siteId);
   }, [revisions, siteId]);
 
+  const markPagePublished = useCallback(
+    (id: string, rev: number) => {
+      const form = formsRef.current.get(id);
+      if (form) {
+        setPublishedForms((current) => new Map(current).set(id, form));
+        setLivePaths((current) => new Map(current).set(id, form.path));
+      }
+      revisions.set(id, rev);
+    },
+    [revisions],
+  );
+  const idsRef = useRef(state.ids);
+  useEffect(() => {
+    idsRef.current = state.ids;
+  }, [state.ids]);
+  const revisionsNow = useCallback(() => {
+    const held: Record<string, number> = {};
+    for (const id of idsRef.current) {
+      const rev = revisions.get(id);
+      if (rev !== undefined) held[id] = rev;
+    }
+    return held;
+  }, [revisions]);
+
   const markUnpublished = useCallback(() => {
     setPublishedForms(new Map());
     setLivePaths(new Map());
@@ -614,6 +643,8 @@ export function useSitePages(args: {
     saveStatus,
     dirty,
     markPublished,
+    markPagePublished,
+    revisions: revisionsNow,
     markUnpublished,
     preview,
     applyPublishErrors,
