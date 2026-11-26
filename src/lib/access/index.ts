@@ -33,6 +33,9 @@ export const isUuid = (value: unknown): value is string =>
 
 const refuse = (reason: AccessRefusal["reason"]): AccessRefusal => ({ ok: false, reason });
 
+/** Ids are stored lower case; one a URL names may not be (R10). */
+const sameId = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
 export interface SiteAccessInput {
   actorId: string;
   siteId: unknown;
@@ -81,7 +84,7 @@ export async function requireEntryAccess(
     console.error("[access] reading the entry failed", found.error.message);
     return refuse("error");
   }
-  if (!found.data || (input.siteId !== undefined && found.data.site_id !== input.siteId)) {
+  if (!found.data || (input.siteId !== undefined && !sameId(found.data.site_id, input.siteId))) {
     return refuse("not_found");
   }
   const need = typeof input.need === "function" ? input.need(found.data) : input.need;
@@ -108,7 +111,7 @@ export async function requireTermAccess(
     console.error("[access] reading the term failed", found.error.message);
     return refuse("error");
   }
-  if (!found.data || (input.siteId !== undefined && found.data.site_id !== input.siteId)) {
+  if (!found.data || (input.siteId !== undefined && !sameId(found.data.site_id, input.siteId))) {
     return refuse("not_found");
   }
   const site = await requireSiteAccess(admin, { ...input, siteId: found.data.site_id });

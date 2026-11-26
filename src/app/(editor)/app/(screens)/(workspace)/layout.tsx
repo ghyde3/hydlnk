@@ -4,6 +4,7 @@ import { WorkspaceProvider } from "@/components/workspace/workspace-provider";
 import { WorkspaceShell } from "@/components/workspace/workspace-shell";
 import { clientEnv } from "@/lib/env/client";
 import { loadPrimaryDomain } from "@/lib/editor/page-address";
+import { loadSharedPrimaryDomain } from "@/lib/team/shared-domain";
 import { loadEditorPageData } from "@/lib/editor/page-data";
 import { tenantOrigin } from "@/lib/editor/urls";
 import { getAppContext, siteOwnerAddress } from "@/lib/pages/context";
@@ -68,7 +69,8 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
         return { ok: false as const };
       }
     })(),
-    loadPrimaryDomain(current.id),
+    // The owner reads their domains with their own session; a member through the access rule (C18).
+    access.isOwner ? loadPrimaryDomain(current.id) : loadSharedPrimaryDomain(user.id, current.id),
     loadTemplateThemes(),
   ]);
 

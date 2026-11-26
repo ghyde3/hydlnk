@@ -46,6 +46,13 @@ const GATE_OAUTH_RESUME = "src/lib/oauth/resume.ts";
  * admin client cannot appear unnoticed.
  */
 const GATE_ACCESS = "src/lib/access/server.ts";
+/**
+ * Wave F (C18, R10): a member's Share tab names the shared site's custom domain. Domains are
+ * owner-only under RLS, so after the access helper said the member may read the site, the page's own
+ * cached rule (getPrimaryDomain, secret key) answers. Read-only; the owner's own read stays on their
+ * session (src/lib/editor/page-address.ts).
+ */
+const SHARED_DOMAIN = "src/lib/team/shared-domain.ts";
 
 const FORBIDDEN: [RegExp, string][] = [
   [/@\/lib\/supabase\/admin/, "the secret-key Supabase client"],
@@ -132,6 +139,10 @@ describe("M2-03: the editor never uses the secret-key client", () => {
         boundaries.add(GATE_ACCESS);
         continue;
       }
+      if (relative(ROOT, file) === SHARED_DOMAIN) {
+        boundaries.add(SHARED_DOMAIN);
+        continue;
+      }
       // Comments may mention the server env ("for the secret key use ..."): only code counts.
       const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
       for (const [pattern, what] of FORBIDDEN) {
@@ -158,6 +169,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
       "src/lib/publish/actions.ts",
       // Unpublish (M14-02) is the fourth: the More actions menu and the Share tab call it.
       "src/lib/publish/unpublish-action.ts",
+      SHARED_DOMAIN,
     ]);
   });
 
