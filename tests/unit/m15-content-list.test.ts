@@ -98,6 +98,18 @@ describe.skipIf(!run)("get and list entries", () => {
       .from("content_entry_terms")
       .insert([...linked].map((entry_id) => ({ entry_id, term_id: termId })));
     if (links.error) throw new Error(links.error.message);
+    // The filter reads the draft's terms: the linked entries carry the category in their drafts too.
+    for (const id of linked) {
+      const current = await admin.from("content_entries").select("draft").eq("id", id).single();
+      if (current.error) throw new Error(current.error.message);
+      const tagged = await admin
+        .from("content_entries")
+        .update({
+          draft: { ...(current.data.draft as object), terms: { categories: [termId] } } as never,
+        })
+        .eq("id", id);
+      if (tagged.error) throw new Error(tagged.error.message);
+    }
   });
   afterAll(async () => removeOwners(admin as never, owners));
 
@@ -178,6 +190,39 @@ describe.skipIf(!run)("get and list entries", () => {
     expect(new Set(seen)).toEqual(new Set([...linked].filter((id) => ids.published.has(id))));
     const all = await pageAll({ termId });
     expect(new Set(all.seen)).toEqual(linked);
+  });
+
+  it("the term filter reads the draft's categories: a draft, and a post whose draft gained the term, match", async () => {
+    const draftOnly = [...ids.draft].find((id) => !linked.has(id))!;
+    const liveOnly = [...ids.published].find((id) => !linked.has(id))!;
+    for (const id of [draftOnly, liveOnly]) {
+      const current = await admin.from("content_entries").select("draft").eq("id", id).single();
+      await admin
+        .from("content_entries")
+        .update({
+          draft: { ...(current.data!.draft as object), terms: { categories: [termId] } } as never,
+        })
+        .eq("id", id);
+    }
+    try {
+      const { seen } = await pageAll({ termId });
+      expect(new Set(seen)).toEqual(new Set([...linked, draftOnly, liveOnly]));
+      const drafts = await pageAll({ termId, status: "draft" });
+      expect(drafts.seen).toContain(draftOnly);
+      // Another site's view of the same term id finds nothing.
+      const other = await list(b, { termId });
+      expect(other).toMatchObject({ ok: true, items: [] });
+    } finally {
+      for (const id of [draftOnly, liveOnly]) {
+        const current = await admin.from("content_entries").select("draft").eq("id", id).single();
+        const rest = { ...(current.data!.draft as Record<string, unknown>) };
+        delete rest.terms;
+        await admin
+          .from("content_entries")
+          .update({ draft: rest as never })
+          .eq("id", id);
+      }
+    }
   });
 
   it("q matches a title literally, % and _ included", async () => {
