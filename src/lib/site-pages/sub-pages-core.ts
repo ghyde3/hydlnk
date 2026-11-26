@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   draftSubPageSchema,
   emptySubPageDraft,
-  resolveNav,
   suggestPath,
   type SubPageDraft,
 } from "@/lib/document";
@@ -14,7 +13,7 @@ import { createEntryWithClient } from "@/lib/content";
 import type { ContentActor } from "@/lib/content";
 import { pagesPerSiteMessage, toPlanId } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
-import type { Database, Json } from "@/lib/supabase/database.types";
+import type { Database } from "@/lib/supabase/database.types";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
 import { pathProblem } from "./pages";
 
@@ -222,47 +221,6 @@ export async function createSubPageWithClient(
   };
 }
 
-/**
- * Takes one id out of Home's draft menu without touching `draft.rev`, so the owner's open editor
- * keeps its stale-tab guard (it removes the entry itself too). The write is conditional on the rev
- * it read; a concurrent autosave makes it match nothing and it reads again, a few times. Whatever is
- * left over is harmless: Publish drops menu items that are not pages of the site.
- */
-async function removeFromHomeNav(admin: Admin, siteId: string, subPageId: string): Promise<void> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const read = await admin
-      .from("pages")
-      .select("draft, draft_rev:draft->>rev")
-      .eq("id", siteId)
-      .single();
-    if (read.error) throw new Error(`Home lookup failed: ${read.error.message}`);
-    const draft = read.data.draft as Record<string, unknown> | null;
-    if (!draft || typeof draft !== "object" || !("nav" in draft) || draft.nav === undefined) return;
-    const nav = resolveNav(draft.nav as { show?: boolean; items?: string[] });
-    // Menu ids are lowercase uuids in Home's draft; the id given here may be spelled in upper case.
-    const wanted = subPageId.toLowerCase();
-    if (!nav.items.some((id) => typeof id === "string" && id.toLowerCase() === wanted)) return;
-    const next = {
-      ...draft,
-      nav: {
-        show: nav.show,
-        items: nav.items.filter((id) => typeof id !== "string" || id.toLowerCase() !== wanted),
-      },
-    };
-    const update = admin
-      .from("pages")
-      .update({ draft: next as unknown as Json })
-      .eq("id", siteId);
-    const conditional =
-      read.data.draft_rev === null
-        ? update.is("draft->>rev", null)
-        : update.eq("draft->>rev", read.data.draft_rev);
-    const written = await conditional.select("id");
-    if (written.error) throw new Error(`Home update failed: ${written.error.message}`);
-    if (written.data.length > 0) return;
-  }
-}
-
 export async function deleteSubPageWithClient(
   admin: Admin,
   input: { userId: string; siteId: unknown; subPageId: unknown; purge?: boolean },
@@ -278,11 +236,12 @@ export async function deleteSubPageWithClient(
   }
   const subPageId = input.subPageId.toLowerCase();
 
-  // One transaction (delete_page_entry): the entry, its revisions, its links and its path claims go
-  // together or not at all, so the page limit frees at once and a failure leaves the page fully in
-  // place, still listed and still live. It takes a live page and one already in the trash; Home,
-  // another site's entry and an unknown id are all P0002. (Posts keep the 30-day trash; this door is
-  // for pages only.)
+  // One transaction (delete_page_entry): the entry, its revisions, its links, its path claims and
+  // its item in the site's draft menu (pages.draft nav.items, `draft.rev` untouched, so the owner's
+  // open editor keeps its stale-tab guard) go together or not at all. The page limit frees at once
+  // and a failure leaves the page fully in place, still listed, still live and still in the menu.
+  // It takes a live page and one already in the trash; Home, another site's entry and an unknown id
+  // are all P0002. (Posts keep the 30-day trash; this door is for pages only.)
   const deleted = await admin.rpc("delete_page_entry", {
     p_entry_id: subPageId,
     p_site_id: site.id,
@@ -292,16 +251,6 @@ export async function deleteSubPageWithClient(
     if (deleted.error.code === "P0002") return failure("not_found");
     console.error("[site-pages] delete failed", deleted.error.code, deleted.error.message);
     return failure("delete_failed");
-  }
-
-  try {
-    await removeFromHomeNav(admin, site.id, subPageId);
-  } catch (error) {
-    // The page is gone; a stale menu entry is dropped by Publish.
-    console.error(
-      "[site-pages] removing the menu entry failed",
-      error instanceof Error ? error.message : "",
-    );
   }
   return { ok: true, id: subPageId, siteId: site.id, handle: site.handle, purged: true };
 }

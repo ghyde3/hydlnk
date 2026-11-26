@@ -142,10 +142,6 @@ export const DESIGN_READERS: Record<string, Reader> = {
     },
     entryRows: { row: "a sub-page's entry row" },
   },
-  "src/lib/site-pages/sub-pages-core.ts": {
-    why: "Home's draft menu (nav) only",
-    blocksOn: { input: "the caller's new page, not a stored document" },
-  },
   "src/lib/versions/client.ts": {
     why: "the stored design a restore keeps for Undo; blocks are Home's entry's",
     blocksOn: { "home.draft": "Home's page entry" },
