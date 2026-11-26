@@ -38,6 +38,7 @@ export function PostPublishPanel({
   busy,
   disabled,
   publishOff,
+  publishForbidden = null,
   previewUrl,
   onPublish,
   onUnpublish,
@@ -52,6 +53,11 @@ export function PostPublishPanel({
   disabled: boolean;
   /** Why Publish is off, or null when it can be pressed. */
   publishOff: string | null;
+  /**
+   * An editor on a shared site (Wave F, M19-10): this sentence stands where Publish and Unpublish
+   * would be, and neither is drawn. Null for the owner and a publisher.
+   */
+  publishForbidden?: string | null;
   /** The share address of the last preview, kept as a link in case the new tab was blocked. */
   previewUrl: string | null;
   onPublish: () => void;
@@ -106,7 +112,12 @@ export function PostPublishPanel({
           >
             {busy === "preview" ? "Opening…" : "Preview"}
           </button>
-          {live ? (
+          {publishForbidden ? (
+            <span data-testid="post-publish-forbidden" className="min-w-0 text-sm text-text-2">
+              {publishForbidden}
+            </span>
+          ) : null}
+          {live && !publishForbidden ? (
             <button
               type="button"
               data-testid={POST_TEST_IDS.unpublish}
@@ -117,20 +128,22 @@ export function PostPublishPanel({
               {busy === "unpublish" ? "Unpublishing…" : "Unpublish"}
             </button>
           ) : null}
-          <button
-            type="button"
-            data-testid={POST_TEST_IDS.publish}
-            disabled={disabled || busy !== null || publishOff !== null}
-            title={publishOff ?? undefined}
-            onClick={onPublish}
-            className={PRIMARY}
-          >
-            {busy === "publish"
-              ? "Publishing…"
-              : state === "changes"
-                ? "Publish changes"
-                : "Publish"}
-          </button>
+          {publishForbidden ? null : (
+            <button
+              type="button"
+              data-testid={POST_TEST_IDS.publish}
+              disabled={disabled || busy !== null || publishOff !== null}
+              title={publishOff ?? undefined}
+              onClick={onPublish}
+              className={PRIMARY}
+            >
+              {busy === "publish"
+                ? "Publishing…"
+                : state === "changes"
+                  ? "Publish changes"
+                  : "Publish"}
+            </button>
+          )}
         </div>
       )}
     </section>

@@ -1,3 +1,5 @@
+import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
+
 /**
  * The browser side of the page-entry save route (1b1-16, 1b1-17): one POST of `{rev, draft}` to
  * /api/pages/{site}/entries/{entry}/draft, with the answer read as the route's `{kind, ...}` body.
@@ -18,6 +20,8 @@ export type EntrySaveAnswer =
   | { kind: "path" }
   /** The account is suspended: nothing can be saved until support lifts it. */
   | { kind: "suspended" }
+  /** A member's role does not allow it (Wave F): the server's sentence, never retried. */
+  | { kind: "forbidden"; message: string }
   | { kind: "error" };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -67,6 +71,11 @@ export async function postEntryDraft(
       return { kind: body.kind };
     case "blocked":
       return { kind: "blocked", hosts: strings(body.hosts), blockIds: strings(body.blockIds) };
+    case "forbidden":
+      return {
+        kind: "forbidden",
+        message: typeof body.message === "string" && body.message !== "" ? body.message : PUBLISH_FORBIDDEN_MESSAGE,
+      };
     default:
       return { kind: "error" };
   }

@@ -27,6 +27,7 @@ export default async function PostPage({ params }: PageProps<"/app/posts/[entryI
           siteId={current.id}
           // The site OWNER: body images are checked and drawn against their folder (D9, Wave F).
           ownerId={current.access.ownerId}
+          canPublish={current.access.canPublish}
           archivePath={data.archivePath}
           entry={data.entry}
           terms={data.terms}

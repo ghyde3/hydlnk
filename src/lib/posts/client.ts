@@ -3,6 +3,7 @@ import type { RevisionSummary } from "@/lib/content/schemas/summaries";
 import type { PublishError } from "@/lib/document/publish";
 import type { CancelScheduleRequest, ScheduleRequest } from "@/lib/schedule/schemas";
 import type { EntrySchedule, EntryScheduleSummary } from "@/lib/schedule/types";
+import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import type { PostEntry } from "./types";
 
 /**
@@ -31,6 +32,8 @@ export type Refused =
   | { kind: "path"; message: string }
   | { kind: "limit"; message: string }
   | { kind: "suspended"; message: string }
+  /** A member's role does not allow it (an editor asked to publish, trash a live post or schedule). */
+  | { kind: "forbidden"; message: string }
   | { kind: "blocked"; hosts: string[] }
   | { kind: "too-large" }
   | { kind: "storage-full" }
@@ -79,6 +82,8 @@ function refusal(status: number, body: unknown): Refused {
     case "limit":
     case "suspended":
       return { kind: body.kind, message: text(body.message) };
+    case "forbidden":
+      return { kind: "forbidden", message: text(body.message) || PUBLISH_FORBIDDEN_MESSAGE };
     case "blocked":
       return {
         kind: "blocked",
@@ -226,6 +231,8 @@ export function refusalMessage(refused: Refused): string {
     case "time":
     case "plan":
       return refused.message || "That can’t be done right now.";
+    case "forbidden":
+      return refused.message || PUBLISH_FORBIDDEN_MESSAGE;
     case "blocked":
       return `That links to a site that isn’t allowed${
         refused.hosts.length > 0 ? ` (${refused.hosts.join(", ")})` : ""

@@ -1,6 +1,7 @@
 "use client";
 
 import { UploadSiteContext } from "@/components/media/upload-site";
+import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import { useId, useRef, useState } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
@@ -78,6 +79,12 @@ import { usePostAutosave } from "./use-post-autosave";
 export interface PostEditorProps {
   siteId: string;
   ownerId: string;
+  /**
+   * The owner or a publisher (Wave F, M19-10). An editor gets PUBLISH_FORBIDDEN_MESSAGE where Publish,
+   * Unpublish and Schedule would be, and no Move to trash on a live post (taking it down is
+   * publish-class); the server refuses all of them anyway.
+   */
+  canPublish: boolean;
   /** The blog's archive path, for the slug field's prefix. */
   archivePath: string;
   entry: PostEntry;
@@ -94,6 +101,7 @@ interface Meta {
 export function PostEditor({
   siteId,
   ownerId,
+  canPublish,
   archivePath,
   entry,
   terms: firstTerms,
@@ -411,13 +419,14 @@ export function PostEditor({
           busy={busy}
           disabled={suspended || conflict}
           publishOff={publishOff}
+          publishForbidden={canPublish ? null : PUBLISH_FORBIDDEN_MESSAGE}
           previewUrl={previewUrl}
           onPublish={() => void run("publish")}
           onUnpublish={() => void run("unpublish")}
           onPreview={() => void preview()}
         />
 
-        {trashed ? null : (
+        {trashed || !canPublish ? null : (
           <section
             aria-label="Schedule"
             data-testid="post-schedule"
@@ -588,6 +597,8 @@ export function PostEditor({
               disabled={suspended || conflict || busy !== null}
               onRestore={restoreFrom}
             />
+            {/* Trashing a live post takes it off the site: publish-class (G17). */}
+            {canPublish || meta.status !== "published" ? (
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <button
                 type="button"
@@ -602,6 +613,11 @@ export function PostEditor({
                 Takes the post off the site at once. You can restore it for 30 days.
               </span>
             </div>
+            ) : (
+              <p data-testid="post-trash-forbidden" className="m-0 text-xs text-text-2">
+                {PUBLISH_FORBIDDEN_MESSAGE}
+              </p>
+            )}
           </PostCard>
         )}
       </div>
@@ -638,6 +654,8 @@ function saveProblemText(save: { problem: string | null; message?: string }): st
       );
     case "suspended":
       return SUSPENDED_REASON;
+    case "forbidden":
+      return save.message ?? PUBLISH_FORBIDDEN_MESSAGE;
     case "missing":
       return "This post no longer exists, or the blog was turned off. Go back to all posts.";
     case "unauthorized":

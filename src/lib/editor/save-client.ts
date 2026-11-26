@@ -154,7 +154,9 @@ function blocksFailure(answer: Awaited<ReturnType<typeof postEntryDraft>>): Save
       return { kind: "conflict" };
     case "blocked":
       return { kind: "blocked", hosts: answer.hosts, blockIds: answer.blockIds };
+    // A member's role refused it (Wave F): the same draft is refused again, so never retried.
     case "path":
+    case "forbidden":
       return { kind: "invalid" };
     case "suspended":
       return { kind: "unauthorized" };

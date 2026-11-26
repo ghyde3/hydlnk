@@ -58,6 +58,7 @@ export function createSubPageSaveFn(revisions: SubPageRevisions, siteId: string)
       // Refused for good: the same draft is refused again, so none of these is retried on a timer.
       case "invalid":
       case "path":
+      case "forbidden":
         return { kind: "invalid" };
       case "suspended":
         return { kind: "unauthorized" };
