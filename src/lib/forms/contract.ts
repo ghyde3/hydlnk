@@ -163,16 +163,45 @@ export function neutralizeLinks(text: string): string {
 }
 
 function line(raw: string | null | undefined): string {
-  return stripHiddenCharacters(String(raw ?? ""));
+  return stripHiddenCharacters(String(raw ?? "")).normalize("NFC");
 }
 
 function lines(raw: string | null | undefined): string {
-  return stripHiddenCharacters(String(raw ?? "").replace(/\r\n?/g, "\n"), { multiline: true });
+  return stripHiddenCharacters(String(raw ?? "").replace(/\r\n?/g, "\n"), {
+    multiline: true,
+  }).normalize("NFC");
+}
+
+/**
+ * An address as one spelling (forms attack pass, finding 7): NFKC, so full-width letters and
+ * digits (`ｖｉｓｉｔｏｒ＠ｅｘａｍｐｌｅ．ｔｅｓｔ`) and a decomposed accent read as the plain ones and
+ * a repeat sign-up is the duplicate it is. Letter case is left to the database (`lower(email)`).
+ * `+tags` and dots are kept: they can be different mailboxes.
+ */
+function address(raw: string | null | undefined): string {
+  return stripHiddenCharacters(String(raw ?? "")).normalize("NFKC");
+}
+
+/** A format character (zero-width space, joiners, soft hyphen, BOM): invisible, never in an address. */
+const FORMAT_CHARACTER = /\p{Cf}/u;
+const LATIN = /\p{Script=Latin}/u;
+const CYRILLIC_OR_GREEK = /[\p{Script=Cyrillic}\p{Script=Greek}]/u;
+
+/**
+ * True when a label of the address's domain mixes Latin letters with Cyrillic or Greek ones
+ * (`exаmple.test` with a Cyrillic `а`): a look-alike of another address, refused. A domain in one
+ * script (`пример.рф`, an IDN the link rules accept too, src/lib/document/url.ts) is kept as typed.
+ */
+function mixesScripts(email: string): boolean {
+  const domain = email.slice(email.lastIndexOf("@") + 1);
+  return domain.split(".").some((label) => LATIN.test(label) && CYRILLIC_OR_GREEK.test(label));
 }
 
 /**
  * A visitor's submission, cleaned and checked (M17-06): trimmed, control and bidi characters
- * removed (a message keeps its line feeds; CRLF becomes LF), then validated by the kind's rules. A
+ * removed (a message keeps its line feeds; CRLF becomes LF), the name and message in NFC and the
+ * address in NFKC (finding 7), then validated by the kind's rules; an address holding a format
+ * character or a domain label that mixes Latin with Cyrillic or Greek is not valid. A
  * sign-up's message is always empty and its name too unless it asks for one. `values` is always the
  * cleaned input, so an error page can show what was typed.
  */
@@ -184,14 +213,19 @@ export function parseSubmission(
   | { ok: true; values: SubmissionValues }
   | { ok: false; values: SubmissionValues; errors: SubmissionErrors } {
   const values: SubmissionValues = {
-    email: line(raw.email),
+    email: address(raw.email),
     name: asksName(kind, askName) ? line(raw.name) : "",
     message: kind === "contact" ? lines(raw.message) : "",
   };
   const errors: SubmissionErrors = {};
 
   if (values.email === "") errors.email = SUBMISSION_MESSAGES.emailMissing;
-  else if (codePointLength(values.email) > SUBMISSION_LIMITS.email || !isEmailAddress(values.email))
+  else if (
+    codePointLength(values.email) > SUBMISSION_LIMITS.email ||
+    !isEmailAddress(values.email) ||
+    FORMAT_CHARACTER.test(values.email) ||
+    mixesScripts(values.email)
+  )
     errors.email = SUBMISSION_MESSAGES.emailInvalid;
 
   if (kind === "contact" && values.name === "") errors.name = SUBMISSION_MESSAGES.nameMissing;

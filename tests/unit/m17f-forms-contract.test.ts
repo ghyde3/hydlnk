@@ -192,6 +192,63 @@ describe("forms attack pass finding 4: one link rule, glued or not", () => {
   });
 });
 
+describe("forms attack pass finding 7: one spelling per address", () => {
+  const signup = (email: string) => parseSubmission("signup", false, { email });
+  const emailOf = (email: string) => {
+    const parsed = signup(email);
+    return parsed.ok ? parsed.values.email : null;
+  };
+
+  it("NFKC on the address: full-width letters and a decomposed accent read as the plain ones", () => {
+    expect(emailOf("ｖｉｓｉｔｏｒ＠ｅｘａｍｐｌｅ．ｔｅｓｔ")).toBe("visitor@example.test");
+    expect(emailOf("jose\u0301@example.test")).toBe("jos\u00e9@example.test");
+    expect(emailOf("jos\u00e9@example.test")).toBe("jos\u00e9@example.test");
+  });
+
+  it("NFC on the name and the message", () => {
+    const parsed = parseSubmission("contact", false, {
+      email: "a@example.test",
+      name: "Jose\u0301",
+      message: "cafe\u0301\nline two",
+    });
+    expect(parsed.values.name).toBe("Jos\u00e9");
+    expect(parsed.values.message).toBe("caf\u00e9\nline two");
+  });
+
+  it.each([
+    ["a zero-width space", "visi\u200btor@example.test"],
+    ["a zero-width joiner", "visitor@exa\u200dmple.test"],
+    ["a soft hyphen", "visi\u00adtor@example.test"],
+    ["a byte order mark inside", "visi\ufefftor@example.test"],
+    ["a word joiner", "visitor\u2060@example.test"],
+  ])("an address with %s is not valid", (_name, email) => {
+    const parsed = signup(email);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) expect(parsed.errors.email).toBe(SUBMISSION_MESSAGES.emailInvalid);
+  });
+
+  it("a domain label mixing Latin with Cyrillic or Greek is not valid; one script is", () => {
+    for (const email of [
+      "visitor@ex\u0430mple.test", // Cyrillic a
+      "visitor@examp\u0406e.test", // Cyrillic I
+      "visitor@\u03bfpen.example", // Greek omicron
+    ]) {
+      expect(signup(email).ok, email).toBe(false);
+    }
+    expect(emailOf("visitor@\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444")).toBe(
+      "visitor@\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444",
+    );
+    expect(emailOf("\u0432\u0430\u0441\u044f@example.test")).toBe(
+      "\u0432\u0430\u0441\u044f@example.test",
+    );
+  });
+
+  it("+tags and dots stay distinct addresses (they can be different mailboxes)", () => {
+    expect(emailOf("visitor+news@example.test")).toBe("visitor+news@example.test");
+    expect(emailOf("vis.itor@example.test")).toBe("vis.itor@example.test");
+  });
+});
+
 describe("M17-04 the path helpers", () => {
   it("the action and the open marker", () => {
     expect(formActionPath(PAGE, "formSign01")).toBe(`/f/${PAGE}/formSign01`);

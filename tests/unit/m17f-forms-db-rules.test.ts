@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { isEmailAddress, stripHiddenCharacters } from "@/lib/document";
+import { parseSubmission } from "@/lib/forms/contract";
 import { localPsql } from "../../scripts/lib/local-db";
-import { stackIsUp } from "./publish-support";
+import { removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import { adminClient, publishedOwner, record } from "./m17f-forms-db-support";
 
 /**
  * Review B8: the app and the database refuse one set of characters. The checks of
@@ -76,5 +78,44 @@ describe.skipIf(!run)(
       }
       expect(refused.has(0x2028)).toBe(true);
     }, 120_000);
+
+    it("an address the app normalises (NFKC) never holds a code point the email check refuses (finding 7)", async () => {
+      const refused = await matching("[[:space:][:cntrl:]]");
+      for (const c of ALL) {
+        const parsed = parseSubmission("signup", false, {
+          email: `a${String.fromCodePoint(c)}b@example.test`,
+        });
+        if (!parsed.ok) continue;
+        for (const ch of parsed.values.email) {
+          expect(refused.has(ch.codePointAt(0)!), c.toString(16)).toBe(false);
+        }
+      }
+    }, 120_000);
+
+    describe("the real store sees one spelling per address (finding 7)", () => {
+      const admin = adminClient();
+      const owners: TestOwner[] = [];
+      afterAll(async () => {
+        await removeOwners(admin, owners);
+      });
+
+      it("full-width, decomposed and upper-case spellings of a stored address are duplicates", async () => {
+        const owner = await publishedOwner(admin, "fnorm");
+        owners.push(owner);
+        const send = (email: string) => {
+          const parsed = parseSubmission("signup", false, { email });
+          if (!parsed.ok) return Promise.resolve("refused by the app");
+          return record(admin, owner, parsed.values.email);
+        };
+        expect(await send("jos\u00e9@example.test")).toBe("stored");
+        expect(await send("jose\u0301@example.test")).toBe("duplicate");
+        expect(await send("ｊｏｓé＠ｅｘａｍｐｌｅ．ｔｅｓｔ")).toBe("duplicate");
+        expect(await send("JOS\u00c9@EXAMPLE.TEST")).toBe("duplicate");
+        expect(await send("jos\u200b\u00e9@example.test")).toBe("refused by the app");
+        expect(await send("jos\u00e9@ex\u0430mple.test")).toBe("refused by the app");
+        // A +tag is another mailbox: stored.
+        expect(await send("jos\u00e9+news@example.test")).toBe("stored");
+      }, 60_000);
+    });
   },
 );
