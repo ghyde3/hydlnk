@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
-import { isClientModule, listFiles, rel, ROOT, walk } from "./support/module-graph";
+import { isClientModule, listFiles, rel, ROOT, stripComments, walk } from "./support/module-graph";
 
 /**
  * M9-14: the rules of CLAUDE.md's "Dependencies" section, held by tests. It reads files and
@@ -362,6 +362,17 @@ describe("M9-14 the tenant boundary: a public page reaches server-render package
     // the editor preview that sits in the same folder and is never imported by the render path.
     const client = [...live.files].filter(([, source]) => isClientModule(source)).map(([file]) => rel(file));
     expect(client).toEqual([]);
+  });
+
+  it("marked is reached through the one lexer module only, which lexes and never renders (Wave B)", () => {
+    // The allowlist above is by package. This pins what it means for `marked`: one importer on the
+    // render path, which builds tokens and has no call that turns Markdown into an HTML string.
+    const lexer = "src/lib/blog/markdown.ts";
+    expect([...(graph.packages.get("marked") ?? [])]).toEqual([lexer]);
+    expect([...(live.packages.get("marked") ?? [])]).toEqual([lexer]);
+    const source = stripComments(read(lexer));
+    expect(source).not.toMatch(/\.parse(?:Inline)?\s*\(|\bparser\s*\(|\bRenderer\b|\bmarked\s*\(/);
+    expect(source).toMatch(/\.lexer\(/);
   });
 
   it("the packages the routes themselves reach are on the allowlist too (the narrower, real graph)", () => {
