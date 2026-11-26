@@ -114,13 +114,28 @@ describe.skipIf(!run)("publish_design, and publish_page keeps its meaning (local
       expect(asText.isError, JSON.stringify(asText.error)).toBe(false);
     });
 
+    it("designRev 0 is real: a live design at rev 0 publishes with the 0 get_page prints", async () => {
+      const { o } = await liveSite("pd-zero");
+      // A design no one has edited since the site was made is at rev 0 (the document default).
+      const page = await h.admin.from("pages").select("draft").eq("id", o.pageId).single();
+      expect(page.error).toBeNull();
+      const zeroed = await h.admin
+        .from("pages")
+        .update({ draft: { ...(page.data!.draft as Record<string, unknown>), rev: 0 } })
+        .eq("id", o.pageId);
+      expect(zeroed.error).toBeNull();
+      expect(await designRevOf(o)).toBe(0);
+      const out = await h.call("publish_design", { pageId: o.pageId, ifDesignRev: 0 }, o);
+      expect(out.isError, JSON.stringify(out.error)).toBe(false);
+    });
+
     it("a stale rev is conflict, a missing one invalid_input: nothing is published and no tag is expired", async () => {
       const { o } = await liveSite("pd-stale");
       const stale = await designRevOf(o);
       await h.call("update_profile", { pageId: o.pageId, bio: "Edited after the read" }, o);
       const before = await h.siteSnapshot(o.pageId);
       mocks.tags.length = 0;
-      for (const ifDesignRev of [stale, "0", "nonsense", 999_999, null]) {
+      for (const ifDesignRev of [stale, "0", 0, "nonsense", 999_999]) {
         const out = await h.call("publish_design", { pageId: o.pageId, ifDesignRev }, o);
         expect(out.error, String(ifDesignRev)).toEqual({
           code: "conflict",
@@ -132,7 +147,8 @@ describe.skipIf(!run)("publish_design, and publish_page keeps its meaning (local
       const missing = await h.call("publish_design", { pageId: o.pageId }, o);
       expect(missing.error?.code).toBe("invalid_input");
       expect(missing.error!.issues![0]!.path).toBe("ifDesignRev");
-      for (const bad of [1.5, -1, true, { rev: 1 }, "x".repeat(41)]) {
+      // null is never a designRev get_page prints: it is refused before the gate.
+      for (const bad of [null, 1.5, -1, true, { rev: 1 }, "x".repeat(41)]) {
         const out = await h.call("publish_design", { pageId: o.pageId, ifDesignRev: bad }, o);
         expect(out.error?.code, JSON.stringify(bad)).toBe("invalid_input");
       }

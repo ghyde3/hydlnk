@@ -11,12 +11,14 @@ import { gateFailure } from "./publish-common";
 
 const input = z.strictObject({
   pageId: pageIdField,
-  // get_page prints designRev as a number; the gate compares its text. Both forms are taken.
+  // get_page prints designRev as a number; the gate compares its text. Both forms are taken. 0 is
+  // a real designRev (a new site's design starts at rev 0 and can be live before it is edited);
+  // null never is (get_page cannot read a design without a rev), so null is refused here rather
+  // than reaching the gate, where it would match a design that has no rev.
   ifDesignRev: z
     .union([z.string().max(40), z.number().int().min(0)], {
       error: "ifDesignRev is required: designRev from get_page.",
     })
-    .nullable()
     .describe(
       "designRev from get_page (the page object of Home). If the design changed since, the call is refused with conflict and nothing is published.",
     ),
@@ -37,7 +39,7 @@ export const publishDesignTool: ToolDefinition<typeof input> = {
     const result = await publishDesignCore(
       {
         pageId: site.id,
-        expectedRev: args.ifDesignRev === null ? null : String(args.ifDesignRev),
+        expectedRev: String(args.ifDesignRev),
         userId: call.userId,
       },
       { admin: call.admin },

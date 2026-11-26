@@ -1667,20 +1667,13 @@
         "ifDesignRev": {
           "anyOf": [
             {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 40
-                },
-                {
-                  "type": "integer",
-                  "minimum": 0,
-                  "maximum": 9007199254740991
-                }
-              ]
+              "type": "string",
+              "maxLength": 40
             },
             {
-              "type": "null"
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
             }
           ],
           "description": "designRev from get_page (the page object of Home). If the design changed since, the call is refused with conflict and nothing is published."
