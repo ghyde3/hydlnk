@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { makeOwner, moveHome, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
@@ -12,6 +13,15 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
  * transaction (M15-13).
  */
 const { run } = await stackIsUp();
+
+/** DDL for the one test that needs a trigger of its own: no API role may create one, so psql does. */
+function psql(sql: string): string {
+  return execFileSync(
+    "docker",
+    ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
+    { input: sql, encoding: "utf8" },
+  );
+}
 
 describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () => {
   let admin: SupabaseClient;
@@ -402,7 +412,7 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect(await count(o.pageId)).toBe(0);
   });
 
-  it("a delete that fails leaves the page fully in place (listed, live, in the menu, path held) and answers delete_failed (M15-13)", async () => {
+  it("a failure raised by the database in the middle of the delete leaves the page fully in place (listed, live, in the menu, path and revisions held) and answers delete_failed (M15-13)", async () => {
     const o = await owner("delfail", "pro");
     const a = await create(o);
     const b = await create(o);
@@ -423,6 +433,12 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
       .from("pages")
       .update({ draft: { ...draft, nav } as never })
       .eq("id", o.pageId);
+    // A stored revision of the page, so the delete has one to take (and the failure one to keep).
+    psql(
+      `insert into public.content_entry_revisions (entry_id, site_id, rev, snapshot, source)
+         select e.id, e.site_id, e.rev, e.draft, 'system' from public.content_entries e
+          where e.id = '${a.id}' on conflict do nothing;`,
+    );
     const state = async () => {
       const entry = await admin
         .from("content_entries")
@@ -454,31 +470,62 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect(before.entry).toMatchObject({ deleted_at: null });
     expect(before.entry!.published).not.toBeNull();
     expect(before.paths!.length).toBeGreaterThan(0);
+    expect(before.revisions!.length).toBeGreaterThan(0);
 
-    // An admin client whose delete call fails the way a statement timeout does: the one statement
-    // is rolled back by the database, so nothing of the delete is applied.
-    const calls: string[] = [];
-    const failing = new Proxy(admin, {
-      get(t, prop) {
-        const value = Reflect.get(t, prop, t);
-        if (prop !== "rpc") return typeof value === "function" ? value.bind(t) : value;
-        return (fn: string, args: unknown) => {
-          calls.push(fn);
-          if (fn !== "delete_page_entry") return t.rpc(fn, args as never);
-          return Promise.resolve({ data: null, error: { code: "57014", message: "timeout" } });
-        };
+    // A real failure in the middle of the delete, raised by the database itself: a trigger this test
+    // creates for this one row and drops again (as pgTAP 211 and 212 do). Twice, at two places:
+    //   1. on the entry row, after its term links and its path claims were deleted;
+    //   2. on the menu write to the site row, after the entry row itself was deleted.
+    const tag = a.id.replace(/-/g, "").slice(0, 12);
+    const places = [
+      {
+        name: `zz_boom_entry_${tag}`,
+        on: `before delete on public.content_entries for each row when (old.id = '${a.id}')`,
       },
-    });
-    const first = await core.deleteSubPageWithClient(failing as never, {
-      userId: o.userId,
-      siteId: o.pageId,
-      subPageId: a.id,
-    });
-    expect(first).toMatchObject({ ok: false, status: 500, error: "delete_failed" });
-    expect(calls).toContain("delete_page_entry");
-    // Nothing moved: the entry is not trashed, its live copy, paths and revisions are there, and
-    // Home's menu still names it.
-    expect(await state()).toEqual(before);
+      {
+        name: `zz_boom_menu_${tag}`,
+        on: `before update of draft on public.pages for each row when (old.id = '${o.pageId}')`,
+      },
+    ];
+    for (const place of places) {
+      const table = place.on.includes("public.pages") ? "public.pages" : "public.content_entries";
+      psql(
+        `create function public.${place.name}() returns trigger language plpgsql as $f$
+           begin raise exception 'boom in the middle of the delete' using errcode = 'P0001'; end; $f$;
+         create trigger ${place.name} ${place.on} execute function public.${place.name}();`,
+      );
+      try {
+        // The database call itself fails this way, straight from the function.
+        const raw = await admin.rpc("delete_page_entry", {
+          p_entry_id: a.id,
+          p_site_id: o.pageId,
+          p_owner_id: o.userId,
+        });
+        expect(raw.error, place.name).toMatchObject({
+          code: "P0001",
+          message: "boom in the middle of the delete",
+        });
+        expect(await state(), place.name).toEqual(before);
+
+        const failed = await core.deleteSubPageWithClient(admin as never, {
+          userId: o.userId,
+          siteId: o.pageId,
+          subPageId: a.id,
+        });
+        expect(failed, place.name).toMatchObject({
+          ok: false,
+          status: 500,
+          error: "delete_failed",
+        });
+        // Nothing moved: the entry is not trashed, its live copy, paths and revisions are there, and
+        // Home's menu still names it.
+        expect(await state(), place.name).toEqual(before);
+      } finally {
+        psql(
+          `drop trigger if exists ${place.name} on ${table}; drop function if exists public.${place.name}();`,
+        );
+      }
+    }
 
     // The same delete with a working database removes it for good.
     const retry = await core.deleteSubPageWithClient(admin as never, {
@@ -493,7 +540,7 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     expect(after.data!.draft).toMatchObject({ nav: { show: true, items: [b.id] } });
   });
 
-  it("a real failure inside the delete rolls the whole delete back, and a page left in the trash is deleted too (M15-13)", async () => {
+  it("the wrong site is refused (P0002) before anything is written, and a page left in the trash is deleted too (M15-13)", async () => {
     const o = await owner("delreal");
     const a = await create(o);
     const b = await create(o);
