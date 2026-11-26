@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { clientEnv } from "@/lib/env/client";
 import { appOrigin } from "@/lib/routing/urls";
-import { listPageRevisionsWithClient } from "@/lib/site-pages/entry-revisions-core";
+import { PAGE_OR_POST, listPageRevisionsWithClient } from "@/lib/site-pages/entry-revisions-core";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +37,7 @@ export async function GET(
       userId: user.id,
       siteId: id,
       entryId,
+      typeKeys: PAGE_OR_POST,
     });
     return NextResponse.json(out.body, { status: out.status, headers: NO_STORE });
   } catch (error) {

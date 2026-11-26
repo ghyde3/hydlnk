@@ -15,6 +15,10 @@ export type EntrySaveAnswer =
   | { kind: "invalid" }
   /** The path is taken or reserved (HL012): the same draft is refused again, so it is not retried. */
   | { kind: "path" }
+  /** A post's slug is taken or reserved: the message belongs to the slug field (M16-15). */
+  | { kind: "slug"; message: string }
+  /** A plan limit refused the write (M16-12). */
+  | { kind: "limit"; message: string }
   /** The account is suspended: nothing can be saved until support lifts it. */
   | { kind: "suspended" }
   | { kind: "error" };
@@ -57,6 +61,9 @@ export async function postEntryDraft(
     case "path":
     case "suspended":
       return { kind: body.kind };
+    case "slug":
+    case "limit":
+      return { kind: body.kind, message: typeof body.message === "string" ? body.message : "" };
     case "blocked":
       return { kind: "blocked", hosts: strings(body.hosts), blockIds: strings(body.blockIds) };
     default:
