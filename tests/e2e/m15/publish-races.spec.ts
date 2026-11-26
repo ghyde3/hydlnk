@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { emptyUser, openEditor, reloadEditor, statusChip } from "../m2/editor-helpers";
+import { emptyUser, openEditor, pageRow, reloadEditor, statusChip } from "../m2/editor-helpers";
 import { PUBLISH_CONFLICT_MESSAGE } from "@/components/workspace/publish-note";
 import { STALE_MESSAGE } from "@/lib/editor/messages";
 import { adminClient } from "../fixtures/auth";
@@ -377,8 +377,16 @@ test("M15-10 A2: a write by someone else right after Publish all changes is a co
     .getByTestId("workspace-toolbar")
     .getByRole("button", { name: "Publish", exact: true })
     .click();
-  await (await answered).finished();
-  // Time for a read the editor might still make after the answer to be sent (and held).
+  // The publish is done once its answer starts and the site reads live in the database: Next.js
+  // sends an action's headers after the action ran. Not `response.finished()`: the body goes on
+  // with the re-rendered /editor tree and ends only when the server's pending cache work does,
+  // which the editor does not wait for (on CI's production build it did not end in three minutes).
+  expect((await answered).status()).toBe(200);
+  await expect
+    .poll(async () => (await pageRow(user.pageId)).published_at, { timeout: 30_000 })
+    .not.toBeNull();
+  // Time for the editor to take the answer, and for a read it might still make after it to be sent
+  // (and held). A read made later than this is held and counted all the same.
   await page.waitForTimeout(1_000);
 
   // Another writer (an MCP tool) saves the sub-page: a new draft at the next rev.
