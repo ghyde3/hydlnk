@@ -191,7 +191,7 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
       <div
         data-testid={TOOLBAR_ROW_TEST_ID}
         {...{ [PIN_ATTRIBUTE]: "" }}
-        className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-1.5 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
+        className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-1 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
       >
         {/*
           The DOM order is the order the eye reads at each width, so Tab follows it (WCAG 2.4.3). At
@@ -202,6 +202,12 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
           client render write the desktop order, and the `order-*` classes draw the phone row the
           same before and after the move; at 760px and up no node ever moves, so focus in the menus
           is never disturbed.
+
+          The phone row's gaps are 4px (row and Undo/Redo), not 6 and 8: at 390px that leaves the
+          status slot 174px for the 165px the longest chip, "Unpublished changes", and its chevron
+          need in Public Sans. With 6 and 8 the slot was 166px, and the chip wrapped to two lines
+          whenever the text ran 2px wider (a fallback font does, before the swap). Under about 381px
+          the chip wraps inside its 44px toggle; nothing is cut and the row does not scroll.
         */}
         {(phoneOrder
           ? (["save", "history", "status"] as const)
@@ -242,7 +248,7 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
           ) : (
             <div
               key="history"
-              className="order-1 flex shrink-0 items-center gap-2 hl:order-none hl:ml-auto min-[1280px]:ml-0"
+              className="order-1 flex shrink-0 items-center gap-1 hl:order-none hl:ml-auto hl:gap-2 min-[1280px]:ml-0"
             >
               <UndoRedoButtons controls={undoRedo} />
               <div className="hidden hl:block">
