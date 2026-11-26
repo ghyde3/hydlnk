@@ -112,3 +112,81 @@ describe("bodyBytes", () => {
     expect(bodyBytes("😀")).toBe(4);
   });
 });
+
+describe("text typed like Markdown block syntax stays text (it is escaped at the line start)", () => {
+  const para = (...content: unknown[]) => ({ type: "paragraph", content });
+  const text = (value: string) => ({ type: "text", text: value });
+  const doc = (...content: unknown[]) => ({ type: "doc", content });
+  const textOf = (node: unknown): string => {
+    const held = node as { text?: string; content?: unknown[]; type?: string };
+    if (held.type === "hardBreak") return "\n";
+    return (held.text ?? "") + (held.content ?? []).map(textOf).join("");
+  };
+
+  const TYPED = [
+    "# text",
+    "###### six",
+    "#",
+    "> not a quote",
+    ">tight",
+    "- not a list",
+    "+ not a list",
+    "1. not a list",
+    "12) not a list",
+    "---",
+    "- - -",
+    "===",
+  ];
+  for (const typed of TYPED) {
+    it(`a paragraph typed as ${JSON.stringify(typed)} reopens in the rich editor as the same text`, () => {
+      const written = toMarkdown(doc(para(text(typed))) as never);
+      expect(canEditRich(written), written).toBe(true);
+      const back = fromMarkdown(written);
+      expect(back.content).toHaveLength(1);
+      expect(back.content![0]!.type).toBe("paragraph");
+      expect(textOf(back)).toBe(typed);
+      expect(toMarkdown(back)).toBe(written);
+    });
+  }
+
+  it("a line after a hard break is a line start too (no setext heading, no rule)", () => {
+    for (const second of ["---", "===", "# x", "- x"]) {
+      const written = toMarkdown(
+        doc(para(text("Title"), { type: "hardBreak" }, text(second))) as never,
+      );
+      expect(canEditRich(written), written).toBe(true);
+      const back = fromMarkdown(written);
+      expect(back.content!.map((node) => node.type)).toEqual(["paragraph"]);
+      expect(textOf(back)).toBe(`Title\n${second}`);
+    }
+  });
+
+  it("the same inside a list item and a quote", () => {
+    const item = { type: "listItem", content: [para(text("# in a list"))] };
+    const list = toMarkdown(doc({ type: "bulletList", content: [item] }) as never);
+    expect(canEditRich(list), list).toBe(true);
+    expect(textOf(fromMarkdown(list))).toBe("# in a list");
+    const quote = toMarkdown(
+      doc({ type: "blockquote", content: [para(text("1. quoted"))] }) as never,
+    );
+    expect(canEditRich(quote), quote).toBe(true);
+    expect(textOf(fromMarkdown(quote))).toBe("1. quoted");
+  });
+
+  it("escapes nothing that is not syntax, so ordinary text is written as typed", () => {
+    for (const plain of [
+      "#hashtag first",
+      "-5 degrees",
+      "1.5 litres",
+      "a # b - c = d",
+      "+1",
+    ]) {
+      expect(toMarkdown(doc(para(text(plain))) as never)).toBe(plain);
+    }
+  });
+
+  it("real headings, lists, quotes and rules are written as before", () => {
+    const body = "## Heading\n\n- one\n- two\n\n1. first\n2. second\n\n> quote\n\n---\n\nEnd.";
+    expect(toMarkdown(fromMarkdown(body))).toBe(body);
+  });
+});

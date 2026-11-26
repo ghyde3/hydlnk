@@ -17,9 +17,48 @@ import { BODY_HEADING_LEVELS, bodySchema } from "./extensions";
  * body the same way.
  */
 
+/**
+ * A line of a paragraph that Markdown would read as the start of a block: a heading ("# text"), a
+ * list item ("- x", "+ x", "1. x", "1) x"), a rule ("---", "- - -") or the underline of a setext
+ * heading ("===" or "---" under a line of text). The serializer escapes inline syntax only, so a
+ * paragraph typed like one of these came back as that block, or (a level 1 heading) sent the post
+ * to the plain Markdown box. The first character that makes it syntax gets a backslash, which
+ * Markdown reads back as the character itself. "*", "`", "~", "[" and "<" are already escaped by the
+ * serializer, and ">" is written as an entity, so quotes, fences and HTML need nothing here.
+ */
+const BLOCK_START =
+  /^( {0,3})(?:(#{1,6}(?=[ \t]|$))|([-+])(?=[ \t]|$)|(\d{1,9})([.)])(?=[ \t]|$)|((?:-[ \t]*){3,}$|=+[ \t]*$))/;
+
+function escapeLineStart(line: string): string {
+  return line.replace(
+    BLOCK_START,
+    (match, indent: string, hashes, bullet, digits, delimiter, rule) => {
+      if (hashes !== undefined) return `${indent}\\${hashes}`;
+      if (bullet !== undefined) return `${indent}\\${bullet}`;
+      if (digits !== undefined) return `${indent}${digits}\\${delimiter}`;
+      if (rule !== undefined) return `${indent}\\${rule}`;
+      return match;
+    },
+  );
+}
+
+/** The Markdown of one paragraph, with every line that would start a block escaped. */
+export function escapeBlockStarts(paragraph: string): string {
+  return paragraph.split("\n").map(escapeLineStart).join("\n");
+}
+
 let shared: MarkdownManager | null = null;
 function manager(): MarkdownManager {
-  shared ??= new MarkdownManager({ extensions: bodySchema() });
+  if (shared) return shared;
+  const made = new MarkdownManager({ extensions: bodySchema() });
+  // Paragraphs are written by the library's own renderer; its result is escaped on the way out.
+  // The manager calls this method for every node, nested ones included (list items, quotes).
+  const render = made.renderNodeToMarkdown.bind(made);
+  made.renderNodeToMarkdown = (node, ...rest) => {
+    const written = render(node, ...rest);
+    return node.type === "paragraph" ? escapeBlockStarts(written) : written;
+  };
+  shared = made;
   return shared;
 }
 

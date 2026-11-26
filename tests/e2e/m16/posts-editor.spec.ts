@@ -182,3 +182,28 @@ test("M16-13 a direct database edit of the entry shows the conflict notice and n
     excerpt: "From elsewhere",
   });
 });
+
+test("M16-13 a line typed like Markdown syntax is saved escaped and reopens in the rich editor", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "px");
+  const id = await seedPost(user.pageId, { title: "Escapes", slug: "escapes", body: "" });
+  await openPost(page, id);
+  const body = page.getByTestId(POST_TEST_IDS.body);
+  await body.click();
+  // "# " makes no heading here (the body has levels 2 to 4), so this is a paragraph of text.
+  await page.keyboard.type("# not a heading");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Plain after.");
+  await expectSaved(page);
+  expect((await postRow(id)).draft.body).toBe("\\# not a heading\n\nPlain after.");
+
+  await page.reload();
+  await waitForPostEditor(page);
+  await expect(page.getByTestId(POST_TEST_IDS.bodySource)).toHaveCount(0);
+  await expect(page.getByTestId(POST_TEST_IDS.body).locator("p").first()).toHaveText(
+    "# not a heading",
+  );
+  await expect(page.getByTestId(POST_TEST_IDS.body).locator("h1, h2")).toHaveCount(0);
+});

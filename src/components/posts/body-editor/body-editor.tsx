@@ -10,7 +10,7 @@ import { mediaOrigin, mediaUrl, storageUrl } from "@/lib/media/url";
 import { mediaPathOf } from "@/lib/themes/bg-image";
 import { bodyExtensions } from "./extensions";
 import { cleanAlt } from "./image-node";
-import { canEditRich } from "./markdown";
+import { canEditRich, toMarkdown } from "./markdown";
 import { SourceBox } from "./source-box";
 import { BodyToolbar, EMPTY_MODEL, readModel } from "./toolbar";
 
@@ -110,7 +110,9 @@ function RichBody({ initial, onChange, disabled, ownerId, labelledBy }: BodyEdit
     },
     onUpdate: ({ editor: current }) => {
       if (!touched.current) return;
-      emit.current(current.getMarkdown().replace(/\n+$/, ""));
+      // Written by the same serializer the loss guard checks with (`toMarkdown`), which escapes a
+      // line typed like block syntax ("# text"), so what is saved reopens here as it was typed.
+      emit.current(toMarkdown(current.getJSON()).replace(/\n+$/, ""));
     },
   });
   useEffect(() => {
