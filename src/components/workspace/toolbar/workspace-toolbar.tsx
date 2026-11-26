@@ -201,6 +201,7 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
               {/* At every width: without it the chip reads as a plain badge on a phone. */}
               <ChevronDown
                 aria-hidden="true"
+                focusable="false"
                 data-testid="publish-bar-chevron"
                 size={14}
                 className={`shrink-0 text-text-2 ${publishBarOpen ? "rotate-180" : ""}`}
