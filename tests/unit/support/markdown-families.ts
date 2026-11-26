@@ -215,6 +215,7 @@ export const ATTACKS: Record<string, (n: number) => string> = {
     "x + www.._ (no host character, a `_` run)": "www._",
     "x + ftp://* (no host character, a `*` run)": "ftp://*",
     "x + www.a( (ends at an unclosed `(`)": "www.a(",
+    "x + www.a(* (ends at an unclosed `(`, then a `*` that opens)": "www.a(*",
   }),
   // Blocks: nesting, lazy lines, setext lookahead, lists.
   "> deep (262,144)": () => "> ".repeat(262144),

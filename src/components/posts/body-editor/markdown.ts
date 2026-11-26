@@ -256,9 +256,11 @@ function mergeText(content: JSONContent[]): JSONContent[] {
     const last = merged.at(-1);
     if (last?.type === "text" && node.type === "text" && sameMarks(last, node)) {
       const joined = { ...last, text: (last.text ?? "") + (node.text ?? "") };
-      // The links of both halves, the second's moved past the first's text.
+      // The links of both halves, the second's moved past the first's text. The first's list is
+      // taken over (its node is replaced here), so joining many links stays linear.
       const shift = (last.text ?? "").length;
-      const runs = [...(linkRuns.get(last) ?? []), ...(linkRuns.get(node) ?? []).map((run) => ({ ...run, start: run.start + shift, end: run.end + shift }))];
+      const runs = linkRuns.get(last) ?? [];
+      for (const run of linkRuns.get(node) ?? []) runs.push({ ...run, start: run.start + shift, end: run.end + shift });
       if (runs.length > 0) linkRuns.set(joined, runs);
       merged[merged.length - 1] = joined;
     } else merged.push(node);
