@@ -152,10 +152,10 @@ export const DESIGN_READERS: Record<string, Reader> = {
     why: "the design and its rev for record and restore",
     blocksOn: {
       "draft.data": "the parsed version being restored, not the site row",
-      // M15-10: a restore writes the design only, and sends the frozen blocks back exactly as
-      // stored (a write that changed them is refused, HL013). They are carried, never used.
-      storedDraft:
-        "restore: the frozen blocks go back unchanged in the same write; never read for content",
+      // M15-10: a restore writes the design only. A moved site's frozen blocks are not read at all
+      // (the write omits them). `unmovedDraft` exists only inside the branch for a site with NO Home
+      // entry, whose blocks still live in pages.draft; a test below pins that branch.
+      unmovedDraft: "restore of a site that was never moved: its blocks are in pages.draft",
     },
     entryRows: { row: "a page entry row" },
     handsTo: { nextRev: "reads the design's rev, nothing else" },
@@ -615,6 +615,25 @@ describe("M15-05: no code reads the frozen copies", () => {
       for (const hit of hits) offenders.push(`${file}: ${hit}`);
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("version restore reads pages.draft blocks only for a site with no Home entry", () => {
+    const source = readFileSync("src/lib/versions/core.ts", "utf8");
+    // The one receiver the allowlist names is declared once, inside the not-moved branch.
+    expect(source.match(/const unmovedDraft\b/g)).toHaveLength(1);
+    const branch = source.indexOf("if (moved.data !== true) {");
+    expect(branch).toBeGreaterThan(-1);
+    const end = source.indexOf("\n  }\n", branch);
+    const body = source.slice(branch, end);
+    expect(body).toContain("const unmovedDraft");
+    expect(body).toContain("unmovedDraft.blocks");
+    // Nothing outside that branch names it, and the branch's condition is the database's own answer.
+    expect(source.replace(body, "")).not.toContain("unmovedDraft");
+    expect(source).toMatch(
+      /const moved = await open\.admin\.rpc\("site_has_home_entry", \{ p_site: open\.pageId \}\)/,
+    );
+    // The receiver the scan used to allow for every site is gone.
+    expect(source).not.toMatch(/storedDraft/);
   });
 
   it("scans the tree (a sanity check that the walk finds the code it is meant to guard)", () => {

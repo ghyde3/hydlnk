@@ -228,6 +228,69 @@ describe.skipIf(!run || !dockerDb())(
       expect(await entry(w.aboutId)).toEqual(before.about);
     });
 
+    /** The admin client, recording every draft sent to `pages` in an update. */
+    const recordingPages = () => {
+      const payloads: Record<string, unknown>[] = [];
+      const spy = new Proxy(admin, {
+        get(target, prop, receiver) {
+          if (prop !== "from") return Reflect.get(target, prop, receiver);
+          return (table: string) => {
+            const builder = target.from(table);
+            if (table !== "pages") return builder;
+            return new Proxy(builder, {
+              get(inner, key, self) {
+                if (key !== "update") return Reflect.get(inner, key, self);
+                return (payload: { draft?: Record<string, unknown> }, ...rest: unknown[]) => {
+                  if (payload.draft) payloads.push(payload.draft);
+                  return (inner.update as (...a: unknown[]) => unknown)(payload, ...rest);
+                };
+              },
+            });
+          };
+        },
+      });
+      return { spy, payloads };
+    };
+
+    it("a moved site: the design write carries no blocks, and the database keeps the frozen copy", async () => {
+      const w = await world("vd5");
+      const siteBefore = await site(w.o.pageId);
+      expect(siteBefore.draft.blocks).toHaveLength(1);
+      const { spy, payloads } = recordingPages();
+      expect(await restore(w, spy)).toMatchObject({ ok: true });
+      // The frozen copy of a moved site is never read: nothing of it is sent back.
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]).not.toHaveProperty("blocks");
+      expect(payloads[0]).toMatchObject({ profile: { name: "Restored" }, rev: 5 });
+      expect((await site(w.o.pageId)).draft.blocks).toEqual(siteBefore.draft.blocks);
+    });
+
+    it("a site with no Home entry keeps its blocks: they are in pages.draft and go back unchanged", async () => {
+      // makeOwner alone gives the layout before the move: the site's blocks live in `pages.draft`.
+      const o = await makeOwner(admin, "vd6", undefined, "pro");
+      owners.push(o);
+      const current = draftOf("Current", [link("home-link-001", "Only here")], { rev: 4 } as never);
+      const set = await admin
+        .from("pages")
+        .update({ draft: current as never })
+        .eq("id", o.pageId);
+      if (set.error) throw new Error(set.error.message);
+      const doc = toPublishForm(draftOf("Restored", [link("home-link-001", "Old")]) as never, null);
+      const versionId = psql(
+        `insert into public.page_versions (page_id, version_no, published_at, document, sub_pages)
+       values ('${o.pageId}', 1, now(), $j$${JSON.stringify(doc)}$j$::jsonb, '[]'::jsonb) returning id;`,
+      )
+        .split("\n")[0]!
+        .trim();
+      const { spy, payloads } = recordingPages();
+      expect(await restore({ o, versionId }, spy)).toMatchObject({ ok: true });
+      expect(payloads).toHaveLength(1);
+      expect(payloads[0]).toHaveProperty("blocks");
+      const after = await site(o.pageId);
+      expect(after.draft.profile.name).toBe("Restored");
+      expect(after.draft.blocks).toEqual((current as any).blocks);
+    });
+
     it("the write is guarded by the draft rev: a design saved meanwhile is a conflict, nothing written", async () => {
       const w = await world("vd2");
       const seen: { column: string; value: unknown }[] = [];

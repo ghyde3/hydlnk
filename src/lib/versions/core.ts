@@ -354,13 +354,23 @@ export async function restorePageVersionCore(
   const draft = draftDocSchema.safeParse(versionToDraft(checked.doc, theme, nextRev(open.draft)));
   if (!draft.success) return failed("error");
 
-  // The stored frozen blocks stay where they are: the write sends them back unchanged (a write that
-  // changed them would be refused, HL013), and a site with no Home entry keeps its blocks this way too.
+  // The write carries the design and no blocks. For a moved site (Home is a page entry) the frozen
+  // copy in `pages.draft` is never read: the database keeps it for a draft that omits it
+  // (guard_frozen_page_blocks). Only a site that has NOT been moved, whose blocks still live in
+  // `pages.draft` with nothing guarding them, gets them sent back unchanged, or the restore would
+  // drop them.
   const { blocks: _none, ...design } = draft.data;
   void _none;
-  const storedDraft = (open.draft ?? {}) as Record<string, unknown>;
-  const designDraft: Record<string, unknown> =
-    "blocks" in storedDraft ? { ...design, blocks: storedDraft.blocks } : design;
+  const moved = await open.admin.rpc("site_has_home_entry", { p_site: open.pageId });
+  if (moved.error) {
+    console.error("[versions] reading whether the site was moved failed", moved.error.code);
+    return failed("error");
+  }
+  let designDraft: Record<string, unknown> = design;
+  if (moved.data !== true) {
+    const unmovedDraft = (open.draft ?? {}) as Record<string, unknown>;
+    if ("blocks" in unmovedDraft) designDraft = { ...design, blocks: unmovedDraft.blocks };
+  }
   // The line the database holds (`pages_draft_integrity`, 20261002000001) and the editor's autosave
   // keeps: refused here, before any write, instead of failing there with 23514.
   if (jsonbTextBytes(designDraft) > LIMITS.draftBytes) return failed("error");
