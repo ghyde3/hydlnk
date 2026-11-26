@@ -68,6 +68,7 @@ import {
   type WorkspaceValue,
 } from "./workspace-context";
 import type { SiteRole } from "@/lib/team/constants";
+import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import { failureTab } from "./failure-tab";
 import {
   PUBLISH_CONFLICT_MESSAGE,
@@ -742,11 +743,14 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       ? null
       : publishNote;
 
-  const publishDisabledReason = suspended
-    ? SUSPENDED_REASON
-    : blocked !== null
-      ? BLOCKED_PUBLISH_DISABLED_REASON
-      : null;
+  // Wave F (M19-10): an editor sees why instead of a working Publish (the server refuses anyway).
+  const publishDisabledReason = !props.canPublish
+    ? PUBLISH_FORBIDDEN_MESSAGE
+    : suspended
+      ? SUSPENDED_REASON
+      : blocked !== null
+        ? BLOCKED_PUBLISH_DISABLED_REASON
+        : null;
 
   // The page's current social image, as the live page's metadata names it (M2-30).
   const publishedMs = publishedAt ? Date.parse(publishedAt) : Number.NaN;

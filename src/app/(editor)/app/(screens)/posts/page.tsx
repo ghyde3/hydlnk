@@ -23,7 +23,13 @@ export default async function PostsPage() {
       <ScreenHeader breadcrumb={`${current.name} · Blog`} title="Posts" />
       <ScreenBody>
         {/* Keyed by site: switching pages starts from that site's posts. */}
-        <PostsScreen key={current.id} siteId={current.id} plan={plan} {...data} />
+        <PostsScreen
+          key={current.id}
+          siteId={current.id}
+          plan={plan}
+          isOwner={current.access.isOwner}
+          {...data}
+        />
       </ScreenBody>
     </>
   );

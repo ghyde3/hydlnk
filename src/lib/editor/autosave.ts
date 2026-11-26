@@ -34,6 +34,7 @@ export type SaveStatus =
   | "storage-full" // the account's 64 MiB cap (HL009): not retried until something is removed
   | "invalid" //    the draft does not pass the draft schema: not sent
   | "conflict" //   another tab saved first; reload to continue
+  | "lost-access" // the site is no longer the user's to edit (removed, paused; Wave F, M19-11)
   | "signed-out" // the session ended (the write was refused with 401): edits stay, no retry loop
   | "blocked"; //   a link points to a blocked site (M5-03): refused for good, until it is edited
 
@@ -41,6 +42,8 @@ export type SaveStatus =
 export type SaveResult =
   | { kind: "ok" }
   | { kind: "conflict" }
+  /** The write matched no row and the site is no longer readable: access ended (M19-11). Never retried. */
+  | { kind: "lost-access" }
   | { kind: "too-large" }
   /** The account's 64 MiB cap (HL009) on page entries, Home's blocks included: not retried. */
   | { kind: "storage-full" }
@@ -158,7 +161,12 @@ export class AutosaveQueue {
     this.version += 1;
     this.lastEditAt = this.now();
     // Keep the edits; the screen asks for a reload or a sign-in, and nothing is sent until then.
-    if (this.current === "conflict" || this.current === "signed-out") return;
+    if (
+      this.current === "conflict" ||
+      this.current === "signed-out" ||
+      this.current === "lost-access"
+    )
+      return;
     // After a failed write the indicator stays "Not saved" until a write succeeds; the retry timer
     // (already running) picks the new draft up.
     if (this.current === "error") return;
@@ -181,7 +189,13 @@ export class AutosaveQueue {
     if (this.current === "blocked") return false;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (this.inFlight) await this.inFlight;
-      if (this.current === "conflict" || this.current === "signed-out") return false;
+      if (
+        this.current === "conflict" ||
+        this.current === "signed-out" ||
+        this.current === "lost-access"
+      ) {
+        return false;
+      }
       if (!this.hasUnsaved) return stored();
       await this.run();
       if (this.current !== "pending" && this.current !== "saving") return stored();
@@ -327,6 +341,10 @@ export class AutosaveQueue {
       case "conflict":
         this.cancelTimer();
         this.setStatus("conflict");
+        return;
+      case "lost-access":
+        this.cancelTimer();
+        this.setStatus("lost-access");
         return;
       case "too-large":
         this.cancelTimer();

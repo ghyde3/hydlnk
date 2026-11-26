@@ -85,6 +85,8 @@ export function createDraftSaver(
           description: "",
           blocks,
         });
+        if (answer.kind === "missing")
+          return (await siteReadable(pageId)) ? { kind: "conflict" } : { kind: "lost-access" };
         const failed = blocksFailure(answer);
         if (failed) return failed;
         if (answer.kind === "ok") homeRev = answer.rev;
@@ -110,7 +112,9 @@ export function createDraftSaver(
       if (blocked) return { kind: "blocked", ...blocked };
       return error.code === "23514" ? { kind: "too-large" } : { kind: "error" };
     }
-    if (data.length === 0) return { kind: "conflict" };
+    // No row: another tab saved first, or (Wave F, M19-11) the site is no longer this user's to edit.
+    if (data.length === 0)
+      return (await siteReadable(pageId)) ? { kind: "conflict" } : { kind: "lost-access" };
     // A save may have dropped an image reference: ask the server to work off its cleanup queue once
     // the Undo window has passed (M5-14).
     scheduleMediaCleanup();
@@ -122,6 +126,19 @@ export function createDraftSaver(
       if (home && homeRev === sent && Number.isSafeInteger(rev) && rev >= 1) homeRev = rev;
     },
   });
+}
+
+/**
+ * Can the session still read the site (RLS: the owner, or a member whose access holds)? A failed read
+ * answers true, so a network error is never shown as lost access.
+ */
+async function siteReadable(pageId: string): Promise<boolean> {
+  const { data, error } = await createBrowserSupabase()
+    .from("pages")
+    .select("id")
+    .eq("id", pageId)
+    .maybeSingle();
+  return error !== null || data !== null;
 }
 
 /** The queue's result for a refused write of Home's blocks, or null when it was stored. */

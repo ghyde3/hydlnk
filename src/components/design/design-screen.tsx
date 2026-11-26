@@ -40,7 +40,7 @@ const STREAMING_TOKENS: ReadonlySet<keyof TokenSet> = new Set<keyof TokenSet>([
  * workspace's now (the toolbar and the shared preview column).
  */
 export function DesignTab() {
-  const { draft, editDraft, state, pageId, ownerId, library, themesLoad, themeDeleted, preview, themeTokens } =
+  const { draft, editDraft, state, pageId, ownerId, role, library, themesLoad, themeDeleted, preview, themeTokens } =
     useWorkspace();
   const stopPreview = preview.stop;
 
@@ -89,6 +89,7 @@ export function DesignTab() {
         previewingId={preview.theme?.id ?? null}
         onBeforeSave={() => stopPreview({ focus: false })}
         deletedNotice={themeDeleted || (library.deletedNotice && draft.theme.ref === null)}
+        canWrite={role === "owner"}
       />
       <DesignCard section="color" title="Colors">
         <ColorSection {...sectionProps} />

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/app/screen";
 import { PRODUCT_DOMAIN } from "@/lib/pages/plans";
 import { DeletePageDialog } from "./delete-page-dialog";
@@ -18,7 +19,16 @@ export interface PagesCardPage {
 export function PagesCard({ pages }: { pages: PagesCardPage[] }) {
   return (
     <Card className="flex flex-col gap-3.5">
-      <h2 className="text-sm font-semibold">Sites</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">Sites</h2>
+        {/* Wave F (M19-09): who works on the current site. */}
+        <Link
+          href="/members"
+          className="inline-flex min-h-11 items-center text-sm font-semibold text-ink underline"
+        >
+          Members
+        </Link>
+      </div>
       <ul className="flex flex-col">
         {pages.map((page) => (
           <li

@@ -71,7 +71,10 @@ function MoreItems({
 }) {
   const router = useRouter();
   // Rendered alone (the toolbar's unit tests), there is no workspace and nothing to unpublish.
-  const hasPublished = useOptionalWorkspace()?.hasPublished ?? false;
+  const workspace = useOptionalWorkspace();
+  // Unpublishing the site is the owner's (Wave F, B1): a member's menu has no Unpublish.
+  const hasPublished =
+    (workspace?.hasPublished ?? false) && (workspace?.role ?? "owner") === "owner";
   const plan = useAccountPlan();
   const { close } = useMenuApi();
   const needsPro = plan !== null && PLAN_LIMITS[plan].versionsKept === 0;

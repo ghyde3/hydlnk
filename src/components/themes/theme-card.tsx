@@ -29,6 +29,7 @@ export function ThemeCard({
   previewing = false,
   onRename,
   onDelete,
+  canWrite = true,
 }: {
   theme: ThemeRow;
   tag: "Applied" | "Edited" | null;
@@ -40,6 +41,8 @@ export function ThemeCard({
   /** Rename opens the screen's dialog; the button is the focus to return to. */
   onRename: (trigger: HTMLElement) => void;
   onDelete: (trigger: HTMLElement) => void;
+  /** The owner's saved themes are read-only for a member of the site (Wave F, G6). */
+  canWrite?: boolean;
 }) {
   const tokens = resolveTokens(theme.tokens, {});
   const applied = tag !== null;
@@ -54,7 +57,7 @@ export function ThemeCard({
       onSelect: onPreview,
     });
   }
-  if (!theme.system) {
+  if (!theme.system && canWrite) {
     items.push({ id: "theme-rename", label: "Rename", onSelect: onRename });
     items.push({ id: "theme-delete", label: "Delete", danger: true, onSelect: onDelete });
   }

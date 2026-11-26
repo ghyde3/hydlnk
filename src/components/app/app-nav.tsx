@@ -14,6 +14,8 @@ interface NavItem {
   tabLabel: string;
   sidebarIcon: ReactNode;
   tabIcon: ReactNode;
+  /** Shown only on the user's own site (Wave F, G3): a member works on the draft, not the account. */
+  ownerOnly?: boolean;
 }
 
 const EDITOR: NavItem = {
@@ -29,6 +31,7 @@ const ANALYTICS: NavItem = {
   href: "/analytics",
   label: "Analytics",
   tabLabel: "Stats",
+  ownerOnly: true,
   sidebarIcon: <Icon icon={ChartColumn} size={16} />,
   tabIcon: <Icon icon={ChartColumn} size={20} />,
 };
@@ -38,6 +41,7 @@ const AUDIENCE: NavItem = {
   href: "/audience",
   label: "Audience",
   tabLabel: "Audience",
+  ownerOnly: true,
   sidebarIcon: <Icon icon={Inbox} size={16} />,
   tabIcon: <Icon icon={Inbox} size={20} />,
 };
@@ -46,6 +50,7 @@ const DOMAINS: NavItem = {
   href: "/domains",
   label: "Domains",
   tabLabel: "Domains",
+  ownerOnly: true,
   sidebarIcon: <Icon icon={Globe} size={16} />,
   tabIcon: <Icon icon={Globe} size={20} />,
 };
@@ -71,12 +76,16 @@ const TAB_ITEMS: readonly NavItem[] = [EDITOR, ANALYTICS, AUDIENCE, DOMAINS, ACC
  * workspace's route group reports its own name).
  */
 
+/** The items for the current site: on a site shared with the user, no owner-only item (M19-10). */
+const visible = (items: readonly NavItem[], isOwner: boolean) =>
+  items.filter((item) => isOwner || !item.ownerOnly);
+
 /** Desktop sidebar navigation (>= 760px). */
-export function SidebarNav() {
+export function SidebarNav({ isOwner = true }: { isOwner?: boolean }) {
   const current = navKeyForSegment(useSelectedLayoutSegment());
   return (
     <nav aria-label="App" className="flex flex-col gap-0.5">
-      {SIDEBAR_ITEMS.map((item) => {
+      {visible(SIDEBAR_ITEMS, isOwner).map((item) => {
         const active = item.key === current;
         return (
           <Link
@@ -106,14 +115,14 @@ export function SidebarNav() {
 /** `bottom` of a fixed element that sits exactly on the phone tab bar. */
 export const TAB_BAR_TOP_CLASS = "bottom-[calc(var(--hl-tab-bar)+env(safe-area-inset-bottom))]";
 
-export function TabBar() {
+export function TabBar({ isOwner = true }: { isOwner?: boolean }) {
   const current = navKeyForSegment(useSelectedLayoutSegment());
   return (
     <nav
       aria-label="App sections"
       className="fixed inset-x-0 bottom-0 z-20 box-border flex h-[calc(var(--hl-tab-bar)+env(safe-area-inset-bottom))] justify-around border-t border-line bg-surface px-1 pb-[env(safe-area-inset-bottom)] hl:hidden"
     >
-      {TAB_ITEMS.map((item) => {
+      {visible(TAB_ITEMS, isOwner).map((item) => {
         const active = item.key === current;
         return (
           <Link

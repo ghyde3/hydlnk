@@ -10,10 +10,11 @@ import {
   SIGNED_OUT_MESSAGE,
   STALE_MESSAGE,
 } from "@/lib/editor/messages";
+import { ACCESS_LOST_MESSAGE } from "@/lib/team/messages";
 
 /** What the banner says for a queue status, or null when there is nothing to say. */
 export type SaveProblem = {
-  kind: "suspended" | "conflict" | "signed-out" | "invalid" | "error" | "blocked";
+  kind: "suspended" | "conflict" | "lost-access" | "signed-out" | "invalid" | "error" | "blocked";
   message: string;
 };
 
@@ -33,6 +34,8 @@ export function saveProblemFor(
   switch (status) {
     case "conflict":
       return { kind: "conflict", message: STALE_MESSAGE };
+    case "lost-access":
+      return { kind: "lost-access", message: ACCESS_LOST_MESSAGE };
     case "signed-out":
       return { kind: "signed-out", message: SIGNED_OUT_MESSAGE };
     case "invalid":
@@ -86,7 +89,7 @@ export function SaveBanner({
           Open Editor
         </Link>
       ) : null}
-      {problem.kind === "conflict" ? (
+      {problem.kind === "conflict" || problem.kind === "lost-access" ? (
         <button type="button" onClick={() => window.location.reload()} className={ACTION}>
           Reload
         </button>
