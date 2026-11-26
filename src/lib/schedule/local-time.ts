@@ -7,6 +7,8 @@
  * and gets the browser's (`Intl.DateTimeFormat().resolvedOptions().timeZone`).
  */
 
+import { scheduleInstant, windowState } from "@/lib/document/schedule";
+
 const MINUTE = 60_000;
 const INPUT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
 
@@ -125,16 +127,17 @@ export function windowChipText(
   now: number,
   zone = browserZone(),
 ): { tone: "upcoming" | "showing" | "ended"; text: string } | null {
-  const from = schedule?.from && Number.isFinite(Date.parse(schedule.from)) ? schedule.from : null;
-  const until =
-    schedule?.until && Number.isFinite(Date.parse(schedule.until)) ? schedule.until : null;
+  // Where `now` falls is the shared rule (`windowState`, the canonical times only); this only words it.
+  const state = windowState(schedule, now);
   const at = new Date(now);
-  if (until && now >= Date.parse(until)) {
-    return { tone: "ended", text: `Ended ${formatLocalDay(until, at, zone)}` };
+  if (state === "ended") {
+    return { tone: "ended", text: `Ended ${formatLocalDay(schedule!.until!, at, zone)}` };
   }
-  if (from && now < Date.parse(from)) {
-    return { tone: "upcoming", text: `Starts ${formatLocal(from, at, zone)}` };
+  if (state === "upcoming") {
+    return { tone: "upcoming", text: `Starts ${formatLocal(schedule!.from!, at, zone)}` };
   }
-  if (until) return { tone: "showing", text: `Until ${formatLocal(until, at, zone)}` };
+  if (state === "showing" && scheduleInstant(schedule?.until) !== null) {
+    return { tone: "showing", text: `Until ${formatLocal(schedule!.until!, at, zone)}` };
+  }
   return null;
 }

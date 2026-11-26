@@ -58,10 +58,18 @@ describe("M20-06 local time to UTC and back", () => {
   });
 
   it("M20-06 the zone line names the zone and its offset", () => {
-    expect(zoneLabel(new Date("2026-01-15T12:00:00Z"), "Europe/London")).toBe("Europe/London, GMT+0");
-    expect(zoneLabel(new Date("2026-07-15T12:00:00Z"), "Europe/London")).toBe("Europe/London, GMT+1");
-    expect(zoneLabel(new Date("2026-01-15T12:00:00Z"), "America/New_York")).toBe("America/New_York, GMT-5");
-    expect(zoneLabel(new Date("2026-01-15T12:00:00Z"), "Asia/Kolkata")).toBe("Asia/Kolkata, GMT+5:30");
+    expect(zoneLabel(new Date("2026-01-15T12:00:00Z"), "Europe/London")).toBe(
+      "Europe/London, GMT+0",
+    );
+    expect(zoneLabel(new Date("2026-07-15T12:00:00Z"), "Europe/London")).toBe(
+      "Europe/London, GMT+1",
+    );
+    expect(zoneLabel(new Date("2026-01-15T12:00:00Z"), "America/New_York")).toBe(
+      "America/New_York, GMT-5",
+    );
+    expect(zoneLabel(new Date("2026-01-15T12:00:00Z"), "Asia/Kolkata")).toBe(
+      "Asia/Kolkata, GMT+5:30",
+    );
   });
 
   it("M20-06 dates read as day and month, with the year only when it is not this year's", () => {
@@ -83,11 +91,36 @@ describe("M20-06 the block row chip", () => {
       tone: "showing",
       text: "Until 24 Dec, 18:00",
     });
-    expect(windowChipText({ from: "2026-11-01T00:00:00Z", until: "2026-11-25T10:00:00Z" }, now, zone)).toEqual({
+    expect(
+      windowChipText({ from: "2026-11-01T00:00:00Z", until: "2026-11-25T10:00:00Z" }, now, zone),
+    ).toEqual({
       tone: "ended",
       text: "Ended 25 Nov",
     });
     expect(windowChipText({ from: "2026-11-01T00:00:00Z" }, now, zone)).toBeNull();
     expect(windowChipText(undefined, now, zone)).toBeNull();
+  });
+
+  it("M20-06 the chip decides with windowState, the renderer's rule: a non-canonical time is no bound", async () => {
+    const { windowState } = await import("@/lib/document/schedule");
+    // Date.parse reads all of these; the shared rule (canonical UTC minutes only) does not.
+    const odd = [
+      { until: "2026-11-25T24:00:00Z" },
+      { until: "2026-11-25T10:00:30Z" },
+      { from: "2027-01-01" },
+      { until: "Nov 25, 2026" },
+    ];
+    for (const schedule of odd) {
+      expect(windowState(schedule, now), JSON.stringify(schedule)).toBe("none");
+      expect(windowChipText(schedule, now, zone), JSON.stringify(schedule)).toBeNull();
+    }
+    // And on canonical times the chip's tone is the state.
+    for (const schedule of [
+      { from: "2026-12-03T09:00:00Z" },
+      { until: "2026-12-24T18:00:00Z" },
+      { until: "2026-11-25T10:00:00Z" },
+    ]) {
+      expect(windowChipText(schedule, now, zone)?.tone).toBe(windowState(schedule, now));
+    }
   });
 });

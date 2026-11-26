@@ -58,13 +58,17 @@ describe("M20-02 the schedule field in the draft and publish schemas", () => {
   it("M20-02 a draft keeps any short string in either time; 41 characters and a non-string are refused", () => {
     expect(blockSchema.safeParse(link({ schedule: { from: "half typed" } })).success).toBe(true);
     expect(blockSchema.safeParse(link({ schedule: { until: "x".repeat(40) } })).success).toBe(true);
-    expect(blockSchema.safeParse(link({ schedule: { until: "x".repeat(41) } })).success).toBe(false);
+    expect(blockSchema.safeParse(link({ schedule: { until: "x".repeat(41) } })).success).toBe(
+      false,
+    );
     expect(blockSchema.safeParse(link({ schedule: { from: 5 } as never })).success).toBe(false);
     expect(blockSchema.safeParse(link({ schedule: "soon" as never })).success).toBe(false);
   });
 
   it("M20-02 Publish accepts canonical UTC minutes with from before until", () => {
-    expect(publishBlockSchema.safeParse(link({ schedule: { from: FROM, until: UNTIL } })).success).toBe(true);
+    expect(
+      publishBlockSchema.safeParse(link({ schedule: { from: FROM, until: UNTIL } })).success,
+    ).toBe(true);
     expect(publishBlockSchema.safeParse(link({ schedule: { from: FROM } })).success).toBe(true);
     expect(publishBlockSchema.safeParse(link({ schedule: { until: UNTIL } })).success).toBe(true);
     expect(publishBlockSchema.safeParse(link({ schedule: {} })).success).toBe(true);
@@ -76,6 +80,13 @@ describe("M20-02 the schedule field in the draft and publish schemas", () => {
     ["milliseconds", { until: "2026-12-03T09:00:00.000Z" }, SCHEDULE_MESSAGES.time],
     ["an impossible day", { from: "2026-02-30T09:00:00Z" }, SCHEDULE_MESSAGES.time],
     ["an impossible month", { from: "2026-13-45T99:00:00Z" }, SCHEDULE_MESSAGES.time],
+    // Date.parse and a Postgres cast both read 24:00 as the next midnight; the canonical form does not
+    // (entry_next_boundary refuses it too: pgTAP 224).
+    [
+      "T24:00 (the next day's midnight written as hour 24)",
+      { until: "2026-12-03T24:00:00Z" },
+      SCHEDULE_MESSAGES.time,
+    ],
     ["from equal to until", { from: FROM, until: FROM }, SCHEDULE_MESSAGES.order],
     ["from after until", { from: UNTIL, until: FROM }, SCHEDULE_MESSAGES.order],
   ])("M20-02 Publish refuses %s and names the block", (_label, schedule, message) => {
@@ -123,10 +134,18 @@ describe("M20-02 the publish form", () => {
   });
 
   it("M20-02 two drafts that differ only in key order publish to equal forms", () => {
-    const a = toPublishForm(draftOf("Mara", [link({ schedule: { from: FROM, until: UNTIL } })]), null);
-    const b = toPublishForm(draftOf("Mara", [link({ schedule: { until: UNTIL, from: FROM } })]), null);
+    const a = toPublishForm(
+      draftOf("Mara", [link({ schedule: { from: FROM, until: UNTIL } })]),
+      null,
+    );
+    const b = toPublishForm(
+      draftOf("Mara", [link({ schedule: { until: UNTIL, from: FROM } })]),
+      null,
+    );
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
-    expect(publishWindow({ until: UNTIL, from: FROM })).toEqual({ schedule: { from: FROM, until: UNTIL } });
+    expect(publishWindow({ until: UNTIL, from: FROM })).toEqual({
+      schedule: { from: FROM, until: UNTIL },
+    });
   });
 
   it("M20-02 a scheduled link is never the redirect target; a scheduled featured link still counts", () => {
@@ -156,7 +175,12 @@ describe("M20-02 the pure decisions every reader shares", () => {
 
   it("M20-02 a hostile stored value never throws: an unreadable from hides, an unreadable until is open", () => {
     const now = at(FROM);
-    for (const schedule of [{ from: "2026-13-45T99:00:00Z" }, { from: 5 }, { from: ["x"] }, { from: null }]) {
+    for (const schedule of [
+      { from: "2026-13-45T99:00:00Z" },
+      { from: 5 },
+      { from: ["x"] },
+      { from: null },
+    ]) {
       expect(isLiveAt({ schedule }, now)).toBe(false);
     }
     for (const schedule of [{ until: "tomorrow" }, { until: 5 }, [1, 2], "x", 7, null]) {
@@ -181,6 +205,11 @@ describe("M20-02 the pure decisions every reader shares", () => {
     expect(effectiveNow(1000, "garbage")).toBe(1000);
     expect(effectiveNow(at(FROM) - 1000, FROM)).toBe(at(FROM));
     expect(effectiveNow(at(UNTIL), FROM)).toBe(at(UNTIL));
+  });
+
+  it("M20-04 the site's clock counts for at most a minute ahead (a clock that ran ahead cannot hold a site in the future)", () => {
+    expect(effectiveNow(at(FROM) - 30_000, FROM)).toBe(at(FROM));
+    expect(effectiveNow(at(FROM) - 3_600_000, FROM)).toBe(at(FROM) - 3_600_000 + 60_000);
   });
 
   it("M20-06 windowState for each state", () => {
