@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { listTerms, type ContentActor, type ContentFailure } from "@/lib/content";
+import { MARKDOWN_MAX_NESTING, MARKDOWN_MAX_NODES } from "@/lib/blog/markdown";
 import { POST_BODY_TOO_LARGE, POST_LIMITS } from "@/lib/content/schemas";
 import {
   MCP_BODY_RANGE_CHARS,
@@ -105,7 +106,7 @@ export const postFieldInputs = {
     .max(POST_LIMITS.bodyBytes, { error: POST_BODY_TOO_LARGE })
     .optional()
     .describe(
-      "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text. Formatting too heavy or nested too deep to read is refused, on body.",
+      `The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text. A body of more than ${MARKDOWN_MAX_NODES.toLocaleString("en-US")} formatted pieces (table cells, list items, links, styled runs), or with quotes, lists or emphasis nested more than ${MARKDOWN_MAX_NESTING} levels, is refused, on body.`,
     ),
   excerpt: z
     .string()

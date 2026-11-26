@@ -23,6 +23,18 @@ vi.mock("@/lib/publish/invalidate", () => ({
   invalidateType: vi.fn(),
 }));
 vi.mock("@/lib/media/cleanup-admin", () => ({ cleanupMediaQuietly: vi.fn() }));
+// Every body is lexed by the one bounded lexer (M17): its entry is counted here.
+const lexer = vi.hoisted(() => ({ lexed: vi.fn<() => void>() }));
+vi.mock("@/lib/blog/markdown/lex", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/blog/markdown/lex")>();
+  return {
+    ...real,
+    lexTokens: (markdown: string) => {
+      lexer.lexed();
+      return real.lexTokens(markdown);
+    },
+  };
+});
 
 const { applyBodyEdits } = await import("@/lib/mcp/body-edit");
 const { runTool } = await import("@/lib/mcp/run-tool");
@@ -33,20 +45,18 @@ const KIB_512 = 512 * 1024;
 const OVER = "The body is over 512 KiB.";
 const failure = (result: any) => result.structuredContent?.error as Record<string, any>;
 
-let lexed: ReturnType<typeof vi.fn<() => void>>;
+const lexed = lexer.lexed;
 beforeEach(() => {
-  lexed = vi.fn();
-  const original = Lexer.prototype.lex;
-  vi.spyOn(Lexer.prototype, "lex").mockImplementation(function (this: Lexer, src: string) {
-    lexed();
-    return original.call(this, src);
-  });
+  lexed.mockClear();
+  // marked's lexer is never a body's reader any more; it is watched so a regression shows here.
+  vi.spyOn(Lexer.prototype, "lex");
   vi.spyOn(marked, "lexer");
 });
 afterEach(() => vi.restoreAllMocks());
 
 const neverLexed = () => {
   expect(lexed).not.toHaveBeenCalled();
+  expect(Lexer.prototype.lex).not.toHaveBeenCalled();
   expect(marked.lexer).not.toHaveBeenCalled();
 };
 
@@ -178,5 +188,6 @@ describe("an oversized body on create_entry and update_entry never reaches the l
       }),
     ).toBeNull();
     expect(lexed).toHaveBeenCalled();
+    expect(Lexer.prototype.lex).not.toHaveBeenCalled();
   });
 });

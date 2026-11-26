@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- a tool result is JSON whose shape each test checks */
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { BODY_SHAPE_MESSAGES, lexBounded } from "@/lib/blog/markdown";
 import { stackIsUp } from "./publish-support";
 import {
   ALL,
@@ -255,29 +256,71 @@ describe.skipIf(!run)(
       expect(html).toContain("&lt;img");
     });
 
-    describe("a body the bounded lexer refuses (M17's one lexer)", () => {
-      const HEAVY = "*a ".repeat(8000);
+    describe("the bounded lexer's limits (M17's one lexer): refused past them, accepted within", () => {
+      // More formatted pieces than MARKDOWN_MAX_NODES (a table cell and its text are two), and
+      // quotes nested past the depth limit.
+      const SIZE = `|a|b|\n|-|-|\n${"|a|b|\n".repeat(40_000)}`;
       const DEEP = `${"> ".repeat(4000)}a`;
-      const cases: Array<[string, string, string]> = [
-        ["too heavy", HEAVY, "This post’s formatting is too heavy to save."],
-        ["too deep", DEEP, "This post nests quotes or lists too deeply to save."],
+      const refused: Array<[string, string, string]> = [
+        ["past the node limit", SIZE, BODY_SHAPE_MESSAGES.size],
+        ["past the depth limit", DEEP, BODY_SHAPE_MESSAGES.depth],
+      ];
+      // Bodies the old meter refused as "too heavy" (marked is quadratic on them): the linear lexer
+      // reads them, so they save, restore and publish like any other.
+      const NBSP = "\u00a0";
+      const accepted: Array<[string, string]> = [
+        ['"*a " x 8,000', "*a ".repeat(8000)],
+        ["[a]( and 4,800 NBSP", `[a](${NBSP.repeat(4800)}`],
+        ["ordinary 64-character paragraphs (500 KiB)", `${"a".repeat(62)}\n\n`.repeat(8000)],
       ];
 
-      /** One tool call, timed: a refusal is a fast, final answer. */
+      it("each body is what its case says it is", () => {
+        expect(lexBounded(SIZE)).toMatchObject({ ok: false, reason: "size" });
+        expect(lexBounded(DEEP)).toMatchObject({ ok: false, reason: "depth" });
+        for (const [label, body] of accepted) expect(lexBounded(body).ok, label).toBe(true);
+      });
+
+      /** One tool call, timed: an answer about a body's shape is fast and final. */
       async function timed(tool: string, args: Record<string, unknown>, scopes = ALL) {
         const started = performance.now();
         const out = await h.call(tool, args, a, scopes);
         return { out, ms: performance.now() - started };
       }
-      const onBody = (out: Awaited<ReturnType<ContentHarness["call"]>>, words: string) => {
+      const onBody = (out: Awaited<ReturnType<ContentHarness["call"]>>, message: string) => {
         expect(out.error!.issues![0]!.path).toBe("body");
-        expect(out.error!.issues![0]!.message).toContain(words);
+        expect(out.error!.issues![0]!.message).toBe(message);
         expect(out.error!.retryAfterSeconds).toBeUndefined();
       };
+      const ok = (out: Awaited<ReturnType<ContentHarness["call"]>>, label: string) =>
+        expect(out.isError, `${label}: ${JSON.stringify(out.error)}`).toBe(false);
 
-      it.each(cases)(
+      /** A version of `entryId` holding `body`, written straight to the table (as an older save). */
+      async function version(entryId: string, rev: number, body: string) {
+        const inserted = await h.admin.from("content_entry_revisions").insert({
+          entry_id: entryId,
+          site_id: a.pageId,
+          rev,
+          snapshot: { title: "Old", slug: "old", body },
+          source: "editor",
+        });
+        expect(inserted.error).toBeNull();
+      }
+
+      /** A draft holding `body`, written straight to the row (as one saved before the bound). */
+      async function storedDraft(body: string) {
+        const made = await h.post(a, { body: "Safe body" });
+        const stored = await h.row(made.id);
+        const written = await h.admin
+          .from("content_entries")
+          .update({ draft: { ...stored.draft, body } })
+          .eq("id", made.id);
+        expect(written.error).toBeNull();
+        return made;
+      }
+
+      it.each(refused)(
         "%s: create_entry, update_entry and bodyEdits answer invalid_input on body, fast",
-        async (_label, body, words) => {
+        async (_label, body, message) => {
           const before = await h.row(target.id);
           const entries = await count();
           for (const [tool, args] of [
@@ -294,7 +337,7 @@ describe.skipIf(!run)(
           ] as const) {
             const { out, ms } = await timed(tool, args);
             expect(out.error?.code, tool).toBe("invalid_input");
-            onBody(out, words);
+            onBody(out, message);
             expect(ms, tool).toBeLessThan(500);
           }
           expect(await h.row(target.id)).toEqual(before);
@@ -302,20 +345,13 @@ describe.skipIf(!run)(
         },
       );
 
-      it.each(cases)(
+      it.each(refused)(
         "%s: a version with that body is invalid_input on body for restore_revision, and nothing is kept",
-        async (_label, body, words) => {
+        async (_label, body, message) => {
           const made = await h.post(a, { body: "Safe body" });
           const before = await h.row(made.id);
-          const rev = 950 + cases.findIndex(([, b]) => b === body);
-          const inserted = await h.admin.from("content_entry_revisions").insert({
-            entry_id: made.id,
-            site_id: a.pageId,
-            rev,
-            snapshot: { title: "Old", slug: "old", body },
-            source: "editor",
-          });
-          expect(inserted.error).toBeNull();
+          const rev = 950 + refused.findIndex(([, b]) => b === body);
+          await version(made.id, rev, body);
           const revisionsBefore = await h.revisions(made.id);
           const { out, ms } = await timed(
             "restore_revision",
@@ -323,7 +359,7 @@ describe.skipIf(!run)(
             READ_WRITE,
           );
           expect(out.error?.code).toBe("invalid_input");
-          onBody(out, words);
+          onBody(out, message);
           expect(ms).toBeLessThan(500);
           expect(await h.row(made.id)).toEqual(before);
           // Refused before the current draft is kept as a version of its own.
@@ -331,30 +367,20 @@ describe.skipIf(!run)(
         },
       );
 
-      it.each(cases)(
+      it.each(refused)(
         "%s: a stored draft with that body is in get_entry's publishIssues and publish_entry refuses it on body",
-        async (_label, body, words) => {
-          // A draft saved before the bound existed: written straight to the row.
-          const made = await h.post(a, { body: "Safe body" });
-          const stored = await h.row(made.id);
-          const written = await h.admin
-            .from("content_entries")
-            .update({ draft: { ...stored.draft, body } })
-            .eq("id", made.id);
-          expect(written.error).toBeNull();
+        async (_label, body, message) => {
+          const made = await storedDraft(body);
           const read = await timed("get_entry", { entryId: made.id }, READ);
-          expect(read.out.isError, JSON.stringify(read.out.error)).toBe(false);
+          ok(read.out, "get_entry");
           expect(read.ms).toBeLessThan(500);
-          expect(read.out.json!.publishIssues).toContainEqual({
-            path: "body",
-            message: expect.stringContaining(words),
-          });
+          expect(read.out.json!.publishIssues).toContainEqual({ path: "body", message });
           const before = await h.row(made.id);
           const { out, ms } = await timed("publish_entry", { entryId: made.id, ifRev: before.rev });
           // A publish's content refusal is publish_refused (M18-08), with the issue on body.
           expect(out.error?.code).toBe("publish_refused");
-          expect(out.error!.message).toContain(words);
-          onBody(out, words);
+          expect(out.error!.message).toContain(message);
+          onBody(out, message);
           expect(ms).toBeLessThan(500);
           expect(await h.liveState(made.id)).toEqual({
             published: before.published,
@@ -369,14 +395,74 @@ describe.skipIf(!run)(
           );
         },
       );
+
+      it.each(accepted)(
+        "%s: create_entry, update_entry and bodyEdits save it as sent, fast",
+        async (label, body) => {
+          const created = await timed("create_entry", { pageId: a.pageId, title: "Read", body });
+          ok(created.out, `create: ${label}`);
+          expect(created.ms, "create").toBeLessThan(500);
+          expect((await h.row(created.out.json!.id)).draft.body === body).toBe(true);
+
+          const made = await h.post(a, { body: SAFE });
+          const replaced = await timed("update_entry", { entryId: made.id, ifRev: 1, body });
+          ok(replaced.out, `update: ${label}`);
+          expect(replaced.ms, "update").toBeLessThan(500);
+          expect((await h.row(made.id)).draft.body === body).toBe(true);
+
+          const edited = await h.post(a, { body: SAFE });
+          const { out, ms } = await timed("update_entry", {
+            entryId: edited.id,
+            ifRev: 1,
+            bodyEdits: [{ find: "MARK", replace: body }],
+          });
+          ok(out, `bodyEdits: ${label}`);
+          expect(ms, "bodyEdits").toBeLessThan(500);
+          expect((await h.row(edited.id)).draft.body === SAFE.replace("MARK", body)).toBe(true);
+        },
+      );
+
+      it.each(accepted)(
+        "%s: restore_revision restores a version with that body, fast",
+        async (label, body) => {
+          const made = await h.post(a, { body: "Safe body" });
+          const before = await h.row(made.id);
+          const rev = 960 + accepted.findIndex(([, b]) => b === body);
+          await version(made.id, rev, body);
+          const { out, ms } = await timed(
+            "restore_revision",
+            { entryId: made.id, revision: rev, ifRev: before.rev },
+            READ_WRITE,
+          );
+          ok(out, `restore: ${label}`);
+          expect(ms).toBeLessThan(500);
+          expect((await h.row(made.id)).draft.body === body).toBe(true);
+        },
+      );
+
+      it.each(accepted)(
+        "%s: a stored draft with that body has no body issue in get_entry and publish_entry publishes it, fast",
+        async (label, body) => {
+          const made = await storedDraft(body);
+          const read = await timed("get_entry", { entryId: made.id }, READ);
+          ok(read.out, `get_entry: ${label}`);
+          expect(read.ms).toBeLessThan(500);
+          const issues = (read.out.json!.publishIssues ?? []) as Array<{ path: string }>;
+          expect(issues.filter((issue) => issue.path === "body")).toEqual([]);
+          const before = await h.row(made.id);
+          const { out, ms } = await timed("publish_entry", { entryId: made.id, ifRev: before.rev });
+          ok(out, `publish: ${label}`);
+          expect(ms).toBeLessThan(500);
+          expect((await h.liveState(made.id)).published).toMatchObject({ body });
+        },
+      );
     });
 
     describe("oversized input", () => {
       const KIB_512 = 512 * 1024;
 
       it("a 512 KiB body can be created and replaced; one byte more is invalid_input on body", async () => {
-        // 512 KiB of short lines: one unbroken 512 KiB word is refused by the lexer's bound (M17,
-        // "too heavy"), which is not the size limit this test is about.
+        // 512 KiB of short lines, the shape the size limit is about.
         const lines = (char: string) => `${char.repeat(63)}\n`.repeat(KIB_512 / 64);
         const full = lines("a");
         const created = await h.call(
