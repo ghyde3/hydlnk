@@ -178,7 +178,7 @@ export async function renameTermWithClient(
 export async function deleteTermWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string; termId: string },
-): Promise<ContentResult<{ id: string }>> {
+): Promise<ContentResult<{ id: string; typeId: string }>> {
   const site = await writableSite(admin, input.actor, input.siteId);
   if (!site.ok) return site;
   const found = await siteTerm(admin, site.siteId, input.termId);
@@ -191,7 +191,7 @@ export async function deleteTermWithClient(
     .select("id");
   if (deleted.error) return mapDbError(deleted.error);
   if (deleted.data.length === 0) return failure("not_found");
-  return { ok: true, id: found.term.id };
+  return { ok: true, id: found.term.id, typeId: found.term.type_id };
 }
 
 /**

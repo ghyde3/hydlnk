@@ -13,6 +13,9 @@ const core = vi.hoisted(() => ({
   restore: vi.fn(),
   enable: vi.fn(),
   update: vi.fn(),
+  renameTerm: vi.fn(),
+  deleteTerm: vi.fn(),
+  createTerm: vi.fn(),
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/publish/invalidate", () => cache);
@@ -31,9 +34,19 @@ vi.mock("@/lib/content/types-core", () => ({
   updateTypeWithClient: core.update,
   listTypesWithClient: vi.fn(),
 }));
+vi.mock("@/lib/content/terms-core", () => ({
+  renameTermWithClient: core.renameTerm,
+  deleteTermWithClient: core.deleteTerm,
+  createTermWithClient: core.createTerm,
+  listTermsWithClient: vi.fn(),
+  setEntryTermsWithClient: vi.fn(),
+}));
 
 import {
+  createTerm,
+  deleteTerm,
   enableType,
+  renameTerm,
   publishEntry,
   restoreEntry,
   trashEntry,
@@ -174,6 +187,69 @@ describe("content writer: cache expiry per entry, type and site", () => {
     core.enable.mockResolvedValueOnce({ ok: true, ...type });
     await expect(
       enableType({ actor, siteId: "site-1", typeKey: "post", enabled: true }),
+    ).resolves.toMatchObject({ ok: true });
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+  });
+  // Terms: a term's name and slug are drawn into cached post pages (under the site tag) and into
+  // the term index and archive pages (under the type tag), so a rename or a delete expires the type,
+  // which expires the site with it. A new term is on no live page until a post is published with it.
+  const term = {
+    id: "term-1",
+    typeId: "type-post",
+    taxonomy: "category" as const,
+    name: "News",
+    slug: "news",
+    parentId: null,
+  };
+
+  it("renameTerm expires the term's type (and through it the site)", async () => {
+    core.renameTerm.mockResolvedValueOnce({ ok: true, ...term, name: "Notes" });
+    await expect(
+      renameTerm({ actor, siteId: "site-1", termId: "term-1", name: "Notes" }),
+    ).resolves.toMatchObject({ ok: true, name: "Notes" });
+    expect(cache.invalidateType).toHaveBeenCalledTimes(1);
+    expect(cache.invalidateType).toHaveBeenCalledWith({ siteId: "site-1", typeId: "type-post" });
+    expect(cache.invalidateEntry).not.toHaveBeenCalled();
+    expect(cache.invalidatePage).not.toHaveBeenCalled();
+  });
+
+  it("deleteTerm expires the term's type (and through it the site)", async () => {
+    core.deleteTerm.mockResolvedValueOnce({ ok: true, id: "term-1", typeId: "type-post" });
+    await expect(deleteTerm({ actor, siteId: "site-1", termId: "term-1" })).resolves.toMatchObject({
+      ok: true,
+      id: "term-1",
+    });
+    expect(cache.invalidateType).toHaveBeenCalledTimes(1);
+    expect(cache.invalidateType).toHaveBeenCalledWith({ siteId: "site-1", typeId: "type-post" });
+  });
+
+  it("a refused rename or delete expires nothing, and neither does a new term", async () => {
+    const refused = { ok: false, status: 404, error: "not_found", message: "x" };
+    core.renameTerm.mockResolvedValueOnce(refused);
+    core.deleteTerm.mockResolvedValueOnce(refused);
+    core.createTerm.mockResolvedValueOnce({ ok: true, ...term });
+    await renameTerm({ actor, siteId: "site-1", termId: "term-1", name: "Notes" });
+    await deleteTerm({ actor, siteId: "site-1", termId: "term-1" });
+    await createTerm({
+      actor,
+      siteId: "site-1",
+      typeKey: "post",
+      taxonomy: "category",
+      name: "News",
+      slug: "news",
+    });
+    for (const fn of Object.values(cache)) expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("a failing expiry after a term write is only logged, the write stands", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    cache.invalidateType.mockImplementationOnce(() => {
+      throw new Error("boom");
+    });
+    core.renameTerm.mockResolvedValueOnce({ ok: true, ...term });
+    await expect(
+      renameTerm({ actor, siteId: "site-1", termId: "term-1", name: "News" }),
     ).resolves.toMatchObject({ ok: true });
     expect(log).toHaveBeenCalled();
     log.mockRestore();

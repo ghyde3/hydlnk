@@ -151,14 +151,21 @@ export function createTerm(input: Parameters<typeof createTermWithClient>[1]) {
   return createTermWithClient(createAdminSupabase(), input);
 }
 
-/** Change a term's name or slug. */
-export function renameTerm(input: Parameters<typeof renameTermWithClient>[1]) {
-  return renameTermWithClient(createAdminSupabase(), input);
+/**
+ * Change a term's name or slug, then expire its type and the site: the name and slug are drawn into
+ * the term index and the archive pages (the type tag) and into every post page (the site tag).
+ */
+export async function renameTerm(input: Parameters<typeof renameTermWithClient>[1]) {
+  const out = await renameTermWithClient(createAdminSupabase(), input);
+  if (out.ok) expireType(input.siteId, out.typeId);
+  return out;
 }
 
-/** Delete a term; its children become top-level and its entry links go. */
-export function deleteTerm(input: Parameters<typeof deleteTermWithClient>[1]) {
-  return deleteTermWithClient(createAdminSupabase(), input);
+/** Delete a term; its children become top-level and its entry links go. Expires like a rename. */
+export async function deleteTerm(input: Parameters<typeof deleteTermWithClient>[1]) {
+  const out = await deleteTermWithClient(createAdminSupabase(), input);
+  if (out.ok) expireType(input.siteId, out.typeId);
+  return out;
 }
 
 /** Set an entry's categories and tags in its draft at `expectedRev`; publish rebuilds the links. */
