@@ -30,8 +30,8 @@ import { issueFormToken, readFormToken } from "./token";
 
 /**
  * The form routes (Wave D, M17-05, M17-06). Plain HTML on both sides: the block posts here, and every
- * answer is a page or a same-origin 303. The order of a POST is fixed, cheapest first, nothing stored
- * before the last step, and every "dropped" case answers exactly like a success:
+ * answer is a page or a same-origin 303. The order of a POST is fixed, nothing stored before the
+ * store, and every "dropped" case answers exactly like a success, after the same steps:
  *
  *    1  cross-site POST    Origin / Sec-Fetch-Site (as the link lock)           403 notice, first
  *    2  ids                pageId a UUID, blockId 8-24 of [A-Za-z0-9_-]        404 notice, no query
@@ -39,19 +39,27 @@ import { issueFormToken, readFormToken } from "./token";
  *    4  body               x-www-form-urlencoded, at most 32,768 bytes          415, 413 notice
  *    5  block              a visible form in the PUBLISHED documents            404; 503 on a db error
  *    6  host               the real Host header serves the site                 404 notice
- *    7  bot user agent     dropped                                              303 to the sent page
- *    8  honeypot           dropped                                              303 to the sent page
- *    9  fields             parseSubmission                                      422 error page
- *   10  fill time          the open marker >= 3 s (read only: only GET /o      200 confirm page
+ *    7  fields             parseSubmission                                      422 error page
+ *    8  fill time          the open marker >= 3 s (read only: only GET /o      200 confirm page
  *                          starts it), or a valid token 2 s to 1 h
- *   11  token once         form-token:{signature}, 1 an hour                    200 confirm page
- *   12  blocked link       a contact message linking a blocked host: dropped    303; 503 if unknown
- *   13  limits             3 per client and form in 10 min; per site an hour a  429 + Retry-After
- *                          quarter of the plan's daily cap (5 / 125 / 1,250)
- *   14  store              record_form_submission: stored, duplicate and over   303; 404 if the site
+ *    9  token once         form-token:{signature}, 1 an hour                    200 confirm page
+ *   10  per client         3 per client and form in 10 min (counted)            429 + Retry-After
+ *   11  per site           a quarter of the plan's daily cap an hour (5 / 125   429 + Retry-After
+ *                          / 1,250), READ here and counted only once stored
+ *   12  dropped            a bot user agent, the honeypot, a contact message    303 to the sent page;
+ *                          linking a blocked host: nothing stored               503 if the blocklist
+ *                                                                               cannot answer
+ *   13  store              record_form_submission: stored, duplicate and over   303; 404 if the site
  *                          a cap answer 303; a field a check refused, 422       went away; 503 on a
  *                                                                               db error
- *   15  after the answer   the click row, the owner's message or limit email
+ *   14  after the answer   stored only: the site's hour is counted; the click
+ *                          row, the owner's message or limit email
+ *
+ * Why the drops come late (forms attack pass, finding 3): a bot, a filled honeypot or a blocked link
+ * answered before the fill-time gate or the limits would show itself (an immediate 303 where a real
+ * post gets the confirm page, or no 429 where a real post gets one). Why the site's hour is counted
+ * after the store (finding 1): a duplicate or a post over a cap stores nothing, and counting it let
+ * five such posts an hour lock every visitor out of a Free site's forms.
  *
  * Every response of the form routes, whatever its status, goes through `formResponse`: the tenant
  * page policy, `no-store`, `noindex`, no framing (M17-05 step 3).
@@ -96,6 +104,8 @@ export interface FormDeps {
   rateLimit: (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult>;
   /** Reads a limiter bucket without counting (`rateLimitAge`): the open marker's read. */
   rateLimitAge: (key: string, windowSeconds: number) => Promise<number | null>;
+  /** What `rateLimit` would answer, counting nothing (`rateLimitPeek`): the site's hour. */
+  rateLimitPeek: (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult>;
   now: () => Date;
   /** For the click row only (`recordClick`); a submission stores no hash. */
   visitorHash: (input: VisitorHashInput) => string;
@@ -337,12 +347,7 @@ async function formPost(request: Request, params: FormParams, deps: FormDeps): P
   const { block } = target;
   const done = () => sentRedirect(pageId, block.id);
 
-  // 7. bots and 8. the honeypot: answered like a success, nothing stored.
-  const userAgent = request.headers.get("user-agent");
-  if (isBot(userAgent)) return done();
-  if ((fields.get(FORM_FIELD.honeypot) ?? "") !== "") return done();
-
-  // 9. the fields.
+  // 7. the fields.
   const now = deps.now();
   const binding = { pageId, blockId: block.id, client, now, secret: deps.tokenSecret() };
   const parsed = parseSubmission(block.kind, block.askName === true, {
@@ -361,7 +366,7 @@ async function formPost(request: Request, params: FormParams, deps: FormDeps): P
   if (!parsed.ok) return again("error", parsed.values, 422, { errors: parsed.errors });
   const { values } = parsed;
 
-  // 10. the fill time, and 11. a token works once.
+  // 8. the fill time, and 9. a token works once.
   const token = fields.get(FORM_FIELD.token) ?? "";
   if (token !== "") {
     const read = readFormToken(token, binding);
@@ -375,7 +380,24 @@ async function formPost(request: Request, params: FormParams, deps: FormDeps): P
     if (age === null || age < MIN_FILL_SECONDS) return again("confirm", values, 200);
   }
 
-  // 12. a link to a blocked host in a message: answered like a success, nothing stored.
+  // 10. this client's submissions to this form (counted for every outcome from here on, so one
+  // client cannot hammer the store), and 11. the site's hour, read only: it counts stored ones.
+  const perForm = await deps.rateLimit(
+    `form-block:${client}:${pageId}:${block.id}`,
+    FORM_BLOCK_LIMIT,
+    FORM_BLOCK_WINDOW_SECONDS,
+  );
+  if (!perForm.allowed) return retryNotice(deps, perForm);
+  const siteKey = `form-site:${pageId}`;
+  const siteLimit = formSiteHourlyLimit(target.plan);
+  const perSite = await deps.rateLimitPeek(siteKey, siteLimit, FORM_SITE_WINDOW_SECONDS);
+  if (!perSite.allowed) return retryNotice(deps, perSite);
+
+  // 12. bots, the honeypot and a link to a blocked host in a message: answered like a success,
+  // nothing stored. Only here, after every step a stored submission takes, so a dropped post shows
+  // the same sequence of answers (confirm page, 422, 429) as a real one.
+  if (isBot(request.headers.get("user-agent"))) return done();
+  if ((fields.get(FORM_FIELD.honeypot) ?? "") !== "") return done();
   if (block.kind === "contact") {
     let blocked: boolean;
     try {
@@ -387,21 +409,7 @@ async function formPost(request: Request, params: FormParams, deps: FormDeps): P
     if (blocked) return done();
   }
 
-  // 13. accepted submissions per client and form, and per site.
-  const perForm = await deps.rateLimit(
-    `form-block:${client}:${pageId}:${block.id}`,
-    FORM_BLOCK_LIMIT,
-    FORM_BLOCK_WINDOW_SECONDS,
-  );
-  if (!perForm.allowed) return retryNotice(deps, perForm);
-  const perSite = await deps.rateLimit(
-    `form-site:${pageId}`,
-    formSiteHourlyLimit(target.plan),
-    FORM_SITE_WINDOW_SECONDS,
-  );
-  if (!perSite.allowed) return retryNotice(deps, perSite);
-
-  // 14. store.
+  // 13. store.
   let result: { status: RecordStatus; ownerId: string | null };
   try {
     result = await deps.recordSubmission({
@@ -418,7 +426,7 @@ async function formPost(request: Request, params: FormParams, deps: FormDeps): P
     return notice(503, FORM_NOTICES.unavailable, homeHref, false);
   }
 
-  // 15. after the answer. A site unpublished or suspended since step 5 is gone, not "sent"; a value
+  // 14. after the answer. A site unpublished or suspended since step 5 is gone, not "sent"; a value
   // a check of the table refused (never expected: the app strips what the checks refuse) is that
   // field's error, never a 503 that loses the message.
   const { status, ownerId } = result;
@@ -428,6 +436,8 @@ async function formPost(request: Request, params: FormParams, deps: FormDeps): P
     return again("error", values, 422, { errors: { [refused]: SUBMISSION_MESSAGES.unsupported } });
   }
   if (status === "stored") {
+    // The site's hour counts what was stored, never a duplicate or a post over a cap (finding 1).
+    await deps.rateLimit(siteKey, siteLimit, FORM_SITE_WINDOW_SECONDS);
     recordClick(request, pageId, block.id, deps, target.subPageId);
     if (block.kind === "contact" && block.notify === true && ownerId) {
       const message: MessageNotice = {

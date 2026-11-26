@@ -2091,6 +2091,13 @@ export type Database = {
           retry_after: number
         }[]
       }
+      rate_limit_peek: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
+        Returns: {
+          allowed: boolean
+          retry_after: number
+        }[]
+      }
       record_entry_revision: {
         Args: {
           p_entry_id: string

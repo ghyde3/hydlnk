@@ -191,7 +191,10 @@ describe("M5-01 the default store is the rate_limit_hit function", () => {
   it("rateLimit through the real store fails open when the RPC errors", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     rpc.mockResolvedValue({ data: null, error: { message: "relation does not exist" } });
-    expect(await rateLimit("beacon:203.0.113.7", 120, 60)).toEqual({ allowed: true, retryAfter: 0 });
+    expect(await rateLimit("beacon:203.0.113.7", 120, 60)).toEqual({
+      allowed: true,
+      retryAfter: 0,
+    });
   });
 
   it("is server only and uses the secret-key client", () => {
@@ -199,5 +202,30 @@ describe("M5-01 the default store is the rate_limit_hit function", () => {
     expect(read("src/lib/rate-limit/index.ts")).toMatch(/^import "server-only";/m);
     expect(read("src/lib/rate-limit/store.ts")).toMatch(/^import "server-only";/m);
     expect(read("src/lib/rate-limit/store.ts")).toMatch(/createAdminSupabase/);
+  });
+});
+
+describe("forms attack pass finding 1: rateLimitPeek reads without counting", () => {
+  it("calls rate_limit_peek with the hashed bucket and reads the answer; never rate_limit_hit", async () => {
+    const { rateLimitPeek } = await import("@/lib/rate-limit");
+    rpc.mockResolvedValueOnce({ data: [{ allowed: false, retry_after: 42 }], error: null });
+    expect(await rateLimitPeek("form-site:x", 5, 3600)).toEqual({ allowed: false, retryAfter: 42 });
+    expect(rpc).toHaveBeenCalledWith("rate_limit_peek", {
+      p_bucket: rateLimitBucket("form-site:x", "unit-test-secret"),
+      p_limit: 5,
+      p_window_seconds: 3600,
+    });
+    expect(rpc).not.toHaveBeenCalledWith("rate_limit_hit", expect.anything());
+  });
+
+  it("fails open on an RPC error or a timeout, like rateLimit", async () => {
+    const { rateLimitPeek } = await import("@/lib/rate-limit");
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    rpc.mockResolvedValueOnce({ data: null, error: { message: "boom" } });
+    expect(await rateLimitPeek("form-site:x", 5, 3600)).toEqual({ allowed: true, retryAfter: 0 });
+    const never = { peek: () => new Promise<never>(() => undefined) };
+    const pending = rateLimitPeek("form-site:x", 5, 3600, { store: never });
+    await vi.advanceTimersByTimeAsync(RATE_LIMIT_TIMEOUT_MS + 1);
+    expect(await pending).toEqual({ allowed: true, retryAfter: 0 });
   });
 });
