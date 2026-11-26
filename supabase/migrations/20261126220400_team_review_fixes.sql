@@ -11,7 +11,7 @@
 --      may edit but not publish gets 42501 publish_required. The owner-scoped inner functions stay.
 --   3. guard_site_owner_columns decides "the owner" through the rule (accessible_site_ids('owner')).
 --   4. access.owner_only_tables(): THE list of tables whose policies stay `owner_id = auth.uid()`
---      (G20). src/lib/access/owner-only.ts mirrors it (tests/unit/m19-access-static.test.ts parses
+--      (G20). tests/unit/m19-owner-only-tables.ts mirrors it (tests/unit/m19-access-static.test.ts parses
 --      this function), and pgTAP 227 and 234 read it, so the copies cannot disagree.
 
 -- ---------------------------------------------------------------------------
@@ -207,4 +207,4 @@ $$;
 revoke all on function access.owner_only_tables() from public, anon, authenticated, service_role;
 
 comment on function access.owner_only_tables() is
-  'The tables whose policies stay owner_id = auth.uid() (G20): never shared with members. Mirrored by src/lib/access/owner-only.ts (parsed by the static test); pgTAP 227 and 234 read it.';
+  'The tables whose policies stay owner_id = auth.uid() (G20): never shared with members. Mirrored by tests/unit/m19-owner-only-tables.ts (parsed by the static test); pgTAP 227 and 234 read it.';

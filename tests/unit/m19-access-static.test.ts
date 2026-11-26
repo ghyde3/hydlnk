@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { OWNER_ONLY_TABLES } from "@/lib/access/owner-only";
+import { OWNER_ONLY_TABLES } from "./m19-owner-only-tables";
 
 /**
  * M19-12 (T6, T19, S5): the static guard of the one access rule. It fails when
@@ -18,7 +18,7 @@ import { OWNER_ONLY_TABLES } from "@/lib/access/owner-only";
  *      or the helper itself keeps state or caches;
  *   5. a migration after this wave creates a site-scoped policy that names owner_id without the
  *      access projections, outside the owner-only tables, whose ONE list is OWNER_ONLY_TABLES
- *      (src/lib/access/owner-only.ts), equal to the database's access.owner_only_tables().
+ *      (tests/unit/m19-owner-only-tables.ts), equal to the database's access.owner_only_tables().
  * The allowlists are the owner-only (B) and owner-scoped (D) rows of the plan. The S5 block below
  * feeds a throwaway file in each form of a bypass to the same scan and expects it caught.
  */

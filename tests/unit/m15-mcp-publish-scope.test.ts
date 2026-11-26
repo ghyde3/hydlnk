@@ -148,8 +148,9 @@ describe("M15-10 publish_page still means publish all changes", () => {
     expect(result.isError).toBeUndefined();
     expect(mocks.publish).toHaveBeenCalledTimes(1);
     const [input, gateDeps] = mocks.publish.mock.calls[0]!;
-    expect(input).toEqual({ pageId: PAGE_A, userId: USER_A });
-    expect(Object.keys(input).sort()).toEqual(["pageId", "userId"]);
+    // Wave F (S4): the tool also says where the call came from, so decide() applies its MCP rule.
+    expect(input).toEqual({ pageId: PAGE_A, userId: USER_A, source: "mcp" });
+    expect(Object.keys(input).sort()).toEqual(["pageId", "source", "userId"]);
     expect("expected" in input).toBe(false);
     expect(Object.keys(gateDeps)).toEqual(["admin"]);
     expect(json(result)).toMatchObject({ published: true, publishedAt: PUBLISHED_AT });
@@ -174,7 +175,7 @@ describe("M15-10 publish_page still means publish all changes", () => {
     expect(mocks.publish).not.toHaveBeenCalled();
     // Another token: that token's user.
     await runTool(publishTool, identity({ userId: USER_B }), { pageId: PAGE_A }, deps);
-    expect(mocks.publish.mock.calls[0]![0]).toEqual({ pageId: PAGE_A, userId: USER_B });
+    expect(mocks.publish.mock.calls[0]![0]).toEqual({ pageId: PAGE_A, userId: USER_B, source: "mcp" });
   });
 
   it("a refusal expires no cache; the gate's new conflict answer is the tool's conflict code", async () => {
