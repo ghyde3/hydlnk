@@ -2,6 +2,7 @@
 
 import {
   Bold,
+  ChevronRight,
   Heading2,
   Heading3,
   Heading4,
@@ -18,7 +19,7 @@ import {
   Undo2,
   type LucideIcon,
 } from "lucide-react";
-import { useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Editor } from "@tiptap/react";
 import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
 
@@ -26,7 +27,8 @@ import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
  * The body editor's toolbar (M16-13), in the look of the text block's `FormatToolbar`: 44 by 44
  * buttons, `role="toolbar"`, the arrow keys move between them, and a press never takes the focus out
  * of the editor (a phone's keyboard stays open). Unlike the text block's, it does not wrap: at 390px
- * it scrolls sideways inside its own row, so the page itself never scrolls sideways.
+ * it scrolls sideways inside its own row, so the page itself never scrolls sideways. While more
+ * buttons are out of view to the right, the row's end fades into a chevron (the scroll cue).
  */
 
 const BUTTON =
@@ -192,6 +194,22 @@ export function BodyToolbar({
   onImage: () => void;
 }) {
   const row = useRef<HTMLDivElement>(null);
+  /** More buttons lie past the right edge of the row (it is scrolled less than all the way). */
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const element = row.current;
+    if (!element) return;
+    const measure = () =>
+      setMore(element.scrollLeft + element.clientWidth < element.scrollWidth - 1);
+    measure();
+    element.addEventListener("scroll", measure, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(element);
+    return () => {
+      element.removeEventListener("scroll", measure);
+      observer?.disconnect();
+    };
+  }, []);
 
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -210,39 +228,51 @@ export function BodyToolbar({
   };
 
   return (
-    <div
-      ref={row}
-      role="toolbar"
-      aria-label="Body formatting"
-      data-body-toolbar=""
-      onKeyDown={onKey}
-      className="flex max-w-full min-w-0 gap-1 overflow-x-auto rounded-md bg-page p-1.5 [scrollbar-width:thin]"
-    >
-      {ITEMS.map((item, index) => {
-        const opens = item.id === "link" || item.id === "image";
-        const off = disabled || editor === null || (item.disabled?.(model) ?? false);
-        return (
-          <button
-            key={item.id}
-            type="button"
-            data-tool={item.id}
-            aria-label={item.label}
-            aria-pressed={item.pressed ? item.pressed(model) : undefined}
-            aria-expanded={opens ? panel === item.id : undefined}
-            disabled={off}
-            tabIndex={index === 0 ? 0 : -1}
-            onMouseDown={keepFocus}
-            onClick={() => {
-              if (item.id === "link") onLink();
-              else if (item.id === "image") onImage();
-              else if (editor) item.run?.(editor);
-            }}
-            className={BUTTON}
-          >
-            <Icon icon={item.icon} size={18} strokeWidth={EDITOR_ICON_STROKE} />
-          </button>
-        );
-      })}
+    <div className="relative max-w-full min-w-0">
+      <div
+        ref={row}
+        role="toolbar"
+        aria-label="Body formatting"
+        data-body-toolbar=""
+        data-more={more ? "" : undefined}
+        onKeyDown={onKey}
+        className="flex max-w-full min-w-0 gap-1 overflow-x-auto rounded-md bg-page p-1.5 [scrollbar-width:thin]"
+      >
+        {ITEMS.map((item, index) => {
+          const opens = item.id === "link" || item.id === "image";
+          const off = disabled || editor === null || (item.disabled?.(model) ?? false);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              data-tool={item.id}
+              aria-label={item.label}
+              aria-pressed={item.pressed ? item.pressed(model) : undefined}
+              aria-expanded={opens ? panel === item.id : undefined}
+              disabled={off}
+              tabIndex={index === 0 ? 0 : -1}
+              onMouseDown={keepFocus}
+              onClick={() => {
+                if (item.id === "link") onLink();
+                else if (item.id === "image") onImage();
+                else if (editor) item.run?.(editor);
+              }}
+              className={BUTTON}
+            >
+              <Icon icon={item.icon} size={18} strokeWidth={EDITOR_ICON_STROKE} />
+            </button>
+          );
+        })}
+      </div>
+      {more ? (
+        <span
+          aria-hidden="true"
+          data-testid="post-toolbar-more"
+          className="pointer-events-none absolute inset-y-0 right-0 flex w-10 items-center justify-end rounded-r-md bg-gradient-to-l from-page via-page/90 to-transparent pr-1 text-ink-2"
+        >
+          <Icon icon={ChevronRight} size={18} strokeWidth={EDITOR_ICON_STROKE} />
+        </span>
+      ) : null}
     </div>
   );
 }

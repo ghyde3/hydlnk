@@ -161,16 +161,36 @@ export async function listEntriesWithClient(
   }
   if (!type.data) return failure("not_found");
 
+  // The term filter reads the DRAFT's terms (what the list shows), not `content_entry_terms`, which
+  // holds the published copy's links only: a draft, or a post whose draft gained the term since its
+  // last publish, matches too. A term of another site or type matches nothing.
+  let termField: "categories" | "tags" | null = null;
+  if (input.termId) {
+    const term = await admin
+      .from("content_terms")
+      .select("taxonomy")
+      .eq("id", input.termId)
+      .eq("site_id", site.site.id)
+      .eq("type_id", type.data.id)
+      .maybeSingle();
+    if (term.error) {
+      console.error("[content] reading the term failed", term.error.message);
+      return failure("error");
+    }
+    if (!term.data) return { ok: true, items: [], nextCursor: null };
+    termField = term.data.taxonomy === "tag" ? "tags" : "categories";
+  }
+
   const col = COLUMN[sort];
   const select =
-    "id, rev, published_at, created_at, updated_at, deleted_at, title:draft->>title, slug:draft->>slug, path:draft->>path" +
-    (input.termId ? ", content_entry_terms!inner(term_id)" : "");
+    "id, rev, published_at, created_at, updated_at, deleted_at, title:draft->>title, slug:draft->>slug, path:draft->>path";
   let query = admin
     .from("content_entries")
     .select(select)
     .eq("site_id", site.site.id)
     .eq("type_id", type.data.id);
-  if (input.termId) query = query.eq("content_entry_terms.term_id", input.termId);
+  if (termField)
+    query = query.filter(`draft->terms->${termField}`, "cs", JSON.stringify([input.termId]));
   if (status === undefined) query = query.is("deleted_at", null);
   else if (status === "draft") query = query.is("deleted_at", null).is("published_at", null);
   else if (status === "published")

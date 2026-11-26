@@ -25,6 +25,8 @@ export interface PostSaveView {
   state: PostSaveState;
   /** Why the last save was refused, while `state` is "error". */
   problem: PostSaveProblem | null;
+  /** What the server said is wrong with the body, for an `invalid` refusal that named it. */
+  message?: string;
 }
 
 export interface PostSaveOptions<Draft> {
@@ -143,7 +145,13 @@ export class PostSaveQueue<Draft> {
   // -----------------------------------------------------------------------------------------
 
   private set(view: PostSaveView): void {
-    if (view.state === this.current.state && view.problem === this.current.problem) return;
+    if (
+      view.state === this.current.state &&
+      view.problem === this.current.problem &&
+      view.message === this.current.message
+    ) {
+      return;
+    }
     this.current = view;
     this.options.onChange?.(view);
     for (const listener of this.listeners) listener();
@@ -193,8 +201,14 @@ export class PostSaveQueue<Draft> {
         return;
       }
       // Refused: the draft stays the one to save, unless a newer edit has arrived since.
+      // Only a network failure or a server error is retried by itself: a refusal (an `invalid` body
+      // included) gets the same answer again, so it waits for the next edit or Try again.
       this.pending ??= job;
-      this.set({ state: "error", problem: answer.kind });
+      this.set({
+        state: "error",
+        problem: answer.kind,
+        ...(answer.kind === "invalid" && answer.message ? { message: answer.message } : {}),
+      });
       if (answer.kind === "error" && this.timer === null) this.schedule(RETRY_MS);
     })();
     this.sending = run;

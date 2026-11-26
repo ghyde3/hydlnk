@@ -3,15 +3,14 @@ import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { ingestPage, type IngestPage } from "../m4/analytics-ingest-helpers";
 import {
-  addPost,
-  addTerm,
-  daysBefore,
-  enableBlog,
-  republish,
-  trash,
-  unpublish,
-  uploadAddress,
-} from "./public-helpers";
+  expireBlog,
+  ownerSession,
+  postAction,
+  publishNewPost,
+  republishPost,
+  setBlog,
+} from "./owner-routes";
+import { addPost, addTerm, daysBefore, enableBlog, uploadAddress } from "./public-helpers";
 
 /**
  * M16-03 to M16-06 and M16-10 on a handle host, at 390x844 and 1440x900: the post page, the
@@ -32,7 +31,7 @@ let rich: { id: string; rev: number };
 const BODY = (image: string) =>
   [
     "An opening paragraph with a [link](https://example.com/a) in it.",
-    "# A heading",
+    "## A heading",
     "- one\n- two",
     "> a quote",
     "```\nconst a = 1; // " + "x".repeat(120) + "\n```",
@@ -122,14 +121,19 @@ test("M16-04 a post page: theme-styled, finished HTML, hostile body shown as tex
 test("M16-04 a draft, an unpublished post and a trashed post are 404; an older post has both neighbours", async ({
   page,
   request,
+  browser,
 }) => {
   expect((await request.get(`${site.origin}/blog/a-draft`)).status()).toBe(404);
-  const gone = await addPost(site, typeId, { title: "Soon gone", slug: "soon-gone" });
+  // Through the real routes: the writer expires the cache, so a production build shows each change.
+  const owner = await ownerSession(browser, site.email);
+  const gone = await publishNewPost(owner, site, typeId, { title: "Soon gone", slug: "soon-gone" });
   expect((await request.get(`${site.origin}/blog/soon-gone`)).status()).toBe(200);
-  await unpublish(site, gone);
+  await postAction(owner, site.pageId, gone, "unpublish");
   expect((await request.get(`${site.origin}/blog/soon-gone`)).status()).toBe(404);
-  const binned = await addPost(site, typeId, { title: "Binned", slug: "binned" });
-  await trash(binned.id);
+  const binned = await publishNewPost(owner, site, typeId, { title: "Binned", slug: "binned" });
+  expect((await request.get(`${site.origin}/blog/binned`)).status()).toBe(200);
+  await postAction(owner, site.pageId, binned, "trash");
+  await owner.close();
   const missing = await request.get(`${site.origin}/blog/binned`);
   expect(missing.status()).toBe(404);
   expect(await missing.text()).not.toContain("Binned");
@@ -150,6 +154,16 @@ test("M16-05 the archive: 12 posts over two pages, a category and a tag page", a
   await expect(cards.nth(9).locator("h2")).toHaveText("Post number 10");
   await expect(page.locator(".hl-archive")).not.toContainText("Still a draft");
   await expect(page.locator(".pg-archive-count")).toHaveText("Page 1 of 2");
+  // The count is centred on the pager, with the next link at its end (no previous link on page 1).
+  const centreOf = async (selector: string) => {
+    const box = (await page.locator(selector).boundingBox())!;
+    return { mid: box.x + box.width / 2, right: box.x + box.width };
+  };
+  const pager = await centreOf(".pg-archive-pager");
+  expect(Math.abs((await centreOf(".pg-archive-count")).mid - pager.mid)).toBeLessThan(2);
+  expect(
+    Math.abs((await centreOf('.pg-archive-pager a[rel="next"]')).right - pager.right),
+  ).toBeLessThan(2);
   await expectNoHorizontalScroll(page);
   await expectTapTargets(page, ".hl-archive");
 
@@ -158,6 +172,15 @@ test("M16-05 the archive: 12 posts over two pages, a category and a tag page", a
   await expect(page.locator(".hl-archive-card")).toHaveCount(2);
   await expect(page.locator(".hl-archive-card").first().locator("h2")).toHaveText("Post number 11");
   await expect(page.locator('.pg-archive-pager a[rel="prev"]')).toHaveAttribute("href", "/blog");
+  {
+    const pagerBox = (await page.locator(".pg-archive-pager").boundingBox())!;
+    const countBox = (await page.locator(".pg-archive-count").boundingBox())!;
+    const prevBox = (await page.locator('.pg-archive-pager a[rel="prev"]').boundingBox())!;
+    expect(
+      Math.abs(countBox.x + countBox.width / 2 - (pagerBox.x + pagerBox.width / 2)),
+    ).toBeLessThan(2);
+    expect(Math.abs(prevBox.x - pagerBox.x)).toBeLessThan(2);
+  }
   await expectNoHorizontalScroll(page);
 
   expect((await page.goto(`${site.origin}/blog/category/news`))?.status()).toBe(200);
@@ -197,7 +220,7 @@ test("M16-03 M16-05 invented paths under the archive are 404s", async ({ page, r
   await expectNoHorizontalScroll(page);
 });
 
-test("M16-06 the feed, the sitemap, and a post's head", async ({ request }) => {
+test("M16-06 the feed, the sitemap, and a post's head", async ({ request, browser }) => {
   const feed = await request.get(`${site.origin}/blog/feed.xml`);
   expect(feed.status()).toBe(200);
   expect(feed.headers()["content-type"]).toContain("application/rss+xml");
@@ -225,6 +248,11 @@ test("M16-06 the feed, the sitemap, and a post's head", async ({ request }) => {
     publishedAt: daysBefore(40),
   });
   expect(hidden.id).toBeTruthy();
+  // Written with its own date straight to the database after the site was requested: the blog's
+  // cache is expired the way the app does after a change of the type.
+  const owner = await ownerSession(browser, site.email);
+  await expireBlog(owner, site.pageId);
+  await owner.close();
   const html = await (await request.get(`${site.origin}/blog/hidden`)).text();
   expect(html).toContain('<meta name="robots" content="noindex">');
   expect(html).toContain('<meta name="description" content="The SEO description">');
@@ -247,13 +275,12 @@ test("M16-06 the feed, the sitemap, and a post's head", async ({ request }) => {
 test("M16-10 a changed slug answers 301 to the new address; a later post that takes the old slug wins", async ({
   page,
   request,
+  browser,
 }) => {
-  const post = await addPost(site, typeId, {
-    title: "Renamed",
-    slug: "old-name",
-    publishedAt: daysBefore(50),
-  });
-  await republish(site, post, { title: "Renamed", slug: "new-name", publishedAt: daysBefore(50) });
+  const owner = await ownerSession(browser, site.email);
+  const post = await publishNewPost(owner, site, typeId, { title: "Renamed", slug: "old-name" });
+  expect((await request.get(`${site.origin}/blog/old-name`)).status()).toBe(200);
+  await republishPost(owner, site.pageId, post, { slug: "new-name" });
   const moved = await request.get(`${site.origin}/blog/old-name`, { maxRedirects: 0 });
   expect(moved.status()).toBe(301);
   expect(moved.headers()["location"]).toBe("/blog/new-name");
@@ -264,7 +291,8 @@ test("M16-10 a changed slug answers 301 to the new address; a later post that ta
     404,
   );
 
-  await addPost(site, typeId, { title: "Taker", slug: "old-name", publishedAt: daysBefore(51) });
+  await publishNewPost(owner, site, typeId, { title: "Taker", slug: "old-name" });
+  await owner.close();
   const taken = await request.get(`${site.origin}/blog/old-name`, { maxRedirects: 0 });
   expect(taken.status()).toBe(200);
   expect(await taken.text()).toContain("Taker");
@@ -272,12 +300,16 @@ test("M16-10 a changed slug answers 301 to the new address; a later post that ta
 
 test("M16-04 M16-05 a blog that is off, and a site that is not published, show nothing", async ({
   request,
+  browser,
 }) => {
   const quiet = await ingestPage("blogoff", { plan: "pro" });
   const type = await enableBlog(quiet.pageId);
   await addPost(quiet, type, { title: "Quiet post", slug: "quiet" });
   expect((await request.get(`${quiet.origin}/blog/quiet`)).status()).toBe(200);
-  await enableBlog(quiet.pageId, false);
+  // Turned off through the Pages route, as the editor does.
+  const owner = await ownerSession(browser, quiet.email);
+  await setBlog(owner, quiet.pageId, false);
+  await owner.close();
   for (const path of ["/blog", "/blog/quiet", "/blog/feed.xml", "/blog/page/2"]) {
     expect((await request.get(`${quiet.origin}${path}`)).status(), path).toBe(404);
   }

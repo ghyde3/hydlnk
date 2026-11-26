@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
+import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll } from "../helpers";
+import { ingestPage } from "../m4/analytics-ingest-helpers";
 import { makePng } from "../m2/publish-helpers";
 import {
   POST_TEST_IDS,
   blogUser,
+  enableBlog,
   expectSaved,
   expectTargets44,
   openPost,
@@ -206,4 +208,139 @@ test("M16-13 a line typed like Markdown syntax is saved escaped and reopens in t
     "# not a heading",
   );
   await expect(page.getByTestId(POST_TEST_IDS.body).locator("h1, h2")).toHaveCount(0);
+});
+
+test("M16-13 a video URL typed in the rich editor is stored as typed, plays live as an embed and reopens rich", async ({
+  page,
+  context,
+}) => {
+  const VIDEO = "https://www.youtube.com/watch?v=a_bcdEFG_12";
+  // A published site (the live post needs one), signed in.
+  const user = await ingestPage("pu", { plan: "pro" });
+  await signInAs(context, user.email);
+  await enableBlog(user.pageId);
+  const id = await seedPost(user.pageId, { title: "Watch", slug: "watch", body: "" });
+  await openPost(page, id);
+  await page.getByTestId(POST_TEST_IDS.body).click();
+  await page.keyboard.type(VIDEO);
+  await expectSaved(page);
+  // No backslashes before the underscores.
+  expect((await postRow(id)).draft.body).toBe(VIDEO);
+
+  await page.getByTestId(POST_TEST_IDS.publish).click();
+  await expect(page.getByTestId("post-bar").locator("[data-post-state]")).toHaveAttribute(
+    "data-post-state",
+    "live",
+  );
+  const live = await page.context().newPage();
+  const response = await live.goto(`${user.origin}/blog/watch`);
+  expect(response?.status()).toBe(200);
+  await expect(live.locator("article .pg-embed[data-embed-provider='youtube']")).toHaveCount(1);
+  await expect(live.locator("article")).not.toContainText("\\_");
+  await live.close();
+
+  await page.reload();
+  await waitForPostEditor(page);
+  await expect(page.getByTestId(POST_TEST_IDS.bodySource)).toHaveCount(0);
+  await expect(page.getByTestId(POST_TEST_IDS.body)).toContainText(VIDEO);
+});
+
+test("M16-13 the link tool takes http and https only; a body over 512 KiB is refused on screen before any request", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "pq");
+  const id = await seedPost(user.pageId, { title: "Links", slug: "links", body: "" });
+  await openPost(page, id);
+  const body = page.getByTestId(POST_TEST_IDS.body);
+  await body.click();
+  await page.keyboard.type("Read this");
+  await page.keyboard.press("Shift+Home");
+  await page.locator('[data-tool="link"]').click();
+  const href = page.locator('[data-field="post-link-href"]');
+  for (const bad of [
+    "javascript:alert(1)",
+    "ftp://files.example/x",
+    "mailto:a@b.example",
+    "example.com",
+  ]) {
+    await href.fill(bad);
+    await page.getByRole("button", { name: "Apply link" }).click();
+    await expect(
+      page.getByText("Use a full address that starts with https:// or http://."),
+    ).toBeVisible();
+    await expect(body.locator("a")).toHaveCount(0);
+  }
+  await href.fill("https://ok.example/page");
+  await page.getByRole("button", { name: "Apply link" }).click();
+  await expect(body.locator("a")).toHaveAttribute("href", "https://ok.example/page");
+  await expectSaved(page);
+  expect((await postRow(id)).draft.body).toBe("[Read this](https://ok.example/page)");
+
+  // Over 512 KiB: the size shows in red, the field says why, and no save request leaves the page.
+  const saves: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().includes(`/entries/${id}/draft`))
+      saves.push(request.url());
+  });
+  const before = (await postRow(id)).rev;
+  await body.click();
+  await page.keyboard.press("End");
+  await page.evaluate(
+    async (text) => {
+      // A paste of 513 KiB of text, as a person would make it.
+      const target = document.querySelector("[data-testid='post-body']") as HTMLElement;
+      const data = new DataTransfer();
+      data.setData("text/plain", text);
+      target.dispatchEvent(
+        new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+      );
+    },
+    "x".repeat(513 * 1024),
+  );
+  await expect(page.getByTestId("post-body-size")).toHaveClass(/text-bad/);
+  await expect(
+    page.getByText("The body is over 512 KiB, so it isn’t being saved. Shorten it."),
+  ).toBeVisible();
+  await page.waitForTimeout(3_000);
+  expect(saves).toEqual([]);
+  expect((await postRow(id)).rev).toBe(before);
+});
+
+test("M16-13 on a phone the post bar stays on screen on a long post, and the toolbar shows that it scrolls", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "ps");
+  const long = Array.from({ length: 60 }, (_, n) => `Paragraph ${n + 1} of a long post.`).join(
+    "\n\n",
+  );
+  const id = await seedPost(user.pageId, { title: "Long", slug: "long", body: long });
+  await openPost(page, id);
+  const phone = (page.viewportSize()?.width ?? 0) < 760;
+  const bar = page.getByTestId("post-bar");
+  await page.getByTestId(POST_TEST_IDS.body).locator("p").last().scrollIntoViewIfNeeded();
+  const publish = page.getByTestId(POST_TEST_IDS.publish);
+  if (phone) {
+    // Stuck to the top of the screen, whole, with Publish inside the viewport.
+    const box = (await bar.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(-1);
+    expect(box.y).toBeLessThan(2);
+    const button = (await publish.boundingBox())!;
+    expect(button.y + button.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    expect(button.height).toBeGreaterThanOrEqual(44);
+    await publish.click();
+    await expect(bar.locator("[data-post-state]")).toHaveAttribute("data-post-state", "live");
+
+    // The toolbar scrolls inside its row: a cue at the end while buttons are hidden, gone at the end.
+    const toolbar = page.locator("[data-body-toolbar]");
+    await toolbar.scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("post-toolbar-more")).toBeVisible();
+    await toolbar.evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
+    await expect(page.getByTestId("post-toolbar-more")).toHaveCount(0);
+  } else {
+    // From 760px the bar stays in the column, above the post.
+    await expect(bar).toHaveCSS("position", "static");
+  }
+  await expectNoHorizontalScroll(page);
 });

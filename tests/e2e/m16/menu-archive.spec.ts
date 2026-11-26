@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { PAGES_BLOG_TEST_IDS } from "@/lib/blog/test-ids";
 import { cleanupUsers } from "../fixtures/data";
-import { rawRequest } from "../fixtures/http";
+import { authCookies, cookieHeader, rawRequest } from "../fixtures/http";
 import { expectNoHorizontalScroll } from "../helpers";
 import { emptyUser, openEditor, pageRow, previewScreen, statusChip } from "../m2/editor-helpers";
 import { seedEntries } from "../m15/entry-helpers";
+import { publishNewPost } from "./owner-routes";
 import { POSTS_TEST_IDS, POSTS_URL, postTypeId } from "./posts-helpers";
 
 /**
@@ -75,6 +76,24 @@ test("M16-08 the blog's menu item survives Publish, links to the archive and hid
   await expect(page).toHaveURL(`http://${host}/blog`);
   await expect(page.locator(".hl-archive")).toBeVisible();
   await expect(page.locator('nav.pg-menu a[href="/blog"]')).toHaveAttribute("aria-current", "page");
+  await expectNoHorizontalScroll(page);
+
+  // On a sub-page the item is there and not current; on a post page it is the current item.
+  expect((await page.goto(`http://${host}/gallery`))?.status()).toBe(200);
+  await expect(page.locator('nav.pg-menu a[href="/blog"]')).toHaveText("Posts");
+  await expect(page.locator('nav.pg-menu a[href="/blog"]')).not.toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const owner = { cookie: cookieHeader(await authCookies(context)), close: async () => {} };
+  await publishNewPost(owner, { pageId: user.pageId }, typeId, {
+    title: "In the menu",
+    slug: "menu-post",
+  });
+  expect((await page.goto(`http://${host}/blog/menu-post`))?.status()).toBe(200);
+  await expect(page.locator("h1")).toHaveText("In the menu");
+  await expect(page.locator('nav.pg-menu a[href="/blog"]')).toHaveAttribute("aria-current", "page");
+  await expect(page.locator('nav.pg-menu a[aria-current="page"]')).toHaveCount(1);
   await expectNoHorizontalScroll(page);
 
   // Blog off (the Posts screen's own control): the link is gone and /blog is the 404.

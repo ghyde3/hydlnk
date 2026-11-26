@@ -8,8 +8,9 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/pages/{id}/posts/latest on the app host (M16-07): what a latest-posts block would draw
- * for the signed-in account's own site, so the editor's preview shows the real list.
+ * GET /api/pages/{id}/posts/latest[?categories=a,b] on the app host (M16-07): what latest-posts
+ * blocks would draw for the signed-in account's own site, so the editor's preview shows the real
+ * list; with the categories the blocks filter by, those categories' newest posts are included.
  *
  *   200  {kind: "ok", latest, categories}   `latest` is null while the blog is off; `categories`
  *        are the Post type's categories (id and name) for the block's picker
@@ -34,13 +35,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const archive = postsArchiveOf((await getSiteArchives(siteId)).archives);
     if (!archive)
       return answer({ status: 200, body: { kind: "ok", latest: null, categories: [] } });
-    const [latest, terms] = await Promise.all([
-      getLatestPosts(siteId, archive.typeId),
-      getTermIndex(siteId, archive.typeId),
-    ]);
+    const terms = await getTermIndex(siteId, archive.typeId);
     const categories = terms
       .filter((term) => term.taxonomy === "category")
       .map((term) => ({ id: term.id, name: term.name }));
+    // `?categories=a,b`: the categories the editor's blocks filter by, each a real category of
+    // this blog (anything else is dropped), so the preview lists older posts of a category too.
+    const known = new Set(categories.map((category) => category.id));
+    const asked = (request.nextUrl.searchParams.get("categories") ?? "")
+      .split(",")
+      .map((id) => id.trim().toLowerCase())
+      .filter((id) => known.has(id));
+    const latest = await getLatestPosts(siteId, archive.typeId, asked);
     return answer({ status: 200, body: { kind: "ok", latest, categories } });
   } catch (error) {
     return failed("reading the latest posts", error);

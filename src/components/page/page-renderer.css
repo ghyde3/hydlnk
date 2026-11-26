@@ -2367,13 +2367,22 @@
   overflow-wrap: anywhere;
 }
 
+/* Three columns: "Page 1 of 2" stays centered on the page, the previous link at the start and the
+   next one at the end, whichever of them is there. */
 [data-page-root] .pg-archive-pager {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   min-width: 0;
+}
+
+[data-page-root] .pg-archive-pager > :first-child {
+  justify-self: start;
+}
+
+[data-page-root] .pg-archive-pager > :last-child {
+  justify-self: end;
 }
 
 [data-page-root] .pg-archive-page {
@@ -2392,7 +2401,6 @@
 }
 
 [data-page-root] .pg-archive-count {
-  flex: 1 1 auto;
   color: var(--t-text-muted);
   font-size: calc(13px * var(--t-scale));
   text-align: center;

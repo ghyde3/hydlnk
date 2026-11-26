@@ -8,6 +8,7 @@ import { CONTENT_CONFLICT_MESSAGE } from "@/lib/posts/messages";
 import { POST_TEST_IDS } from "@/lib/blog/test-ids";
 import {
   fetchPost,
+  expirePost,
   postAction,
   refusalMessage,
   restoreRevision,
@@ -107,10 +108,7 @@ export function PostEditor({
   const [meta, setMeta] = useState<Meta>(() => ({
     status: entry.status,
     everPublished: entry.firstPublishedAt !== null,
-    liveJson:
-      entry.status === "published" && !entry.hasUnpublishedChanges
-        ? stableJson(toStoredDraft(readPostForm(entry.draft), entry.draft))
-        : null,
+    liveJson: liveJsonOf(entry),
   }));
   const [following, setFollowing] = useState(() =>
     slugFollowsTitle(readPostForm(entry.draft), entry.firstPublishedAt !== null),
@@ -118,6 +116,8 @@ export function PostEditor({
   const [terms, setTerms] = useState(firstTerms);
   const [issues, setIssues] = useState<FieldIssue[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  /** The last action stood but its cache expiry failed: the live copy may lag until a retry. */
+  const [cacheStale, setCacheStale] = useState(false);
   const [busy, setBusy] = useState<PostBusy>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   /** Bumped when the draft is replaced from the server, so the body editor mounts on the new body. */
@@ -166,10 +166,7 @@ export function PostEditor({
     setMeta({
       status: fresh.status,
       everPublished: fresh.firstPublishedAt !== null,
-      liveJson:
-        fresh.status === "published" && !fresh.hasUnpublishedChanges
-          ? stableJson(toStoredDraft(next, fresh.draft))
-          : null,
+      liveJson: liveJsonOf(fresh),
     });
     setIssues([]);
     setLoadKey((key) => key + 1);
@@ -223,6 +220,7 @@ export function PostEditor({
         report(out.value);
         return;
       }
+      setCacheStale(out.value.cacheStale === true);
       if (action === "publish") {
         setMeta({ status: "published", everPublished: true, liveJson: sent });
         setFollowing(false);
@@ -236,6 +234,11 @@ export function PostEditor({
     } finally {
       setBusy(null);
     }
+  }
+
+  async function expireAgain() {
+    const out = await expirePost(siteId, entry.id);
+    if (out.kind === "ok" && out.expired) setCacheStale(false);
   }
 
   async function restoreFrom(revision: number): Promise<string | null> {
@@ -369,6 +372,18 @@ export function PostEditor({
           )}
         </div>
       ) : null}
+      {cacheStale ? (
+        <div
+          role="status"
+          data-testid="post-cache-stale"
+          className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-line bg-surface py-1 pr-1 pl-4 text-sm text-text-2"
+        >
+          <span className="min-w-0 py-2 [overflow-wrap:anywhere]">{CACHE_STALE_MESSAGE}</span>
+          <button type="button" onClick={() => void expireAgain()} className={FORM_BUTTON}>
+            Try again
+          </button>
+        </div>
+      ) : null}
       {notice ? (
         <p
           role="alert"
@@ -497,7 +512,21 @@ export function PostEditor({
   );
 }
 
-function saveProblemText(save: { problem: string | null }): string {
+const CACHE_STALE_MESSAGE =
+  "Done. Your live site may take a moment to show this change. Try again to update it now.";
+
+/**
+ * The live copy as the screen compares it with what it would store: so a post opened with
+ * unpublished changes reads Live again once it is edited back to what is live. Null when not live.
+ */
+function liveJsonOf(entry: PostEntry): string | null {
+  if (entry.status !== "published") return null;
+  const live = entry.published ?? (entry.hasUnpublishedChanges ? null : entry.draft);
+  if (live === null || typeof live !== "object") return null;
+  return stableJson(toStoredDraft(readPostForm(live), live));
+}
+
+function saveProblemText(save: { problem: string | null; message?: string }): string {
   switch (save.problem) {
     case "too-large":
       return "This post is too large to save. Shorten it.";
@@ -506,7 +535,10 @@ function saveProblemText(save: { problem: string | null }): string {
     case "blocked":
       return "The post links to a site that isn’t allowed, so it isn’t being saved. Remove the link.";
     case "invalid":
-      return "Something in this post can’t be saved. Check the slug and the fields below.";
+      return (
+        save.message ??
+        "Something in this post can’t be saved. Check the slug and the fields below."
+      );
     case "suspended":
       return SUSPENDED_REASON;
     case "missing":

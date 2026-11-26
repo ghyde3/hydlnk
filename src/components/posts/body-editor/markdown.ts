@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import { MarkdownManager } from "@tiptap/markdown";
+import { lexBounded } from "@/lib/blog/markdown";
 import { isHttpUrl } from "@/lib/document";
 import { BODY_HEADING_LEVELS, bodySchema } from "./extensions";
 
@@ -24,7 +25,8 @@ import { BODY_HEADING_LEVELS, bodySchema } from "./extensions";
  * paragraph typed like one of these came back as that block, or (a level 1 heading) sent the post
  * to the plain Markdown box. The first character that makes it syntax gets a backslash, which
  * Markdown reads back as the character itself. "*", "`", "~", "[" and "<" are already escaped by the
- * serializer, and ">" is written as an entity, so quotes, fences and HTML need nothing here.
+ * serializer (outside URL runs, see `encodeKeepingUrls`), and ">" is written as an entity, so
+ * quotes, fences and HTML need nothing here.
  */
 const BLOCK_START =
   /^( {0,3})(?:(#{1,6}(?=[ \t]|$))|([-+])(?=[ \t]|$)|(\d{1,9})([.)])(?=[ \t]|$)|((?:-[ \t]*){3,}$|=+[ \t]*$))/;
@@ -47,10 +49,87 @@ export function escapeBlockStarts(paragraph: string): string {
   return paragraph.split("\n").map(escapeLineStart).join("\n");
 }
 
+/**
+ * A URL typed as text (finding 2): the serializer backslash-escapes `_`, `*` and `~`, and marked
+ * then reads `https://x.com/a\_b` as a URL WITH the backslashes (no link, no embed, backslashes on
+ * the live page). So a run marked's GFM URL rule would take is written as typed. The run is found as
+ * marked finds it (17.0.6: `(?:protocol://|www.)` and a host character, up to a space or `<`, then
+ * its trailing punctuation trimmed by `_backpedal` until nothing changes). When the character after
+ * the trimmed run is one the serializer escapes, marked would read the escape into the URL, so that
+ * run is escaped as before.
+ */
+const URL_RUN = /(?:https?:\/\/|www\.)[a-zA-Z0-9-][^\s<]*/gi;
+const BACKPEDAL = /(?:[^?!.,:;*_'"~()&]+|\([^)]*\)|&(?![a-zA-Z0-9]+;$)|[?!.,:;*_'"~)]+(?!$))+/;
+const ESCAPED = /[\\`*_[\]~<>&]/;
+/** Longer runs are escaped as before (the trim is quadratic; no real address is this long). */
+const MAX_URL_RUN = 4096;
+
+function trimmedUrl(run: string): string {
+  let current = run;
+  let previous: string;
+  do {
+    previous = current;
+    current = BACKPEDAL.exec(current)?.[0] ?? "";
+  } while (previous !== current);
+  return current;
+}
+
+/** `text` with every URL run left as typed and everything else through `escape`. */
+export function encodeKeepingUrls(text: string, escape: (piece: string) => string): string {
+  let out = "";
+  let from = 0;
+  for (const match of text.matchAll(URL_RUN)) {
+    const start = match.index;
+    if (start < from || match[0].length > MAX_URL_RUN) continue;
+    const url = trimmedUrl(match[0]);
+    const next = text.charAt(start + url.length);
+    if (url.length === 0 || (next !== "" && ESCAPED.test(next))) continue;
+    out += escape(text.slice(from, start)) + url;
+    from = start + url.length;
+  }
+  return out + escape(text.slice(from));
+}
+
+/** A text node whose link is a bare URL: its text is its address (or `www.` and the address). */
+function isBareLink(node: JSONContent): boolean {
+  const text = node.text ?? "";
+  const link = node.marks?.find((mark) => mark.type === "link");
+  const href = link?.attrs?.href;
+  if (typeof href !== "string" || (href !== text && href !== `http://${text}`)) return false;
+  const runs = [...text.matchAll(URL_RUN)];
+  return runs.length === 1 && runs[0]!.index === 0 && trimmedUrl(runs[0]![0]) === text;
+}
+
+/**
+ * The document with every bare link written as plain text: the URL run is then left as typed, and
+ * marked reads it back as the same link (`https://...` on its own line stays an embed).
+ */
+function withBareLinksAsText(node: JSONContent): JSONContent {
+  if (node.type === "text") {
+    if (!isBareLink(node)) return node;
+    const marks = node.marks?.filter((mark) => mark.type !== "link") ?? [];
+    return { ...node, marks };
+  }
+  if (!node.content) return node;
+  return { ...node, content: node.content.map(withBareLinksAsText) };
+}
+
+type EncodeText = (text: string, node: JSONContent, parentNode?: JSONContent) => string;
+
 let shared: MarkdownManager | null = null;
 function manager(): MarkdownManager {
   if (shared) return shared;
   const made = new MarkdownManager({ extensions: bodySchema() });
+  // Text is escaped by the library (`encodeTextForMarkdown`, private): URL runs of plain text are
+  // left as typed. In code (the library leaves "*" alone there) and in a link's text, as before.
+  const internals = made as unknown as { encodeTextForMarkdown: EncodeText };
+  const encode = internals.encodeTextForMarkdown.bind(made);
+  internals.encodeTextForMarkdown = (text, node, parentNode) => {
+    const inCode = encode("*", node, parentNode) === "*";
+    const inLink = node.marks?.some((mark) => mark.type === "link") ?? false;
+    if (inCode || inLink) return encode(text, node, parentNode);
+    return encodeKeepingUrls(text, (piece) => encode(piece, node, parentNode));
+  };
   // Paragraphs are written by the library's own renderer; its result is escaped on the way out.
   // The manager calls this method for every node, nested ones included (list items, quotes).
   const render = made.renderNodeToMarkdown.bind(made);
@@ -72,7 +151,7 @@ export function fromMarkdown(markdown: string): JSONContent {
 }
 
 export function toMarkdown(doc: JSONContent): string {
-  return manager().serialize(doc);
+  return manager().serialize(withBareLinksAsText(doc));
 }
 
 const encoder = new TextEncoder();
@@ -143,6 +222,9 @@ function allKnown(tokens: readonly Token[]): boolean {
 export function canEditRich(body: string): boolean {
   const text = comparable(body);
   if (text === "") return true;
+  // A body the one bounded lexer refuses (too heavy or too deep to lex) is never handed to the
+  // editor's own lexer, which has no bound: it opens in the plain Markdown box.
+  if (!lexBounded(text).ok) return false;
   try {
     const tokens = manager().instance.lexer(text) as unknown as Token[];
     if (!allKnown(tokens)) return false;

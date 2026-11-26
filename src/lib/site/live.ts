@@ -26,6 +26,16 @@ export function usesLatestPosts(blocks: readonly { type: string }[]): boolean {
   return blocks.some((block) => block.type === "latest_posts");
 }
 
+/** The categories the latest-posts blocks of `blocks` filter by, once each. */
+export function latestPostsCategories(blocks: readonly { type: string }[]): string[] {
+  const ids = new Set<string>();
+  for (const block of blocks) {
+    const id = (block as { categoryId?: unknown }).categoryId;
+    if (block.type === "latest_posts" && typeof id === "string" && id !== "") ids.add(id);
+  }
+  return [...ids];
+}
+
 /** The archive a latest-posts block lists: the site's Post type when it is on, else nothing. */
 export function postsArchiveOf(archives: readonly ArchiveSummary[]): ArchiveSummary | null {
   return archives.find((archive) => archive.key === "post") ?? null;

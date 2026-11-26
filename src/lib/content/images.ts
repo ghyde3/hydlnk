@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { marked, type Token, type Tokens } from "marked";
+import type { Token, Tokens } from "marked";
+import { walkBody } from "@/lib/blog/markdown";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
 import { uploadPathOf } from "@/lib/media/upload-path";
 import type { Database } from "@/lib/supabase/database.types";
@@ -43,7 +44,8 @@ const FOREIGN_IMAGE_MESSAGE = "Use an image from your uploads.";
 /** The address of every `image` token of the body, as written (tables, lists, quotes, links and references included). */
 function imageAddresses(body: string): string[] {
   const found: string[] = [];
-  marked.walkTokens(marked.lexer(body), (token: Token) => {
+  // The one bounded lexer: a body it refuses is refused by the gates before this runs.
+  walkBody(body, (token: Token) => {
     if (token.type === "image") found.push((token as Tokens.Image).href);
   });
   return found;

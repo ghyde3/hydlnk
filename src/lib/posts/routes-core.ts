@@ -6,8 +6,10 @@ import {
   createTerm,
   deleteTerm,
   enableType,
+  expireEntryAgain,
   getEntry,
   listTermsWithClient,
+  listTypes,
   listTypesWithClient,
   publishEntry,
   renameTerm,
@@ -111,7 +113,8 @@ export async function listTypesCore(
 /**
  * POST types/post {enabled?, archivePath?}: turn the blog on or off, or move its archive. The path is
  * changed first, so "turn on at /news" claims `/news` and never `/blog`. A path a page uses or a
- * reserved word answers `{kind: "path"}` (HL012) and nothing changes.
+ * reserved word answers `{kind: "path"}` (HL012) and nothing changes: a refused turn on puts the
+ * previous path back.
  */
 export async function setPostTypeCore(input: {
   userId: string;
@@ -130,6 +133,14 @@ export async function setPostTypeCore(input: {
   if (!UUID.test(input.siteId)) return MISSING;
   const who = actor(input.userId);
   let type: TypeSummary | null = null;
+  // Turning on at an address moves the path first; if the turn on is then refused, the path the
+  // type had is put back, so a refusal changes nothing.
+  let previousPath: string | null = null;
+  if (archivePath !== undefined && enabled !== undefined) {
+    const types = await listTypes({ actor: who, siteId: input.siteId });
+    if (!types.ok) return refused(types);
+    previousPath = types.types.find((t) => t.key === POST_KEY)?.archivePath ?? null;
+  }
   if (archivePath !== undefined) {
     const moved = await updateType({
       actor: who,
@@ -147,7 +158,18 @@ export async function setPostTypeCore(input: {
       typeKey: POST_KEY,
       enabled,
     });
-    if (!switched.ok) return refused(switched);
+    if (!switched.ok) {
+      if (previousPath !== null && previousPath !== archivePath) {
+        const back = await updateType({
+          actor: who,
+          siteId: input.siteId,
+          typeKey: POST_KEY,
+          archivePath: previousPath,
+        });
+        if (!back.ok) console.error("[posts] restoring the archive path failed", back.error);
+      }
+      return refused(switched);
+    }
     type = switched;
   }
   if (!type) return invalid("Nothing to change.");
@@ -256,7 +278,7 @@ export async function createPostCore(
 
 export type { PostEntry };
 
-/** GET entries/{entryId}: one post of the site with its draft (trashed posts included). Never the live copy. */
+/** GET entries/{entryId}: one post of the site with its draft (trashed posts included), and its live copy while live. */
 export async function getPostCore(input: {
   userId: string;
   siteId: string;
@@ -276,6 +298,7 @@ export async function getPostCore(input: {
         status: out.status,
         hasUnpublishedChanges: out.hasUnpublishedChanges,
         draft: out.draft,
+        published: out.status === "published" ? out.published : null,
         publishedAt: out.publishedAt,
         firstPublishedAt: out.firstPublishedAt,
         updatedAt: out.updatedAt,
@@ -287,7 +310,10 @@ export async function getPostCore(input: {
 
 export const POST_ACTIONS = ["publish", "unpublish", "trash", "restore"] as const;
 export type PostAction = (typeof POST_ACTIONS)[number];
-export type PostActionBody = { kind: "ok"; rev: number; publishedAt?: string };
+/** `cacheStale`: the write stands but expiring the cache failed twice; the live copy may lag a moment. */
+export type PostActionBody = { kind: "ok"; rev: number; publishedAt?: string; cacheStale?: true };
+
+const stale = (out: object) => ("cacheStale" in out ? { cacheStale: true as const } : {});
 
 /**
  * POST entries/{entryId}/publish | unpublish | trash | restore {rev}: one post, at the rev the
@@ -311,7 +337,10 @@ export async function postActionCore(
   if (action === "publish") {
     const out = await publishEntry(write);
     if (!out.ok) return refused(out);
-    return { status: 200, body: { kind: "ok", rev: out.rev, publishedAt: out.publishedAt } };
+    return {
+      status: 200,
+      body: { kind: "ok", rev: out.rev, publishedAt: out.publishedAt, ...stale(out) },
+    };
   }
   const out =
     action === "unpublish"
@@ -320,7 +349,22 @@ export async function postActionCore(
         ? await trashEntry(write)
         : await restoreEntry(write);
   if (!out.ok) return refused(out);
-  return { status: 200, body: { kind: "ok", rev: out.rev } };
+  return { status: 200, body: { kind: "ok", rev: out.rev, ...stale(out) } };
+}
+
+/**
+ * POST entries/{entryId}/expire: expire the post's cache again, after an action answered
+ * `cacheStale`. Any post of the site, trashed ones included. 200 `{kind: "ok", expired}`.
+ */
+export async function expirePostCore(
+  admin: Admin,
+  input: { userId: string; siteId: string; entryId: string },
+): Promise<Answer<{ kind: "ok"; expired: boolean }>> {
+  if (!UUID.test(input.siteId) || !UUID.test(input.entryId)) return MISSING;
+  if (!(await isEntryOfSite(admin, input.siteId, input.entryId, POST, "any"))) return MISSING;
+  const out = await expireEntryAgain({ actor: actor(input.userId), entryId: input.entryId });
+  if (!out.ok) return refused(out);
+  return { status: 200, body: { kind: "ok", expired: out.expired } };
 }
 
 // Terms ------------------------------------------------------------------------------------------

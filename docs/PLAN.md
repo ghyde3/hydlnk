@@ -240,6 +240,7 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
 - `content_entries_live_order_idx` on `(site_id, type_id, first_published_at desc, id)` for live, untrashed entries: the archive order.
 - `live_term_counts(site, type)`: a type's terms with the number of published, untrashed entries on each (a term with none is listed at 0). `service_role` only.
 - Redirects for a changed archive path or page path are not built.
+- The private share link of a site (M16-16) shows the saved draft of any post of that same site at `/share/{token}/entry/{entryId}`: this is intended (a share link previews the whole site's drafts, its posts included), and the entry is always looked up inside the link's own site.
 
 **Deferred:**
 - `content_relations` arrives in stage 5.

@@ -158,8 +158,9 @@ function blockToken(token: Token, ctx: Ctx, depth: number, key: number): ReactNo
     }
     case "heading": {
       const heading = token as Tokens.Heading;
-      // The title is the page's one <h1>: a body heading starts at <h2> and stops at <h4>.
-      const level = Math.min(Math.max(Number(heading.depth) || 1, 1) + 1, 4);
+      // The title is the page's one <h1>. The editor writes levels 2 to 4 ("##" to "####"), drawn as
+      // written; a "#" from elsewhere is an <h2>, levels 5 and 6 are <h4>.
+      const level = Math.min(Math.max(Number(heading.depth) || 2, 2), 4);
       const children = inline(heading.tokens, ctx, depth + 1);
       if (level === 2) return <h2 key={key}>{children}</h2>;
       if (level === 3) return <h3 key={key}>{children}</h3>;

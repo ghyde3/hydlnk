@@ -9,6 +9,7 @@ import {
   findLivePostId,
   getPostIndex,
   getSiteArchives,
+  getRedirectTargetSlug,
   getSlugRedirects,
   getTermIndex,
 } from "@/lib/blog/published";
@@ -64,16 +65,19 @@ async function postResponse(
   handle: string | null,
 ): Promise<Response> {
   const siteId = page.pageId;
-  const entryId = await findLivePostId(siteId, archive.typeId, slug);
+  // A slug with a redirect row is not live: the row is deleted when its slug goes live again (the
+  // trigger of M16-01). So past the index (a type with more than POST_INDEX_MAX live posts) such a
+  // slug skips the uncached slug read, and an old slug costs no database read on a warm cache. The
+  // cached index is still asked first, so a live post with the slug always wins.
+  const target = own(await getSlugRedirects(siteId, archive.typeId), slug);
+  const entryId = await findLivePostId(siteId, archive.typeId, slug, target === undefined);
   if (entryId === null) {
-    // No live post has this slug (a live one always wins: it was looked up first). An old slug of
-    // a post that is STILL live answers 301 to its current address (M16-10); the redirect row only
-    // names an entry, so the entry must be found in the index of live posts before anything is sent.
-    const target = own(await getSlugRedirects(siteId, archive.typeId), slug);
+    // An old slug of a post that is STILL live answers 301 to its current address (M16-10); the
+    // redirect row only names an entry, so the entry must be found live (the index, or past it one
+    // cached published-only read) before anything is sent.
     if (target === undefined) return plainNotFound();
-    const index = await getPostIndex(siteId, archive.typeId);
-    const current = index.posts.find((post) => post.id === target);
-    const location = current ? postHref(archive.path, current.slug) : null;
+    const current = await getRedirectTargetSlug(siteId, archive.typeId, target);
+    const location = current === null ? null : postHref(archive.path, current);
     return location === null ? plainNotFound() : movedResponse(location);
   }
   const html = await getPostHtml(siteId, archive.typeId, entryId, handle);

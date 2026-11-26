@@ -156,6 +156,20 @@ export function postTerms(
   return out;
 }
 
+/**
+ * A post's og:image (M16-06): its own share image, else its featured image (each only when it is a
+ * file of the owner's own folder), else the site's image at 1200x630, else none.
+ */
+export function postShareImage(
+  post: Pick<PostFields, "shareImage" | "featuredImage">,
+  ownerId: string,
+  siteImage: string | null,
+): PostHeadInput["image"] {
+  const share = ownImage(post.shareImage, ownerId) ?? ownImage(post.featuredImage, ownerId);
+  if (share) return { url: share.src, width: share.width, height: share.height };
+  return siteImage ? { url: siteImage, width: 1200, height: 630 } : null;
+}
+
 export interface PostDocumentInput {
   page: PublishedPage;
   archive: ArchiveSummary;
@@ -211,12 +225,7 @@ export function renderPostDocument(input: PostDocumentInput): string {
 
   const href = postHref(archive.path, post.slug);
   const url = input.origin !== null && href !== null ? `${input.origin}${href}` : null;
-  const share = ownImage(post.shareImage, ownerId) ?? ownImage(post.featuredImage, ownerId);
-  const image = share
-    ? { url: share.src, width: share.width, height: share.height }
-    : input.siteImage
-      ? { url: input.siteImage, width: 1200, height: 630 }
-      : null;
+  const image = postShareImage(post, ownerId, input.siteImage);
   const preloads: HeadPreload[] = tenantFontPreloads(document.tokens).map((font): HeadPreload => ({
     as: "font",
     href: font,

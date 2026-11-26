@@ -321,16 +321,39 @@ export async function loadDraftPreview(
         blocks: cleaned.blocks,
       };
     }
+    // The site's archives that are on (the Blog, M16-08) join the menu as on the live site: the type's
+    // id, its path and its plural label. The preview has no archive of its own, so such an item keeps
+    // the live address, which the preview frame does not follow.
+    const types = await admin
+      .from("content_types")
+      .select("id, archive_path, label_plural")
+      .eq("site_id", page.id)
+      .eq("enabled", true);
+    if (types.error) throw new Error(`Loading the site's archives failed: ${types.error.message}`);
+    const archives = (types.data ?? []).flatMap((type): SitePageSummary[] => {
+      const archivePath = type.archive_path;
+      const title = stripHiddenCharacters(type.label_plural ?? "").trim();
+      if (typeof archivePath !== "string" || !isValidSubPagePath(archivePath) || title === "") {
+        return [];
+      }
+      return [{ id: type.id, path: archivePath, title }];
+    });
+    const archiveHrefs = new Set(archives.map((archive) => `/${archive.path}`));
     // The menu is the draft's: Home and the sub-pages in Home's order, the current one marked, every
-    // entry a link to this same preview. Page links resolve to the same addresses.
+    // page entry a link to this same preview. Page links resolve to the same addresses.
     const toShare = (href: string) => (href === "/" ? base : `${base}${href}`);
-    const menu = buildMenu(doc.nav, summaries, currentId, "links");
+    const menu = buildMenu(doc.nav, [...summaries, ...archives], currentId, "links");
     const hrefs: Record<string, string> = { [HOME_TARGET]: base };
     for (const [id, href] of Object.entries(hrefsOf(summaries))) hrefs[id] = toShare(href);
     site = {
       hrefs,
       menu: menu
-        ? { ...menu, items: menu.items.map((item) => ({ ...item, href: toShare(item.href) })) }
+        ? {
+            ...menu,
+            items: menu.items.map((item) =>
+              archiveHrefs.has(item.href) ? item : { ...item, href: toShare(item.href) },
+            ),
+          }
         : null,
     };
   }

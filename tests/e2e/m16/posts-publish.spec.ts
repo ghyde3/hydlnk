@@ -1,11 +1,14 @@
 import { expect, test } from "@playwright/test";
+import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll } from "../helpers";
+import { ingestPage } from "../m4/analytics-ingest-helpers";
 import {
   POSTS_TEST_IDS,
   POSTS_URL,
   POST_TEST_IDS,
   blogUser,
+  enableBlog,
   expectSaved,
   expectTargets44,
   openPost,
@@ -178,4 +181,85 @@ test("M16-15 M16-16 Preview opens the post's private share address, which draws 
   expect(headers["x-robots-tag"]).toContain("noindex");
   await expect(popup.getByRole("heading", { level: 1, name: "Preview me" })).toBeVisible();
   await expectNoHorizontalScroll(popup);
+});
+
+test("M16-15 a post opened with unpublished changes reads Live again once edited back to the live copy", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "pk");
+  const id = await seedPost(user.pageId, { title: "Live words", slug: "live", body: "One." });
+  await openPost(page, id);
+  await page.getByTestId(POST_TEST_IDS.publish).click();
+  await expect(chip(page)).toHaveAttribute("data-post-state", "live");
+  await page.getByTestId(POST_TEST_IDS.title).fill("Changed words");
+  await expectSaved(page);
+  await expect(chip(page)).toHaveAttribute("data-post-state", "changes");
+
+  // Opened fresh, with the change still unpublished.
+  await page.reload();
+  await waitForPostEditor(page);
+  await expect(chip(page)).toHaveAttribute("data-post-state", "changes");
+  // Back to exactly what is live: the chip says Live without a publish.
+  await page.getByTestId(POST_TEST_IDS.title).fill("Live words");
+  await expect(chip(page)).toHaveAttribute("data-post-state", "live");
+  await expect(chip(page)).toHaveText("Live");
+  await expectSaved(page);
+  await page.getByTestId(POST_TEST_IDS.title).fill("Live words again");
+  await expect(chip(page)).toHaveAttribute("data-post-state", "changes");
+});
+
+test("M16-15 publishing a post changes no page and no design; trashing it live takes the public URL away at once", async ({
+  page,
+  context,
+}) => {
+  const site = await ingestPage("pz", { plan: "pro" });
+  await signInAs(context, site.email);
+  await enableBlog(site.pageId);
+  const pagesBefore = await adminClient()
+    .from("content_entries")
+    .select("id, rev, published, published_at")
+    .eq("site_id", site.pageId)
+    .order("id");
+  const designBefore = await adminClient()
+    .from("pages")
+    .select("published, published_at")
+    .eq("id", site.pageId)
+    .single();
+  const homeBefore = (await page.request.get(site.url)).status();
+
+  const id = await seedPost(site.pageId, { title: "Going live", slug: "going-live", body: "Hi." });
+  await openPost(page, id);
+  await page.getByTestId(POST_TEST_IDS.publish).click();
+  await expect(chip(page)).toHaveAttribute("data-post-state", "live");
+
+  // Only the post changed: every other entry of the site (Home, its pages) and the design are as they were.
+  const pagesAfter = await adminClient()
+    .from("content_entries")
+    .select("id, rev, published, published_at")
+    .eq("site_id", site.pageId)
+    .neq("id", id)
+    .order("id");
+  expect(pagesAfter.data).toEqual(pagesBefore.data);
+  const designAfter = await adminClient()
+    .from("pages")
+    .select("published, published_at")
+    .eq("id", site.pageId)
+    .single();
+  expect(designAfter.data).toEqual(designBefore.data);
+  expect((await page.request.get(site.url)).status()).toBe(homeBefore);
+
+  const live = await context.newPage();
+  expect((await live.goto(`${site.origin}/blog/going-live`))?.status()).toBe(200);
+  await expect(live.locator("h1")).toHaveText("Going live");
+
+  // Trash the LIVE post: the very next request is the 404, and the archive no longer lists it.
+  await page.getByTestId(POST_TEST_IDS.trash).click();
+  await expect(page.getByTestId("post-trashed")).toBeVisible();
+  const gone = await live.goto(`${site.origin}/blog/going-live`);
+  expect(gone?.status()).toBe(404);
+  expect(await gone?.text()).not.toContain("Going live");
+  await live.goto(`${site.origin}/blog`);
+  await expect(live.locator(".hl-archive")).not.toContainText("Going live");
+  await live.close();
 });

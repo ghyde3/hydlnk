@@ -1,5 +1,6 @@
 import "server-only";
-import { marked, type Token, type Tokens } from "marked";
+import type { Token, Tokens } from "marked";
+import { walkBody } from "@/lib/blog/markdown";
 import { findBlockedLinks, type BlocklistRpc } from "@/lib/blocklist/check";
 import { MAX_URL_LENGTH } from "@/lib/document/url";
 import { failure } from "./errors";
@@ -59,10 +60,14 @@ function normalizeUrl(raw: string): string {
   }
 }
 
-/** Every link and image address in a Markdown body, including `href`/`src` in raw HTML. */
+/**
+ * Every link and image address in a Markdown body, including `href`/`src` in raw HTML. Read with the
+ * one bounded lexer; a body it refuses holds no addresses here, because the save and publish gates
+ * refuse that body first (`bodyShapeIssue`).
+ */
 export function markdownUrls(body: string): string[] {
   const urls: string[] = [];
-  marked.walkTokens(marked.lexer(body), (token: Token) => {
+  walkBody(body, (token: Token) => {
     if (token.type === "link" || token.type === "image") {
       urls.push((token as Tokens.Link | Tokens.Image).href);
     }

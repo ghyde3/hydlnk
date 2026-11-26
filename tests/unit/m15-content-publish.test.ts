@@ -215,11 +215,14 @@ describe.skipIf(!run)("publish and unpublish an entry", () => {
       expect(out).toMatchObject({ ok: true });
       const typeId = (await row(made.id)).type_id;
       const place = { siteId: a.pageId, typeId, typeKey: "post", entryId: made.id };
-      expect(invalidateEntry).toHaveBeenCalledTimes(1);
+      // The throw is tried once more at once (the security pass, finding 13): two calls, the second
+      // went through, so the answer is not flagged.
+      expect(invalidateEntry).toHaveBeenCalledTimes(2);
       expect(invalidateEntry).toHaveBeenCalledWith(place);
+      expect(out).not.toHaveProperty("cacheStale");
       const down = await unpublishEntry({ actor: actor(a), entryId: made.id, expectedRev: 2 });
       expect(down).toMatchObject({ ok: true });
-      expect(invalidateEntry).toHaveBeenCalledTimes(2);
+      expect(invalidateEntry).toHaveBeenCalledTimes(3);
       expect(invalidateEntry).toHaveBeenLastCalledWith(place);
       expect(invalidatePage).not.toHaveBeenCalled();
     });

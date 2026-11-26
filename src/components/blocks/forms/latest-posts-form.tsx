@@ -16,7 +16,11 @@ import { fieldError, type BlockFormProps } from "./types";
  */
 export function LatestPostsForm({ block, onChange, errors }: BlockFormProps) {
   const workspace = useOptionalWorkspace();
-  const { state, latest, categories } = useLatestPosts(workspace?.pageId ?? null);
+  const categoryId = block.type === "latest_posts" ? (block.categoryId ?? "") : "";
+  const { state, latest, categories } = useLatestPosts(
+    workspace?.pageId ?? null,
+    categoryId === "" ? [] : [categoryId],
+  );
   if (block.type !== "latest_posts") return null;
   const counts = Array.from(
     { length: LIMITS.latestPostsMax - LIMITS.latestPostsMin + 1 },

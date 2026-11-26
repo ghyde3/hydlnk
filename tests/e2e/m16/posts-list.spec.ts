@@ -111,3 +111,80 @@ test("M16-12 at the plan's posts the button gives way to the limit notice", asyn
   expect((await postsOf(user.pageId)).length).toBe(25);
   await expectNoHorizontalScroll(page);
 });
+
+test("M16-12 the category filter finds drafts by their own categories; both sorts order the list", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "pc");
+  const term = await adminClient()
+    .from("content_terms")
+    .insert({
+      site_id: user.pageId,
+      type_id: user.typeId,
+      taxonomy: "category",
+      name: "News",
+      slug: "news",
+    })
+    .select("id")
+    .single();
+  expect(term.error).toBeNull();
+  const news = term.data!.id as string;
+  const day = 24 * 60 * 60 * 1000;
+  const insert = async (title: string, categories: string[], publishedDaysAgo: number | null) => {
+    const draft = {
+      title,
+      slug: title.toLowerCase().replace(/ /g, "-"),
+      body: "",
+      terms: { categories },
+    };
+    const made = await adminClient()
+      .from("content_entries")
+      .insert({
+        site_id: user.pageId,
+        type_id: user.typeId,
+        draft: draft as never,
+        ...(publishedDaysAgo === null
+          ? {}
+          : {
+              published: draft as never,
+              published_at: new Date(Date.now() - publishedDaysAgo * day).toISOString(),
+            }),
+      })
+      .select("id")
+      .single();
+    expect(made.error).toBeNull();
+    return made.data!.id as string;
+  };
+  // Inserted in this order, so "Last edited" lists them newest first: Gamma, Beta, Alpha.
+  const alpha = await insert("Alpha draft", [news], null);
+  const beta = await insert("Beta live", [news], 2);
+  const gamma = await insert("Gamma live", [], 1);
+
+  await page.goto(POSTS_URL);
+  const rows = page.getByTestId(POSTS_TEST_IDS.row);
+  await expect(rows).toHaveCount(3);
+  const order = async () =>
+    rows.evaluateAll((els) => els.map((el) => el.getAttribute("data-post-id")));
+  await expect.poll(order).toEqual([gamma, beta, alpha]);
+
+  await page.getByTestId("posts-sort").selectOption("published_at");
+  // Newest published first, the draft (never published) last.
+  await expect.poll(order).toEqual([gamma, beta, alpha]);
+  await adminClient()
+    .from("content_entries")
+    .update({ published_at: new Date(Date.now() - 3 * day).toISOString() })
+    .eq("id", gamma);
+  await page.getByTestId("posts-sort").selectOption("updated_at");
+  await page.getByTestId("posts-sort").selectOption("published_at");
+  await expect.poll(order).toEqual([beta, gamma, alpha]);
+
+  // The category: the draft that was never published matches by its draft's categories.
+  await page.getByTestId(POSTS_TEST_IDS.filterCategory).selectOption(news);
+  await expect.poll(order).toEqual([beta, alpha]);
+  await page.getByTestId("posts-sort").selectOption("updated_at");
+  await expect.poll(order).toEqual([beta, alpha]);
+  await page.getByTestId(POSTS_TEST_IDS.filterStatus).selectOption("draft");
+  await expect.poll(order).toEqual([alpha]);
+  await expectNoHorizontalScroll(page);
+});

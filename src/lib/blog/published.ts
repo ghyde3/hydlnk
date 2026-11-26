@@ -2,7 +2,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { postPublishSchema } from "@/lib/content/schemas/post";
-import { IMAGE_PATH_PATTERN } from "@/lib/document";
+import { IMAGE_PATH_PATTERN, LIMITS } from "@/lib/document";
 import { isValidSubPagePath } from "@/lib/document/path";
 import {
   PAGE_REVALIDATE_SECONDS,
@@ -46,7 +46,9 @@ import {
  *   getPostIndex      ["tenant-post-index", v, typeId]        type:<typeId>, page:<siteId>
  *   getTermIndex      ["tenant-term-index", v, typeId]        type:<typeId>
  *   getSlugRedirects  ["tenant-slug-redirects", v, typeId]    type:<typeId>
+ *   getRedirectTargetSlug ["tenant-redirect-target", v, typeId, entryId]  type:<typeId> (past the index only)
  *   getLatestPosts    ["tenant-latest-posts", v, typeId]      type:<typeId>, page:<siteId>
+ *                     ["tenant-latest-posts", v, typeId, categoryId]  (one per category a block names)
  *
  * `getPublishedPost`, `getPostCards` and the two page reads are not cached on their own: they are
  * called from inside the cached HTML of a real post or a proven archive page (`post-html.ts`,
@@ -485,14 +487,80 @@ async function readLatestPosts(siteId: string, typeId: string): Promise<LatestPo
   return { archivePath: path, posts: cardsOf(data) };
 }
 
-/** What a `latest_posts` block draws; null when the type is off. Tags `type:<typeId>`, `page:<siteId>`. */
-export function getLatestPosts(siteId: string, typeId: string): Promise<LatestPosts | null> {
-  if (!isUuid(siteId) || !isUuid(typeId)) return Promise.resolve(null);
-  return cached(
+/** How many categories one read serves (a page with more latest-posts blocks than this is rare). */
+export const LATEST_POSTS_CATEGORIES = 12;
+
+/** The newest live posts of one category, at most what a block shows (6), in archive order. */
+async function readLatestCategoryPosts(
+  siteId: string,
+  typeId: string,
+  categoryId: string,
+): Promise<PostCard[]> {
+  const { data, error } = await liveEntries(
+    await adminClient(),
+    siteId,
+    typeId,
+    `${CARD_COLUMNS}, content_entry_terms!inner(term_id)`,
+  )
+    .eq("content_entry_terms.term_id", categoryId)
+    .range(0, LIMITS.latestPostsMax - 1);
+  if (error)
+    throw new Error(`Loading the latest posts of term ${categoryId} failed: ${error.message}`);
+  return cardsOf(data);
+}
+
+/** Cards of several reads as one list, each post once, in archive order (newest first, then id). */
+function mergeCards(lists: readonly PostCard[][]): PostCard[] {
+  const byId = new Map<string, PostCard>();
+  for (const list of lists)
+    for (const made of list) if (!byId.has(made.id)) byId.set(made.id, made);
+  return [...byId.values()].sort((a, b) =>
+    a.publishedAt === b.publishedAt
+      ? a.id < b.id
+        ? -1
+        : a.id > b.id
+          ? 1
+          : 0
+      : a.publishedAt < b.publishedAt
+        ? 1
+        : -1,
+  );
+}
+
+/**
+ * What `latest_posts` blocks draw; null when the type is off. Tags `type:<typeId>`, `page:<siteId>`.
+ * The newest `LATEST_POSTS_READ` posts, plus, for each category in `categoryIds` (a block's own
+ * category, at most `LATEST_POSTS_CATEGORIES`), the newest posts of that category, so a block with
+ * a category shows that category's posts however old they are. Each category is one cache entry of
+ * its own (`["tenant-latest-posts", v, typeId, categoryId]`), so the entries are bounded by the
+ * categories the site's documents name, never by a request.
+ */
+export async function getLatestPosts(
+  siteId: string,
+  typeId: string,
+  categoryIds: readonly string[] = [],
+): Promise<LatestPosts | null> {
+  if (!isUuid(siteId) || !isUuid(typeId)) return null;
+  const latest = await cached(
     readLatestPosts,
     ["tenant-latest-posts", PUBLIC_READ_CACHE_VERSION, typeId],
     [typeTag(typeId), pageTag(siteId)],
   )(siteId, typeId);
+  const categories = [...new Set(categoryIds.filter(isUuid).map((id) => id.toLowerCase()))].slice(
+    0,
+    LATEST_POSTS_CATEGORIES,
+  );
+  if (latest === null || categories.length === 0) return latest;
+  const lists = await Promise.all(
+    categories.map((categoryId) =>
+      cached(
+        readLatestCategoryPosts,
+        ["tenant-latest-posts", PUBLIC_READ_CACHE_VERSION, typeId, categoryId],
+        [typeTag(typeId), pageTag(siteId)],
+      )(siteId, typeId, categoryId),
+    ),
+  );
+  return { archivePath: latest.archivePath, posts: mergeCards([latest.posts, ...lists]) };
 }
 
 // Lookups ----------------------------------------------------------------------------------------
@@ -523,13 +591,59 @@ export async function findLivePostId(
   siteId: string,
   typeId: string,
   slug: string,
+  /** false: answer from the index only (the caller knows the slug has a redirect row, see blog-respond). */
+  readPastIndex = true,
 ): Promise<string | null> {
   if (!isUuid(siteId) || !isUuid(typeId) || postHref("x", slug) === null) return null;
   const index = await getPostIndex(siteId, typeId);
   const found = index.posts.find((post) => post.slug === slug);
   if (found) return found.id;
-  if (index.complete) return null;
+  if (index.complete || !readPastIndex) return null;
   return readLiveIdBySlug(siteId, typeId, slug);
+}
+
+async function readLiveSlugOf(
+  siteId: string,
+  typeId: string,
+  entryId: string,
+): Promise<string | null> {
+  const { data, error } = await (
+    await adminClient()
+  )
+    .from("content_entries")
+    .select("live_slug")
+    .eq("id", entryId)
+    .eq("site_id", siteId)
+    .eq("type_id", typeId)
+    .is("deleted_at", null)
+    .not("published", "is", null)
+    .maybeSingle();
+  if (error) throw new Error(`Looking up entry ${entryId} failed: ${error.message}`);
+  return typeof data?.live_slug === "string" ? data.live_slug : null;
+}
+
+/**
+ * The live slug of the post an old slug's redirect row names (M16-10), or null when that post is not
+ * live. The cached index answers; when it is not complete (more than `POST_INDEX_MAX` live posts)
+ * and does not hold the post, one published-only read by id, cached under the type's tag
+ * (`["tenant-redirect-target", v, typeId, entryId]`): the ids come from the redirect rows (at most
+ * 200 per type), never from the request, so the entries are bounded and a warm cache reads nothing.
+ */
+export async function getRedirectTargetSlug(
+  siteId: string,
+  typeId: string,
+  entryId: string,
+): Promise<string | null> {
+  if (!isUuid(siteId) || !isUuid(typeId) || !isUuid(entryId)) return null;
+  const index = await getPostIndex(siteId, typeId);
+  const found = index.posts.find((post) => post.id === entryId);
+  if (found) return found.slug;
+  if (index.complete) return null;
+  return cached(
+    readLiveSlugOf,
+    ["tenant-redirect-target", PUBLIC_READ_CACHE_VERSION, typeId, entryId],
+    [typeTag(typeId)],
+  )(siteId, typeId, entryId);
 }
 
 async function readIsLive(siteId: string, typeId: string, entryId: string): Promise<boolean> {

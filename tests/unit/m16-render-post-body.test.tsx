@@ -277,12 +277,13 @@ describe("PostBody: embeds come from the allowlist, by a bare URL on its own lin
 });
 
 describe("PostBody: structure", () => {
-  it("body headings start at h2 and stop at h4", () => {
-    const html = draw("# One\n\n## Two\n\n### Three\n\n#### Four\n\n###### Six");
+  it("body headings are drawn at the level written, clamped to h2..h4 (the editor writes 2 to 4)", () => {
+    const html = draw("# One\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six");
     expect(html).toContain("<h2>One</h2>");
-    expect(html).toContain("<h3>Two</h3>");
-    expect(html).toContain("<h4>Three</h4>");
+    expect(html).toContain("<h2>Two</h2>");
+    expect(html).toContain("<h3>Three</h3>");
     expect(html).toContain("<h4>Four</h4>");
+    expect(html).toContain("<h4>Five</h4>");
     expect(html).toContain("<h4>Six</h4>");
     expect(html).not.toMatch(/<h1|<h5|<h6/);
   });
@@ -357,7 +358,7 @@ describe("PostArticle", () => {
     expect(html).toContain("Hello &lt;script&gt;alert(1)&lt;/script&gt;</h1>");
     expect(html).toContain('<time dateTime="2026-11-20T10:00:00.000Z">November 20, 2026</time>');
     expect(html).toContain("1 min read");
-    expect(html).toContain("<h3>Part</h3>");
+    expect(html).toContain("<h2>Part</h2>");
   });
 
   it("the featured image is the owner's upload with its size; another user's is not drawn", () => {
