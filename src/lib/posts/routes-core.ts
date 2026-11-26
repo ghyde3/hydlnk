@@ -277,7 +277,7 @@ export async function createPostCore(
 
 export type { PostEntry };
 
-/** GET entries/{entryId}: one post of the site with its draft (trashed posts included). Never the live copy. */
+/** GET entries/{entryId}: one post of the site with its draft (trashed posts included), and its live copy while live. */
 export async function getPostCore(input: {
   userId: string;
   siteId: string;
@@ -297,6 +297,7 @@ export async function getPostCore(input: {
         status: out.status,
         hasUnpublishedChanges: out.hasUnpublishedChanges,
         draft: out.draft,
+        published: out.status === "published" ? out.published : null,
         publishedAt: out.publishedAt,
         firstPublishedAt: out.firstPublishedAt,
         updatedAt: out.updatedAt,

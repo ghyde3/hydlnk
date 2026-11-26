@@ -107,10 +107,7 @@ export function PostEditor({
   const [meta, setMeta] = useState<Meta>(() => ({
     status: entry.status,
     everPublished: entry.firstPublishedAt !== null,
-    liveJson:
-      entry.status === "published" && !entry.hasUnpublishedChanges
-        ? stableJson(toStoredDraft(readPostForm(entry.draft), entry.draft))
-        : null,
+    liveJson: liveJsonOf(entry),
   }));
   const [following, setFollowing] = useState(() =>
     slugFollowsTitle(readPostForm(entry.draft), entry.firstPublishedAt !== null),
@@ -166,10 +163,7 @@ export function PostEditor({
     setMeta({
       status: fresh.status,
       everPublished: fresh.firstPublishedAt !== null,
-      liveJson:
-        fresh.status === "published" && !fresh.hasUnpublishedChanges
-          ? stableJson(toStoredDraft(next, fresh.draft))
-          : null,
+      liveJson: liveJsonOf(fresh),
     });
     setIssues([]);
     setLoadKey((key) => key + 1);
@@ -495,6 +489,17 @@ export function PostEditor({
       )}
     </div>
   );
+}
+
+/**
+ * The live copy as the screen compares it with what it would store: so a post opened with
+ * unpublished changes reads Live again once it is edited back to what is live. Null when not live.
+ */
+function liveJsonOf(entry: PostEntry): string | null {
+  if (entry.status !== "published") return null;
+  const live = entry.published ?? (entry.hasUnpublishedChanges ? null : entry.draft);
+  if (live === null || typeof live !== "object") return null;
+  return stableJson(toStoredDraft(readPostForm(live), live));
 }
 
 function saveProblemText(save: { problem: string | null; message?: string }): string {

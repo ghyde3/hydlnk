@@ -179,3 +179,29 @@ test("M16-15 M16-16 Preview opens the post's private share address, which draws 
   await expect(popup.getByRole("heading", { level: 1, name: "Preview me" })).toBeVisible();
   await expectNoHorizontalScroll(popup);
 });
+
+test("M16-15 a post opened with unpublished changes reads Live again once edited back to the live copy", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "pk");
+  const id = await seedPost(user.pageId, { title: "Live words", slug: "live", body: "One." });
+  await openPost(page, id);
+  await page.getByTestId(POST_TEST_IDS.publish).click();
+  await expect(chip(page)).toHaveAttribute("data-post-state", "live");
+  await page.getByTestId(POST_TEST_IDS.title).fill("Changed words");
+  await expectSaved(page);
+  await expect(chip(page)).toHaveAttribute("data-post-state", "changes");
+
+  // Opened fresh, with the change still unpublished.
+  await page.reload();
+  await waitForPostEditor(page);
+  await expect(chip(page)).toHaveAttribute("data-post-state", "changes");
+  // Back to exactly what is live: the chip says Live without a publish.
+  await page.getByTestId(POST_TEST_IDS.title).fill("Live words");
+  await expect(chip(page)).toHaveAttribute("data-post-state", "live");
+  await expect(chip(page)).toHaveText("Live");
+  await expectSaved(page);
+  await page.getByTestId(POST_TEST_IDS.title).fill("Live words again");
+  await expect(chip(page)).toHaveAttribute("data-post-state", "changes");
+});
