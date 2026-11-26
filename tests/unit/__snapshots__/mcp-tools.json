@@ -1049,7 +1049,8 @@
         },
         "body": {
           "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text.",
-          "type": "string"
+          "type": "string",
+          "maxLength": 524288
         },
         "excerpt": {
           "description": "A short summary for lists and feeds, at most 400 characters.",
@@ -1163,7 +1164,8 @@
         },
         "body": {
           "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text.",
-          "type": "string"
+          "type": "string",
+          "maxLength": 524288
         },
         "excerpt": {
           "description": "A short summary for lists and feeds, at most 400 characters.",
@@ -1242,7 +1244,7 @@
               },
               "replace": {
                 "type": "string",
-                "maxLength": 600000,
+                "maxLength": 524288,
                 "description": "What to put in its place. An empty string removes the text."
               },
               "all": {
