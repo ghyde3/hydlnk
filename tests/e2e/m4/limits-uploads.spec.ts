@@ -22,6 +22,7 @@ import {
   rawBuffer,
   type RawBufferResponse,
 } from "../m2/publish-helpers";
+import { uploadSiteHeader } from "../fixtures/upload-site";
 
 /**
  * M4-31: the per-account upload cap, enforced on write by POST /api/media (Free 10 MiB, Pro
@@ -76,7 +77,7 @@ async function objectNames(userId: string): Promise<string[]> {
 
 type Parts = { kind?: string; extra?: Record<string, string> };
 
-function post(
+async function post(
   cookie: string | undefined,
   size: number,
   opts: Parts & { origin?: string } = {},
@@ -92,7 +93,11 @@ function post(
   return rawBuffer(APP_HOST, "/api/media", {
     method: "POST",
     cookie,
-    headers: { "content-type": contentType, ...(opts.origin ? { origin: opts.origin } : {}) },
+    headers: {
+      ...(await uploadSiteHeader(cookie)),
+      "content-type": contentType,
+      ...(opts.origin ? { origin: opts.origin } : {}),
+    },
     body,
   });
 }
@@ -129,7 +134,7 @@ async function storedSizeOf(
   return size;
 }
 
-function postImage(
+async function postImage(
   cookie: string | undefined,
   data: Buffer,
   opts: Parts & { origin?: string } = {},
@@ -142,7 +147,11 @@ function postImage(
   return rawBuffer(APP_HOST, "/api/media", {
     method: "POST",
     cookie,
-    headers: { "content-type": contentType, ...(opts.origin ? { origin: opts.origin } : {}) },
+    headers: {
+      ...(await uploadSiteHeader(cookie)),
+      "content-type": contentType,
+      ...(opts.origin ? { origin: opts.origin } : {}),
+    },
     body,
   });
 }

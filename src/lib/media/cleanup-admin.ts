@@ -7,7 +7,7 @@ import {
   type CleanupDeps,
   type CleanupResult,
 } from "./cleanup";
-import { MEDIA_BUCKET } from "./limits";
+import { MEDIA_BUCKET, UPLOAD_UNUSED_GRACE_SECONDS } from "./limits";
 
 /**
  * The real dependencies of the cleanup (M5-14): the secret key reads `image_cleanup_queue`, asks
@@ -24,6 +24,8 @@ export function adminCleanupDeps(
         .from("image_cleanup_queue")
         .select("path")
         .eq("owner_id", ownerId)
+        // A new upload waits out its grace (queue_new_upload, S3) before the cleanup may see it.
+        .lte("queued_at", new Date().toISOString())
         .order("queued_at", { ascending: true })
         .limit(limit);
       if (error) throw new Error(`Reading the media queue failed: ${error.message}`);
@@ -86,6 +88,25 @@ export async function cleanupMediaQuietly(
  * Takes one path off the owner's queue: the upload route calls it when the same bytes are uploaded
  * again, so a cleanup that runs before the draft is saved cannot delete the object being reused.
  */
+/**
+ * Queues a path the upload route just answered (S3): `queue_new_upload` dates the row
+ * UPLOAD_UNUSED_GRACE_SECONDS ahead, so the cleanup deletes the image only if no document names it
+ * by then. The path must be the owner's own (the table's check says so too).
+ */
+export async function queueNewUpload(
+  ownerId: string,
+  path: string,
+  admin: SupabaseClient = createAdminSupabase() as unknown as SupabaseClient,
+): Promise<void> {
+  if (!isOwnedMediaPath(ownerId, path)) return;
+  const { error } = await admin.rpc("queue_new_upload", {
+    p_owner: ownerId,
+    p_path: path,
+    p_grace_seconds: UPLOAD_UNUSED_GRACE_SECONDS,
+  });
+  if (error) throw new Error(`Queueing the upload failed: ${error.message}`);
+}
+
 export async function unqueueMediaPath(
   userId: string,
   path: string,

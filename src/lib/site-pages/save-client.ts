@@ -51,7 +51,7 @@ export function createSubPageSaveFn(revisions: SubPageRevisions, siteId: string)
     switch (answer.kind) {
       case "ok":
         revisions.set(id, answer.rev);
-        scheduleMediaCleanup();
+        scheduleMediaCleanup(siteId);
         return { kind: "ok" };
       case "blocked":
         return { kind: "blocked", hosts: answer.hosts, blockIds: answer.blockIds };

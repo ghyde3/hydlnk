@@ -119,7 +119,7 @@ export function createDraftSaver(
       return (await siteReadable(pageId)) ? { kind: "conflict" } : { kind: "lost-access" };
     // A save may have dropped an image reference: ask the server to work off its cleanup queue once
     // the Undo window has passed (M5-14).
-    scheduleMediaCleanup();
+    scheduleMediaCleanup(pageId);
     return { kind: "ok" };
   };
   return Object.assign(save, {

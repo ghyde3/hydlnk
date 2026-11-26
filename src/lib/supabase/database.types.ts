@@ -2324,6 +2324,10 @@ export type Database = {
       purge_old_events: { Args: never; Returns: number }
       purge_site_team: { Args: never; Returns: undefined }
       purge_trashed_entries: { Args: never; Returns: number }
+      queue_new_upload: {
+        Args: { p_grace_seconds: number; p_owner: string; p_path: string }
+        Returns: undefined
+      }
       rate_limit_age: {
         Args: { p_bucket: string; p_window_seconds: number }
         Returns: number

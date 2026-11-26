@@ -18,7 +18,7 @@ const m = vi.hoisted(() => ({
   process: vi.fn(async () => ({ ok: true, image: { path: "p", width: 1, height: 1, url: "u" } })),
   quota: vi.fn((owner: string) => ({ quotaOf: owner })),
   rate: vi.fn((uploader: string) => ({ rateOf: uploader })),
-  unqueue: vi.fn(async () => undefined),
+  queue: vi.fn(async () => undefined),
   cleanup: vi.fn(async () => ({ deleted: [], kept: [] })),
 }));
 vi.mock("server-only", () => ({}));
@@ -33,7 +33,7 @@ vi.mock("@/lib/media/upload", () => ({ processUpload: m.process }));
 vi.mock("@/lib/media/quota", () => ({ adminUploadQuota: m.quota }));
 vi.mock("@/lib/media/rate-limit", () => ({ adminUploadRateLimit: m.rate }));
 vi.mock("@/lib/media/cleanup-admin", () => ({
-  unqueueMediaPath: m.unqueue,
+  queueNewUpload: m.queue,
   cleanupMediaFor: m.cleanup,
 }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: async () => ({ allowed: true, retryAfter: 0 }) }));
@@ -68,13 +68,14 @@ describe("M19-06 uploads on a shared site", () => {
       string,
       unknown,
       unknown,
-      { rateLimit: unknown; unqueue: (p: string) => unknown },
+      { rateLimit: unknown; queue: (p: string) => unknown },
     ];
     expect(folder).toBe(OWNER);
     expect(quota).toEqual({ quotaOf: OWNER });
     expect(options.rateLimit).toEqual({ rateOf: MEMBER });
-    await options.unqueue(`${OWNER}/img-x.webp`);
-    expect(m.unqueue).toHaveBeenCalledWith(OWNER, `${OWNER}/img-x.webp`);
+    // S3: every stored path goes on the OWNER's cleanup queue (with its grace).
+    await options.queue(`${OWNER}/img-x.webp`);
+    expect(m.queue).toHaveBeenCalledWith(OWNER, `${OWNER}/img-x.webp`);
     expect(m.suspended).toHaveBeenCalledWith(MEMBER);
   });
 
@@ -97,11 +98,16 @@ describe("M19-06 uploads on a shared site", () => {
     expect(m.process).not.toHaveBeenCalled();
   });
 
-  it("M19-06 without site the folder is the user's own (an old bundle)", async () => {
+  it("G22: an upload without site (an old bundle) stores nothing and says to reload", async () => {
     m.user = { id: OWNER };
-    await upload.POST(post("/api/media"));
+    const res = await upload.POST(post("/api/media"));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "site_required",
+      message: "The editor was updated. Reload the page, then add the image again.",
+    });
     expect(m.access).not.toHaveBeenCalled();
-    expect((m.process.mock.calls[0] as unknown as unknown[])[1]).toBe(OWNER);
+    expect(m.process).not.toHaveBeenCalled();
   });
 
   it("M19-06 cleanup with site works off the OWNER's queue; a site the user may not edit runs nothing", async () => {
