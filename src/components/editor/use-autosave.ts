@@ -34,8 +34,11 @@ export interface Autosave {
   revKey: () => string | null;
   /** Home's entry rev this tab holds, or null when the site has no Home entry. */
   homeRev: () => number | null;
-  /** Take the rev a Publish page of Home answered: the next save of Home's blocks is checked against it. */
-  adoptHomeRev: (rev: number) => void;
+  /**
+   * Take the rev a Publish page of Home answered, when the rev held is still `sent` (the one the
+   * publish was checked against): a save that landed meanwhile holds the newer rev and keeps it.
+   */
+  adoptHomeRev: (rev: number, sent: number) => void;
   /** Re-read Home's entry rev (after Publish all changes, which can move it). The editor has flushed first. */
   refreshHomeRev: () => Promise<void>;
 }
@@ -133,7 +136,10 @@ export function useAutosave(args: {
   const currentStatus = useCallback(() => queueRef.current?.status ?? "idle", []);
   const revKey = useCallback(() => revKeyRef.current, []);
   const homeRev = useCallback(() => saverRef.current?.homeRev() ?? home?.rev ?? null, [home]);
-  const adoptHomeRev = useCallback((rev: number) => saverRef.current?.adoptHomeRev(rev), []);
+  const adoptHomeRev = useCallback(
+    (rev: number, sent: number) => saverRef.current?.adoptHomeRev(rev, sent),
+    [],
+  );
   const refreshHomeRev = useCallback(async () => saverRef.current?.refreshHomeRev(), []);
   return {
     status,

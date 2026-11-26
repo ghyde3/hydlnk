@@ -123,10 +123,27 @@ export interface SiteValue {
   saveStatus: SubSaveStatus;
   /** A sub-page differs from what is live (an edit, or never published): Publish has something to do. */
   dirty: boolean;
-  /** Called after a successful Publish with the sub-pages as they were saved. */
-  markPublished: () => void;
-  /** Called after Publish page on one sub-page (M15-10): it is live as saved, at the rev the server answered. */
-  markPagePublished: (id: string, rev: number) => void;
+  /**
+   * The sub-pages' publish forms as they are now. Publish takes it right after `flush()` (what is
+   * stored, so what the server will publish) and hands it back to `markPublished` or
+   * `markPagePublished`: an edit typed while the publish was answering is not what went live.
+   */
+  snapshotForms: () => ReadonlyMap<string, SubPagePublish>;
+  /**
+   * Called after a successful Publish all changes with the forms that were published (`snapshotForms`
+   * taken before the call). Resolves once the pages' revs are re-read: Publish can move them, and the
+   * next Publish page or Restore must send the new ones.
+   */
+  markPublished: (published: ReadonlyMap<string, SubPagePublish>) => Promise<void>;
+  /**
+   * Called after Publish page on one sub-page (M15-10): `form` (from `snapshotForms`, taken before
+   * the call) is live. `rev` is the rev the server answered and `sent` the one the publish was checked
+   * against: it is adopted only while the editor still holds `sent`.
+   */
+  markPagePublished: (
+    id: string,
+    published: { rev: number; sent: number; form: SubPagePublish | undefined },
+  ) => void;
   /** The entry rev the editor holds for each sub-page: what its saves, Publish page and Publish all are checked against. */
   revisions: () => Record<string, number>;
 
@@ -546,21 +563,27 @@ export function useSitePages(args: {
   useEffect(() => {
     formsRef.current = forms;
   }, [forms]);
-  const markPublished = useCallback(() => {
-    const current = formsRef.current;
-    setPublishedForms(new Map(current));
-    setLivePaths(new Map([...current].map(([id, form]) => [id, form.path])));
-    void revisions.refresh(siteId);
-  }, [revisions, siteId]);
+  const snapshotForms = useCallback(
+    (): ReadonlyMap<string, SubPagePublish> => new Map(formsRef.current),
+    [],
+  );
+  const markPublished = useCallback(
+    async (published: ReadonlyMap<string, SubPagePublish>) => {
+      // What went live is what was stored when Publish was sent, not what has been typed since.
+      setPublishedForms(new Map(published));
+      setLivePaths(new Map([...published].map(([id, form]) => [id, form.path])));
+      await revisions.refresh(siteId);
+    },
+    [revisions, siteId],
+  );
 
-  const markPagePublished = useCallback(
-    (id: string, rev: number) => {
-      const form = formsRef.current.get(id);
+  const markPagePublished = useCallback<SiteValue["markPagePublished"]>(
+    (id, { rev, sent, form }) => {
       if (form) {
         setPublishedForms((current) => new Map(current).set(id, form));
         setLivePaths((current) => new Map(current).set(id, form.path));
       }
-      revisions.set(id, rev);
+      revisions.adopt(id, rev, sent);
     },
     [revisions],
   );
@@ -642,6 +665,7 @@ export function useSitePages(args: {
     flush,
     saveStatus,
     dirty,
+    snapshotForms,
     markPublished,
     markPagePublished,
     revisions: revisionsNow,

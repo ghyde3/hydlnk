@@ -20,8 +20,17 @@ export interface HomeEntryRef {
 export type DraftSaver = SaveFn & {
   /** Home's entry rev the next save is checked against, or null when the site has no Home entry. */
   homeRev: () => number | null;
-  adoptHomeRev: (rev: number) => void;
-  /** Re-read Home's entry rev (after Publish all changes, which can move it) and adopt it. */
+  /**
+   * Take the rev a Publish page of Home answered, but only while the rev held is still `sent`, the
+   * one that publish was checked against. A save that landed while the publish was answering has
+   * moved the entry on, and its rev is the newer one: adopting the publish's would make the next save
+   * a conflict.
+   */
+  adoptHomeRev: (rev: number, sent: number) => void;
+  /**
+   * Re-read Home's entry rev (after Publish all changes, which can move it) and adopt it, unless a
+   * save of this tab moved the held rev while the read was out (that save's answer is the newer one).
+   */
   refreshHomeRev: () => Promise<void>;
 };
 
@@ -113,13 +122,14 @@ export function createDraftSaver(
   };
   return Object.assign(save, {
     homeRev: () => (home ? homeRev : null),
-    adoptHomeRev: (rev: number) => {
-      if (home && Number.isSafeInteger(rev) && rev >= 1) homeRev = rev;
+    adoptHomeRev: (rev: number, sent: number) => {
+      if (home && homeRev === sent && Number.isSafeInteger(rev) && rev >= 1) homeRev = rev;
     },
     refreshHomeRev: async () => {
       if (!home) return;
+      const before = homeRev;
       const row = (await readEntryRevs(pageId))?.find((entry) => entry.id === home.entryId);
-      if (row) homeRev = row.rev;
+      if (row && homeRev === before) homeRev = row.rev;
     },
   });
 }

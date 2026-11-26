@@ -317,10 +317,16 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   }, [draft]);
 
   const { revKey, homeRev, adoptHomeRev, refreshHomeRev } = autosave;
-  const { markPagePublished: markSitePagePublished, revisions: siteRevisions } = site;
+  const {
+    markPagePublished: markSitePagePublished,
+    revisions: siteRevisions,
+    snapshotForms: snapshotSiteForms,
+  } = site;
   const homeEntryId = initial.home?.entryId ?? null;
 
   const publishingRef = useRef(false);
+  // The publish in flight, settled either way: Restore waits for it, so it sends the revs that publish left.
+  const publishInFlight = useRef<Promise<void> | null>(null);
   const lastPublish = useRef<PublishTarget>("all");
 
   /** Publish freezes what is stored, so both queues write their newest edits first. False: a note says why. */
@@ -375,7 +381,12 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       setPublishNote(null);
       lastPublish.current = target;
       try {
-        return await action();
+        const run = action();
+        publishInFlight.current = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return await run;
       } catch {
         // Nothing was published, the draft is stored, the status keeps saying "Unpublished changes".
         setPublishNote({ message: PUBLISH_FAILED_MESSAGE, retry: true });
@@ -392,7 +403,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     () =>
       runPublish("all", async () => {
         if (!(await storeEdits())) return false;
+        // What is stored now is what the server publishes: an edit typed while it answers is not live.
         const snapshot = savedDraft() ?? draftRef.current;
+        const siteForms = snapshotSiteForms();
         // What this tab holds: the gate refuses (`conflict`) when any of it was saved elsewhere since.
         const heldHome = homeRev();
         const expected =
@@ -404,9 +417,10 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
           showRefusal(result);
           return false;
         }
-        markSitePublished();
-        // Publish can move Home's entry rev without changing its draft: take the stored one.
-        await refreshHomeRev();
+        // Publish can move an entry's rev without changing its draft: take the stored ones, and wait
+        // for them, so a Publish page or a Restore right after this sends the new rev. (A save of this
+        // tab answered meanwhile keeps its own, newer rev.)
+        await Promise.all([markSitePublished(siteForms), refreshHomeRev()]);
         setPublished({
           has: true,
           doc: toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)),
@@ -421,6 +435,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       runPublish,
       storeEdits,
       savedDraft,
+      snapshotSiteForms,
       homeRev,
       homeEntryId,
       revKey,
@@ -446,22 +461,24 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
           setPublishNote(publishFailureNote("conflict"));
           return false;
         }
+        // What is stored now is what the server publishes: an edit typed while it answers is not live.
         const snapshot = savedDraft() ?? draftRef.current;
+        const form = isHome ? undefined : snapshotSiteForms().get(id);
         const result = await publishSitePage(pageId, entryId, rev);
         if (!result.ok) {
           showRefusal(result);
           return false;
         }
         if (isHome) {
-          // The rev the server answered: the next save of Home's blocks is checked against it.
-          adoptHomeRev(result.rev);
+          // The rev the server answered, unless a save landed meanwhile and holds a newer one.
+          adoptHomeRev(result.rev, rev);
           const blocks = toPublishForm(snapshot, themeTokensOf(snapshot.theme.ref)).blocks;
           setPublished((current) =>
             current.doc ? { has: true, doc: { ...current.doc, blocks } } : current,
           );
           dispatch({ type: "publish/clear-errors" });
         } else {
-          markSitePagePublished(id, result.rev);
+          markSitePagePublished(id, { rev: result.rev, sent: rev, form });
           clearSiteErrors();
         }
         setPublishedToken((token) => (token ?? 0) + 1);
@@ -474,6 +491,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       homeRev,
       siteRevisions,
       savedDraft,
+      snapshotSiteForms,
       pageId,
       showRefusal,
       adoptHomeRev,
@@ -522,6 +540,8 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
    */
   const restoreRevision = useCallback(
     async (id: string, rev: number): Promise<{ ok: true } | { ok: false; message: string }> => {
+      // A publish still answering can move the page's rev: the restore is sent after it, with that rev.
+      await publishInFlight.current;
       const stored = (await flush()) && (await flushSite());
       if (!stored) {
         return { ok: false, message: "Couldn’t restore. Your latest changes aren’t saved yet." };

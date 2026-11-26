@@ -79,8 +79,9 @@ describe("M15-10 the publish notice", () => {
     expect(provider).toMatch(/publishPage\(pageId, expected\)/);
     expect(provider).toMatch(/publishSitePage\(pageId, entryId, rev\)/);
     expect(provider).toMatch(/publishDesign\(pageId, revKey\(\)\)/);
-    // The rev a Publish page answered is adopted, for Home and for a sub-page.
-    expect(provider).toContain("adoptHomeRev(result.rev)");
-    expect(provider).toContain("markSitePagePublished(id, result.rev)");
+    // The rev a Publish page answered is adopted, for Home and for a sub-page, together with the rev
+    // that was sent: a save that landed meanwhile keeps its newer rev (m15-publish-races).
+    expect(provider).toContain("adoptHomeRev(result.rev, rev)");
+    expect(provider).toContain("markSitePagePublished(id, { rev: result.rev, sent: rev, form })");
   });
 });

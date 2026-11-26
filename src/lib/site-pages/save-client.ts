@@ -12,11 +12,17 @@ import type { SubSaveFn } from "./saver";
 export interface SubPageRevisions {
   get(id: string): number | undefined;
   set(id: string, rev: number): void;
+  /**
+   * Take the rev a Publish page answered, but only while the rev held is still `sent`, the one that
+   * publish was checked against (M15-10). A save that landed while the publish was answering moved
+   * the entry on and holds the newer rev: the publish's answer is older and is dropped.
+   */
+  adopt(id: string, rev: number, sent: number): void;
   delete(id: string): void;
   /**
    * Re-reads the revs of a site's pages (those the editor already holds). Publish and Unpublish can
-   * bump a page entry's rev without changing its draft; the editor has flushed first, so nothing of
-   * its own is unsaved.
+   * bump a page entry's rev without changing its draft. A page whose held rev moved while the read
+   * was out (a save of this tab was answered meanwhile) keeps the rev that save gave it.
    */
   refresh(siteId: string): Promise<void>;
 }
@@ -28,11 +34,17 @@ export function createSubPageRevisions(
   return {
     get: (id) => map.get(id),
     set: (id, rev) => void map.set(id, rev),
+    adopt: (id, rev, sent) => {
+      if (map.get(id) === sent && Number.isSafeInteger(rev) && rev >= 1) map.set(id, rev);
+    },
     delete: (id) => void map.delete(id),
     async refresh(siteId) {
+      const before = new Map(map);
       const rows = await readEntryRevs(siteId);
       if (!rows) return;
-      for (const row of rows) if (map.has(row.id)) map.set(row.id, row.rev);
+      for (const row of rows) {
+        if (map.has(row.id) && map.get(row.id) === before.get(row.id)) map.set(row.id, row.rev);
+      }
     },
   };
 }
