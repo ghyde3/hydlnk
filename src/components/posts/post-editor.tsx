@@ -28,7 +28,8 @@ import {
 import type { PostEntry } from "@/lib/posts/types";
 import { suggestSlug } from "@/lib/posts/slug";
 import type { PostState } from "@/lib/posts/status";
-import { createPreviewLink } from "@/lib/previews/actions";
+import { createPreviewLink, listPreviewLinks } from "@/lib/previews/actions";
+import { choosePreviewLink, HAS_PREVIEW_LINK_MESSAGE } from "@/lib/posts/preview-link";
 import { BodyEditor } from "./body-editor/body-editor";
 import { bodyBytes } from "./body-editor/markdown";
 import {
@@ -281,6 +282,20 @@ export function PostEditor({
     try {
       await queue.flush();
       let link = rememberedPreview(siteId);
+      const listed = link === null ? await listPreviewLinks(siteId).catch(() => null) : null;
+      const choice = choosePreviewLink({
+        remembered: link,
+        activeLinks: listed?.ok ? listed.links.length : null,
+      });
+      if (choice === "has-link" || choice === "unknown") {
+        tab?.close();
+        setNotice(
+          choice === "has-link"
+            ? HAS_PREVIEW_LINK_MESSAGE
+            : "The preview could not be opened. Try again.",
+        );
+        return;
+      }
       if (link === null) {
         const made = await createPreviewLink(siteId);
         if (!made.ok) {
