@@ -41,7 +41,10 @@ describe("sub-page revisions after Publish", () => {
   });
 
   it("the editor re-reads the revs after markPublished and markUnpublished", () => {
-    const src = readFileSync(resolve(process.cwd(), "src/components/site/use-site-pages.ts"), "utf8");
+    const src = readFileSync(
+      resolve(process.cwd(), "src/components/site/use-site-pages.ts"),
+      "utf8",
+    );
     for (const name of ["markPublished", "markUnpublished"]) {
       const start = src.indexOf(`const ${name} = useCallback`);
       const end = src.indexOf("}, [", start);

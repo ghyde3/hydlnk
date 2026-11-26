@@ -74,9 +74,7 @@ export function UnpublishDialog({
       }}
       className="m-auto max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-[420px] overflow-y-auto rounded-md border border-line bg-surface p-4 text-ink backdrop:bg-ink/60 hl:p-6"
     >
-      {open ? (
-        <UnpublishBody onClose={onClose} titleId={titleId} bodyId={bodyId} />
-      ) : null}
+      {open ? <UnpublishBody onClose={onClose} titleId={titleId} bodyId={bodyId} /> : null}
     </dialog>
   );
 }

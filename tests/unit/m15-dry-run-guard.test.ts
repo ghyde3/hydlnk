@@ -67,8 +67,20 @@ function fakes(opts: {
   const sql = vi.fn((text: string): string => {
     if (text.includes("-- sites")) {
       return JSON.stringify([
-        { id: SITE_A, handle: "alpha", owner_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", plan: "free", domains: ["alpha.example.com"] },
-        { id: SITE_B, handle: "beta", owner_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", plan: "pro", domains: [] },
+        {
+          id: SITE_A,
+          handle: "alpha",
+          owner_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          plan: "free",
+          domains: ["alpha.example.com"],
+        },
+        {
+          id: SITE_B,
+          handle: "beta",
+          owner_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          plan: "pro",
+          domains: [],
+        },
       ]);
     }
     if (text.includes("-- mode")) return "entries";
@@ -119,11 +131,17 @@ describe("dry run guard and diff", () => {
     const f = fakes({ out: dir });
     expect(await main(["snapshot", "--phase", "before"], LOCAL_ENV, f.deps)).toBe(0);
     const base = join(dir, "before", SITE_A);
-    expect(readFileSync(join(base, "handle", "home.html"), "utf8")).toBe("body of alpha.localhost:3000/");
+    expect(readFileSync(join(base, "handle", "home.html"), "utf8")).toBe(
+      "body of alpha.localhost:3000/",
+    );
     expect(readFileSync(join(base, "handle", "page-about.html"), "utf8")).toContain("/about");
-    expect(readFileSync(join(base, "custom-alpha.example.com", "robots.txt"), "utf8")).toContain("/robots.txt");
+    expect(readFileSync(join(base, "custom-alpha.example.com", "robots.txt"), "utf8")).toContain(
+      "/robots.txt",
+    );
     for (const name of ["sitemap.xml", "og.bin", "counts.json"]) {
-      expect(readFileSync(join(base, name === "counts.json" ? name : join("handle", name)))).toBeTruthy();
+      expect(
+        readFileSync(join(base, name === "counts.json" ? name : join("handle", name))),
+      ).toBeTruthy();
     }
   });
 
@@ -163,7 +181,9 @@ describe("dry run guard and diff", () => {
     expect(diffSnapshots(dir, "a", "b").differing).toEqual([]);
     const written = JSON.parse(readFileSync(join(dir, "b", SITE_A, "account-bytes.json"), "utf8"));
     expect(written).toEqual({ accountSiteBytes: 5717 });
-    expect(readFileSync(join(dir, "b", SITE_A, "counts.json"), "utf8")).not.toContain("accountSiteBytes");
+    expect(readFileSync(join(dir, "b", SITE_A, "counts.json"), "utf8")).not.toContain(
+      "accountSiteBytes",
+    );
   });
 
   it("fails when a site or a file is missing from one side", async () => {
@@ -181,7 +201,10 @@ describe("dry run guard and diff", () => {
     expect(await main(["check", "--phase", "after"], LOCAL_ENV, clean.deps)).toBe(0);
     const logs: string[] = [];
     const bad = fakes({ out: dir, violations: [`${SITE_A}: no '/' entry`] });
-    const code = await main(["check", "--phase", "after"], LOCAL_ENV, { ...bad.deps, log: (l) => logs.push(l) });
+    const code = await main(["check", "--phase", "after"], LOCAL_ENV, {
+      ...bad.deps,
+      log: (l) => logs.push(l),
+    });
     expect(code).not.toBe(0);
     expect(logs.join("\n")).toContain(SITE_A);
     expect(await main(["check", "--phase", "before"], LOCAL_ENV, clean.deps)).not.toBe(0);
@@ -208,7 +231,18 @@ describe.skipIf(!dbUp())("countsSql against the local database", () => {
   function psql(script: string): string {
     return execFileSync(
       "docker",
-      ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At", "-q"],
+      [
+        "exec",
+        "-i",
+        "supabase_db_hydlnk",
+        "psql",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At",
+        "-q",
+      ],
       { input: script, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
     );
   }

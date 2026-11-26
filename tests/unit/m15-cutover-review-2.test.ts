@@ -119,7 +119,9 @@ describe.skipIf(!run)("cutover review 2 (local Supabase)", () => {
 
   describe("the editor's published copy", () => {
     it("carries Home's published blocks, so a published site is not 'Unpublished changes'", async () => {
-      const o = await makeOwner(admin as never, "pub", (h) => draftOf(h, [link("lnk-pub-0001", "One")]));
+      const o = await makeOwner(admin as never, "pub", (h) =>
+        draftOf(h, [link("lnk-pub-0001", "One")]),
+      );
       owners.push(o);
       await moveHome(admin as never, o.pageId);
       expect(await publish(o)).toMatchObject({ ok: true });
@@ -202,9 +204,8 @@ describe("the entry save client maps path and suspended answers", () => {
     answer(409, { kind: "path", message: "That address is already used or reserved." });
     // The browser client reads the public env at import; CI has no .env.local.
     vi.doMock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => ({}) }));
-    const { createSubPageSaveFn, createSubPageRevisions } = await import(
-      "@/lib/site-pages/save-client"
-    );
+    const { createSubPageSaveFn, createSubPageRevisions } =
+      await import("@/lib/site-pages/save-client");
     const save = createSubPageSaveFn(createSubPageRevisions({ a: 3 }), "site");
     const { emptySubPageDraft } = await import("@/lib/document");
     expect(await save("a", emptySubPageDraft("menu", "Menu"))).toEqual({ kind: "invalid" });
@@ -214,9 +215,8 @@ describe("the entry save client maps path and suspended answers", () => {
     answer(403, { kind: "suspended", code: "x", message: "Suspended" });
     // The browser client reads the public env at import; CI has no .env.local.
     vi.doMock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => ({}) }));
-    const { createSubPageSaveFn, createSubPageRevisions } = await import(
-      "@/lib/site-pages/save-client"
-    );
+    const { createSubPageSaveFn, createSubPageRevisions } =
+      await import("@/lib/site-pages/save-client");
     const save = createSubPageSaveFn(createSubPageRevisions({ a: 3 }), "site");
     const { emptySubPageDraft } = await import("@/lib/document");
     expect(await save("a", emptySubPageDraft("menu", "Menu"))).toEqual({ kind: "unauthorized" });

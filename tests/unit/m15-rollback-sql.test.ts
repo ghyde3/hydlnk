@@ -281,7 +281,17 @@ rollback;
 `;
     const out = execFileSync(
       "docker",
-      ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
+      [
+        "exec",
+        "-i",
+        "supabase_db_hydlnk",
+        "psql",
+        "-U",
+        "postgres",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-At",
+      ],
       { input: script, encoding: "utf8" },
     );
     expect(out).toContain("R|22023|maintenance");

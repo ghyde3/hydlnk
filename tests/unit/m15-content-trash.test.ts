@@ -97,9 +97,11 @@ describe.skipIf(!run)("trash and restore an entry", () => {
 
     const fresh = await make("post", { title: "Never live", slug: "never-live" });
     expect(await trash(fresh.id, 1)).toMatchObject({ ok: true });
-    expect(await purgeEntryWithClient(admin, { actor: actor(a), entryId: fresh.id })).toMatchObject({
-      ok: true,
-    });
+    expect(await purgeEntryWithClient(admin, { actor: actor(a), entryId: fresh.id })).toMatchObject(
+      {
+        ok: true,
+      },
+    );
     expect((await admin.from("content_entries").select("id").eq("id", fresh.id)).data).toEqual([]);
   });
 

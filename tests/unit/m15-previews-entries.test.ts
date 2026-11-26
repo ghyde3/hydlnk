@@ -2,7 +2,12 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { blockDefaults, draftSubPageSchema, toPublishForm, toSubPagePublishForm } from "@/lib/document";
+import {
+  blockDefaults,
+  draftSubPageSchema,
+  toPublishForm,
+  toSubPagePublishForm,
+} from "@/lib/document";
 import { loadDraft } from "@/lib/editor/load";
 import { sanitizeSharedDoc } from "@/lib/previews/sanitize";
 import { generatePreviewToken, hashPreviewToken } from "@/lib/previews/token";
