@@ -149,10 +149,7 @@ describe("M16-11 the beacon: posts and archives", () => {
 
   it("the verified custom host may send a post view", async () => {
     const s = blogDeps();
-    await handleBeacon(
-      beacon(view(LIVE_POST), { origin: "http://links.example.test" }),
-      s.deps,
-    );
+    await handleBeacon(beacon(view(LIVE_POST), { origin: "http://links.example.test" }), s.deps);
     expect(s.inserted).toHaveLength(1);
   });
 });

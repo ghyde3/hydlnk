@@ -90,7 +90,10 @@ export function sanitizeSharedPost(draft: {
   return {
     title: line(draft.title),
     excerpt: stripHiddenCharacters(draft.excerpt ?? "", { multiline: true }),
-    body: (draft.body ?? "").replace(/\r\n?/g, "\n").replace(BODY_CONTROL, "").replace(BODY_BIDI, ""),
+    body: (draft.body ?? "")
+      .replace(/\r\n?/g, "\n")
+      .replace(BODY_CONTROL, "")
+      .replace(BODY_BIDI, ""),
     seo,
   };
 }

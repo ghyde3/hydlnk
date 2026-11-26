@@ -70,8 +70,7 @@ export type SharedPreview =
     };
 
 /** The one address form of a post preview: `entry/` and a canonical (lower-case) UUID, nothing else. */
-const ENTRY_TAIL =
-  /^entry\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+const ENTRY_TAIL = /^entry\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /** The entry id when `path` is exactly `entry/{uuid}`, else null. */
 export function sharedEntryId(path: string): string | null {
@@ -203,7 +202,8 @@ export async function loadDraftPost(
 
   // A draft image may be half-saved (an upload in progress): drawn only when it is whole. The
   // article component checks again that it is a file of this owner's own folder.
-  const image = draft.featuredImage;
+  const image = draft.featuredImage as
+    { path?: unknown; width?: unknown; height?: unknown } | null | undefined;
   const featuredImage =
     image &&
     typeof image.path === "string" &&
@@ -263,9 +263,7 @@ export async function loadDraftPreview(
   // `pages.draft` is the whole document, as the editor reads it.
   const home = await getHomeDraftWithClient(admin, page.id);
   const { draft } = loadDraft(
-    home
-      ? { ...(page.draft as Record<string, unknown>), blocks: home.draft.blocks }
-      : page.draft,
+    home ? { ...(page.draft as Record<string, unknown>), blocks: home.draft.blocks } : page.draft,
     page.handle,
   );
 

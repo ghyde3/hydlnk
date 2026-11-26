@@ -39,7 +39,10 @@ const CATEGORY = "30000000-0000-4000-8000-000000000001";
 const TAG = "30000000-0000-4000-8000-000000000002";
 const OTHER_SITE_TERM = "30000000-0000-4000-8000-000000000003";
 
-const { blocks: homeBlocks, ...design } = { ...emptyDraft("zq"), nav: { show: true, items: [PAGE_ENTRY] } };
+const { blocks: homeBlocks, ...design } = {
+  ...emptyDraft("zq"),
+  nav: { show: true, items: [PAGE_ENTRY] },
+};
 
 const postDraft = {
   title: "A draft‮ post\u0007",
@@ -138,9 +141,33 @@ function tables(link: Row | null = {}): Record<string, Row[]> {
       },
     ],
     content_terms: [
-      { id: CATEGORY, site_id: SITE, type_id: POST_TYPE, taxonomy: "category", slug: "news", name: "News‮", position: 0 },
-      { id: TAG, site_id: SITE, type_id: POST_TYPE, taxonomy: "tag", slug: "hello", name: "Hello", position: 0 },
-      { id: OTHER_SITE_TERM, site_id: OTHER_SITE, type_id: OTHER_POST_TYPE, taxonomy: "category", slug: "theirs", name: "THEIR TERM", position: 0 },
+      {
+        id: CATEGORY,
+        site_id: SITE,
+        type_id: POST_TYPE,
+        taxonomy: "category",
+        slug: "news",
+        name: "News‮",
+        position: 0,
+      },
+      {
+        id: TAG,
+        site_id: SITE,
+        type_id: POST_TYPE,
+        taxonomy: "tag",
+        slug: "hello",
+        name: "Hello",
+        position: 0,
+      },
+      {
+        id: OTHER_SITE_TERM,
+        site_id: OTHER_SITE,
+        type_id: OTHER_POST_TYPE,
+        taxonomy: "category",
+        slug: "theirs",
+        name: "THEIR TERM",
+        position: 0,
+      },
     ],
     themes: [],
   };

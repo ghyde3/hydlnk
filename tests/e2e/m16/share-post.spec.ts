@@ -168,10 +168,14 @@ test("M16-16 a signed-out visitor previews a draft post", async ({ page, context
   expect(response?.status()).toBe(200);
 
   await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "A heading in the draft" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "A heading in the draft" }),
+  ).toBeVisible();
   await expect(page).toHaveTitle(`Preview of ${TITLE}`);
   // The draft's raw HTML never ran.
-  expect(await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned)).toBeUndefined();
+  expect(
+    await page.evaluate(() => (window as unknown as { __pwned?: number }).__pwned),
+  ).toBeUndefined();
   await expect(page.locator("iframe")).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 

@@ -5,11 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => ({}) }));
 
-import {
-  POST_LOOKUP_MAX,
-  hiddenHistoryIds,
-  readBlogPages,
-} from "@/lib/analytics/dashboard/source";
+import { POST_LOOKUP_MAX, hiddenHistoryIds, readBlogPages } from "@/lib/analytics/dashboard/source";
 
 /**
  * M16-11: the blog's entries of the Analytics page filter. Every read is keyed by the site the
@@ -102,7 +98,11 @@ describe("M16-11 the stats source and the blog", () => {
 
   it("an archive that is off lists nothing and reads no post, but its type id is known", async () => {
     const { db, calls } = fakeDb({ content_types: [{ ...postType, enabled: false }] });
-    expect(await readBlogPages(db, SITE)).toEqual({ archives: [], posts: [], typeIds: [POST_TYPE] });
+    expect(await readBlogPages(db, SITE)).toEqual({
+      archives: [],
+      posts: [],
+      typeIds: [POST_TYPE],
+    });
     expect(calls.map((call) => call.table)).toEqual(["content_types"]);
   });
 
