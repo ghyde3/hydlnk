@@ -11,7 +11,10 @@ export interface EventRow {
   device: string;
   country: string | null;
   visitor_hash: string;
-  /** The sub-page the event happened on (M11-09). Absent = Home (stored as null). */
+  /**
+   * The item the event happened on: a sub-page (M11-09), a post's entry id or, for archive, paging
+   * and term pages, the Post type's id (M16-11). Absent = Home (stored as null).
+   */
   sub_page_id?: string | null;
 }
 
@@ -22,6 +25,17 @@ export interface BeaconPage {
   customHosts: string[];
   /** Ids of the site's LIVE sub-pages (published ones), for the beacon's page check (M11-09). */
   subPageIds?: string[];
+  /**
+   * Ids of the site's ENABLED content types that have an archive (M16-11): the Post type's id is
+   * what an archive, paging or term page sends as its item id.
+   */
+  archiveTypeIds?: string[];
+  /**
+   * Is this id a LIVE post of an enabled archive of THIS site (M16-11)? Bound to the site by the
+   * lookup, so the beacon cannot ask about another site. Asked last (after the origin check) and
+   * only for an id that is neither a sub-page nor an archive. Absent = no id passes this way.
+   */
+  isLivePost?: (entryId: string) => Promise<boolean>;
 }
 
 /**

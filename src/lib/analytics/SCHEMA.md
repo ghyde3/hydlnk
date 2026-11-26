@@ -23,6 +23,13 @@ rolls a day up before it deletes it, so nothing is lost when the raw rows go. Fr
 Inserted by the ingest code with the secret key. Ingest contract: `device` in `mobile|tablet|desktop` (or null),
 `country` ISO 3166-1 alpha-2 (or null), `referrer` hostname only, lowercased (or null for direct).
 
+`sub_page_id` (M11-09; nullable on `events`, the nil UUID for Home in the rollups) is a generic item id, not a
+foreign key: a sub-page's id, a post's entry id, or the Post type's id for a blog's archive, paging and term
+pages (M16-11). The beacon records it only for a live item of the site that sent it (a live sub-page, an enabled
+archive, a live post); the rollups key on it as a plain UUID, and the dashboard names it from the site's own
+pages, types and posts, "Deleted page" when the site no longer has it. Clicks never carry a post's id: a post
+body's links are not click-tracked.
+
 ### `daily_stats` (shape unchanged, semantics tightened)
 
 `(page_id, block_id, day, views, clicks, uniques)`, primary key `(page_id, block_id, day)`.

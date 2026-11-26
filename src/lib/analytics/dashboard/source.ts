@@ -13,7 +13,11 @@ import {
   HOME_SUB_PAGE_ID,
   PAGE_FILTER_ALL,
   PAGE_FILTER_HOME,
+  POST_OPTIONS_MAX,
+  archiveLabel,
+  postOptionTitle,
   type PageFilter,
+  type SubPageInfo,
 } from "./page-filter";
 
 /**
@@ -58,10 +62,120 @@ function rollupPage<Q>(query: Q, filter: PageFilter): Q {
   return (query as unknown as { eq(column: string, value: string): Q }).eq("sub_page_id", page);
 }
 
+/** How many ids with history that are no listed page are checked against the site's posts, and per read. */
+export const POST_LOOKUP_MAX = 200;
+const POST_LOOKUP_CHUNK = 100;
+
+/** The blog's part of the page filter, and what `hiddenHistoryIds` needs to tell a post from a deleted page. */
+export interface BlogPages {
+  /** One entry per enabled archive, under the content type's id. */
+  archives: SubPageInfo[];
+  /** The newest live posts, by title. */
+  posts: SubPageInfo[];
+  /** Every content type of the site that has an archive, on or off. */
+  typeIds: string[];
+}
+
+/**
+ * The blog in the page filter (M16-11), for a site the owner lookup already approved. Both reads
+ * are keyed by that site id, and neither is a stats table (a refused range still reads none).
+ *
+ *   archives  each content type of the site whose archive is on: one entry under the type's id (its
+ *             archive, paging and term pages all count there), "Blog" for the built-in Post type.
+ *   posts     the `POST_OPTIONS_MAX` newest LIVE posts of those types, by their published title.
+ *             Only the id and that title are read: never a draft, never a body.
+ *
+ * A trashed, purged or unpublished post is not returned, so its history reads "Deleted page".
+ */
+export async function readBlogPages(db: SupabaseClient, siteId: string): Promise<BlogPages> {
+  const types = await db
+    .from("content_types")
+    .select("id, key, label_plural, enabled")
+    .eq("site_id", siteId)
+    .neq("key", "page")
+    .not("archive_path", "is", null)
+    .order("position");
+  if (types.error) throw new Error(`Reading the content types failed: ${types.error.message}`);
+  const rows = (types.data ?? []) as {
+    id: string;
+    key: string;
+    label_plural: string;
+    enabled: boolean;
+  }[];
+  const typeIds = rows.map((row) => row.id.toLowerCase());
+  const enabled = rows.filter((row) => row.enabled);
+  if (enabled.length === 0) return { archives: [], posts: [], typeIds };
+  const archives = enabled.map((row) => ({
+    id: row.id.toLowerCase(),
+    title: archiveLabel({ key: row.key, labelPlural: row.label_plural }),
+  }));
+  const { data, error } = await db
+    .from("content_entries")
+    .select("id, title:published->>title")
+    .eq("site_id", siteId)
+    .in(
+      "type_id",
+      enabled.map((row) => row.id),
+    )
+    .is("deleted_at", null)
+    .not("published", "is", null)
+    .order("first_published_at", { ascending: false })
+    .order("id")
+    .limit(POST_OPTIONS_MAX);
+  if (error) throw new Error(`Reading the post titles failed: ${error.message}`);
+  const posts = ((data ?? []) as { id: string; title: unknown }[]).map((row) => ({
+    id: row.id.toLowerCase(),
+    title: postOptionTitle(row.title),
+  }));
+  return { archives, posts, typeIds };
+}
+
+/**
+ * Which ids with history get no entry in the page filter (M16-11): an archive that is off, and a
+ * post of the site that still exists but is not among the listed ones (an older post of a large
+ * blog). Without this each would read "Deleted page", which is only true of an id the site no
+ * longer has. Ids of `candidates` are checked against the site's own untrashed entries of its
+ * archive types, at most `POST_LOOKUP_MAX` of them; the ids past that are hidden unchecked.
+ * "All pages" still counts every one.
+ */
+export async function hiddenHistoryIds(
+  db: SupabaseClient,
+  siteId: string,
+  candidates: readonly string[],
+  typeIds: readonly string[],
+): Promise<Set<string>> {
+  const hidden = new Set<string>();
+  if (typeIds.length === 0) return hidden;
+  const types = new Set(typeIds);
+  const unknown: string[] = [];
+  for (const id of candidates) {
+    if (types.has(id)) hidden.add(id);
+    else unknown.push(id);
+  }
+  const asked = unknown.slice(0, POST_LOOKUP_MAX);
+  for (const id of unknown.slice(POST_LOOKUP_MAX)) hidden.add(id);
+  for (let at = 0; at < asked.length; at += POST_LOOKUP_CHUNK) {
+    const { data, error } = await db
+      .from("content_entries")
+      .select("id")
+      .eq("site_id", siteId)
+      .in("type_id", [...typeIds])
+      .in("id", asked.slice(at, at + POST_LOOKUP_CHUNK))
+      .is("deleted_at", null);
+    if (error) throw new Error(`Reading the posts with history failed: ${error.message}`);
+    for (const row of (data ?? []) as { id: string }[]) hidden.add(row.id.toLowerCase());
+  }
+  return hidden;
+}
+
 export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
   // The generated types do not know daily_dim_stats until they are regenerated; one untyped client
   // serves every read here, and the row shapes are declared where they are used.
   const db = client ?? (createAdminSupabase() as unknown as SupabaseClient);
+
+  // One source serves one load: what `resolvePage` listed for a site (its pages, archives and
+  // posts, and its archive types) is what `historicPageIds` compares the history against.
+  const listedOf = new Map<string, { ids: Set<string>; typeIds: string[] }>();
 
   return {
     async resolvePage(ownerId, pageId) {
@@ -94,10 +208,18 @@ export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
           published: page.livePath !== null ? { blocks: published?.blocks ?? [] } : null,
         };
       });
+      // The blog (M16-11): its archive and its newest live posts, as entries of the page filter.
+      // No published document: a post has no click-tracked links.
+      const blog = await readBlogPages(db, pageId);
+      const items = [...blog.archives, ...blog.posts];
+      listedOf.set(pageId, {
+        ids: new Set([...subPages, ...items].map((item) => item.id)),
+        typeIds: blog.typeIds,
+      });
       return {
         plan: toPlanId(plan),
         published: mergeHomePublished(data.published, home),
-        subPages,
+        subPages: [...subPages, ...items.map((item) => ({ ...item, published: null }))],
       };
     },
 
@@ -129,7 +251,17 @@ export function createAdminStatsSource(client?: SupabaseClient): StatsSource {
       }[]) {
         if (row.sub_page_id) ids.add(row.sub_page_id.toLowerCase());
       }
-      return [...ids];
+      // An id the filter does not list is a "Deleted page" unless it is an existing post or an
+      // archive that is off (M16-11): those get no entry.
+      const listed = listedOf.get(pageId);
+      if (!listed) return [...ids];
+      const hidden = await hiddenHistoryIds(
+        db,
+        pageId,
+        [...ids].filter((id) => !listed.ids.has(id)),
+        listed.typeIds,
+      );
+      return [...ids].filter((id) => !hidden.has(id));
     },
 
     async hasActivity(pageId) {
