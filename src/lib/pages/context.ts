@@ -37,6 +37,14 @@ export interface AppContext {
 }
 
 /**
+ * Where the current site's notification emails go (the form block's "Email me each message",
+ * M17-07): its OWNER's sign-in address, which on a shared site is never the member's own (R6).
+ */
+export function siteOwnerAddress(context: Pick<AppContext, "ownerEmail" | "user">): string {
+  return context.ownerEmail ?? context.user.email;
+}
+
+/**
  * Everything the app chrome and the page-scoped screens need, loaded once per request (React
  * `cache` is per request; nothing is kept across requests, so a removal shows on the next load):
  * the gated user, their own and shared sites, the current site with the access the rule gives, and

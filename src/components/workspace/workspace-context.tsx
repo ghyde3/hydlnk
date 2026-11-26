@@ -67,8 +67,11 @@ export interface WorkspaceValue {
   role: SiteRole;
   /** The owner or a publisher: the publish-class controls show (an editor sees PUBLISH_FORBIDDEN_MESSAGE). */
   canPublish: boolean;
-  /** The signed-in user's sign-in address: where a contact form's message emails go (M17-07, M17-10). */
-  accountEmail?: string;
+  /**
+   * The site OWNER's sign-in address: where a contact form's message emails go (M17-07, M17-10). On a
+   * shared site it is the owner's, never the member's (R6, `siteOwnerAddress`).
+   */
+  ownerEmail?: string;
   plan: PlanId;
   handle: string;
   /** `{handle}.hydlnk.com`, the display address (the mono line above the page name). */

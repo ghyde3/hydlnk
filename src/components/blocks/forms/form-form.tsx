@@ -26,7 +26,7 @@ export function FormForm({ block, onChange, errors }: BlockFormProps) {
     void _dropped;
     onChange(value === "" ? rest : { ...rest, [key]: value });
   };
-  const address = workspace?.accountEmail;
+  const address = workspace?.ownerEmail;
   return (
     <div data-testid={FORM_TEST_IDS.editor} className="flex flex-col gap-3">
       <Field label="Kind" error={fieldError(errors, form.id, "kind")} className="w-48 flex-none">

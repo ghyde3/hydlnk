@@ -30,7 +30,7 @@ afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()!();
 });
 
-function mount(initial: Block, errors: PublishError[] = [], accountEmail?: string) {
+function mount(initial: Block, errors: PublishError[] = [], ownerEmail?: string) {
   const latest: { block: Block } = { block: initial };
   function Harness() {
     const [block, setBlock] = useState<Block>(initial);
@@ -41,10 +41,10 @@ function mount(initial: Block, errors: PublishError[] = [], accountEmail?: strin
       onChange: setBlock,
       onImage: () => undefined,
     });
-    return accountEmail
+    return ownerEmail
       ? createElement(
           WorkspaceContextProvider,
-          { value: { accountEmail } as unknown as WorkspaceValue },
+          { value: { ownerEmail } as unknown as WorkspaceValue },
           form,
         )
       : form;

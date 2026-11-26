@@ -95,7 +95,7 @@ export interface WorkspaceProviderProps {
   /** The owner, or a publisher: Publish and the other publish-class controls show. */
   canPublish: boolean;
   /** The signed-in user's sign-in address (the form block's "Email me each message" helper line). */
-  accountEmail?: string;
+  ownerEmail?: string;
   plan: PlanId;
   handle: string;
   address: string;
@@ -866,7 +866,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       userId: props.userId,
       role: props.role,
       canPublish: props.canPublish,
-      ...(props.accountEmail ? { accountEmail: props.accountEmail } : {}),
+      ...(props.ownerEmail ? { ownerEmail: props.ownerEmail } : {}),
       plan,
       handle: props.handle,
       address: props.address,
@@ -929,7 +929,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       props.userId,
       props.role,
       props.canPublish,
-      props.accountEmail,
+      props.ownerEmail,
       plan,
       props.handle,
       props.address,

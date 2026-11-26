@@ -6,7 +6,7 @@ import { clientEnv } from "@/lib/env/client";
 import { loadPrimaryDomain } from "@/lib/editor/page-address";
 import { loadEditorPageData } from "@/lib/editor/page-data";
 import { tenantOrigin } from "@/lib/editor/urls";
-import { getAppContext } from "@/lib/pages/context";
+import { getAppContext, siteOwnerAddress } from "@/lib/pages/context";
 import { handleAddress } from "@/lib/pages/plans";
 import { pageChrome } from "@/lib/publish/chrome";
 import { countTrashedPages, loadSiteArchives, loadSubPages } from "@/lib/site-pages/load";
@@ -40,7 +40,8 @@ import { loadThemeLibrary } from "@/lib/themes/load";
  * fresh props; the provider takes the live ones (name, address) and ignores the draft-shaped ones.
  */
 export default async function WorkspaceLayout({ children }: { children: ReactNode }) {
-  const { user, current, sitePlan } = await getAppContext();
+  const context = await getAppContext();
+  const { user, current, sitePlan } = context;
   const { access } = current;
   const [draftRead, themesRead, primaryDomain, templateThemes] = await Promise.all([
     (async () => {
@@ -87,7 +88,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
       userId={user.id}
       role={access.role}
       canPublish={access.canPublish}
-      accountEmail={user.email}
+      ownerEmail={siteOwnerAddress(context)}
       plan={sitePlan}
       handle={current.handle}
       address={handleAddress(current.handle)}
