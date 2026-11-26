@@ -25,6 +25,7 @@ export type TeamError =
   | "team_limit"
   | "invite_limit"
   | "invite_email"
+  | "invite_session"
   | "invite_used"
   | "shared_site_limit"
   | "rate_limited"
@@ -42,6 +43,8 @@ export const TEAM_MESSAGES: Readonly<Record<TeamError, string>> = {
   invite_limit: "You’ve sent 20 invites today, the most for a day. Try again tomorrow.",
   invite_email:
     "This invite is for another email address. Sign in with the address it was sent to.",
+  invite_session:
+    "To accept, sign in with the link we email you (or with Google), not with a password.",
   invite_used:
     "This invite link has expired, was revoked or was already used. Ask the owner for a new one.",
   shared_site_limit: "You’re a member of 50 sites, the most an account can be. Leave one first.",
@@ -66,7 +69,7 @@ export function teamErrorOf(err: { code?: string | null; message?: string | null
     case "HL020":
       return "invite_limit";
     case "HL021":
-      return "invite_email";
+      return err.message === "invite_session" ? "invite_session" : "invite_email";
     case "23505":
       return err.message === "already_member" ? "already_member" : "already_invited";
     case "22023":
@@ -127,15 +130,20 @@ export async function inviteMemberCore(
   return { ok: true, inviteUrl, emailed };
 }
 
-/** The signed-in user accepts the invite the token names; answers the site they joined. */
+/**
+ * The signed-in user accepts the invite the token names; answers the site they joined. `methods` is
+ * the session's sign-in methods (`SessionUser.methods`): the database refuses a password-only session
+ * (S1, HL021 invite_session), so only someone who proved the inbox joins.
+ */
 export async function acceptInviteCore(
   admin: Admin,
-  input: { userId: string; token: unknown },
+  input: { userId: string; token: unknown; methods: readonly string[] },
 ): Promise<{ ok: true; siteId: string } | TeamFailure> {
   if (!isInviteToken(input.token)) return teamFailure("invite_used");
   const { data, error } = await admin.rpc("accept_site_invite", {
     p_token_hash: hashInviteToken(input.token),
     p_user: input.userId,
+    p_methods: [...input.methods],
   });
   if (error) return teamFailure(teamErrorOf(error));
   return { ok: true, siteId: String(data) };

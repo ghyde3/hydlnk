@@ -1626,7 +1626,7 @@ export type Database = {
     }
     Functions: {
       accept_site_invite: {
-        Args: { p_token_hash: string; p_user: string }
+        Args: { p_methods: string[]; p_token_hash: string; p_user: string }
         Returns: string
       }
       account_upload_bytes: { Args: { p_uid: string }; Returns: number }
@@ -1960,6 +1960,15 @@ export type Database = {
       }
       delete_page_entry: {
         Args: { p_entry_id: string; p_owner_id: string; p_site_id: string }
+        Returns: string
+      }
+      delete_page_entry_as: {
+        Args: {
+          p_actor: string
+          p_entry_id: string
+          p_owner_id: string
+          p_site_id: string
+        }
         Returns: string
       }
       due_block_boundaries: { Args: { p_limit?: number }; Returns: string[] }
@@ -2482,6 +2491,15 @@ export type Database = {
       }
       trash_entry: {
         Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
+      }
+      trash_entry_as: {
+        Args: {
+          p_actor: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+        }
         Returns: number
       }
       unpublish_entry: {

@@ -65,10 +65,10 @@ select throws_ok(
 -- 4 members and 6 pending invites fill the 10.
 select public.create_site_invite('00000000-0000-4000-8000-000000228a01', tests.get_supabase_uid('o'),
   'e-228@example.test', pg_temp.h(10), 'editor');
-select public.accept_site_invite(pg_temp.h(10), tests.get_supabase_uid('e'));
+select public.accept_site_invite(pg_temp.h(10), tests.get_supabase_uid('e'), array['otp']);
 select public.create_site_invite('00000000-0000-4000-8000-000000228a01', tests.get_supabase_uid('o'),
   'p-228@example.test', pg_temp.h(11), 'publisher');
-select public.accept_site_invite(pg_temp.h(11), tests.get_supabase_uid('p'));
+select public.accept_site_invite(pg_temp.h(11), tests.get_supabase_uid('p'), array['otp']);
 select tests.create_supabase_user('m' || n, 'm' || n || '-228@example.test') from generate_series(1, 2) n;
 insert into team.site_members (site_id, user_id, role)
   select '00000000-0000-4000-8000-000000228a01', tests.get_supabase_uid('m' || n), 'editor' from generate_series(1, 2) n;
@@ -92,7 +92,7 @@ insert into team.site_members (site_id, user_id, role)
 select tests.create_supabase_user('q1', 'q1-228@example.test');
 update auth.users set email_confirmed_at = now() where email = 'q1-228@example.test';
 select throws_ok(
-  $$ select public.accept_site_invite(pg_temp.h(101), tests.get_supabase_uid('q1')) $$,
+  $$ select public.accept_site_invite(pg_temp.h(101), tests.get_supabase_uid('q1'), array['otp']) $$,
   'HL019', 'team_limit', 'accepting when the site already has 10 members is refused');
 select is((select count(*)::int from team.site_members where site_id = '00000000-0000-4000-8000-000000228a01'), 10,
   'the site holds exactly 10 members');
@@ -130,7 +130,7 @@ select lives_ok(
 -- ---------------------------------------------------------------------------
 
 select throws_ok(
-  $$ select public.accept_site_invite(pg_temp.h(302), tests.get_supabase_uid('e')) $$,
+  $$ select public.accept_site_invite(pg_temp.h(302), tests.get_supabase_uid('e'), array['otp']) $$,
   'HL021', 'invite_email', 'another account''s session cannot accept the invite');
 
 -- A member of 50 sites (of other owners) cannot accept a 51st.
@@ -157,7 +157,7 @@ select public.create_site_invite(
 select is((select count(*)::int from team.site_members where user_id = tests.get_supabase_uid('q1')), 50,
   'the member is in 50 shared sites');
 select throws_ok(
-  $$ select public.accept_site_invite(pg_temp.h(400), tests.get_supabase_uid('q1')) $$,
+  $$ select public.accept_site_invite(pg_temp.h(400), tests.get_supabase_uid('q1'), array['otp']) $$,
   '22023', 'shared_site_limit', 'a 51st shared site is refused');
 
 -- ---------------------------------------------------------------------------

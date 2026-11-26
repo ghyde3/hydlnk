@@ -37,7 +37,7 @@ export async function join(
     p_role: role,
   });
   if (invite.error) throw new Error(`create_site_invite: ${invite.error.message}`);
-  const accepted = await admin.rpc("accept_site_invite", { p_token_hash: hash, p_user: member.userId });
+  const accepted = await admin.rpc("accept_site_invite", { p_token_hash: hash, p_user: member.userId, p_methods: ["otp"] });
   if (accepted.error) throw new Error(`accept_site_invite: ${accepted.error.message}`);
 }
 

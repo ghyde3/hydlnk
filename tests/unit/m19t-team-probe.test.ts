@@ -97,7 +97,7 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
         ["list_shared_sites", { p_user: f.editor.userId }],
         ["set_site_member_role", { p_site: f.owner.pageId, p_actor: f.owner.userId, p_user: f.editor.userId, p_role: "publisher" }],
         ["create_site_invite", { p_site: f.owner.pageId, p_actor: f.owner.userId, p_email: "z@example.com", p_token_hash: tokenHash("z"), p_role: "publisher" }],
-        ["accept_site_invite", { p_token_hash: tokenHash("z"), p_user: f.stranger.userId }],
+        ["accept_site_invite", { p_token_hash: tokenHash("z"), p_user: f.stranger.userId, p_methods: ["otp"] }],
       ] as const) {
         const res = await client.rpc(fn as never, args as never);
         expect(res.error, fn).not.toBeNull();

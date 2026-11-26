@@ -4,6 +4,7 @@ import { AuthLayout } from "@/components/auth/auth-layout";
 import { AcceptInviteForm } from "@/components/team/accept-invite-form";
 import { signOut } from "@/lib/auth/actions";
 import { requireUser } from "@/lib/auth/session";
+import { dismissInvite } from "@/lib/team/actions";
 import { TEAM_MESSAGES } from "@/lib/team/core";
 import { pendingInviteToken } from "@/lib/team/resume";
 
@@ -30,15 +31,24 @@ export default async function InvitePage() {
         }
       />
       {token ? (
-        <div className="mt-7">
+        <div className="mt-7 flex flex-col gap-2">
           <AcceptInviteForm />
+          <form action={dismissInvite}>
+            <button
+              type="submit"
+              className="flex min-h-11 w-full cursor-pointer items-center justify-center font-semibold text-ink underline"
+            >
+              Not now
+            </button>
+          </form>
         </div>
       ) : null}
       <div className="mt-6 text-sm text-text-2">
         <p>
           Signed in as{" "}
           <span className="font-semibold text-ink [overflow-wrap:anywhere]">{user.email}</span>. The
-          invite works only for the address it was sent to.
+          invite works only for the address it was sent to: sign out, then open the link in the
+          email again.
         </p>
         <form action={signOut}>
           <button

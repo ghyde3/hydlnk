@@ -134,8 +134,7 @@ select set_eq(
 select is_empty(
   $$ select policyname from pg_policies where schemaname = 'public'
        and (qual like '%owner_id = ( SELECT auth.uid()%' or with_check like '%owner_id = ( SELECT auth.uid()%')
-       and tablename not in ('domains', 'daily_stats', 'daily_dim_stats', 'daily_site_stats', 'site_pages',
-                             'form_submissions', 'themes') $$,
+       and tablename::text not in (select access.owner_only_tables()) $$,
   'no site-scoped policy outside the owner-only list compares owner_id with the caller');
 select ok(
   (select bool_and(roles = '{authenticated}') from pg_policies where schemaname = 'public'

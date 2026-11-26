@@ -43,6 +43,8 @@ describe.skipIf(!run)("M19-08 invites (local Supabase)", () => {
   afterAll(async () => removeOwners(admin, [o, pro, e, x].filter(Boolean)));
 
   const tokenOf = (url: string) => url.split("/invite/")[1]!;
+  /** An email-link session (what every real sign-in here is). */
+  const OTP = ["otp"];
 
   it("M19-08 the owner invites; the link is shown once and emailed; only its hash is stored", async () => {
     const out = await core.inviteMemberCore(admin as never, { actorId: o.userId, siteId: o.pageId, email: ` ${e.email.toUpperCase()} `, role: "editor" }, deps);
@@ -59,9 +61,12 @@ describe.skipIf(!run)("M19-08 invites (local Supabase)", () => {
     const out = await core.inviteMemberCore(admin as never, { actorId: o.userId, siteId: o.pageId, email: x.email, role: "publisher" }, deps);
     if (!out.ok) throw new Error(out.error);
     const token = tokenOf(out.inviteUrl);
-    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token })).toMatchObject({ ok: false, error: "invite_email" });
-    expect(await core.acceptInviteCore(admin as never, { userId: x.userId, token })).toEqual({ ok: true, siteId: o.pageId });
-    const replay = await core.acceptInviteCore(admin as never, { userId: x.userId, token });
+    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token, methods: OTP })).toMatchObject({ ok: false, error: "invite_email" });
+    // S1: the invited address itself, signed in with a password only (no inbox proven), is refused.
+    expect(await core.acceptInviteCore(admin as never, { userId: x.userId, token, methods: ["password"] })).toEqual(core.teamFailure("invite_session"));
+    expect(await core.acceptInviteCore(admin as never, { userId: x.userId, token, methods: [] })).toEqual(core.teamFailure("invite_session"));
+    expect(await core.acceptInviteCore(admin as never, { userId: x.userId, token, methods: OTP })).toEqual({ ok: true, siteId: o.pageId });
+    const replay = await core.acceptInviteCore(admin as never, { userId: x.userId, token, methods: OTP });
     expect(replay).toEqual(core.teamFailure("invite_used"));
     const team = await core.loadTeamCore(admin as never, { actorId: o.userId, siteId: o.pageId });
     expect(team!.members).toEqual([expect.objectContaining({ userId: x.userId, role: "publisher" })]);
@@ -75,9 +80,9 @@ describe.skipIf(!run)("M19-08 invites (local Supabase)", () => {
     expect(await core.revokeInviteCore(admin as never, { actorId: x.userId, inviteId: invite.id })).toMatchObject({ ok: false, error: "not_found" });
     expect(await core.revokeInviteCore(admin as never, { actorId: o.userId, inviteId: invite.id })).toEqual({ ok: true });
     const used = core.teamFailure("invite_used");
-    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token: tokenOf(first.inviteUrl) })).toEqual(used);
-    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token: "A".repeat(43) })).toEqual(used);
-    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token: "garbage" })).toEqual(used);
+    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token: tokenOf(first.inviteUrl), methods: OTP })).toEqual(used);
+    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token: "A".repeat(43), methods: OTP })).toEqual(used);
+    expect(await core.acceptInviteCore(admin as never, { userId: e.userId, token: "garbage", methods: OTP })).toEqual(used);
     // An expired link answers the same P0002 in SQL (pgTAP 225: the team schema is not reachable
     // over the API to age a row from here).
   });

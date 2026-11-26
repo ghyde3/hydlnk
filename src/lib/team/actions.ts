@@ -78,6 +78,12 @@ export async function leaveSite(siteId: string): Promise<Plain> {
   return leaveSiteCore(createAdminSupabase(), { userId, siteId });
 }
 
+/** /invite's "Not now": drops the invite cookie and goes home (S7). The invite itself stays valid. */
+export async function dismissInvite(): Promise<void> {
+  await clearInviteCookie();
+  redirect("/");
+}
+
 export type AcceptInviteState = { message: string } | null;
 
 /**
@@ -94,10 +100,16 @@ export async function acceptInvite(
   if (!token) return { message: teamFailure("invite_used").message };
   const limit = await rateLimit(`invite-accept:${user.id}`, 10, 600);
   if (!limit.allowed) return { message: teamFailure("rate_limited").message };
-  const result = await acceptInviteCore(createAdminSupabase(), { userId: user.id, token });
+  const result = await acceptInviteCore(createAdminSupabase(), {
+    userId: user.id,
+    token,
+    methods: user.methods,
+  });
   if (!result.ok) {
-    // A link that can never work again is dropped; a wrong account keeps it to switch accounts.
-    if (result.error !== "invite_email") await clearInviteCookie();
+    // S7: every final answer drops the cookie (a used link, the wrong account, a password session):
+    // the person opens the emailed link again once signed in the right way. Only a passing failure
+    // (too many tries, an error) keeps it for another try.
+    if (result.error !== "rate_limited" && result.error !== "error") await clearInviteCookie();
     return { message: result.message };
   }
   await clearInviteCookie();
