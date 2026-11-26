@@ -3,6 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, signIn } from "../fixtures/data";
 import { PRODUCTION_BUILD, appRaw, authCookies, cookieHeader, rawRequest } from "../fixtures/http";
 import { DEV_PORT } from "../helpers";
+import type { Block } from "@/lib/document";
 import { ingestPage, type IngestPage } from "../m4/analytics-ingest-helpers";
 
 /**
@@ -67,7 +68,7 @@ async function act(
   context: BrowserContext,
   site: IngestPage,
   entryId: string,
-  action: "publish" | "trash",
+  action: "publish" | "unpublish" | "trash",
 ) {
   const response = await appRaw(`/api/pages/${site.pageId}/entries/${entryId}/${action}`, {
     method: "POST",
@@ -144,5 +145,49 @@ test(
     expect((await get(`/blog/${B.slug}`)).status).toBe(404);
     expect((await get("/blog")).body.includes(B.title)).toBe(false);
     expect(hasNext((await get(`/blog/${A.slug}`)).body)).toBe(false);
+  },
+);
+
+test(
+  "M16-07 M16-09 Home's Latest posts card goes on the next request after the post is unpublished or trashed",
+  { tag: "@full-ci" },
+  async ({ context }, info) => {
+    test.skip(!desktopOnly(info), "raw HTTP, no UI");
+    const block = {
+      id: "latest-posts-ct",
+      type: "latest_posts",
+      visible: true,
+      heading: "From the blog",
+      count: 3,
+    } as unknown as Block;
+    const site = await ingestPage("cl", { plan: "pro", blocks: [block] });
+    await signIn(context, site.email);
+    const typeId = await postType(site.pageId);
+    const get = (path: string) => rawRequest(site.host, path);
+    const C = { slug: "post-c", title: "Post C" };
+    const a = await addDraft(site.pageId, typeId, A, "Body of A.");
+    const c = await addDraft(site.pageId, typeId, C, "Body of C.");
+    await act(context, site, a, "publish");
+    await act(context, site, c, "publish");
+
+    // Home lists both (in production this response is now the cached Home).
+    const first = await get("/");
+    expect(first.status).toBe(200);
+    expect(first.body.includes(`href="/blog/${A.slug}"`)).toBe(true);
+    expect(first.body.includes(`href="/blog/${C.slug}"`)).toBe(true);
+    expect((await get("/")).body.includes(`href="/blog/${C.slug}"`)).toBe(true);
+
+    // Unpublished through the route: the very next Home has no card for it.
+    await act(context, site, c, "unpublish");
+    const afterUnpublish = await get("/");
+    expect(afterUnpublish.body.includes(`href="/blog/${C.slug}"`)).toBe(false);
+    expect(afterUnpublish.body.includes(`href="/blog/${A.slug}"`)).toBe(true);
+
+    // Trashed: the last card goes, and with no post left the block draws nothing.
+    await act(context, site, a, "trash");
+    const afterTrash = await get("/");
+    expect(afterTrash.status).toBe(200);
+    expect(afterTrash.body.includes(`href="/blog/${A.slug}"`)).toBe(false);
+    expect(afterTrash.body.includes("hl-latest-posts")).toBe(false);
   },
 );
