@@ -129,7 +129,7 @@ export default function ConnectPage() {
                 <li>
                   Publish your pages and posts, if you allowed publishing when you connected. That
                   permission also covers taking a post down, renaming or deleting a category or tag,
-                  and turning your blog on or off.
+                  turning your blog on or off, and changing your blog’s address or its name.
                 </li>
               </ul>
 

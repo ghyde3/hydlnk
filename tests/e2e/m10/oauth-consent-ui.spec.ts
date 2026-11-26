@@ -172,7 +172,7 @@ test.describe("M10-13 what the screen says", () => {
       "Add, change and remove blocks, blog posts, design choices and your profile in your drafts. Nothing goes live until you publish.",
     );
     await expect(page.locator("body")).toContainText(
-      "Make your drafts live on your public site, the same as the Publish button. Also take a post down, rename or delete categories and tags, and turn your blog on or off.",
+      "Make your drafts live on your public site, the same as the Publish button. Also take a post down, rename or delete categories and tags, and turn your blog on or off, change its address or rename it.",
     );
   });
 

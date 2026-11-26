@@ -62,7 +62,7 @@ export const SCOPE_LABELS: Readonly<Record<OauthScope, { title: string; hint: st
   },
   [SCOPE_PUBLISH]: {
     title: "Publish your pages and posts",
-    hint: "Make your drafts live on your public site, the same as the Publish button. Also take a post down, rename or delete categories and tags, and turn your blog on or off.",
+    hint: "Make your drafts live on your public site, the same as the Publish button. Also take a post down, rename or delete categories and tags, and turn your blog on or off, change its address or rename it.",
   },
 };
 
