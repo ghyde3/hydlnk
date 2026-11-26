@@ -50,10 +50,6 @@ export async function postEntryDraft(
       return typeof body.rev === "number"
         ? { kind: "ok", rev: body.rev, unchanged: body.unchanged === true }
         : { kind: "error" };
-    case "conflict":
-    case "missing":
-    case "too-large":
-    case "storage-full":
     case "invalid": {
       const issues: unknown[] = Array.isArray(body.issues) ? body.issues : [];
       const message = issues.find(
@@ -62,6 +58,10 @@ export async function postEntryDraft(
       )?.message;
       return message === undefined ? { kind: "invalid" } : { kind: "invalid", message };
     }
+    case "conflict":
+    case "missing":
+    case "too-large":
+    case "storage-full":
     case "path":
     case "suspended":
       return { kind: body.kind };
