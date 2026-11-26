@@ -1860,6 +1860,16 @@ export type Database = {
           versions_kept: number
         }[]
       }
+      publish_design: {
+        Args: {
+          p_design: Json
+          p_expected_rev?: string
+          p_owner_id: string
+          p_page_id: string
+          p_published_at?: string
+        }
+        Returns: string
+      }
       publish_entry: {
         Args: {
           p_entry_id: string
@@ -1880,6 +1890,18 @@ export type Database = {
           p_sub_pages: Json
         }
         Returns: string
+      }
+      publish_site_page: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+          p_published_at?: string
+          p_site_id: string
+          p_source?: string
+        }
+        Returns: Json
       }
       purge_old_events: { Args: never; Returns: number }
       purge_trashed_entries: { Args: never; Returns: number }
