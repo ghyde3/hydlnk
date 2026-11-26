@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
  *   401  {kind: "unauthorized"}; 403 forbidden_origin
  *   404  {kind: "missing"}  another account's entry, an entry of another site, a page entry, an
  *        unknown or malformed id: one answer
+ *   429  {kind: "limit", message}  more than EXPIRE_RATE_LIMIT a minute for the account
  */
 export async function POST(
   request: NextRequest,
