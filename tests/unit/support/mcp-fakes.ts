@@ -1,4 +1,5 @@
 import type { ActivityRow, OwnedPage, ToolDeps, ToolIdentity } from "@/lib/mcp/types";
+import { loadEnvLocal } from "../publish-support";
 
 /**
  * Fakes for the MCP tests (Wave L): dependencies with spies, so a test can prove the ORDER of the
@@ -6,7 +7,9 @@ import type { ActivityRow, OwnedPage, ToolDeps, ToolIdentity } from "@/lib/mcp/t
  */
 
 // The public environment the modules under test validate at import. Defaults only: a real value in
-// the environment (a CI job, a loaded .env.local) wins.
+// the environment (a CI job, a loaded .env.local) wins. .env.local is loaded first, so a checkout
+// with its own local stack (another API port) never sends the tests' writes to another stack.
+loadEnvLocal();
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= "http://127.0.0.1:54321";
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= "test-publishable-key";
 process.env.NEXT_PUBLIC_ROOT_DOMAIN ??= "localhost:3000";

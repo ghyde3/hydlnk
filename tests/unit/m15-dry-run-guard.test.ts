@@ -10,6 +10,7 @@ import {
   main,
   type DryRunDeps,
 } from "../../scripts/content-move-dry-run";
+import { LOCAL_DB_CONTAINER } from "../../scripts/lib/local-db";
 
 /**
  * M15-05 (1b1-24): the content-move dry run. The script only ever talks to a local app and a local
@@ -213,7 +214,7 @@ describe("dry run guard and diff", () => {
 
 function dbUp(): boolean {
   try {
-    execFileSync("docker", ["exec", "supabase_db_hydlnk", "true"], { stdio: "ignore" });
+    execFileSync("docker", ["exec", LOCAL_DB_CONTAINER, "true"], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -234,7 +235,7 @@ describe.skipIf(!dbUp())("countsSql against the local database", () => {
       [
         "exec",
         "-i",
-        "supabase_db_hydlnk",
+        LOCAL_DB_CONTAINER,
         "psql",
         "-U",
         "postgres",
