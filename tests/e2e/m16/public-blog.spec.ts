@@ -32,7 +32,7 @@ let rich: { id: string; rev: number };
 const BODY = (image: string) =>
   [
     "An opening paragraph with a [link](https://example.com/a) in it.",
-    "# A heading",
+    "## A heading",
     "- one\n- two",
     "> a quote",
     "```\nconst a = 1; // " + "x".repeat(120) + "\n```",
