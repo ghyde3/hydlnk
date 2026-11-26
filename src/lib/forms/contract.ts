@@ -73,6 +73,9 @@ export const SUBMISSION_LIMITS = {
 export const FORM_POST_FLOOR_MS = 250;
 export const FORM_POST_JITTER_MS = 10;
 
+/** The owner's message emails a contact form sends at most an hour per account (form-notify). */
+export const FORM_NOTIFY_PER_HOUR = 30;
+
 /** The fixed labels of the block's controls. */
 export const FORM_LABELS = {
   email: "Email",
@@ -357,6 +360,7 @@ export const AUDIENCE_TEST_IDS = {
   screen: "audience-screen",
   meter: "audience-meter",
   overLimit: "audience-over-limit",
+  notifySkipped: "audience-notify-skipped",
   responsibility: "audience-responsibility",
   filter: "audience-filter",
   list: "audience-list",

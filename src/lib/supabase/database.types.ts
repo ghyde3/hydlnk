@@ -675,19 +675,28 @@ export type Database = {
       }
       form_submission_usage: {
         Row: {
+          accepted: number
           month: string
+          notify_skipped: number
+          notify_skipped_day: string | null
           owner_id: string
           refused: number
           refused_daily: number
         }
         Insert: {
+          accepted?: number
           month: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
           owner_id: string
           refused?: number
           refused_daily?: number
         }
         Update: {
+          accepted?: number
           month?: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
           owner_id?: string
           refused?: number
           refused_daily?: number
@@ -1837,6 +1846,7 @@ export type Database = {
         Args: { p_uid: string }
         Returns: {
           month: string
+          notify_skipped_today: number
           refused: number
           refused_daily: number
           stored: number
@@ -2106,6 +2116,10 @@ export type Database = {
           p_was_published?: boolean
         }
         Returns: boolean
+      }
+      record_form_notify_skipped: {
+        Args: { p_owner: string }
+        Returns: undefined
       }
       record_form_submission: {
         Args: {

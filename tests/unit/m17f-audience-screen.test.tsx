@@ -40,7 +40,10 @@ describe("M17-08 the Audience screen's states", () => {
 
   it("the meter's line names what is counted and the daily cap; each cap's notice once something was refused", () => {
     const quiet = renderToStaticMarkup(
-      <UsageCard plan="free" usage={{ stored: 3, refused: 0, refusedDaily: 0, limit: 100 }} />,
+      <UsageCard
+        plan="free"
+        usage={{ stored: 3, refused: 0, refusedDaily: 0, notifySkippedToday: 0, limit: 100 }}
+      />,
     );
     expect(quiet).toContain("3 / 100 this month");
     expect(quiet).toContain(
@@ -49,7 +52,10 @@ describe("M17-08 the Audience screen's states", () => {
     expect(quiet).not.toContain('data-testid="audience-over-limit"');
 
     const daily = renderToStaticMarkup(
-      <UsageCard plan="free" usage={{ stored: 20, refused: 0, refusedDaily: 3, limit: 100 }} />,
+      <UsageCard
+        plan="free"
+        usage={{ stored: 20, refused: 0, refusedDaily: 3, notifySkippedToday: 0, limit: 100 }}
+      />,
     );
     const notice = new DOMParser()
       .parseFromString(daily, "text/html")
@@ -59,7 +65,10 @@ describe("M17-08 the Audience screen's states", () => {
     );
 
     const both = renderToStaticMarkup(
-      <UsageCard plan="pro" usage={{ stored: 5000, refused: 2, refusedDaily: 1, limit: 5000 }} />,
+      <UsageCard
+        plan="pro"
+        usage={{ stored: 5000, refused: 2, refusedDaily: 1, notifySkippedToday: 0, limit: 5000 }}
+      />,
     );
     const lines = [
       ...new DOMParser()
@@ -70,5 +79,33 @@ describe("M17-08 the Audience screen's states", () => {
       "You’ve reached this month’s limit of 5,000 form submissions on Pro. 2 were not saved. Upgrade to keep more, or wait until the 1st.",
       "A site reached its limit of 500 form submissions a day on Pro. 1 was not saved this month. Delete what you don’t need to make room, or wait until tomorrow (UTC).",
     ]);
+  });
+
+  it("a plain line once owner emails were skipped today by their hourly cap (finding 6); none otherwise", () => {
+    const usage = { stored: 40, refused: 0, refusedDaily: 0, limit: 100 };
+    const quiet = renderToStaticMarkup(
+      <UsageCard plan="free" usage={{ ...usage, notifySkippedToday: 0 }} />,
+    );
+    expect(quiet).not.toContain('data-testid="audience-notify-skipped"');
+    for (const [count, text] of [
+      [
+        1,
+        "Today 1 message email was not sent: at most 30 go out an hour. Every message is saved here.",
+      ],
+      [
+        12,
+        "Today 12 message emails were not sent: at most 30 go out an hour. Every message is saved here.",
+      ],
+    ] as const) {
+      const html = renderToStaticMarkup(
+        <UsageCard plan="free" usage={{ ...usage, notifySkippedToday: count }} />,
+      );
+      const line = new DOMParser()
+        .parseFromString(html, "text/html")
+        .querySelector('[data-testid="audience-notify-skipped"]')!;
+      expect(line.textContent).toBe(text);
+      expect(line.getAttribute("role")).toBe("status");
+      expect(html).not.toContain('data-testid="audience-over-limit"');
+    }
   });
 });

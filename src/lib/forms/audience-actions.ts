@@ -9,8 +9,9 @@ import { isBlockId, isUuid } from "./contract";
  * Deleting submissions on the Audience screen (M17-08): one row, or every row of one form of the
  * current site. Both act as the signed-in user, under RLS (the delete policy: rows of a site they
  * own), and filter on the current site from `getAppContext()` too, so an id from another account
- * deletes nothing. At most 60 a minute per user. The month's count is not given back (HL016 counts
- * intake, in form_submission_usage).
+ * deletes nothing. At most 60 a minute per user. Deleting gives the places back: the monthly and
+ * daily caps (HL016) count what the forms hold. Only the month's intake ceiling, five times the
+ * monthly cap (form_submission_usage.accepted), is never given back.
  */
 
 const AUDIENCE_DELETE_LIMIT = 60;

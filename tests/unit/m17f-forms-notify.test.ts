@@ -64,6 +64,7 @@ function deps(over: { limit?: RateLimitResult; owner?: unknown; send?: unknown }
             : { email: OWNER, plan: "free" as const },
       ),
       rateLimit: vi.fn(async () => over.limit ?? { allowed: true, retryAfter: 0 }),
+      recordSkipped: vi.fn(async (_ownerId: string) => undefined),
       send:
         (over.send as never) ??
         ((message: Parameters<typeof sendMessage>[0]) =>
@@ -204,6 +205,19 @@ describe("M17-10 the message email", () => {
     expect(await notifyOwnerOfMessage(notice(), d.deps)).toBe("limited");
     expect(d.smtp.raw).toHaveLength(0);
     expect(d.deps.owner).not.toHaveBeenCalled();
+    // Counted for the owner's Audience screen (finding 6), once per skipped email.
+    expect(d.deps.recordSkipped).toHaveBeenCalledTimes(1);
+    expect(d.deps.recordSkipped).toHaveBeenCalledWith(notice().ownerId);
+  });
+
+  it("a sent email records no skip; a skip that cannot be recorded is logged and never throws", async () => {
+    const sent = deps();
+    expect(await notifyOwnerOfMessage(notice(), sent.deps)).toBe("sent");
+    expect(sent.deps.recordSkipped).not.toHaveBeenCalled();
+    const broken = deps({ limit: { allowed: false, retryAfter: 100 } });
+    broken.deps.recordSkipped.mockRejectedValue(new Error("down"));
+    expect(await notifyOwnerOfMessage(notice(), broken.deps)).toBe("skipped");
+    expect(broken.log).toHaveBeenCalledTimes(1);
   });
 
   it("a deployment without SMTP skips it", async () => {
@@ -263,6 +277,10 @@ describe("M17-02 the limit email", () => {
     expect(headersOf(raw)).toContain(`To: ${OWNER}`);
     const { html, text } = d.smtp.sent[0]! as { html: string; text: string };
     for (const part of [html, text]) expect(part).toContain("5,000 form submissions on Pro");
+    // Deleting makes room now that the caps count what the forms hold.
+    expect(text.replace(/\s+/g, " ")).toContain(
+      "New submissions are not saved until there is room: delete the ones you don’t need, or wait until the 1st of next month.",
+    );
     expect(headersOf(raw).some((line) => line.startsWith("Subject:"))).toBe(true);
     expect(FORM_LIMIT_SUBJECT).toBe("Your forms reached this month’s limit");
     expect(headersOf(raw).some((line) => /^reply-to:/i.test(line))).toBe(false);
