@@ -4,7 +4,8 @@ import type { PublishError } from "@/lib/document";
 import { PATH_MESSAGES } from "@/lib/document/path";
 import type { ContentActor, ContentFailure, EntryPlace, PublishRun } from "@/lib/content";
 import { SCHEDULING_PLAN_MESSAGE } from "@/lib/limits/messages";
-import { PLAN_LIMITS, toPlanId } from "@/lib/limits/table";
+import { requireSiteAccess } from "@/lib/access";
+import { PLAN_LIMITS } from "@/lib/limits/table";
 import { SITE_NOT_LIVE_MESSAGE } from "@/lib/publish/gate-messages";
 import type { PagePublishResult } from "@/lib/publish/core";
 import type { Database } from "@/lib/supabase/database.types";
@@ -71,27 +72,29 @@ export interface WorkerResult {
 }
 
 /**
- * May the user who scheduled this row still make it happen, as the owner's account stands now? The
- * ONE place this is decided (Wave F, team access, changes it to "may this member still publish this
- * site"). Today: the scheduler is the site's owner, the owner's account is not suspended (a suspended
- * account never fires, and the row does not wait for the suspension to end), and for a publish the
- * plan still includes scheduling. Null when it may; else the code the row fails with.
+ * May the row's creator still make it happen? The ONE place the worker decides this (Wave F): the
+ * access helper, for the creator, on the row's site, with need publish and source system. A removed
+ * or demoted publisher, a member whose access is paused (the owner left Studio, either suspension)
+ * and anyone who never had access: `access_lost`, and the row ends without publishing (T9, G19).
+ * The owner's own suspension: `account_suspended` (the row does not wait for it to end). A publish
+ * whose owner's plan no longer includes scheduling: `plan`. Null when it may run.
  */
 export async function scheduleActorRefusal(
   db: Admin,
-  row: Pick<ClaimedSchedule, "action" | "ownerId" | "createdBy">,
+  row: Pick<ClaimedSchedule, "action" | "siteId" | "ownerId" | "createdBy">,
 ): Promise<string | null | "retry"> {
-  if (row.createdBy !== row.ownerId) return "not_permitted";
-  const account = await db
-    .from("accounts")
-    .select("plan, suspended_at")
-    .eq("id", row.ownerId)
-    .maybeSingle();
-  if (account.error) return "retry";
-  if (!account.data || account.data.suspended_at !== null) return "account_suspended";
-  if (row.action === "publish" && !PLAN_LIMITS[toPlanId(account.data.plan)].scheduling) {
-    return "plan";
+  const found = await requireSiteAccess(db, {
+    actorId: row.createdBy,
+    siteId: row.siteId,
+    need: "publish",
+    source: "system",
+  });
+  if (!found.ok) {
+    if (found.reason === "error") return "retry";
+    return found.reason === "account_suspended" ? "account_suspended" : "access_lost";
   }
+  if (found.access.ownerId !== row.ownerId) return "access_lost";
+  if (row.action === "publish" && !PLAN_LIMITS[found.access.plan].scheduling) return "plan";
   return null;
 }
 
