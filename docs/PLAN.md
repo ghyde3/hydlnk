@@ -231,8 +231,17 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
 - A draft path that clashes is refused at save time (HL012), not only at publish. That is new compared with today's sub-pages.
 - Ordering, instead of a cross-table check: no user can enable a post type before stage 1b ships, because the editor and MCP expose it only in stages 3 and 4. So until then, `site_paths` only needs to watch the content tables.
 
+**Stage 2 additions (Wave B, M16-01, migration `blog_stage_2`):**
+- `content_slug_redirects` (`site_id`, `type_id`, `from_slug`, `entry_id`, `created_at`; primary key `type_id, from_slug`): the old slugs of a published entry, so a changed slug answers 301.
+  - Its one writer is a trigger on `content_entries.published`. A republish that changes the live slug records the old one against the entry. A slug that goes live again (the same entry or a later one) deletes its row, so a live post always wins over a redirect.
+  - A first publish, an unpublish and a trash record nothing. The newest 200 per type are kept. Rows go with their entry, type or site.
+  - Access: RLS on; the owner may SELECT rows of their own sites; `service_role` may SELECT (the public lookup); no role has a write grant, the secret key included.
+  - A row points at the entry, not at a slug, so there is no chain to follow. The reader must still check the entry is live.
+- `content_entries_live_order_idx` on `(site_id, type_id, first_published_at desc, id)` for live, untrashed entries: the archive order.
+- `live_term_counts(site, type)`: a type's terms with the number of published, untrashed entries on each (a term with none is listed at 0). `service_role` only.
+- Redirects for a changed archive path or page path are not built.
+
 **Deferred:**
-- `redirects` arrives with stage 2, which serves the redirects.
 - `content_relations` arrives in stage 5.
 
 **Access rules**
@@ -251,6 +260,8 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
 | `content_bytes` per account (drafts and published copies of entries and sub-pages) | 64 MiB (today's HL009 value) | 1 GiB | 5 GiB | HL009, now by plan |
 
 - A path claim refused by `site_paths` raises HL012 (taken or reserved).
+- A type holds at most 500 terms, categories and tags together, on every plan: the 501st insert raises HL015 (a trigger on `content_terms`; the writer answers `term_limit`). It is not a plan limit and is not in `plan_limits`.
+- Posts per plan are `entries_per_type` (HL010): nothing new in SQL for the blog; `218-posts-per-plan.test.sql` pins it.
 - Trashed entries count toward the limits until purged, so trash is never free overflow.
 - A downgrade deletes nothing: existing entries stay live, and new ones over the limit are refused.
 
@@ -276,17 +287,20 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
   - get an entry;
   - list and restore revisions;
   - create, rename and delete terms;
-  - set an entry's terms.
+  - set an entry's terms;
+  - (stage 2) list a site's types, list a type's terms, and count a type's entries, trash included. These three are reads: they check ownership only, so they work for a type that is off and for a suspended owner.
 - Publish and unpublish are single SQL functions (service role only, empty `search_path`), so each one is atomic.
   - Publish copies the draft, sets the dates, rebuilds the term links, updates `site_paths` and records a revision.
   - Publish never touches `pages`, `site_pages` or `page_versions`.
-  - Until stage 2 adds the per-entry and per-type tags, the writer expires the site's existing `page:<id>` tag after a publish.
+  - Cache expiry (stage 2, M16-09): after a publish, unpublish, trash or restore, a page entry expires the site's `page:<id>` tag; an entry of any other type expires `entry:<id>` and `type:<typeId>` and leaves the site tag alone. Turning a type on or off, or changing its labels or archive path, expires `type:<typeId>` and `page:<id>`. The write stands if the expiry fails.
+  - A list row and a single entry carry `hasUnpublishedChanges`: a live entry whose draft differs from its published copy (key order aside).
 - Trash clears the live copy at once and keeps the draft. Restore works for 30 days. A daily job purges older trash.
 
 **Post bodies are untrusted Markdown** (orchestrator decision, 2026-10-12, from the M15-03 checks):
 - Publish refuses any link or image whose scheme is not http, https, `mailto:` or `tel:` (for example `javascript:` and `data:`), with a typed issue the author can act on.
 - The writer also checks every link and image host against the blocklist: in tables, in raw HTML and behind HTML character references. It fails closed on URLs it cannot parse.
 - Stage 2 renders with `marked` with raw HTML escaped as text, never passed through, and only http(s) links. Images come only from HYDLNK media, and embeds only from the existing allowlist, on a line of their own.
+- Body images (stage 2, M16-04): Publish takes an image in a body only when its address is, character for character, the stored address of an upload (`storageUrl(path)`: this project's Storage, the `page-media` bucket, a `{uid}/{file}.{jpg|png|webp}` path), the path is in the owner's own folder and the file exists. Any other address answers `invalid` with "Use an image from your uploads."; so does a body with more than 50 distinct images. A draft save does not check this, so an old draft is refused only when it is published. Such an address is not sent to the link blocklist (it is HYDLNK's own Storage). Raw HTML `<img>` is not an image: the renderer shows it as text.
 - The post schemas, limits and list enums live in `@/lib/content/schemas`. That module is free of server-only imports, so the editor and MCP use the same rules as the writer.
 
 **Content model security review (M15-04, 2026-10-12): decisions and known items** (both confirmed by Gary on 2026-10-12: revision history is pruned, oldest first, to fit the cap; the known items are fixed before stages 3 and 4)
@@ -296,11 +310,11 @@ Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home
   - the `hydlnk.content_move` flag is honored only for privileged roles, never `authenticated` or `anon`;
   - moved `site_pages` rows are read-only under RLS.
 - **Known items, to settle before the writer is reachable from the editor (stage 3) or MCP (stage 4):**
-  - a per-type cap on terms;
-  - body images restricted to the owner's own media (stage 2 renders only those);
+  - ~~a per-type cap on terms~~ closed in stage 2 (HL015, 500 per type, M16-01);
+  - ~~body images restricted to the owner's own media~~ closed in stage 2 (refused at Publish, M16-04; the renderer keeps its own check);
   - custom `fields` validated by type (stage 5);
-  - trashed page entries and the Home exemption under HL008;
-  - the editor adopting new sub-page revisions after Publish (an MCP edit made during that window goes unnoticed);
+  - trashed page entries and the Home exemption under HL008: still open, not part of the blog wave. As of `20261014000009`, the page count includes trashed page entries and leaves out any page entry whose draft or published path is `/`;
+  - the editor adopting new sub-page revisions after Publish (an MCP edit made during that window goes unnoticed): addressed in 1b-2 (`publish_site_revs` answers the revs under the publish locks, see the 1b-2 note below); not touched by the blog wave;
   - revisions pruned when a plan drops or a gift ends (accepted, as with versions).
 
 ### Moving pages in (stage 1b), in this order
