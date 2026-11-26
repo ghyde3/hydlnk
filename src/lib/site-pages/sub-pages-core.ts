@@ -98,7 +98,6 @@ export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const actorOf = (userId: string): ContentActor => ({ userId, source: "editor" });
 
 const failure = (error: SubPageError, message?: string) => ({
   ok: false as const,
@@ -118,6 +117,8 @@ export async function createSubPageWithClient(
   admin: Admin,
   input: {
     userId: string;
+    /** Where the call came from (S4): the MCP tool says "mcp", so decide() applies its owner-only rule. */
+    source: ContentActor["source"];
     siteId: unknown;
     title?: unknown;
     path?: unknown;
@@ -131,7 +132,7 @@ export async function createSubPageWithClient(
     actorId: input.userId,
     siteId: input.siteId,
     need: "edit",
-    source: "editor",
+    source: input.source,
   });
   if (!found.ok) return refusalOf(found, "create_failed");
   const { access } = found;
@@ -172,7 +173,7 @@ export async function createSubPageWithClient(
     draft = parsed.data;
   }
   const made = await createEntryWithClient(admin, {
-    actor: actorOf(input.userId),
+    actor: { userId: input.userId, source: input.source },
     siteId: site.id,
     typeKey: "page",
     draft,

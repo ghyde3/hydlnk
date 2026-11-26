@@ -137,7 +137,7 @@ describe.skipIf(!run)("M19-06 the content writer under team access (local Supaba
     const bTermId = bTerm.ok ? bTerm.id : "";
     expect(await renameTermWithClient(admin, { actor: as(f.publisher), siteId: f.owner.pageId, termId: bTermId, name: "X" })).toMatchObject({ ok: false, error: "not_found" });
     expect(await deleteTermWithClient(admin, { actor: as(f.publisher), siteId: f.owner.pageId, termId: bTermId })).toMatchObject({ ok: false, error: "not_found" });
-    const bPage = await createSubPageWithClient(admin as never, { userId: other.userId, siteId: other.pageId, title: "B page", path: "b-page" });
+    const bPage = await createSubPageWithClient(admin as never, { userId: other.userId, source: "editor", siteId: other.pageId, title: "B page", path: "b-page" });
     expect(bPage.ok).toBe(true);
     const bPageId = bPage.ok ? bPage.id : "";
     expect(await deleteSubPageWithClient(admin as never, { userId: f.publisher.userId, siteId: f.owner.pageId, subPageId: bPageId })).toMatchObject({ ok: false, error: "not_found" });
@@ -147,18 +147,18 @@ describe.skipIf(!run)("M19-06 the content writer under team access (local Supaba
   });
 
   it("M19-06 sub-pages: an editor adds a draft page and deletes it; a live page needs a publisher", async () => {
-    const page = await createSubPageWithClient(admin as never, { userId: f.editor.userId, siteId: f.owner.pageId, title: "Editor page", path: "editor-page" });
+    const page = await createSubPageWithClient(admin as never, { userId: f.editor.userId, source: "editor", siteId: f.owner.pageId, title: "Editor page", path: "editor-page" });
     expect(page.ok).toBe(true);
     const id = page.ok ? page.id : "";
     expect(await deleteSubPageWithClient(admin as never, { userId: f.editor.userId, siteId: f.owner.pageId, subPageId: id })).toMatchObject({ ok: true });
-    const live = await createSubPageWithClient(admin as never, { userId: f.owner.userId, siteId: f.owner.pageId, title: "Live", path: "live-page" });
+    const live = await createSubPageWithClient(admin as never, { userId: f.owner.userId, source: "editor", siteId: f.owner.pageId, title: "Live", path: "live-page" });
     const liveId = live.ok ? live.id : "";
     const madeLive = await admin.from("content_entries").update({ published: { path: "live-page", title: "Live", description: "", blocks: [] } as never, published_at: new Date().toISOString() }).eq("id", liveId).select("id");
     expect(madeLive.error).toBeNull();
     expect(madeLive.data).toHaveLength(1);
     expect(await deleteSubPageWithClient(admin as never, { userId: f.editor.userId, siteId: f.owner.pageId, subPageId: liveId })).toMatchObject({ ok: false, error: "forbidden" });
     expect(await deleteSubPageWithClient(admin as never, { userId: f.publisher.userId, siteId: f.owner.pageId, subPageId: liveId })).toMatchObject({ ok: true });
-    expect(await createSubPageWithClient(admin as never, { userId: f.stranger.userId, siteId: f.owner.pageId, title: "No" })).toMatchObject({ ok: false, error: "not_found" });
+    expect(await createSubPageWithClient(admin as never, { userId: f.stranger.userId, source: "editor", siteId: f.owner.pageId, title: "No" })).toMatchObject({ ok: false, error: "not_found" });
   });
 
   it("M19-06 a publisher's body image in the OWNER's folder publishes; the same file in their own folder is refused", async () => {

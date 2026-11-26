@@ -38,7 +38,7 @@ describe.skipIf(!run)("M19-13 a member's MCP token reaches no shared site (local
     p = await makeOwner(admin, "m19mcp-p", () => draftOf("Member's own"));
     await join(admin, o, o.pageId, p, "publisher");
     const { createSubPageWithClient } = await import("@/lib/site-pages/sub-pages-core");
-    const made = await createSubPageWithClient(admin as never, { userId: o.userId, siteId: o.pageId, title: "About", path: "about" });
+    const made = await createSubPageWithClient(admin as never, { userId: o.userId, source: "editor", siteId: o.pageId, title: "About", path: "about" });
     if (!made.ok) throw new Error("sub-page");
     subPageId = made.id;
   });
@@ -98,6 +98,14 @@ describe.skipIf(!run)("M19-13 a member's MCP token reaches no shared site (local
     const owners = JSON.stringify((await runTool(list, identity(o.userId), {}, deps)).structuredContent);
     expect(owners).toContain(o.pageId);
     expect(codeOf(await runTool(tools.toolByName("get_page")!, identity(o.userId), { pageId: o.pageId }, deps))).toBe("ok");
+  });
+
+  it("S4: the sub-page core itself refuses a member when the source is mcp (and lets the same member in from the editor)", async () => {
+    const { createSubPageWithClient } = await import("@/lib/site-pages/sub-pages-core");
+    const viaMcp = await createSubPageWithClient(admin as never, { userId: p.userId, source: "mcp", siteId: o.pageId, title: "Planted", path: "planted-mcp" });
+    expect(viaMcp).toMatchObject({ ok: false, error: "not_found" });
+    const viaEditor = await createSubPageWithClient(admin as never, { userId: p.userId, source: "editor", siteId: o.pageId, title: "From the editor", path: "from-editor" });
+    expect(viaEditor).toMatchObject({ ok: true });
   });
 
   it("M19-13 the consent screen and the Connected apps card say shared sites aren't included", async () => {

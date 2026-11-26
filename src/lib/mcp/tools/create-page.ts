@@ -63,6 +63,7 @@ export const createPage: ToolDefinition<typeof input> = {
 
     const created = await createSubPageWithClient(call.admin, {
       userId: call.userId,
+      source: "mcp",
       siteId: call.page!.id,
       title,
       path,

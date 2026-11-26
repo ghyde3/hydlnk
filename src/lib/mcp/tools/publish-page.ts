@@ -28,7 +28,7 @@ export const publishPage: ToolDefinition<typeof input> = {
   async handler(_args, call) {
     const page = call.page!;
     const result = await publishPageCore(
-      { pageId: page.id, userId: call.userId },
+      { pageId: page.id, userId: call.userId, source: "mcp" },
       { admin: call.admin },
     );
     if (!result.ok) {

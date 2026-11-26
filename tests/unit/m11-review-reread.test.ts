@@ -100,6 +100,7 @@ describe("HL009 creating a page", () => {
     });
     const result = await createSubPageWithClient({ from: table, rpc } as never, {
       userId: "00000000-0000-4000-8000-0000000000a1",
+      source: "editor",
       siteId: SITE,
     });
     expect(result).toEqual({
