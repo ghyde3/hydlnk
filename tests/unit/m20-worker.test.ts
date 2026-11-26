@@ -163,6 +163,10 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     expect(deps.publishPost).not.toHaveBeenCalled();
     // Wave F: the creator is asked through the access rule; one with no publish access is access_lost.
     expect(finished[0]).toMatchObject({ p_failed: true, p_code: "access_lost" });
+    // M19-16 step 5, directly: it publishes nothing (no post, no page, no unpublish) and expires nothing.
+    expect(deps.publishPage).not.toHaveBeenCalled();
+    expect(deps.unpublish).not.toHaveBeenCalled();
+    expect(deps.expire).not.toHaveBeenCalled();
   });
 
   it.each([
