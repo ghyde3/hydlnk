@@ -36,13 +36,20 @@ export function saveIndicatorText(status: SaveStatus): string {
  *     pattern of the old Design screen), shown only while it has something to say. It ends before
  *     the mini phone's column, so it is never under it.
  */
-export function SaveIndicator({ status }: { status: SaveStatus }) {
+export function SaveIndicator({
+  status,
+  className = "",
+}: {
+  status: SaveStatus;
+  /** Extra classes for the row it sits in (its place among the toolbar's items at 760px and up). */
+  className?: string;
+}) {
   const text = saveIndicatorText(status);
   return (
     <span
       aria-live="polite"
       data-save-status={status}
-      className={`pointer-events-none fixed bottom-[calc(124px+env(safe-area-inset-bottom))] left-4 z-10 max-w-[calc(100vw-5.5rem)] font-mono text-xs text-text-2 hl:pointer-events-auto hl:static hl:z-auto hl:max-w-none hl:rounded-none hl:border-0 hl:bg-transparent hl:p-0 hl:whitespace-nowrap ${
+      className={`pointer-events-none fixed bottom-[calc(124px+env(safe-area-inset-bottom))] left-4 z-10 max-w-[calc(100vw-5.5rem)] font-mono text-xs text-text-2 hl:pointer-events-auto hl:static hl:z-auto hl:max-w-none hl:rounded-none hl:border-0 hl:bg-transparent hl:p-0 hl:whitespace-nowrap ${className} ${
         text === "" ? "" : "rounded-md border border-line-2 bg-surface px-3 py-2"
       }`}
     >

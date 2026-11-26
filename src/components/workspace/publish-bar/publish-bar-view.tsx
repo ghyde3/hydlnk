@@ -65,7 +65,7 @@ export function PublishBarView(props: PublishBarViewProps) {
               key={row.key}
               data-testid={`publish-row-${row.key}`}
               data-state={row.state}
-              className="flex min-h-14 flex-col gap-2 border-b border-line px-4 py-2.5"
+              className="flex min-h-14 shrink-0 flex-col gap-2 border-b border-line px-4 py-2.5"
             >
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <div className="min-w-0">

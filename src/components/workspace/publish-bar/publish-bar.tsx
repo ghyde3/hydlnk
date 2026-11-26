@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { TAB_BAR_TOP_CLASS } from "@/components/app/app-nav";
 import { HOME_PAGE_ID } from "@/lib/site-pages/pages";
 import { useWorkspace } from "../workspace-context";
 import { PageRevisions } from "./page-revisions";
@@ -90,7 +91,7 @@ export function PublishBar({
       aria-label="Publish"
       data-testid="publish-bar"
       tabIndex={-1}
-      className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-40 flex max-h-[min(70dvh,calc(100dvh-180px))] flex-col border-t border-line bg-surface text-ink outline-none hl:absolute hl:inset-x-auto hl:top-full hl:right-8 hl:bottom-auto hl:mt-1.5 hl:max-h-[calc(100dvh-160px)] hl:w-[380px] hl:rounded-md hl:border"
+      className={`fixed inset-x-0 ${TAB_BAR_TOP_CLASS} z-40 flex max-h-[min(70dvh,calc(100dvh-180px))] flex-col border-t border-line bg-surface text-ink outline-none hl:absolute hl:inset-x-auto hl:top-full hl:right-8 hl:bottom-auto hl:mt-1.5 hl:max-h-[calc(100dvh-160px)] hl:w-[380px] hl:rounded-md hl:border`}
     >
       {revisionsOf !== null && revisionsEntry !== null ? (
         <PageRevisions

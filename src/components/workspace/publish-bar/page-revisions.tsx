@@ -125,7 +125,7 @@ export function PageRevisions({
             <li
               key={revision.rev}
               data-rev={revision.rev}
-              className="flex min-h-14 items-center justify-between gap-3 border-b border-line px-4 py-2"
+              className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-line px-4 py-2"
             >
               <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <LocalTime iso={revision.createdAt} className="font-mono text-xs text-text-2" />

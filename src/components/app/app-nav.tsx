@@ -89,13 +89,20 @@ export function SidebarNav() {
   );
 }
 
-/** Phone bottom tab bar (< 760px): fixed, four tabs, current one marked with a brass top edge. */
+/**
+ * Phone bottom tab bar (< 760px): fixed, four tabs, current one marked with a brass top edge. Its
+ * height is `--hl-tab-bar` (57px: the 56px tabs and the 1px top border) plus the safe-area inset;
+ * anything placed on top of it uses the same token (`TAB_BAR_TOP_CLASS`).
+ */
+/** `bottom` of a fixed element that sits exactly on the phone tab bar. */
+export const TAB_BAR_TOP_CLASS = "bottom-[calc(var(--hl-tab-bar)+env(safe-area-inset-bottom))]";
+
 export function TabBar() {
   const current = navKeyForSegment(useSelectedLayoutSegment());
   return (
     <nav
       aria-label="App sections"
-      className="fixed inset-x-0 bottom-0 z-20 flex justify-around border-t border-line bg-surface px-1 pb-[env(safe-area-inset-bottom)] hl:hidden"
+      className="fixed inset-x-0 bottom-0 z-20 box-border flex h-[calc(var(--hl-tab-bar)+env(safe-area-inset-bottom))] justify-around border-t border-line bg-surface px-1 pb-[env(safe-area-inset-bottom)] hl:hidden"
     >
       {TAB_ITEMS.map((item) => {
         const active = item.key === current;

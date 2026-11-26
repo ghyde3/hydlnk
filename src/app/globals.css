@@ -50,6 +50,9 @@
   /* Shape */
   --hl-radius: 6px; /* cards, buttons, inputs, segmented track */
   --hl-radius-sm: 4px; /* chips, segmented items, small buttons */
+  /* The phone tab bar without the safe-area inset: 56px of tabs under its 1px top border. The bar
+     is sized by it, and what sits on top of the bar (the publish sheet) is placed by it. */
+  --hl-tab-bar: 57px;
 
   /* Focus */
   --hl-focus-width: 2px;

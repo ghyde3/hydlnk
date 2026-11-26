@@ -5,6 +5,7 @@ import { ChevronDown } from "lucide-react";
 import { PageName } from "@/components/editor/page-name";
 import { StatusChip } from "@/components/editor/status-chip";
 import { UndoRedoButtons } from "@/components/editor/undo-redo-controls";
+import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import type { UndoRedo } from "@/components/editor/use-undo-redo";
 import type { SaveStatus } from "@/lib/editor/autosave";
 import { PUBLISH_STATUS_LABEL, type PublishStatus } from "@/lib/editor/status";
@@ -160,6 +161,7 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
   const { publishBusy = false, onTogglePublishBar, publishBarOpen = false } = props;
   const { publishToggleRef, publishBarId, publishBarSlot } = props;
   usePinnedHeight();
+  const isDesktop = useIsDesktop();
 
   return (
     <div
@@ -182,56 +184,76 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
         {...{ [PIN_ATTRIBUTE]: "" }}
         className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-1.5 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
       >
-        <div className="order-2 flex min-w-0 flex-1 hl:order-none hl:flex-none">
-          {onTogglePublishBar ? (
-            <button
-              ref={publishToggleRef}
-              type="button"
-              data-testid="publish-bar-toggle"
-              // The name holds the visible text (WCAG 2.5.3, label in name), so "click Published"
-              // finds it. It starts with "Status": no button but Publish has a name starting "Publish".
-              aria-label={publishToggleName(status)}
-              aria-haspopup="dialog"
-              aria-expanded={publishBarOpen}
-              aria-controls={publishBarOpen ? publishBarId : undefined}
-              onClick={onTogglePublishBar}
-              className="inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-0.5 rounded-sm border-0 bg-transparent p-0 text-ink hl:gap-1"
-            >
-              <StatusChip status={status} />
-              {/* At every width: without it the chip reads as a plain badge on a phone. */}
-              <ChevronDown
-                aria-hidden="true"
-                focusable="false"
-                data-testid="publish-bar-chevron"
-                size={14}
-                className={`shrink-0 text-text-2 ${publishBarOpen ? "rotate-180" : ""}`}
-              />
-            </button>
+        {/*
+          The DOM order is the order the eye reads at each width, so Tab follows it (WCAG 2.4.3):
+          on a phone Undo and Redo come first, then the status chip, then Publish; at 760px and up
+          the status and the save indicator come first and Undo, Redo and the menus follow. One set of
+          buttons, moved (the keys keep the nodes), not two. The server and the first client render
+          draw the phone order (`useIsDesktop`), and `hl:order-*` keeps the desktop row looking the
+          same for that one frame.
+        */}
+        {(isDesktop
+          ? (["status", "save", "history"] as const)
+          : (["history", "status", "save"] as const)
+        ).map((part) =>
+          part === "status" ? (
+            <div key="status" className="flex min-w-0 flex-1 hl:order-1 hl:flex-none">
+              {onTogglePublishBar ? (
+                <button
+                  ref={publishToggleRef}
+                  type="button"
+                  data-testid="publish-bar-toggle"
+                  // The name holds the visible text (WCAG 2.5.3, label in name), so "click Published"
+                  // finds it. It starts with "Status": no button but Publish has a name starting "Publish".
+                  aria-label={publishToggleName(status)}
+                  aria-haspopup="dialog"
+                  aria-expanded={publishBarOpen}
+                  aria-controls={publishBarOpen ? publishBarId : undefined}
+                  onClick={onTogglePublishBar}
+                  className="inline-flex min-h-11 min-w-0 cursor-pointer items-center gap-0.5 rounded-sm border-0 bg-transparent p-0 text-ink hl:gap-1"
+                >
+                  <StatusChip status={status} />
+                  {/* At every width: without it the chip reads as a plain badge on a phone. */}
+                  <ChevronDown
+                    aria-hidden="true"
+                    focusable="false"
+                    data-testid="publish-bar-chevron"
+                    size={14}
+                    className={`shrink-0 text-text-2 ${publishBarOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+              ) : (
+                <StatusChip status={status} />
+              )}
+            </div>
+          ) : part === "save" ? (
+            <SaveIndicator key="save" status={saveStatus} className="hl:order-2" />
           ) : (
-            <StatusChip status={status} />
-          )}
-        </div>
-        <SaveIndicator status={saveStatus} />
-        <div className="order-1 flex shrink-0 items-center gap-2 hl:order-none hl:ml-auto min-[1280px]:ml-0">
-          <UndoRedoButtons controls={undoRedo} />
-          <div className="hidden hl:block">
-            <PreviewMenu
-              pageId={pageId}
-              flush={flush}
-              liveUrl={liveUrl}
-              onOpenShare={onOpenShare}
-            />
-          </div>
-          <div className="hidden hl:block">
-            <MoreMenu flush={flush} onOpenShare={onOpenShare} />
-          </div>
-        </div>
+            <div
+              key="history"
+              className="flex shrink-0 items-center gap-2 hl:order-3 hl:ml-auto min-[1280px]:ml-0"
+            >
+              <UndoRedoButtons controls={undoRedo} />
+              <div className="hidden hl:block">
+                <PreviewMenu
+                  pageId={pageId}
+                  flush={flush}
+                  liveUrl={liveUrl}
+                  onOpenShare={onOpenShare}
+                />
+              </div>
+              <div className="hidden hl:block">
+                <MoreMenu flush={flush} onOpenShare={onOpenShare} />
+              </div>
+            </div>
+          ),
+        )}
         <PublishButton
           publishing={publishing}
           busy={publishBusy}
           disabledReason={publishDisabledReason}
           onPublish={onPublish}
-          className="order-3 min-w-[84px] hl:order-none hl:min-w-0"
+          className="min-w-[84px] hl:order-4 hl:min-w-0"
         />
       </div>
       {publishBarOpen ? publishBarSlot : null}
