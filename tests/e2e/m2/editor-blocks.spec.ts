@@ -115,6 +115,9 @@ test.describe("M2-10 add a block", () => {
       "Page link",
       "Items",
       "Hours",
+      // Wave B (M16-07), which left this list behind, and Wave D (M17-03).
+      "Latest posts",
+      "Form",
     ]);
     const first = chips.first();
     expect(await css(first, "border-top-left-radius")).toBe("4px");
