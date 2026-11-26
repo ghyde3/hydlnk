@@ -303,6 +303,7 @@ export async function getPostCore(input: {
         firstPublishedAt: out.firstPublishedAt,
         updatedAt: out.updatedAt,
         deletedAt: out.deletedAt,
+        schedule: out.schedule,
       },
     },
   };

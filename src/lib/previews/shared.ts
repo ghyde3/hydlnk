@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   HOME_TARGET,
+  documentAt,
   draftSubPageSchema,
   isValidSubPagePath,
   stripHiddenCharacters,
@@ -118,7 +119,7 @@ export async function loadSharedPreview(
   };
   const base = `/share/${token as string}`;
   if (entryId === null) {
-    return loadDraftPreview(admin, site, { path, base, expiresAt: data.expires_at });
+    return loadDraftPreview(admin, site, { path, base, expiresAt: data.expires_at, now });
   }
 
   // A post (M16-16). The site is the link row's and nothing else: the entry is looked up inside it,
@@ -131,6 +132,7 @@ export async function loadSharedPreview(
     base,
     expiresAt: data.expires_at,
     currentId: entryId,
+    now,
   });
   return preview.kind === "active" ? { ...preview, post } : preview;
 }
@@ -255,9 +257,12 @@ export async function loadDraftPreview(
      * and the entry with this id is the current one (none, for a post).
      */
     currentId?: string;
+    /** The instant the draft is drawn for (Wave E, M20-06): blocks outside their time window are not drawn. */
+    now?: Date;
   },
 ): Promise<SharedPreview> {
   const { path, base, expiresAt } = options;
+  const at = (options.now ?? new Date()).getTime();
   // The design is the site row's; Home's blocks are its page entry's draft (the blocks frozen in
   // `pages.draft` by the move are never read). A site with no Home entry has not been moved: its
   // `pages.draft` is the whole document, as the editor reads it.
@@ -358,13 +363,14 @@ export async function loadDraftPreview(
     };
   }
 
+  // The draft as a visitor would see it now (M20-06): a block outside its time window is not drawn.
   return {
     kind: "active",
     pageId: page.id,
-    doc,
+    doc: documentAt(doc, at),
     plan: page.plan,
     expiresAt,
     ...(site ? { site } : {}),
-    ...(subPage ? { subPage } : {}),
+    ...(subPage ? { subPage: documentAt(subPage, at) } : {}),
   };
 }

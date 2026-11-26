@@ -45,6 +45,7 @@ import {
   cancelScheduleWithClient,
   listSchedulesWithClient,
   scheduleEntryWithClient,
+  siteScheduleSummariesWithClient,
 } from "./schedule-core";
 import {
   createTermWithClient,
@@ -140,6 +141,32 @@ export async function trashEntry(input: EntryWrite) {
 export async function restoreEntry(input: EntryWrite) {
   const out = await restoreEntryWithClient(createAdminSupabase(), input);
   return out.ok ? expired(input.entryId, out) : out;
+}
+
+/**
+ * Schedule a publish (the draft at `expectedRev`, checked now as Publish would) or an unpublish
+ * (Wave E). Nothing live changes, so nothing expires.
+ */
+export function scheduleEntry(
+  input: Parameters<typeof scheduleEntryWithClient>[1],
+  deps?: Parameters<typeof scheduleEntryWithClient>[2],
+) {
+  return scheduleEntryWithClient(createAdminSupabase(), input, deps);
+}
+
+/** Cancel an entry's pending scheduled publish or unpublish at `expectedRev`. */
+export function cancelSchedule(input: Parameters<typeof cancelScheduleWithClient>[1]) {
+  return cancelScheduleWithClient(createAdminSupabase(), input);
+}
+
+/** The site's entries that have a pending or a failed schedule, with their summaries (the publish bar). */
+export function listSiteSchedules(input: Parameters<typeof siteScheduleSummariesWithClient>[1]) {
+  return siteScheduleSummariesWithClient(createAdminSupabase(), input);
+}
+
+/** An entry's pending schedules and the newest finished one of each action. */
+export function listSchedules(input: Parameters<typeof listSchedulesWithClient>[1]) {
+  return listSchedulesWithClient(createAdminSupabase(), input);
 }
 
 /**

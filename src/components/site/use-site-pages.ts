@@ -52,6 +52,8 @@ import {
 } from "@/lib/site-templates/catalog";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
 import { latestPostsCategories } from "@/lib/site/live";
+import { previewBlocks } from "@/lib/document/schedule";
+import { useMinuteClock } from "@/lib/schedule/use-minute-clock";
 import type { WorkspaceAction } from "@/components/workspace/workspace-reducer";
 import { useLatestPosts } from "@/components/blocks/use-latest-posts";
 import { docOf, initSiteState, siteReducer, type SubPageSettings } from "./site-state";
@@ -668,6 +670,7 @@ export function useSitePages(args: {
     [forms],
   );
   const { latest: latestPosts } = useLatestPosts(siteId, latestCategories);
+  const minute = useMinuteClock();
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({
       id,
@@ -698,10 +701,11 @@ export function useSitePages(args: {
       site,
       subPage: {
         title: titleOf({ title: state.settings[effectiveId]!.title }),
-        blocks: forms.get(effectiveId)?.blocks ?? [],
+        // As Home's preview: every block that has not ended (Wave E, M20-06).
+        blocks: previewBlocks(forms.get(effectiveId)?.blocks ?? [], minute),
       },
     };
-  }, [state.ids, state.settings, nav, effectiveId, isHome, forms, latestPosts, archives]);
+  }, [state.ids, state.settings, nav, effectiveId, isHome, forms, latestPosts, archives, minute]);
 
   const hrefToId = useCallback(
     (href: string) => {

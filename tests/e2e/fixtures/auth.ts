@@ -20,7 +20,7 @@ import { url } from "../helpers";
 let envCache: Record<string, string> | undefined;
 
 /** Local keys: process.env wins, .env.local (written by scripts/init.sh) fills the rest. Never log them. */
-function readEnv(name: string): string {
+export function readEnv(name: string): string {
   if (process.env[name]) return process.env[name]!;
   if (!envCache) {
     envCache = {};

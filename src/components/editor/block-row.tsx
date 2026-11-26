@@ -12,6 +12,8 @@ import { Icon } from "@/components/app/icon";
 import { FeaturedChip } from "@/components/blocks/featured-chip";
 import { LinkTagsChip, LockChip } from "@/components/blocks/link-field-chips";
 import { OverrideChip } from "@/components/themes";
+import { ScheduleChip, ScheduleField } from "@/components/blocks/forms/schedule-field";
+import { useAccountPlan } from "@/components/versions/plan-context";
 
 /** A text control to start typing in: the file input of an image control is hidden, so it is skipped. */
 const FIRST_FIELD =
@@ -46,6 +48,8 @@ export const BlockRow = memo(function BlockRow({
   dispatch,
 }: BlockRowProps) {
   const sortable = useSortable({ id: block.id });
+  // The account's plan decides whether the Schedule section's controls are on (M20-06).
+  const plan = useAccountPlan() ?? "free";
   const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition } =
     sortable;
   const rowRef = useRef<HTMLLIElement | null>(null);
@@ -199,6 +203,7 @@ export const BlockRow = memo(function BlockRow({
             ) : null}
           </button>
         </div>
+        <ScheduleChip block={block} />
         <OverrideChip block={block} />
         <FeaturedChip block={block} />
         <LinkTagsChip block={block} />
@@ -241,6 +246,13 @@ export const BlockRow = memo(function BlockRow({
             }
             onSessionEnd={() => dispatch({ type: "block/session-end" })}
             onImage={(image) => dispatch({ type: "block/set-image", id: block.id, image })}
+          />
+          {/* Every block type's time window (Wave E, M20-06): one section, mounted here once. */}
+          <ScheduleField
+            block={block}
+            errors={errors}
+            plan={plan}
+            onChange={(next) => dispatch({ type: "block/update", block: next })}
           />
           <div className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-1.5">
             <button

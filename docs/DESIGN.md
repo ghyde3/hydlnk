@@ -78,6 +78,8 @@ Icons in the HYDLNK UI are Lucide (`lucide-react`), drawn through the one `Icon`
 
 Primary button (charcoal), secondary (white + `--hl-line-3` border), danger (white + red border/text), segmented control (track + white selected item with ring), status chip (4px radius, tinted bg), meter (6px track, brass fill), toggle switch (charcoal on / `#C9C5BE` off, white knob), card (white, 1px `--hl-line`, 6px), data table (mono numbers, `--hl-page` header row), step list (numbered circles: done = green with check, current = ink outline, todo = grey outline).
 
+**Scheduling (Wave E).** A block's Schedule section sits under its form, collapsed with a one-line summary: two rows ("Show from", "Show until"), each a native date-and-time control (44px, 16px mono text) and a Clear button, stacked at 390px; under them "Times are in {zone}, {GMT offset}." The block row carries one mono 11px chip: "Starts 3 Dec, 09:00" (neutral `--hl-track`), "Until 24 Dec, 18:00" (brass soft), "Ended 1 Dec" (track, muted text). Schedule for a page or a post is a secondary button that opens a native modal dialog ("Publish at", an optional "Unpublish at", the zone line, a charcoal Schedule). States use the publish chip: "Scheduled" (track, ink text and dot) and "Didn't publish" (track, red text and dot). Every time is drawn in the browser's zone after mount; nothing time-zoned is server-rendered.
+
 ## Screens
 
 | Screen | Key content | Mockup file |

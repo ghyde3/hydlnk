@@ -9,6 +9,8 @@ export interface EntryScheduleSummary {
   publishAt: string | null;
   unpublishAt: string | null;
   scheduledRev: number | null;
+  /** When the pending publish's snapshot was taken (Schedule was pressed), for "Your scheduled version is from …". */
+  snapshotAt: string | null;
   failed: string | null;
 }
 

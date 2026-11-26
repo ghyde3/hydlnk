@@ -216,7 +216,7 @@ describe.skipIf(!run)("M20 scheduling through the content writer and the worker"
     expect(listed.ok && listed.items.map((item) => item.id)).toContain(made.id);
     expect(listed.ok && listed.items.every((item) => item.schedule.publishAt !== null)).toBe(true);
     const read = await getEntryWithClient(admin, { actor: actor(pro), entryId: made.id });
-    expect(read.ok && read.schedule).toMatchObject({ publishAt: new Date(second).toISOString(), scheduledRev: made.rev, failed: null });
+    expect(read.ok && read.schedule).toMatchObject({ publishAt: second, scheduledRev: made.rev, failed: null });
     expect(await cancelScheduleWithClient(admin, { actor: actor(pro), entryId: made.id, expectedRev: made.rev, action: "publish" })).toMatchObject({ ok: true, canceled: true });
     const after = await listEntriesWithClient(admin, { actor: actor(pro), siteId: pro.pageId, typeKey: "post", status: "scheduled" });
     expect(after.ok && after.items.map((item) => item.id)).not.toContain(made.id);

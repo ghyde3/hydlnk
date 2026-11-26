@@ -125,6 +125,16 @@ export interface WorkspaceValue {
     id: string,
     rev: number,
   ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /**
+   * Schedule or cancel for one page (Wave E): both queues write first, then `send` runs with the
+   * page's entry id and the rev this tab holds.
+   */
+  schedulePage: <T>(
+    id: string,
+    send: (entryId: string, rev: number) => Promise<T>,
+  ) => Promise<{ ok: true; value: T } | { ok: false; message: string }>;
+  /** The rev this tab holds for a page's entry ("home" or a sub-page's id), or null. */
+  pageRev: (id: string) => number | null;
   /** Home's page entry id (its revisions are listed under it), or null when the site has none. */
   homeEntryId: string | null;
   publishNote: PublishNote | null;

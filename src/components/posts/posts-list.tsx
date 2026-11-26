@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { FORM_BUTTON } from "@/components/blocks/field";
 import type { EntrySummary } from "@/lib/content/schemas/summaries";
 import { POSTS_TEST_IDS } from "@/lib/blog/test-ids";
 import { postDateLabel, postState } from "@/lib/posts/status";
+import { formatLocal, zoneLabel } from "@/lib/schedule/local-time";
 import { PostChip } from "./post-chip";
 
 /**
@@ -53,6 +55,7 @@ export function PostsList({
               <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
                 <PostChip state={postState(item)} />
                 <span className="font-mono text-xs text-text-2">{postDateLabel(item)}</span>
+                {item.schedule.publishAt ? <ScheduledAt iso={item.schedule.publishAt} /> : null}
               </span>
             </Link>
           </li>
@@ -70,5 +73,17 @@ export function PostsList({
         </button>
       ) : null}
     </div>
+  );
+}
+
+/** "Publishes 3 Dec, 09:00 (Europe/London, GMT+0)": in the browser's zone, drawn after mount (M20-10). */
+function ScheduledAt({ iso }: { iso: string }) {
+  const [text, setText] = useState("");
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- local times are drawn after mount
+  useEffect(() => setText(`Publishes ${formatLocal(iso)} (${zoneLabel()})`), [iso]);
+  return (
+    <span data-testid="posts-row-scheduled" className="font-mono text-xs text-ink">
+      {text}
+    </span>
   );
 }

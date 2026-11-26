@@ -1,17 +1,20 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
 import type { TermSummary } from "@/lib/content/schemas/summaries";
 import { CONTENT_CONFLICT_MESSAGE } from "@/lib/posts/messages";
 import { POST_TEST_IDS } from "@/lib/blog/test-ids";
 import {
+  cancelScheduledChange,
   fetchPost,
   expirePost,
+  scheduleChange,
   postAction,
   refusalMessage,
   restoreRevision,
+  type Answer,
   type FieldIssue,
   type Refused,
 } from "@/lib/posts/client";
@@ -27,7 +30,10 @@ import {
 } from "@/lib/posts/draft";
 import type { PostEntry } from "@/lib/posts/types";
 import { suggestSlug } from "@/lib/posts/slug";
-import type { PostState } from "@/lib/posts/status";
+import { withSchedule, type PostState, type PublishedState } from "@/lib/posts/status";
+import { ScheduleControls } from "@/components/schedule/schedule-controls";
+import { useAccountPlan } from "@/components/versions/plan-context";
+import type { EntryScheduleSummary, ScheduleAction } from "@/lib/schedule/types";
 import { createPreviewLink, listPreviewLinks } from "@/lib/previews/actions";
 import { choosePreviewLink, HAS_PREVIEW_LINK_MESSAGE } from "@/lib/posts/preview-link";
 import { BodyEditor } from "./body-editor/body-editor";
@@ -123,19 +129,24 @@ export function PostEditor({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   /** Bumped when the draft is replaced from the server, so the body editor mounts on the new body. */
   const [loadKey, setLoadKey] = useState(0);
+  /** The post's pending schedules and newest failure (Wave E, M20-10). */
+  const [schedule, setSchedule] = useState<EntryScheduleSummary>(entry.schedule);
+  const plan = useAccountPlan() ?? "free";
 
   const trashed = meta.status === "trashed";
   const conflict = save.state === "conflict";
   const locked = suspended || trashed || conflict || busy === "revision" || busy === "restore";
   const usage = bodyUsage(bodyBytes(form.body));
   const stored = stableJson(toStoredDraft(form, base));
-  const state: PostState = trashed
+  const state: PublishedState = trashed
     ? "trashed"
     : meta.status === "draft"
       ? "draft"
       : stored === meta.liveJson
         ? "live"
         : "changes";
+  // The chip's word: Scheduled or Didn't publish win over Draft and Unpublished changes (M20-10).
+  const chipState: PostState = withSchedule(state, schedule);
 
   function change(patch: Partial<PostForm>) {
     let next: PostForm = { ...latest.current, ...patch };
@@ -222,6 +233,8 @@ export function PostEditor({
         return;
       }
       setCacheStale(out.value.cacheStale === true);
+      // A hand publish, unpublish or trash cancels the matching pending schedule (M20-07).
+      if (schedule.publishAt || schedule.unpublishAt) void reloadSchedule();
       if (action === "publish") {
         setMeta({ status: "published", everPublished: true, liveJson: sent });
         setFollowing(false);
@@ -327,6 +340,66 @@ export function PostEditor({
     }
   }
 
+  /** The schedule as the server holds it now (after a schedule, a cancel, or a fire). */
+  async function reloadSchedule(): Promise<PostEntry | null> {
+    const fresh = await fetchPost(siteId, entry.id);
+    if (fresh.kind !== "ok") return null;
+    setSchedule(fresh.entry.schedule);
+    return fresh.entry;
+  }
+
+  /**
+   * Schedule or cancel (Wave E, M20-07): what is typed is stored first, then the request runs at the
+   * stored rev, as Publish does. Scheduling changes no rev. A refusal is the sentence the controls
+   * show; a publish the draft cannot make also lists its issues by field, as Publish does.
+   */
+  async function scheduleAction(
+    send: (rev: number) => Promise<Answer<object>>,
+  ): Promise<string | null> {
+    if (busy !== null) return "Wait for the current step to finish.";
+    setIssues([]);
+    const out = await queue.exclusive(async (rev) => ({ value: await send(rev) }));
+    if (!out.ok) return queue.view.state === "conflict" ? CONTENT_CONFLICT_MESSAGE : NOT_SAVED;
+    if (out.value.kind !== "ok") {
+      if (out.value.kind === "conflict") queue.markConflict();
+      if (out.value.kind === "invalid" && out.value.issues.length > 0) setIssues(out.value.issues);
+      return out.value.kind === "invalid" ? "Fix these to schedule." : refusalMessage(out.value);
+    }
+    await reloadSchedule();
+    return null;
+  }
+  const onSchedule = (action: ScheduleAction, runAt: string) =>
+    scheduleAction((rev) => scheduleChange(siteId, entry.id, { rev, action, runAt }));
+  const onCancelSchedule = (action: ScheduleAction) =>
+    scheduleAction((rev) => cancelScheduledChange(siteId, entry.id, { rev, action }));
+
+  // A schedule that fires while the editor is open (M20-10): a minute after its time the post is read
+  // again; when the server's draft is what this screen holds, its new rev and live copy are adopted
+  // without the conflict notice.
+  const firesAt = schedule.publishAt ?? schedule.unpublishAt;
+  useEffect(() => {
+    if (!firesAt) return;
+    const wait = Math.max(5_000, Date.parse(firesAt) + 60_000 - Date.now());
+    if (wait > 2 ** 31 - 1) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const fresh = await reloadSchedule();
+        if (!fresh || fresh.rev === queue.rev || queue.dirty) return;
+        const held = stableJson(toStoredDraft(latest.current, base));
+        if (stableJson(toStoredDraft(readPostForm(fresh.draft), fresh.draft)) !== held) return;
+        await queue.exclusive(async () => ({ rev: fresh.rev, value: null }));
+        setMeta({
+          status: fresh.status,
+          everPublished: fresh.firstPublishedAt !== null,
+          liveJson: liveJsonOf(fresh),
+        });
+      })();
+    }, wait);
+    return () => clearTimeout(timer);
+    // `reloadSchedule` and the queue are stable for the screen's life; the timer follows the time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firesAt]);
+
   const fieldError = (field: string) =>
     issues.find((issue) => fieldOfIssue(issue.path) === field)?.message;
   const errors = {
@@ -346,6 +419,7 @@ export function PostEditor({
     <div data-testid="post-editor" data-post-id={entry.id} className="flex min-w-0 flex-col gap-3">
       <PostPublishPanel
         state={state}
+        chipState={chipState}
         save={save}
         busy={busy}
         disabled={suspended || conflict}
@@ -355,6 +429,24 @@ export function PostEditor({
         onUnpublish={() => void run("unpublish")}
         onPreview={() => void preview()}
       />
+
+      {trashed ? null : (
+        <section
+          aria-label="Schedule"
+          data-testid="post-schedule"
+          className="flex min-w-0 flex-col gap-2 rounded-md border border-line bg-surface p-3"
+        >
+          <ScheduleControls
+            summary={schedule}
+            currentRev={queue.rev}
+            allowUnpublish
+            plan={plan}
+            disabled={suspended || conflict || busy !== null || usage.over}
+            onSchedule={onSchedule}
+            onCancel={onCancelSchedule}
+          />
+        </section>
+      )}
 
       {conflict ? (
         <div

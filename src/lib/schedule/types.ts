@@ -25,6 +25,7 @@ export const NO_SCHEDULE: EntryScheduleSummary = {
   publishAt: null,
   unpublishAt: null,
   scheduledRev: null,
+  snapshotAt: null,
   failed: null,
 };
 

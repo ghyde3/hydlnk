@@ -2,7 +2,14 @@
 
 import { useId, type ReactNode } from "react";
 import { ItemChip } from "./item-chip";
-import { NOT_LIVE_NOTE, changeCount, changeCountLabel, type PublishRow } from "./rows";
+import {
+  NOT_LIVE_NOTE,
+  changeCount,
+  changeCountLabel,
+  rowChipState,
+  scheduledToCancel,
+  type PublishRow,
+} from "./rows";
 
 /** The secondary button of DESIGN.md: white, 1px `--hl-line-3`, at least 44px tall, 16px side padding. */
 export const ROW_BUTTON =
@@ -23,6 +30,8 @@ export interface PublishBarViewProps {
   onPublishPage: (key: string) => void;
   onPublishAll: () => void;
   onRevisions: (row: PublishRow) => void;
+  /** A page row's Schedule (Wave E): opens the page's schedule in the bar. */
+  onSchedule?: (row: PublishRow) => void;
   /** A slot above the rows (a refusal the bar itself shows). */
   notice?: ReactNode;
 }
@@ -84,9 +93,21 @@ export function PublishBarView(props: PublishBarViewProps) {
                     {row.detail}
                   </p>
                 </div>
-                <ItemChip state={row.state} />
+                <ItemChip state={rowChipState(row)} />
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {row.kind === "page" && props.onSchedule ? (
+                  <button
+                    type="button"
+                    data-testid={`publish-row-schedule-${row.key}`}
+                    aria-describedby={`${titleBase}-${row.key}`}
+                    onClick={() => props.onSchedule?.(row)}
+                    disabled={busy || !siteLive}
+                    className={ROW_BUTTON}
+                  >
+                    Schedule
+                  </button>
+                ) : null}
                 {row.kind === "page" ? (
                   <button
                     type="button"
@@ -134,6 +155,13 @@ export function PublishBarView(props: PublishBarViewProps) {
         >
           {changeCountLabel(count)}
         </p>
+        {scheduledToCancel(rows) > 0 ? (
+          <p data-testid="publish-bar-schedules-note" className="m-0 text-center text-xs text-text-2 hl:text-left">
+            {scheduledToCancel(rows) === 1
+              ? "Publish all changes cancels 1 scheduled publish."
+              : `Publish all changes cancels ${scheduledToCancel(rows)} scheduled publishes.`}
+          </p>
+        ) : null}
       </div>
     </div>
   );

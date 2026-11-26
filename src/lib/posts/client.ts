@@ -1,5 +1,7 @@
 import type { EntrySummary, TermSummary, TypeSummary } from "@/lib/content/schemas/summaries";
 import type { RevisionSummary } from "@/lib/content/schemas/summaries";
+import type { PublishError } from "@/lib/document/publish";
+import type { EntrySchedule, EntryScheduleSummary, ScheduleAction } from "@/lib/schedule/types";
 import type { PostEntry } from "./types";
 
 /**
@@ -17,8 +19,13 @@ export interface FieldIssue {
 export type Refused =
   | { kind: "unauthorized" }
   | { kind: "missing" }
-  | { kind: "conflict" }
-  | { kind: "invalid"; message: string; issues: FieldIssue[] }
+  | { kind: "conflict"; currentRev?: number }
+  /** `errors`: a page's Publish gate errors (Schedule on a page, Wave E). */
+  | { kind: "invalid"; message: string; issues: FieldIssue[]; errors?: PublishError[] }
+  /** Schedule (Wave E): a time that is past, too soon, too far or not on a minute. */
+  | { kind: "time"; message: string }
+  /** Schedule (Wave E): the plan does not include scheduling (HL017). */
+  | { kind: "plan"; message: string }
   | { kind: "slug"; message: string }
   | { kind: "path"; message: string }
   | { kind: "limit"; message: string }
@@ -47,13 +54,23 @@ function refusal(status: number, body: unknown): Refused {
   if (status === 401) return { kind: "unauthorized" };
   if (!isRecord(body)) return { kind: "error" };
   switch (body.kind) {
-    case "missing":
     case "conflict":
+      return typeof body.currentRev === "number"
+        ? { kind: "conflict", currentRev: body.currentRev }
+        : { kind: "conflict" };
+    case "missing":
     case "too-large":
     case "storage-full":
       return { kind: body.kind };
     case "invalid":
-      return { kind: "invalid", message: text(body.message), issues: issuesOf(body.issues) };
+      return {
+        kind: "invalid",
+        message: text(body.message),
+        issues: issuesOf(body.issues),
+        ...(Array.isArray(body.errors) ? { errors: body.errors.filter(isRecord) as unknown as PublishError[] } : {}),
+      };
+    case "time":
+    case "plan":
     case "slug":
     case "path":
     case "limit":
@@ -153,6 +170,28 @@ export const restoreRevision = (siteId: string, entryId: string, revision: numbe
     rev,
   });
 
+/** The entry's schedules (Wave E): pending rows and the newest finished one of each action. */
+export const fetchSchedules = (siteId: string, entryId: string) =>
+  request<{ rev: number; schedules: EntrySchedule[] }>("GET", `${entry(siteId, entryId)}/schedule`);
+
+/** The site's entries with a pending or a failed schedule (the publish bar's rows). */
+export const fetchSiteSchedules = (siteId: string) =>
+  request<{ entries: Record<string, EntryScheduleSummary> }>("GET", `${base(siteId)}/schedules`);
+
+/** Schedule (or reschedule) a publish of the saved draft at `rev`, or an unpublish, at `runAt` (UTC). */
+export const scheduleChange = (
+  siteId: string,
+  entryId: string,
+  change: { rev: number; action: ScheduleAction; runAt: string },
+) => request<{ schedule: EntrySchedule }>("POST", `${entry(siteId, entryId)}/schedule`, change);
+
+/** Cancel the pending scheduled publish or unpublish. */
+export const cancelScheduledChange = (
+  siteId: string,
+  entryId: string,
+  change: { rev: number; action: ScheduleAction },
+) => request<{ canceled: boolean }>("DELETE", `${entry(siteId, entryId)}/schedule`, change);
+
 export const fetchTerms = (siteId: string) =>
   request<{ terms: TermSummary[] }>("GET", `${base(siteId)}/terms`);
 
@@ -184,6 +223,8 @@ export function refusalMessage(refused: Refused): string {
     case "path":
     case "limit":
     case "suspended":
+    case "time":
+    case "plan":
       return refused.message || "That can’t be done right now.";
     case "blocked":
       return `That links to a site that isn’t allowed${

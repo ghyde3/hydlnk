@@ -21,7 +21,14 @@ import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { useUndoRedo } from "@/components/editor/use-undo-redo";
 import { useSitePages, type SiteArchive, type SubPageInit } from "@/components/site/use-site-pages";
 import { useThemeLibrary, useThemePreview } from "@/components/themes";
-import { toPublishForm, type DraftDoc, type PublishDoc, type PublishError } from "@/lib/document";
+import {
+  previewBlocks,
+  toPublishForm,
+  type DraftDoc,
+  type PublishDoc,
+  type PublishError,
+} from "@/lib/document";
+import { useMinuteClock } from "@/lib/schedule/use-minute-clock";
 import {
   publishDesign,
   publishPage,
@@ -271,7 +278,13 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     showPreview: () => {},
     showStyle: () => {},
   });
-  const shownForm = preview.form ?? form;
+  // The preview draws every block that has not ended (Wave E, M20-06): the owner is still editing
+  // the upcoming ones; an ended one is gone from the live page, so it is gone here too.
+  const minute = useMinuteClock();
+  const shownForm = useMemo(() => {
+    const shown = preview.form ?? form;
+    return { ...shown, blocks: previewBlocks(shown.blocks, minute) };
+  }, [preview.form, form, minute]);
 
   // Publish ---------------------------------------------------------------------------------------
   const [published, setPublished] = useState({
@@ -641,6 +654,39 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [flush, flushSite, homeEntryId, homeRev, siteRevisions, pageId],
   );
 
+  /**
+   * Schedule or cancel for one page (Wave E, M20-07): Home ("home") or a sub-page. Both queues write
+   * first (the schedule snapshots the stored draft, at the rev this tab holds), then `send` runs with
+   * the page's entry id and that rev. Scheduling changes no rev and nothing live. Null when the page's
+   * rev is not known here (its first save has not answered).
+   */
+  const schedulePage = useCallback(
+    async <T,>(
+      id: string,
+      send: (entryId: string, rev: number) => Promise<T>,
+    ): Promise<{ ok: true; value: T } | { ok: false; message: string }> => {
+      await publishInFlight.current;
+      const stored = (await flush()) && (await flushSite());
+      if (!stored) {
+        return { ok: false, message: "Your latest changes aren’t saved yet, so nothing was scheduled." };
+      }
+      const isHome = id === HOME_PAGE_ID;
+      const entryId = isHome ? homeEntryId : id;
+      const held = isHome ? homeRev() : siteRevisions()[id];
+      if (entryId === null || held === null || held === undefined) {
+        return { ok: false, message: PUBLISH_CONFLICT_MESSAGE };
+      }
+      return { ok: true, value: await send(entryId, held) };
+    },
+    [flush, flushSite, homeEntryId, homeRev, siteRevisions],
+  );
+  /** The rev this tab holds for a page's entry, or null. */
+  const pageRev = useCallback(
+    (id: string): number | null =>
+      (id === HOME_PAGE_ID ? homeRev() : siteRevisions()[id]) ?? null,
+    [homeRev, siteRevisions],
+  );
+
   // Unpublish (M14-02): the site goes back to its placeholder, the draft stays. Nothing here
   // flushes: the draft is untouched by it, so edits in flight keep saving as they do.
   const [unpublishing, setUnpublishing] = useState(false);
@@ -787,6 +833,8 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       publishDesignOnly,
       retryPublish,
       restoreRevision,
+      schedulePage,
+      pageRev,
       homeEntryId,
       unpublish,
       unpublishing,
@@ -843,6 +891,8 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       publishDesignOnly,
       retryPublish,
       restoreRevision,
+      schedulePage,
+      pageRev,
       homeEntryId,
       unpublish,
       unpublishing,

@@ -114,3 +114,27 @@ export function formatLocal(iso: string, now: Date = new Date(), zone = browserZ
   const p = partsIn(Date.parse(iso), zone);
   return `${day}, ${pad(p.hour)}:${pad(p.minute)}`;
 }
+
+/**
+ * The block row's one schedule chip (M20-06), or null: "Starts 3 Dec, 09:00" before the window,
+ * "Until 24 Dec, 18:00" inside one that ends, "Ended 1 Dec" after it; nothing for a block with no
+ * window or one that started and never ends.
+ */
+export function windowChipText(
+  schedule: { from?: string; until?: string } | undefined,
+  now: number,
+  zone = browserZone(),
+): { tone: "upcoming" | "showing" | "ended"; text: string } | null {
+  const from = schedule?.from && Number.isFinite(Date.parse(schedule.from)) ? schedule.from : null;
+  const until =
+    schedule?.until && Number.isFinite(Date.parse(schedule.until)) ? schedule.until : null;
+  const at = new Date(now);
+  if (until && now >= Date.parse(until)) {
+    return { tone: "ended", text: `Ended ${formatLocalDay(until, at, zone)}` };
+  }
+  if (from && now < Date.parse(from)) {
+    return { tone: "upcoming", text: `Starts ${formatLocal(from, at, zone)}` };
+  }
+  if (until) return { tone: "showing", text: `Until ${formatLocal(until, at, zone)}` };
+  return null;
+}

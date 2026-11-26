@@ -13,7 +13,7 @@ import {
 } from "@/lib/schedule/types";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, ownedEntry, siteType } from "./guards";
+import { activeAccount, ownedEntry, ownedSite, siteType } from "./guards";
 import { publishEntryWithClient, type EntryPlace } from "./publish-core";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
 
@@ -39,10 +39,13 @@ export type ScheduleFailure = ContentFailure & { publishErrors?: PublishError[] 
 
 export type ScheduleResult = ContentResult<{ schedule: EntrySchedule } & EntryPlace> | ScheduleFailure;
 
+/** A stored instant in the canonical form every scheduling reader takes (`YYYY-MM-DDTHH:MM:00Z`). */
+const minuteOf = (value: string) => new Date(value).toISOString().slice(0, 16) + ":00Z";
+
 const toSchedule = (row: Pick<Row, "action" | "run_at" | "status" | "scheduled_rev" | "result_code">) =>
   ({
     action: row.action as ScheduleAction,
-    runAt: new Date(row.run_at).toISOString(),
+    runAt: minuteOf(row.run_at),
     status: row.status as ScheduleStatus,
     scheduledRev: row.scheduled_rev === null ? null : Number(row.scheduled_rev),
     resultCode: row.result_code,
@@ -244,6 +247,45 @@ export async function listSchedulesWithClient(
 }
 
 /**
+ * The schedule summaries of a site's entries that have a pending or a failed schedule (M20-10), for
+ * the publish bar: one read of the site's rows, one of the entries' publish dates. Ownership first.
+ */
+export async function siteScheduleSummariesWithClient(
+  admin: Admin,
+  input: { actor: ContentActor; siteId: string },
+): Promise<ContentResult<{ entries: Record<string, EntryScheduleSummary> }>> {
+  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  if (!site.ok) return site;
+  const rows = await admin
+    .from("content_schedules")
+    .select("entry_id")
+    .eq("site_id", site.site.id)
+    .in("status", ["pending", "failed"])
+    .limit(1000);
+  if (rows.error) {
+    console.error("[content] reading the site's schedules failed", rows.error.message);
+    return failure("error");
+  }
+  const ids = [...new Set(rows.data.map((row) => row.entry_id))];
+  if (ids.length === 0) return { ok: true, entries: {} };
+  const entries = await admin
+    .from("content_entries")
+    .select("id, published_at")
+    .in("id", ids)
+    .is("deleted_at", null);
+  if (entries.error) {
+    console.error("[content] reading the scheduled entries failed", entries.error.message);
+    return failure("error");
+  }
+  const summaries = await scheduleSummariesWithClient(
+    admin,
+    entries.data.map((entry) => ({ id: entry.id, publishedAt: entry.published_at })),
+  );
+  if (!summaries) return failure("error");
+  return { ok: true, entries: Object.fromEntries(summaries) };
+}
+
+/**
  * The schedule summary of each listed entry (M20-10): one read for the page of results. A pending
  * row gives its time; a failed row is reported while it is the newest row of its action and the
  * entry was not published after it failed.
@@ -273,10 +315,11 @@ export async function scheduleSummariesWithClient(
     const summary = out.get(row.entry_id) ?? { ...NO_SCHEDULE };
     if (row.status === "pending") {
       if (row.action === "publish") {
-        summary.publishAt = new Date(row.run_at).toISOString();
+        summary.publishAt = minuteOf(row.run_at);
         summary.scheduledRev = row.scheduled_rev === null ? null : Number(row.scheduled_rev);
+        summary.snapshotAt = new Date(row.created_at).toISOString();
       } else {
-        summary.unpublishAt = new Date(row.run_at).toISOString();
+        summary.unpublishAt = minuteOf(row.run_at);
       }
     } else if (!newest.has(key) && row.status === "failed" && row.action === "publish") {
       const liveAt = published.get(row.entry_id);
