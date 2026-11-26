@@ -43,6 +43,8 @@ const EXPECTED: Record<string, NavKey | null> = {
   "/design": "editor",
   "/share": "editor",
   "/editor/history": "editor",
+  "/posts": "editor",
+  "/posts/[entryId]": "editor",
   "/analytics": "analytics",
   "/domains": "domains",
   "/settings": "settings",
