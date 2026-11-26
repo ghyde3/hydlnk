@@ -1048,7 +1048,7 @@
           "maxLength": 80
         },
         "body": {
-          "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text.",
+          "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text. Formatting too heavy or nested too deep to read is refused, on body.",
           "type": "string",
           "maxLength": 524288
         },
@@ -1163,7 +1163,7 @@
           "maxLength": 80
         },
         "body": {
-          "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text.",
+          "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text. Formatting too heavy or nested too deep to read is refused, on body.",
           "type": "string",
           "maxLength": 524288
         },

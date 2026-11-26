@@ -105,7 +105,7 @@ export const postFieldInputs = {
     .max(POST_LIMITS.bodyBytes, { error: POST_BODY_TOO_LARGE })
     .optional()
     .describe(
-      "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text.",
+      "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text. Formatting too heavy or nested too deep to read is refused, on body.",
     ),
   excerpt: z
     .string()
