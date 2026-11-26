@@ -306,3 +306,41 @@ test("M16-13 the link tool takes http and https only; a body over 512 KiB is ref
   expect(saves).toEqual([]);
   expect((await postRow(id)).rev).toBe(before);
 });
+
+test("M16-13 on a phone the post bar stays on screen on a long post, and the toolbar shows that it scrolls", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "ps");
+  const long = Array.from({ length: 60 }, (_, n) => `Paragraph ${n + 1} of a long post.`).join(
+    "\n\n",
+  );
+  const id = await seedPost(user.pageId, { title: "Long", slug: "long", body: long });
+  await openPost(page, id);
+  const phone = (page.viewportSize()?.width ?? 0) < 760;
+  const bar = page.getByTestId("post-bar");
+  await page.getByTestId(POST_TEST_IDS.body).locator("p").last().scrollIntoViewIfNeeded();
+  const publish = page.getByTestId(POST_TEST_IDS.publish);
+  if (phone) {
+    // Stuck to the top of the screen, whole, with Publish inside the viewport.
+    const box = (await bar.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(-1);
+    expect(box.y).toBeLessThan(2);
+    const button = (await publish.boundingBox())!;
+    expect(button.y + button.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+    expect(button.height).toBeGreaterThanOrEqual(44);
+    await publish.click();
+    await expect(bar.locator("[data-post-state]")).toHaveAttribute("data-post-state", "live");
+
+    // The toolbar scrolls inside its row: a cue at the end while buttons are hidden, gone at the end.
+    const toolbar = page.locator("[data-body-toolbar]");
+    await toolbar.scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("post-toolbar-more")).toBeVisible();
+    await toolbar.evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
+    await expect(page.getByTestId("post-toolbar-more")).toHaveCount(0);
+  } else {
+    // From 760px the bar stays in the column, above the post.
+    await expect(bar).toHaveCSS("position", "static");
+  }
+  await expectNoHorizontalScroll(page);
+});

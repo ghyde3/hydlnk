@@ -13,7 +13,8 @@ import { PostChip } from "./post-chip";
  * The post editor's bar (M16-15): where the post stands, whether it is saved, and Preview, Unpublish
  * and Publish. Publish makes only this post live. What Publish refused is listed under the bar by
  * field, each with a link to its field. Built from DESIGN.md's tokens (no mockup): a white card,
- * 44px buttons, the charcoal primary.
+ * 44px buttons, the charcoal primary. Below 760px the bar sticks to the top of the screen, so
+ * Publish stays one tap away on a long post.
  */
 
 const PRIMARY =
@@ -60,7 +61,8 @@ export function PostPublishPanel({
     <section
       aria-label="Publish"
       data-testid="post-bar"
-      className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-line bg-surface p-3"
+      data-sticky=""
+      className="sticky top-0 z-10 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-line bg-surface p-3 hl:static"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
         <Link
