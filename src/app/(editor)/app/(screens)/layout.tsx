@@ -30,7 +30,8 @@ export default async function ScreensLayout({ children }: { children: ReactNode 
   const context = await getAppContext();
   return (
     <AppShellFrame context={context}>
-      <PlanProvider plan={context.plan}>{children}</PlanProvider>
+      {/* The site's (owner's) plan gates site features; the member's own plan is for billing only (R4). */}
+      <PlanProvider plan={context.sitePlan}>{children}</PlanProvider>
     </AppShellFrame>
   );
 }

@@ -33,7 +33,7 @@ import type { PostEntry } from "@/lib/posts/types";
 import { suggestSlug } from "@/lib/posts/slug";
 import { withSchedule, type PostState, type PublishedState } from "@/lib/posts/status";
 import { ScheduleControls } from "@/components/schedule/schedule-controls";
-import { useAccountPlan } from "@/components/versions/plan-context";
+import { useSitePlan } from "@/components/versions/plan-context";
 import type { EntryScheduleSummary, ScheduleAction } from "@/lib/schedule/types";
 import { firedRevToAdopt } from "@/lib/schedule/adopt";
 import { useFireWatch } from "@/lib/schedule/use-fire-watch";
@@ -125,7 +125,7 @@ export function PostEditor({
   const [loadKey, setLoadKey] = useState(0);
   /** The post's pending schedules and newest failure (Wave E, M20-10). */
   const [schedule, setSchedule] = useState<EntryScheduleSummary>(entry.schedule);
-  const plan = useAccountPlan() ?? "free";
+  const plan = useSitePlan() ?? "free";
 
   const trashed = meta.status === "trashed";
   const conflict = save.state === "conflict";

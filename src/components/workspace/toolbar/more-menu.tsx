@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type MouseEvent } from "react";
 import { Icon } from "@/components/app/icon";
-import { useAccountPlan } from "@/components/versions/plan-context";
+import { useSitePlan } from "@/components/versions/plan-context";
 import { UnpublishDialog } from "../unpublish-dialog";
 import { useOptionalWorkspace } from "../workspace-context";
 import { PLAN_LIMITS } from "@/lib/limits";
@@ -75,7 +75,7 @@ function MoreItems({
   // Unpublishing the site is the owner's (Wave F, B1): a member's menu has no Unpublish.
   const hasPublished =
     (workspace?.hasPublished ?? false) && (workspace?.role ?? "owner") === "owner";
-  const plan = useAccountPlan();
+  const plan = useSitePlan();
   const { close } = useMenuApi();
   const needsPro = plan !== null && PLAN_LIMITS[plan].versionsKept === 0;
 
