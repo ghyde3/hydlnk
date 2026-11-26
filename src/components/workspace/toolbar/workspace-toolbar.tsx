@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode, RefObject } from "react";
+import { useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { ChevronDown } from "lucide-react";
 import { PageName } from "@/components/editor/page-name";
 import { StatusChip } from "@/components/editor/status-chip";
@@ -155,6 +155,8 @@ function NameBlock({ pageId, address, name }: { pageId: string; address: string;
  * kept equal to its measured height. Nothing in the toolbar changes the draft or adds an undo step
  * except the buttons that are about doing so (Undo, Redo, Publish).
  */
+const noSubscription = () => () => {};
+
 export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
   const { pageId, address, name, tabs, status, saveStatus, undoRedo, flush, liveUrl } = props;
   const { publishing, publishDisabledReason = null, onPublish, onOpenShare } = props;
@@ -162,6 +164,13 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
   const { publishToggleRef, publishBarId, publishBarSlot } = props;
   usePinnedHeight();
   const isDesktop = useIsDesktop();
+  // False on the server and for the first client render, when the width is not known yet.
+  const hydrated = useSyncExternalStore(
+    noSubscription,
+    () => true,
+    () => false,
+  );
+  const phoneOrder = hydrated && !isDesktop;
 
   return (
     <div
@@ -185,19 +194,21 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
         className="sticky top-0 z-20 order-[-3] box-border flex h-[52px] items-center gap-1.5 border-b border-line bg-surface px-4 hl:static hl:z-auto hl:order-none hl:h-auto hl:min-h-12 hl:flex-wrap hl:gap-x-3 hl:gap-y-1 hl:border-b-0 hl:bg-transparent hl:p-0 min-[1280px]:min-h-0 min-[1280px]:flex-nowrap"
       >
         {/*
-          The DOM order is the order the eye reads at each width, so Tab follows it (WCAG 2.4.3):
-          on a phone Undo and Redo come first, then the status chip, then Publish; at 760px and up
-          the status and the save indicator come first and Undo, Redo and the menus follow. One set of
-          buttons, moved (the keys keep the nodes), not two. The server and the first client render
-          draw the phone order (`useIsDesktop`), and `hl:order-*` keeps the desktop row looking the
-          same for that one frame.
+          The DOM order is the order the eye reads at each width, so Tab follows it (WCAG 2.4.3). At
+          760px and up that is the order written here: status, save indicator, then Undo, Redo and the
+          menus, then Publish. On a phone Undo and Redo are drawn first (`order-1`) and the status
+          chip after them, so there the chip's node is moved behind them once the viewport is known.
+          One set of controls, moved (the keys keep the nodes), never two. The server and the first
+          client render write the desktop order, and the `order-*` classes draw the phone row the
+          same before and after the move; at 760px and up no node ever moves, so focus in the menus
+          is never disturbed.
         */}
-        {(isDesktop
-          ? (["status", "save", "history"] as const)
-          : (["history", "status", "save"] as const)
+        {(phoneOrder
+          ? (["save", "history", "status"] as const)
+          : (["status", "save", "history"] as const)
         ).map((part) =>
           part === "status" ? (
-            <div key="status" className="flex min-w-0 flex-1 hl:order-1 hl:flex-none">
+            <div key="status" className="order-2 flex min-w-0 flex-1 hl:order-none hl:flex-none">
               {onTogglePublishBar ? (
                 <button
                   ref={publishToggleRef}
@@ -227,11 +238,11 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
               )}
             </div>
           ) : part === "save" ? (
-            <SaveIndicator key="save" status={saveStatus} className="hl:order-2" />
+            <SaveIndicator key="save" status={saveStatus} />
           ) : (
             <div
               key="history"
-              className="flex shrink-0 items-center gap-2 hl:order-3 hl:ml-auto min-[1280px]:ml-0"
+              className="order-1 flex shrink-0 items-center gap-2 hl:order-none hl:ml-auto min-[1280px]:ml-0"
             >
               <UndoRedoButtons controls={undoRedo} />
               <div className="hidden hl:block">
@@ -253,7 +264,7 @@ export function WorkspaceToolbar(props: WorkspaceToolbarProps) {
           busy={publishBusy}
           disabledReason={publishDisabledReason}
           onPublish={onPublish}
-          className="min-w-[84px] hl:order-4 hl:min-w-0"
+          className="order-3 min-w-[84px] hl:order-none hl:min-w-0"
         />
       </div>
       {publishBarOpen ? publishBarSlot : null}
