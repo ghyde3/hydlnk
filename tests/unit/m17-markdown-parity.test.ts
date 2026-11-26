@@ -78,6 +78,16 @@ const marked = (body: string): Signature => signature(new Lexer({ gfm: true }).l
 const CORPUS: Record<string, string> = {
   "link in a link's text (marked nests it)": "[[a](b)](c)",
   "unbalanced runs **a*": "**a*",
+  // A run right after a finished emphasis follows a token (marked has no `prevChar` there), and
+  // what is left of a closer is a run of its own: emphasis is matched as each run is pushed.
+  "strike starting with punctuation after bold": "**a**~~-b~~",
+  "em starting with punctuation after the rest of a closer": "**@2***-*",
+  "strike of punctuation after em": "*@22*~~---~~",
+  "strong after em in a heading, from one run": '#### *21***"(/**',
+  // A bare URL is cut only by a run that closes an opener still open (counted exactly).
+  "URL after a closed bold keeps its stars": "**Docs** at www.a.co**b**",
+  "URL after a closed strike keeps its tilde": "~~old~~ https://x.co/a~b",
+  "URL inside an open em still stops at its closer": "*a https://x.co/a*b c*",
   "mixed runs ***a** b ** c*": "***a** b ** c*",
   "NBSP before <address>": "[a](\u00a0<b>)",
   "escaped mark before a closer": "*a \\**",

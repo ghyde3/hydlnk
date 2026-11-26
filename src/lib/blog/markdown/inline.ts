@@ -32,8 +32,9 @@ import {
   DelimiterStack,
   NextClosingRun,
   RUN_KINDS,
+  OPENS,
   flanking,
-  processEmphasis,
+  matchCloser,
   type Delimiter,
   type EmphasisSink,
   type InlineNode,
@@ -124,7 +125,7 @@ export function lexInline(text: string, depth: number, ctx: InlineContext): Toke
   return new InlineRun(text, ctx).tokens(depth);
 }
 
-class InlineRun implements EmphasisSink {
+class InlineRun {
   private readonly finders: TagFinders;
   private readonly closeParen: NextIndex;
   private readonly urlStop: NextWhere;
@@ -171,7 +172,7 @@ class InlineRun implements EmphasisSink {
   /** The nodes of `[from, to)`, emphasis matched. */
   private range(from: number, to: number): NodeList {
     const s = this.src;
-    const c = new Cursor(from, to);
+    const c = new Cursor(s, from, to);
     while (c.i < to) {
       const i = c.i;
       const code = s.charCodeAt(i);
@@ -226,9 +227,12 @@ class InlineRun implements EmphasisSink {
           const sides = flanking(s, i, end, code, from, to, c.afterToken());
           c.flush(i);
           const node = c.text(i, end);
-          if (sides !== 0) node.delimiter = c.push(node, code, end - i, sides);
           c.i = end;
           c.pend = end;
+          if (sides !== 0) {
+            node.delimiter = c.push(node, code, end - i, sides);
+            matchCloser(c.stack, node.delimiter, c);
+          }
           break;
         }
         case BACKTICK: {
@@ -251,7 +255,6 @@ class InlineRun implements EmphasisSink {
       }
     }
     c.flush(to);
-    processEmphasis(c.stack, this);
     return c.list;
   }
 
@@ -321,39 +324,6 @@ class InlineRun implements EmphasisSink {
     const lower = raw.slice(0, 4).toLowerCase();
     if (!state.inLink && lower.startsWith("<a ")) state.inLink = true;
     else if (state.inLink && lower === "</a>") state.inLink = false;
-  }
-
-  // Emphasis -----------------------------------------------------------------------------------------
-
-  /** A match: the nodes between the two runs become the children of a new token node. */
-  emphasize(opener: Delimiter, closer: Delimiter, use: number): void {
-    const s = this.src;
-    const on = opener.node;
-    const cn = closer.node;
-    const first = on.next === cn ? null : on.next;
-    const last = on.next === cn ? null : cn.prev;
-    if (first && last) {
-      first.prev = null;
-      last.next = null;
-    }
-    const a = on.b - use;
-    const b = cn.a + use;
-    on.b -= use;
-    cn.a += use;
-    const type = closer.char === TILDE ? "del" : use === 2 ? "strong" : "em";
-    const token = { type, raw: s.slice(a, b), text: s.slice(a + use, b - use), tokens: [] } as
-      | Tokens.Em
-      | Tokens.Strong
-      | Tokens.Del;
-    const node: TokenNode = {
-      kind: "token",
-      token,
-      children: { head: first, tail: last },
-      prev: on,
-      next: cn,
-    };
-    on.next = node;
-    cn.prev = node;
   }
 
   // Links --------------------------------------------------------------------------------------------
@@ -566,7 +536,7 @@ class InlineRun implements EmphasisSink {
     const stop = Math.min(this.urlStop.at(from), to);
     let cut = stop;
     for (let kind = 0; kind < RUN_KINDS; kind += 1) {
-      if (c.stack.opens(kind)) cut = Math.min(cut, c.closingRuns(this.src, kind).at(from));
+      if (c.stack.opens(kind)) cut = Math.min(cut, c.closingRuns(kind).at(from));
     }
     return cut < stop ? cut : to;
   }
@@ -659,8 +629,11 @@ class InlineRun implements EmphasisSink {
   }
 }
 
-/** The state of one range's pass: its nodes, its delimiters, the cursor and the pending text. */
-class Cursor {
+/**
+ * The state of one range's pass: its nodes, its delimiters (matched as they are pushed), the cursor
+ * and the pending text.
+ */
+class Cursor implements EmphasisSink {
   readonly list: NodeList = { head: null, tail: null };
   readonly stack = new DelimiterStack();
   /** Where the text not yet in a node starts. */
@@ -668,11 +641,48 @@ class Cursor {
   i: number;
 
   constructor(
+    private readonly src: string,
     readonly from: number,
     readonly to: number,
   ) {
     this.pend = from;
     this.i = from;
+  }
+
+  /** A match: the nodes between the two runs become the children of a new token node. */
+  emphasize(opener: Delimiter, closer: Delimiter, use: number): void {
+    const s = this.src;
+    const on = opener.node;
+    const cn = closer.node;
+    const first = on.next === cn ? null : on.next;
+    const last = on.next === cn ? null : cn.prev;
+    if (first && last) {
+      first.prev = null;
+      last.next = null;
+    }
+    const a = on.b - use;
+    const b = cn.a + use;
+    on.b -= use;
+    cn.a += use;
+    const type = closer.char === TILDE ? "del" : use === 2 ? "strong" : "em";
+    const token = { type, raw: s.slice(a, b), text: s.slice(a + use, b - use), tokens: [] } as
+      | Tokens.Em
+      | Tokens.Strong
+      | Tokens.Del;
+    const node: TokenNode = {
+      kind: "token",
+      token,
+      children: { head: first, tail: last },
+      prev: on,
+      next: cn,
+    };
+    on.next = node;
+    cn.prev = node;
+  }
+
+  leftOpens(closer: Delimiter): boolean {
+    const { node, char } = closer;
+    return (flanking(this.src, node.a, node.b, char, this.from, this.to, true) & OPENS) !== 0;
   }
 
   append(node: InlineNode): void {
@@ -712,13 +722,19 @@ class Cursor {
 
   /** The closing runs of one kind ahead of a bare URL, searched lazily (top-level runs only). */
   private readonly closers: Array<NextClosingRun | undefined> = [];
-  closingRuns(src: string, kind: number): NextClosingRun {
-    return (this.closers[kind] ??= new NextClosingRun(src, this.from, this.to, kind));
+  closingRuns(kind: number): NextClosingRun {
+    return (this.closers[kind] ??= new NextClosingRun(this.src, this.from, this.to, kind));
   }
 
-  /** marked has no `prevChar` after a token. */
+  /**
+   * marked has no `prevChar` after a token. A closer used up by a match is left as an empty node
+   * right after the emphasis token it made: the run after it follows that token.
+   */
   afterToken(): boolean {
-    return this.pend === this.i && this.list.tail?.kind === "token";
+    if (this.pend !== this.i) return false;
+    let tail = this.list.tail;
+    if (tail?.kind === "text" && tail.a === tail.b) tail = tail.prev;
+    return tail?.kind === "token";
   }
 
   /** An email starting at `start` swallows the pending text and text nodes back to there. */

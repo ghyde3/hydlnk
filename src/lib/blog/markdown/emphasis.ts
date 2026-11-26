@@ -18,7 +18,7 @@ import {
  * is what made `*a ` repeated quadratic).
  *
  * WHY IT IS LINEAR. The delimiter runs of one inline run form a doubly linked list. A closer looks
- * back for an opener; on a match, every run between the two is unlinked in O(1) and never seen
+ * back for an opener when it is pushed (`matchCloser`); on a match, every run between the two is unlinked in O(1) and never seen
  * again. When a closer finds no opener, `bottom` remembers, for that kind of closer, the run below
  * which no opener can exist (cmark's `openers_bottom`), so the next closer of that kind starts its
  * look-back there. Each run is passed over once per kind: linear in the number of runs.
@@ -113,6 +113,17 @@ export class DelimiterStack {
     if (entry.next) entry.next.prev = entry.prev;
     else this.top = entry.prev;
     if (entry.open) this.countOpener(entry, -1);
+  }
+
+  /** cmark's `openers_bottom`: per kind of closer, the index below which no opener can match it. */
+  readonly bottom = new Map<string, number>();
+
+  /** A run's rest as a run of its own: its length and whether it opens. */
+  reread(entry: Delimiter, length: number, open: boolean): void {
+    if (entry.open) this.countOpener(entry, -1);
+    entry.length = length;
+    entry.open = open;
+    if (entry.open) this.countOpener(entry, 1);
   }
 
   /** Whether an opener of `kind` is on the stack. */
@@ -256,25 +267,30 @@ export function flanking(
 /** Builds the token of a match: the caller knows the source and the node list. */
 export interface EmphasisSink {
   emphasize(opener: Delimiter, closer: Delimiter, use: number): void;
+  /**
+   * Whether what is left of a closer after a match may open, read as a run of its own right after
+   * the token the match made (marked lexes the rest of the run again with no `prevChar`).
+   */
+  leftOpens(closer: Delimiter): boolean;
 }
 
 /**
- * CommonMark's "process emphasis" over the whole stack. `sink` builds the token for a match. The emphasis rules of marked: a `~` run closes only
- * a run of the same length; `*` and `_` follow the rule of three when the closer could also open.
+ * CommonMark's "process emphasis" for one closer, run as soon as the run is pushed: the closers of
+ * one inline run are taken left to right, each looking back only at runs to its left, which is the
+ * order the algorithm takes them in at the end, so matching at once gives the same matches. What it
+ * buys: the stack holds exactly the openers still open (a bare URL is cut only by a run that closes
+ * one), and a run right after a finished emphasis follows a token, as in marked.
+ *
+ * `sink` builds the token for a match. The emphasis rules of marked: a `~` run closes only a run of
+ * the same length; `*` and `_` follow the rule of three when the closer could also open.
  */
-export function processEmphasis(stack: DelimiterStack, sink: EmphasisSink): void {
-  const bottom = new Map<string, number>();
-  let closer = stack.first;
-  while (closer) {
-    if (!closer.close) {
-      closer = closer.next;
-      continue;
-    }
+export function matchCloser(stack: DelimiterStack, closer: Delimiter, sink: EmphasisSink): void {
+  while (closer.close) {
     const key =
       closer.char === TILDE
         ? `~${closer.length}`
         : `${closer.char}:${closer.open ? 1 : 0}:${closer.length % 3}`;
-    const floor = bottom.get(key) ?? -1;
+    const floor = stack.bottom.get(key) ?? -1;
     let opener = closer.prev;
     for (; opener && opener.index > floor; opener = opener.prev) {
       if (!opener.open || opener.char !== closer.char) continue;
@@ -291,11 +307,9 @@ export function processEmphasis(stack: DelimiterStack, sink: EmphasisSink): void
       if (!ruleOfThree) break;
     }
     if (!opener || opener.index <= floor) {
-      bottom.set(key, closer.prev ? closer.prev.index : -1);
-      const next = closer.next;
+      stack.bottom.set(key, closer.prev ? closer.prev.index : -1);
       if (!closer.open) stack.remove(closer);
-      closer = next;
-      continue;
+      return;
     }
     const use = closer.char === TILDE ? closer.left : opener.left >= 2 && closer.left >= 2 ? 2 : 1;
     // The runs between the two can no longer match anything: drop them in O(1).
@@ -306,9 +320,10 @@ export function processEmphasis(stack: DelimiterStack, sink: EmphasisSink): void
     closer.left -= use;
     if (opener.left === 0) stack.remove(opener);
     if (closer.left === 0) {
-      const next = closer.next;
       stack.remove(closer);
-      closer = next;
+      return;
     }
+    // What is left of the closer is a run of its own after the new token.
+    stack.reread(closer, closer.left, sink.leftOpens(closer));
   }
 }
