@@ -39,6 +39,7 @@ import {
 } from "@/lib/document";
 import { SOCIAL_PLATFORMS } from "@/lib/document";
 import { computePublishStatus, type PublishStatus } from "@/lib/editor/status";
+import { splitPublishState, type ItemPublishState } from "@/lib/publish/status";
 import { resolveTokens, type TokenSet } from "@/lib/theme";
 import { friendlyPublishError, friendlyPublishErrors } from "@/lib/themes/publish-errors";
 import { MESSAGES, ToolFailure, type ToolIssue } from "./errors";
@@ -397,6 +398,40 @@ export function publishStatusOf(input: {
     published: parsed?.success ? parsed.data : null,
     form: toPublishForm(input.draft, input.themeTokens),
   });
+}
+
+/** An item's state in the words the tools have always answered with. */
+const STATUS_OF_STATE: Record<ItemPublishState, PublishStatus> = {
+  live: "published",
+  changed: "unpublished-changes",
+  draft: "not-published",
+};
+
+/**
+ * Home's own state and the design's (M15-10), from the same data as `publishStatusOf`:
+ * `publishStatus` is Home's blocks against Home's live blocks, `designStatus` is everything else of
+ * the publish form (theme, menu, profile) against the live design. Each can be published on its own
+ * in the editor, so one can be live while the other has changes.
+ */
+export function homeStatusesOf(input: {
+  draft: DraftDoc;
+  published: unknown;
+  publishedAt: string | null;
+  themeTokens: Partial<TokenSet> | null;
+}): { publishStatus: PublishStatus; designStatus: PublishStatus } {
+  const parsed =
+    input.published === null || input.published === undefined
+      ? null
+      : publishedDocSchema.safeParse(input.published);
+  const split = splitPublishState({
+    hasPublished: input.publishedAt !== null,
+    published: parsed?.success ? parsed.data : null,
+    form: toPublishForm(input.draft, input.themeTokens),
+  });
+  return {
+    publishStatus: STATUS_OF_STATE[split.home],
+    designStatus: STATUS_OF_STATE[split.design],
+  };
 }
 
 /** The stored draft, parsed; null when it cannot be read. */

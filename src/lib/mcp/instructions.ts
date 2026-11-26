@@ -4,9 +4,9 @@
  */
 export const MCP_INSTRUCTIONS = `HYDLNK builds link-in-bio pages. You manage the person's pages here.
 
-Work in this order: list_pages to get a pageId, get_page to read the draft, then the write tools (update_profile, add_block, update_block, move_block, remove_block, set_theme), then get_page again to check the result, and publish_page last.
+In this order: list_pages to get a pageId, get_page to read the draft, then the write tools (update_profile, add_block, update_block, move_block, remove_block, set_theme), then get_page again to check the result, and publish_page last.
 
-A site has Home and other pages. list_pages shows each page's id: pass it as subPageId to get_page and the block tools. create_page adds a page, update_page_settings changes its title, path and menu. publish_page publishes the whole site.
+A site has Home and other pages. list_pages shows each page's id: pass it as subPageId to get_page and the block tools. create_page adds a page, update_page_settings changes its title, path and menu. publish_page publishes all changes of the site.
 
 Writes change the draft only. Nothing is live until publish_page, so ask the person before you publish.
 
