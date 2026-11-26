@@ -8,10 +8,10 @@
 --     row done (published_at = run_at, source 'system', the draft untouched); a second fire of the same
 --     row raises and the rev rises once; after a downgrade it raises HL017 and the row stays pending;
 --     a page entry publishes through publish_site_page;
---   * finish_schedule: releases the lease, or ends the row (failed, with the code, no snapshot); the
---     fifth attempt ends as failed 'retries';
+--   * finish_schedule: releases the claim behind a backoff, or ends the row (failed, with the code, no
+--     snapshot), answering the row's status; the fifth attempt ends as failed 'retries';
 --   * a trash, a hand publish and a hand unpublish cancel the matching pending rows in the same
---     transaction, so they are never claimed;
+--     transaction (at its commit, 20261126210000), so they are never claimed;
 --   * fire_scheduled_unpublish takes a live entry down (draft kept) and finishes 'not_live' for one
 --     that is not live, however late.
 
@@ -142,15 +142,17 @@ select throws_ok(
   $$select public.fire_scheduled_publish((select id from claimed), (select claim from first_claim), '{"title":"Two","slug":"two"}')$$,
   'P0002', null, 'the old token cannot fire it');
 
-select is(public.finish_schedule((select id from claimed), (select claim from claimed), false, null), true,
-  'finish without failure releases the lease');
+select is(public.finish_schedule((select id from claimed), (select claim from claimed), false, null), 'pending',
+  'finish without failure releases the claim');
 select is((select row(status, claim, locked_until)::text from public.content_schedules where id = (select id from claimed)),
-  row('pending', null::uuid, null::timestamptz)::text, 'the row is pending again, for the next run');
-select is(public.finish_schedule((select id from claimed), (select claim from claimed), false, null), false,
-  'a released token finishes nothing');
+  row('pending', null::uuid, now() + interval '4 minutes')::text,
+  'the row is pending again, not claimable for 2^attempts minutes (the second attempt: 4)');
+select is(public.finish_schedule((select id from claimed), (select claim from claimed), false, null), 'pending',
+  'a released token finishes nothing (the row''s status is answered)');
+update public.content_schedules set locked_until = null where id = (select id from claimed);
 update public.content_schedules set attempts = 4 where id = (select id from claimed);
 select is(pg_temp.claim(), 1, 'the fifth attempt is claimed');
-select is(public.finish_schedule((select id from claimed), (select claim from claimed), false, null), true, 'and finishes');
+select is(public.finish_schedule((select id from claimed), (select claim from claimed), false, null), 'failed', 'and finishes');
 select is((select row(status, result_code, snapshot)::text from public.content_schedules where id = (select id from claimed)),
   row('failed', 'retries', null::jsonb)::text, 'the fifth failed attempt marks the row failed retries');
 
@@ -167,7 +169,7 @@ select is((select result_code from public.content_schedules where id = (select i
 create temp table blocked as select pg_temp.sched('00000000-0000-4000-8000-000000223e04') as id;
 grant all on blocked to public;
 select pg_temp.claim();
-select is(public.finish_schedule((select id from blocked), pg_temp.token((select id from blocked)), true, 'blocked_link'), true,
+select is(public.finish_schedule((select id from blocked), pg_temp.token((select id from blocked)), true, 'blocked_link'), 'failed',
   'a final failure finishes the row');
 select is((select row(status, result_code, snapshot)::text from public.content_schedules where id = (select id from blocked)),
   row('failed', 'blocked_link', null::jsonb)::text, 'failed, with its code and no snapshot');
@@ -182,6 +184,9 @@ create temp table gone as select
 grant all on gone to public;
 select public.trash_entry('00000000-0000-4000-8000-000000223e05', tests.get_supabase_uid('p'), 1);
 select public.publish_entry('00000000-0000-4000-8000-000000223e06', tests.get_supabase_uid('p'), 1, '{"title":"Six","slug":"six"}');
+-- The cancel runs at commit (a deferred trigger, 20261126210000); this test never commits, so it runs it here.
+set constraints public.cancel_schedules_on_entry_change immediate;
+set constraints public.cancel_schedules_on_entry_change deferred;
 select is((select string_agg(result_code, ',' order by result_code) from public.content_schedules
   where id in ((select trashed from gone), (select by_hand from gone))),
   'published_by_hand,trashed', 'a trash and a hand publish cancel the pending publish');
@@ -190,6 +195,8 @@ select is(pg_temp.claim(), 0, 'so they are never claimed');
 -- A hand unpublish cancels the pending unpublish.
 select public.schedule_entry('00000000-0000-4000-8000-000000223e06', tests.get_supabase_uid('p'), 2, 'unpublish', pg_temp.soon());
 select public.unpublish_entry('00000000-0000-4000-8000-000000223e06', tests.get_supabase_uid('p'), 2);
+set constraints public.cancel_schedules_on_entry_change immediate;
+set constraints public.cancel_schedules_on_entry_change deferred;
 select is((select result_code from public.content_schedules where entry_id = '00000000-0000-4000-8000-000000223e06' and action = 'unpublish'),
   'unpublished_by_hand', 'a hand unpublish cancels the pending unpublish');
 

@@ -329,6 +329,8 @@ export type Database = {
           created_by: string
           entry_id: string
           finished_at: string | null
+          fired_from_rev: number | null
+          fired_rev: number | null
           id: string
           locked_until: string | null
           result_code: string | null
@@ -347,6 +349,8 @@ export type Database = {
           created_by: string
           entry_id: string
           finished_at?: string | null
+          fired_from_rev?: number | null
+          fired_rev?: number | null
           id?: string
           locked_until?: string | null
           result_code?: string | null
@@ -365,6 +369,8 @@ export type Database = {
           created_by?: string
           entry_id?: string
           finished_at?: string | null
+          fired_from_rev?: number | null
+          fired_rev?: number | null
           id?: string
           locked_until?: string | null
           result_code?: string | null
@@ -1902,6 +1908,7 @@ export type Database = {
           run_at: string
           site_id: string
           snapshot: Json
+          type_id: string
           type_key: string
         }[]
       }
@@ -1939,7 +1946,7 @@ export type Database = {
           p_failed: boolean
           p_id: string
         }
-        Returns: boolean
+        Returns: string
       }
       fire_scheduled_publish: {
         Args: { p_claim: string; p_id: string; p_published: Json }
@@ -1996,6 +2003,8 @@ export type Database = {
           created_by: string
           entry_id: string
           finished_at: string | null
+          fired_from_rev: number | null
+          fired_rev: number | null
           id: string
           locked_until: string | null
           result_code: string | null
@@ -2177,6 +2186,7 @@ export type Database = {
           pages_per_site: number
           redirect_mode: boolean
           revisions_kept: number
+          scheduled_per_account: number
           scheduled_per_site: number
           scheduling: boolean
           versions_kept: number
@@ -2191,6 +2201,15 @@ export type Database = {
           p_published_at?: string
         }
         Returns: string
+      }
+      publish_dry_run: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+        }
+        Returns: undefined
       }
       publish_entry: {
         Args: {
@@ -2273,6 +2292,10 @@ export type Database = {
           owner_id: string
           status: string
         }[]
+      }
+      release_schedule_claim: {
+        Args: { p_claim: string; p_id: string }
+        Returns: boolean
       }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }

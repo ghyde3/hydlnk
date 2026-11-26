@@ -10,7 +10,9 @@ import { spyOnConsole } from "./analytics-ingest-helpers";
 
 vi.mock("server-only", () => ({}));
 const SECRET = "cron-secret-value-for-m20-tests";
-vi.mock("@/lib/env/server", () => ({ serverEnv: { CRON_SECRET: "cron-secret-value-for-m20-tests" } }));
+vi.mock("@/lib/env/server", () => ({
+  serverEnv: { CRON_SECRET: "cron-secret-value-for-m20-tests" },
+}));
 
 const run = vi.hoisted(() => ({ fn: vi.fn() }));
 vi.mock("@/lib/schedule/run", () => ({ runSchedules: () => run.fn() }));
@@ -20,7 +22,17 @@ const URL_ = "http://app.localhost:3000/api/cron/run-schedules";
 const post = (headers: Record<string, string> = {}, url = URL_, body?: string) =>
   route.POST(new NextRequest(url, { method: "POST", headers, ...(body ? { body } : {}) }));
 
-const OK = { sites: 1, sitesFailed: 0, published: 2, unpublished: 1, failed: 0, retried: 0, expiryFailed: 0 };
+const OK = {
+  sites: 1,
+  sitesFailed: 0,
+  published: 2,
+  unpublished: 1,
+  failed: 0,
+  retried: 0,
+  expiryFailed: 0,
+  sweepFailed: false,
+  workerFailed: false,
+};
 
 beforeEach(() => {
   run.fn.mockReset();
@@ -53,8 +65,18 @@ describe("M20-08 POST /api/cron/run-schedules", () => {
   });
 
   it("M20-12 the secret in the query string or the body is ignored: 401", async () => {
-    expect((await post({}, `${URL_}?secret=${SECRET}&authorization=Bearer%20${SECRET}`)).status).toBe(401);
-    expect((await post({ "content-type": "application/json" }, URL_, JSON.stringify({ authorization: `Bearer ${SECRET}` }))).status).toBe(401);
+    expect(
+      (await post({}, `${URL_}?secret=${SECRET}&authorization=Bearer%20${SECRET}`)).status,
+    ).toBe(401);
+    expect(
+      (
+        await post(
+          { "content-type": "application/json" },
+          URL_,
+          JSON.stringify({ authorization: `Bearer ${SECRET}` }),
+        )
+      ).status,
+    ).toBe(401);
     expect(run.fn).not.toHaveBeenCalled();
   });
 
@@ -62,7 +84,13 @@ describe("M20-08 POST /api/cron/run-schedules", () => {
     const res = await post({ authorization: `Bearer ${SECRET}` });
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(await res.json()).toEqual({ sites: 1, published: 2, unpublished: 1, failed: 0, retried: 0 });
+    expect(await res.json()).toEqual({
+      sites: 1,
+      published: 2,
+      unpublished: 1,
+      failed: 0,
+      retried: 0,
+    });
     expect(run.fn).toHaveBeenCalledTimes(1);
   });
 
@@ -75,6 +103,24 @@ describe("M20-08 POST /api/cron/run-schedules", () => {
     expect(res.status).toBe(500);
     expect(await res.json()).toMatchObject({ error: "invalidate_failed" });
     quiet.restore();
+  });
+
+  it("M20-08 either half failing answers 500 with the other half's counts (both ran)", async () => {
+    run.fn.mockResolvedValueOnce({ ...OK, sweepFailed: true, sites: 0 });
+    const sweep = await post({ authorization: `Bearer ${SECRET}` });
+    expect(sweep.status).toBe(500);
+    expect(await sweep.json()).toEqual({
+      error: "run_failed",
+      sites: 0,
+      published: 2,
+      unpublished: 1,
+      failed: 0,
+      retried: 0,
+    });
+    run.fn.mockResolvedValueOnce({ ...OK, workerFailed: true, published: 0, unpublished: 0 });
+    const worker = await post({ authorization: `Bearer ${SECRET}` });
+    expect(worker.status).toBe(500);
+    expect(await worker.json()).toMatchObject({ error: "run_failed", sites: 1 });
   });
 
   it("M20-12 a failed run answers 500 and neither the answer nor any log line holds the secret", async () => {

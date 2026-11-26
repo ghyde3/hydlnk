@@ -42,6 +42,7 @@ describe("M4-02 the TypeScript limits table", () => {
       formSubmissionsPerSiteDay: 20,
       scheduling: false,
       scheduledPerSite: 0,
+      scheduledPerAccount: 0,
     });
     expect(PLAN_LIMITS.pro).toEqual({
       pages: 3,
@@ -61,6 +62,7 @@ describe("M4-02 the TypeScript limits table", () => {
       formSubmissionsPerSiteDay: 500,
       scheduling: true,
       scheduledPerSite: 50,
+      scheduledPerAccount: 100,
     });
     expect(PLAN_LIMITS.studio).toEqual({
       pages: 15,
@@ -80,6 +82,7 @@ describe("M4-02 the TypeScript limits table", () => {
       formSubmissionsPerSiteDay: 5000,
       scheduling: true,
       scheduledPerSite: 500,
+      scheduledPerAccount: 1000,
     });
     // The exact figures the acceptance names.
     expect(PLAN_IDS.map((plan) => PLAN_LIMITS[plan].uploadBytes)).toEqual([

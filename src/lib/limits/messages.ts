@@ -89,10 +89,16 @@ export const REDIRECT_MODE_MESSAGE = "Redirect mode is part of Pro. Upgrade to u
 export const SCHEDULING_PLAN_MESSAGE =
   "Scheduling is part of Pro. Upgrade to schedule, or remove the block times to publish.";
 
-/** HL018 (M20-11): a site holds `scheduledPerSite` pending schedules already. */
-export function scheduleLimitMessage(plan: PlanId): string {
-  const max = PLAN_LIMITS[plan].scheduledPerSite;
-  return `This site already has ${max.toLocaleString("en-US")} scheduled changes, the most ${PLAN_LABELS[plan]} allows. Cancel one or let one run first.`;
+/**
+ * HL018 (M20-11): a site holds `scheduledPerSite` pending schedules already, or the account holds
+ * `scheduledPerAccount` across its sites.
+ */
+export function scheduleLimitMessage(plan: PlanId, scope: "site" | "account" = "site"): string {
+  const limits = PLAN_LIMITS[plan];
+  if (scope === "account") {
+    return `Your sites already have ${limits.scheduledPerAccount.toLocaleString("en-US")} scheduled changes, the most ${PLAN_LABELS[plan]} allows. Cancel one or let one run first.`;
+  }
+  return `This site already has ${limits.scheduledPerSite.toLocaleString("en-US")} scheduled changes, the most ${PLAN_LABELS[plan]} allows. Cancel one or let one run first.`;
 }
 
 const grouped = (count: number) => count.toLocaleString("en-US");

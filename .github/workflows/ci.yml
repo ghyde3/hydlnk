@@ -146,6 +146,8 @@ jobs:
           tests/unit/reports-footer.test.ts
           tests/unit/admin-actions.test.ts
           tests/unit/admin-suspension.test.ts
+          tests/unit/m20-schedule-core.test.ts
+          tests/unit/m20-schedule-routes.test.ts
 
       - name: Supabase diagnostics
         if: failure()

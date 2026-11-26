@@ -28,6 +28,7 @@ export interface ClaimedSchedule {
   siteId: string;
   ownerId: string;
   createdBy: string;
+  typeId: string;
   typeKey: string;
   runAt: string;
   snapshot: unknown;
@@ -58,8 +59,12 @@ export interface WorkerDeps {
     input: { actor: ContentActor; entryId: string },
     run: Fire,
   ) => Promise<({ ok: true; changed?: boolean } & EntryPlace) | ContentFailure>;
-  /** The writer's cache expiry of a written entry (`expireEntry`): false when it failed twice. */
-  expire: (entryId: string, place: EntryPlace) => boolean;
+  /**
+   * The cache expiry after a fire (a page publish: the shared post-publish step, `afterPagePublished`;
+   * anything else: the entry's tags), resolved once the cache dropped the tags; false when it failed.
+   * Idempotent: it also runs for a row a fire committed whose answer was lost.
+   */
+  expire: (row: ClaimedSchedule, place: EntryPlace) => Promise<boolean>;
 }
 
 export interface WorkerResult {
@@ -155,15 +160,22 @@ async function fire(row: ClaimedSchedule, deps: WorkerDeps): Promise<Outcome> {
       { siteId: row.siteId, entryId: row.entryId, userId: row.ownerId },
       run,
     );
-    return out.ok
-      ? { kind: "done", place: { siteId: row.siteId, typeId: "", typeKey: "page" }, changed: true }
-      : pageOutcome(out);
+    return out.ok ? { kind: "done", place: placeOfRow(row), changed: true } : pageOutcome(out);
   }
   const out = await deps.publishPost({ actor, entryId: row.entryId }, run);
   return out.ok ? { kind: "done", place: placeOf(out), changed: true } : contentOutcome(out);
 }
 
-const placeOf = ({ siteId, typeId, typeKey }: EntryPlace): EntryPlace => ({ siteId, typeId, typeKey });
+const placeOf = ({ siteId, typeId, typeKey }: EntryPlace): EntryPlace => ({
+  siteId,
+  typeId,
+  typeKey,
+});
+const placeOfRow = (row: ClaimedSchedule): EntryPlace => ({
+  siteId: row.siteId,
+  typeId: row.typeId,
+  typeKey: row.typeKey,
+});
 
 function toClaimed(raw: Record<string, unknown>): ClaimedSchedule {
   return {
@@ -174,6 +186,7 @@ function toClaimed(raw: Record<string, unknown>): ClaimedSchedule {
     siteId: String(raw.site_id),
     ownerId: String(raw.owner_id),
     createdBy: String(raw.created_by),
+    typeId: String(raw.type_id),
     typeKey: String(raw.type_key),
     runAt: String(raw.run_at),
     snapshot: raw.snapshot ?? null,
@@ -183,65 +196,117 @@ function toClaimed(raw: Record<string, unknown>): ClaimedSchedule {
 
 /**
  * The publish half of `POST /api/cron/run-schedules` (Wave E, M20-08, M20-09). Claims due rows in
- * batches of `WORKER_CLAIM` (oldest first, at most 5 per owner, each under a lease), fires each
- * through the same gate as a hand publish, and ends each row:
+ * batches of `WORKER_CLAIM` (round robin across owners, at most 5 per owner, each under a lease),
+ * fires each through the same gate as a hand publish, and ends each row:
  *
- *   done     the SQL fire function marked it done in the publish's own transaction; the entry's
- *            cache is expired with the writer's `expireEntry` (a failure is counted, the answer is
- *            500, and the one-day backstop repairs it);
+ *   done     the SQL fire function marked it done in the publish's own transaction; the cache is
+ *            expired (`expire`, awaited; a failure is counted, the answer is 500, and the one-day
+ *            backstop repairs it). A fire whose answer was lost (the call failed, the row is done:
+ *            `finish_schedule` says so) is expired all the same;
  *   failed   a refusal that will not change by itself (the plan, a suspension, a blocked link, an
  *            invalid snapshot, a taken slug or path, more than a day late...): `finish_schedule` ends
  *            it for good with that code, and it never fires later by itself;
- *   retry    a database or network error: the lease is released for the next run, and the fifth
- *            attempt ends the row as failed `retries`.
+ *   retry    a database or network error: `finish_schedule` puts the row behind a backoff of
+ *            min(2^attempts, 30) minutes, and the fifth attempt ends it as failed `retries`. A row
+ *            this run already handled is never fired twice in the run.
  *
- * It stops claiming after `WORKER_BUDGET_MS` or `WORKER_MAX_ROWS` rows. A row whose run crashed
- * midway keeps its lease until it runs out, then the next run takes it (the fire is atomic, so
- * nothing was half done). A claim error stops the run (thrown: the route answers 500).
+ * The time budget (`WORKER_BUDGET_MS`) is checked before every row: once it is spent the rows still
+ * claimed are released (`release_schedule_claim`) without spending an attempt, and the run stops.
+ * It also stops after `WORKER_MAX_ROWS` rows. A row whose run crashed midway keeps its lease until it
+ * runs out, then the next run takes it (the fire is atomic, so nothing was half done). A claim error
+ * stops the run (thrown: the route answers 500).
  */
 export async function runScheduleWorker(deps: WorkerDeps): Promise<WorkerResult> {
-  const result: WorkerResult = { published: 0, unpublished: 0, failed: 0, retried: 0, expiryFailed: 0 };
+  const result: WorkerResult = {
+    published: 0,
+    unpublished: 0,
+    failed: 0,
+    retried: 0,
+    expiryFailed: 0,
+  };
   const started = deps.now();
+  const seen = new Set<string>();
+  const inBudget = () => deps.now() - started < WORKER_BUDGET_MS;
   let handled = 0;
-  while (handled < WORKER_MAX_ROWS && deps.now() - started < WORKER_BUDGET_MS) {
+  while (handled < WORKER_MAX_ROWS && inBudget()) {
     const claimed = await deps.db.rpc("claim_due_schedules", {
       p_limit: Math.min(WORKER_CLAIM, WORKER_MAX_ROWS - handled),
     });
     if (claimed.error) throw new Error(`Claiming due schedules failed: ${claimed.error.message}`);
     const rows = ((claimed.data ?? []) as Record<string, unknown>[]).map(toClaimed);
     if (rows.length === 0) break;
-    for (const row of rows) {
-      handled += 1;
-      let outcome: Outcome;
-      try {
-        outcome = await fire(row, deps);
-      } catch (error) {
-        console.error(
-          "[schedule] a scheduled change failed to run:",
-          error instanceof Error ? error.name : "unknown",
-        );
-        outcome = { kind: "retry" };
+    let fresh = 0;
+    for (const [index, row] of rows.entries()) {
+      if (!inBudget()) {
+        await release(deps, rows.slice(index));
+        return result;
       }
-      if (outcome.kind === "done") {
-        if (row.action === "publish") result.published += 1;
-        else result.unpublished += 1;
-        if (outcome.changed && !deps.expire(row.entryId, outcome.place)) result.expiryFailed += 1;
+      if (seen.has(row.id)) {
+        // Claimed again in the same run (a backoff the database did not apply): left for a later run.
+        await release(deps, [row]);
         continue;
       }
-      const final = outcome.kind === "failed";
-      const finished = await deps.db.rpc("finish_schedule", {
-        p_id: row.id,
-        p_claim: row.claim,
-        p_failed: final,
-        p_code: outcome.kind === "failed" ? outcome.code : "error",
-      });
-      if (finished.error) {
-        // The lease runs out by itself and the next run takes the row again.
-        console.error("[schedule] ending a schedule's attempt failed:", finished.error.code);
-      }
-      if (final) result.failed += 1;
-      else result.retried += 1;
+      seen.add(row.id);
+      fresh += 1;
+      handled += 1;
+      await handle(row, deps, result);
     }
+    if (fresh === 0) break;
   }
   return result;
+}
+
+/** Gives claimed rows back without spending their attempt (the next run takes them). */
+async function release(deps: WorkerDeps, rows: readonly ClaimedSchedule[]): Promise<void> {
+  for (const row of rows) {
+    const out = await deps.db.rpc("release_schedule_claim", { p_id: row.id, p_claim: row.claim });
+    // Unreleased, the lease runs out by itself and the next run takes the row.
+    if (out.error) console.error("[schedule] releasing a claimed schedule failed:", out.error.code);
+  }
+}
+
+/** Fires one claimed row and ends it, counting what happened into `result`. */
+async function handle(row: ClaimedSchedule, deps: WorkerDeps, result: WorkerResult): Promise<void> {
+  let outcome: Outcome;
+  try {
+    outcome = await fire(row, deps);
+  } catch (error) {
+    console.error(
+      "[schedule] a scheduled change failed to run:",
+      error instanceof Error ? error.name : "unknown",
+    );
+    outcome = { kind: "retry" };
+  }
+  if (outcome.kind === "done") {
+    await done(row, deps, result, outcome.changed ? outcome.place : null);
+    return;
+  }
+  const final = outcome.kind === "failed";
+  const finished = await deps.db.rpc("finish_schedule", {
+    p_id: row.id,
+    p_claim: row.claim,
+    p_failed: final,
+    p_code: outcome.kind === "failed" ? outcome.code : "error",
+  });
+  if (finished.error) {
+    // The lease runs out by itself and the next run takes the row again.
+    console.error("[schedule] ending a schedule's attempt failed:", finished.error.code);
+  } else if (finished.data === "done") {
+    // The fire committed but its answer never arrived: it stands, so its cache is expired.
+    await done(row, deps, result, placeOfRow(row));
+    return;
+  }
+  if (final) result.failed += 1;
+  else result.retried += 1;
+}
+
+async function done(
+  row: ClaimedSchedule,
+  deps: WorkerDeps,
+  result: WorkerResult,
+  place: EntryPlace | null,
+): Promise<void> {
+  if (row.action === "publish") result.published += 1;
+  else result.unpublished += 1;
+  if (place && !(await deps.expire(row, place))) result.expiryFailed += 1;
 }

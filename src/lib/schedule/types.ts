@@ -27,6 +27,7 @@ export const NO_SCHEDULE: EntryScheduleSummary = {
   scheduledRev: null,
   snapshotAt: null,
   failed: null,
+  fired: null,
 };
 
 /** A scheduled time must be at least this far ahead (checked again with the database clock). */

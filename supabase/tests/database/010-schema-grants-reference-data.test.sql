@@ -258,7 +258,7 @@ select set_eq(
       ('form_submissions|service_role|INSERT|*'),
       ('form_submissions|service_role|DELETE|*'),
       -- Wave E (221): the owner reads every column but snapshot, claim and locked_until.
-      ('content_schedules|authenticated|SELECT|action,attempts,created_at,created_by,entry_id,finished_at,id,result_code,run_at,scheduled_rev,site_id,source,status'),
+      ('content_schedules|authenticated|SELECT|action,attempts,created_at,created_by,entry_id,finished_at,fired_from_rev,fired_rev,id,result_code,run_at,scheduled_rev,site_id,source,status'),
       ('content_schedules|service_role|SELECT|*'),
       ('content_schedules|service_role|INSERT|*'),
       ('content_schedules|service_role|UPDATE|*'),
@@ -312,17 +312,17 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, 20, false, 0) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, 20, false, 0, 0) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, 500, true, 50) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, 500, true, 50, 100) $$,
   'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, 5000, true, 500) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, 5000, true, 500, 1000) $$,
   'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns, 25 versions'
 );
 select throws_ok(

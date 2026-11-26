@@ -12,15 +12,17 @@ type Admin = SupabaseClient<Database>;
  *   1. `due_block_boundaries` sets each due site's `schedule_clock` to the database clock and returns
  *      the ids (the clock comes first, so the regeneration draws at least that instant whatever the
  *      function's own clock says);
- *   2. `invalidate(siteId)` expires `page:<siteId>` (Home, every sub-page, the click reads);
- *   3. `advance_block_boundaries` acknowledges ONLY the sites whose expiry went through.
+ *   2. `invalidate(siteId)` expires `page:<siteId>` (Home, every sub-page, the click reads) and
+ *      resolves once the cache has dropped it (`expireTagsNow`: a Route Handler's `revalidateTag`
+ *      alone only queues the expiry until after the response, M10-31);
+ *   3. `advance_block_boundaries` acknowledges ONLY the sites whose expiry resolved.
  *
  * A failure between 2 and 3 repeats the expiry on the next tick (at least once, and expiring twice
- * is harmless); a site whose expiry threw is not acknowledged and comes back next tick.
+ * is harmless); a site whose expiry threw or rejected is not acknowledged and comes back next tick.
  */
 export async function sweepBlockBoundaries(deps: {
   db: Admin;
-  invalidate: (siteId: string) => void;
+  invalidate: (siteId: string) => Promise<void>;
 }): Promise<{ sites: number; failed: number }> {
   const due = await deps.db.rpc("due_block_boundaries", { p_limit: 200 });
   if (due.error) throw new Error(`Reading the due block boundaries failed: ${due.error.message}`);
@@ -28,7 +30,7 @@ export async function sweepBlockBoundaries(deps: {
   let failed = 0;
   for (const siteId of (due.data ?? []) as string[]) {
     try {
-      deps.invalidate(siteId);
+      await deps.invalidate(siteId);
       expired.push(siteId);
     } catch (error) {
       failed += 1;

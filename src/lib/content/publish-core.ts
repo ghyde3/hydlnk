@@ -63,7 +63,7 @@ async function prepare(
 
 /**
  * Publish the entry's draft, strictly validated, stored exactly as it is. `deps.run` (Wave E): `check`
- * runs every rule and writes nothing; `fire` validates a schedule's snapshot instead of the draft and
+ * runs every rule, the database's too (`publish_dry_run`, rolled back), and writes nothing; `fire` validates a schedule's snapshot instead of the draft and
  * writes through `fire_scheduled_publish` (published_at is the scheduled time).
  */
 export async function publishEntryWithClient(
@@ -76,7 +76,8 @@ export async function publishEntryWithClient(
   if (!ready.ok) return ready;
   const { type } = ready;
   // What is validated and published: the stored draft, or the snapshot a schedule took.
-  const entry = run?.kind === "fire" ? { ...ready.entry, draft: run.snapshot as Json } : ready.entry;
+  const entry =
+    run?.kind === "fire" ? { ...ready.entry, draft: run.snapshot as Json } : ready.entry;
 
   const schema = schemaForType(type.key, "publish");
   if (!schema) return failure("invalid", "That content type can’t be published yet.");
@@ -124,6 +125,15 @@ export async function publishEntryWithClient(
   if (unplaced) return unplaced;
 
   if (run?.kind === "check") {
+    // The database's own publish rules (a slug another live post holds, the size checks, the byte
+    // cap) on this copy, rolled back: refused with Publish's own words, nothing written.
+    const dry = await admin.rpc("publish_dry_run", {
+      p_entry_id: entry.id,
+      p_owner_id: input.actor.userId,
+      p_expected_rev: input.expectedRev,
+      p_published: published as Json,
+    });
+    if (dry.error) return refused(admin, entry.id, dry.error);
     return { ok: true, rev: Number(entry.rev), publishedAt: "", ...ready.place };
   }
   if (run?.kind === "fire") {
