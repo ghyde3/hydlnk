@@ -23,6 +23,9 @@ export function formDeps(): FormDeps {
     // The site's hour, read before the store (it fails open like the limiter).
     rateLimitPeek: (key, limit, windowSeconds) => rateLimitPeek(key, limit, windowSeconds),
     now: () => new Date(),
+    clock: () => performance.now(),
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    random: Math.random,
     visitorHash,
     tokenSecret: visitorHashSecret,
     resolveFormBlock,

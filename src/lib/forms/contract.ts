@@ -61,6 +61,18 @@ export const SUBMISSION_LIMITS = {
   bodyBytes: 32768,
 } as const;
 
+/**
+ * The least time any form POST takes, from its arrival to its answer, plus up to the jitter (forms
+ * attack pass, finding 2). Without it the time told the outcomes apart: a dropped post answered in
+ * 7-11 ms where a stored one took 19 ms or more, and "already subscribed" on a large account
+ * answered faster than a store. Every outcome (403 to 503, the pages, every 303) waits until the
+ * same moment, so only a request slower than the floor shows its own time. The floor is above the
+ * measured p99 of a stored submission on a large account on a production build (PROGRESS.md, forms
+ * attack pass). Applied in one place: `handleFormPost` (src/lib/forms/submit.ts).
+ */
+export const FORM_POST_FLOOR_MS = 250;
+export const FORM_POST_JITTER_MS = 10;
+
 /** The fixed labels of the block's controls. */
 export const FORM_LABELS = {
   email: "Email",

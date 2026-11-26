@@ -31,6 +31,7 @@ const {
   formSiteHourlyLimit,
   MIN_FILL_SECONDS,
 } = await import("@/lib/forms/submit");
+const { FORM_POST_FLOOR_MS, FORM_POST_JITTER_MS } = await import("@/lib/forms/contract");
 const { notice } = await import("@/lib/analytics/ingest/click-common");
 const { rateLimit, rateLimitAge, rateLimitPeek } = await import("@/lib/rate-limit");
 const { issueFormToken } = await import("@/lib/forms/token");
@@ -66,6 +67,8 @@ interface Setup {
   status?: RecordStatus | Error;
   blocked?: boolean | Error;
   html?: string | null;
+  /** How long the store takes on the fake clock (ms); 20 unless said. */
+  recordMs?: number;
 }
 
 function setup(over: Setup = {}) {
@@ -79,26 +82,39 @@ function setup(over: Setup = {}) {
     raw === null || raw instanceof Error ? raw : { plan: "free", ...raw };
   const scheduled: (() => Promise<void>)[] = [];
   const rendered: FormRenderState[] = [];
+  // A fake monotonic clock: every dependency below costs time on it, each its own amount, and the
+  // floor's sleep moves it on (finding 2).
+  const time = { t: 1_000 };
+  const cost = (ms: number) => {
+    time.t += ms;
+  };
   const deps = {
     rateLimit: vi.fn(async (key: string, ..._rest: number[]): Promise<RateLimitResult> => {
       const prefix = key.split(":")[0]!;
       calls.push(`limit:${prefix}`);
+      cost(1);
       return over.limits?.[prefix] ?? { allowed: true, retryAfter: 0 };
     }),
     rateLimitPeek: vi.fn(async (key: string, ..._rest: number[]): Promise<RateLimitResult> => {
       const prefix = key.split(":")[0]!;
       calls.push(`peek:${prefix}`);
+      cost(1);
       return over.limits?.[prefix] ?? { allowed: true, retryAfter: 0 };
     }),
     rateLimitAge: vi.fn(async (key: string, ..._rest: number[]): Promise<number | null> => {
       calls.push(`age:${key.split(":")[0]!}`);
+      cost(2);
       return over.openedAgo === undefined ? 10 : over.openedAgo;
     }),
     now: () => NOW,
+    clock: () => time.t,
+    sleep: vi.fn(async (ms: number) => cost(ms)),
+    random: () => 0.5,
     visitorHash: vi.fn(() => "a".repeat(64)),
     tokenSecret: () => SECRET,
     resolveFormBlock: vi.fn(async () => {
       calls.push("resolve");
+      cost(3);
       if (target instanceof Error) throw target;
       return target;
     }),
@@ -110,16 +126,19 @@ function setup(over: Setup = {}) {
     }),
     renderFormPage: vi.fn(async ({ state }: { state: FormRenderState }) => {
       calls.push(`render:${state.view}`);
+      cost(5);
       rendered.push(state);
       return over.html === undefined ? `<html>${state.view}</html>` : over.html;
     }),
     hasBlockedLink: vi.fn(async () => {
       calls.push("blocklist");
+      cost(7);
       if (over.blocked instanceof Error) throw over.blocked;
       return over.blocked ?? false;
     }),
     recordSubmission: vi.fn(async (_row?: { blockId: string; email: string }) => {
       calls.push("record");
+      cost(over.recordMs ?? 20);
       if (over.status instanceof Error) throw over.status;
       return { status: over.status ?? "stored", ownerId: "owner-0000-0001" };
     }),
@@ -135,7 +154,7 @@ function setup(over: Setup = {}) {
   const flush = async () => {
     for (const task of scheduled.splice(0)) await task();
   };
-  return { deps, calls, scheduled, rendered, flush };
+  return { deps, calls, scheduled, rendered, flush, time };
 }
 
 function post(
@@ -816,6 +835,103 @@ describe("forms attack pass finding 3: a dropped post follows the same visible s
       const s = contactSetup(v, { limits: { "form-site": { allowed: false, retryAfter: 9 } } });
       expect((await send(v, s)).status, v.name).toBe(429);
     }
+  });
+});
+
+describe("forms attack pass finding 2: every POST outcome answers at the same moment", () => {
+  const contactTarget = { block: CONTACT, handle: "mara", customHosts: [] };
+  const contactUrl = `http://mara.localhost:3000/f/${PAGE}/formCont01`;
+  const denied = { allowed: false, retryAfter: 5 };
+  const token = () =>
+    issueFormToken({
+      pageId: PAGE,
+      blockId: "formSign01",
+      client: IP,
+      secret: SECRET,
+      now: new Date(NOW.getTime() - 5000),
+    });
+  type Case = [string, Setup, () => Request, string?];
+  const cases: Case[] = [
+    ["403 cross-site", {}, () => post(signupBody, { "sec-fetch-site": "cross-site" })],
+    ["404 ids", {}, () => post(signupBody), "not-a-uuid"],
+    ["429 form-post", { limits: { "form-post": denied } }, () => post(signupBody)],
+    ["415", {}, () => post(signupBody, { "content-type": "text/plain" })],
+    ["413", {}, () => post("x".repeat(40_000))],
+    ["503 lookup", { target: new Error("down") }, () => post(signupBody)],
+    ["404 block", { target: null }, () => post(signupBody)],
+    ["422", {}, () => post({ ...signupBody, email: "nope" })],
+    ["200 confirm", { openedAgo: null }, () => post(signupBody)],
+    [
+      "200 token spent",
+      { limits: { "form-token": denied } },
+      () => post({ ...signupBody, t: token() }),
+    ],
+    ["429 form-block", { limits: { "form-block": denied } }, () => post(signupBody)],
+    ["429 form-site", { limits: { "form-site": denied } }, () => post(signupBody)],
+    ["303 bot", {}, () => post(signupBody, { "user-agent": "Googlebot/2.1" })],
+    ["303 honeypot", {}, () => post({ ...signupBody, hl_confirm: "x" })],
+    [
+      "303 blocked link",
+      { block: CONTACT, target: contactTarget, blocked: true },
+      () => post(contactBody, {}, contactUrl),
+    ],
+    [
+      "503 blocklist",
+      { block: CONTACT, target: contactTarget, blocked: new Error("down") },
+      () => post(contactBody, {}, contactUrl),
+    ],
+    ["303 stored", {}, () => post(signupBody)],
+    [
+      "303 stored message",
+      { block: CONTACT, target: contactTarget },
+      () => post(contactBody, {}, contactUrl),
+    ],
+    ["303 duplicate", { status: "duplicate" }, () => post(signupBody)],
+    ["303 over_limit_first", { status: "over_limit_first" }, () => post(signupBody)],
+    ["303 over_daily_limit", { status: "over_daily_limit" }, () => post(signupBody)],
+    ["404 unavailable", { status: "unavailable" }, () => post(signupBody)],
+    ["422 invalid_email", { status: "invalid_email" }, () => post(signupBody)],
+    ["503 store", { status: new Error("down") }, () => post(signupBody)],
+  ];
+
+  it.each(cases)(
+    "%s ends at arrival + the floor + the jitter",
+    async (_name, over, req, pageId) => {
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const s = setup(over);
+      const blockId = over.block?.id ?? "formSign01";
+      const start = s.time.t;
+      await handleFormPost(req(), { pageId: pageId ?? PAGE, blockId }, s.deps);
+      expect(s.time.t - start).toBe(FORM_POST_FLOOR_MS + 0.5 * FORM_POST_JITTER_MS);
+      expect(s.deps.sleep).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("a request slower than the floor is not made slower; a dependency that throws still waits for the floor", async () => {
+    const slow = setup({ recordMs: FORM_POST_FLOOR_MS + 100 });
+    const start = slow.time.t;
+    expect((await handleFormPost(post(signupBody), params(), slow.deps)).status).toBe(303);
+    expect(slow.deps.sleep).toHaveBeenCalledWith(0);
+    expect(slow.time.t - start).toBeGreaterThan(FORM_POST_FLOOR_MS + 100);
+
+    const broken = setup();
+    broken.deps.renderFormPage.mockRejectedValue(new Error("render down"));
+    const from = broken.time.t;
+    await expect(
+      handleFormPost(post({ ...signupBody, email: "nope" }), params(), broken.deps),
+    ).rejects.toThrow("render down");
+    expect(broken.time.t - from).toBe(FORM_POST_FLOOR_MS + 0.5 * FORM_POST_JITTER_MS);
+  });
+
+  it("the jitter stays within its bound and the floor is the same for every plan", async () => {
+    for (const r of [0, 0.999]) {
+      const s = setup();
+      s.deps.random = () => r;
+      const start = s.time.t;
+      await handleFormPost(post(signupBody), params(), s.deps);
+      expect(s.time.t - start).toBeCloseTo(FORM_POST_FLOOR_MS + r * FORM_POST_JITTER_MS, 6);
+    }
+    expect(FORM_POST_JITTER_MS).toBeLessThanOrEqual(FORM_POST_FLOOR_MS / 10);
   });
 });
 

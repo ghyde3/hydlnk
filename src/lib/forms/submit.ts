@@ -11,6 +11,8 @@ import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import {
   FORM_FIELD,
   FORM_KIND_LABELS,
+  FORM_POST_FLOOR_MS,
+  FORM_POST_JITTER_MS,
   SUBMISSION_LIMITS,
   formActionPath,
   isBlockId,
@@ -107,6 +109,12 @@ export interface FormDeps {
   /** What `rateLimit` would answer, counting nothing (`rateLimitPeek`): the site's hour. */
   rateLimitPeek: (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult>;
   now: () => Date;
+  /** Milliseconds from a monotonic clock (`performance.now`), for the POST's time floor. */
+  clock: () => number;
+  /** Waits `ms` milliseconds: the POST's time floor. */
+  sleep: (ms: number) => Promise<void>;
+  /** A number in [0, 1): the floor's jitter. */
+  random: () => number;
   /** For the click row only (`recordClick`); a submission stores no hash. */
   visitorHash: (input: VisitorHashInput) => string;
   /** The token's HMAC key (the visitor-hash secret). */
@@ -312,13 +320,22 @@ export function formMethodNotAllowed(marker: boolean): Response {
   );
 }
 
-/** POST /f/{pageId}/{blockId}: a submission. */
+/**
+ * POST /f/{pageId}/{blockId}: a submission, answered no sooner than `FORM_POST_FLOOR_MS` (plus up
+ * to `FORM_POST_JITTER_MS`) after it arrived, whatever the outcome (forms attack pass, finding 2).
+ * The one place the floor is applied: every branch of `formPost`, a throw included, passes here.
+ */
 export async function handleFormPost(
   request: Request,
   params: FormParams,
   deps: FormDeps,
 ): Promise<Response> {
-  return formResponse(await formPost(request, params, deps));
+  const answerAt = deps.clock() + FORM_POST_FLOOR_MS + deps.random() * FORM_POST_JITTER_MS;
+  try {
+    return formResponse(await formPost(request, params, deps));
+  } finally {
+    await deps.sleep(Math.max(0, answerAt - deps.clock()));
+  }
 }
 
 async function formPost(request: Request, params: FormParams, deps: FormDeps): Promise<Response> {
