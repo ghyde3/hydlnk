@@ -51,6 +51,7 @@ import {
   type SiteTemplateId,
 } from "@/lib/site-templates/catalog";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
+import { latestPostsCategories } from "@/lib/site/live";
 import type { WorkspaceAction } from "@/components/workspace/workspace-reducer";
 import { useLatestPosts } from "@/components/blocks/use-latest-posts";
 import { docOf, initSiteState, siteReducer, type SubPageSettings } from "./site-state";
@@ -661,7 +662,12 @@ export function useSitePages(args: {
     setLivePaths(new Map());
   }, []);
 
-  const { latest: latestPosts } = useLatestPosts(siteId);
+  // The categories the latest-posts blocks of every page filter by: their older posts are read too.
+  const latestCategories = useMemo(
+    () => latestPostsCategories([...forms.values()].flatMap((form) => form.blocks)),
+    [forms],
+  );
+  const { latest: latestPosts } = useLatestPosts(siteId, latestCategories);
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({
       id,

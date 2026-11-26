@@ -66,12 +66,21 @@ export function parseLatestPosts(body: unknown): Omit<LatestPostsData, "state"> 
   return { latest, categories };
 }
 
-export function useLatestPosts(siteId: string | null | undefined): LatestPostsData {
+/**
+ * The site's latest posts as the live page reads them. `categoryIds`: the categories the blocks on
+ * screen filter by, so their older posts are included too.
+ */
+export function useLatestPosts(
+  siteId: string | null | undefined,
+  categoryIds: readonly string[] = [],
+): LatestPostsData {
   const [data, setData] = useState<LatestPostsData>(EMPTY);
+  const categories = [...new Set(categoryIds.filter((id) => id !== ""))].sort().join(",");
   useEffect(() => {
     if (!siteId) return;
     let live = true;
-    fetch(`/api/pages/${encodeURIComponent(siteId)}/posts/latest`, {
+    const query = categories === "" ? "" : `?categories=${encodeURIComponent(categories)}`;
+    fetch(`/api/pages/${encodeURIComponent(siteId)}/posts/latest${query}`, {
       headers: { accept: "application/json" },
     })
       .then(async (response) => (response.ok ? ((await response.json()) as unknown) : null))
@@ -84,6 +93,6 @@ export function useLatestPosts(siteId: string | null | undefined): LatestPostsDa
     return () => {
       live = false;
     };
-  }, [siteId]);
+  }, [siteId, categories]);
   return data;
 }

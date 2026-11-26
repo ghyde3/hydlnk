@@ -5,7 +5,7 @@ import { countSiteIndexQuery } from "@/lib/publish/query-counter";
 import { PAGE_REVALIDATE_SECONDS, PUBLIC_READ_CACHE_VERSION, pageTag } from "@/lib/publish/tags";
 import { getLatestPosts, getSiteArchives } from "@/lib/blog/published";
 import type { PublishDoc } from "@/lib/document";
-import { postsArchiveOf, siteContextFrom, usesLatestPosts } from "./live";
+import { latestPostsCategories, postsArchiveOf, siteContextFrom, usesLatestPosts } from "./live";
 import type { SiteContext, SitePageSummary } from "./menu";
 import { getLivePageWithClient, listLivePagesWithClient } from "./page-entries";
 
@@ -111,7 +111,7 @@ export async function getLiveSiteContext(
   const posts = usesLatestPosts(blocks) ? postsArchiveOf(archives) : null;
   const latest = usesLatestPosts(blocks)
     ? posts
-      ? await getLatestPosts(pageId, posts.typeId)
+      ? await getLatestPosts(pageId, posts.typeId, latestPostsCategories(blocks))
       : null
     : undefined;
   return siteContextFrom(index, doc, currentId, archives, latest);
