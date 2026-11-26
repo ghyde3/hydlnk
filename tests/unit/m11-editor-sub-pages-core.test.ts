@@ -502,13 +502,24 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     ];
     for (const place of places) {
       const table = place.on.includes("public.pages") ? "public.pages" : "public.content_entries";
-      psql(
-        `create function public.${place.name}() returns trigger language plpgsql as $f$
-           begin raise exception 'boom in the middle of the delete' using errcode = 'P0001'; end; $f$;
-         revoke all on function public.${place.name}() from public, anon, authenticated;
-         create trigger ${place.name} ${place.on} execute function public.${place.name}();`,
-      );
       try {
+        // Inside the `try`, so the `finally` cleans up even when the setup itself fails half way.
+        // `create trigger` locks the table against the rest of the suite's writers, so it waits
+        // briefly and is retried instead of deadlocking.
+        const setup = `set lock_timeout = '3s';
+           create or replace function public.${place.name}() returns trigger language plpgsql as $f$
+             begin raise exception 'boom in the middle of the delete' using errcode = 'P0001'; end; $f$;
+           revoke all on function public.${place.name}() from public, anon, authenticated;
+           drop trigger if exists ${place.name} on ${table};
+           create trigger ${place.name} ${place.on} execute function public.${place.name}();`;
+        for (let attempt = 1; ; attempt += 1) {
+          try {
+            psql(setup);
+            break;
+          } catch (error) {
+            if (attempt === 5) throw error;
+          }
+        }
         // The database call itself fails this way, straight from the function.
         const raw = await admin.rpc("delete_page_entry", {
           p_entry_id: a.id,
