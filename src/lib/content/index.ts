@@ -30,6 +30,8 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } from "./query-core";
 import { unsafeBodySchemes } from "./blocklist";
+import { failure } from "./errors";
+import { POST_BODY_TOO_LARGE, postBodyTooLarge } from "./schemas";
 import { bodyImageIssue, bodyImages, checkOwnImages } from "./images";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 import type { EntryPlace } from "./publish-core";
@@ -55,6 +57,14 @@ export async function checkPostBody(input: {
   actor: ContentActor;
   draft: unknown;
 }): Promise<ContentFailure | null> {
+  // The size first: nothing over the limit is ever lexed (three scans of a huge body otherwise).
+  const raw = (input.draft as { body?: unknown } | null)?.body;
+  if (typeof raw === "string" && postBodyTooLarge(raw)) {
+    return {
+      ...failure("invalid", POST_BODY_TOO_LARGE),
+      issues: [{ path: "body", message: POST_BODY_TOO_LARGE }],
+    };
+  }
   const unsafe = unsafeBodySchemes(input.draft);
   if (unsafe) return unsafe;
   const foreign = bodyImageIssue(input.draft);

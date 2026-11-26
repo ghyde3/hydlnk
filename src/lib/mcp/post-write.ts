@@ -1,6 +1,6 @@
 import "server-only";
 import { checkPostBody } from "@/lib/content";
-import { entrySlugIssue } from "@/lib/content/schemas";
+import { POST_BODY_TOO_LARGE, entrySlugIssue, postBodyTooLarge } from "@/lib/content/schemas";
 import { cleanLine, cleanMultiline } from "./doc-view";
 import { ToolFailure } from "./errors";
 import { createImageResolver } from "./images";
@@ -52,6 +52,12 @@ export async function preparePostDraft(
   current: unknown,
   args: PostFieldArgs,
 ): Promise<Record<string, unknown>> {
+  // Before anything reads the database or lexes the body: a body over the limit stops here.
+  if (args.body !== undefined && postBodyTooLarge(args.body)) {
+    throw new ToolFailure("invalid_input", POST_BODY_TOO_LARGE, {
+      issues: [{ path: "body", message: POST_BODY_TOO_LARGE }],
+    });
+  }
   const changes: PostChanges = {
     ...(args.title !== undefined ? { title: cleanLine(args.title).trim() } : {}),
     ...(args.slug !== undefined ? { slug: checkedSlug(args.slug) } : {}),

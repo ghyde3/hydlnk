@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { updateEntry } from "@/lib/content";
+import { POST_BODY_TOO_LARGE, POST_LIMITS } from "@/lib/content/schemas";
 import { applyBodyEdits } from "../body-edit";
 import { charCount, contentHash } from "../body-range";
 import { MCP_SCOPES } from "../constants";
@@ -22,7 +23,8 @@ import {
 
 const BODY_EDITS_MAX = 20;
 const FIND_MAX = 100_000;
-const REPLACE_MAX = 600_000;
+/** A replace longer than the body limit could never be saved. */
+const REPLACE_MAX = POST_LIMITS.bodyBytes;
 const BOTH = "Send body or bodyEdits, not both.";
 
 const input = z.strictObject({
@@ -85,6 +87,13 @@ export const updateEntryTool: ToolDefinition<typeof input> = {
     let body = fields.body;
     if (bodyEdits !== undefined) {
       const edited = applyBodyEdits(bodyOf(entry.draft), bodyEdits);
+      if (!edited.ok && edited.tooLarge) {
+        const message = `Step ${edited.index + 1} would make the body larger than 512 KiB. Nothing was changed.`;
+        throw new ToolFailure("invalid_input", message, {
+          issues: [{ path: "body", message: POST_BODY_TOO_LARGE }],
+          details: { step: edited.index + 1 },
+        });
+      }
       if (!edited.ok) {
         const message =
           edited.matches === 0

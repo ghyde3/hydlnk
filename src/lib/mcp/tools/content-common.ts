@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { listTerms, type ContentActor, type ContentFailure } from "@/lib/content";
-import { POST_LIMITS } from "@/lib/content/schemas";
+import { POST_BODY_TOO_LARGE, POST_LIMITS } from "@/lib/content/schemas";
 import { MCP_BODY_RANGE_CHARS, MCP_BODY_RANGE_MAX_CHARS, MCP_SCOPES } from "../constants";
 import { contentFailure, type FailureContext } from "../content-failure";
 import { MESSAGES, ToolFailure, insufficientScopeMessage } from "../errors";
@@ -94,6 +94,9 @@ export const postFieldInputs = {
     ),
   body: z
     .string()
+    // Characters, as a first bound: more than 512 Ki UTF-16 units is over 512 KiB in UTF-8 too.
+    // The exact byte count runs in `preparePostDraft`, before anything lexes the body.
+    .max(POST_LIMITS.bodyBytes, { error: POST_BODY_TOO_LARGE })
     .optional()
     .describe(
       "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text.",
