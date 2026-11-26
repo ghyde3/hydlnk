@@ -188,6 +188,19 @@ describe("contentFailure", () => {
     ]);
   });
 
+  it("in a publish call, a slug taken or reserved is publish_refused with the slug issue", () => {
+    for (const code of ["slug_taken", "slug_reserved"] as const) {
+      const out = contentFailure(fail(code, { message: "Another entry uses that slug." }), {
+        publish: true,
+      });
+      expect(out.code, code).toBe("publish_refused");
+      expect(out.message, code).toBe("Publishing stopped. Another entry uses that slug.");
+      expect(out.extras.issues, code).toEqual([
+        { path: "slug", message: "Another entry uses that slug." },
+      ]);
+    }
+  });
+
   it("suspension has the one sentence of the rest of the connector", async () => {
     const { ACCOUNT_SUSPENDED_MESSAGE } = await import("@/lib/admin/suspension");
     expect(contentFailure(fail("account_suspended")).message).toBe(ACCOUNT_SUSPENDED_MESSAGE);

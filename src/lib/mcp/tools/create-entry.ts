@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { createEntry } from "@/lib/content";
+import { createEntry, listEntries } from "@/lib/content";
 import { suggestSlug } from "@/lib/posts/slug";
 import { charCount, contentHash } from "../body-range";
 import { MCP_SCOPES } from "../constants";
 import { MESSAGES } from "../errors";
 import { bodyOf } from "../post-view";
 import { preparePostDraft } from "../post-write";
-import type { ToolDefinition } from "../types";
+import type { ToolCall, ToolDefinition } from "../types";
 import { WRITE_NOT_IDEMPOTENT, pageIdField } from "./common";
 import {
   NOT_LIVE_UNTIL_PUBLISH,
@@ -16,6 +16,31 @@ import {
   titleInput,
   typeField,
 } from "./content-common";
+
+/**
+ * The slugs of the site's posts whose title holds this one (one bounded list read): a second post
+ * called "Hello" is made as hello-2, not as a second hello that Publish would refuse. Only a
+ * suggestion: Publish and the database still decide (HL012). A failed read suggests from the title.
+ */
+async function slugsInUse(
+  call: ToolCall,
+  siteId: string,
+  draft: Record<string, unknown>,
+): Promise<string[]> {
+  const title = typeof draft.title === "string" ? draft.title.trim() : "";
+  if (title === "") return [];
+  const listed = await listEntries({
+    actor: mcpActor(call),
+    siteId,
+    typeKey: "post",
+    q: title,
+    limit: SLUG_SCAN_LIMIT,
+  });
+  if (!listed?.ok) return [];
+  return listed.items.map((item) => item.slug).filter((slug): slug is string => !!slug);
+}
+
+const SLUG_SCAN_LIMIT = 100;
 
 const input = z.strictObject({
   pageId: pageIdField,
@@ -45,7 +70,9 @@ export const createEntryTool: ToolDefinition<typeof input> = {
         body: fields.body ?? "",
       },
     );
-    if (fields.slug === undefined) draft.slug = suggestSlug(String(draft.title ?? ""));
+    if (fields.slug === undefined) {
+      draft.slug = suggestSlug(String(draft.title ?? ""), await slugsInUse(call, siteId, draft));
+    }
     const created = await createEntry({
       actor: mcpActor(call),
       siteId,

@@ -307,6 +307,32 @@ describe.skipIf(!run)("publish_entry and unpublish_entry (local Supabase)", () =
       );
     });
 
+    it("publish_refused with the slug issue when another live post already uses the slug (M18-08 step 2)", async () => {
+      const first = await h.post(o, { title: "Same slug", slug: "same-slug" });
+      const live = await h.call("publish_entry", { entryId: first.id, ifRev: 1 }, o);
+      expect(live.isError, JSON.stringify(live.error)).toBe(false);
+      const second = await h.post(o, { title: "Same slug again", slug: "same-slug" });
+      const out = await refused(second.id);
+      expect(out.error?.code).toBe("publish_refused");
+      expect(out.error!.message).toContain("Publishing stopped.");
+      expect(out.error!.issues).toHaveLength(1);
+      expect(out.error!.issues![0]!.path).toBe("slug");
+    });
+
+    it("create_entry with a repeated title and no slug suggests a free slug, and both publish", async () => {
+      const title = `Repeated title ${Date.now() % 100000}`;
+      const one = await h.call("create_entry", { pageId: o.pageId, title }, o);
+      const two = await h.call("create_entry", { pageId: o.pageId, title }, o);
+      const three = await h.call("create_entry", { pageId: o.pageId, title }, o);
+      const base = one.json!.slug as string;
+      expect(two.json!.slug).toBe(`${base}-2`);
+      expect(three.json!.slug).toBe(`${base}-3`);
+      for (const made of [one, two, three]) {
+        const out = await h.call("publish_entry", { entryId: made.json!.id, ifRev: 1 }, o);
+        expect(out.isError, JSON.stringify(out.error)).toBe(false);
+      }
+    });
+
     it("publish_refused for a body image that is not an upload, and for one that is not the caller's", async () => {
       const remote = await editorDraft({
         title: "Remote",

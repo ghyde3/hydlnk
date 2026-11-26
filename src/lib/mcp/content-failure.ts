@@ -95,6 +95,12 @@ export function contentFailure(failure: ContentFailure, where: FailureContext = 
         failure.error === "slug_taken" && where.slugTakenMessage
           ? where.slugTakenMessage
           : failure.message.slice(0, 200);
+      // At Publish a slug another post already uses is one of Publish's refusals (M18-08 step 2).
+      if (where.publish) {
+        return new ToolFailure("publish_refused", `Publishing stopped. ${message}`.slice(0, 600), {
+          issues: [{ path: where.slugPath ?? "slug", message }],
+        });
+      }
       return new ToolFailure("invalid_input", message, {
         issues: [{ path: where.slugPath ?? "slug", message }],
       });
