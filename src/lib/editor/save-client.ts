@@ -21,9 +21,12 @@ export interface HomeEntryRef {
  *     the stale-tab `conflict`. The frozen `blocks` there are never sent (the database keeps them);
  *   - Home's blocks are the '/' page entry: a POST to the entry save route under the entry's own rev.
  *
- * The blocks go first and only when they changed since the last write, so a theme edit costs one
- * request, and a refusal of the blocks (a blocked link, too large, a conflict) stops before the
- * design moves. Each counter advances on its own: a retry after a design conflict does not resend
+ * The blocks go first and only when they changed since the last write, and a refusal of the blocks
+ * (a blocked link, too large, a conflict) stops before the design moves. A save that sends no blocks
+ * (a theme edit) first reads Home's entry rev, once, and is a `conflict` when it is not the one this
+ * tab holds: another writer (an MCP tool) moved Home's blocks, and the tab must reload before it
+ * saves anything on top. That read is made for EVERY such save (M15-17), not once per session: the
+ * other writer can come at any time. Each counter advances on its own: a retry after a design conflict does not resend
  * blocks that were stored. A site with no Home entry (`home` null) still writes the whole document to
  * `pages.draft`, as before.
  *
@@ -45,25 +48,19 @@ export function createDraftSaver(
   let storedBlocks: string | null =
     home && loadedBlocks !== undefined ? JSON.stringify(loadedBlocks) : null;
 
-  // Seeded with the loaded blocks, the first save may send none; until a block POST (checked under
-  // the entry rev) or this read has passed, the entry rev is confirmed so a tab whose Home blocks
-  // were written elsewhere (an MCP tool) still hits the stale-tab conflict.
-  let revConfirmed = !(home && loadedBlocks !== undefined);
-
   return async (doc, expectedRevKey) => {
     let design: unknown = doc;
     if (home) {
       const { blocks, ...rest } = doc;
       design = rest;
       const text = JSON.stringify(blocks);
-      if (text === storedBlocks && !revConfirmed) {
+      if (text === storedBlocks) {
+        // No block POST will check the entry rev for this save, so this one read does.
         const revs = await readEntryRevs(pageId);
         if (!revs) return { kind: "error" };
         const entry = revs.find((row) => row.id === home.entryId);
         if (!entry || entry.rev !== homeRev) return { kind: "conflict" };
-        revConfirmed = true;
-      }
-      if (text !== storedBlocks) {
+      } else {
         const answer = await postEntryDraft(pageId, home.entryId, homeRev, {
           path: "/",
           title: "",
@@ -74,7 +71,6 @@ export function createDraftSaver(
         if (failed) return failed;
         if (answer.kind === "ok") homeRev = answer.rev;
         storedBlocks = text;
-        revConfirmed = true;
       }
     }
 

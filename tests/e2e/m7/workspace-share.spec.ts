@@ -271,7 +271,7 @@ test.describe("M7-04 safety and layout", () => {
       if (/\/(_next\/|__nextjs)/.test(u.pathname) || /fonts\.g/.test(u.host)) return;
       // A production build prefetches the nav links' routes (`?_rsc=`); they are not the tab's calls.
       if (u.searchParams.has("_rsc")) return;
-      // M15-17: the one read of Home's entry rev before a design-only save, counted on its own.
+      // M15-17: the one read of Home's entry rev before each design-only save, counted on its own.
       if (
         request.method() === "GET" &&
         u.pathname === "/rest/v1/content_entries" &&
@@ -294,9 +294,12 @@ test.describe("M7-04 safety and layout", () => {
     const allowed =
       /^(PATCH \/rest\/v1\/pages|POST \/share|GET \/share|GET \/og|.*\/api\/media.*|OPTIONS .*)$/;
     expect(calls.filter((call) => !allowed.test(call) && !call.includes("_rsc"))).toEqual([]);
-    // Exactly one read of the entry revs, and no entry write (no other call to content_entries at all).
-    expect(entryRevReads).toBe(1);
-    expect(calls.filter((call) => call.includes("content_entries"))).toEqual([]);
+    // Exactly one read of the entry revs per design-only save (every save here is one: the tab sends
+    // no blocks), and no entry write (no other call to content_entries, none to the entry route).
+    const designSaves = calls.filter((call) => call === "PATCH /rest/v1/pages").length;
+    expect(designSaves).toBeGreaterThan(0);
+    expect(entryRevReads).toBe(designSaves);
+    expect(calls.filter((call) => /content_entries|\/entries\//.test(call))).toEqual([]);
     const row = await pageRow(user.pageId);
     expect(row.draft.share?.title).toBe(evil);
   });

@@ -56,13 +56,16 @@ vi.mock("@/lib/supabase/browser", () => ({
   }),
 }));
 
-// The entry rev read that confirms a seeded first save (1b1-17).
+// The entry rev read that confirms every save that sends no blocks (1b1-17, M15-17).
 let storedEntryRev: number | null = 7;
+let revReads = 0;
 vi.mock("@/lib/site-pages/entry-revs-client", () => ({
-  readEntryRevs: async () =>
-    storedEntryRev === null
+  readEntryRevs: async () => {
+    revReads += 1;
+    return storedEntryRev === null
       ? null
-      : [{ id: "22222222-2222-4222-8222-222222222222", rev: storedEntryRev }],
+      : [{ id: "22222222-2222-4222-8222-222222222222", rev: storedEntryRev }];
+  },
 }));
 
 // The entry route ---------------------------------------------------------------------------------
@@ -77,6 +80,7 @@ beforeEach(() => {
   patches.length = 0;
   posts.length = 0;
   storedEntryRev = 7;
+  revReads = 0;
   answer = { data: [{ id: "site" }], error: null, status: 200 };
   routeAnswers = [];
   vi.stubGlobal(
@@ -131,10 +135,14 @@ describe("Home's autosave on page entries", () => {
     const save = createDraftSaver(SITE, { entryId: HOME, rev: 7 });
     const blocks = [link("lnk-aaaaaaaa")];
     await save(doc(blocks, 5), "4");
+    expect(revReads).toBe(0);
+    // The entry now holds the rev the route answered.
+    storedEntryRev = 8;
     // A theme-only edit: the same blocks, the next design rev.
-    await save(doc(blocks, 6, "mara 2"), "5");
+    expect(await save(doc(blocks, 6, "mara 2"), "5")).toEqual({ kind: "ok" });
     expect(posts).toHaveLength(1);
     expect(patches).toHaveLength(2);
+    expect(revReads).toBe(1);
     // A block edit goes out under the rev the first save returned.
     await save(doc([link("lnk-aaaaaaaa", "Changed")], 7), "6");
     expect(posts).toHaveLength(2);
@@ -164,6 +172,42 @@ describe("Home's autosave on page entries", () => {
     expect(patches).toHaveLength(0);
   });
 
+  it("every design-only save confirms Home's entry rev: an AI write between two design edits is a conflict (M15-17)", async () => {
+    const blocks = [link("lnk-aaaaaaaa")];
+    const save = createDraftSaver(SITE, { entryId: HOME, rev: 7 }, blocks);
+    // Design edit 1: the read passes.
+    expect(await save(doc(blocks, 5, "mara 2"), "4")).toEqual({ kind: "ok" });
+    expect(revReads).toBe(1);
+    expect(patches).toHaveLength(1);
+    // An MCP tool writes Home's blocks: the entry moves to rev 8.
+    storedEntryRev = 8;
+    // Design edit 2: read again, and refused before anything is written.
+    expect(await save(doc(blocks, 6, "mara 3"), "5")).toEqual({ kind: "conflict" });
+    expect(revReads).toBe(2);
+    expect(patches).toHaveLength(1);
+    expect(posts).toHaveLength(0);
+  });
+
+  it("makes exactly one entry-rev read per design-only save, and none for a save that posts blocks", async () => {
+    const blocks = [link("lnk-aaaaaaaa")];
+    const save = createDraftSaver(SITE, { entryId: HOME, rev: 7 }, blocks);
+    for (let n = 0; n < 4; n += 1) {
+      expect(await save(doc(blocks, 5 + n, `mara ${n}`), String(4 + n))).toEqual({ kind: "ok" });
+    }
+    expect(revReads).toBe(4);
+    expect(posts).toHaveLength(0);
+    // A block edit is checked by its own POST under the entry rev: no read.
+    expect(await save(doc([link("lnk-aaaaaaaa", "Changed")], 9), "8")).toEqual({ kind: "ok" });
+    expect(revReads).toBe(4);
+    expect(posts).toHaveLength(1);
+    // The next design-only save reads again, against the rev that POST returned.
+    storedEntryRev = 8;
+    expect(await save(doc([link("lnk-aaaaaaaa", "Changed")], 10, "x"), "9")).toEqual({
+      kind: "ok",
+    });
+    expect(revReads).toBe(5);
+  });
+
   it("a conflict on the blocks stops before the design is written", async () => {
     routeAnswers = [{ status: 409, body: { kind: "conflict", currentRev: 9 } }];
     const save = createDraftSaver(SITE, { entryId: HOME, rev: 7 });
@@ -178,6 +222,8 @@ describe("Home's autosave on page entries", () => {
     expect(await save(edit, "4")).toEqual({ kind: "conflict" });
     expect(posts).toHaveLength(1);
     answer = { data: [{ id: "site" }], error: null, status: 200 };
+    // The stored entry holds the rev the first try's POST returned.
+    storedEntryRev = 8;
     expect(await save(edit, "4")).toEqual({ kind: "ok" });
     expect(posts).toHaveLength(1);
   });
