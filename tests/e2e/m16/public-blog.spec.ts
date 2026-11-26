@@ -113,7 +113,7 @@ test("M16-04 a post page: theme-styled, finished HTML, hostile body shown as tex
   // The site's published tenant tokens and its header (name, menu) are the post page's too.
   expect(await tokenOf("--t-bg")).toBe(homeTokens.bg);
   expect(await tokenOf("--t-accent")).toBe(homeTokens.accent);
-  await expect(page.locator("header.pg-sitehead a[href=\"/\"]")).toContainText("Mara Okafor");
+  await expect(page.locator('header.pg-sitehead a[href="/"]')).toContainText("Mara Okafor");
   await expect(page.locator("h1")).toHaveCount(1);
   await expect(page.locator("h1")).toHaveText("Post number 1");
   const article = page.locator("article.hl-post");
