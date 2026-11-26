@@ -25,7 +25,7 @@ const input = z.strictObject({
     .max(64)
     .meta({ format: "uuid" })
     .optional()
-    .describe("Only posts whose live copy is in this category or tag (an id from list_terms)."),
+    .describe("Only posts whose draft is in this category or tag (an id from list_terms)."),
   q: z
     .string()
     .max(200, { error: "Use 200 characters or fewer." })

@@ -165,7 +165,7 @@
           ]
         },
         "termId": {
-          "description": "Only posts whose live copy is in this category or tag (an id from list_terms).",
+          "description": "Only posts whose draft is in this category or tag (an id from list_terms).",
           "type": "string",
           "maxLength": 64,
           "format": "uuid"

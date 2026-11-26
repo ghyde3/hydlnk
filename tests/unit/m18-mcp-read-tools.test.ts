@@ -211,6 +211,38 @@ describe.skipIf(!run)("the content read tools (local Supabase)", () => {
       expect(trashed.json!.entries[0].deletedAt).toBeTruthy();
     });
 
+    it("termId matches the categories and tags of each post's DRAFT, live or not", async () => {
+      // Its own site, so the posts here stay out of the other lists of this block.
+      const site = await h.secondSite(o, "rd-terms");
+      const cat = (
+        await h.call("create_term", { pageId: site, taxonomy: "category", name: "Draft cat" }, o)
+      ).json!.term.id as string;
+      const tag = (
+        await h.call("create_term", { pageId: site, taxonomy: "tag", name: "Draft tag" }, o)
+      ).json!.term.id as string;
+      // A post that was never published, with the term in its draft only.
+      const draftOnly = await h.post(
+        o,
+        { title: "Never live", categories: [cat], tags: [tag] },
+        site,
+      );
+      // A live post whose draft has since dropped the term: its live copy still has it.
+      const dropped = await h.post(o, { title: "Dropped", categories: [cat], tags: [tag] }, site);
+      const live = await h.call("publish_entry", { entryId: dropped.id, ifRev: 1 }, o);
+      expect(live.isError, JSON.stringify(live.error)).toBe(false);
+      const edited = await h.call(
+        "update_entry",
+        { entryId: dropped.id, ifRev: live.json!.rev, categories: [], tags: [] },
+        o,
+      );
+      expect(edited.isError, JSON.stringify(edited.error)).toBe(false);
+      for (const termId of [cat, tag]) {
+        const out = await h.call("list_entries", { pageId: site, termId }, o, READ);
+        expect(out.isError, JSON.stringify(out.error)).toBe(false);
+        expect(out.json!.entries.map((entry: any) => entry.id)).toEqual([draftOnly.id]);
+      }
+    });
+
     it("a live post whose draft changed says hasUnpublishedChanges", async () => {
       const made = await h.post(o, { title: "Delta" });
       const live = await h.call("publish_entry", { entryId: made.id, ifRev: 1 }, o);
