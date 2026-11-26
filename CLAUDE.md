@@ -48,7 +48,6 @@ Next.js 16 differs from older versions (`proxy.ts`, no `next lint`, `updateTag`)
 
 ## Dependencies
 Approved by Gary 2026-10-04. `tests/unit/dependencies-policy.test.ts` holds these rules and fails, naming this section, when `package.json` and the list below disagree.
-
 1. Client libraries live on the app and editor side only. Public tenant pages (the static HTML pipeline in `src/lib/tenant-render/` and the one tenant script) never ship library JavaScript; a library may be used there only at server render to produce static markup (for example Simple Icons SVG paths).
 2. No library makes network calls (no telemetry, no CDN, no remote fonts, icons, images or schemas). The one Gary-approved exception is Sentry on the app side, off unless its DSN is set.
 3. Permissive licenses only: MIT, ISC, BSD, Apache-2.0, CC0-1.0, 0BSD, OFL for fonts. Three older packages are named exceptions in the test, for Gary to confirm: isbot (Unlicense, public domain), nodemailer (MIT-0, MIT without attribution), @axe-core/playwright (MPL-2.0, test tooling that never ships). sharp's prebuilt libvips binaries (LGPL, dynamically linked) are the one known and accepted transitive exception.
