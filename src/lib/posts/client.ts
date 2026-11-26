@@ -135,9 +135,15 @@ export const postAction = (
   action: "publish" | "unpublish" | "trash" | "restore",
   rev: number,
 ) =>
-  request<{ rev: number; publishedAt?: string }>("POST", `${entry(siteId, entryId)}/${action}`, {
-    rev,
-  });
+  request<{ rev: number; publishedAt?: string; cacheStale?: true }>(
+    "POST",
+    `${entry(siteId, entryId)}/${action}`,
+    { rev },
+  );
+
+/** Expire a post's cache again, after an action answered `cacheStale`. */
+export const expirePost = (siteId: string, entryId: string) =>
+  request<{ expired: boolean }>("POST", `${entry(siteId, entryId)}/expire`);
 
 export const fetchRevisions = (siteId: string, entryId: string) =>
   request<{ revisions: RevisionSummary[] }>("GET", `${entry(siteId, entryId)}/revisions`);

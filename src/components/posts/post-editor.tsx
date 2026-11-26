@@ -8,6 +8,7 @@ import { CONTENT_CONFLICT_MESSAGE } from "@/lib/posts/messages";
 import { POST_TEST_IDS } from "@/lib/blog/test-ids";
 import {
   fetchPost,
+  expirePost,
   postAction,
   refusalMessage,
   restoreRevision,
@@ -115,6 +116,8 @@ export function PostEditor({
   const [terms, setTerms] = useState(firstTerms);
   const [issues, setIssues] = useState<FieldIssue[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  /** The last action stood but its cache expiry failed: the live copy may lag until a retry. */
+  const [cacheStale, setCacheStale] = useState(false);
   const [busy, setBusy] = useState<PostBusy>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   /** Bumped when the draft is replaced from the server, so the body editor mounts on the new body. */
@@ -217,6 +220,7 @@ export function PostEditor({
         report(out.value);
         return;
       }
+      setCacheStale(out.value.cacheStale === true);
       if (action === "publish") {
         setMeta({ status: "published", everPublished: true, liveJson: sent });
         setFollowing(false);
@@ -230,6 +234,11 @@ export function PostEditor({
     } finally {
       setBusy(null);
     }
+  }
+
+  async function expireAgain() {
+    const out = await expirePost(siteId, entry.id);
+    if (out.kind === "ok" && out.expired) setCacheStale(false);
   }
 
   async function restoreFrom(revision: number): Promise<string | null> {
@@ -363,6 +372,18 @@ export function PostEditor({
           )}
         </div>
       ) : null}
+      {cacheStale ? (
+        <div
+          role="status"
+          data-testid="post-cache-stale"
+          className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-line bg-surface py-1 pr-1 pl-4 text-sm text-text-2"
+        >
+          <span className="min-w-0 py-2 [overflow-wrap:anywhere]">{CACHE_STALE_MESSAGE}</span>
+          <button type="button" onClick={() => void expireAgain()} className={FORM_BUTTON}>
+            Try again
+          </button>
+        </div>
+      ) : null}
       {notice ? (
         <p
           role="alert"
@@ -490,6 +511,9 @@ export function PostEditor({
     </div>
   );
 }
+
+const CACHE_STALE_MESSAGE =
+  "Done. Your live site may take a moment to show this change. Try again to update it now.";
 
 /**
  * The live copy as the screen compares it with what it would store: so a post opened with

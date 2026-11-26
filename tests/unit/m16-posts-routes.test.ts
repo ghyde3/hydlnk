@@ -52,6 +52,7 @@ const ROUTES = {
   term: () => import("@/app/(editor)/app/api/pages/[id]/terms/[termId]/route"),
   draft: () => import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/draft/route"),
   revisions: () => import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/revisions/route"),
+  expire: () => import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/expire/route"),
 } as const;
 type RouteName = keyof typeof ROUTES;
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
@@ -649,6 +650,45 @@ describe.skipIf(!run)("the Posts app routes", () => {
       expect(published.json.issues).toEqual([{ path: "body", message: BODY_SHAPE_MESSAGES.depth }]);
       expect((await row(post)).published).toBeNull();
     } finally {
+      await admin.from("content_entries").delete().eq("id", post);
+    }
+  });
+
+  it("unpublish and trash: a cache expiry that fails twice answers cacheStale, and expire retries it", async () => {
+    const post = await insertPost(a, { title: "Stale", slug: "stale", body: "Hello" });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const params = { id: a.pageId, entryId: post };
+      const published = await call("publish", "POST", params, { body: { rev: 1 } });
+      expect(published.json).toMatchObject({ kind: "ok" });
+      expect(published.json).not.toHaveProperty("cacheStale");
+      mocks.invalidateEntry.mockImplementation(() => {
+        throw new Error("cache down");
+      });
+      const off = await call("unpublish", "POST", params, {
+        body: { rev: published.json.rev },
+      });
+      expect(off).toMatchObject({ status: 200, json: { kind: "ok", cacheStale: true } });
+      // The write stood.
+      expect((await row(post)).published).toBeNull();
+      const failing = await call("expire", "POST", params);
+      expect(failing).toMatchObject({ status: 200, json: { kind: "ok", expired: false } });
+      mocks.invalidateEntry.mockReset();
+      const again = await call("expire", "POST", params);
+      expect(again).toMatchObject({
+        status: 200,
+        cache: "no-store",
+        json: { kind: "ok", expired: true },
+      });
+      expect(mocks.invalidateEntry).toHaveBeenCalledTimes(1);
+      // Another account's post, or a page entry, is the one not-found.
+      expect((await call("expire", "POST", { id: a.pageId, entryId: postB })).status).toBe(404);
+      expect((await call("expire", "POST", { id: a.pageId, entryId: pageEntryA })).status).toBe(
+        404,
+      );
+    } finally {
+      mocks.invalidateEntry.mockReset();
+      log.mockRestore();
       await admin.from("content_entries").delete().eq("id", post);
     }
   });

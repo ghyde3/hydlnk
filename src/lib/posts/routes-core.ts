@@ -6,6 +6,7 @@ import {
   createTerm,
   deleteTerm,
   enableType,
+  expireEntryAgain,
   getEntry,
   listTermsWithClient,
   listTypes,
@@ -309,7 +310,10 @@ export async function getPostCore(input: {
 
 export const POST_ACTIONS = ["publish", "unpublish", "trash", "restore"] as const;
 export type PostAction = (typeof POST_ACTIONS)[number];
-export type PostActionBody = { kind: "ok"; rev: number; publishedAt?: string };
+/** `cacheStale`: the write stands but expiring the cache failed twice; the live copy may lag a moment. */
+export type PostActionBody = { kind: "ok"; rev: number; publishedAt?: string; cacheStale?: true };
+
+const stale = (out: object) => ("cacheStale" in out ? { cacheStale: true as const } : {});
 
 /**
  * POST entries/{entryId}/publish | unpublish | trash | restore {rev}: one post, at the rev the
@@ -333,7 +337,10 @@ export async function postActionCore(
   if (action === "publish") {
     const out = await publishEntry(write);
     if (!out.ok) return refused(out);
-    return { status: 200, body: { kind: "ok", rev: out.rev, publishedAt: out.publishedAt } };
+    return {
+      status: 200,
+      body: { kind: "ok", rev: out.rev, publishedAt: out.publishedAt, ...stale(out) },
+    };
   }
   const out =
     action === "unpublish"
@@ -342,7 +349,22 @@ export async function postActionCore(
         ? await trashEntry(write)
         : await restoreEntry(write);
   if (!out.ok) return refused(out);
-  return { status: 200, body: { kind: "ok", rev: out.rev } };
+  return { status: 200, body: { kind: "ok", rev: out.rev, ...stale(out) } };
+}
+
+/**
+ * POST entries/{entryId}/expire: expire the post's cache again, after an action answered
+ * `cacheStale`. Any post of the site, trashed ones included. 200 `{kind: "ok", expired}`.
+ */
+export async function expirePostCore(
+  admin: Admin,
+  input: { userId: string; siteId: string; entryId: string },
+): Promise<Answer<{ kind: "ok"; expired: boolean }>> {
+  if (!UUID.test(input.siteId) || !UUID.test(input.entryId)) return MISSING;
+  if (!(await isEntryOfSite(admin, input.siteId, input.entryId, POST, "any"))) return MISSING;
+  const out = await expireEntryAgain({ actor: actor(input.userId), entryId: input.entryId });
+  if (!out.ok) return refused(out);
+  return { status: 200, body: { kind: "ok", expired: out.expired } };
 }
 
 // Terms ------------------------------------------------------------------------------------------

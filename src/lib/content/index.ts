@@ -68,15 +68,25 @@ type EntryWrite = { actor: ContentActor; entryId: string; expectedRev: number };
 /**
  * Expire what the cache holds for a written entry (M16-09). A page entry expires the site tag, as
  * before; an entry of any other type expires its own tag and its type's, and leaves the site alone.
- * The write already stands, so a failure is only logged.
+ * The write already stands: a failure is tried once more at once, then logged, and the answer is
+ * false so the caller can say the live copy may take a moment (`cacheStale`) and offer a retry.
  */
-function expireEntry(entryId: string, place: EntryPlace) {
-  try {
-    if (place.typeKey === "page") invalidatePage(place.siteId);
-    else invalidateEntry({ ...place, entryId });
-  } catch (error) {
-    console.error("[content] expiring the entry cache failed", error);
+function expireEntry(entryId: string, place: EntryPlace): boolean {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      if (place.typeKey === "page") invalidatePage(place.siteId);
+      else invalidateEntry({ ...place, entryId });
+      return true;
+    } catch (error) {
+      console.error(`[content] expiring the entry cache failed (attempt ${attempt})`, error);
+    }
   }
+  return false;
+}
+
+/** A write's answer, flagged when its cache expiry failed twice (the live copy may lag a moment). */
+function expired<T extends { ok: true } & EntryPlace>(entryId: string, out: T) {
+  return expireEntry(entryId, placeOf(out)) ? out : { ...out, cacheStale: true as const };
 }
 
 /** Expire a type that was switched on or off, renamed or moved (its archive, lists and the site's menu). */
@@ -97,29 +107,35 @@ const placeOf = ({ siteId, typeId, typeKey }: EntryPlace): EntryPlace => ({
 /** Publish an entry's draft at `expectedRev`, then expire its cache tags. */
 export async function publishEntry(input: EntryWrite) {
   const out = await publishEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireEntry(input.entryId, placeOf(out));
-  return out;
+  return out.ok ? expired(input.entryId, out) : out;
 }
 
 /** Take an entry off the site at `expectedRev`, then expire its cache tags. */
 export async function unpublishEntry(input: EntryWrite) {
   const out = await unpublishEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireEntry(input.entryId, placeOf(out));
-  return out;
+  return out.ok ? expired(input.entryId, out) : out;
 }
 
 /** Move an entry to the trash at `expectedRev`, then expire its cache tags (the live copy is gone). */
 export async function trashEntry(input: EntryWrite) {
   const out = await trashEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireEntry(input.entryId, placeOf(out));
-  return out;
+  return out.ok ? expired(input.entryId, out) : out;
 }
 
 /** Restore a trashed entry (within 30 days) as a draft at `expectedRev`, then expire its cache tags. */
 export async function restoreEntry(input: EntryWrite) {
   const out = await restoreEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireEntry(input.entryId, placeOf(out));
-  return out;
+  return out.ok ? expired(input.entryId, out) : out;
+}
+
+/**
+ * Expire an entry's cache again (the retry the editor offers after `cacheStale`). Checks the owner
+ * like a read; true once the expiry went through.
+ */
+export async function expireEntryAgain(input: { actor: ContentActor; entryId: string }) {
+  const found = await getEntryWithClient(createAdminSupabase(), input);
+  if (!found.ok) return found;
+  return { ok: true as const, expired: expireEntry(input.entryId, placeOf(found)) };
 }
 
 /** One entry with its draft, published copy, rev, status and dates. Reads check ownership only. */

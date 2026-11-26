@@ -136,6 +136,33 @@ describe("content writer: cache expiry per entry, type and site", () => {
     });
   }
 
+  for (const [name, call, mock] of WRITES) {
+    it(`${name}: an expiry that fails once is tried again at once, and the answer is plain`, async () => {
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      cache.invalidateEntry.mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+      mock.mockResolvedValueOnce({ ok: true, rev: 2, ...post });
+      const out = await call(input);
+      expect(cache.invalidateEntry).toHaveBeenCalledTimes(2);
+      expect(out).toMatchObject({ ok: true, rev: 2 });
+      expect(out).not.toHaveProperty("cacheStale");
+      log.mockRestore();
+    });
+
+    it(`${name}: an expiry that fails twice flags the answer cacheStale, the write stands`, async () => {
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      cache.invalidateEntry.mockImplementation(() => {
+        throw new Error("boom");
+      });
+      mock.mockResolvedValueOnce({ ok: true, rev: 2, ...post });
+      await expect(call(input)).resolves.toMatchObject({ ok: true, rev: 2, cacheStale: true });
+      expect(cache.invalidateEntry).toHaveBeenCalledTimes(2);
+      expect(log).toHaveBeenCalledTimes(2);
+      log.mockRestore();
+    });
+  }
+
   const type = {
     typeId: "type-post",
     key: "post",
