@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import { MarkdownManager } from "@tiptap/markdown";
+import { lexBounded } from "@/lib/blog/markdown";
 import { isHttpUrl } from "@/lib/document";
 import { BODY_HEADING_LEVELS, bodySchema } from "./extensions";
 
@@ -143,6 +144,9 @@ function allKnown(tokens: readonly Token[]): boolean {
 export function canEditRich(body: string): boolean {
   const text = comparable(body);
   if (text === "") return true;
+  // A body the one bounded lexer refuses (too heavy or too deep to lex) is never handed to the
+  // editor's own lexer, which has no bound: it opens in the plain Markdown box.
+  if (!lexBounded(text).ok) return false;
   try {
     const tokens = manager().instance.lexer(text) as unknown as Token[];
     if (!allKnown(tokens)) return false;

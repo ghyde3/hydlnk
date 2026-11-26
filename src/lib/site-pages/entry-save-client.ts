@@ -12,7 +12,8 @@ export type EntrySaveAnswer =
   | { kind: "storage-full" }
   | { kind: "blocked"; hosts: string[]; blockIds: string[] }
   | { kind: "unauthorized" }
-  | { kind: "invalid" }
+  /** `message`: what the server said is wrong with the post body (field `body`), when it said so. */
+  | { kind: "invalid"; message?: string }
   /** The path is taken or reserved (HL012): the same draft is refused again, so it is not retried. */
   | { kind: "path" }
   /** The account is suspended: nothing can be saved until support lifts it. */
@@ -53,7 +54,14 @@ export async function postEntryDraft(
     case "missing":
     case "too-large":
     case "storage-full":
-    case "invalid":
+    case "invalid": {
+      const issues: unknown[] = Array.isArray(body.issues) ? body.issues : [];
+      const message = issues.find(
+        (issue): issue is { path: string; message: string } =>
+          isRecord(issue) && issue.path === "body" && typeof issue.message === "string",
+      )?.message;
+      return message === undefined ? { kind: "invalid" } : { kind: "invalid", message };
+    }
     case "path":
     case "suspended":
       return { kind: body.kind };

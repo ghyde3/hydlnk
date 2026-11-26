@@ -100,6 +100,42 @@ describe("PostSaveQueue", () => {
     expect(queue.view).toEqual({ state: "saved", problem: null });
   });
 
+  it("an invalid body (the bounded lexer refused it) is not retried and carries the body message", async () => {
+    const message = "This post nests quotes or lists too deeply to save. Use fewer levels.";
+    const { queue, calls } = setup([{ kind: "invalid", message }, ok(4)]);
+    queue.push({ title: "deep" });
+    await vi.advanceTimersByTimeAsync(POST_SAVE_DEBOUNCE_MS);
+    expect(queue.view).toEqual({ state: "error", problem: "invalid", message });
+    // Not "Check your connection" and not retried by itself: the same body gets the same answer.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(calls).toHaveLength(1);
+    queue.push({ title: "flat" });
+    await vi.advanceTimersByTimeAsync(POST_SAVE_DEBOUNCE_MS);
+    expect(queue.view).toEqual({ state: "saved", problem: null });
+  });
+
+  it("the save client reads the body message of a 422 invalid answer, and only a body one", async () => {
+    const { postEntryDraft } = await import("@/lib/site-pages/entry-save-client");
+    const answer = (body: unknown) =>
+      vi.fn(async () => new Response(JSON.stringify(body), { status: 422 }));
+    const message = "This post’s formatting can’t be read. Simplify the Markdown and try again.";
+    vi.stubGlobal(
+      "fetch",
+      answer({
+        kind: "invalid",
+        message: "That content isn’t valid.",
+        issues: [{ path: "body", message }],
+      }),
+    );
+    expect(await postEntryDraft("s", "e", 1, {})).toEqual({ kind: "invalid", message });
+    vi.stubGlobal(
+      "fetch",
+      answer({ kind: "invalid", issues: [{ path: "slug", message: "Use another slug." }] }),
+    );
+    expect(await postEntryDraft("s", "e", 1, {})).toEqual({ kind: "invalid" });
+    vi.unstubAllGlobals();
+  });
+
   it("a network failure is retried without a new edit", async () => {
     const { queue, calls } = setup([{ kind: "error" }, ok(4)]);
     queue.push({ title: "x" });

@@ -615,6 +615,44 @@ describe.skipIf(!run)("the Posts app routes", () => {
     expect((await row(postA)).rev).toBe(held + 1);
   });
 
+  it("draft save and publish refuse a body the bounded lexer refuses: 422 invalid with a body message, never a 500", async () => {
+    const { BODY_SHAPE_MESSAGES } = await import("@/lib/blog/markdown");
+    const post = await insertPost(a, { title: "Heavy", slug: "heavy", body: "Fine" });
+    try {
+      const params = { id: a.pageId, entryId: post };
+      const cases: Array<[string, string]> = [
+        ["*a ".repeat(32_000), BODY_SHAPE_MESSAGES.work],
+        ["*a **b ".repeat(8000), BODY_SHAPE_MESSAGES.work],
+        [`${"> ".repeat(4000)}a`, BODY_SHAPE_MESSAGES.depth],
+        [`${"- > ".repeat(2000)}a`, BODY_SHAPE_MESSAGES.depth],
+        [`${"1. ".repeat(4000)}a`, BODY_SHAPE_MESSAGES.depth],
+      ];
+      for (const [body, message] of cases) {
+        const start = Date.now();
+        const out = await call("draft", "POST", params, {
+          body: { rev: 1, draft: { title: "Heavy", slug: "heavy", body } },
+        });
+        expect([out.status, out.json.kind]).toEqual([422, "invalid"]);
+        expect(out.json.issues).toEqual([{ path: "body", message }]);
+        expect(Date.now() - start).toBeLessThan(5_000);
+      }
+      expect((await row(post)).rev).toBe(1);
+      // A body stored before the bound (written behind the writer) is refused at publish the same way.
+      await admin
+        .from("content_entries")
+        .update({
+          draft: { title: "Heavy", slug: "heavy", body: `${"> ".repeat(4000)}a` } as never,
+        })
+        .eq("id", post);
+      const published = await call("publish", "POST", params, { body: { rev: 1 } });
+      expect([published.status, published.json.kind]).toEqual([422, "invalid"]);
+      expect(published.json.issues).toEqual([{ path: "body", message: BODY_SHAPE_MESSAGES.depth }]);
+      expect((await row(post)).published).toBeNull();
+    } finally {
+      await admin.from("content_entries").delete().eq("id", post);
+    }
+  });
+
   it("revisions: a post of an enabled blog lists and restores; another account's does not", async () => {
     const recorded = await admin.rpc("record_entry_revision", {
       p_entry_id: postA,

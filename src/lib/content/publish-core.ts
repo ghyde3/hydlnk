@@ -6,6 +6,7 @@ import { placedBlockImages } from "@/lib/publish/placed-images";
 import { blockedBodyLinks, blockedPageLinks, unsafeBodySchemes } from "./blocklist";
 import { failure, mapDbError } from "./errors";
 import { activeAccount, ownedEntry, siteType } from "./guards";
+import { bodyShapeIssue } from "./body-shape";
 import { bodyImageIssue, checkOwnImages, postImages, type ImageUse } from "./images";
 import { pruneTerms } from "./prune-terms";
 import { issuesOf, schemaForType, untrimmedPathIssue } from "./schemas";
@@ -74,6 +75,9 @@ export async function publishEntryWithClient(
   let published: unknown = entry.draft;
   let images: ImageUse[] = [];
   if (type.key === "post") {
+    // A body the bounded lexer refuses is refused before anything else reads it.
+    const shape = bodyShapeIssue(entry.draft);
+    if (shape) return shape;
     const unsafe = unsafeBodySchemes(entry.draft);
     if (unsafe) return unsafe;
     // Images in the body are uploads only; whose, and whether they exist, is checked below.

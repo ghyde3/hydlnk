@@ -372,7 +372,7 @@ describe("M9-14 the tenant boundary: a public page reaches server-render package
     expect([...(live.packages.get("marked") ?? [])]).toEqual([lexer]);
     const source = stripComments(read(lexer));
     expect(source).not.toMatch(/\.parse(?:Inline)?\s*\(|\bparser\s*\(|\bRenderer\b|\bmarked\s*\(/);
-    expect(source).toMatch(/\.lexer\(/);
+    expect(source).toMatch(/\.lex(?:er)?\(/);
   });
 
   it("the packages the routes themselves reach are on the allowlist too (the narrower, real graph)", () => {

@@ -497,7 +497,7 @@ export function PostEditor({
   );
 }
 
-function saveProblemText(save: { problem: string | null }): string {
+function saveProblemText(save: { problem: string | null; message?: string }): string {
   switch (save.problem) {
     case "too-large":
       return "This post is too large to save. Shorten it.";
@@ -506,7 +506,10 @@ function saveProblemText(save: { problem: string | null }): string {
     case "blocked":
       return "The post links to a site that isn’t allowed, so it isn’t being saved. Remove the link.";
     case "invalid":
-      return "Something in this post can’t be saved. Check the slug and the fields below.";
+      return (
+        save.message ??
+        "Something in this post can’t be saved. Check the slug and the fields below."
+      );
     case "suspended":
       return SUSPENDED_REASON;
     case "missing":

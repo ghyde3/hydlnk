@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { blockedBodyLinks } from "./blocklist";
+import { bodyShapeIssue } from "./body-shape";
 import { failure, mapDbError } from "./errors";
 import { pruneTerms } from "./prune-terms";
 import { activeAccount, enabledType, ownedEntry, ownedSite } from "./guards";
@@ -34,7 +35,11 @@ async function checkDraft(
   const spaced = untrimmedPathIssue(typeKey, draft);
   if (spaced) return { ...failure("invalid"), issues: [spaced] };
   if (draftBytes(draft) > MAX_DRAFT_BYTES) return failure("too_large");
-  if (typeKey === "post") return blockedBodyLinks(admin, draft);
+  if (typeKey === "post") {
+    const shape = bodyShapeIssue(draft);
+    if (shape) return shape;
+    return blockedBodyLinks(admin, draft);
+  }
   return null;
 }
 
