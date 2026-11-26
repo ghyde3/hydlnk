@@ -2,6 +2,14 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-11-26 — Wave D: the form block, email capture and Audience (M17-01 to M17-12)
+
+On `m19-forms` (worktree `/home/user/hydlnk-forms`, its own local Supabase stack `hydlnk-forms` on ports 54420-54429, dev server :3200), built from `m17-blog` by one lead builder. Nothing flipped: every M17 row stays `passes: false` until integration runs the reviews and the full suite (M17-11 also waits for Gary's Privacy Policy sentence, M17-12 for the security review).
+
+- **Built:** migration `20261126162408_form_submissions.sql` (pgTAP 219, 220; HL016); the `form` block (document, renderer, editor panel, MCP); `/f/{pageId}/{blockId}` and `/f/{pageId}/o` with the fifteen-step POST, the signed confirm token and the open marker; the confirm, error and sent pages; `form-action 'self'`; the owner message and limit emails (react-email, the shared `sendMessage`); Audience (`/audience`, CSV export, delete actions, nav); PLAN.md and DESIGN.md text.
+- **Evidence (local, this worktree's stack):** `pnpm test:db` 89 files, 3,161 tests; `pnpm test --retry 2` 515 files, 11,709 tests (with `NEXT_PUBLIC_ROOT_DOMAIN=localhost:3000`, which the unit tests assume); typecheck and lint pass; `tests/e2e/forms` 35 passed (7 phone skips of raw-HTTP tests) on `next dev --webpack` :3200 and on a production build (`next start`, `HL_E2E_SERVER=start E2E_PROD_BUILD=1 CI=1`); `tests/e2e/m7/workspace-nav.spec.ts` and the chip-order spec pass on the production build.
+- **Known:** turbopack `next dev` cannot compile `next/font/google` in this container (`next/font/google queries have exactly one entry`); webpack dev and the turbopack production build work. Specs that hard-code port 3000 cannot run from a second checkout (they reach the main checkout's server). `tmp/plans/wave-d-forms.md` section 10 lists Gary's open decisions.
+
 ## 2026-11-26 — Content model, stage 1b: the page move and per-page publishing (M15-05 to M15-17)
 
 On `m16-content` (draft PR #32, label `full-ci`), built in a cloud session by an orchestrator with builder, reviewer, security-reviewer, design-verifier and adversarial-verifier agents. Flipped to `passes: true`: M15-10, M15-11, M15-13, M15-14, M15-15, M15-16, M15-17. Features: 334 of 355. Nothing was merged or released.

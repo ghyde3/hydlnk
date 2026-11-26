@@ -103,13 +103,15 @@ test("M17-07 add, edit and publish a form block; the preview posts nowhere", asy
   if (await page.getByTestId("preview-sheet").isVisible()) await showView(page, "Blocks");
 
   await publishFromEditor(page);
-  await page.goto(url(user.handle));
-  const live = page.locator(`form[data-block-id="${id}"]`);
+  // The live page in a tab of its own, so nothing the editor still does can interrupt the load.
+  const visitor = await context.newPage();
+  await visitor.goto(url(user.handle));
+  const live = visitor.locator(`form[data-block-id="${id}"]`);
   await expect(live.getByRole("heading", { name: "Write to me" })).toBeVisible();
   // The same component draws both: the live markup is the preview's.
-  const liveHtml = await page.evaluate(
+  const liveHtml = await visitor.evaluate(
     `(${canonical.toString()})(document.querySelector('form[data-block-id="${id}"]'))`,
   );
   expect(liveHtml).toBe(previewHtml);
-  await expectNoHorizontalScroll(page);
+  await expectNoHorizontalScroll(visitor);
 });
