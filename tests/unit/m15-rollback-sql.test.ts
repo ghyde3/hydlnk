@@ -310,15 +310,19 @@ select 'X|' || p.oid::regprocedure
     and (has_function_privilege('anon', p.oid, 'execute')
       or has_function_privilege('authenticated', p.oid, 'execute'));
 `;
-  // The full rollback walks and locks every site of the local database while it runs. A test of
-  // another file that deletes its own site at that moment makes the reverse report it
-  // (`reverse_failed … site_not_found`), and one that holds a row can make Postgres pick this
-  // transaction as the deadlock victim. Nothing was changed then (it is all one transaction): it is
-  // run again.
-  const BUSY =
-    /deadlock detected|could not serialize|lock timeout|canceling statement|reverse_failed: .*site_not_found/;
+  // This check is about the functions a file leaves, not about the data. The data step of the full
+  // rollback (reverse_all_content, proven by the "applied" test above) walks and locks every site of
+  // the local database, and so trips over, and deadlocks with, the tests of other files that are
+  // writing their own sites at that moment. Inside this transaction only, it is replaced by one that
+  // reports nothing to do: the file itself runs unchanged, word for word.
+  const NO_DATA = `
+create or replace function public.reverse_all_content() returns jsonb language sql as
+  $stub$ select '{"sites": {}, "failed_sites": {}}'::jsonb $stub$;
+`;
+  // What is left can still meet a lock another test holds (drop trigger takes the table): run again.
+  const BUSY = /deadlock detected|could not serialize|lock timeout|canceling statement/;
   function executable(sql: string): string[] {
-    const input = `begin;\n\\set ON_ERROR_STOP on\n${sql}\n${probe}\nselect 'X|done';\nrollback;\n`;
+    const input = `begin;\n\\set ON_ERROR_STOP on\n${NO_DATA}\n${sql}\n${probe}\nselect 'X|done';\nrollback;\n`;
     for (let attempt = 1; ; attempt++) {
       const run = spawnSync(
         "docker",
