@@ -5,8 +5,8 @@ import { publishedSubPageSchema, toSubPagePublishForm } from "@/lib/document/sub
 import { placedBlockImages } from "@/lib/publish/placed-images";
 import { blockedBodyLinks, blockedPageLinks, unsafeBodySchemes } from "./blocklist";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, enabledType, ownedEntry } from "./guards";
-import { checkOwnImages, postImages, type ImageUse } from "./images";
+import { activeAccount, ownedEntry, siteType } from "./guards";
+import { bodyImageIssue, checkOwnImages, postImages, type ImageUse } from "./images";
 import { pruneTerms } from "./prune-terms";
 import { issuesOf, schemaForType, untrimmedPathIssue } from "./schemas";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
@@ -14,6 +14,8 @@ import type { ContentActor, ContentFailure, ContentResult } from "./types";
 type Admin = SupabaseClient<Database>;
 type Deps = { now?: () => Date };
 type Input = { actor: ContentActor; entryId: string; expectedRev: number };
+/** Where a written entry sits: what the cache expiry needs (`entry:<id>`, `type:<typeId>`, or the site for a page). */
+export type EntryPlace = { siteId: string; typeId: string; typeKey: string };
 
 /** A refused rpc: a stale rev (22023) re-reads the rev and answers conflict with it. */
 async function refused(
@@ -41,12 +43,14 @@ async function prepare(admin: Admin, input: Input, opts: { allowDisabledType?: b
     return failure("invalid", "Send the revision you are editing.");
   }
   // Taking content down always works, even for a type switched off since.
-  const type = await enabledType(admin, entry.site_id, entry.type_id);
-  if (!type.ok && !(opts.allowDisabledType && type.error === "type_disabled")) return type;
+  const type = await siteType(admin, entry.site_id, entry.type_id);
+  if (!type.ok) return type;
+  if (!type.type.enabled && !opts.allowDisabledType) return failure("type_disabled");
   if (Number(entry.rev) !== input.expectedRev) {
     return failure("conflict", undefined, Number(entry.rev));
   }
-  return { ok: true as const, entry, type: type.ok ? type.type : null };
+  const place: EntryPlace = { siteId: entry.site_id, typeId: type.type.id, typeKey: type.type.key };
+  return { ok: true as const, entry, type: type.type, place };
 }
 
 /** Publish the entry's draft, strictly validated, stored exactly as it is. */
@@ -54,12 +58,10 @@ export async function publishEntryWithClient(
   admin: Admin,
   input: Input,
   deps: Deps = {},
-): Promise<ContentResult<{ rev: number; publishedAt: string; siteId: string }>> {
+): Promise<ContentResult<{ rev: number; publishedAt: string } & EntryPlace>> {
   const ready = await prepare(admin, input);
   if (!ready.ok) return ready;
-  const { entry } = ready;
-  const { type } = ready;
-  if (!type) return failure("type_disabled");
+  const { entry, type } = ready;
 
   const schema = schemaForType(type.key, "publish");
   if (!schema) return failure("invalid", "That content type can’t be published yet.");
@@ -74,6 +76,9 @@ export async function publishEntryWithClient(
   if (type.key === "post") {
     const unsafe = unsafeBodySchemes(entry.draft);
     if (unsafe) return unsafe;
+    // Images in the body are uploads only; whose, and whether they exist, is checked below.
+    const foreign = bodyImageIssue(entry.draft);
+    if (foreign) return foreign;
     const blocked = await blockedBodyLinks(admin, entry.draft);
     if (blocked) return blocked;
     // A term deleted since the last save does not go into the published copy.
@@ -110,14 +115,14 @@ export async function publishEntryWithClient(
     p_source: input.actor.source,
   });
   if (error) return refused(admin, entry.id, error);
-  return { ok: true, rev: Number(data), publishedAt, siteId: entry.site_id };
+  return { ok: true, rev: Number(data), publishedAt, ...ready.place };
 }
 
 /** Take the entry off the site. The draft stays. */
 export async function unpublishEntryWithClient(
   admin: Admin,
   input: Input,
-): Promise<ContentResult<{ rev: number; siteId: string }>> {
+): Promise<ContentResult<{ rev: number } & EntryPlace>> {
   const ready = await prepare(admin, input, { allowDisabledType: true });
   if (!ready.ok) return ready;
   const { entry } = ready;
@@ -127,5 +132,5 @@ export async function unpublishEntryWithClient(
     p_expected_rev: input.expectedRev,
   });
   if (error) return refused(admin, entry.id, error);
-  return { ok: true, rev: Number(data), siteId: entry.site_id };
+  return { ok: true, rev: Number(data), ...ready.place };
 }

@@ -2,7 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, ownedEntry } from "./guards";
+import { activeAccount, ownedEntry, siteType } from "./guards";
+import type { EntryPlace } from "./publish-core";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -31,14 +32,22 @@ async function prepare(admin: Admin, input: Input) {
   if (!Number.isSafeInteger(input.expectedRev) || input.expectedRev < 1) {
     return failure("invalid", "Send the revision you are editing.");
   }
-  return { ok: true as const, entry: owned.entry };
+  // The type is read on or off: trash and restore always work, and the caller expires by type.
+  const type = await siteType(admin, owned.entry.site_id, owned.entry.type_id);
+  if (!type.ok) return type;
+  const place: EntryPlace = {
+    siteId: owned.entry.site_id,
+    typeId: type.type.id,
+    typeKey: type.type.key,
+  };
+  return { ok: true as const, entry: owned.entry, place };
 }
 
 /** Move the entry to the trash: the live copy goes at once, the draft stays for 30 days. */
 export async function trashEntryWithClient(
   admin: Admin,
   input: Input,
-): Promise<ContentResult<{ rev: number; siteId: string }>> {
+): Promise<ContentResult<{ rev: number } & EntryPlace>> {
   const ready = await prepare(admin, input);
   if (!ready.ok) return ready;
   const { entry } = ready;
@@ -49,14 +58,14 @@ export async function trashEntryWithClient(
     p_expected_rev: input.expectedRev,
   });
   if (error) return refused(admin, entry.id, error);
-  return { ok: true, rev: Number(data), siteId: entry.site_id };
+  return { ok: true, rev: Number(data), ...ready.place };
 }
 
 /** Bring a trashed entry back as a draft, within 30 days. It does not republish. */
 export async function restoreEntryWithClient(
   admin: Admin,
   input: Input,
-): Promise<ContentResult<{ rev: number; siteId: string }>> {
+): Promise<ContentResult<{ rev: number } & EntryPlace>> {
   const ready = await prepare(admin, input);
   if (!ready.ok) return ready;
   const { entry } = ready;
@@ -67,7 +76,7 @@ export async function restoreEntryWithClient(
     p_expected_rev: input.expectedRev,
   });
   if (error) return refused(admin, entry.id, error);
-  return { ok: true, rev: Number(data), siteId: entry.site_id };
+  return { ok: true, rev: Number(data), ...ready.place };
 }
 
 /**

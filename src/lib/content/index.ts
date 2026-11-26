@@ -15,7 +15,7 @@ export type {
 
 /**
  * The same operations for callers that hold their own client (a route's tool core, a version restore
- * run against a test database). They write through the one writer; they do not expire the page tag.
+ * run against a test database). They write through the one writer; they do not expire any cache tag.
  */
 export { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 export { purgeEntryWithClient, restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
@@ -25,11 +25,12 @@ export type { RevisionSummary } from "./revisions-core";
 export { publishSitePageWithClient } from "./site-page-publish-core";
 export type { SitePagePublishWrite } from "./site-page-publish-core";
 
-import { invalidatePage } from "@/lib/publish/invalidate";
+import { invalidateEntry, invalidatePage, invalidateType } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } from "./query-core";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
+import type { EntryPlace } from "./publish-core";
 import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
 import {
   createTermWithClient,
@@ -62,42 +63,62 @@ export function updateEntry(input: {
   return updateEntryWithClient(createAdminSupabase(), input);
 }
 
-/** Expire the site's cached public page. The write already stands, so a failure is only logged. */
-function expireSite(siteId: string) {
+type EntryWrite = { actor: ContentActor; entryId: string; expectedRev: number };
+
+/**
+ * Expire what the cache holds for a written entry (M16-09). A page entry expires the site tag, as
+ * before; an entry of any other type expires its own tag and its type's, and leaves the site alone.
+ * The write already stands, so a failure is only logged.
+ */
+function expireEntry(entryId: string, place: EntryPlace) {
   try {
-    invalidatePage(siteId);
+    if (place.typeKey === "page") invalidatePage(place.siteId);
+    else invalidateEntry({ ...place, entryId });
   } catch (error) {
-    console.error("[content] expiring the site cache failed", error);
+    console.error("[content] expiring the entry cache failed", error);
   }
 }
 
-type EntryWrite = { actor: ContentActor; entryId: string; expectedRev: number };
+/** Expire a type that was switched on or off, renamed or moved (its archive, lists and the site's menu). */
+function expireType(siteId: string, typeId: string) {
+  try {
+    invalidateType({ siteId, typeId });
+  } catch (error) {
+    console.error("[content] expiring the type cache failed", error);
+  }
+}
 
-/** Publish an entry's draft at `expectedRev`, then expire the site's page tag. */
+const placeOf = ({ siteId, typeId, typeKey }: EntryPlace): EntryPlace => ({
+  siteId,
+  typeId,
+  typeKey,
+});
+
+/** Publish an entry's draft at `expectedRev`, then expire its cache tags. */
 export async function publishEntry(input: EntryWrite) {
   const out = await publishEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireSite(out.siteId);
+  if (out.ok) expireEntry(input.entryId, placeOf(out));
   return out;
 }
 
-/** Take an entry off the site at `expectedRev`, then expire the site's page tag. */
+/** Take an entry off the site at `expectedRev`, then expire its cache tags. */
 export async function unpublishEntry(input: EntryWrite) {
   const out = await unpublishEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireSite(out.siteId);
+  if (out.ok) expireEntry(input.entryId, placeOf(out));
   return out;
 }
 
-/** Move an entry to the trash at `expectedRev`, then expire the site's page tag (the live copy is gone). */
+/** Move an entry to the trash at `expectedRev`, then expire its cache tags (the live copy is gone). */
 export async function trashEntry(input: EntryWrite) {
   const out = await trashEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireSite(out.siteId);
+  if (out.ok) expireEntry(input.entryId, placeOf(out));
   return out;
 }
 
-/** Restore a trashed entry (within 30 days) as a draft at `expectedRev`, then expire the site's page tag. */
+/** Restore a trashed entry (within 30 days) as a draft at `expectedRev`, then expire its cache tags. */
 export async function restoreEntry(input: EntryWrite) {
   const out = await restoreEntryWithClient(createAdminSupabase(), input);
-  if (out.ok) expireSite(out.siteId);
+  if (out.ok) expireEntry(input.entryId, placeOf(out));
   return out;
 }
 
@@ -111,14 +132,18 @@ export function listEntries(input: Parameters<typeof listEntriesWithClient>[1]) 
   return listEntriesWithClient(createAdminSupabase(), input);
 }
 
-/** Turn a built-in type on or off. */
-export function enableType(input: Parameters<typeof enableTypeWithClient>[1]) {
-  return enableTypeWithClient(createAdminSupabase(), input);
+/** Turn a built-in type on or off, then expire the type and the site (its archive appears or goes). */
+export async function enableType(input: Parameters<typeof enableTypeWithClient>[1]) {
+  const out = await enableTypeWithClient(createAdminSupabase(), input);
+  if (out.ok) expireType(input.siteId, out.typeId);
+  return out;
 }
 
-/** Change a type's labels or archive path. */
-export function updateType(input: Parameters<typeof updateTypeWithClient>[1]) {
-  return updateTypeWithClient(createAdminSupabase(), input);
+/** Change a type's labels or archive path, then expire the type and the site. */
+export async function updateType(input: Parameters<typeof updateTypeWithClient>[1]) {
+  const out = await updateTypeWithClient(createAdminSupabase(), input);
+  if (out.ok) expireType(input.siteId, out.typeId);
+  return out;
 }
 
 /** Add a category (one level) or a tag to an enabled type. */
@@ -151,17 +176,17 @@ export function restoreRevision(input: Parameters<typeof restoreRevisionWithClie
   return restoreRevisionWithClient(createAdminSupabase(), input);
 }
 
-/** Every type of a site, on or off (Wave B). Stubbed in its core until Builder A writes it. */
+/** Every type of a site, on or off, the page type first. */
 export function listTypes(input: Parameters<typeof listTypesWithClient>[1]) {
   return listTypesWithClient(createAdminSupabase(), input);
 }
 
-/** The terms of one type of a site (Wave B). Stubbed in its core until Builder A writes it. */
+/** The terms of one type of a site: categories, then tags, by name. */
 export function listTerms(input: Parameters<typeof listTermsWithClient>[1]) {
   return listTermsWithClient(createAdminSupabase(), input);
 }
 
-/** How many entries of one type a site holds, trash included (Wave B). Stubbed in its core until Builder A writes it. */
+/** How many entries of one type a site holds, drafts and the trash included (as HL010 counts). */
 export function countEntries(input: Parameters<typeof countEntriesWithClient>[1]) {
   return countEntriesWithClient(createAdminSupabase(), input);
 }
@@ -169,5 +194,7 @@ export function countEntries(input: Parameters<typeof countEntriesWithClient>[1]
 /** The Wave B reads for callers that hold their own client (the Posts routes' cores). */
 export { countEntriesWithClient, listTermsWithClient, listTypesWithClient };
 export type { EntrySummary } from "./query-core";
+export type { EntryPlace } from "./publish-core";
+export { BODY_IMAGES_MAX } from "./images";
 export type { TermSummary } from "./terms-core";
 export type { TypeSummary } from "./types-core";

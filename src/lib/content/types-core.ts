@@ -137,12 +137,26 @@ export async function updateTypeWithClient(
   return { ok: true, ...summary(updated.data) };
 }
 
-/** Every type of a site the actor owns, on or off. Contract stub (Wave B, plan 4.1): Builder A writes it. */
+/**
+ * Every type of a site the actor owns, on or off, in menu order (the page type first). A read: it
+ * checks ownership only, so a suspended owner still sees their types. Another user's site and a
+ * missing one answer the same `not_found`.
+ */
 export async function listTypesWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string },
 ): Promise<ContentResult<{ types: TypeSummary[] }>> {
-  void admin;
-  void input;
-  throw new Error("not built: A");
+  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  if (!site.ok) return site;
+  const rows = await admin
+    .from("content_types")
+    .select(COLUMNS)
+    .eq("site_id", site.site.id)
+    .order("position", { ascending: true })
+    .order("key", { ascending: true });
+  if (rows.error) {
+    console.error("[content] listing the types failed", rows.error.message);
+    return failure("error");
+  }
+  return { ok: true, types: rows.data.map(summary) };
 }
