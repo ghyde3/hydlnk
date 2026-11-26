@@ -1,5 +1,7 @@
 "use client";
 
+import { useUploadSite } from "@/components/media/upload-site";
+import { uploadSiteHeaders } from "@/lib/media/upload-site";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { backgroundImagePath } from "@/components/page/background";
 import type { DesignSectionProps } from "@/components/design/types";
@@ -44,13 +46,20 @@ function parseBody(text: string): { message?: unknown } | null {
 }
 
 /** Posts one image to the upload route, reporting how much of it has been sent (0 to 100). */
-function postBackground(file: File, onProgress: (percent: number) => void): Promise<ImageRef> {
+function postBackground(
+  file: File,
+  onProgress: (percent: number) => void,
+  site: string | null,
+): Promise<ImageRef> {
   return new Promise((resolve, reject) => {
     const body = new FormData();
     body.append("file", file);
     body.append("kind", "background");
     const request = new XMLHttpRequest();
     request.open("POST", "/api/media");
+    for (const [name, value] of Object.entries(uploadSiteHeaders(site))) {
+      request.setRequestHeader(name, value);
+    }
     request.upload.onprogress = (event) => {
       if (event.lengthComputable && event.total > 0) {
         onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)));
@@ -90,6 +99,7 @@ const KINDS: readonly { value: BackgroundKind; label: string }[] = [
 ];
 
 export function BackgroundSection(props: DesignSectionProps) {
+  const site = useUploadSite();
   const { resolved, setToken } = props;
   const fileRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState<number | null>(null);
@@ -126,7 +136,7 @@ export function BackgroundSection(props: DesignSectionProps) {
         setError(TOO_BIG_MESSAGE);
         return;
       }
-      const image = await postBackground(file, setProgress);
+      const image = await postBackground(file, setProgress, site);
       // The URL is rebuilt from the stored path, so what the draft holds is always the bucket's.
       setTokenRef.current("bgImage", storageUrl(image.path));
       setTokenRef.current("bgType", "image");

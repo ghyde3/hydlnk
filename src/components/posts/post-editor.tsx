@@ -1,5 +1,6 @@
 "use client";
 
+import { UploadSiteContext } from "@/components/media/upload-site";
 import { useEffect, useId, useRef, useState } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
@@ -403,206 +404,214 @@ export function PostEditor({
   const fields = { form, change, disabled: locked, errors };
 
   return (
-    <div data-testid="post-editor" data-post-id={entry.id} className="flex min-w-0 flex-col gap-3">
-      <PostPublishPanel
-        state={state}
-        chipState={chipState}
-        save={save}
-        busy={busy}
-        disabled={suspended || conflict}
-        publishOff={publishOff}
-        previewUrl={previewUrl}
-        onPublish={() => void run("publish")}
-        onUnpublish={() => void run("unpublish")}
-        onPreview={() => void preview()}
-      />
+    <UploadSiteContext.Provider value={siteId}>
+      <div
+        data-testid="post-editor"
+        data-post-id={entry.id}
+        className="flex min-w-0 flex-col gap-3"
+      >
+        <PostPublishPanel
+          state={state}
+          chipState={chipState}
+          save={save}
+          busy={busy}
+          disabled={suspended || conflict}
+          publishOff={publishOff}
+          previewUrl={previewUrl}
+          onPublish={() => void run("publish")}
+          onUnpublish={() => void run("unpublish")}
+          onPreview={() => void preview()}
+        />
 
-      {trashed ? null : (
-        <section
-          aria-label="Schedule"
-          data-testid="post-schedule"
-          className="flex min-w-0 flex-col gap-2 rounded-md border border-line bg-surface p-3"
-        >
-          <ScheduleControls
-            summary={schedule}
-            currentRev={queue.rev}
-            allowUnpublish
-            plan={plan}
-            disabled={suspended || conflict || busy !== null || usage.over}
-            onSchedule={onSchedule}
-            onCancel={onCancelSchedule}
-          />
-        </section>
-      )}
+        {trashed ? null : (
+          <section
+            aria-label="Schedule"
+            data-testid="post-schedule"
+            className="flex min-w-0 flex-col gap-2 rounded-md border border-line bg-surface p-3"
+          >
+            <ScheduleControls
+              summary={schedule}
+              currentRev={queue.rev}
+              allowUnpublish
+              plan={plan}
+              disabled={suspended || conflict || busy !== null || usage.over}
+              onSchedule={onSchedule}
+              onCancel={onCancelSchedule}
+            />
+          </section>
+        )}
 
-      {conflict ? (
-        <div
-          role="alert"
-          data-testid={POST_TEST_IDS.conflict}
-          className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-bad-line bg-surface py-1 pr-1 pl-4 text-sm text-bad"
-        >
-          <span className="min-w-0 py-2 [overflow-wrap:anywhere]">{CONTENT_CONFLICT_MESSAGE}</span>
-          <button type="button" onClick={() => window.location.reload()} className={FORM_BUTTON}>
-            Reload
-          </button>
-        </div>
-      ) : null}
-      {save.state === "error" ? (
-        <div
-          role="alert"
-          data-testid="post-save-error"
-          data-save-problem={save.problem ?? "error"}
-          className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-bad-line bg-surface py-1 pr-1 pl-4 text-sm text-bad"
-        >
-          <span className="min-w-0 py-2 [overflow-wrap:anywhere]">{saveProblemText(save)}</span>
-          {save.problem === "unauthorized" ? (
-            <a href="/login" target="_blank" rel="noopener" className={FORM_BUTTON}>
-              Sign in
-            </a>
-          ) : (
-            <button type="button" onClick={() => queue.retry()} className={FORM_BUTTON}>
+        {conflict ? (
+          <div
+            role="alert"
+            data-testid={POST_TEST_IDS.conflict}
+            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-bad-line bg-surface py-1 pr-1 pl-4 text-sm text-bad"
+          >
+            <span className="min-w-0 py-2 [overflow-wrap:anywhere]">
+              {CONTENT_CONFLICT_MESSAGE}
+            </span>
+            <button type="button" onClick={() => window.location.reload()} className={FORM_BUTTON}>
+              Reload
+            </button>
+          </div>
+        ) : null}
+        {save.state === "error" ? (
+          <div
+            role="alert"
+            data-testid="post-save-error"
+            data-save-problem={save.problem ?? "error"}
+            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-bad-line bg-surface py-1 pr-1 pl-4 text-sm text-bad"
+          >
+            <span className="min-w-0 py-2 [overflow-wrap:anywhere]">{saveProblemText(save)}</span>
+            {save.problem === "unauthorized" ? (
+              <a href="/login" target="_blank" rel="noopener" className={FORM_BUTTON}>
+                Sign in
+              </a>
+            ) : (
+              <button type="button" onClick={() => queue.retry()} className={FORM_BUTTON}>
+                Try again
+              </button>
+            )}
+          </div>
+        ) : null}
+        {cacheStale ? (
+          <div
+            role="status"
+            data-testid="post-cache-stale"
+            className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-line bg-surface py-1 pr-1 pl-4 text-sm text-text-2"
+          >
+            <span className="min-w-0 py-2 [overflow-wrap:anywhere]">{CACHE_STALE_MESSAGE}</span>
+            <button type="button" onClick={() => void expireAgain()} className={FORM_BUTTON}>
               Try again
             </button>
-          )}
-        </div>
-      ) : null}
-      {cacheStale ? (
-        <div
-          role="status"
-          data-testid="post-cache-stale"
-          className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-line bg-surface py-1 pr-1 pl-4 text-sm text-text-2"
-        >
-          <span className="min-w-0 py-2 [overflow-wrap:anywhere]">{CACHE_STALE_MESSAGE}</span>
-          <button type="button" onClick={() => void expireAgain()} className={FORM_BUTTON}>
-            Try again
-          </button>
-        </div>
-      ) : null}
-      {notice ? (
-        <p
-          role="alert"
-          data-testid="post-notice"
-          className="m-0 rounded-md border border-bad-line bg-surface px-4 py-3 text-sm text-bad"
-        >
-          {notice}
-        </p>
-      ) : null}
-      <PostIssues issues={issues} />
-
-      {trashed ? (
-        <div
-          role="status"
-          data-testid="post-trashed"
-          className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-line bg-surface p-3.5 text-sm text-text-2"
-        >
-          <span className="min-w-0">
-            This post is in the trash and off the site. It is deleted for good 30 days after it was
-            trashed, and counts toward your posts until then.
-          </span>
-          <button
-            type="button"
-            data-testid={POST_TEST_IDS.restore}
-            disabled={suspended || busy !== null}
-            onClick={() => void run("restore")}
-            className={FORM_BUTTON}
+          </div>
+        ) : null}
+        {notice ? (
+          <p
+            role="alert"
+            data-testid="post-notice"
+            className="m-0 rounded-md border border-bad-line bg-surface px-4 py-3 text-sm text-bad"
           >
-            {busy === "restore" ? "Restoring…" : "Restore post"}
-          </button>
-        </div>
-      ) : null}
+            {notice}
+          </p>
+        ) : null}
+        <PostIssues issues={issues} />
 
-      <PostCard title="Post">
-        <TitleField {...fields} />
-        <SlugField {...fields} archivePath={archivePath} following={following} />
-        <div id={postFieldId("body")} className="flex min-w-0 scroll-mt-24 flex-col gap-1.5">
-          <div className="flex items-baseline justify-between gap-3">
-            <span id={bodyLabelId} className="text-[13px] font-semibold text-ink-2">
-              Body
+        {trashed ? (
+          <div
+            role="status"
+            data-testid="post-trashed"
+            className="flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md border border-line bg-surface p-3.5 text-sm text-text-2"
+          >
+            <span className="min-w-0">
+              This post is in the trash and off the site. It is deleted for good 30 days after it
+              was trashed, and counts toward your posts until then.
             </span>
-            {usage.near ? (
-              <span
-                data-testid="post-body-size"
-                className={`font-mono text-[11px] ${usage.over ? "text-bad" : "text-text-2"}`}
-              >
-                {usage.text}
-              </span>
-            ) : null}
-          </div>
-          <BodyEditor
-            key={loadKey}
-            initial={form.body}
-            disabled={locked}
-            ownerId={ownerId}
-            labelledBy={bodyLabelId}
-            onChange={(body) => change({ body })}
-          />
-          <div aria-live="polite" className="empty:hidden">
-            {bodyError ? (
-              <p data-testid="post-body-error" className="m-0 text-[13px] text-bad">
-                {bodyError}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </PostCard>
-
-      <PostCard title="Summary and image">
-        <ExcerptField {...fields} />
-        <FeaturedImageField {...fields} />
-      </PostCard>
-
-      <PostCard title="Categories and tags">
-        <div id={postFieldId("terms")} className="flex min-w-0 scroll-mt-24 flex-col gap-5">
-          <TermPicker
-            taxonomy="category"
-            siteId={siteId}
-            terms={terms}
-            onTermsChange={setTerms}
-            selected={form.categories}
-            onSelect={(categories) => change({ categories })}
-            disabled={locked}
-          />
-          <TermPicker
-            taxonomy="tag"
-            siteId={siteId}
-            terms={terms}
-            onTermsChange={setTerms}
-            selected={form.tags}
-            onSelect={(tags) => change({ tags })}
-            disabled={locked}
-          />
-        </div>
-      </PostCard>
-
-      <PostCard title="Search">
-        <SearchFields {...fields} />
-      </PostCard>
-
-      {trashed ? null : (
-        <PostCard title="Revisions and trash">
-          <PostRevisions
-            siteId={siteId}
-            entryId={entry.id}
-            disabled={suspended || conflict || busy !== null}
-            onRestore={restoreFrom}
-          />
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <button
               type="button"
-              data-testid={POST_TEST_IDS.trash}
-              disabled={suspended || conflict || busy !== null}
-              onClick={() => void run("trash")}
-              className={FORM_BUTTON_DANGER}
+              data-testid={POST_TEST_IDS.restore}
+              disabled={suspended || busy !== null}
+              onClick={() => void run("restore")}
+              className={FORM_BUTTON}
             >
-              {busy === "trash" ? "Moving…" : "Move to trash"}
+              {busy === "restore" ? "Restoring…" : "Restore post"}
             </button>
-            <span className="min-w-0 text-xs text-text-2">
-              Takes the post off the site at once. You can restore it for 30 days.
-            </span>
+          </div>
+        ) : null}
+
+        <PostCard title="Post">
+          <TitleField {...fields} />
+          <SlugField {...fields} archivePath={archivePath} following={following} />
+          <div id={postFieldId("body")} className="flex min-w-0 scroll-mt-24 flex-col gap-1.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span id={bodyLabelId} className="text-[13px] font-semibold text-ink-2">
+                Body
+              </span>
+              {usage.near ? (
+                <span
+                  data-testid="post-body-size"
+                  className={`font-mono text-[11px] ${usage.over ? "text-bad" : "text-text-2"}`}
+                >
+                  {usage.text}
+                </span>
+              ) : null}
+            </div>
+            <BodyEditor
+              key={loadKey}
+              initial={form.body}
+              disabled={locked}
+              ownerId={ownerId}
+              labelledBy={bodyLabelId}
+              onChange={(body) => change({ body })}
+            />
+            <div aria-live="polite" className="empty:hidden">
+              {bodyError ? (
+                <p data-testid="post-body-error" className="m-0 text-[13px] text-bad">
+                  {bodyError}
+                </p>
+              ) : null}
+            </div>
           </div>
         </PostCard>
-      )}
-    </div>
+
+        <PostCard title="Summary and image">
+          <ExcerptField {...fields} />
+          <FeaturedImageField {...fields} />
+        </PostCard>
+
+        <PostCard title="Categories and tags">
+          <div id={postFieldId("terms")} className="flex min-w-0 scroll-mt-24 flex-col gap-5">
+            <TermPicker
+              taxonomy="category"
+              siteId={siteId}
+              terms={terms}
+              onTermsChange={setTerms}
+              selected={form.categories}
+              onSelect={(categories) => change({ categories })}
+              disabled={locked}
+            />
+            <TermPicker
+              taxonomy="tag"
+              siteId={siteId}
+              terms={terms}
+              onTermsChange={setTerms}
+              selected={form.tags}
+              onSelect={(tags) => change({ tags })}
+              disabled={locked}
+            />
+          </div>
+        </PostCard>
+
+        <PostCard title="Search">
+          <SearchFields {...fields} />
+        </PostCard>
+
+        {trashed ? null : (
+          <PostCard title="Revisions and trash">
+            <PostRevisions
+              siteId={siteId}
+              entryId={entry.id}
+              disabled={suspended || conflict || busy !== null}
+              onRestore={restoreFrom}
+            />
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                data-testid={POST_TEST_IDS.trash}
+                disabled={suspended || conflict || busy !== null}
+                onClick={() => void run("trash")}
+                className={FORM_BUTTON_DANGER}
+              >
+                {busy === "trash" ? "Moving…" : "Move to trash"}
+              </button>
+              <span className="min-w-0 text-xs text-text-2">
+                Takes the post off the site at once. You can restore it for 30 days.
+              </span>
+            </div>
+          </PostCard>
+        )}
+      </div>
+    </UploadSiteContext.Provider>
   );
 }
 

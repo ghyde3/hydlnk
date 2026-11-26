@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { UPLOAD_SITE_HEADER } from "@/lib/media/upload-site";
 import { clientEnv } from "@/lib/env/client";
 import { cleanupMediaFor } from "@/lib/media/cleanup-admin";
 import {
@@ -16,8 +17,8 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 /**
  * POST /api/media/cleanup on the app host (M5-14): works off the signed-in user's queue of replaced
- * and removed images (see src/lib/media/cleanup.ts). No body, no parameters: the only input is the
- * verified session user, so a caller can neither name a path nor another owner; the worst a forged
+ * and removed images (see src/lib/media/cleanup.ts), or with the `x-hl-site` header that site owner's (Wave F). No
+ * body: the input is the verified session user (and a site they may edit), so a caller can neither name a path nor another owner; the worst a forged
  * call does is delete the caller's own images that no draft, published page or saved theme uses.
  *
  * The editor calls it a few seconds after a draft save (past the Undo window) and the Publish action
@@ -50,7 +51,25 @@ export async function POST(request: NextRequest) {
     );
   }
   try {
-    const result = await cleanupMediaFor(user.id);
+    // Wave F (A32): the `x-hl-site` header works off that site OWNER's queue when the user may edit the site;
+    // a site they may not edit is 404 and nothing runs.
+    const site = request.headers.get(UPLOAD_SITE_HEADER);
+    let ownerId = user.id;
+    if (site !== null) {
+      // Loaded on use: a request without a site never touches the access module.
+      const { siteAccessFor } = await import("@/lib/access/server");
+      const allowed = await siteAccessFor({
+        actorId: user.id,
+        siteId: site.toLowerCase(),
+        need: "edit",
+        source: "editor",
+      });
+      if (!allowed.ok) {
+        return NextResponse.json({ error: "not_found" }, { status: 404, headers: NO_STORE });
+      }
+      ownerId = allowed.access.ownerId;
+    }
+    const result = await cleanupMediaFor(ownerId);
     return NextResponse.json(
       { deleted: result.deleted.length, kept: result.kept.length },
       { status: 200, headers: NO_STORE },

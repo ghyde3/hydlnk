@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { UPLOAD_SITE_HEADER } from "@/lib/media/upload-site";
 import { isAccountSuspended, suspendedBody } from "@/lib/admin/suspension";
 import { clientEnv } from "@/lib/env/client";
 import { unqueueMediaPath } from "@/lib/media/cleanup-admin";
@@ -7,6 +8,7 @@ import { adminUploadQuota } from "@/lib/media/quota";
 import { adminUploadRateLimit } from "@/lib/media/rate-limit";
 import { processUpload } from "@/lib/media/upload";
 import { appOrigin } from "@/lib/routing/urls";
+import { ACCESS_LOST_MESSAGE } from "@/lib/team/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +19,13 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  * `file`, optional field `kind` (avatar, background or content). Answers `{path, width, height,
  * url}`; `path` is the image reference the draft stores.
  *
- * The owner folder is always the verified session user (`getSessionUser`): any owner or folder
- * field in the form is ignored, and a caller without a session gets a 401 and nothing is stored.
+ * The folder (Wave F, A31): the `x-hl-site` header names the site the image is for; the access helper must say
+ * the verified session user may edit it, and the file is stored in, counted on and queued for that
+ * site OWNER's folder (so a member's upload is usable on the shared site and the owner's quota and
+ * plan apply, T15). A site the user may not edit stores nothing (404, the one answer for a missing
+ * one). Without it (an old bundle) the folder is the session user's own. Any owner or folder
+ * field in the form is ignored; a caller without a session gets a 401 and nothing is stored. The
+ * rate limit and the suspension check stay the uploader's (T16).
  * A cross-origin Origin header is refused, so a cross-site form cannot upload as the signed-in
  * user. Everything else (size cap, magic bytes, dimensions, storage) is `processUpload`.
  *
@@ -47,9 +54,32 @@ export async function POST(request: NextRequest) {
     if (await isAccountSuspended(user.id)) {
       return NextResponse.json(suspendedBody("forbidden"), { status: 403, headers: NO_STORE });
     }
-    const result = await processUpload(request, user.id, undefined, adminUploadQuota(user.id), {
+    const site = request.headers.get(UPLOAD_SITE_HEADER);
+    let ownerId = user.id;
+    if (site !== null) {
+      // Loaded on use: a request without a site never touches the access module.
+      const { siteAccessFor } = await import("@/lib/access/server");
+      const allowed = await siteAccessFor({
+        actorId: user.id,
+        siteId: site.toLowerCase(),
+        need: "edit",
+        source: "editor",
+      });
+      if (!allowed.ok) {
+        if (allowed.reason === "error") throw new Error("reading the site's access failed");
+        if (allowed.reason === "account_suspended") {
+          return NextResponse.json(suspendedBody("forbidden"), { status: 403, headers: NO_STORE });
+        }
+        return NextResponse.json(
+          { error: "not_found", message: ACCESS_LOST_MESSAGE },
+          { status: 404, headers: NO_STORE },
+        );
+      }
+      ownerId = allowed.access.ownerId;
+    }
+    const result = await processUpload(request, ownerId, undefined, adminUploadQuota(ownerId), {
       rateLimit: adminUploadRateLimit(user.id),
-      unqueue: (path) => unqueueMediaPath(user.id, path),
+      unqueue: (path) => unqueueMediaPath(ownerId, path),
     });
     if (!result.ok) {
       return NextResponse.json(

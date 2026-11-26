@@ -1,5 +1,6 @@
 "use client";
 
+import { UploadSiteContext } from "@/components/media/upload-site";
 import { useRouter, useSelectedLayoutSegment } from "next/navigation";
 import {
   useCallback,
@@ -677,7 +678,10 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       await publishInFlight.current;
       const stored = (await flush()) && (await flushSite());
       if (!stored) {
-        return { ok: false, message: "Your latest changes aren’t saved yet, so nothing was scheduled." };
+        return {
+          ok: false,
+          message: "Your latest changes aren’t saved yet, so nothing was scheduled.",
+        };
       }
       const isHome = id === HOME_PAGE_ID;
       const entryId = isHome ? homeEntryId : id;
@@ -691,8 +695,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   );
   /** The rev this tab holds for a page's entry, or null. */
   const pageRev = useCallback(
-    (id: string): number | null =>
-      (id === HOME_PAGE_ID ? homeRev() : siteRevisions()[id]) ?? null,
+    (id: string): number | null => (id === HOME_PAGE_ID ? homeRev() : siteRevisions()[id]) ?? null,
     [homeRev, siteRevisions],
   );
 
@@ -933,5 +936,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     ],
   );
 
-  return <WorkspaceContextProvider value={value}>{children}</WorkspaceContextProvider>;
+  return (
+    <WorkspaceContextProvider value={value}>
+      <UploadSiteContext.Provider value={pageId}>{children}</UploadSiteContext.Provider>
+    </WorkspaceContextProvider>
+  );
 }
