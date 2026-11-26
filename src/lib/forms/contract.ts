@@ -67,10 +67,11 @@ export const SUBMISSION_LIMITS = {
  * 7-11 ms where a stored one took 19 ms or more, and "already subscribed" on a large account
  * answered faster than a store. Every outcome (403 to 503, the pages, every 303) waits until the
  * same moment, so only a request slower than the floor shows its own time. The floor is above the
- * measured p99 of a stored submission on a large account on a production build (PROGRESS.md, forms
- * attack pass). Applied in one place: `handleFormPost` (src/lib/forms/submit.ts).
+ * measured time of a stored submission on a large account (a production build, a Studio account
+ * holding 47,000 this month, two runs of 150: p99 175 and 185 ms, the slowest 252 ms). Applied in
+ * one place: `handleFormPost` (src/lib/forms/submit.ts).
  */
-export const FORM_POST_FLOOR_MS = 250;
+export const FORM_POST_FLOOR_MS = 400;
 export const FORM_POST_JITTER_MS = 10;
 
 /** The owner's message emails a contact form sends at most an hour per account (form-notify). */

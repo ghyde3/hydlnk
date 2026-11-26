@@ -16,6 +16,8 @@ import { SIGNUP_ID, formPage, waitForRows } from "./forms-helpers";
  */
 
 const SAMPLES = 50;
+const BROWSER =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
@@ -57,6 +59,8 @@ test("a dropped and a stored submission answer in the same time (medians within 
       body,
       headers: {
         "content-type": "application/x-www-form-urlencoded",
+        // A browser's user agent: with none the post is dropped as a bot and nothing is stored.
+        "user-agent": BROWSER,
         origin,
         "x-forwarded-for": client,
       },
