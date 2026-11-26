@@ -767,6 +767,36 @@ describe.skipIf(!run)("M20 scheduling through the content writer and the worker"
     }
   });
 
+  it("M20-11 the account's 101st pending schedule (Pro 100, across its sites) is refused with the account message", async () => {
+    const { scheduleLimitMessage } = await import("@/lib/limits/messages");
+    const site = await liveSite("m20-acct");
+    // Two more sites of the same account holding 50 pending publishes each (written as postgres).
+    await psql(`
+      do $$
+      declare v_site uuid; v_type uuid; v_n integer;
+      begin
+        for v_n in 1 .. 2 loop
+          insert into public.pages (owner_id, handle, draft)
+            values ('${site.userId}', 'zq-m20acct-' || v_n || '-${site.handle.slice(-6)}',
+              '{"version":1,"rev":1,"profile":{"name":"X","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}')
+            returning id into v_site;
+          select id into v_type from public.content_types where site_id = v_site and key = 'post';
+          insert into public.content_entries (site_id, type_id, draft)
+            select v_site, v_type, jsonb_build_object('title', 't' || g) from generate_series(1, 50) g;
+          insert into public.content_schedules (site_id, entry_id, action, run_at, scheduled_rev, snapshot, source, created_by)
+            select v_site, e.id, 'publish', date_trunc('minute', now()) + interval '1 day', 1, '{"title":"t"}', 'editor', '${site.userId}'
+            from public.content_entries e where e.site_id = v_site;
+        end loop;
+      end $$;`);
+    const made = await post({ title: "One more", slug: "one-more" }, site);
+    expect(await schedule(site, made.id, made.rev)).toMatchObject({
+      ok: false,
+      error: "schedule_limit",
+      message: scheduleLimitMessage("pro", "account"),
+    });
+    expect(scheduleLimitMessage("pro", "account")).not.toBe(scheduleLimitMessage("pro", "site"));
+  });
+
   it("M20-07 turning the blog off cancels its posts' pending publishes in the same write", async () => {
     const site = await liveSite("m20-off");
     const made = await post({ title: "Off", slug: "off-soon" }, site);
