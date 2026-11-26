@@ -45,7 +45,6 @@ export interface HistoryData {
  */
 export async function loadHistory(
   page: { id: string; handle: string },
-  ownerId: string,
   limit: number,
 ): Promise<HistoryData> {
   const supabase = await createServerSupabase();
@@ -56,11 +55,12 @@ export async function loadHistory(
       .eq("page_id", page.id)
       .order("version_no", { ascending: false })
       .limit(limit),
-    supabase.from("pages").select("published").eq("id", page.id).eq("owner_id", ownerId).single(),
+    // RLS decides (the owner or a member; the caller picked the site through the access helper).
+    supabase.from("pages").select("published").eq("id", page.id).single(),
     getHomeDraftWithClient(supabase, page.id),
     getPublishedHomeWithClient(supabase, page.id),
     listDraftPagesWithClient(supabase, page.id),
-    loadEditorPageData(page, ownerId),
+    loadEditorPageData(page),
   ]);
   if (rows.error)
     throw new Error(`Loading the versions of page ${page.id} failed: ${rows.error.code}`);

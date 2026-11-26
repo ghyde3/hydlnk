@@ -42,6 +42,13 @@ import {
 import { SITE_NOT_LIVE_MESSAGE } from "./gate-messages";
 import { homeForSite, nameErrors, pageTitleOf, siteErrors, type SiteSubPage } from "./site-checks";
 import { mediaOrigin } from "@/lib/media/url";
+import {
+  recordSiteActivity,
+  requireSiteAccess,
+  type AccessRefusalReason,
+  type AccessSource,
+  type SiteAccess,
+} from "@/lib/access";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
@@ -180,7 +187,13 @@ const refuse = (
  * A failed gate writes nothing, so a failed Publish leaves the live page and its cache as they were.
  */
 export async function publishPageCore(
-  input: { pageId: unknown; userId: string | null; expected?: PublishExpected },
+  input: {
+    pageId: unknown;
+    userId: string | null;
+    expected?: PublishExpected;
+    /** Where the call came from: MCP may act only on the token user's own sites (M19-13). */
+    source?: AccessSource;
+  },
   deps: PublishDeps = {},
 ): Promise<SitePublishResult> {
   if (!input.userId || !UID.test(input.userId)) return refuse("unauthorized");
@@ -190,7 +203,19 @@ export async function publishPageCore(
 
   const admin = deps.admin ?? createAdminSupabase();
 
-  // Ownership first: the secret key bypasses RLS, so the owner filter below is the access rule.
+  // Access first (Wave F, the one helper): the owner or a publisher of the site, the owner not
+  // suspended (M5-08, M5-09). The secret key bypasses RLS, so this is the access rule. Another
+  // owner's site and an unknown one answer `forbidden` as before; so does an editor.
+  const allowed = await requireSiteAccess(admin, {
+    actorId: userId,
+    siteId: pageId.data,
+    need: "publish",
+    source: input.source ?? "editor",
+  });
+  if (!allowed.ok) return refuse(publishRefusal(allowed.reason, "forbidden"));
+  const access = allowed.access;
+  // Everything account-shaped below (themes, image folder, plan, p_owner_id) is the OWNER's.
+  const ownerId = access.ownerId;
   const page = await admin
     .from("pages")
     .select("id, owner_id, draft, draft_rev:draft->>rev")
@@ -200,20 +225,7 @@ export async function publishPageCore(
     console.error("[publish] reading the draft failed", page.error.message);
     return refuse("error");
   }
-  if (!page.data || page.data.owner_id !== userId) return refuse("forbidden");
-
-  // A suspended owner cannot bring a page back by republishing (M5-08, M5-09). Read with the secret
-  // key, after the ownership check so it says nothing about anyone else's account; fails closed.
-  const account = await admin
-    .from("accounts")
-    .select("suspended_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (account.error) {
-    console.error("[publish] reading the account failed", account.error.message);
-    return refuse("error");
-  }
-  if (!account.data || account.data.suspended_at !== null) return refuse("account_suspended");
+  if (!page.data) return refuse("forbidden");
 
   // Stage 1b: the design is `pages.draft` (its frozen `blocks` are never read); Home's blocks are
   // the '/' page entry and the sub-pages are the other page entries. Entry ids are the sub-page ids
@@ -295,7 +307,7 @@ export async function publishPageCore(
 
   let themeTokens: Partial<TokenSet> | null;
   try {
-    themeTokens = await loadThemeTokens(admin, draft.theme.ref, userId);
+    themeTokens = await loadThemeTokens(admin, draft.theme.ref, ownerId);
   } catch (error) {
     console.error("[publish] reading the theme failed", error);
     return refuse("error");
@@ -307,8 +319,8 @@ export async function publishPageCore(
   try {
     const exists = deps.mediaExists ?? storageExists(admin);
     mediaErrors = [
-      ...(await checkImages(form, userId, exists)),
-      ...(await checkBackground(form, draft.theme.overrides.bgImage !== undefined, userId, exists)),
+      ...(await checkImages(form, ownerId, exists)),
+      ...(await checkBackground(form, draft.theme.overrides.bgImage !== undefined, ownerId, exists)),
     ];
   } catch (error) {
     console.error("[publish] checking the images failed", error);
@@ -334,7 +346,7 @@ export async function publishPageCore(
     const subMediaErrors: PublishError[] = [];
     for (const page of subPages) {
       subMediaErrors.push(
-        ...nameErrors(await checkPlaced(placedBlockImages(page.form.blocks), userId, exists), page),
+        ...nameErrors(await checkPlaced(placedBlockImages(page.form.blocks), ownerId, exists), page),
       );
     }
     if (subMediaErrors.length > 0) return refuse("invalid", subMediaErrors);
@@ -370,7 +382,7 @@ export async function publishPageCore(
   try {
     linkErrors = await checkLinkRules(admin, {
       pageId: pageId.data,
-      userId,
+      ownerId,
       form: checked.data,
       raw,
     });
@@ -410,7 +422,7 @@ export async function publishPageCore(
   // `publish_site_revs` is `publish_site` in the same transaction, answering the revs it left.
   const written = await admin.rpc("publish_site_revs", {
     p_page_id: pageId.data,
-    p_owner_id: userId,
+    p_owner_id: ownerId,
     p_home: home as unknown as Json,
     p_sub_pages: subPages.map((page) => ({
       id: page.id,
@@ -459,6 +471,7 @@ export async function publishPageCore(
   const revs: PublishedRevs = left.success
     ? { designRev: left.data.design_rev, entries: left.data.entries }
     : { designRev: expectedRevs?.design ?? null, entries: expectedRevs?.entries ?? {} };
+  await recordSiteActivity(admin, access, "site_published");
   return { ok: true, publishedAt, revs };
 }
 
@@ -645,7 +658,11 @@ function prepareSubPages(rows: readonly SubDraftRow[]): {
 interface OwnedSite {
   admin: SupabaseClient<Database>;
   pageId: string;
+  /** The acting user (rate keys, activity). */
   userId: string;
+  /** The site's OWNER: themes, the image folder, the plan and every `p_owner_id`. */
+  ownerId: string;
+  access: SiteAccess;
   /** The site row as read: its design draft, the draft's rev and the two facts of the live design this needs. */
   page: {
     data: {
@@ -661,6 +678,14 @@ interface OwnedSite {
 
 type Refusal = { ok: false; errors: PublishError[]; reason: PublishFailureReason };
 
+/** The access helper's refusal as a Publish reason; `notFound` is what a stranger's id has always answered. */
+function publishRefusal(
+  reason: AccessRefusalReason,
+  notFound: "forbidden" | "not_found",
+): PublishFailureReason {
+  return reason === "not_found" ? notFound : reason;
+}
+
 /**
  * The first checks of Publish page and Publish design, in order: a session; a site that is the
  * caller's (another owner's, an unknown or malformed id: `not_found`, one answer, so ids cannot be
@@ -668,7 +693,7 @@ type Refusal = { ok: false; errors: PublishError[]; reason: PublishFailureReason
  * only its `version` (is there one) and its `redirect` are read, never the whole document.
  */
 async function openOwnedSite(
-  input: { pageId: unknown; userId: string | null },
+  input: { pageId: unknown; userId: string | null; source?: AccessSource },
   deps: PublishDeps,
 ): Promise<{ ok: true; site: OwnedSite } | Refusal> {
   if (!input.userId || !UID.test(input.userId)) return refuse("unauthorized");
@@ -677,7 +702,15 @@ async function openOwnedSite(
   if (!pageId.success) return refuse("not_found");
   const admin = deps.admin ?? createAdminSupabase();
 
-  // Ownership first: the secret key bypasses RLS, so the owner filter is the access rule.
+  // Access first (Wave F, the one helper): the owner or a publisher, the owner not suspended. The
+  // secret key bypasses RLS, so this is the access rule; a stranger's site answers `not_found`.
+  const allowed = await requireSiteAccess(admin, {
+    actorId: userId,
+    siteId: pageId.data.toLowerCase(),
+    need: "publish",
+    source: input.source ?? "editor",
+  });
+  if (!allowed.ok) return refuse(publishRefusal(allowed.reason, "not_found"));
   const page = await admin
     .from("pages")
     .select(
@@ -697,22 +730,15 @@ async function openOwnedSite(
     live_version: string | null;
     live_redirect: Json | null;
   } | null;
-  if (!found || found.owner_id !== userId) return refuse("not_found");
-
-  const account = await admin
-    .from("accounts")
-    .select("suspended_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (account.error) {
-    console.error("[publish] reading the account failed", account.error.message);
-    return refuse("error");
-  }
-  if (!account.data || account.data.suspended_at !== null) return refuse("account_suspended");
+  if (!found) return refuse("not_found");
 
   // Every published design carries `version`; none means `pages.published` is null: not live.
   if (found.live_version === null) return siteNotLive();
-  return { ok: true, site: { admin, pageId: found.id, userId, page: { data: found } } };
+  const { access } = allowed;
+  return {
+    ok: true,
+    site: { admin, pageId: found.id, userId, ownerId: access.ownerId, access, page: { data: found } },
+  };
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -760,7 +786,7 @@ export async function publishSitePageCore(
   const fire = run?.kind === "fire" ? run : undefined;
   const opened = await openOwnedSite(input, deps);
   if (!opened.ok) return opened;
-  const { admin, pageId, userId } = opened.site;
+  const { admin, pageId, ownerId } = opened.site;
   const entryId = pageIdSchema.safeParse(input.entryId);
   if (!entryId.success) return refuse("not_found");
   const wanted = entryId.data.toLowerCase();
@@ -831,7 +857,7 @@ export async function publishSitePageCore(
 
   try {
     const exists = deps.mediaExists ?? storageExists(admin);
-    const mediaErrors = await checkPlaced(placedBlockImages(blocks), userId, exists);
+    const mediaErrors = await checkPlaced(placedBlockImages(blocks), ownerId, exists);
     if (mediaErrors.length > 0) return refuse("invalid", name(mediaErrors));
   } catch (error) {
     console.error("[publish] checking the images failed", error);
@@ -893,7 +919,7 @@ export async function publishSitePageCore(
   if (run?.kind === "check") return { ok: true, publishedAt, rev: row.rev, unchanged: false };
   const written = await publishSitePageWithClient(admin, {
     siteId: pageId,
-    ownerId: userId,
+    ownerId,
     entryId: wanted,
     expectedRev,
     published: form,
@@ -902,6 +928,7 @@ export async function publishSitePageCore(
     ...(fire ? { fire } : {}),
   });
   if (written.ok) {
+    if (!fire) await recordSiteActivity(admin, opened.site.access, "page_published", wanted);
     return {
       ok: true,
       publishedAt: written.publishedAt,
@@ -968,7 +995,7 @@ export async function publishDesignCore(
 ): Promise<PublishResult> {
   const opened = await openOwnedSite(input, deps);
   if (!opened.ok) return opened;
-  const { admin, pageId, userId, page } = opened.site;
+  const { admin, pageId, ownerId, page } = opened.site;
   const draftRev = page.data.draft_rev;
 
   let liveHome;
@@ -1013,7 +1040,7 @@ export async function publishDesignCore(
 
   let themeTokens: Partial<TokenSet> | null;
   try {
-    themeTokens = await loadThemeTokens(admin, draft.theme.ref, userId);
+    themeTokens = await loadThemeTokens(admin, draft.theme.ref, ownerId);
   } catch (error) {
     console.error("[publish] reading the theme failed", error);
     return refuse("error");
@@ -1023,11 +1050,11 @@ export async function publishDesignCore(
   try {
     const exists = deps.mediaExists ?? storageExists(admin);
     const mediaErrors = [
-      ...(await checkImages(built, userId, exists)),
+      ...(await checkImages(built, ownerId, exists)),
       ...(await checkBackground(
         built,
         draft.theme.overrides.bgImage !== undefined,
-        userId,
+        ownerId,
         exists,
       )),
     ];
@@ -1073,7 +1100,7 @@ export async function publishDesignCore(
     const liveBlocks = liveBlocksOf(liveHome) as unknown as PublishDoc["blocks"];
     const linkErrors = await checkLinkRules(admin, {
       pageId,
-      userId,
+      ownerId,
       form: { ...form, blocks: liveBlocks },
       raw,
     });
@@ -1097,7 +1124,7 @@ export async function publishDesignCore(
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
   const written = await admin.rpc("publish_design", {
     p_page_id: pageId,
-    p_owner_id: userId,
+    p_owner_id: ownerId,
     p_design: designForm as unknown as Json,
     // The rev compared above; the function checks it again under its row lock.
     ...(draftRev === null ? {} : { p_expected_rev: draftRev }),
@@ -1117,5 +1144,6 @@ export async function publishDesignCore(
     console.error("[publish] writing the published design failed", code, message);
     return refuse("error");
   }
+  await recordSiteActivity(admin, opened.site.access, "design_published");
   return { ok: true, publishedAt };
 }

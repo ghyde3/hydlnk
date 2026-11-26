@@ -40,13 +40,14 @@ import { loadThemeLibrary } from "@/lib/themes/load";
  * fresh props; the provider takes the live ones (name, address) and ignores the draft-shaped ones.
  */
 export default async function WorkspaceLayout({ children }: { children: ReactNode }) {
-  const { user, current, plan } = await getAppContext();
+  const { user, current, sitePlan } = await getAppContext();
+  const { access } = current;
   const [draftRead, themesRead, primaryDomain, templateThemes] = await Promise.all([
     (async () => {
       try {
         await failIfInjected("draft-load");
         const [data, subPages, trashedPages, archives] = await Promise.all([
-          loadEditorPageData(current, user.id),
+          loadEditorPageData(current),
           loadSubPages(current.id),
           countTrashedPages(current.id),
           loadSiteArchives(current.id),
@@ -60,7 +61,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
     (async () => {
       try {
         await failIfInjected("themes-load");
-        return { ok: true as const, themes: await loadThemeLibrary() };
+        return { ok: true as const, themes: await loadThemeLibrary(access.ownerId) };
       } catch (error) {
         console.error("[workspace] loading the themes failed", error);
         return { ok: false as const };
@@ -81,9 +82,13 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
       // old page's queue flushes what it still holds.
       key={current.id}
       pageId={current.id}
-      ownerId={user.id}
+      // Wave F: the site's OWNER (media folder, theme scope); the actor is `userId`.
+      ownerId={access.ownerId}
+      userId={user.id}
+      role={access.role}
+      canPublish={access.canPublish}
       accountEmail={user.email}
-      plan={plan}
+      plan={sitePlan}
       handle={current.handle}
       address={handleAddress(current.handle)}
       name={current.name}
@@ -96,7 +101,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
         rootDomain: clientEnv.NEXT_PUBLIC_ROOT_DOMAIN,
       })}
       primaryDomain={primaryDomain}
-      chrome={pageChrome(plan, current.id)}
+      chrome={pageChrome(sitePlan, current.id)}
       draft={data.draft}
       revKey={data.revKey}
       home={data.home}

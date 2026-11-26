@@ -21,6 +21,11 @@ vi.mock("@/lib/media/cleanup-admin", () => ({ cleanupMediaQuietly }));
 
 const rateLimit = vi.fn();
 vi.mock("@/lib/rate-limit", () => ({ rateLimit }));
+// Wave F: the actions ask the access helper for the site's owner (rate keys, the media queue). Here
+// the session user owns the page, so the owner key and the user key are one.
+vi.mock("@/lib/access/server", () => ({
+  siteAccessFor: async () => ({ ok: true, access: { ownerId: "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01" } }),
+}));
 
 const { publishPage, publishSitePage, publishDesign } = await import("@/lib/publish/actions");
 type PublishExpected = import("@/lib/publish/core").PublishExpected;

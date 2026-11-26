@@ -15,7 +15,8 @@ export const metadata: Metadata = { title: "Posts" };
  * content writer with the session user as the actor.
  */
 export default async function PostsPage() {
-  const { user, current, plan } = await getAppContext();
+  // The site OWNER's plan: a member works under its limits (C16).
+  const { user, current, sitePlan: plan } = await getAppContext();
   const data = await loadPostsScreen(user.id, current.id);
   return (
     <>

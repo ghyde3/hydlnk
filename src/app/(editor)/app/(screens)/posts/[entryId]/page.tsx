@@ -25,7 +25,8 @@ export default async function PostPage({ params }: PageProps<"/app/posts/[entryI
         <PostEditor
           key={data.entry.id}
           siteId={current.id}
-          ownerId={user.id}
+          // The site OWNER: body images are checked and drawn against their folder (D9, Wave F).
+          ownerId={current.access.ownerId}
           archivePath={data.archivePath}
           entry={data.entry}
           terms={data.terms}

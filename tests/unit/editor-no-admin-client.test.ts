@@ -39,6 +39,13 @@ const GATE_ACCOUNT_REPAIR = "src/lib/auth/accounts.ts";
  * user. Not editor code; named here so a second path to the admin client cannot appear unnoticed.
  */
 const GATE_OAUTH_RESUME = "src/lib/oauth/resume.ts";
+/**
+ * Wave F (team access): the gate asks the one access helper which sites the verified session user
+ * may work on (own and shared) and what they may do on the current one. It answers the rule's
+ * booleans and the shared sites' names only. Not editor code; named here so a second path to the
+ * admin client cannot appear unnoticed.
+ */
+const GATE_ACCESS = "src/lib/access/server.ts";
 
 const FORBIDDEN: [RegExp, string][] = [
   [/@\/lib\/supabase\/admin/, "the secret-key Supabase client"],
@@ -121,6 +128,10 @@ describe("M2-03: the editor never uses the secret-key client", () => {
         boundaries.add(GATE_OAUTH_RESUME);
         continue;
       }
+      if (relative(ROOT, file) === GATE_ACCESS) {
+        boundaries.add(GATE_ACCESS);
+        continue;
+      }
       // Comments may mention the server env ("for the secret key use ..."): only code counts.
       const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
       for (const [pattern, what] of FORBIDDEN) {
@@ -139,6 +150,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     // `hashLinkCode` (M9-30) is the third: the link form's 'Set code' button (the limiter behind it
     // reads the counter store with the secret key), loaded with a dynamic import when a code is set.
     expect([...boundaries].sort()).toEqual([
+      GATE_ACCESS,
       GATE_ACCOUNT_REPAIR,
       "src/lib/links/actions.ts",
       GATE_OAUTH_RESUME,

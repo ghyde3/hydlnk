@@ -11,6 +11,8 @@ import {
 import { parseStoredSubPages, versionIsLive } from "@/lib/versions/site";
 import { OWNER_UID, bannerRef, fullPublished, photoRef } from "./fixtures/page-document";
 
+import { siteAccessAnswer } from "./access-fake";
+
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/env/client", () => ({
   clientEnv: {
@@ -177,6 +179,10 @@ function makeClient(world: World) {
     client: {
       from,
       rpc: (_fn: string, args: { p_draft?: unknown } & Record<string, unknown>) => {
+        // Wave F: the access rule, from this world's rows.
+        if (_fn === "site_access") {
+          return Promise.resolve(siteAccessAnswer(data.pages as never, data.accounts as never, args));
+        }
         const text = JSON.stringify(args);
         const rows = world.blockedBlockIds
           .filter((id) => text.includes(id))

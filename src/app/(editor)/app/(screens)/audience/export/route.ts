@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
     return fail("load_failed", 500);
   }
 
+  // Owner-only (Wave F, G3): a member never reads the site's submissions.
+  if (!context.current.access.isOwner) return fail("not_found", 404);
   const form = parseFormFilter(request.nextUrl.searchParams.get("form"));
   if (form === null) return fail("bad_form", 400);
 

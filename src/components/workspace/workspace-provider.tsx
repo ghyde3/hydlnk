@@ -66,6 +66,7 @@ import {
   type WorkspaceTab,
   type WorkspaceValue,
 } from "./workspace-context";
+import type { SiteRole } from "@/lib/team/constants";
 import { failureTab } from "./failure-tab";
 import {
   PUBLISH_CONFLICT_MESSAGE,
@@ -79,7 +80,14 @@ import { workspaceReducer, type WorkspaceAction } from "./workspace-reducer";
 export interface WorkspaceProviderProps {
   // Page identity: live, the layout passes them on every render (a rename refreshes the route).
   pageId: string;
+  /** The site's OWNER (Wave F): the first path segment of its uploads and the saved-themes scope. */
   ownerId: string;
+  /** The signed-in user (the actor). Equals `ownerId` on an own site. */
+  userId: string;
+  /** The user's role on this site: the owner, or a member (editor, publisher). */
+  role: SiteRole;
+  /** The owner, or a publisher: Publish and the other publish-class controls show. */
+  canPublish: boolean;
   /** The signed-in user's sign-in address (the form block's "Email me each message" helper line). */
   accountEmail?: string;
   plan: PlanId;
@@ -802,6 +810,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     () => ({
       pageId,
       ownerId,
+      userId: props.userId,
+      role: props.role,
+      canPublish: props.canPublish,
       ...(props.accountEmail ? { accountEmail: props.accountEmail } : {}),
       plan,
       handle: props.handle,
@@ -862,6 +873,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [
       pageId,
       ownerId,
+      props.userId,
+      props.role,
+      props.canPublish,
       props.accountEmail,
       plan,
       props.handle,

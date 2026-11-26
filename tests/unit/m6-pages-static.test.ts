@@ -105,9 +105,11 @@ describe("M6-11 the owner's draft preview reads with the user's own session", ()
     expect(source).toContain("createServerSupabase");
   });
 
-  it("checks ownership from pages.owner_id and never reads the hl-page cookie", () => {
+  it("checks access through the one access helper and never reads the hl-page cookie", () => {
+    // Wave F (C14): the owner or a member may preview; the decision is the access rule's, for the
+    // verified session user and this page id (was: pages.owner_id equals the session user).
     const source = code(route);
-    expect(source).toMatch(/\.eq\("owner_id", user\.id\)/);
+    expect(source).toMatch(/siteAccessFor\(\{\s*actorId: user\.id,\s*siteId: pageId\.toLowerCase\(\),\s*need: "read"/);
     expect(source).not.toMatch(/hl-page|CURRENT_PAGE_COOKIE|getCurrentPage|cookies\(/);
   });
 

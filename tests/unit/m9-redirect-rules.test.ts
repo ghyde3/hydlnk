@@ -248,7 +248,7 @@ describe("M9-31 the Publish gate's rules (fake database)", () => {
       redirect,
       blocks: list,
     }) as PublishDoc;
-  const input = (form: PublishDoc) => ({ pageId: "p", userId: "u", form, raw: {} });
+  const input = (form: PublishDoc) => ({ pageId: "p", ownerId: "u", form, raw: {} });
 
   it("a page with no redirect reads nothing", async () => {
     const { client, reads } = fakeAdmin({ plan: "free" });
@@ -343,7 +343,7 @@ describe("M9-31 the Publish gate's rules (fake database)", () => {
     const raw = draftWith({ ...blocks.card, lock: { kind: "age" } });
     const errors = await checkLinkRules(client, {
       pageId: "p",
-      userId: "u",
+      ownerId: "u",
       form: formOf(undefined, []),
       raw,
     });

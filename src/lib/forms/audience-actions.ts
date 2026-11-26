@@ -21,6 +21,8 @@ export type AudienceDeleteResult =
 
 async function remove(column: "id" | "block_id", value: string): Promise<AudienceDeleteResult> {
   const { user, current } = await getAppContext();
+  // Owner-only (Wave F, G3): RLS already refuses a member's delete; say so before touching anything.
+  if (!current.access.isOwner) return { ok: false, error: "failed" };
   const limit = await rateLimit(
     `audience-delete:${user.id}`,
     AUDIENCE_DELETE_LIMIT,

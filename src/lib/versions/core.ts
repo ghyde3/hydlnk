@@ -4,9 +4,10 @@ import { z } from "zod";
 import { checkBlocklist, readBlockedLinkError } from "@/lib/blocklist";
 import { LIMITS, draftDocSchema, publishedDocSchema, type PublishDoc } from "@/lib/document";
 import { jsonbTextBytes } from "@/lib/editor/size";
-import { PLAN_LIMITS, toPlanId } from "@/lib/limits";
+import { PLAN_LIMITS } from "@/lib/limits";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
 import { mediaOrigin } from "@/lib/media/url";
+import { recordSiteActivity, requireSiteAccess, type SiteAccess } from "@/lib/access";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
@@ -73,7 +74,9 @@ function logFailure(op: Op, code: string, ids: { page?: unknown; version?: unkno
 
 interface OpenVersion {
   admin: SupabaseClient<Database>;
+  /** The site's OWNER (folder, themes, the draft write's filter); `access.actorId` is who asked. */
   ownerId: string;
+  access: SiteAccess;
   pageId: string;
   /** `pages.draft` as stored, and its rev as Postgres reads it (`draft->>rev`); restore only. */
   draft: unknown;
@@ -102,7 +105,23 @@ async function openVersion(
 
   const admin = deps.admin ?? createAdminSupabase();
 
-  // Ownership first: the secret key bypasses RLS, so this filter is the access rule.
+  // Access first (Wave F, the one helper): members preview and restore into the draft (G5), both
+  // asked as `edit` so a suspended owner gets account_suspended for either, as before (M6-49). The
+  // secret key bypasses RLS, so this is the access rule; a stranger's site answers `forbidden`.
+  const allowed = await requireSiteAccess(admin, {
+    actorId: userId,
+    siteId: pageId.data,
+    need: "edit",
+    source: "editor",
+  });
+  if (!allowed.ok) {
+    if (allowed.reason === "error") {
+      logFailure(op, "error", { page: pageId.data });
+      return { ok: false, reason: "error" };
+    }
+    return fail(allowed.reason === "account_suspended" ? "account_suspended" : "forbidden");
+  }
+  const { access } = allowed;
   const page = await admin
     .from("pages")
     .select(withDraft ? "id, owner_id, draft, draft_rev:draft->>rev" : "id, owner_id")
@@ -118,20 +137,9 @@ async function openVersion(
     draft?: unknown;
     draft_rev?: string | null;
   } | null;
-  if (!row || row.owner_id !== userId) return fail("forbidden");
-
-  const account = await admin
-    .from("accounts")
-    .select("plan, suspended_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (account.error) {
-    logFailure(op, "error", { page: pageId.data });
-    return { ok: false, reason: "error" };
-  }
-  if (!account.data) return fail("forbidden");
-  if (account.data.suspended_at !== null) return fail("account_suspended");
-  if (PLAN_LIMITS[toPlanId(account.data.plan)].versionsKept <= 0) return fail("plan_required");
+  if (!row) return fail("forbidden");
+  // The OWNER's plan decides whether version history is included.
+  if (PLAN_LIMITS[access.plan].versionsKept <= 0) return fail("plan_required");
 
   // Only now is a version id looked at. Malformed, unknown and another page's all read the same.
   const versionId = guid.safeParse(input.versionId);
@@ -152,7 +160,8 @@ async function openVersion(
     ok: true,
     value: {
       admin,
-      ownerId: userId,
+      ownerId: access.ownerId,
+      access,
       pageId: pageId.data,
       draft: row.draft ?? null,
       draftRev: row.draft_rev ?? null,
@@ -413,6 +422,7 @@ export async function restorePageVersionCore(
     return { ok: false, reason: "error" };
   }
   if (!written.data || written.data.length === 0) return failed("conflict");
+  await recordSiteActivity(open.admin, open.access, "version_restored");
 
   return {
     ok: true,

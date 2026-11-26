@@ -186,6 +186,8 @@ describe.skipIf(!run)("1b1-15 publishPageCore over page entries (local Supabase)
       get(target, prop, receiver) {
         if (prop !== "rpc") return Reflect.get(target, prop, receiver);
         return async (...args: Parameters<typeof admin.rpc>) => {
+          // Wave F: the access rule's rpc runs first, before the reads the race must follow.
+          if (args[0] === "site_access") return target.rpc(...args);
           if (!raced) {
             raced = true;
             await sub(o, "Late", "late");

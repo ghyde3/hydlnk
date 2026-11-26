@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { siteAccessAnswer } from "./access-fake";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emptyDraft } from "@/lib/document";
 
@@ -87,7 +88,15 @@ function fakeAdmin(
     };
     return chain;
   };
-  return { admin: { from, rpc: rpcSpy } as unknown as SupabaseClient, writes, rpcSpy };
+  // Wave F: the access rule answers from this site's row (USER owns PAGE); every other rpc is the
+  // blocklist's, recorded by rpcSpy.
+  const rpcOf = (fn: string, args: unknown) =>
+    fn === "site_access"
+      ? Promise.resolve(
+          siteAccessAnswer([{ id: PAGE, owner_id: USER }], [{ id: USER, plan: "free", suspended_at: null }], args),
+        )
+      : (rpcSpy as unknown as (fn: string, args: unknown) => ReturnType<typeof rpc>)(fn, args);
+  return { admin: { from, rpc: rpcOf } as unknown as SupabaseClient, writes, rpcSpy };
 }
 
 describe("M5-03 the publish gate and the blocklist", () => {

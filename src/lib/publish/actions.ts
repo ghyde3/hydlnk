@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import { siteAccessFor } from "@/lib/access/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { cleanupMediaQuietly } from "@/lib/media/cleanup-admin";
 import { rateLimit } from "@/lib/rate-limit";
@@ -35,40 +36,53 @@ import { pageTag } from "./tags";
  * what the editor holds (the design's rev key and each page entry's rev); when any of them moved the
  * answer is `conflict` and nothing is written. Unchanged pages keep their publish date.
  */
-/** The session user and the shared publish rate limit (M11-12): 60 an hour per account, all three actions together. */
-async function publisher(): Promise<
-  { userId: string | null; limited: false } | { userId: string; limited: true }
-> {
+/**
+ * The session user and the shared publish rate limit (M11-12): 60 an hour per account, all three
+ * actions together. Wave F (G18): a member's publish counts on their own key AND on the site owner's,
+ * so members cannot spend more than the owner's budget between them; the owner counts once. The
+ * owner comes from the access helper (a read; the core decides publish access itself).
+ */
+async function publisher(pageId: string): Promise<{
+  userId: string | null;
+  ownerId: string | null;
+  limited: boolean;
+}> {
   const user = await getSessionUser();
-  if (!user) return { userId: null, limited: false };
-  const limit = await rateLimit(
-    publishRateKey(user.id),
-    PUBLISH_RATE_LIMIT,
-    PUBLISH_RATE_WINDOW_SECONDS,
-  );
-  return { userId: user.id, limited: !limit.allowed };
+  if (!user) return { userId: null, ownerId: null, limited: false };
+  const site = await siteAccessFor({
+    actorId: user.id,
+    siteId: typeof pageId === "string" ? pageId.toLowerCase() : pageId,
+    need: "read",
+    source: "editor",
+  });
+  const ownerId = site.ok ? site.access.ownerId : null;
+  for (const id of new Set([user.id, ownerId ?? user.id])) {
+    const limit = await rateLimit(publishRateKey(id), PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS);
+    if (!limit.allowed) return { userId: user.id, ownerId, limited: true };
+  }
+  return { userId: user.id, ownerId, limited: false };
 }
 
-/** After a publish that stands: the site's tag (Home, every page, the index), then the media queue. */
-async function published(pageId: string, userId: string | null): Promise<void> {
+/** After a publish that stands: the site's tag (Home, every page, the index), then the OWNER's media queue. */
+async function published(pageId: string, ownerId: string | null): Promise<void> {
   // Tags are case-sensitive and page ids are stored lower case; the id is a GUID by now.
   updateTag(pageTag(pageId.toLowerCase()));
   // The Publish may have dropped the last reference to an image the live page used to show (M5-14).
-  if (userId) await cleanupMediaQuietly(userId);
+  if (ownerId) await cleanupMediaQuietly(ownerId);
 }
 
 export async function publishPage(
   pageId: string,
   expected?: PublishExpected,
 ): Promise<SitePublishResult> {
-  const who = await publisher();
+  const who = await publisher(pageId);
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishPageCore({
     pageId,
     userId: who.userId,
     ...(expected === undefined ? {} : { expected }),
   });
-  if (result.ok) await published(pageId, who.userId);
+  if (result.ok) await published(pageId, who.ownerId);
   return result;
 }
 
@@ -84,7 +98,7 @@ export async function publishSitePage(
   entryId: string,
   expectedRev: number,
 ): Promise<PagePublishResult> {
-  const who = await publisher();
+  const who = await publisher(pageId);
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishSitePageCore({
     pageId,
@@ -93,7 +107,7 @@ export async function publishSitePage(
     userId: who.userId,
     source: "editor",
   });
-  if (result.ok) await published(pageId, who.userId);
+  if (result.ok) await published(pageId, who.ownerId);
   return result;
 }
 
@@ -106,9 +120,9 @@ export async function publishDesign(
   pageId: string,
   expectedRev: string | null,
 ): Promise<PublishResult> {
-  const who = await publisher();
+  const who = await publisher(pageId);
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishDesignCore({ pageId, expectedRev, userId: who.userId });
-  if (result.ok) await published(pageId, who.userId);
+  if (result.ok) await published(pageId, who.ownerId);
   return result;
 }

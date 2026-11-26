@@ -129,7 +129,7 @@ describe("M17-09 the route", () => {
   beforeEach(() => {
     mocks.context.mockResolvedValue({
       user: { id: "user-a", email: "a@example.test" },
-      current: { id: SITE, handle: "mara" },
+      current: { id: SITE, handle: "mara", access: { isOwner: true } },
     });
     mocks.rateLimit.mockResolvedValue({ allowed: true, retryAfter: 0 });
     mocks.load.mockResolvedValue({ rows: [row()], labels });

@@ -1,5 +1,6 @@
 "use client";
 
+import type { SiteRole } from "@/lib/team/constants";
 import { createContext, useContext, type Dispatch } from "react";
 import type { Autosave } from "@/components/editor/use-autosave";
 import type { UndoRedo } from "@/components/editor/use-undo-redo";
@@ -58,8 +59,14 @@ export interface ThemesLoad {
 export interface WorkspaceValue {
   // Page identity. Live: the layout passes them on every render, so a rename (`router.refresh()`) updates `name`.
   pageId: string;
-  /** The signed-in user's id: the first path segment of the page's uploaded media. */
+  /** The site OWNER's id (Wave F): the first path segment of the page's uploaded media. */
   ownerId: string;
+  /** The signed-in user (the actor); equals `ownerId` on an own site. */
+  userId: string;
+  /** The user's role on this site. */
+  role: SiteRole;
+  /** The owner or a publisher: the publish-class controls show (an editor sees PUBLISH_FORBIDDEN_MESSAGE). */
+  canPublish: boolean;
   /** The signed-in user's sign-in address: where a contact form's message emails go (M17-07, M17-10). */
   accountEmail?: string;
   plan: PlanId;

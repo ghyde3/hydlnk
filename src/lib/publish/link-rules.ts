@@ -88,13 +88,14 @@ export async function ownHostsOf(
 
 export async function checkLinkRules(
   admin: SupabaseClient<Database>,
-  input: { pageId: string; userId: string; form: PublishDoc; raw: unknown },
+  /** `ownerId`: the site OWNER (Wave F): redirect mode is the owner's plan, whoever publishes. */
+  input: { pageId: string; ownerId: string; form: PublishDoc; raw: unknown },
 ): Promise<PublishError[]> {
   const errors = misplacedLockErrors(input.raw);
   const redirect = input.form.redirect;
   if (!redirect) return errors;
 
-  const account = await admin.from("accounts").select("plan").eq("id", input.userId).maybeSingle();
+  const account = await admin.from("accounts").select("plan").eq("id", input.ownerId).maybeSingle();
   if (account.error) throw new Error(`Reading the plan failed: ${account.error.message}`);
   // An unknown or missing plan reads as Free: the gate fails closed.
   if (!PLAN_LIMITS[toPlanId(account.data?.plan)].redirectMode) {

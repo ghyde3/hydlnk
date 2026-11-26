@@ -58,6 +58,8 @@ export async function GET(request: NextRequest) {
     return fail("load_failed", 500);
   }
 
+  // Owner-only (Wave F, G3): a member's request answers like a missing page.
+  if (!context.current.access.isOwner) return fail("not_found", 404);
   const kind = parseKind(request.nextUrl.searchParams.get("kind"));
   if (kind === null) return fail("bad_kind", 400);
 
