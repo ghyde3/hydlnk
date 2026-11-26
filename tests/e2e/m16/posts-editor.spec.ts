@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SLUG_MESSAGES } from "@/lib/content/schemas/slug";
 import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll } from "../helpers";
@@ -343,4 +344,32 @@ test("M16-13 on a phone the post bar stays on screen on a long post, and the too
     await expect(bar).toHaveCSS("position", "static");
   }
   await expectNoHorizontalScroll(page);
+});
+
+test("M16-13 an invalid slug shows its error as you type, and a valid one clears it", async ({
+  page,
+  context,
+}) => {
+  const user = await blogUser(context, "ps");
+  const id = await seedPost(user.pageId, { title: "Slug check", slug: "slug-check", body: "" });
+  await openPost(page, id);
+  const slug = page.getByTestId(POST_TEST_IDS.slug);
+  const editor = page.getByTestId("post-editor");
+
+  // Typed one key at a time: the format rule shows while typing, before any Publish.
+  await slug.fill("");
+  await slug.pressSequentially("Bad Slug!");
+  await expect(editor.getByText(SLUG_MESSAGES.format, { exact: true })).toBeVisible();
+  await expect(slug).toHaveAttribute("aria-invalid", "true");
+
+  await slug.fill("good-slug");
+  await expect(editor.getByText(SLUG_MESSAGES.format, { exact: true })).toHaveCount(0);
+  await expect(slug).not.toHaveAttribute("aria-invalid", "true");
+
+  // A reserved word has its own sentence, and a valid slug clears that too.
+  await slug.fill("category");
+  await expect(editor.getByText(SLUG_MESSAGES.reserved, { exact: true })).toBeVisible();
+  await slug.fill("a-valid-one");
+  await expect(editor.getByText(SLUG_MESSAGES.reserved, { exact: true })).toHaveCount(0);
+  await expect(slug).not.toHaveAttribute("aria-invalid", "true");
 });
