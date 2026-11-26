@@ -5,7 +5,7 @@ import { handleAddress } from "@/lib/pages/plans";
 import { orderSitePages } from "@/lib/site-pages/pages";
 import { tenantOrigin } from "@/lib/publish/urls";
 import { MCP_LIST_SUB_PAGES_MAX, MCP_SCOPES } from "../constants";
-import { publishStatusOf, readDraft } from "../doc-view";
+import { homeStatusesOf, readDraft } from "../doc-view";
 import { MESSAGES, ToolFailure } from "../errors";
 import {
   listOwnedPages,
@@ -30,7 +30,7 @@ export const listPages: ToolDefinition<typeof input> = {
   name: "list_pages",
   title: "List your pages",
   description:
-    "Lists the sites in this HYDLNK account: id, name, handle, public address and url, custom domains with their status, publishStatus of Home (published, unpublished-changes or not-published) and when it was last published. Each site also lists its pages: Home first (id home), then the others in menu order, each with id, title, path, inMenu and live (it has been published). Each page has a target: pass it as pageId (and subPageId) to get_page and the block tools; a page's id alone also works as pageId. Also returns the plan and how many sites and how many pages per site it allows. Call this first to get a pageId for the other tools. It reads only and changes nothing. Errors: account_suspended, rate_limited.",
+    "Lists the sites in this HYDLNK account: id, name, handle, public address and url, custom domains with their status, publishStatus (Home's blocks) and designStatus (theme, menu, profile), each published, unpublished-changes or not-published as in get_page, hasUnpublishedChanges and publishedAt. Each site also lists its pages: Home first (id home), then the others in menu order, each with id, title, path, inMenu and live (it has been published). Each page has a target: pass it as pageId (and subPageId) to get_page and the block tools; a page's id alone also works as pageId. Also returns the plan and how many sites and how many pages per site it allows. Call this first to get a pageId for the other tools. It reads only and changes nothing. Errors: account_suspended, rate_limited.",
   scope: MCP_SCOPES.read,
   annotations: READ_ONLY,
   input,
@@ -63,16 +63,18 @@ export const listPages: ToolDefinition<typeof input> = {
     const rows = pages.map((page) => {
       const draft = readDraft(page.draft);
       const theme = draft?.theme.ref ? themes.find((row) => row.id === draft.theme.ref) : undefined;
-      const publishStatus = draft
-        ? publishStatusOf({
+      // The same two statuses get_page answers for Home, from the same helper (M15-10): Home's own
+      // blocks, and the design. A theme-only change leaves publishStatus published in both tools.
+      const unreadable = page.publishedAt ? "unpublished-changes" : "not-published";
+      const { publishStatus, designStatus } = draft
+        ? homeStatusesOf({
             draft,
             published: page.published,
             publishedAt: page.publishedAt,
             themeTokens: theme?.tokens ?? null,
           })
-        : page.publishedAt
-          ? "unpublished-changes"
-          : "not-published";
+        : ({ publishStatus: unreadable, designStatus: unreadable } as const);
+      const hasUnpublishedChanges = publishStatus !== "published" || designStatus !== "published";
       const mine = subPages.filter((row) => row.siteId === page.id);
       const ordered = orderSitePages(
         "Home",
@@ -116,6 +118,8 @@ export const listPages: ToolDefinition<typeof input> = {
           .filter((domain) => domain.pageId === page.id)
           .map((domain) => ({ hostname: domain.hostname, status: domain.status })),
         publishStatus,
+        designStatus,
+        hasUnpublishedChanges,
         publishedAt: page.publishedAt,
         updatedAt: page.updatedAt,
         pageCount: ordered.length,
@@ -127,7 +131,17 @@ export const listPages: ToolDefinition<typeof input> = {
     const count = rows.length;
     const list = rows
       .map(
-        (row) => `${row.address} (${STATUS_WORDS[row.publishStatus as keyof typeof STATUS_WORDS]})`,
+        // One word per site: not published, live as it is, or with changes in Home or the design.
+        (row) =>
+          `${row.address} (${
+            STATUS_WORDS[
+              row.publishStatus === "not-published"
+                ? "not-published"
+                : row.hasUnpublishedChanges
+                  ? "unpublished-changes"
+                  : "published"
+            ]
+          })`,
       )
       .join(", ");
     return {

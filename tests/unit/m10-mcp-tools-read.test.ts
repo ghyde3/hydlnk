@@ -138,11 +138,34 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
         second.pageId,
         third.pageId,
       ]);
+      // The third site's change is its profile name: the design, not Home's blocks (M15-10, as get_page).
       expect(pages.map((page: { publishStatus: string }) => page.publishStatus)).toEqual([
+        "not-published",
+        "published",
+        "published",
+      ]);
+      expect(pages.map((page: { designStatus: string }) => page.designStatus)).toEqual([
         "not-published",
         "published",
         "unpublished-changes",
       ]);
+      expect(
+        pages.map((page: { hasUnpublishedChanges: boolean }) => page.hasUnpublishedChanges),
+      ).toEqual([true, false, true]);
+      // list_pages and get_page say the same about each site, a design-only change included.
+      for (const listed of pages) {
+        const read = await rt.call("get_page", { pageId: listed.id }, who(a));
+        expect(read.isError).toBe(false);
+        const { publishStatus, designStatus, hasUnpublishedChanges } = read.json!.page;
+        expect({
+          publishStatus: listed.publishStatus,
+          designStatus: listed.designStatus,
+          hasUnpublishedChanges: listed.hasUnpublishedChanges,
+        }).toEqual({ publishStatus, designStatus, hasUnpublishedChanges });
+      }
+      expect(out.text).toContain("(not published)");
+      expect(out.text).toContain("(published)");
+      expect(out.text).toContain("(unpublished changes)");
       expect(pages[0]).toMatchObject({
         id: a.pageId,
         handle: a.handle,
@@ -155,7 +178,9 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
       expect(Object.keys(pages[0]).sort()).toEqual([
         "address",
         "customDomains",
+        "designStatus",
         "handle",
+        "hasUnpublishedChanges",
         "id",
         "name",
         "pageCount",

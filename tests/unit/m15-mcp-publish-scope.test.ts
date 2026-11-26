@@ -209,6 +209,15 @@ describe("M15-10 get_page reports each page's own status", () => {
       "publishStatus is this page's own; designStatus covers theme, menu and profile.",
     );
     expect(getTool.description).toContain("the only way to learn block ids and image ids");
+    expect(getTool.description).toContain(
+      "page (id, rev, publishStatus, designStatus, hasUnpublishedChanges, publishedAt)",
+    );
+    // list_pages uses the same two words for the same two things.
+    const list = toolByName("list_pages")!.description;
+    expect(list).toContain("publishStatus (Home's blocks) and designStatus (theme, menu, profile)");
+    expect(list).toContain("hasUnpublishedChanges");
+    expect(list).not.toContain("publishStatus of Home");
+    expect(list.length).toBeLessThanOrEqual(800);
     expect(getTool.description.length).toBeLessThanOrEqual(800);
   });
 
