@@ -11,6 +11,9 @@ import { POSTS_TEST_IDS, POSTS_URL, expectTargets44 } from "./posts-helpers";
  * screen. Runs at phone 390x844 and desktop 1440x900.
  */
 
+const TAKEN_MESSAGE =
+  "That address is already used by a page of this site, or reserved. Choose another.";
+
 test.afterAll(cleanupUsers);
 test.describe.configure({ timeout: 120_000 });
 
@@ -116,4 +119,45 @@ test("M16-02 a site whose page already uses /blog is told so and can choose anot
     .single();
   expect(off.data).toEqual({ enabled: false, archive_path: "notes" });
   await expectNoHorizontalScroll(page);
+});
+
+test("M16-02 'Add blog' in the Pages panel says when /blog is a page's address, and takes another", async ({
+  page,
+  context,
+}) => {
+  const user = await emptyUser(context, "pt");
+  const admin = adminClient();
+  const pageType = await admin
+    .from("content_types")
+    .select("id")
+    .eq("site_id", user.pageId)
+    .eq("key", "page")
+    .single();
+  const taken = await admin.from("content_entries").insert({
+    site_id: user.pageId,
+    type_id: pageType.data!.id,
+    draft: { path: "blog", title: "Blog page", description: "", blocks: [] } as never,
+  });
+  expect(taken.error).toBeNull();
+
+  await openEditor(page);
+  await page.getByTestId(PAGES_BLOG_TEST_IDS.addBlog).click();
+  const panel = page.getByTestId("pages-blog");
+  await expect(panel.getByText(TAKEN_MESSAGE)).toBeVisible();
+  // The blog stayed off, and the address field is there, filled with the refused address.
+  const address = panel.locator('[data-field="blog-address"]');
+  await expect(address).toHaveValue("blog");
+  await expect(page.getByTestId(PAGES_BLOG_TEST_IDS.blogRow)).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+
+  await address.fill("journal");
+  await page.getByTestId(PAGES_BLOG_TEST_IDS.addBlog).click();
+  await expect(page.getByTestId(PAGES_BLOG_TEST_IDS.blogRow)).toContainText("/journal");
+  const type = await admin
+    .from("content_types")
+    .select("enabled, archive_path")
+    .eq("site_id", user.pageId)
+    .eq("key", "post")
+    .single();
+  expect(type.data).toEqual({ enabled: true, archive_path: "journal" });
 });
