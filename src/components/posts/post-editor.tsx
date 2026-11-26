@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
 import { FORM_BUTTON, FORM_BUTTON_DANGER } from "@/components/blocks/field";
 import type { TermSummary } from "@/lib/content/schemas/summaries";
@@ -34,6 +34,8 @@ import { withSchedule, type PostState, type PublishedState } from "@/lib/posts/s
 import { ScheduleControls } from "@/components/schedule/schedule-controls";
 import { useAccountPlan } from "@/components/versions/plan-context";
 import type { EntryScheduleSummary, ScheduleAction } from "@/lib/schedule/types";
+import { firedRevToAdopt } from "@/lib/schedule/adopt";
+import { useFireWatch } from "@/lib/schedule/use-fire-watch";
 import { createPreviewLink, listPreviewLinks } from "@/lib/previews/actions";
 import {
   choosePreviewLink,
@@ -360,32 +362,24 @@ export function PostEditor({
   const onCancelSchedule = (action: ScheduleAction) =>
     scheduleAction((rev) => cancelScheduledChange(siteId, entry.id, { rev, action }));
 
-  // A schedule that fires while the editor is open (M20-10): a minute after its time the post is read
-  // again; when the server's draft is what this screen holds, its new rev and live copy are adopted
-  // without the conflict notice.
+  // A schedule that fires while the editor is open (M20-10): the shared watch reads the post again once
+  // its time has passed; when this screen still holds the rev the fire found, it takes the rev the
+  // fire left (the draft is the server's) without the conflict notice, and the live state with it.
   const firesAt = schedule.publishAt ?? schedule.unpublishAt;
-  useEffect(() => {
-    if (!firesAt) return;
-    const wait = Math.max(5_000, Date.parse(firesAt) + 60_000 - Date.now());
-    if (wait > 2 ** 31 - 1) return;
-    const timer = setTimeout(() => {
-      void (async () => {
-        const fresh = await reloadSchedule();
-        if (!fresh || fresh.rev === queue.rev || queue.dirty) return;
-        const held = stableJson(toStoredDraft(latest.current, base));
-        if (stableJson(toStoredDraft(readPostForm(fresh.draft), fresh.draft)) !== held) return;
-        await queue.exclusive(async () => ({ rev: fresh.rev, value: null }));
-        setMeta({
-          status: fresh.status,
-          everPublished: fresh.firstPublishedAt !== null,
-          liveJson: liveJsonOf(fresh),
-        });
-      })();
-    }, wait);
-    return () => clearTimeout(timer);
-    // `reloadSchedule` and the queue are stable for the screen's life; the timer follows the time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firesAt]);
+  useFireWatch(firesAt, async () => {
+    const fresh = await reloadSchedule();
+    if (!fresh || firedRevToAdopt(queue.rev, fresh.schedule.fired) === null) return;
+    const adopted = await queue.exclusive(async (held) => {
+      const rev = firedRevToAdopt(held, fresh.schedule.fired);
+      return rev === null ? { value: false } : { rev, value: true };
+    });
+    if (!adopted.ok || !adopted.value) return;
+    setMeta({
+      status: fresh.status,
+      everPublished: fresh.firstPublishedAt !== null,
+      liveJson: liveJsonOf(fresh),
+    });
+  });
 
   const fieldError = (field: string) =>
     issues.find((issue) => fieldOfIssue(issue.path) === field)?.message;
