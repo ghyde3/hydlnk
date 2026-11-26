@@ -1,3 +1,4 @@
+import "server-only";
 import { createElement } from "react";
 import { render } from "react-email";
 import { FormLimit } from "@/emails/form-limit";

@@ -15,7 +15,8 @@ import { limitEmailContent, messageEmailContent } from "./email-content";
  *
  *   message  a contact form with "Email me each message" on: the message to the ACCOUNT'S OWN sign-in
  *            address (read with the secret key; a block can name no other recipient), with the
- *            visitor's address as Reply-To and nowhere else in a header. At most 30 an hour per
+ *            visitor's address as Reply-To and nowhere else in a header; only once that address is
+ *            confirmed (`email_confirmed_at`). At most 30 an hour per
  *            account (`form-notify:{ownerId}`); past that the message is stored and no email goes.
  *   limit    the first refusal of a month (`over_limit_first`, which the database answers once per
  *            account and month): one email with the plan's numbers and no visitor text.
@@ -37,7 +38,7 @@ export interface MessageNotice {
 }
 
 export interface NotifyDeps {
-  /** The account's sign-in address and plan, or null when the account is gone. */
+  /** The account's CONFIRMED sign-in address and plan, or null (gone, or never confirmed). */
   owner: (ownerId: string) => Promise<{ email: string; plan: PlanId } | null>;
   rateLimit: (key: string, limit: number, windowSeconds: number) => Promise<RateLimitResult>;
   send: (message: OutgoingMessage) => Promise<"sent" | "skipped">;
@@ -45,7 +46,11 @@ export interface NotifyDeps {
   log: (line: string) => void;
 }
 
-async function readOwner(ownerId: string): Promise<{ email: string; plan: PlanId } | null> {
+/**
+ * The account's sign-in address and plan, or null when the account is gone or its address was never
+ * confirmed (review A3: an address nobody proved is theirs gets no form email).
+ */
+export async function readOwner(ownerId: string): Promise<{ email: string; plan: PlanId } | null> {
   const admin = createAdminSupabase();
   const [user, account] = await Promise.all([
     admin.auth.admin.getUserById(ownerId),
@@ -55,7 +60,8 @@ async function readOwner(ownerId: string): Promise<{ email: string; plan: PlanId
   if (account.error)
     throw new Error(`reading the plan failed (${account.error.code ?? "unknown"})`);
   const email = user.data.user?.email;
-  return email ? { email, plan: toPlanId(account.data?.plan) } : null;
+  if (!email || !user.data.user?.email_confirmed_at) return null;
+  return { email, plan: toPlanId(account.data?.plan) };
 }
 
 export function notifyDeps(): NotifyDeps {

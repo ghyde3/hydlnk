@@ -117,11 +117,35 @@ describe("M17-10 the message email", () => {
     const { html, text } = d.smtp.sent[0]! as { html: string; text: string };
     expect(html).not.toContain("<script>alert(1)</script>");
     expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt; &amp; more");
-    expect(html).toContain("Vera Visitor &lt;vera@example.test&gt;");
+    expect(html).toContain("Name (as typed by the visitor): Vera Visitor");
+    expect(html).toContain("Email (as typed by the visitor): vera@example.test");
+    expect(text).toContain("Name (as typed by the visitor): Vera Visitor");
+    expect(text).not.toContain("From:");
+    expect(text).not.toMatch(/!/);
     // The plain-text part is text: the characters as typed, which no mail client runs.
     expect(text).toContain("<script>alert(1)</script> & more");
     expect(raw).toContain("Content-Type: text/plain");
     expect(raw).toContain("Content-Type: text/html");
+  });
+
+  it("a link in the message is plain text: no anchor, and no text run a client would turn into one (review A3)", async () => {
+    const d = deps();
+    await notifyOwnerOfMessage(
+      notice({ message: "See https://evil.example/login?x=1 and www.other.example, thanks" }),
+      d.deps,
+    );
+    const { html, text } = d.smtp.sent[0]! as { html: string; text: string };
+    // One anchor only: HYDLNK's own Audience link.
+    const anchors = [...html.matchAll(/<a\b[^>]*href="([^"]*)"/g)].map((match) => match[1]);
+    expect(anchors).toEqual(["http://app.localhost:3000/audience"]);
+    expect(html).not.toContain("https://evil.example");
+    expect(html).not.toContain("www.other.example");
+    expect(html).not.toContain("evil.example/login");
+    expect(html).toContain('content="telephone=no, date=no, address=no, email=no, url=no"');
+    // The words read the same, and the plain-text part keeps the link as typed.
+    const visible = html.replace(/<[^>]+>/g, "");
+    expect(visible).toContain("See https://evil.example/login?x=1 and www.other.example, thanks");
+    expect(text).toContain("See https://evil.example/login?x=1 and www.other.example, thanks");
   });
 
   it("a line break followed by Bcc: in a name or a message adds no header", async () => {
