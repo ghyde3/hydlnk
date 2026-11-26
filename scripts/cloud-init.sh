@@ -6,6 +6,7 @@
 #   1. Node from .nvmrc into /opt/node<major>, linked first on PATH (~/.local/bin)
 #   2. the Supabase CLI pinned in .github/workflows/ci.yml (both binaries: supabase, supabase-go)
 #   3. the Docker daemon, if it is installed but not running
+#   3b. libnss-myhostname, so Node resolves *.localhost (browsers already do)
 #   4. Supabase's images from ghcr.io, retagged to the public.ecr.aws names the CLI asks for
 #      (ECR's anonymous pull limit is usually spent on shared cloud IPs)
 #
@@ -93,6 +94,18 @@ if ! docker info >/dev/null 2>&1; then
     sleep 1
   done
   docker info >/dev/null 2>&1 || die "dockerd did not start; see tmp/dockerd.log"
+fi
+
+# --- 3b. *.localhost for Node -----------------------------------------------------------------
+# Browsers resolve *.localhost themselves; Node asks the system resolver, which needs
+# nss-myhostname. Without it, server-side test fetches to app.localhost fail with ENOTFOUND.
+if ! getent hosts probe.localhost >/dev/null 2>&1; then
+  say "installing libnss-myhostname so Node resolves *.localhost"
+  (apt-get update -q && apt-get install -y -q libnss-myhostname) >"$ROOT/tmp/apt-nss.log" 2>&1 ||
+    die "could not install libnss-myhostname; see tmp/apt-nss.log"
+  grep -q myhostname /etc/nsswitch.conf ||
+    sed -i 's/^hosts:.*/& myhostname/' /etc/nsswitch.conf
+  getent hosts probe.localhost >/dev/null || die "*.localhost still does not resolve"
 fi
 
 # --- 4. Supabase images from ghcr.io --------------------------------------------------------
