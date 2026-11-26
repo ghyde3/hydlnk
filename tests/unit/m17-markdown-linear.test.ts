@@ -1,10 +1,8 @@
 // @vitest-environment node
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { setFlagsFromString } from "node:v8";
-import { runInNewContext } from "node:vm";
 import type { Token } from "marked";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   BODY_SHAPE_MESSAGES,
   MARKDOWN_MAX_DEPTH,
@@ -19,6 +17,7 @@ import { lexTokens } from "@/lib/blog/markdown/lex";
 import { LexRefused } from "@/lib/blog/markdown/limits";
 import { canEditRich } from "@/components/posts/body-editor/markdown";
 import { ATTACKS, BODY_CAP, REALISTIC, atCap, fit } from "./support/markdown-families";
+import { stopTiming, timeLex, type LexTiming } from "./support/markdown-timing";
 
 /**
  * The bound on post bodies (M16-04, M16-13): the lexer is linear in the body, its two limits are
@@ -31,7 +30,12 @@ import { ATTACKS, BODY_CAP, REALISTIC, atCap, fit } from "./support/markdown-fam
  *       a loose ceiling of 1 s at 512 KiB (the worst family takes about 0.2 s on the dev box). The
  *       ratio is measured for each family whose 512 KiB body takes 20 ms or more;
  *   (d) the 47 realistic families at 512 KiB are accepted;
- *   (e) memory: the wide table and bodies at the node limit stay within a sane heap delta.
+ *   (e) memory: the wide table and bodies at the node limit stay within a sane heap delta;
+ *   (f) a search for super-linear shapes: candidate bodies grown by doubling, the worst mutated.
+ *
+ * Every timed lex runs in a worker thread (`support/markdown-timing.ts`) that is killed after
+ * `LIMIT_MS`: a regression to quadratic time fails its own test in seconds instead of hanging the
+ * suite. Ratios read the worker's CPU time (the machine may be shared); the ceiling reads wall time.
  *
  * The fuzzers run `MARKDOWN_FUZZ_SAMPLES` bodies each (default 24, a few seconds); set it higher
  * for a longer run (the advisor's run used 400).
@@ -52,53 +56,26 @@ function lexOnce(body: string): { ok: boolean; reason?: string; nodes: number; t
   }
 }
 
-/**
- * A full garbage collection before each timed run, so a timing measures the lexer and not the
- * previous run's garbage (an accepted body's tree holds up to 150,000 tokens). Node exposes `gc`
- * to a new context once the flag is set; where it does not, timing just runs without it.
- */
-const collectGarbage: () => void = (() => {
-  try {
-    setFlagsFromString("--expose-gc");
-    return runInNewContext("gc") as () => void;
-  } catch {
-    return () => {};
-  }
-})();
+afterAll(stopTiming);
 
-function timed(body: string): number {
-  const start = performance.now();
-  lexOnce(body);
-  return performance.now() - start;
-}
-
-/** The fastest of `runs` timings of each body, interleaved so both see the same heap. */
-function fastest(bodies: string[], runs = 5): number[] {
-  const best = bodies.map(() => Infinity);
-  for (let run = 0; run < runs; run += 1) {
-    collectGarbage();
-    bodies.forEach((body, k) => {
-      best[k] = Math.min(best[k]!, timed(body));
-    });
-  }
-  return best;
-}
+/** The fastest of `runs` lexes of each body (interleaved), in the worker. */
+const fastest = (label: string, bodies: string[], runs = 5): Promise<LexTiming[]> => timeLex(label, { bodies, runs });
 
 /**
  * t(2n) / t(n) below 3 for n = 64 KiB (a quadratic shape reads about 4 there; marked took seconds),
  * measured again (up to five times) when noise makes one reading high.
  */
-function expectLinear(name: string, make: (n: number) => string): void {
+async function expectLinear(name: string, make: (n: number) => string): Promise<void> {
   // Uncut: cutting a body mid-pattern would compare two different shapes.
   const small = make(BODY_CAP / 8);
   const large = make(BODY_CAP / 4);
   let ratio = Infinity;
   let times: number[] = [];
+  await fastest(name, [small, large], 1);
   // A garbage collection inside every one of five runs can still lift one reading; a quadratic
   // shape reads 4 or more on every attempt, so five attempts tell the two apart.
-  fastest([small, large], 1);
   for (let attempt = 0; attempt < 5 && ratio >= 3; attempt += 1) {
-    times = fastest([small, large]);
+    times = (await fastest(name, [small, large])).map((timing) => timing.cpu);
     // Below a few milliseconds a ratio is noise: the body is cheap whatever its shape.
     ratio = times[1]! < 4 ? 0 : times[1]! / Math.max(times[0]!, 0.5);
   }
@@ -299,17 +276,17 @@ describe("the limits and their messages", () => {
     expect(lexOnce(`${"> ".repeat(MARKDOWN_MAX_NESTING + 1)}a`).ok).toBe(false);
   });
 
-  it("size: a body past the node limit is refused with the size message, below it accepted", () => {
+  it("size: a body past the node limit is refused with the size message, below it accepted", async () => {
     const at = (n: number) => "*a* ".repeat(n);
-    expect(lexOnce(at(40_000))).toMatchObject({ ok: true, nodes: 120_001 });
-    expect(lexOnce(at(60_000))).toMatchObject({ ok: false, reason: "size" });
+    const [below, past] = await timeLex("size", { bodies: [at(40_000), at(60_000)], runs: 1 });
+    expect(below).toMatchObject({ ok: true, nodes: 120_001 });
+    expect(past).toMatchObject({ ok: false, reason: "size" });
     expect(bodyShapeMessage(at(60_000))).toBe(BODY_SHAPE_MESSAGES.size);
   });
 
-  it("the reported refusals of the old meter are accepted now (they lex in linear time)", () => {
-    for (const body of ["*a ".repeat(32_000), "*a **b ".repeat(8000), `[a](${" ".repeat(4800)}`]) {
-      expect(lexOnce(body).ok).toBe(true);
-    }
+  it("the reported refusals of the old meter are accepted now (they lex in linear time)", async () => {
+    const bodies = ["*a ".repeat(32_000), "*a **b ".repeat(8000), `[a](${"\u00a0".repeat(4800)}`];
+    for (const result of await timeLex("old meter", { bodies, runs: 1 })) expect(result.ok).toBe(true);
   });
 });
 
@@ -328,16 +305,15 @@ function rng(seed: number): () => number {
 }
 const pick = <T,>(random: () => number, list: readonly T[]): T => list[Math.floor(random() * list.length)]!;
 
-function expectBounded(body: string, label: string): number {
-  let result: ReturnType<typeof lexOnce> | undefined;
+async function expectBounded(body: string, label: string): Promise<number> {
+  let result: LexTiming | undefined;
   let ms = Infinity;
   for (let run = 0; run < 2 && ms >= CEILING_MS; run += 1) {
-    const start = performance.now();
-    result = lexOnce(body);
-    ms = Math.min(ms, performance.now() - start);
+    [result] = await timeLex(label, { bodies: [body], runs: 1 });
+    ms = Math.min(ms, result!.ms);
   }
-  expect(result!.reason, label).not.toBe("error");
-  expect(result!.nodes, label).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
+  expect(result!.reason, `${label}: ${result!.message ?? ""}`).not.toBe("error");
+  expect(result!.ok ? result!.nodes : MARKDOWN_MAX_NODES, label).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
   expect(ms, `${label}: ${ms.toFixed(0)} ms`).toBeLessThan(CEILING_MS);
   return ms;
 }
@@ -348,7 +324,7 @@ const RATIO_FLOOR_MS = 20;
 describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
   const SPECIAL = ["*", "_", "~", "[", "]", "(", ")", "<", ">", "!", "`", "|", "#", "-", "+", "\\", "&", " ", "\t", "\n", "\r\n", " ", "　", "a"];
 
-  it(`repetition fuzzer: prefix + piece x k + suffix at 512 KiB (${FUZZ_SAMPLES} bodies)`, () => {
+  it(`repetition fuzzer: prefix + piece x k + suffix at 512 KiB (${FUZZ_SAMPLES} bodies)`, async () => {
     const ALPHA = [...SPECIAL, "**", "__", "~~", "``", "\n\n", "[a](", "](", "<!--", "<a ", "&amp;", "---", "===", "|-", "- ", "> ", "```", "~~~", "a@b.c", "[a]: b\n", "[a]", "![", "http://", "www.", "1.", "    ", "x_y", '"', ":", "/", "@", "."];
     const random = rng(1);
     for (let sample = 0; sample < FUZZ_SAMPLES; sample += 1) {
@@ -358,11 +334,11 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
       const unit = seed.length + second.length || 1;
       const k = Math.floor(500_000 / unit);
       const body = fit(part(4) + seed.repeat(k) + second.repeat(second ? k : 0) + part(4));
-      expectBounded(body, JSON.stringify(seed + "|" + second).slice(0, 60));
+      await expectBounded(body, JSON.stringify(seed + "|" + second).slice(0, 60));
     }
   }, 120_000);
 
-  it(`random-mix fuzzer: random sub-alphabets of the special characters, 4 to 512 KiB (${FUZZ_SAMPLES} bodies)`, () => {
+  it(`random-mix fuzzer: random sub-alphabets of the special characters, 4 to 512 KiB (${FUZZ_SAMPLES} bodies)`, async () => {
     const random = rng(7);
     for (let sample = 0; sample < FUZZ_SAMPLES; sample += 1) {
       const length = sample % 4 === 0 ? BODY_CAP : 4096 + Math.floor(random() * (BODY_CAP - 4096));
@@ -386,14 +362,14 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
           size += 1;
         }
       }
-      expectBounded(fit(parts.join("")), `mix ${sample}: ${JSON.stringify(alphabet.join("").slice(0, 30))}`);
+      await expectBounded(fit(parts.join("")), `mix ${sample}: ${JSON.stringify(alphabet.join("").slice(0, 30))}`);
     }
   }, 120_000);
 
   // Linear is not enough when the constant is 33: each `[` used to rescan its address up to the
   // 33rd open parenthesis, so `[a](` repeated read every character 33 times (1.3 s on CI). Each
   // family is timed against a body with the same `[`s whose address ends at a space.
-  it("a link address is read once, not again for each `[` that precedes it", () => {
+  it("a link address is read once, not again for each `[` that precedes it", async () => {
     const pairs: [string, string, string][] = [
       [
         "[a]( repeated",
@@ -407,15 +383,15 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
       ],
     ];
     for (const [name, body, control] of pairs) {
-      const [cost, base] = fastest([body, control]);
+      const [cost, base] = (await fastest(name, [body, control])).map((timing) => timing.cpu);
       const label = `${name}: ${cost!.toFixed(0)} ms, control ${base!.toFixed(0)} ms`;
       expect(cost! / Math.max(base!, 1), label).toBeLessThan(3);
     }
   }, 60_000);
 
   for (const [name, make] of Object.entries(ATTACKS)) {
-    it(`${name}: linear (t(2n)/t(n) < 3), and within the ceiling at 512 KiB`, () => {
-      if (expectBounded(fit(make(BODY_CAP)), name) >= RATIO_FLOOR_MS) expectLinear(name, make);
+    it(`${name}: linear (t(2n)/t(n) < 3), and within the ceiling at 512 KiB`, async () => {
+      if ((await expectBounded(fit(make(BODY_CAP)), name)) >= RATIO_FLOOR_MS) await expectLinear(name, make);
     }, 60_000);
   }
 });
@@ -428,12 +404,11 @@ describe("(d) the 47 realistic families at 512 KiB are accepted", () => {
   });
 
   for (const [name, { gen }] of Object.entries(REALISTIC)) {
-    it(name, () => {
+    it(name, async () => {
       const body = atCap(gen);
       expect(Buffer.byteLength(body)).toBeGreaterThan(BODY_CAP * 0.9);
-      const start = performance.now();
-      const result = lexOnce(body);
-      expect(performance.now() - start).toBeLessThan(CEILING_MS);
+      const [result] = await timeLex(name, { bodies: [body], runs: 1 });
+      expect(result!.ms).toBeLessThan(CEILING_MS);
       expect(result, name).toMatchObject({ ok: true });
     }, 60_000);
   }
@@ -443,23 +418,132 @@ describe("(d) the 47 realistic families at 512 KiB are accepted", () => {
 
 describe("(e) memory", () => {
   const MB = 1024 * 1024;
-  const heapDelta = (body: string): { delta: number; result: ReturnType<typeof lexOnce> } => {
-    const before = process.memoryUsage().heapUsed;
-    const result = lexOnce(body);
-    return { delta: process.memoryUsage().heapUsed - before, result };
+  const heapDelta = async (body: string): Promise<{ delta: number; result: LexTiming }> => {
+    const [result] = await timeLex("heap", { bodies: [body], runs: 1, heap: true });
+    return { delta: result!.heap, result: result! };
   };
 
-  it("the wide table (6,000 columns, 3,000 rows) is accepted without growing with rows x columns", () => {
-    const { delta, result } = heapDelta(ATTACKS["wide table 6,000 x 3,000"]!(0));
+  it("the wide table (6,000 columns, 3,000 rows) is accepted without growing with rows x columns", async () => {
+    const { delta, result } = await heapDelta(ATTACKS["wide table 6,000 x 3,000"]!(0));
     expect(result.ok).toBe(true);
     expect(delta).toBeLessThan(128 * MB);
   });
 
-  it("bodies at the node limit, accepted and refused, stay within a sane heap delta", () => {
+  it("bodies at the node limit, accepted and refused, stay within a sane heap delta", async () => {
     for (const body of ["*a* ".repeat(40_000), "- a\n".repeat(130_000), `|a|b|\n|-|-|\n${"a|b\n".repeat(120_000)}`]) {
-      const { delta, result } = heapDelta(fit(body));
-      expect(result.nodes).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
+      const { delta, result } = await heapDelta(fit(body));
+      expect(result.ok ? result.nodes : MARKDOWN_MAX_NODES).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
       expect(delta, JSON.stringify(body.slice(0, 20))).toBeLessThan(256 * MB);
     }
   });
+});
+
+// (f) ------------------------------------------------------------------------------------------------
+
+/**
+ * Every character a scanner of the lexer branches on, read from its source (the character codes it
+ * compares, `0x..`, and the characters of its short string literals), and every short literal
+ * itself (`www.`, `://`, `<!--`...): a new branch character joins the search without a test edit.
+ */
+function scannerAlphabet(): string[] {
+  const pieces = new Set<string>(["a", "x", "1", " ", "\n", "\t", "\u00a0", "\u3000", "字"]);
+  const printable = (code: number) => code === 0x09 || code === 0x0a || (code >= 0x20 && code < 0x7f);
+  for (const name of readdirSync(LEXER_DIR).filter((file) => file.endsWith(".ts"))) {
+    const source = readFileSync(join(LEXER_DIR, name), "utf8");
+    for (const match of source.matchAll(/\b0x([0-9a-fA-F]{2})\b/g)) {
+      const code = Number.parseInt(match[1]!, 16);
+      if (printable(code)) pieces.add(String.fromCharCode(code));
+    }
+    for (const match of source.matchAll(/"((?:[^"\\\n]|\\.){1,24})"|'((?:[^'\\\n]|\\.){1,24})'/g)) {
+      const literal = (match[1] ?? match[2]!).replace(/\\(.)/g, (_, c: string) => (c === "n" ? "\n" : c === "t" ? "\t" : c));
+      for (const char of literal) if (printable(char.charCodeAt(0))) pieces.add(char);
+      if (literal.length > 1 && literal.length <= 8 && /^[\x20-\x7e]+$/.test(literal)) pieces.add(literal);
+    }
+  }
+  return [...pieces].sort();
+}
+
+describe("(f) a search for super-linear shapes", () => {
+  const alphabet = scannerAlphabet();
+
+  it("its alphabet holds every character the inline cursor stops at and every named character", () => {
+    for (const char of "\\`<[!*_~\n@hHfFw|#>-+=:.()&;\"'") expect(alphabet, JSON.stringify(char)).toContain(char);
+    expect(alphabet).toEqual(expect.arrayContaining(["www.", "://"]));
+  });
+
+  // Shapes: a prefix and a unit repeated to the size. Each is scored by t(64 KiB) / t(32 KiB); the
+  // worst are kept and mutated. Then each kept shape is grown by doubling until its time is past
+  // the noise (from 16 to 512 KiB): one that more than doubles (t(2n)/t(n) > 2.4) across two
+  // doublings there fails the test.
+  it("finds no shape that stays super-linear across two doublings (fixed seed, bounded time)", async () => {
+    const SEARCH_MS = 12_000;
+    const RATIO = 2.4;
+    /** Times below this are noise, whatever the shape. */
+    const NOISE_MS = 10;
+    const started = performance.now();
+    const random = rng(0x5ea7c4);
+    type Shape = { prefix: string; unit: string; score: number };
+    const piece = () => pick(random, alphabet);
+    const pieces = (max: number) => Array.from({ length: 1 + Math.floor(random() * max) }, piece).join("");
+    const bodyOf = (shape: Shape, n: number) => (shape.prefix + shape.unit.repeat(Math.ceil(n / shape.unit.length))).slice(0, n);
+    const label = (shape: Shape) => `${JSON.stringify(shape.prefix)} + ${JSON.stringify(shape.unit)} x k`;
+    /** CPU times at each size (fastest of 3); null when the worker was killed (far past linear). */
+    const times = async (shape: Shape, sizes: number[]): Promise<number[] | null> => {
+      try {
+        const timings = await timeLex(label(shape), { bodies: sizes.map((n) => bodyOf(shape, n)), runs: 3 });
+        return timings.map((timing) => timing.cpu);
+      } catch {
+        return null;
+      }
+    };
+    const score = async (shape: Shape): Promise<number> => {
+      const t = await times(shape, [32_768, 65_536]);
+      if (t === null) return Infinity;
+      return t[1]! < 2 ? 0 : t[1]! / Math.max(t[0]!, 0.05);
+    };
+    const mutate = (shape: Shape): Shape => {
+      const units = [...shape.unit];
+      const at = Math.floor(random() * (units.length + 1));
+      const roll = random();
+      if (roll < 0.35 && units.length > 1) units.splice(Math.min(at, units.length - 1), 1);
+      else if (roll < 0.75) units.splice(at, 0, piece());
+      else return { prefix: random() < 0.5 ? "" : pieces(3), unit: shape.unit, score: 0 };
+      return { prefix: shape.prefix, unit: units.join(""), score: 0 };
+    };
+
+    let kept: Shape[] = [];
+    const consider = async (shape: Shape) => {
+      shape.score = await score(shape);
+      kept = [...kept, shape].sort((p, q) => q.score - p.score).slice(0, 8);
+    };
+    for (let k = 0; k < 120 && performance.now() - started < SEARCH_MS / 2; k += 1) {
+      await consider({ prefix: random() < 0.4 ? pieces(3) : "", unit: pieces(6), score: 0 });
+    }
+    while (performance.now() - started < SEARCH_MS) await consider(mutate(kept[Math.floor(random() * 3)]!));
+
+    const failing: string[] = [];
+    let worst = { shape: "", ratio: 0 };
+    for (const shape of kept) {
+      const sizes: number[] = [];
+      const seen: number[] = [];
+      let verdict: number[] | null = null;
+      for (let n = 16_384; n <= BODY_CAP && verdict === null; n *= 2) {
+        const t = await times(shape, [n]);
+        if (t === null) {
+          verdict = [Infinity, Infinity];
+          break;
+        }
+        sizes.push(n);
+        seen.push(t[0]!);
+        const k = seen.length;
+        if (k >= 3 && seen[k - 3]! >= NOISE_MS) verdict = [seen[k - 2]! / seen[k - 3]!, seen[k - 1]! / seen[k - 2]!];
+      }
+      if (verdict === null) continue;
+      const ratio = Math.min(...verdict);
+      if (ratio > worst.ratio) worst = { shape: label(shape), ratio };
+      if (ratio > RATIO) failing.push(`${label(shape)}: ${seen.map((t, k) => `${sizes[k]! / 1024} KiB ${t.toFixed(1)} ms`).join(", ")}`);
+    }
+    console.info(`(f) worst surviving shape: ${worst.shape}, t(2n)/t(n) = ${worst.ratio.toFixed(2)} (the smaller of two doublings)`);
+    expect(failing, failing.join("\n")).toEqual([]);
+  }, 60_000);
 });
