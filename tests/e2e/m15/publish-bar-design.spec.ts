@@ -49,6 +49,9 @@ test("M15-10 the publish bar's chip, chevron, chips and titles", async ({ page, 
     .toContain("Changed");
   await page.reload();
   await expect(statusChip(page)).toHaveText("Unpublished changes");
+  // Measured in Public Sans, the font the design is drawn in: the chip is in the server's HTML, so
+  // it can be on screen in the fallback font for a moment before the swap.
+  await page.evaluate(() => document.fonts.ready);
 
   // The chip: its name holds the text it shows, and Publish is still the only "Publish…" button.
   await expect(toggle(page)).toHaveAccessibleName(
