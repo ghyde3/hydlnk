@@ -49,9 +49,20 @@ export async function recordSubmission(
   return { status, ownerId: first?.owner_id ?? null };
 }
 
-/** `http(s)://…` for a bare `www.` host, so the blocklist's URL parser reads its host. */
-function asUrl(link: string): string {
-  return /^https?:\/\//i.test(link) ? link : `https://${link}`;
+/**
+ * Each kind of link `linksIn` finds as an `https://` URL of the same host, so the blocklist's URL
+ * parser reads that host: http(s) as written, `ftp://host/…` as `https://host/…`, `mailto:a@host` as
+ * `https://host`, a `www.` host or a bare host with a path with `https://` in front.
+ */
+export function asUrl(link: string): string {
+  if (/^https?:\/\//i.test(link)) return link;
+  const ftp = /^ftp:\/\//i.exec(link);
+  if (ftp) return `https://${link.slice(ftp[0].length)}`;
+  if (/^mailto:/i.test(link)) {
+    const address = link.slice("mailto:".length).split(/[?#]/, 1)[0] ?? "";
+    return `https://${address.slice(address.lastIndexOf("@") + 1)}`;
+  }
+  return `https://${link}`;
 }
 
 /**

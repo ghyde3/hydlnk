@@ -16,6 +16,10 @@ import { adminClient, publishedOwner, record } from "./m17f-forms-db-support";
  * A. B must then count A's row and refuse. A version without that lock would let B count 99 and
  * store a 101st. pgTAP 220 has every other case of the cap.
  *
+ * The month's usage row exists, committed, before session A starts (forms attack pass, finding 8a):
+ * otherwise B would wait on A's INSERT of a brand-new row (the unique key), not on the row lock,
+ * and the test would pass with FOR UPDATE removed. Checked by that mutation: red without it.
+ *
  * The seed rows stand on a second site of the account (made with no trigger running) and are dated
  * the 1st of the month, so the per-site daily cap of the site under test is never what refuses,
  * whatever the date.
@@ -92,6 +96,10 @@ insert into public.pages (id, owner_id, handle, draft, published, published_at)
     '{"version":1,"blocks":[]}', now());
 commit;`);
       if (count > 0) await seedFormRows(second, count);
+      // The month's lock row, committed before any session starts: only FOR UPDATE can serialise.
+      await localPsql(
+        `insert into public.form_submission_usage (owner_id, month) values ('${owner.userId}', public.form_usage_month());`,
+      );
       return owner;
     }
 

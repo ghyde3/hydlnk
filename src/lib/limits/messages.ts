@@ -166,6 +166,17 @@ export function formDailyLimitNotice(plan: PlanId, refusedDaily: number): string
 }
 
 /**
+ * The notice once owner message emails were skipped today by their hourly cap (forms attack pass,
+ * finding 6), or null: "Today 4 message emails were not sent: at most 30 go out an hour. Every
+ * message is saved here."
+ */
+export function formNotifySkippedNotice(skippedToday: number, perHour: number): string | null {
+  if (skippedToday <= 0) return null;
+  const emails = skippedToday === 1 ? "message email was" : "message emails were";
+  return `Today ${grouped(skippedToday)} ${emails} not sent: at most ${grouped(perHour)} go out an hour. Every message is saved here.`;
+}
+
+/**
  * The Audience screen's notice once anything was refused this month (M17-02), by plan:
  *   "You’ve reached this month’s limit of 100 form submissions on Free. 12 were not saved. Upgrade to
  *    keep more, or wait until the 1st."

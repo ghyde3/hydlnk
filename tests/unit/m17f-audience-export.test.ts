@@ -103,6 +103,17 @@ describe("M17-09 the CSV", () => {
     expect(rows[3]![5]).toBe("'\tcmd");
   });
 
+  it("a formula cell that also needs quoting keeps its apostrophe inside the quotes (finding 8c)", () => {
+    const name = '=HYPERLINK("http://evil.example","x")\nsecond line';
+    const message = "=1+1,\r\n@SUM(A1)";
+    const text = audienceCsv([row({ name, message })], labels);
+    const rows = parseCsv(text.slice(1));
+    expect(rows[1]![4]).toBe(`'${name}`);
+    expect(rows[1]![5]).toBe(`'${message}`);
+    // The raw cell starts with the quote, then the apostrophe: never a bare = after the quote.
+    expect(text).toContain(`,"'=HYPERLINK(""http://evil.example"",""x"")\nsecond line",`);
+  });
+
   it("a message with a comma, a quote and a line break round-trips", () => {
     const message = 'Hi, "there"\nsecond line';
     const rows = parseCsv(audienceCsv([row({ message })], labels).slice(1));

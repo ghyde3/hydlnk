@@ -61,6 +61,22 @@ export const SUBMISSION_LIMITS = {
   bodyBytes: 32768,
 } as const;
 
+/**
+ * The least time any form POST takes, from its arrival to its answer, plus up to the jitter (forms
+ * attack pass, finding 2). Without it the time told the outcomes apart: a dropped post answered in
+ * 7-11 ms where a stored one took 19 ms or more, and "already subscribed" on a large account
+ * answered faster than a store. Every outcome (403 to 503, the pages, every 303) waits until the
+ * same moment, so only a request slower than the floor shows its own time. The floor is above the
+ * measured time of a stored submission on a large account (a production build, a Studio account
+ * holding 47,000 this month, two runs of 150: p99 175 and 185 ms, the slowest 252 ms). Applied in
+ * one place: `handleFormPost` (src/lib/forms/submit.ts).
+ */
+export const FORM_POST_FLOOR_MS = 400;
+export const FORM_POST_JITTER_MS = 10;
+
+/** The owner's message emails a contact form sends at most an hour per account (form-notify). */
+export const FORM_NOTIFY_PER_HOUR = 30;
+
 /** The fixed labels of the block's controls. */
 export const FORM_LABELS = {
   email: "Email",
@@ -96,11 +112,24 @@ export function asksName(kind: FormKind, askName: boolean): boolean {
   return kind === "contact" || askName;
 }
 
-const LINK = /\bhttps?:\/\/[^\s<>"']+|\bwww\.[^\s<>"']+/gi;
+/**
+ * What counts as a link in what a visitor typed (forms attack pass, finding 4). One rule for the
+ * field checks (no link in a name, at most 5 in a message), the blocklist check and the owner's
+ * email, which neutralises every one of them:
+ *   - `http://`, `https://` or `ftp://` and what follows, or `mailto:` and what follows;
+ *   - a `www.` host;
+ *   - a bare host with a path: dotted labels, a last label of 2 to 63 letters, then `/`
+ *     (`evil.example/login`).
+ * Not a link: a bare host with no path (`booking.com`, `node.js`), which names and plain sentences
+ * hold too often. No leading word boundary: a link glued to a word character (`xhttps://…`,
+ * `_https://…`, `1www.…`) is found all the same.
+ */
+const LINK =
+  /(?:https?|ftp):\/\/[^\s<>"']+|mailto:[^\s<>"']+|www\.[^\s<>"']+|(?:[\p{L}\p{N}-]+\.)+\p{L}{2,63}\/[^\s<>"']*/giu;
 const TRAILING_PUNCTUATION = /[.,;:!?)\]}]+$/;
 const MAX_LINKS_RETURNED = 50;
 
-/** The http(s) links and bare `www.` hosts in a text, in order, at most 50. */
+/** The links in a text (the rule above), in order, at most 50. */
 export function linksIn(text: string): string[] {
   const found: string[] = [];
   for (const match of text.matchAll(LINK)) {
@@ -111,17 +140,72 @@ export function linksIn(text: string): string[] {
   return found;
 }
 
+/** A text cut at its links (`linksIn`), in order: the pieces between them and the links. */
+export function linkParts(text: string): { text: string; link: boolean }[] {
+  const parts: { text: string; link: boolean }[] = [];
+  let rest = text;
+  for (const link of linksIn(text)) {
+    const at = rest.indexOf(link);
+    if (at < 0) continue;
+    if (at > 0) parts.push({ text: rest.slice(0, at), link: false });
+    parts.push({ text: link, link: true });
+    rest = rest.slice(at + link.length);
+  }
+  if (rest !== "") parts.push({ text: rest, link: false });
+  return parts;
+}
+
+/**
+ * A text with each of its links (`linksIn`) made inert for plain text: every `.` becomes `[.]` and
+ * every `:` becomes `[:]` inside the link (`https[:]//evil[.]example/login`), the usual way to write
+ * an address no client turns into a link. The rest of the text, line breaks included, is unchanged.
+ */
+export function neutralizeLinks(text: string): string {
+  return linkParts(text)
+    .map((part) => (part.link ? part.text.replace(/[.:]/g, (c) => `[${c}]`) : part.text))
+    .join("");
+}
+
 function line(raw: string | null | undefined): string {
-  return stripHiddenCharacters(String(raw ?? ""));
+  return stripHiddenCharacters(String(raw ?? "")).normalize("NFC");
 }
 
 function lines(raw: string | null | undefined): string {
-  return stripHiddenCharacters(String(raw ?? "").replace(/\r\n?/g, "\n"), { multiline: true });
+  return stripHiddenCharacters(String(raw ?? "").replace(/\r\n?/g, "\n"), {
+    multiline: true,
+  }).normalize("NFC");
+}
+
+/**
+ * An address as one spelling (forms attack pass, finding 7): NFKC, so full-width letters and
+ * digits (`ｖｉｓｉｔｏｒ＠ｅｘａｍｐｌｅ．ｔｅｓｔ`) and a decomposed accent read as the plain ones and
+ * a repeat sign-up is the duplicate it is. Letter case is left to the database (`lower(email)`).
+ * `+tags` and dots are kept: they can be different mailboxes.
+ */
+function address(raw: string | null | undefined): string {
+  return stripHiddenCharacters(String(raw ?? "")).normalize("NFKC");
+}
+
+/** A format character (zero-width space, joiners, soft hyphen, BOM): invisible, never in an address. */
+const FORMAT_CHARACTER = /\p{Cf}/u;
+const LATIN = /\p{Script=Latin}/u;
+const CYRILLIC_OR_GREEK = /[\p{Script=Cyrillic}\p{Script=Greek}]/u;
+
+/**
+ * True when a label of the address's domain mixes Latin letters with Cyrillic or Greek ones
+ * (`exаmple.test` with a Cyrillic `а`): a look-alike of another address, refused. A domain in one
+ * script (`пример.рф`, an IDN the link rules accept too, src/lib/document/url.ts) is kept as typed.
+ */
+function mixesScripts(email: string): boolean {
+  const domain = email.slice(email.lastIndexOf("@") + 1);
+  return domain.split(".").some((label) => LATIN.test(label) && CYRILLIC_OR_GREEK.test(label));
 }
 
 /**
  * A visitor's submission, cleaned and checked (M17-06): trimmed, control and bidi characters
- * removed (a message keeps its line feeds; CRLF becomes LF), then validated by the kind's rules. A
+ * removed (a message keeps its line feeds; CRLF becomes LF), the name and message in NFC and the
+ * address in NFKC (finding 7), then validated by the kind's rules; an address holding a format
+ * character or a domain label that mixes Latin with Cyrillic or Greek is not valid. A
  * sign-up's message is always empty and its name too unless it asks for one. `values` is always the
  * cleaned input, so an error page can show what was typed.
  */
@@ -133,14 +217,19 @@ export function parseSubmission(
   | { ok: true; values: SubmissionValues }
   | { ok: false; values: SubmissionValues; errors: SubmissionErrors } {
   const values: SubmissionValues = {
-    email: line(raw.email),
+    email: address(raw.email),
     name: asksName(kind, askName) ? line(raw.name) : "",
     message: kind === "contact" ? lines(raw.message) : "",
   };
   const errors: SubmissionErrors = {};
 
   if (values.email === "") errors.email = SUBMISSION_MESSAGES.emailMissing;
-  else if (codePointLength(values.email) > SUBMISSION_LIMITS.email || !isEmailAddress(values.email))
+  else if (
+    codePointLength(values.email) > SUBMISSION_LIMITS.email ||
+    !isEmailAddress(values.email) ||
+    FORMAT_CHARACTER.test(values.email) ||
+    mixesScripts(values.email)
+  )
     errors.email = SUBMISSION_MESSAGES.emailInvalid;
 
   if (kind === "contact" && values.name === "") errors.name = SUBMISSION_MESSAGES.nameMissing;
@@ -272,6 +361,7 @@ export const AUDIENCE_TEST_IDS = {
   screen: "audience-screen",
   meter: "audience-meter",
   overLimit: "audience-over-limit",
+  notifySkipped: "audience-notify-skipped",
   responsibility: "audience-responsibility",
   filter: "audience-filter",
   list: "audience-list",
