@@ -70,7 +70,10 @@ describe("M4-21 the view beacon (the shared tenant script, M8-06)", () => {
   it("runs once per load and posts the page id and the referrer (jsdom)", () => {
     const sendBeacon = vi.fn(() => true);
     Object.defineProperty(navigator, "sendBeacon", { value: sendBeacon, configurable: true });
-    Object.defineProperty(document, "referrer", { value: "https://l.instagram.com/?u=x", configurable: true });
+    Object.defineProperty(document, "referrer", {
+      value: "https://l.instagram.com/?u=x",
+      configurable: true,
+    });
     const states: string[] = ["loading"];
     Object.defineProperty(document, "readyState", { get: () => states.at(-1), configurable: true });
 
@@ -111,7 +114,12 @@ describe("M4-21 where the beacon is, and where it is not", () => {
       ...fullPublished,
       blocks: fullPublished.blocks.filter((block) => block.type !== "faq"),
     };
-    const live = renderLivePage({ pageId: PAGE_ID, document: withoutFaq, plan: "free", urls: null });
+    const live = renderLivePage({
+      pageId: PAGE_ID,
+      document: withoutFaq,
+      plan: "free",
+      urls: null,
+    });
     expect((live.match(/<script/g) ?? []).length).toBe(1);
     expect(live).toContain(`data-page-id="${PAGE_ID}"`);
     expect(live).not.toContain("/api/e"); // the call is in the script file, never in the document
@@ -150,7 +158,9 @@ describe("M4-21 where the beacon is, and where it is not", () => {
       "src/lib/tenant-render/post-html.tsx",
       "src/lib/tenant-render/state-css.ts",
     ]);
-    const tagWriters = users.filter((file) => /TENANT_SCRIPT_SRC/.test(read(file)) && !file.startsWith("src/lib/tenant-assets/"));
+    const tagWriters = users.filter(
+      (file) => /TENANT_SCRIPT_SRC/.test(read(file)) && !file.startsWith("src/lib/tenant-assets/"),
+    );
     expect(tagWriters).toEqual(["src/lib/tenant-render/live-page.tsx"]);
   });
 
@@ -170,14 +180,17 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
 
   it("no file sets or reads a cookie", () => {
     for (const name of files) {
-      expect(strip(read(`src/lib/analytics/ingest/${name}`)), name).not.toMatch(/cookies\(|set-cookie|document\.cookie|\.cookie\b/i);
+      expect(strip(read(`src/lib/analytics/ingest/${name}`)), name).not.toMatch(
+        /cookies\(|set-cookie|document\.cookie|\.cookie\b/i,
+      );
     }
     expect(strip(read("src/app/api/e/route.ts"))).not.toMatch(/cookie/i);
     expect(strip(read("src/app/r/[pageId]/[blockId]/route.ts"))).not.toMatch(/cookie/i);
   });
 
   it("no ingest file is a Client Component", () => {
-    for (const name of files) expect(read(`src/lib/analytics/ingest/${name}`), name).not.toMatch(/"use client"/);
+    for (const name of files)
+      expect(read(`src/lib/analytics/ingest/${name}`), name).not.toMatch(/"use client"/);
   });
 
   it("everything that reaches the database imports server-only and uses the secret-key client", () => {
@@ -208,7 +221,9 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     // Since M11-09 the document comes from the site index: Home's published schema, or a sub-page's.
     expect(source).toMatch(/documentForBlock/);
     expect(read("src/lib/analytics/ingest/site-index.ts")).toMatch(/publishedDocSchema\.safeParse/);
-    expect(read("src/lib/analytics/ingest/site-index.ts")).toMatch(/publishedSubPageSchema\.safeParse/);
+    expect(read("src/lib/analytics/ingest/site-index.ts")).toMatch(
+      /publishedSubPageSchema\.safeParse/,
+    );
     expect(read("src/lib/analytics/ingest/target.ts")).toMatch(/isHttpUrl/);
   });
 
@@ -217,7 +232,9 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     // The recording of a click lives in click-common.ts since M9-29, shared by the GET and the lock's POST.
     expect(read("src/lib/analytics/ingest/click-common.ts")).toMatch(/deps\.schedule\(/);
     expect(strip(read("src/lib/analytics/ingest/click.ts"))).toMatch(/recordClick\(/);
-    expect(strip(read("src/lib/analytics/ingest/click.ts"))).not.toMatch(/NextResponse\.redirect|new URL\(request/);
+    expect(strip(read("src/lib/analytics/ingest/click.ts"))).not.toMatch(
+      /NextResponse\.redirect|new URL\(request/,
+    );
     expect(strip(read("src/lib/analytics/ingest/beacon.ts"))).not.toMatch(/redirect/i);
   });
 
@@ -245,9 +262,10 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     // The proxy leaves the tracking paths unrewritten on tenant and custom hosts, so one pair of
     // routes serves every host (src/lib/routing/paths.ts, src/proxy.ts).
     expect(read("src/proxy.ts")).toMatch(/isTrackingPath\(pathname\)/);
-    // The page routes are /r, /c and (Wave D) /f; the tracking paths are those and the beacon.
+    // The page routes are /r, /c and (Wave D) the two exact shapes of /f (forms attack pass,
+    // finding 5); the tracking paths are those and the beacon.
     expect(read("src/lib/routing/paths.ts")).toMatch(
-      /pathname\.startsWith\("\/r\/"\) \|\| pathname\.startsWith\("\/c\/"\) \|\| pathname\.startsWith\("\/f\/"\)/,
+      /pathname\.startsWith\("\/r\/"\) \|\| pathname\.startsWith\("\/c\/"\) \|\| FORM_ROUTE\.test\(pathname\)/,
     );
     expect(read("src/lib/routing/paths.ts")).toMatch(
       /return isPageRoutePath\(pathname\) \|\| pathname === "\/api\/e";/,
