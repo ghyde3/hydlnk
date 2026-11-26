@@ -1,9 +1,15 @@
 import { z } from "zod";
 import { listTerms, type ContentActor, type ContentFailure } from "@/lib/content";
 import { POST_BODY_TOO_LARGE, POST_LIMITS } from "@/lib/content/schemas";
-import { MCP_BODY_RANGE_CHARS, MCP_BODY_RANGE_MAX_CHARS, MCP_SCOPES } from "../constants";
+import {
+  MCP_BODY_RANGE_CHARS,
+  MCP_BODY_RANGE_MAX_CHARS,
+  MCP_ITEM_PUBLISH_PER_HOUR,
+  MCP_SCOPES,
+  itemPublishKey,
+} from "../constants";
 import { contentFailure, type FailureContext } from "../content-failure";
-import { MESSAGES, ToolFailure, insufficientScopeMessage } from "../errors";
+import { MESSAGES, ToolFailure, insufficientScopeMessage, rateLimitedMessage } from "../errors";
 import { loadAccountPlan } from "../page-access";
 import type { ToolCall } from "../types";
 
@@ -160,6 +166,30 @@ export function requirePublish(call: ToolCall): void {
   if (call.scopes.includes(MCP_SCOPES.publish)) return;
   throw new ToolFailure("insufficient_scope", insufficientScopeMessage(MCP_SCOPES.publish), {
     requiredScope: MCP_SCOPES.publish,
+  });
+}
+
+/**
+ * A handler's draw on the per-item publish bucket (M18-01) for a call that turned out to change the
+ * live site: `delete_entry` on a live post. The same bucket and key as a `changesLive` tool; a
+ * limiter that fails lets the call through, as in `runTool`.
+ */
+export async function requireItemPublishBudget(call: ToolCall): Promise<void> {
+  let verdict: { allowed: boolean; retryAfter: number };
+  try {
+    verdict = await call.deps.limit(
+      itemPublishKey(call.userId),
+      MCP_ITEM_PUBLISH_PER_HOUR,
+      3600,
+    );
+  } catch {
+    call.deps.log("[mcp] the rate limiter failed; allowing the call");
+    return;
+  }
+  if (verdict.allowed) return;
+  const seconds = Math.max(1, Math.ceil(verdict.retryAfter));
+  throw new ToolFailure("rate_limited", rateLimitedMessage(seconds), {
+    retryAfterSeconds: seconds,
   });
 }
 

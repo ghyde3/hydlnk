@@ -466,7 +466,7 @@ describe("M18-01 the publish limits", () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it("the real tools: the four per-item tools carry the mark, and publish_page keeps its 10 an hour", async () => {
+  it("the real tools: the six per-item tools carry the mark, and publish_page keeps its 10 an hour", async () => {
     for (const name of CONTENT_TOOL_NAMES) {
       expect(toolByName(name)!.changesLive === true, name).toBe(
         CHANGES_LIVE_TOOL_NAMES.includes(name),
@@ -493,6 +493,49 @@ describe("M18-01 the publish limits", () => {
     await runTool(publishPage, identity(), { pageId: PAGE_A }, deps);
     expect(seen.at(-1)).toEqual([`mcp-publish:${USER_A}`, 10, 3600]);
     expect(seen.some(([key]) => key.startsWith("mcp-publish-item:"))).toBe(false);
+  });
+});
+
+describe("M18-01 delete_entry on a live post draws on the per-item bucket", () => {
+  const trashed = { ok: true, rev: 4, siteId: PAGE_A, typeId: "t", typeKey: "post" };
+  const live = (status: "published" | "draft", allowed = true) => {
+    const seen: string[] = [];
+    const { deps } = makeDeps({
+      limit: async (key) => {
+        seen.push(key);
+        return key.startsWith("mcp-publish-item:")
+          ? { allowed, retryAfter: allowed ? 0 : 900 }
+          : { allowed: true, retryAfter: 0 };
+      },
+      loadEntry: async (_user, id) => ({ ok: true, entry: ownedEntry({ id, status }) }),
+    });
+    return { deps, seen };
+  };
+
+  it("a live post counts once against the bucket; a draft post does not", async () => {
+    writer.trashEntry.mockResolvedValue(trashed);
+    const tool = toolByName("delete_entry")!;
+    const one = live("published");
+    expect((await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, one.deps)).isError)
+      .toBeUndefined();
+    expect(one.seen.filter((key) => key === `mcp-publish-item:${USER_A}`)).toHaveLength(1);
+    const two = live("draft");
+    expect((await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, two.deps)).isError)
+      .toBeUndefined();
+    expect(two.seen.some((key) => key.startsWith("mcp-publish-item:"))).toBe(false);
+  });
+
+  it("over the bucket a live post is rate_limited and stays live: the writer is never called", async () => {
+    const tool = toolByName("delete_entry")!;
+    const { deps } = live("published", false);
+    const result = await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, deps);
+    expect(failure(result)).toMatchObject({ code: "rate_limited", retryAfterSeconds: 900 });
+    expect(writer.trashEntry).not.toHaveBeenCalled();
+    // A draft post is trashed at the same moment: the bucket is for what visitors see.
+    writer.trashEntry.mockResolvedValue(trashed);
+    const draft = live("draft", false);
+    expect((await runTool(tool, identity(), { entryId: ENTRY_A, ifRev: 3 }, draft.deps)).isError)
+      .toBeUndefined();
   });
 });
 

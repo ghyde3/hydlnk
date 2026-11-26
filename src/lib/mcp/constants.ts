@@ -34,6 +34,8 @@ export const MCP_PUBLISH_PER_HOUR = 10;
  * setting) per person per hour, across every token: the editor's own number (M18-01).
  */
 export const MCP_ITEM_PUBLISH_PER_HOUR = 60;
+/** The limiter key of the per-item publish bucket: per person, across tokens. */
+export const itemPublishKey = (userId: string) => `mcp-publish-item:${userId}`;
 
 /**
  * Requests per access token per minute, of any kind (`initialize`, `tools/list`, a tool call), counted

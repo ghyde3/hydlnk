@@ -19,11 +19,12 @@ export const deleteTermTool: ToolDefinition<typeof input> = {
   name: "delete_term",
   title: "Delete a category or tag",
   description:
-    "Deletes a category or tag for good. This changes the live site at once, with no publish step: the term's page is gone, live posts stop showing it, and categories under a deleted category become top-level. So it needs the publish permission: only call it when the person has asked. The posts themselves are kept. It cannot be undone from here. Errors: not_found, insufficient_scope.",
+    "Deletes a category or tag for good. This changes the live site at once, with no publish step: the term's page is gone, live posts stop showing it, and categories under a deleted category become top-level. So it needs the publish permission: only call it when the person has asked. The posts themselves are kept. It cannot be undone from here. At most 60 an hour. Errors: not_found, insufficient_scope.",
   scope: MCP_SCOPES.publish,
   annotations: DESTRUCTIVE_IDEMPOTENT,
   input,
   page: "one",
+  changesLive: true,
   async handler(args, call) {
     const siteId = call.page!.id;
     const out = await deleteTerm({

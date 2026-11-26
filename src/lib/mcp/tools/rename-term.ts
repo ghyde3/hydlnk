@@ -33,11 +33,12 @@ export const renameTermTool: ToolDefinition<typeof input> = {
   name: "rename_term",
   title: "Rename a category or tag",
   description:
-    "Changes the name or the slug of a category or tag. This changes the live site at once, with no publish step: the name on every live post and term page, and with a new slug the address of the term's page (the old address stops working). So it needs the publish permission: only call it when the person has asked. Send name, slug or both. Returns the term. Errors: not_found, invalid_input (a name or slug that is not valid, or a slug already used), insufficient_scope.",
+    "Changes the name or the slug of a category or tag. This changes the live site at once, with no publish step: the name on every live post and term page, and with a new slug the address of the term's page (the old address stops working). So it needs the publish permission: only call it when the person has asked. Send name, slug or both. At most 60 an hour. Returns the term. Errors: not_found, invalid_input (a name or slug that is not valid, or a slug already used), insufficient_scope.",
   scope: MCP_SCOPES.publish,
   annotations: DESTRUCTIVE_IDEMPOTENT,
   input,
   page: "one",
+  changesLive: true,
   async handler(args, call) {
     if (args.name === undefined && args.slug === undefined) {
       throw new ToolFailure("invalid_input", MESSAGES.nothingToChange);

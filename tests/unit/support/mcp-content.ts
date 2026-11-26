@@ -52,8 +52,13 @@ export const PUBLISH_SCOPE_TOOL_NAMES = [
   "publish_page",
 ];
 
-/** The tools that count against the per-item publish limit. */
+/**
+ * The tools that count against the per-item publish limit. `delete_entry` draws on it from its
+ * handler, and only for a live post.
+ */
 export const CHANGES_LIVE_TOOL_NAMES = [
+  "rename_term",
+  "delete_term",
   "publish_entry",
   "unpublish_entry",
   "publish_design",

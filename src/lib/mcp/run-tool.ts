@@ -7,6 +7,7 @@ import {
   MCP_TOOL_TIMEOUT_MS,
   MCP_USER_PER_HOUR,
   MCP_USER_PER_MINUTE,
+  itemPublishKey,
 } from "./constants";
 import {
   MESSAGES,
@@ -378,7 +379,7 @@ export async function runTool(
     // never reaches it.
     if (tool.changesLive) {
       const over = await limited(
-        `mcp-publish-item:${identity.userId}`,
+        itemPublishKey(identity.userId),
         MCP_ITEM_PUBLISH_PER_HOUR,
         3600,
       );
