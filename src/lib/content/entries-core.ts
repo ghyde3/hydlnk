@@ -39,7 +39,7 @@ async function checkDraft(
 }
 
 /** Key-order-insensitive JSON equality (the database returns jsonb keys in its own order). */
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
