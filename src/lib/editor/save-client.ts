@@ -77,7 +77,9 @@ export function createDraftSaver(
         const revs = await readEntryRevs(pageId);
         if (!revs) return { kind: "error" };
         const entry = revs.find((row) => row.id === home.entryId);
-        if (!entry || entry.rev !== homeRev) return { kind: "conflict" };
+        // Home's entry not readable any more: lost access (M19-11), unless the site still reads.
+        if (!entry) return (await siteReadable(pageId)) ? { kind: "conflict" } : { kind: "lost-access" };
+        if (entry.rev !== homeRev) return { kind: "conflict" };
       } else {
         const answer = await postEntryDraft(pageId, home.entryId, homeRev, {
           path: "/",

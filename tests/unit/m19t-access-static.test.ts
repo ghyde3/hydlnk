@@ -55,7 +55,7 @@ const OWNER_COMPARISONS: Readonly<Record<string, { count: number; reason: string
   "src/lib/publish/core.ts": { count: 1, reason: "themes of the site owner: ownerId is access.ownerId (D2)" },
   "src/lib/publish/invalidate.ts": { count: 1, reason: "expire all of an account's sites at suspension (B22)" },
   "src/lib/publish/unpublish.ts": { count: 1, reason: "unpublishing a site is owner-only (B1)" },
-  "src/lib/themes/client.ts": { count: 1, reason: "`owner_id === null` marks a system theme (not ownership)" },
+  "src/lib/themes/client.ts": { count: 2, reason: "a system theme flag, and the retry's scope to the site owner (C11, ownerId from access)" },
   "src/lib/themes/load.ts": { count: 2, reason: "system themes plus the site owner's (C11; ownerId is access.ownerId)" },
   "src/lib/versions/core.ts": { count: 2, reason: "the site owner's themes and draft write, bound from access.ownerId (A29, A30)" },
 };

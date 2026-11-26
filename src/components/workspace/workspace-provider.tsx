@@ -246,7 +246,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     setRetryingThemes(true);
     void (async () => {
       try {
-        const result = await fetchThemeLibrary(createBrowserSupabase());
+        const result = await fetchThemeLibrary(createBrowserSupabase(), ownerId);
         if (result.ok) {
           replaceThemes(result.themes);
           setThemesFailed(false);
@@ -255,7 +255,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         setRetryingThemes(false);
       }
     })();
-  }, [replaceThemes]);
+  }, [replaceThemes, ownerId]);
   const themesLoad = useMemo(
     () => ({ failed: themesFailed, retrying: retryingThemes, retry: retryThemes }),
     [themesFailed, retryingThemes, retryThemes],
