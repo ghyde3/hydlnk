@@ -216,14 +216,21 @@ describe.skipIf(!run)(
       }
     });
 
-    it("U+0000 is refused, in the body and in a title", async () => {
+    it("U+0000 is refused in the body; in a title it becomes a space", async () => {
       const nul = String.fromCharCode(0);
       await refusedEverywhere(`before${nul}after`, "invalid_input", "NUL in the body");
-      const entries = await count();
+      // A one-line field is cleaned before the writer sees it: the U+0000 is replaced by a space, as
+      // a line break is (pinned: the title is saved, not refused).
       const out = await h.call("create_entry", { pageId: a.pageId, title: `T${nul}itle` }, a);
-      // A one-line field is cleaned of control characters before the writer sees it.
-      if (!out.isError) expect((await h.row(out.json!.id)).draft.title).not.toContain(nul);
-      else expect(await count()).toBe(entries);
+      expect(out.isError, JSON.stringify(out.error)).toBe(false);
+      expect((await h.row(out.json!.id)).draft.title).toBe("T itle");
+      const renamed = await h.call(
+        "update_entry",
+        { entryId: out.json!.id, ifRev: 1, title: `New${nul}title` },
+        a,
+      );
+      expect(renamed.isError, JSON.stringify(renamed.error)).toBe(false);
+      expect((await h.row(out.json!.id)).draft.title).toBe("New title");
     });
 
     it("raw HTML is stored as written and is text on the live page", async () => {
