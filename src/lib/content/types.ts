@@ -47,3 +47,15 @@ export interface ContentFailure {
 }
 
 export type ContentResult<T extends object = object> = ({ ok: true } & T) | ContentFailure;
+
+/**
+ * How a publish runs (Wave E, M20-07, M20-08). Absent: the stored draft at `expectedRev` goes live.
+ *   check  every rule of Publish runs on the stored draft and nothing is written (Schedule refuses an
+ *          unpublishable draft now, with the same issues);
+ *   fire   a claimed schedule's snapshot is validated in place of the draft, the rev is the entry's
+ *          current one (the SQL function locks it), and `fire_scheduled_publish` writes the copy and
+ *          marks the row done in one transaction. Every other check is the same code path.
+ */
+export type PublishRun =
+  | { kind: "check" }
+  | { kind: "fire"; scheduleId: string; claim: string; snapshot: unknown };

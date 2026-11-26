@@ -147,7 +147,14 @@ function overridesView(block: Rec): Rec {
 /** One block as `get_page` shows it: `{ id, type, visible, ...the fields the write tools take }`. */
 export function blockView(input: Block): Rec {
   const block = input as unknown as Rec;
-  const base = { id: block.id, type: block.type, visible: block.visible !== false };
+  // A block's time window (M20-02) shows as stored; the MCP tools do not set one (a later wave).
+  const schedule = block.schedule as Rec | undefined;
+  const base = {
+    id: block.id,
+    type: block.type,
+    visible: block.visible !== false,
+    ...(schedule && (schedule.from || schedule.until) ? { schedule } : {}),
+  };
   const extras = overridesView(block);
   switch (block.type as BlockType) {
     case "link": {

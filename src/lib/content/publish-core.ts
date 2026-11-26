@@ -10,10 +10,10 @@ import { bodyShapeIssue } from "./body-shape";
 import { bodyImageIssue, checkOwnImages, postImages, type ImageUse } from "./images";
 import { pruneTerms } from "./prune-terms";
 import { issuesOf, schemaForType, untrimmedPathIssue } from "./schemas";
-import type { ContentActor, ContentFailure, ContentResult } from "./types";
+import type { ContentActor, ContentFailure, ContentResult, PublishRun } from "./types";
 
 type Admin = SupabaseClient<Database>;
-type Deps = { now?: () => Date };
+type Deps = { now?: () => Date; run?: PublishRun };
 type Input = { actor: ContentActor; entryId: string; expectedRev: number };
 /** Where a written entry sits: what the cache expiry needs (`entry:<id>`, `type:<typeId>`, or the site for a page). */
 export type EntryPlace = { siteId: string; typeId: string; typeKey: string };
@@ -32,37 +32,51 @@ async function refused(
   return failure("conflict", undefined, Number(reread.data.rev));
 }
 
-/** The checks both operations share, before anything is written. */
-async function prepare(admin: Admin, input: Input, opts: { allowDisabledType?: boolean } = {}) {
+/**
+ * The checks both operations share, before anything is written. A scheduled fire skips the rev
+ * comparison only: its SQL function locks the entry and uses the current rev.
+ */
+async function prepare(
+  admin: Admin,
+  input: Input,
+  opts: { allowDisabledType?: boolean; fire?: boolean } = {},
+) {
   const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
   if (!owned.ok) return owned;
   const account = await activeAccount(admin, input.actor.userId);
   if (!account.ok) return account;
   const { entry } = owned;
   if (entry.deleted_at !== null) return failure("not_found");
-  if (!Number.isSafeInteger(input.expectedRev) || input.expectedRev < 1) {
+  if (!opts.fire && (!Number.isSafeInteger(input.expectedRev) || input.expectedRev < 1)) {
     return failure("invalid", "Send the revision you are editing.");
   }
   // Taking content down always works, even for a type switched off since.
   const type = await siteType(admin, entry.site_id, entry.type_id);
   if (!type.ok) return type;
   if (!type.type.enabled && !opts.allowDisabledType) return failure("type_disabled");
-  if (Number(entry.rev) !== input.expectedRev) {
+  if (!opts.fire && Number(entry.rev) !== input.expectedRev) {
     return failure("conflict", undefined, Number(entry.rev));
   }
   const place: EntryPlace = { siteId: entry.site_id, typeId: type.type.id, typeKey: type.type.key };
   return { ok: true as const, entry, type: type.type, place };
 }
 
-/** Publish the entry's draft, strictly validated, stored exactly as it is. */
+/**
+ * Publish the entry's draft, strictly validated, stored exactly as it is. `deps.run` (Wave E): `check`
+ * runs every rule and writes nothing; `fire` validates a schedule's snapshot instead of the draft and
+ * writes through `fire_scheduled_publish` (published_at is the scheduled time).
+ */
 export async function publishEntryWithClient(
   admin: Admin,
   input: Input,
   deps: Deps = {},
 ): Promise<ContentResult<{ rev: number; publishedAt: string } & EntryPlace>> {
-  const ready = await prepare(admin, input);
+  const run = deps.run;
+  const ready = await prepare(admin, input, { fire: run?.kind === "fire" });
   if (!ready.ok) return ready;
-  const { entry, type } = ready;
+  const { type } = ready;
+  // What is validated and published: the stored draft, or the snapshot a schedule took.
+  const entry = run?.kind === "fire" ? { ...ready.entry, draft: run.snapshot as Json } : ready.entry;
 
   const schema = schemaForType(type.key, "publish");
   if (!schema) return failure("invalid", "That content type can’t be published yet.");
@@ -109,6 +123,25 @@ export async function publishEntryWithClient(
   const unplaced = await checkOwnImages(admin, input.actor.userId, images);
   if (unplaced) return unplaced;
 
+  if (run?.kind === "check") {
+    return { ok: true, rev: Number(entry.rev), publishedAt: "", ...ready.place };
+  }
+  if (run?.kind === "fire") {
+    const fired = await admin.rpc("fire_scheduled_publish", {
+      p_id: run.scheduleId,
+      p_claim: run.claim,
+      p_published: published as Json,
+    });
+    if (fired.error) return refused(admin, entry.id, fired.error);
+    const out = (fired.data ?? {}) as { rev?: unknown; published_at?: unknown };
+    return {
+      ok: true,
+      rev: Number(out.rev),
+      publishedAt: typeof out.published_at === "string" ? out.published_at : "",
+      ...ready.place,
+    };
+  }
+
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
   const { data, error } = await admin.rpc("publish_entry", {
     p_entry_id: entry.id,
@@ -122,14 +155,27 @@ export async function publishEntryWithClient(
   return { ok: true, rev: Number(data), publishedAt, ...ready.place };
 }
 
-/** Take the entry off the site. The draft stays. */
+/**
+ * Take the entry off the site. The draft stays. `fire` (Wave E): a claimed scheduled unpublish, at the
+ * entry's current rev, through `fire_scheduled_unpublish` (an entry that is not live just finishes).
+ */
 export async function unpublishEntryWithClient(
   admin: Admin,
   input: Input,
-): Promise<ContentResult<{ rev: number } & EntryPlace>> {
-  const ready = await prepare(admin, input, { allowDisabledType: true });
+  deps: { run?: Extract<PublishRun, { kind: "fire" }> } = {},
+): Promise<ContentResult<{ rev: number; changed?: boolean } & EntryPlace>> {
+  const ready = await prepare(admin, input, { allowDisabledType: true, fire: Boolean(deps.run) });
   if (!ready.ok) return ready;
   const { entry } = ready;
+  if (deps.run) {
+    const fired = await admin.rpc("fire_scheduled_unpublish", {
+      p_id: deps.run.scheduleId,
+      p_claim: deps.run.claim,
+    });
+    if (fired.error) return refused(admin, entry.id, fired.error);
+    const out = (fired.data ?? {}) as { rev?: unknown; changed?: unknown };
+    return { ok: true, rev: Number(out.rev), changed: out.changed === true, ...ready.place };
+  }
   const { data, error } = await admin.rpc("unpublish_entry", {
     p_entry_id: entry.id,
     p_owner_id: input.actor.userId,

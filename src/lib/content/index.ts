@@ -11,6 +11,7 @@ export type {
   ContentFailure,
   ContentResult,
   ContentSource,
+  PublishRun,
 } from "./types";
 
 /**
@@ -21,6 +22,14 @@ export { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 export { purgeEntryWithClient, restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
 export { listRevisionsWithClient, restoreRevisionWithClient } from "./revisions-core";
 export type { RevisionSummary } from "./revisions-core";
+/** Scheduling (Wave E), for callers that hold their own client (the worker, tests). */
+export {
+  cancelScheduleWithClient,
+  listSchedulesWithClient,
+  scheduleEntryWithClient,
+} from "./schedule-core";
+export type { ScheduleFailure, ScheduleResult } from "./schedule-core";
+export { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 /** Publish page (M15-10): the one call of `publish_site_page`, for the Publish gate. */
 export { publishSitePageWithClient } from "./site-page-publish-core";
 export type { SitePagePublishWrite } from "./site-page-publish-core";
@@ -32,6 +41,11 @@ import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } fro
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 import type { EntryPlace } from "./publish-core";
 import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
+import {
+  cancelScheduleWithClient,
+  listSchedulesWithClient,
+  scheduleEntryWithClient,
+} from "./schedule-core";
 import {
   createTermWithClient,
   deleteTermWithClient,
@@ -71,7 +85,7 @@ type EntryWrite = { actor: ContentActor; entryId: string; expectedRev: number };
  * The write already stands: a failure is tried once more at once, then logged, and the answer is
  * false so the caller can say the live copy may take a moment (`cacheStale`) and offer a retry.
  */
-function expireEntry(entryId: string, place: EntryPlace): boolean {
+export function expireEntry(entryId: string, place: EntryPlace): boolean {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       if (place.typeKey === "page") invalidatePage(place.siteId);

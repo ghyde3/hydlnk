@@ -61,6 +61,14 @@ export function blocksAt<B extends { schedule?: unknown }>(blocks: readonly B[],
   return blocks.filter((block) => isLiveAt(block, at));
 }
 
+/** A document (a page or a sub-page) as a visitor sees it at `at`: the same document, its live blocks only. */
+export function documentAt<D extends { blocks: readonly { schedule?: unknown }[] }>(
+  doc: D,
+  at: number,
+): D {
+  return { ...doc, blocks: blocksAt(doc.blocks, at) };
+}
+
 /** The blocks the editor preview draws at `at`: everything but the ended ones (the owner is editing upcoming ones). */
 export function previewBlocks<B extends { schedule?: unknown }>(
   blocks: readonly B[],
@@ -96,7 +104,24 @@ export function windowState(schedule: BlockSchedule | undefined, at: number): Wi
   return "showing";
 }
 
-/** A window that holds at least one set time, as Publish stores it; undefined for none. */
+/** A window that holds at least one set time. */
 export function hasWindow(schedule: BlockSchedule | undefined | null): boolean {
   return Boolean(schedule && (schedule.from || schedule.until));
+}
+
+/**
+ * The window as the publish form stores it (M20-02): `{schedule: {from?, until?}}` with the set
+ * times only, in that key order, or nothing at all when neither is set. Pure: never reads the clock,
+ * so an ended block stays in the published copy and the renderer decides.
+ */
+export function publishWindow(
+  schedule: BlockSchedule | undefined | null,
+): { schedule?: BlockSchedule } {
+  if (!schedule || !hasWindow(schedule)) return {};
+  return {
+    schedule: {
+      ...(schedule.from ? { from: schedule.from } : {}),
+      ...(schedule.until ? { until: schedule.until } : {}),
+    },
+  };
 }

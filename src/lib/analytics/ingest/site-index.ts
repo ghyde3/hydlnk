@@ -1,4 +1,10 @@
-import { publishedDocSchema, publishedSubPageSchema, type PublishDoc } from "@/lib/document";
+import {
+  documentAt,
+  effectiveNow,
+  publishedDocSchema,
+  publishedSubPageSchema,
+  type PublishDoc,
+} from "@/lib/document";
 
 /**
  * The site-wide block index (M11-09): which published document of a site holds a clickable id, so a
@@ -113,6 +119,8 @@ export interface SiteRead {
   home: unknown;
   subPages: PublishedSubPage[];
   index: BlockIndex;
+  /** The site's schedule clock (`pages.schedule_clock`, M20-04), read with Home's copy. */
+  clock?: string | null;
 }
 
 /**
@@ -120,21 +128,30 @@ export interface SiteRead {
  * own document, or Home's document with the sub-page's blocks in place of its own. A sub-page has no
  * theme, banner or tags of its own; the site's UTM tags (Home's document) apply to its links, and the
  * banner stays Home's. Null when no page holds the id or the holding document fails its schema.
+ *
+ * The blocks are those a visitor sees at `now` (M20-05): a block outside its time window is gone, and
+ * every id nested in it (icons, cells, items, marks, store and map buttons) with it, so a per-block
+ * route answers it exactly like an unknown id. The instant is the later of `now` and the site's
+ * schedule clock, the one the live page is drawn at.
  */
 export function documentForBlock(
   site: SiteRead,
   id: string,
+  now: number,
 ): { doc: PublishDoc; subPageId: string | undefined } | null {
+  const at = effectiveNow(now, site.clock);
   if (!Object.hasOwn(site.index, id)) return null;
   const owner = site.index[id]!;
   const home = publishedDocSchema.safeParse(site.home);
   if (!home.success) return null;
-  if (owner === "") return { doc: home.data, subPageId: undefined };
+  if (owner === "") {
+    return { doc: documentAt(home.data, at), subPageId: undefined };
+  }
 
   const row = site.subPages.find((page) => page.id === owner);
   if (!row) return null;
   const sub = publishedSubPageSchema.safeParse(row.published);
   if (!sub.success) return null;
   const { banner: _banner, ...rest } = home.data;
-  return { doc: { ...rest, blocks: sub.data.blocks }, subPageId: owner };
+  return { doc: documentAt({ ...rest, blocks: sub.data.blocks }, at), subPageId: owner };
 }

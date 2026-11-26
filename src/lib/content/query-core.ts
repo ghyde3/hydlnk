@@ -8,6 +8,8 @@ import { ownedEntry, ownedSite, siteType } from "./guards";
 import { LIST_SORTS, LIST_STATUSES } from "./schemas/enums";
 import type { EntryStatus, ListSort, ListStatus } from "./schemas/enums";
 import type { EntrySummary } from "./schemas/summaries";
+import { scheduleSummariesWithClient } from "./schedule-core";
+import { NO_SCHEDULE } from "@/lib/schedule/types";
 import type { ContentActor, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -31,8 +33,13 @@ export async function getEntryWithClient(
   const e = owned.entry;
   const type = await siteType(admin, e.site_id, e.type_id);
   if (!type.ok) return type;
+  const schedules = await scheduleSummariesWithClient(admin, [
+    { id: e.id, publishedAt: e.published_at },
+  ]);
+  if (!schedules) return failure("error");
   return {
     ok: true as const,
+    schedule: schedules.get(e.id) ?? { ...NO_SCHEDULE },
     id: e.id,
     siteId: e.site_id,
     typeId: e.type_id,
@@ -196,6 +203,9 @@ export async function listEntriesWithClient(
   else if (status === "published")
     query = query.is("deleted_at", null).not("published_at", "is", null);
   else if (status === "trashed") query = query.not("deleted_at", "is", null);
+  // A pending scheduled publish (M20-10): `scheduled_at` mirrors it (a trigger on content_schedules).
+  else if (status === "scheduled")
+    query = query.is("deleted_at", null).not("scheduled_at", "is", null);
   if (input.q) {
     query = query.ilike("draft->>title", `%${input.q.replace(/[\\%_]/g, "\\$&")}%`);
   }
@@ -235,6 +245,11 @@ export async function listEntriesWithClient(
     page.filter((r) => statusOf(r) === "published").map((r) => ({ id: r.id, rev: Number(r.rev) })),
   );
   if (!changed) return failure("error");
+  const schedules = await scheduleSummariesWithClient(
+    admin,
+    page.map((r) => ({ id: r.id, publishedAt: r.published_at })),
+  );
+  if (!schedules) return failure("error");
   return {
     ok: true,
     items: page.map((r) => ({
@@ -249,6 +264,7 @@ export async function listEntriesWithClient(
       updatedAt: r.updated_at,
       deletedAt: r.deleted_at,
       hasUnpublishedChanges: changed.has(r.id),
+      schedule: schedules.get(r.id) ?? { ...NO_SCHEDULE },
     })),
     nextCursor: raw.length > limit && last ? encodeCursor(sortValue(last), last.id) : null,
   };

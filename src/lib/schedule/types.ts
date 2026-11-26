@@ -2,6 +2,7 @@
  * Scheduled publishing (Wave E, M20-07 to M20-10): the shapes the content writer, the schedule
  * routes, the worker and the editor share. Pure and client-safe.
  */
+import type { EntryScheduleSummary } from "@/lib/content/schemas/summaries";
 
 export type ScheduleAction = "publish" | "unpublish";
 export type ScheduleStatus = "pending" | "done" | "failed" | "canceled";
@@ -18,17 +19,7 @@ export interface EntrySchedule {
   resultCode: string | null;
 }
 
-/**
- * The schedule state an entry list row and the editor bar draw (M20-10), read with the entry:
- * the pending publish and unpublish times, the rev the pending publish was taken at, and the code
- * of the newest failed row when nothing is pending for that action.
- */
-export interface EntryScheduleSummary {
-  publishAt: string | null;
-  unpublishAt: string | null;
-  scheduledRev: number | null;
-  failed: string | null;
-}
+export type { EntryScheduleSummary };
 
 export const NO_SCHEDULE: EntryScheduleSummary = {
   publishAt: null,

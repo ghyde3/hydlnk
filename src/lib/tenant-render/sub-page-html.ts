@@ -11,6 +11,7 @@ import {
   pageTag,
   typeTag,
 } from "@/lib/publish/tags";
+import { documentAt } from "@/lib/document";
 import { customOrigin } from "@/lib/routing/urls";
 import { getLiveSiteContext, getPublishedSubPage } from "@/lib/site/published";
 import { renderLiveSubPage } from "./live-page";
@@ -72,7 +73,9 @@ export async function renderSubPageHtml(
     getPrimaryDomain(pageId),
   ]);
   if (!sub) return null;
-  const site = await getLiveSiteContext(pageId, page.document, sub.id, sub.document.blocks);
+  // The page's blocks as a visitor sees them at the site's instant (M20-03), before anything reads them.
+  const subPage = documentAt(sub.document, page.at);
+  const site = await getLiveSiteContext(pageId, page.document, sub.id, subPage.blocks);
 
   const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
   let urls: { page: string; image: string } | null = null;
@@ -88,7 +91,7 @@ export async function renderSubPageHtml(
     pageId: page.pageId,
     subPageId: sub.id,
     document: page.document,
-    subPage: sub.document,
+    subPage,
     plan: page.plan,
     site,
     urls,

@@ -3,7 +3,7 @@ import { placedBlockImages, type Placed } from "./placed-images";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { blockedLinksInPublished, checkBlocklist, loadBlockedDomains } from "@/lib/blocklist";
-import { publishSitePageWithClient } from "@/lib/content";
+import { publishSitePageWithClient, type PublishRun } from "@/lib/content";
 import { designPublishSchema, prepareHomeEntryPublish } from "@/lib/content/schemas/page";
 import {
   PATH_MESSAGES,
@@ -32,7 +32,14 @@ import {
   type HomeDraft,
 } from "@/lib/site/page-entries";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
-import { checkLinkRules, misplacedLockErrors, ownHostsOf } from "./link-rules";
+import {
+  checkLinkRules,
+  misplacedLockErrors,
+  ownHostsOf,
+  schedulePlanErrors,
+  scheduledBlockErrors,
+} from "./link-rules";
+import { SITE_NOT_LIVE_MESSAGE } from "./gate-messages";
 import { homeForSite, nameErrors, pageTitleOf, siteErrors, type SiteSubPage } from "./site-checks";
 import { mediaOrigin } from "@/lib/media/url";
 import { createAdminSupabase } from "@/lib/supabase/admin";
@@ -100,7 +107,7 @@ const expectedSchema = z.object({
 });
 
 /** What Publish page and Publish design say on a site that was never published. */
-export const SITE_NOT_LIVE_MESSAGE = "This site isn’t live yet. Use Publish all changes first.";
+export { SITE_NOT_LIVE_MESSAGE };
 const TOO_LARGE_MESSAGE = "This is too large to publish. Remove some content and try again.";
 const siteNotLive = () =>
   refuse("invalid", [{ blockId: null, field: "document", message: SITE_NOT_LIVE_MESSAGE }]);
@@ -111,6 +118,12 @@ export interface PublishDeps {
   /** Does `page-media` hold this object? Defaults to a Storage HEAD with the secret key. */
   mediaExists?: (path: string) => Promise<boolean>;
   now?: () => Date;
+  /**
+   * Publish page only (Wave E): `check` runs the whole gate on the stored draft and writes nothing
+   * (Schedule); `fire` runs it on a claimed schedule's snapshot, skips the rev comparison (the SQL
+   * function locks the entry and uses its current rev) and writes through `fire_scheduled_publish`.
+   */
+  run?: PublishRun;
 }
 
 const pageIdSchema = z.guid();
@@ -411,6 +424,16 @@ export async function publishPageCore(
     const { code, message } = written.error;
     if (code === "P0002") return refuse("forbidden");
     if (code === "HL009") return refuse("storage_full");
+    // A block time window on a plan without scheduling (M20-11): the trigger refused the copy.
+    if (code === "HL017") {
+      return refuse(
+        "invalid",
+        schedulePlanErrors([
+          ...scheduledBlockErrors(home),
+          ...subPages.flatMap((page) => nameErrors(scheduledBlockErrors(page.form), page)),
+        ]),
+      );
+    }
     // Saved, added or deleted somewhere else after the reads above: nothing was written.
     if (code === "22023" && message === "stale_rev") return refuse("conflict");
     if (code === "22023" || code === "23505") {
@@ -729,10 +752,12 @@ export async function publishSitePageCore(
     entryId: unknown;
     expectedRev: unknown;
     userId: string | null;
-    source?: "editor" | "mcp";
+    source?: "editor" | "mcp" | "system";
   },
   deps: PublishDeps = {},
 ): Promise<PagePublishResult> {
+  const run = deps.run;
+  const fire = run?.kind === "fire" ? run : undefined;
   const opened = await openOwnedSite(input, deps);
   if (!opened.ok) return opened;
   const { admin, pageId, userId } = opened.site;
@@ -753,12 +778,16 @@ export async function publishSitePageCore(
   }
   const isHome = homeDraft !== null && homeDraft.entryId === wanted;
   // The entry's row: Home's, or one of the site's sub-pages. Anything else is not found.
-  const row: { rev: number; draft: Record<string, unknown> } | null = isHome
+  const stored: { rev: number; draft: Record<string, unknown> } | null = isHome
     ? { rev: homeDraft!.rev, draft: homeDraft!.draft }
     : (subDrafts.find((candidate) => candidate.id === wanted) ?? null);
-  if (!row) return refuse("not_found");
+  if (!stored) return refuse("not_found");
+  // A scheduled fire validates the snapshot it took, not the draft (Wave E).
+  const row = fire
+    ? { rev: stored.rev, draft: isRecord(fire.snapshot) ? fire.snapshot : {} }
+    : stored;
 
-  const expectedRev = input.expectedRev;
+  const expectedRev = fire ? stored.rev : input.expectedRev;
   if (typeof expectedRev !== "number" || !Number.isSafeInteger(expectedRev) || expectedRev < 1) {
     return refuse("invalid", [
       { blockId: null, field: "document", message: "Send the revision you are editing." },
@@ -861,6 +890,7 @@ export async function publishSitePageCore(
   }
 
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
+  if (run?.kind === "check") return { ok: true, publishedAt, rev: row.rev, unchanged: false };
   const written = await publishSitePageWithClient(admin, {
     siteId: pageId,
     ownerId: userId,
@@ -868,7 +898,8 @@ export async function publishSitePageCore(
     expectedRev,
     published: form,
     publishedAt,
-    source: input.source ?? "editor",
+    source: fire ? "system" : (input.source ?? "editor"),
+    ...(fire ? { fire } : {}),
   });
   if (written.ok) {
     return {
@@ -902,6 +933,9 @@ export async function publishSitePageCore(
     );
   }
   if (code === "HL009") return refuse("storage_full");
+  if (code === "HL017") {
+    return refuse("invalid", schedulePlanErrors(name(scheduledBlockErrors({ blocks }))));
+  }
   if (code === "23514") {
     return refuse(
       "invalid",
