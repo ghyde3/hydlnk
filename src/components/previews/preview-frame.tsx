@@ -7,7 +7,8 @@ import type { MouseEvent, ReactNode } from "react";
  * the shared /share link, M6-10, M6-11). The renderer leaves its links alone so its markup is the
  * same everywhere; this frame stops a click or tap on any link, card, social icon or grid cell from
  * going anywhere, as the editor's own preview does, so a preview never leaves its URL and never
- * reaches /r/ (no click is tracked, and no view is: nothing here renders the beacon).
+ * reaches /r/ (no click is tracked, and no view is: nothing here renders the beacon). A form block's
+ * submit is stopped the same way, so a preview never posts to /f/.
  */
 export function PreviewFrame({ children }: { children: ReactNode }) {
   function stopNavigation(event: MouseEvent<HTMLDivElement>): void {
@@ -21,7 +22,13 @@ export function PreviewFrame({ children }: { children: ReactNode }) {
     event.preventDefault();
   }
   return (
-    <div data-preview-frame="" onClickCapture={stopNavigation} onAuxClickCapture={stopNavigation}>
+    <div
+      data-preview-frame=""
+      onClickCapture={stopNavigation}
+      onAuxClickCapture={stopNavigation}
+      // A form block (M17-07) posts nowhere from a preview.
+      onSubmitCapture={(event) => event.preventDefault()}
+    >
       {children}
     </div>
   );

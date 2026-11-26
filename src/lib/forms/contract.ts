@@ -223,6 +223,24 @@ export const AUDIENCE_PAGE_SIZE = 50;
 /** `?form=`: every form, or one block id. */
 export const AUDIENCE_ALL_FORMS = "all";
 
+/** `?form=`: "all" or one block id; anything else is null (the export answers 400, the screen shows all). */
+export function parseFormFilter(
+  value: string | readonly string[] | null | undefined,
+): string | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === undefined || raw === null || raw === "" || raw === AUDIENCE_ALL_FORMS) {
+    return AUDIENCE_ALL_FORMS;
+  }
+  return isBlockId(raw) ? raw : null;
+}
+
+/** `?page=`: a whole number from 1 (anything else is page 1). */
+export function parsePageNumber(value: string | readonly string[] | null | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const n = typeof raw === "string" && /^[1-9]\d{0,5}$/.test(raw) ? Number(raw) : 1;
+  return n;
+}
+
 /** The `data-testid` values of the form block's editor panel and the Audience screen. */
 export const FORM_TEST_IDS = {
   editor: "form-block-editor",

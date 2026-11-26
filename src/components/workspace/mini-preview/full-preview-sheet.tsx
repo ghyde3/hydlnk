@@ -175,6 +175,8 @@ export function FullPreviewSheet({
             data-testid="preview-screen"
             data-page-frame=""
             onClickCapture={onClickCapture}
+            // A form block (M17-07) posts nowhere from the editor: no request leaves for /f/.
+            onSubmitCapture={(event) => event.preventDefault()}
             className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain ${
               onTap && !themePreview
                 ? "[&_[data-block-id]]:cursor-pointer [&_[data-item-id]]:cursor-pointer [&_[data-profile-part]]:cursor-pointer [&_iframe]:pointer-events-none"

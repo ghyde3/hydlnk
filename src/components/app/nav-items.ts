@@ -8,11 +8,12 @@
  *   /posts, /posts/{id}        "posts" (the blog of the current site, M16-12: opened from the
  *                              Pages panel, with no item of its own)
  *   /analytics, /domains, /settings, /pages/new     "analytics", "domains", "settings", "pages"
+ *   /audience                  "audience" (the forms' submissions, Wave D, M17-08)
  *
  * All of the first three belong to the one Editor item. `tests/unit/m7-nav-segments.test.ts` walks the
  * real src/app tree and checks every route against this function.
  */
-export type NavKey = "editor" | "analytics" | "domains" | "settings";
+export type NavKey = "editor" | "analytics" | "audience" | "domains" | "settings";
 
 /** The route group that holds the workspace's three tabs: its directory name under `(screens)`. */
 export const WORKSPACE_SEGMENT = "(workspace)";
@@ -24,6 +25,7 @@ export function navKeyForSegment(segment: string | null): NavKey | null {
     case "posts":
       return "editor";
     case "analytics":
+    case "audience":
     case "domains":
     case "settings":
       return segment;
