@@ -46,7 +46,8 @@ import {
 } from "./terms-core";
 import { listRevisionsWithClient, restoreRevisionWithClient } from "./revisions-core";
 import { enableTypeWithClient, listTypesWithClient, updateTypeWithClient } from "./types-core";
-import type { ContentActor, ContentFailure } from "./types";
+import type { ContentActor, ContentFailure, ContentResult } from "./types";
+import type { TypeSummary as TypeSummaryOf } from "./types-core";
 
 /**
  * What Publish checks on a post body, for a caller that wants it at save (the MCP tools, M18-05):
@@ -228,6 +229,54 @@ export async function updateType(input: Parameters<typeof updateTypeWithClient>[
   const out = await updateTypeWithClient(createAdminSupabase(), input);
   if (out.ok) expireType(input.siteId, out.typeId);
   return out;
+}
+
+/**
+ * A type's address or names and its switch in one call, all or nothing (M16-02, M18-10). The
+ * settings go first, while the switch is as it was: an address a page uses is refused there, and
+ * "turn on at /news" claims `/news`, never the old address. The switch goes second; when it is
+ * refused (turning on claims the new address, and a page may use it), every setting this call
+ * changed is put back while the type is still as it was, and the switch's refusal is the answer.
+ * Putting them back can fail too (the account or the site changed between the writes): that
+ * refusal carries `settingsStand: true`. The one implementation for the Posts route and the
+ * `update_content_type` tool.
+ */
+export async function updateTypeAndSwitch(input: {
+  actor: ContentActor;
+  siteId: string;
+  typeKey: string;
+  settings: { archivePath?: string; label?: string; labelPlural?: string };
+  enabled: boolean;
+}): Promise<ContentResult<TypeSummaryOf> & { settingsStand?: true }> {
+  const { actor, siteId, typeKey, settings } = input;
+  const listed = await listTypes({ actor, siteId });
+  if (!listed.ok) return listed;
+  const before = listed.types.find((type) => type.key === typeKey);
+  if (!before) return failure("not_found");
+
+  const updated = await updateType({ actor, siteId, typeKey, ...settings });
+  if (!updated.ok) return updated;
+  const switched = await enableType({ actor, siteId, typeKey, enabled: input.enabled });
+  if (switched.ok) return switched;
+
+  const undo = {
+    ...(settings.archivePath !== undefined &&
+    before.archivePath !== null &&
+    updated.archivePath !== before.archivePath
+      ? { archivePath: before.archivePath }
+      : {}),
+    ...(settings.label !== undefined && updated.label !== before.label
+      ? { label: before.label }
+      : {}),
+    ...(settings.labelPlural !== undefined && updated.labelPlural !== before.labelPlural
+      ? { labelPlural: before.labelPlural }
+      : {}),
+  };
+  if (Object.keys(undo).length === 0) return switched;
+  const back = await updateType({ actor, siteId, typeKey, ...undo });
+  if (back.ok) return switched;
+  console.error("[content] putting the type's settings back failed", back.error);
+  return { ...switched, settingsStand: true };
 }
 
 /** Add a category (one level) or a tag to an enabled type. */

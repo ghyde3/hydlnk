@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { enableType, listTypes, updateType } from "@/lib/content";
+import { enableType, updateType, updateTypeAndSwitch } from "@/lib/content";
 import type { TypeSummary } from "@/lib/content/schemas/summaries";
 import { MCP_SCOPES } from "../constants";
 import { cleanLine } from "../doc-view";
@@ -45,49 +45,24 @@ interface TypeSettings {
 }
 
 /**
- * A call with `enabled` and other fields is all or nothing (M18-10 step 2: "nothing changes"). The
- * address and names go first: an address a page uses is refused there while the switch is still
- * as it was (a type that is on claims its address at once). The switch goes second; when it is
- * refused (turning the blog on claims the new address, and a page may use it), the address and
- * names are put back as they were before the call, while the blog is still off, and the switch's
- * refusal is the answer.
+ * A call with `enabled` and other fields is all or nothing (M18-10 step 2: "nothing changes"): the
+ * content layer's `updateTypeAndSwitch`, the same one the Posts route uses. When the switch is
+ * refused and putting the settings back failed too, the answer says what stands.
  */
 async function settingsThenSwitch(
   call: ToolCall,
   input: { siteId: string; typeKey: string; settings: TypeSettings; enabled: boolean },
 ): Promise<TypeSummary> {
-  const actor = mcpActor(call);
-  const { siteId, typeKey, settings } = input;
-  const where = { notFoundMessage: TYPE_NOT_FOUND };
-  const listed = await listTypes({ actor, siteId });
-  if (!listed.ok) throw await refusal(call, listed, where);
-  const before = listed.types.find((type) => type.key === typeKey);
-  if (!before) throw new ToolFailure("not_found", TYPE_NOT_FOUND);
-
-  const updated = await updateType({ actor, siteId, typeKey, ...settings });
-  if (!updated.ok) throw await refusal(call, updated, where);
-  const switched = await enableType({ actor, siteId, typeKey, enabled: input.enabled });
-  if (switched.ok) return switched;
-
-  const failure = await refusal(call, switched, where);
-  const undo: TypeSettings = {
-    ...(settings.archivePath !== undefined && before.archivePath !== null
-      ? { archivePath: before.archivePath }
-      : {}),
-    ...(settings.label !== undefined ? { label: before.label } : {}),
-    ...(settings.labelPlural !== undefined ? { labelPlural: before.labelPlural } : {}),
-  };
-  const undone =
-    Object.keys(undo).length > 0 ? await updateType({ actor, siteId, typeKey, ...undo }) : null;
-  if (undone && !undone.ok) {
-    // Rare (the account or the site changed between the two writes): say what stands.
-    const stands = `The blog was not turned ${input.enabled ? "on" : "off"}, but its new address or names stand. Call list_content_types.`;
-    throw new ToolFailure(failure.code, `${stands} ${failure.message}`, {
-      ...failure.extras,
-      details: { ...failure.extras.details, settingsApplied: true },
-    });
-  }
-  throw failure;
+  const out = await updateTypeAndSwitch({ actor: mcpActor(call), ...input });
+  if (out.ok) return out;
+  const failure = await refusal(call, out, { notFoundMessage: TYPE_NOT_FOUND });
+  if (!out.settingsStand) throw failure;
+  // Rare (the account or the site changed between the two writes): say what stands.
+  const stands = `The blog was not turned ${input.enabled ? "on" : "off"}, but its new address or names stand. Call list_content_types.`;
+  throw new ToolFailure(failure.code, `${stands} ${failure.message}`, {
+    ...failure.extras,
+    details: { ...failure.extras.details, settingsApplied: true },
+  });
 }
 
 export const updateContentTypeTool: ToolDefinition<typeof input> = {

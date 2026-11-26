@@ -285,7 +285,11 @@ describe.skipIf(!run)(
             ["update_entry", { entryId: target.id, ifRev: before.rev, body }],
             [
               "update_entry",
-              { entryId: target.id, ifRev: before.rev, bodyEdits: [{ find: "MARK", replace: body }] },
+              {
+                entryId: target.id,
+                ifRev: before.rev,
+                bodyEdits: [{ find: "MARK", replace: body }],
+              },
             ],
           ] as const) {
             const { out, ms } = await timed(tool, args);
