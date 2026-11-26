@@ -24,6 +24,12 @@ export type ContentErrorCode =
   | "slug_taken"
   | "slug_reserved"
   | "too_large"
+  /** Scheduling is not part of the owner's plan (HL017, M20-11). */
+  | "schedule_plan"
+  /** The site holds its plan's number of pending schedules (HL018, M20-11). */
+  | "schedule_limit"
+  /** A scheduled time that is past, too soon, too far ahead or not on a minute (M20-01). */
+  | "schedule_time"
   | "error";
 
 export interface ContentFailure {
