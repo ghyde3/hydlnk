@@ -193,6 +193,55 @@ describe.skipIf(!run)("list_revisions and restore_revision (local Supabase)", ()
       expect(JSON.stringify(out.raw)).not.toContain("Body one");
     });
 
+    it("a post version whose body Publish would refuse is refused as update_entry refuses it, and nothing is written", async () => {
+      const made = await h.post(a, { title: "Safe now", body: "Safe body" });
+      const before = await h.row(made.id);
+      const revisionsBefore = await h.revisions(made.id);
+      const hostile: Array<[string, string]> = [
+        ["[x](javascript:alert(1))", "only http, https, mailto and tel"],
+        ["![x](https://example.com/a.png)", "Use an image from your uploads."],
+      ];
+      for (const [index, [body, words]] of hostile.entries()) {
+        const rev = 900 + index;
+        const inserted = await h.admin.from("content_entry_revisions").insert({
+          entry_id: made.id,
+          site_id: a.pageId,
+          rev,
+          snapshot: { title: "Old", slug: "old", body },
+          source: "editor",
+        });
+        expect(inserted.error).toBeNull();
+        const out = await h.call(
+          "restore_revision",
+          { entryId: made.id, revision: rev, ifRev: before.rev },
+          a,
+          READ_WRITE,
+        );
+        // The same answer update_entry gives for that body.
+        const update = await h.call(
+          "update_entry",
+          { entryId: made.id, ifRev: before.rev, body },
+          a,
+          READ_WRITE,
+        );
+        expect(out.error?.code, body).toBe("invalid_input");
+        expect(out.error, body).toEqual(update.error);
+        expect(out.error!.issues![0]!.path, body).toBe("body");
+        expect(out.error!.issues![0]!.message, body).toContain(words);
+      }
+      expect(await h.row(made.id)).toEqual(before);
+      // Only the two versions this test planted: the restore kept nothing of its own.
+      expect((await h.revisions(made.id)).length).toBe(revisionsBefore.length + 2);
+      // A stale rev is conflict before the version is looked at.
+      const stale = await h.call(
+        "restore_revision",
+        { entryId: made.id, revision: 900, ifRev: before.rev + 5 },
+        a,
+        READ_WRITE,
+      );
+      expect(stale.error?.code).toBe("conflict");
+    });
+
     it("is recorded with the source mcp, and the draft it replaced is kept as a revision", async () => {
       const post = await postWithHistory(a);
       const out = await h.call(
