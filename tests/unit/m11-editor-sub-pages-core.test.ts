@@ -477,6 +477,19 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     //   1. on the entry row, after its term links and its path claims were deleted;
     //   2. on the menu write to the site row, after the entry row itself was deleted.
     const tag = a.id.replace(/-/g, "").slice(0, 12);
+    // A run killed mid-test skips the `finally` below and would leave its trigger and function
+    // behind (and fail the grants pgTAP files), so sweep any leftovers first.
+    psql(
+      `do $sweep$ declare r record; begin
+         for r in select tgname, tgrelid::regclass as rel from pg_trigger where tgname like 'zz\\_boom\\_%' loop
+           execute format('drop trigger if exists %I on %s', r.tgname, r.rel);
+         end loop;
+         for r in select p.oid::regprocedure as fn from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname = 'public' and p.proname like 'zz\\_boom\\_%' loop
+           execute format('drop function if exists %s', r.fn);
+         end loop;
+       end $sweep$;`,
+    );
     const places = [
       {
         name: `zz_boom_entry_${tag}`,
@@ -492,6 +505,7 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
       psql(
         `create function public.${place.name}() returns trigger language plpgsql as $f$
            begin raise exception 'boom in the middle of the delete' using errcode = 'P0001'; end; $f$;
+         revoke all on function public.${place.name}() from public, anon, authenticated;
          create trigger ${place.name} ${place.on} execute function public.${place.name}();`,
       );
       try {
