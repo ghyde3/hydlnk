@@ -65,6 +65,14 @@ test("M17-08 the submissions of the site, as text, filtered, deleted; the meter;
     .first()
     .evaluate((el) => getComputedStyle(el).display);
   expect(display).toBe(info.project.name === "phone" ? "block" : "table-row");
+  if (info.project.name !== "phone") {
+    // At 1440 a table with the columns of M17-08 step 1, by their header text.
+    const headers = screen(page).locator("thead th");
+    await expect(headers).toHaveText(["Date", "Form", "Name", "Email", "Message", "Actions"]);
+    await expect(screen(page).locator("thead")).toBeVisible();
+  } else {
+    await expect(screen(page).locator("thead")).toBeHidden();
+  }
   await expectTapTargets(page, '[data-testid="audience-screen"]');
   await expectNoHorizontalScroll(page);
 
@@ -177,6 +185,17 @@ test("M17-02 over the month's limit: the notice with the numbers of the plan", a
   await expect(page.getByTestId("audience-pager")).toContainText("Page 1 of 2");
   await expect(rows(page)).toHaveCount(50);
   await expectNoHorizontalScroll(page);
+
+  // Page 2 for real, through the pager: the 51st row (100 seeded, 50 a page: 50 on page 2).
+  await page.getByTestId("audience-pager").getByRole("link", { name: "Older" }).click();
+  await expect(page).toHaveURL(/\/audience\?page=2$/);
+  await expect(page.getByTestId("audience-pager")).toContainText("Page 2 of 2");
+  await expect(rows(page)).toHaveCount(50);
+  // A page past the last one shows the last page, never the load-failure card (review B6).
+  await page.goto(url("app", "/audience?page=9"));
+  await expect(page.getByTestId("audience-load-error")).toHaveCount(0);
+  await expect(page.getByTestId("audience-pager")).toContainText("Page 2 of 2");
+  await expect(rows(page)).toHaveCount(50);
 });
 
 test("M17-08 a site with no submissions shows the empty state", async ({ page, context }) => {

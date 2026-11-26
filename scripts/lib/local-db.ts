@@ -35,14 +35,15 @@ export async function localPsql(sql: string): Promise<string> {
 }
 
 /**
- * `count` sign-ups on one form of a site, dated `createdAt` (default the 1st of this UTC month),
+ * `count` sign-ups on one form of a site, dated `createdAt` (default the 1st of this UTC month) plus
+ * `stepSeconds` for each next one (number g at `createdAt + g * step`),
  * written with no trigger running: the form caps' fixtures (M17-02), so a test can stand at a cap
  * without the per-site daily cap refusing the seed itself.
  */
 export async function seedFormRows(
   siteId: string,
   count: number,
-  opts: { blockId?: string; createdAt?: string; prefix?: string } = {},
+  opts: { blockId?: string; createdAt?: string; prefix?: string; stepSeconds?: number } = {},
 ): Promise<void> {
   if (!/^[0-9a-f-]{36}$/i.test(siteId) || !Number.isInteger(count) || count < 1) {
     throw new Error("seedFormRows: a site id and a whole count");
@@ -55,10 +56,13 @@ export async function seedFormRows(
   const at = opts.createdAt
     ? `'${new Date(opts.createdAt).toISOString()}'::timestamptz`
     : "public.form_usage_month()::timestamp at time zone 'utc'";
+  const step = opts.stepSeconds ?? 0;
+  if (!Number.isInteger(step) || step < 0) throw new Error("seedFormRows: a whole step");
   await localPsql(`begin;
 set local session_replication_role = replica;
 insert into public.form_submissions (site_id, block_id, kind, email, created_at)
-  select '${siteId}', '${blockId}', 'signup', '${prefix}' || g || '@example.test', ${at}
+  select '${siteId}', '${blockId}', 'signup', '${prefix}' || g || '@example.test',
+    ${at} + make_interval(secs => g * ${step})
   from generate_series(1, ${count}) g;
 commit;`);
 }
