@@ -1,6 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { marked, type Token, type Tokens } from "marked";
 import { MEDIA_BUCKET } from "@/lib/media/limits";
+import { mediaPathOf } from "@/lib/themes/bg-image";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure } from "./errors";
 import type { ContentFailure } from "./types";
@@ -13,7 +15,7 @@ export interface ImageUse {
   field: string;
 }
 
-/** The images of a post: the featured image and the share image. */
+/** The images of a post: the featured image, the share image and the uploads in its body. */
 export function postImages(published: unknown): ImageUse[] {
   const post = (published ?? {}) as {
     featuredImage?: { path?: unknown } | null;
@@ -26,7 +28,90 @@ export function postImages(published: unknown): ImageUse[] {
   if (typeof post.seo?.ogImage?.path === "string") {
     uses.push({ path: post.seo.ogImage.path, field: "seo.ogImage" });
   }
+  uses.push(...bodyImages(bodyOf(published)));
   return uses;
+}
+
+/** Most distinct images one post body may hold: Publish asks Storage about each of them. */
+export const BODY_IMAGES_MAX = 50;
+
+const FOREIGN_IMAGE_MESSAGE = "Use an image from your uploads.";
+
+/** The address of every `image` token of the body, as written (tables, lists, quotes, links and references included). */
+function imageAddresses(body: string): string[] {
+  const found: string[] = [];
+  marked.walkTokens(marked.lexer(body), (token: Token) => {
+    if (token.type === "image") found.push((token as Tokens.Image).href);
+  });
+  return found;
+}
+
+/**
+ * The upload an address stands for, or null. Only the stored form passes, character for character:
+ * what `storageUrl(path)` builds (`src/lib/media/url.ts`) for a `{uid}/{file}.{jpg|png|webp}` path on
+ * this project's Storage. `mediaPathOf` reads the address back; on top of it, the address must be
+ * exactly what a URL parser prints for it and must end in the path as written. So nothing a browser
+ * would normalize into an upload's address (dot segments, a backslash, a tab, upper case, a
+ * percent-encoded letter) passes, and the renderer never has to guess what a stored address means.
+ * The project URL is read when called, as `isProjectMediaUrl` does; with none set, nothing is an upload.
+ */
+export function uploadPathOf(address: string): string | null {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  let origin: string;
+  let printed: string;
+  try {
+    origin = new URL(base).origin;
+    printed = new URL(address).href;
+  } catch {
+    return null;
+  }
+  const path = mediaPathOf(address, origin);
+  if (path === null) return null;
+  return printed === address && address.endsWith(`/${path}`) ? path : null;
+}
+
+const bodyOf = (draft: unknown): string => {
+  const body = (draft as { body?: unknown } | null)?.body;
+  return typeof body === "string" ? body : "";
+};
+
+/**
+ * The images of a Markdown body that are uploads, once each, in order (field `body`). Whose upload
+ * each is, and whether the file exists, is `checkOwnImages`' part. An image at any other address is
+ * not listed here: `bodyImageIssue` refuses it.
+ */
+export function bodyImages(body: string): ImageUse[] {
+  if (body === "") return [];
+  const paths = new Set<string>();
+  for (const address of imageAddresses(body)) {
+    const path = uploadPathOf(address);
+    if (path !== null) paths.add(path);
+  }
+  return [...paths].map((path) => ({ path, field: "body" }));
+}
+
+/**
+ * Strict publish: every image in a post body must be an upload (PLAN, Content model). A remote
+ * image, another bucket, a query string or any other address is refused with one message; so is a
+ * body with more than `BODY_IMAGES_MAX` images. Drafts are not checked. Returns null when clean.
+ */
+export function bodyImageIssue(draft: unknown): ContentFailure | null {
+  const body = bodyOf(draft);
+  if (body === "") return null;
+  const addresses = imageAddresses(body);
+  if (addresses.some((address) => uploadPathOf(address) === null)) {
+    return { ...failure("invalid"), issues: [{ path: "body", message: FOREIGN_IMAGE_MESSAGE }] };
+  }
+  if (new Set(addresses).size > BODY_IMAGES_MAX) {
+    return {
+      ...failure("invalid"),
+      issues: [
+        { path: "body", message: `A post can hold up to ${BODY_IMAGES_MAX} images. Remove some.` },
+      ],
+    };
+  }
+  return null;
 }
 
 /**

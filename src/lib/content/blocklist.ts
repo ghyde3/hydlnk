@@ -3,6 +3,7 @@ import { marked, type Token, type Tokens } from "marked";
 import { findBlockedLinks, type BlocklistRpc } from "@/lib/blocklist/check";
 import { MAX_URL_LENGTH } from "@/lib/document/url";
 import { failure } from "./errors";
+import { uploadPathOf } from "./images";
 import type { ContentFailure } from "./types";
 
 const HTML_URL =
@@ -145,7 +146,9 @@ export async function blockedBodyLinks(
 ): Promise<ContentFailure | null> {
   const body = (draft as { body?: unknown } | null)?.body;
   if (typeof body !== "string" || body === "") return null;
-  const urls = markdownUrls(body);
+  // An upload's stored address is this project's own Storage and nothing else (`uploadPathOf`), so its
+  // host is not a link to judge. Locally that host is a loopback address, which the blocklist refuses.
+  const urls = markdownUrls(body).filter((url) => uploadPathOf(url) === null);
   // The database judges no host in an address over the cap, so a longer one cannot be judged: refuse it.
   if (urls.some((url) => url.length > MAX_URL_LENGTH)) {
     return { ...failure("blocked_link"), hosts: [] };
