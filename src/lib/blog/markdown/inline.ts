@@ -1,4 +1,5 @@
 import type { Token, Tokens } from "marked";
+import { AddressIndex } from "./address";
 import {
   angleAutolink,
   bareUrlEnd,
@@ -39,7 +40,7 @@ import {
   type TextNode,
   type TokenNode,
 } from "./emphasis";
-import { NextIndex, NextUnescaped, NextWhere } from "./finder";
+import { NextIndex, NextUnescaped, NextWhere, lowerBound } from "./finder";
 import { TagFinders, inlineTagEnd } from "./html";
 import type { Budget } from "./limits";
 import { normalizeLabel, unescapePunctuation, type LinkDefinitions } from "./text-utils";
@@ -56,8 +57,9 @@ import { normalizeLabel, unescapePunctuation, type LinkDefinitions } from "./tex
  *   - a code span's closing run is found in an index of backtick runs by length, built once;
  *   - comments, titles and other terminators come from memoised forward searches (`finder.ts`);
  *   - a link label is read to its `]` (it holds one level of brackets at most, as marked's does),
- *     a link address stops at a space or at 32 open parentheses, and on success the cursor jumps
- *     past the link: its label is lexed once, as its own range;
+ *     a link address (to a space, an unbalanced `)` or 33 open parentheses) is read from an index
+ *     of the text built once (`address.ts`), and on success the cursor jumps past the link: its
+ *     label is lexed once, as its own range;
  *   - a bare URL is read to its first space once, and its trim is computed, not repeated;
  *   - every `raw` and `text` is a slice of the source.
  */
@@ -76,9 +78,6 @@ export interface InlineContext {
 /** The characters the cursor stops at; everything else is plain text. */
 const STOP = new Uint8Array(128);
 for (const char of "\\`<[!*_~\n@hHfFw") STOP[char.charCodeAt(0)] = 1;
-
-/** A bracket-free opener depth past which a link address is not read (CommonMark's own limit). */
-const MAX_PARENS = 32;
 
 /** The backtick runs of one text, by length (sorted starts), and all of them in order. */
 class BacktickRuns {
@@ -114,17 +113,6 @@ class BacktickRuns {
   }
 }
 
-function lowerBound(list: readonly number[], value: number): number {
-  let lo = 0;
-  let hi = list.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (list[mid]! < value) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
 /** What `[` or `![` turned out to be. */
 type LinkAttempt =
   | { kind: "link"; node: TokenNode; end: number }
@@ -141,6 +129,7 @@ class InlineRun implements EmphasisSink {
   private readonly urlStop: NextWhere;
   private readonly titleEnds: { quote: NextUnescaped; apos: NextUnescaped; paren: NextUnescaped };
   private ticks: BacktickRuns | null = null;
+  private addressIndex: AddressIndex | null = null;
   /** The last index that is not a space: a hard break needs text after it (`(?!\s*$)`). */
   private readonly lastText: number;
 
@@ -465,27 +454,14 @@ class InlineRun implements EmphasisSink {
       if (angle !== null) return angle;
       // marked then reads it as a plain address, which must still be `<...>` (see `address`).
     }
-    // `[^ \t\n\x00-\x1f]*`, with marked's check of its parentheses (`findClosingBracket`).
-    let q = p;
-    let depth = 0;
-    let closes = 0;
-    let lastClose = -1;
-    for (; q < to; q += 1) {
-      const code = s.charCodeAt(q);
-      if (isAddressEnd(code)) break;
-      if (code === BACKSLASH) {
-        if (q + 1 < to && !isAddressEnd(s.charCodeAt(q + 1))) q += 1;
-      } else if (code === OPEN_PAREN) {
-        depth += 1;
-        if (depth > MAX_PARENS) return null;
-      } else if (code === CLOSE_PAREN) {
-        // The first unbalanced `)` ends the address, and the link: nothing after it is read.
-        if (depth === 0) return this.address(s.slice(p, q), null, q + 1);
-        depth -= 1;
-        closes += 1;
-        lastClose = q;
-      }
-    }
+    // `[^ \t\n\x00-\x1f]*`, with marked's check of its parentheses (`findClosingBracket`), read
+    // from an index of the whole text: no address is scanned again by a later `[`.
+    this.addressIndex ??= new AddressIndex(s);
+    const read = this.addressIndex.read(p, to);
+    if (read.stop === "deep") return null;
+    // The first unbalanced `)` ends the address, and the link: nothing after it is read.
+    if (read.stop === "close") return this.address(s.slice(p, read.at), null, read.at + 1);
+    const { end: q, depth, closes, lastClose } = read;
     const tail = this.titleAndClose(q, to);
     if (tail !== null) {
       // An address that opens more than it closes, and closes at least once, is refused.
@@ -777,11 +753,6 @@ function codespan(s: string, at: number, end: number, close: number): Tokens.Cod
 /** `[ \t\n]`: the only whitespace before a link address (marked's `\s` also takes NBSP; see tests). */
 function isAsciiSpace(code: number): boolean {
   return code === SPACE || code === TAB || code === NEWLINE;
-}
-
-/** What ends a plain link address: a space, tab, newline or control character. */
-function isAddressEnd(code: number): boolean {
-  return code <= SPACE && (code === SPACE || code === TAB || code === NEWLINE || code < 0x20);
 }
 
 /** marked's link text: `\[` and `\]` read as brackets (`outputLinkReplace`). */

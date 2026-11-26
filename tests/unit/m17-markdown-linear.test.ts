@@ -388,6 +388,29 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
     }
   }, 120_000);
 
+  // Linear is not enough when the constant is 33: each `[` used to rescan its address up to the
+  // 33rd open parenthesis, so `[a](` repeated read every character 33 times (1.3 s on CI). Each
+  // family is timed against a body with the same `[`s whose address ends at a space.
+  it("a link address is read once, not again for each `[` that precedes it", () => {
+    const pairs: [string, string, string][] = [
+      [
+        "[a]( repeated",
+        fit(ATTACKS["[a]( repeated"]!(BODY_CAP)),
+        fit("[a]( ".repeat(BODY_CAP / 5)),
+      ],
+      [
+        "[a]( + long address, repeated",
+        fit(ATTACKS["[a]( + long address, repeated"]!(BODY_CAP)),
+        fit(`[a]( ${"b".repeat(995)}`.repeat(BODY_CAP / 1000)),
+      ],
+    ];
+    for (const [name, body, control] of pairs) {
+      const [cost, base] = fastest([body, control]);
+      const label = `${name}: ${cost!.toFixed(0)} ms, control ${base!.toFixed(0)} ms`;
+      expect(cost! / Math.max(base!, 1), label).toBeLessThan(3);
+    }
+  }, 60_000);
+
   for (const [name, make] of Object.entries(ATTACKS)) {
     it(`${name}: linear (t(2n)/t(n) < 3), and within the ceiling at 512 KiB`, () => {
       if (expectBounded(fit(make(BODY_CAP)), name) >= RATIO_FLOOR_MS) expectLinear(name, make);
