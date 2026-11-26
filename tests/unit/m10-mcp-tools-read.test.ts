@@ -224,10 +224,12 @@ describe.skipIf(!run)("the read tools (local Supabase)", () => {
       const text = everything(out.raw);
       expect(text).toContain("DRAFT-ONLY-7f3a");
       expect(text).not.toContain("PUBLISHED-ONLY-91c2");
+      // Only the bio differs, which is the design's (M15-10): Home's own blocks match what is live.
       expect(out.json!.page).toMatchObject({
         id: a.pageId,
         handle: a.handle,
-        publishStatus: "unpublished-changes",
+        publishStatus: "published",
+        designStatus: "unpublished-changes",
         hasUnpublishedChanges: true,
         rev: 3,
       });
