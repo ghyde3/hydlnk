@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSelectedLayoutSegment } from "next/navigation";
-import { ChartColumn, Globe, LayoutGrid, User } from "lucide-react";
+import { ChartColumn, Globe, Inbox, LayoutGrid, User } from "lucide-react";
 import type { ReactNode } from "react";
 import { Icon } from "./icon";
 import { navKeyForSegment, type NavKey } from "./nav-items";
@@ -32,6 +32,15 @@ const ANALYTICS: NavItem = {
   sidebarIcon: <Icon icon={ChartColumn} size={16} />,
   tabIcon: <Icon icon={ChartColumn} size={20} />,
 };
+/** The submissions of the current site's forms (Wave D, M17-08). */
+const AUDIENCE: NavItem = {
+  key: "audience",
+  href: "/audience",
+  label: "Audience",
+  tabLabel: "Audience",
+  sidebarIcon: <Icon icon={Inbox} size={16} />,
+  tabIcon: <Icon icon={Inbox} size={20} />,
+};
 const DOMAINS: NavItem = {
   key: "domains",
   href: "/domains",
@@ -50,10 +59,10 @@ const ACCOUNT: NavItem = {
   tabIcon: <Icon icon={User} size={20} />,
 };
 
-/** The sidebar: Editor (one item for Edit, Design and Share), Analytics and Domains. */
-const SIDEBAR_ITEMS: readonly NavItem[] = [EDITOR, ANALYTICS, DOMAINS];
-/** The phone tab bar: Editor, Stats, Domains and Account (settings). */
-const TAB_ITEMS: readonly NavItem[] = [EDITOR, ANALYTICS, DOMAINS, ACCOUNT];
+/** The sidebar: Editor (one item for Edit, Design and Share), Analytics, Audience and Domains. */
+const SIDEBAR_ITEMS: readonly NavItem[] = [EDITOR, ANALYTICS, AUDIENCE, DOMAINS];
+/** The phone tab bar: Editor, Stats, Audience, Domains and Account (settings). */
+const TAB_ITEMS: readonly NavItem[] = [EDITOR, ANALYTICS, AUDIENCE, DOMAINS, ACCOUNT];
 
 /*
  * The current screen comes from the route segment below the (screens) layout, not from the URL
@@ -90,7 +99,7 @@ export function SidebarNav() {
 }
 
 /**
- * Phone bottom tab bar (< 760px): fixed, four tabs, current one marked with a brass top edge. Its
+ * Phone bottom tab bar (< 760px): fixed, five tabs (four before Wave D), current one marked with a brass top edge. Its
  * height is `--hl-tab-bar` (57px: the 56px tabs and the 1px top border) plus the safe-area inset;
  * anything placed on top of it uses the same token (`TAB_BAR_TOP_CLASS`).
  */

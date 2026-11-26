@@ -6081,6 +6081,175 @@
         "`adversarial-verifier` tries: a post slug equal to a page path, `/blog/page/2e0`, `%2F` in a slug, a 100,000-post type, a Markdown body with nested HTML in a table, a beacon for another site's post."
       ],
       "passes": false
+    },
+    {
+      "id": "M17-01",
+      "milestone": 17,
+      "area": "data",
+      "title": "form_submissions: the table, its policies and the month counter",
+      "acceptance": [
+        "A new migration creates `public.form_submissions` (`id`, `site_id` → `pages.id` on delete cascade, `entry_id` → `content_entries.id` on delete set null and null for Home, `block_id`, `kind` 'signup' or 'contact', `email`, `name`, `message`, `visitor_hash`, `created_at`) with checks: `block_id` matches `^[A-Za-z0-9_-]{8,24}$`, `email` 3 to 254 characters with no space or control character, `name` at most 80, `message` at most 2,000 (a line feed is the only control character), a sign-up has an empty message, a contact message has a name and a message, `visitor_hash` is 64 hex characters. There is no column for an IP address or a user agent.",
+        "RLS is on. `anon` has no privilege. `authenticated` may select the columns `id, site_id, entry_id, block_id, kind, email, name, message, created_at` (never `visitor_hash`) and delete, both only for rows of a site it owns; it has no insert and no update privilege. pgTAP proves: the owner reads and deletes own rows; another user reads none and deletes none; anon reads nothing; an insert and an update by the owner are refused; selecting `visitor_hash` is refused.",
+        "`public.form_submission_usage(owner_id, month, stored, refused)` is server only (RLS on, no policy, no client privilege). `public.record_form_submission(...)` and `public.form_usage(uuid)` are granted to `service_role` only; `public.form_submission_counts(uuid)` is security invoker and granted to `authenticated`. pgTAP proves a client can call neither of the first two and that the counts function returns nothing for another user's site.",
+        "`record_form_submission` returns 'unavailable' and stores nothing for a site with nothing published and for a suspended owner; 'duplicate' and stores nothing for a second sign-up with the same address on the same form in any letter case; 'stored' otherwise.",
+        "A Vitest probe with the publishable key (as `tests/unit/content-rls.test.ts` does) cannot read, insert, update or delete a row as anon, and cannot insert or update as a signed-in user."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-02",
+      "milestone": 17,
+      "area": "billing",
+      "title": "Form submissions per month by plan, enforced on write",
+      "acceptance": [
+        "`plan_limits()` gains `form_submissions_per_month`: 100 Free, 5,000 Pro, 50,000 Studio. `src/lib/limits/table.ts` mirrors it as `formSubmissionsPerMonth` and `tests/unit/limits-parity.test.ts` passes for every plan.",
+        "The limit counts submissions accepted for storage in the UTC calendar month per account, over all of its sites. A `BEFORE INSERT` trigger refuses the next one with HL016, also for an insert made with the secret key. Deleting a row does not lower the count. A duplicate sign-up is not counted.",
+        "pgTAP: with the month's counter at 99 on Free the next call returns 'stored' and the one after returns 'over_limit_first' and stores nothing; the one after that returns 'over_limit'; `refused` is 2; a row dated in the month before does not count; two concurrent calls at 99 store exactly one; after the plan changes to Pro the next call is stored.",
+        "Over the limit the visitor gets the same 303 and the same sent page as for a stored submission, nothing is stored and no message email is sent. The owner gets one limit email on the first refusal of a month (when email is configured).",
+        "The Audience screen shows '{stored} / {limit} this month' and, when anything was refused, the notice 'You’ve reached this month’s limit of {limit} form submissions on {plan}. {refused} were not saved. Upgrade to keep more, or wait until the 1st.' (no upgrade sentence on Studio). Every number comes from the limits table."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-03",
+      "milestone": 17,
+      "area": "blocks",
+      "title": "A form block: sign-up and contact",
+      "acceptance": [
+        "A `form` block with `kind` 'signup' or 'contact', `heading` (80), `description` (200), `askName`, `buttonLabel` (30), `successMessage` (160), `consent` (200), `notify` and `overrides`, added through the add-block-type steps. Each text counts code points. An older document parses unchanged and `version` stays 1.",
+        "Publish requires a button label, a success message and a consent line, each named on its own field ('Add a button label.', 'Add a message to show after sending.', 'Add a consent line.'), and refuses control and bidi characters as every text field does. A draft keeps what was typed. `toPublishForm` drops an empty heading and description and keeps `askName` only for a sign-up and `notify` only for a contact form.",
+        "A new block starts as a sign-up form with 'Subscribe', 'Thanks. You’re on the list.' and the default consent line 'Your details go to the owner of this page, who may contact you.'",
+        "Vitest: the schema accepts both kinds, rejects an unknown kind, over-length values, a bad id and hidden characters; the fixture document holds one form of each kind; the block-type tables, the style spec table and the MCP registry list the type.",
+        "The MCP tools can add and edit the block's texts; `notify` can only be set in the app."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-04",
+      "milestone": 17,
+      "area": "blocks",
+      "title": "The form on the page: plain HTML, one renderer, no script",
+      "acceptance": [
+        "The editor preview and the live page draw the block through the same component and produce the same markup: a `<form method=\"post\" action=\"/f/{pageId}/{blockId}\">` with labelled fields (email always; name for a contact form and for a sign-up that asks for it; message for a contact form), the button and the consent line under it. Every author text is escaped text; a heading of `<img src=x onerror=alert(1)>` shows as text.",
+        "The tenant script is unchanged in this wave: the hashed file name in `public/_t` is the one before it, and the page works with JavaScript disabled.",
+        "A live page that holds a visible form block loads one extra same-origin request, the 43-byte image `/f/{pageId}/o`; the editor preview, the share link and a page without a form block load none. A page without a form block has byte-identical HTML and CSS to before.",
+        "The block reads tenant variables only (`--t-*`) and takes block overrides on its own root. In the editor's phone dock it holds no form control.",
+        "Supersedes: M8-09's request list for a page that holds a form block only, which gains that one image. Nothing else.",
+        "At 390x844 and 1440x900 on http://mara.localhost:3000/: every input and the button are at least 44px tall, inputs use 16px text, the honeypot field is not visible and not reachable by Tab, and `scrollWidth <= innerWidth`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-05",
+      "milestone": 17,
+      "area": "routing",
+      "title": "The /f routes on a page's own hosts, and form-action 'self'",
+      "acceptance": [
+        "`/f/{pageId}/{blockId}` (GET, HEAD, POST) and `/f/{pageId}/o` (GET) are served on `{handle}.{root}` and on the site's verified custom domains and nowhere else: the proxy passes `/f/` through like `/r/` and `/c/` (`isTrackingPath`, pinned by `tests/unit/routing-proxy-matcher.test.ts`), the root and deployment hosts answer the plain 404, and the handlers check the real Host header with `hostServesPage`, never `X-Forwarded-Host`. Both routes are `force-dynamic`; a burst of 50 invented `/f/<uuid>/<id>` paths makes no cache entry.",
+        "`/f` alone is still a valid sub-page path: `f` is not a reserved path, and a sub-page at `/f` renders.",
+        "The tenant policy's `form-action` is `'self'`; every other directive of `TENANT_PAGE_CSP` is unchanged. A form that posts to another origin is still blocked (M8-07 step 3 holds). Every `/f` HTML response carries the same policy, `Cache-Control: no-store`, `X-Robots-Tag: noindex`, `X-Frame-Options: DENY` and no `Set-Cookie`, and loads no script.",
+        "A POST to `/` on a tenant or custom host is still 405, and a POST to any other path that is not a tracking route is still the plain 404.",
+        "Supersedes: M8-07 step 1's `form-action 'none'` (now `'self'`); M9-29 step 3's mention of it; M4-09 step 4's list of what lives on a page's own hosts, which gains `/f/`. Nothing else.",
+        "Playwright at 390x844 and 1440x900: the routes answer on http://mara.localhost:3000 and on the verified custom host fixture (M4-09), and answer 404 on http://localhost:3000 and http://app.localhost:3000."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-06",
+      "milestone": 17,
+      "area": "safety",
+      "title": "Taking a submission: validation, spam checks and the result pages",
+      "acceptance": [
+        "A submission is read from the POST body only (`application/x-www-form-urlencoded`, at most 32,768 bytes; 415 and 413 otherwise) and validated on the server: a valid email address of at most 254 characters; a name of at most 80 (required for a contact form) with no link in it; a message of 1 to 2,000 code points with at most 5 links. Control and bidi characters are removed. A bad field answers 422 with the themed page, the values typed and one sentence per field.",
+        "Only a visible form block in the PUBLISHED document of a site whose owner is not suspended takes a submission. A draft-only, hidden, unknown or foreign block id, another block type, an unpublished site and a suspended owner answer the 404 notice and store nothing. The block, its kind and its settings are read from the published document, never from the request.",
+        "A request from another site is refused with 403 before anything else is checked (`Origin` and `Sec-Fetch-Site`, as the link lock does).",
+        "Dropped without a trace and answered exactly like a success (303 to the sent page): a bot user agent, a filled honeypot field, and a message with a link to a blocked host.",
+        "Fill time, with no JavaScript and no cookie: a POST is stored at once only when this client opened the page at least 3 seconds before (the marker set by `/f/{pageId}/o`, a hashed key kept at most an hour). Otherwise the answer is a themed confirm page with the values and a signed token; sending that page after at least 2 seconds stores it. A token is bound to the site, the block and the client, lasts an hour and works once. A forged, expired or reused token shows the confirm page again.",
+        "Limits through the one limiter, each answering the 429 notice with `Retry-After`: 10 POSTs per client in 10 minutes, 3 accepted submissions per client and form in 10 minutes, 600 per site in an hour, 120 GETs per client a minute. A limiter that cannot answer lets the request through.",
+        "A stored submission answers 303 to `/f/{pageId}/{blockId}` (never 301, 307 or 308, and no Location built from the request), which shows the site's theme, the block's success message and a link back to the page the form is on. One `events` click row with the form block's id is recorded after the response, and 'Clicks by link' names it 'Form: {heading}'.",
+        "Nothing of a submission is written to a log: a Vitest spy on `console` across every branch sees no email, name, message, IP address or user agent.",
+        "Playwright at 390x844 and 1440x900 on http://mara.localhost:3000/, with JavaScript enabled and with it disabled: fill a sign-up form and a contact form after 3 seconds and land on the sent page; submit at once with images blocked and get the confirm page, then send and land on the sent page; an empty email shows the field error and keeps the other values; every control on the result pages is at least 44px tall and `scrollWidth <= innerWidth`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-07",
+      "milestone": 17,
+      "area": "editor",
+      "title": "Editing a form block",
+      "acceptance": [
+        "The add-block chips offer 'Form'. The block row shows the type, the heading (or 'Sign-up form' / 'Contact form') and the visibility toggle. The expanded form has: kind (Sign-up, Contact), heading, description, 'Ask for a name' (sign-up only), button label, success message, consent line and 'Email me each message' (contact only, with the account's address in the helper line). Counters and Publish errors appear on their own fields.",
+        "Switching kind swaps the button label and success message only while they still hold the other kind's defaults.",
+        "The preview shows the form and pressing its button does nothing: no request leaves the editor (Playwright asserts no request to `/f/`).",
+        "At 390x844 and 1440x900 on http://app.localhost:3000/editor: add the block, edit every field, publish, and the live page shows the same markup as the preview; every control is at least 44px tall, inputs use 16px text, and there is no horizontal scroll."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-08",
+      "milestone": 17,
+      "area": "app-shell",
+      "title": "Audience: the submissions of a site",
+      "acceptance": [
+        "`/audience` on the app host lists the current site's submissions newest first, 50 a page, read with the signed-in user's session under RLS: date, form, name, email and message, all as escaped text (a message of `<script>alert(1)</script>` shows as text). `?form={blockId}` filters by form and `?page=n` pages; no id from the request can show another account's rows (Playwright as user B with user A's block id sees nothing).",
+        "'Delete' removes one submission; with a form selected, 'Delete all from this form' asks in a dialog and removes every submission of that form on this site. Both are Server Actions that act as the signed-in user under RLS and are limited to 60 a minute per user. The month's count does not change.",
+        "The screen shows the month's meter and the over-limit notice of M17-02, an empty state ('No submissions yet. Add a form block to collect sign-ups and messages.') and a load-failure state.",
+        "Navigation: the sidebar lists Editor, Analytics, Audience and Domains; the phone tab bar shows five tabs, Editor, Stats, Audience, Domains and Account, each at least 56px tall and 44px wide, with Audience active on `/audience`.",
+        "Supersedes: M7-01's sidebar list (three items) and tab list (four tabs), which each gain Audience. Nothing else.",
+        "At 390x844: each submission is a stacked card, every button is at least 44px tall and `scrollWidth <= innerWidth`. At 1440x900: a table with the columns above. HYDLNK UI tokens only; no `--t-*` variable on the screen."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-09",
+      "milestone": 17,
+      "area": "analytics",
+      "title": "Export submissions as CSV on every plan",
+      "acceptance": [
+        "`GET /audience/export?form=all|{blockId}` on the app host, for the signed-in user's current site only, on every plan. Signed out is 401 JSON; any method but GET is 405; a `form` that is not 'all' or a block id is 400; more than 20 a minute from one user is 429 with `Retry-After`. `?site=`, `?owner=` and `?user=` are ignored.",
+        "200 with `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename=\"{handle}-audience-{YYYY-MM-DD}.csv\"`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. The body starts with a byte order mark, uses CRLF and RFC 4180 quoting, header `submitted_at,form,kind,email,name,message`, newest first, at most the newest 50,000 rows.",
+        "Every cell goes through `csvCell` (M9-26): a name of `=HYPERLINK(\"http://evil.example\",\"x\")` and a message that starts with `+`, `-`, `@` or a tab open as text; a message with a comma, a quote and a line break round-trips through a CSV parser.",
+        "Playwright as user B never receives a row of user A."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-10",
+      "milestone": 17,
+      "area": "safety",
+      "title": "Owner email for a contact message",
+      "acceptance": [
+        "When a contact form has 'Email me each message' on, a stored message is sent to the account's own sign-in address after the response, through the existing sender (SMTP when `SMTP_HOST` is set, Mailpit locally, skipped on a deployment without SMTP). A block cannot name another recipient.",
+        "The email has the fixed subject 'New message from your HYDLNK form', the visitor's address as `Reply-To` and nowhere else in a header, and the name, address and message as escaped text in an HTML part and a plain-text part. A name or message holding a line break followed by `Bcc:` adds no header (Vitest on the built message).",
+        "At most 30 message emails an hour per account; past that the message is still stored and no email is sent. A sending failure never reaches the visitor and never stops the submission from being stored.",
+        "Nothing is sent for a submission that was dropped, was a duplicate or was over the month's limit. The one limit email of M17-02 is sent at most once per account per month.",
+        "Playwright locally: a contact message with the setting on arrives in Mailpit with the right recipient and Reply-To; with it off, nothing arrives."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-11",
+      "milestone": 17,
+      "area": "copy",
+      "title": "Consent line and privacy wording for forms",
+      "acceptance": [
+        "Every published form shows its consent line directly under the button; Publish refuses an empty one.",
+        "The Audience screen states once, above the list: 'These are details people sent you through your forms. You decide how to use them and you’re responsible for that.'",
+        "The Privacy Policy sentence about form submissions is approved by Gary and live before this wave is released (recorded in PLAN.md, Decided). The wave itself does not edit the policy."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M17-12",
+      "milestone": 17,
+      "area": "security",
+      "title": "Security review of the forms wave",
+      "acceptance": [
+        "`security-reviewer` runs once over the whole wave diff (routing, a public write route, a new table with personal data, the CSP change, email) and reports no critical or high finding; medium findings are fixed or recorded in PLAN.md with Gary's decision.",
+        "The review covers each row of the threat model in `tmp/plans/wave-d-forms.md` section 9 and answers, with a test name or a file and line: the CSP change, cross-site POSTs, the host check, published-only reads, the RLS policies and column grants, the month cap under concurrency, the token (forgery, replay, binding), header injection in the email, CSV formulas, logging of personal data, and cache entries for invented paths.",
+        "The findings and their fixes are written to PROGRESS.md with the commands and results."
+      ],
+      "passes": false
     }
   ]
 }

@@ -51,6 +51,7 @@ describe("block types (M2-01)", () => {
       "items",
       "hours",
       "latest_posts",
+      "form",
     ];
     expect(BLOCK_TYPES.length).toBeGreaterThanOrEqual(12);
     expect([...BLOCK_TYPES]).toEqual(order.slice(0, BLOCK_TYPES.length));

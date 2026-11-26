@@ -46,6 +46,8 @@ const EXPECTED: Record<string, NavKey | null> = {
   "/posts": "editor",
   "/posts/[entryId]": "editor",
   "/analytics": "analytics",
+  // Wave D (M17-08): the forms' submissions.
+  "/audience": "audience",
   "/domains": "domains",
   "/settings": "settings",
   "/pages/new": null,
@@ -80,10 +82,11 @@ describe("M7-01 the navigation matches every real screen route", () => {
     expect(navKeyForSegment("share")).toBeNull();
   });
 
-  it("the sidebar lists Editor, Analytics and Domains; the phone bar adds Account", () => {
+  // M17-08 supersedes M7-01's two lists: each gains Audience after Analytics.
+  it("the sidebar lists Editor, Analytics, Audience and Domains; the phone bar adds Account", () => {
     const source = code("src/components/app/app-nav.tsx");
-    expect(source).toMatch(/SIDEBAR_ITEMS[^=]*=\s*\[EDITOR, ANALYTICS, DOMAINS\]/);
-    expect(source).toMatch(/TAB_ITEMS[^=]*=\s*\[EDITOR, ANALYTICS, DOMAINS, ACCOUNT\]/);
+    expect(source).toMatch(/SIDEBAR_ITEMS[^=]*=\s*\[EDITOR, ANALYTICS, AUDIENCE, DOMAINS\]/);
+    expect(source).toMatch(/TAB_ITEMS[^=]*=\s*\[EDITOR, ANALYTICS, AUDIENCE, DOMAINS, ACCOUNT\]/);
     expect(source).not.toMatch(/label: "Design"/);
   });
 });

@@ -8,6 +8,7 @@ import {
 import { embedErrorMessage, parseEmbed } from "./embed";
 import { IMAGE_SHAPES, IMAGE_SHAPE_MESSAGE, focusSchema, type Focus } from "./focus";
 import { BLOCK_ID_PATTERN } from "./ids";
+import { FORM_KINDS, FORM_KIND_MESSAGE } from "./form";
 import { LIMITS, codePointLength } from "./limits";
 import { linkUtmSchema, lockSchema, pageUtmSchema, redirectSchema } from "./link-fields";
 import {
@@ -100,6 +101,7 @@ export const BLOCK_TYPES = [
   "items",
   "hours",
   "latest_posts",
+  "form",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -123,6 +125,7 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   items: "Items",
   hours: "Hours",
   latest_posts: "Latest posts",
+  form: "Form",
 };
 
 /** Social platforms, in the order of the platform select. `email` stores an address, not a URL. */
@@ -769,6 +772,26 @@ function buildBlocks(mode: Mode) {
     overrides: blockOverrides.optional(),
   });
 
+  // A sign-up or contact form (Wave D, M17-03). The visitor's fields are fixed by the kind; the
+  // block holds only the owner's texts and two switches. `askName` is read for a sign-up only and
+  // `notify` (email each message to the account's own address) for a contact form only.
+  const form = z.object({
+    ...common,
+    type: z.literal("form"),
+    kind: z.enum(FORM_KINDS, { error: FORM_KIND_MESSAGE }),
+    heading: text(mode, { max: LIMITS.formHeading }).optional(),
+    description: text(mode, { max: LIMITS.formDescription }).optional(),
+    askName: z.boolean().default(false),
+    buttonLabel: text(mode, { max: LIMITS.formButton, required: "Add a button label." }),
+    successMessage: text(mode, {
+      max: LIMITS.formSuccess,
+      required: "Add a message to show after sending.",
+    }),
+    consent: text(mode, { max: LIMITS.formConsent, required: "Add a consent line." }),
+    notify: z.boolean().default(false),
+    overrides: blockOverrides.optional(),
+  });
+
   const block = z.discriminatedUnion("type", [
     link,
     card,
@@ -789,6 +812,7 @@ function buildBlocks(mode: Mode) {
     items,
     hours,
     latestPosts,
+    form,
   ]);
 
   // The display options (M6-15, M6-17) are the same in both modes: a bad value fails the draft
@@ -897,6 +921,7 @@ export type PageLinkBlock = Extract<Block, { type: "page_link" }>;
 export type ItemsBlock = Extract<Block, { type: "items" }>;
 export type HoursBlock = Extract<Block, { type: "hours" }>;
 export type LatestPostsBlock = Extract<Block, { type: "latest_posts" }>;
+export type FormBlock = Extract<Block, { type: "form" }>;
 export type ListItem = ItemsBlock["items"][number];
 export type BookLink = BookBlock["links"][number];
 export type AppLink = AppsBlock["links"][number];

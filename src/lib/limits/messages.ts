@@ -121,3 +121,50 @@ export function postLimitMessage(
 
 /** Why a new category or tag is refused (HL015, M16-14). The cap is the same on every plan. */
 export const TERM_LIMIT_MESSAGE = `A blog holds up to ${TERMS_PER_TYPE} categories and tags. Delete one to add another.`;
+
+/** "87 / 100 this month": the Audience screen's meter of form submissions (M17-02). */
+export function formMeterText(plan: PlanId, stored: number): string {
+  return `${grouped(stored)} / ${grouped(PLAN_LIMITS[plan].formSubmissionsPerMonth)} this month`;
+}
+
+/**
+ * The line under the meter (security review A1): what is counted, that deleting frees a place, and
+ * the per-site daily cap. "Counts what your forms hold from the 1st of the month (UTC). Deleting a
+ * submission frees its place. Each site takes up to 20 a day."
+ */
+export function formMeterHelp(plan: PlanId): string {
+  return `Counts what your forms hold from the 1st of the month (UTC). Deleting a submission frees its place. Each site takes up to ${grouped(PLAN_LIMITS[plan].formSubmissionsPerSiteDay)} a day.`;
+}
+
+/**
+ * The notice once a site's daily cap refused anything this month, or null:
+ *   "A site reached its limit of 20 form submissions a day on Free. 3 were not saved this month.
+ *    Delete what you don’t need to make room, or wait until tomorrow (UTC)."
+ */
+export function formDailyLimitNotice(plan: PlanId, refusedDaily: number): string | null {
+  if (refusedDaily <= 0) return null;
+  return `A site reached its limit of ${grouped(PLAN_LIMITS[plan].formSubmissionsPerSiteDay)} form submissions a day on ${PLAN_LABELS[plan]}. ${grouped(refusedDaily)} ${refusedDaily === 1 ? "was" : "were"} not saved this month. Delete what you don’t need to make room, or wait until tomorrow (UTC).`;
+}
+
+/**
+ * The notice once owner message emails were skipped today by their hourly cap (forms attack pass,
+ * finding 6), or null: "Today 4 message emails were not sent: at most 30 go out an hour. Every
+ * message is saved here."
+ */
+export function formNotifySkippedNotice(skippedToday: number, perHour: number): string | null {
+  if (skippedToday <= 0) return null;
+  const emails = skippedToday === 1 ? "message email was" : "message emails were";
+  return `Today ${grouped(skippedToday)} ${emails} not sent: at most ${grouped(perHour)} go out an hour. Every message is saved here.`;
+}
+
+/**
+ * The Audience screen's notice once anything was refused this month (M17-02), by plan:
+ *   "You’ve reached this month’s limit of 100 form submissions on Free. 12 were not saved. Upgrade to
+ *    keep more, or wait until the 1st."
+ * Studio has no plan to upgrade to, so its notice ends after the count. Null when nothing was refused.
+ */
+export function formLimitNotice(plan: PlanId, refused: number): string | null {
+  if (refused <= 0) return null;
+  const head = `You’ve reached this month’s limit of ${grouped(PLAN_LIMITS[plan].formSubmissionsPerMonth)} form submissions on ${PLAN_LABELS[plan]}. ${grouped(refused)} ${refused === 1 ? "was" : "were"} not saved.`;
+  return plan === "studio" ? head : `${head} Upgrade to keep more, or wait until the 1st.`;
+}

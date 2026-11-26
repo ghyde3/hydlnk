@@ -1,4 +1,5 @@
 import {
+  formKindLabel,
   SOCIAL_PLATFORM_LABELS,
   appStoreLabel,
   bookStoreLabel,
@@ -111,6 +112,10 @@ export function linkLabelsFromPublished(published: unknown): Map<string, string>
       case "contact":
         // "Save contact" (M9-18) is counted under the contact block's own id.
         labels.set(block.id, truncateToCodePoints(`Save contact: ${text(block.name)}`, 60).trim());
+        break;
+      case "form":
+        // A form's stored submissions (Wave D, M17-06) are counted under its own id.
+        labels.set(block.id, cutTo60(`Form: ${text(block.heading) || formKindLabel(block.kind)}`));
         break;
       case "book":
         // A store button of a book (M9-20): "{title} on Amazon", each under its own id.

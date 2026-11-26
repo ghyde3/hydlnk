@@ -41,14 +41,36 @@ export function isInternalPath(pathname: string): boolean {
 }
 
 /**
- * The tracking routes of a tenant page (analytics): `/r/<pageId>/<blockId>` (the click redirect),
- * `/c/<pageId>/<blockId>` ("Save contact", the vCard of a contact block, M9-18) and `/api/e` (the
- * view beacon). The page emits them as relative URLs, so they have to resolve on the host the
- * visitor is on: the proxy leaves them unrewritten on tenant hosts and on (resolved) custom hosts,
- * where every other path goes to the tenant 404.
+ * The exact shape of a form route: `/f/<pageId>/<blockId>` or `/f/<pageId>/o`, two plain segments
+ * (letters, digits, `_` and `-`). Anything else under `/f/` (one segment, a third, percent-encoding)
+ * is no route: on a page's own hosts it gets the plain tenant 404 like any other path, never the
+ * framework's 404 page or a 500 (forms attack pass, finding 5). `/r/` and `/c/` stay prefixes.
+ */
+const FORM_ROUTE = /^\/f\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+$/;
+
+/**
+ * The routes that belong to one page's own hosts: `/r/<pageId>/<blockId>` (the click redirect),
+ * `/c/<pageId>/<blockId>` ("Save contact", the vCard of a contact block, M9-18) and the two form
+ * routes (`FORM_ROUTE`: a form block's submission, result pages and open marker, Wave D). On the
+ * root and deployment hosts there is no page, so the proxy answers them with the plain 404 there.
+ */
+export function isPageRoutePath(pathname: string): boolean {
+  return pathname.startsWith("/r/") || pathname.startsWith("/c/") || FORM_ROUTE.test(pathname);
+}
+
+/** A path under `/f/` that is not one of the form routes: the plain 404, never an archive shape. */
+function isFormLookalike(pathname: string): boolean {
+  return pathname.startsWith("/f/") && !FORM_ROUTE.test(pathname);
+}
+
+/**
+ * The tracking routes of a tenant page: the page routes above and `/api/e` (the view beacon). The
+ * page emits them as relative URLs, so they have to resolve on the host the visitor is on: the proxy
+ * leaves them unrewritten on tenant hosts and on (resolved) custom hosts, where every other path
+ * goes to the tenant 404.
  */
 export function isTrackingPath(pathname: string): boolean {
-  return pathname.startsWith("/r/") || pathname.startsWith("/c/") || pathname === "/api/e";
+  return isPageRoutePath(pathname) || pathname === "/api/e";
 }
 
 function join(prefix: string, pathname: string): string {
@@ -73,6 +95,7 @@ export function tenantRewritePath(handle: string, pathname: string, testHooks = 
   if (pathname === "/og" || (testHooks && TENANT_TEST_HOOK_PATHS.has(pathname))) {
     return join(`/t/${handle}`, pathname);
   }
+  if (isFormLookalike(pathname)) return PLAIN_404_PATH;
   const subPage = subPageSegment(pathname);
   if (subPage !== null) return `/t/${handle}/p/${subPage}`;
   const archive = archiveRoute(pathname);
@@ -90,6 +113,7 @@ export function siteRewritePath(pageId: string, pathname: string): string {
   if (pageId === UNKNOWN_SITE_ID) return PLAIN_404_PATH;
   if (pathname === "/" || pathname === "") return `/sites/${pageId}`;
   if (pathname === "/og") return `/sites/${pageId}/og`;
+  if (isFormLookalike(pathname)) return PLAIN_404_PATH;
   const subPage = subPageSegment(pathname);
   if (subPage !== null) return `/sites/${pageId}/p/${subPage}`;
   const archive = archiveRoute(pathname);

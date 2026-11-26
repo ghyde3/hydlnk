@@ -55,7 +55,8 @@ const ORIGINAL_NINE = [
 const WAVE_K = ["faq", "contact", "discount", "book", "apps", "map"];
 const WAVE_M = ["page_link", "items", "hours"];
 const WAVE_B = ["latest_posts"];
-const FULL_ORDER = [...ORIGINAL_NINE, ...WAVE_K, ...WAVE_M, ...WAVE_B];
+const WAVE_D = ["form"];
+const FULL_ORDER = [...ORIGINAL_NINE, ...WAVE_K, ...WAVE_M, ...WAVE_B, ...WAVE_D];
 /**
  * Types whose document layer exists but whose renderer, editor form, stylesheet family or add-block
  * chip is not built yet; an entry turns the checks below off for the type. Empty since M12-01 and

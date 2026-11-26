@@ -24,17 +24,17 @@ insert into public.pages (id, owner_id, handle, draft) values
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, 20) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MiB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, 500) $$,
   'pro: 3 pages, unlimited saved themes (null), 1 domain, 100 MiB, 365 days, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, 5000) $$,
   'studio: 15 pages, unlimited saved themes (null), 15 domains, 1 GiB, 365 days, breakdowns, 25 versions'
 );
 select throws_ok(
@@ -107,8 +107,9 @@ select set_eq(
       and (has_function_privilege('anon', p.oid, 'EXECUTE')
            or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
   $$,
-  $$ values ('plan_limits') $$,
-  'plan_limits is the only function in public a client role may execute'
+  -- form_submission_counts (Wave D) is security invoker: RLS decides what it returns (219).
+  $$ values ('plan_limits'), ('form_submission_counts') $$,
+  'plan_limits and the security invoker form_submission_counts are the only functions in public a client role may execute'
 );
 
 -- ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import {
   PHOTO_SIZES,
   applyProfileOption,
   blockDefaults,
+  switchFormKind,
   blockSchema,
   changeSocialPlatform,
   DAY_KEYS,
@@ -31,6 +32,8 @@ import {
   stripHiddenCharacters,
   toPublishForm,
   type Block,
+  type FormBlock,
+  type FormKind,
   type BlockType,
   type DraftDoc,
   type ImageRef,
@@ -285,6 +288,19 @@ export function blockView(input: Block): Rec {
           ...(item.url ? { url: item.url } : {}),
           sold: item.sold === true,
         })),
+        ...extras,
+      };
+    case "form":
+      return {
+        ...base,
+        kind: block.kind,
+        ...(block.heading ? { heading: block.heading } : {}),
+        ...(block.description ? { description: block.description } : {}),
+        askName: block.askName === true,
+        buttonLabel: block.buttonLabel,
+        successMessage: block.successMessage,
+        consent: block.consent,
+        notify: block.notify === true,
         ...extras,
       };
     case "hours":
@@ -855,6 +871,24 @@ export function patchBlock(
         block.items = mergeItems(block, fields.items as Rec[], ITEMS_MERGE, images);
       }
       break;
+    case "form": {
+      if (fields.kind !== undefined) {
+        Object.assign(
+          block,
+          switchFormKind(block as unknown as FormBlock, fields.kind as FormKind),
+        );
+      }
+      for (const key of ["heading", "description"] as const) {
+        if (fields[key] === undefined) continue;
+        if (fields[key] === null) delete block[key];
+        else block[key] = cleanLine(String(fields[key]));
+      }
+      if (fields.askName !== undefined) block.askName = fields.askName === true;
+      line("buttonLabel");
+      line("successMessage");
+      line("consent");
+      break;
+    }
     case "hours": {
       if (fields.timezone !== undefined) {
         const zone = String(fields.timezone).trim();

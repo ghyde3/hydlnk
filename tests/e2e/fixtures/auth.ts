@@ -226,7 +226,8 @@ export async function openCallback(
   try {
     await page.route("**/*", async (route) => {
       const requested = new URL(route.request().url());
-      if (requested.host === "app.localhost:3000" && requested.pathname !== "/auth/callback") {
+      // The app host on this checkout's port (HL_DEV_PORT): a second checkout's redirect is stubbed too.
+      if (requested.host === new URL(url("app")).host && requested.pathname !== "/auth/callback") {
         await route.fulfill({ status: 200, contentType: "text/plain", body: "signed in" });
       } else {
         await route.continue();

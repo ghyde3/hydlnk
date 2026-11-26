@@ -93,6 +93,10 @@ describe("proxy matcher: everything routed by host still runs the proxy", () => 
     "/c/00000000-0000-4000-8000-0000000000b1/blk",
     "/c/00000000-0000-4000-8000-0000000000b1/blk.mp4",
     "/c/00000000-0000-4000-8000-0000000000b1/blk.png",
+    // The form routes (Wave D, M17-05) are a page's own routes like /r and /c.
+    "/f/00000000-0000-4000-8000-0000000000b1/formSign01",
+    "/f/00000000-0000-4000-8000-0000000000b1/o",
+    "/f/00000000-0000-4000-8000-0000000000b1/blk.png",
     // Near misses: a name or extension that merely looks static. Only files are skipped, so a
     // path under /marketing/ that is not a static file still gets its host's routing and 404.
     "/marketing",

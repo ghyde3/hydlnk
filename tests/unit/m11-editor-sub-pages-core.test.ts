@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { makeOwner, moveHome, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import { LOCAL_DB_CONTAINER } from "../../scripts/lib/local-db";
 
 vi.mock("server-only", () => ({}));
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -18,7 +19,7 @@ const { run } = await stackIsUp();
 function psql(sql: string): string {
   return execFileSync(
     "docker",
-    ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
+    ["exec", "-i", LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
     { input: sql, encoding: "utf8" },
   );
 }

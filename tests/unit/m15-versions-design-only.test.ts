@@ -15,6 +15,7 @@ import {
   type TestOwner,
 } from "./publish-support";
 import { adminForTests } from "./support/mcp-db";
+import { LOCAL_DB_CONTAINER } from "../../scripts/lib/local-db";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidateTag: () => undefined, updateTag: () => undefined }));
@@ -51,7 +52,7 @@ vi.mock("@/lib/supabase/browser", () => ({ createBrowserSupabase: () => admin })
 const { run } = await stackIsUp();
 const dockerDb = (): boolean => {
   try {
-    execFileSync("docker", ["exec", "supabase_db_hydlnk", "true"], { stdio: "ignore" });
+    execFileSync("docker", ["exec", LOCAL_DB_CONTAINER, "true"], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -60,7 +61,7 @@ const dockerDb = (): boolean => {
 function psql(sql: string): string {
   return execFileSync(
     "docker",
-    ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
+    ["exec", "-i", LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
     { input: sql, encoding: "utf8" },
   );
 }

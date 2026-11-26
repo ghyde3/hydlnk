@@ -24,6 +24,7 @@ import {
   type TextBlock,
 } from "@/lib/document";
 import { BLOG_CLASSES } from "@/lib/blog/test-ids";
+import type { FormRenderState } from "@/lib/forms/contract";
 import { postHref } from "@/lib/blog/types";
 import { mediaUrl } from "@/lib/media/url";
 import {
@@ -45,6 +46,7 @@ import { mailtoLink, outboundHref, telLink, vcardLink, type OutboundAttrs } from
 import { SocialGlyph } from "./social-icons";
 import { AppsView, BookView, MapView } from "./store-blocks";
 import { HoursView, ItemsView } from "./items-hours-blocks";
+import { FormView } from "./form-block";
 
 /**
  * The block renderers. Nothing outside `src/components/page/` outputs block markup: the editor's
@@ -94,6 +96,12 @@ export interface BlockContext {
    * nothing, while one to Home still resolves.
    */
   site?: Pick<SiteContext, "hrefs" | "latestPosts">;
+  /**
+   * A form block's result page (Wave D, M17-06): the confirm, error or sent view of the block whose
+   * id it names, with the values typed and the token. Absent on every page but `/f/...`; only
+   * `FormView` reads it.
+   */
+  form?: FormRenderState;
 }
 
 /**
@@ -754,6 +762,8 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockContext }) {
       return <HoursView block={block} ctx={ctx} />;
     case "latest_posts":
       return <LatestPostsView block={block} ctx={ctx} />;
+    case "form":
+      return <FormView block={block} ctx={ctx} />;
     default:
       return null;
   }

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { stackIsUp } from "./publish-support";
+import { LOCAL_DB_CONTAINER } from "../../scripts/lib/local-db";
 
 /**
  * M15-05 (1b1-08): supabase/rollback/content-move-rollback.sql. It is not a migration. At a rollback it
@@ -122,7 +123,7 @@ describe("content-move-rollback.sql, static", () => {
 const { run: stackUp } = await stackIsUp();
 function dockerDb(): boolean {
   try {
-    execFileSync("docker", ["exec", "supabase_db_hydlnk", "true"], { stdio: "ignore" });
+    execFileSync("docker", ["exec", LOCAL_DB_CONTAINER, "true"], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -209,17 +210,7 @@ describe.skipIf(!haveDb)("content-move-rollback.sql, applied", () => {
     const rollback = readFileSync(rollbackPath, "utf8");
     const out = execFileSync(
       "docker",
-      [
-        "exec",
-        "-i",
-        "supabase_db_hydlnk",
-        "psql",
-        "-U",
-        "postgres",
-        "-v",
-        "ON_ERROR_STOP=1",
-        "-At",
-      ],
+      ["exec", "-i", LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
       { input: scenario(rollback), encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
     );
     const got: Record<string, string> = {};
@@ -281,17 +272,7 @@ rollback;
 `;
     const out = execFileSync(
       "docker",
-      [
-        "exec",
-        "-i",
-        "supabase_db_hydlnk",
-        "psql",
-        "-U",
-        "postgres",
-        "-v",
-        "ON_ERROR_STOP=1",
-        "-At",
-      ],
+      ["exec", "-i", LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-At"],
       { input: script, encoding: "utf8" },
     );
     expect(out).toContain("R|22023|maintenance");
@@ -300,13 +281,14 @@ rollback;
 
 // A1: `create or replace` after a drop CREATES the function, with the default ACL (execute to
 // public, and Supabase's default privileges add anon and authenticated). Every rollback file must
-// leave no SECURITY DEFINER function a client can call.
+// leave no SECURITY DEFINER function a client can call. form_submission_counts (Wave D) is the one
+// other function a client may run, and it is security invoker (RLS decides; pgTAP 219).
 describe.skipIf(!haveDb)("the rollback files leave no function a client can execute", () => {
   const files = ["block-publish-before-rollback.sql", "content-move-rollback.sql"];
   const probe = `
 select 'X|' || p.oid::regprocedure
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname = 'public' and p.proname <> 'plan_limits'
+  where n.nspname = 'public' and p.proname not in ('plan_limits', 'form_submission_counts')
     and (has_function_privilege('anon', p.oid, 'execute')
       or has_function_privilege('authenticated', p.oid, 'execute'));
 `;
@@ -326,7 +308,7 @@ create or replace function public.reverse_all_content() returns jsonb language s
     for (let attempt = 1; ; attempt++) {
       const run = spawnSync(
         "docker",
-        ["exec", "-i", "supabase_db_hydlnk", "psql", "-U", "postgres", "-q", "-At"],
+        ["exec", "-i", LOCAL_DB_CONTAINER, "psql", "-U", "postgres", "-q", "-At"],
         { input, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
       );
       if (run.status === 0) {

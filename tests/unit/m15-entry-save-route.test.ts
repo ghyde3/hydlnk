@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Database } from "@/lib/supabase/database.types";
 import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import { LOCAL_DB_CONTAINER } from "../../scripts/lib/local-db";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/env/client", () => ({ clientEnv: { NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000" } }));
@@ -37,7 +38,7 @@ function psql(sql: string): string {
     [
       "exec",
       "-i",
-      "supabase_db_hydlnk",
+      LOCAL_DB_CONTAINER,
       "psql",
       "-U",
       "postgres",

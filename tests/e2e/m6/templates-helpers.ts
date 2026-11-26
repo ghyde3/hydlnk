@@ -139,6 +139,8 @@ export function describeBlocks(blocks: DraftDoc["blocks"]): string[] {
         return `items:${block.items.length}`;
       case "latest_posts":
         return `latest_posts:${block.count}`;
+      case "form":
+        return `form:${block.kind}`;
       case "hours":
         return `hours:${block.timezone}`;
     }

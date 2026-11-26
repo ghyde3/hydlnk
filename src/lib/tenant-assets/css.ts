@@ -49,6 +49,8 @@ const BLOCK_CLASS_FAMILIES: Record<string, readonly string[]> = {
   hours: ["hours"],
   // The latest-posts list (Wave B, M16-07).
   latest_posts: ["latest"],
+  // The sign-up and contact form (Wave D, M17-04).
+  form: ["form"],
 };
 
 /** Every block type with rules of its own, in the order of the table above. */

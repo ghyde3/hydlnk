@@ -1,0 +1,42 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { PLAN_LIMITS, type PlanId } from "@/lib/limits";
+import { createAdminSupabase } from "@/lib/supabase/admin";
+
+export interface FormUsage {
+  /** Submissions the account's sites hold from this UTC month (what HL016 counts). */
+  stored: number;
+  /** Submissions turned away over the monthly cap this month. */
+  refused: number;
+  /** Submissions turned away this month because a site reached its daily cap. */
+  refusedDaily: number;
+  /** Owner message emails skipped today (UTC) by their hourly cap; each message is still stored. */
+  notifySkippedToday: number;
+  /** The plan's monthly allowance, from the limits table. */
+  limit: number;
+}
+
+/**
+ * This UTC month's form submissions of one account (M17-02), from `public.form_usage(uid)`. The
+ * function is secret-key only (the counter table has no client grant), so `userId` must be the
+ * verified session user and `plan` that user's plan. Throws when the database does.
+ */
+export async function loadFormUsage(
+  userId: string,
+  plan: PlanId,
+  admin: SupabaseClient = createAdminSupabase() as unknown as SupabaseClient,
+): Promise<FormUsage> {
+  const { data, error } = await admin.rpc("form_usage", { p_uid: userId });
+  if (error) throw new Error(`Loading form usage failed (${error.code ?? "unknown"})`);
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { stored?: number; refused?: number; refused_daily?: number; notify_skipped_today?: number }
+    | null
+    | undefined;
+  return {
+    stored: Number(row?.stored ?? 0),
+    refused: Number(row?.refused ?? 0),
+    refusedDaily: Number(row?.refused_daily ?? 0),
+    notifySkippedToday: Number(row?.notify_skipped_today ?? 0),
+    limit: PLAN_LIMITS[plan].formSubmissionsPerMonth,
+  };
+}

@@ -64,7 +64,11 @@ export function csvCell(value: string | number): string {
 export const CSV_BOM = "\uFEFF";
 const EOL = "\r\n";
 
-function csv(header: readonly string[], rows: readonly (readonly (string | number)[])[]): string {
+/** A whole CSV file: the byte order mark, the header, the rows, CRLF line ends, every cell through `csvCell`. */
+export function csv(
+  header: readonly string[],
+  rows: readonly (readonly (string | number)[])[],
+): string {
   const lines = [header, ...rows].map((cells) => cells.map(csvCell).join(","));
   return `${CSV_BOM}${lines.join(EOL)}${EOL}`;
 }

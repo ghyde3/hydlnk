@@ -38,6 +38,8 @@ describe("M4-02 the TypeScript limits table", () => {
       customTypes: 0,
       revisionsKept: 10,
       contentBytes: 67108864,
+      formSubmissionsPerMonth: 100,
+      formSubmissionsPerSiteDay: 20,
     });
     expect(PLAN_LIMITS.pro).toEqual({
       pages: 3,
@@ -53,6 +55,8 @@ describe("M4-02 the TypeScript limits table", () => {
       customTypes: 3,
       revisionsKept: 50,
       contentBytes: 1073741824,
+      formSubmissionsPerMonth: 5000,
+      formSubmissionsPerSiteDay: 500,
     });
     expect(PLAN_LIMITS.studio).toEqual({
       pages: 15,
@@ -68,6 +72,8 @@ describe("M4-02 the TypeScript limits table", () => {
       customTypes: 100,
       revisionsKept: 200,
       contentBytes: 5368709120,
+      formSubmissionsPerMonth: 50000,
+      formSubmissionsPerSiteDay: 5000,
     });
     // The exact figures the acceptance names.
     expect(PLAN_IDS.map((plan) => PLAN_LIMITS[plan].uploadBytes)).toEqual([

@@ -35,7 +35,7 @@ beforeEach(() => resolveCustomDomain.mockReset());
 describe("M8-07 the CSP of a live tenant page", () => {
   it("is exactly the closed policy: script-src 'self', one directive per resource type, the nine embed origins, no framing", () => {
     expect(TENANT_PAGE_CSP).toBe(
-      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
     );
   });
 

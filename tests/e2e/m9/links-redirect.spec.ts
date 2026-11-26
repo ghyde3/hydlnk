@@ -86,7 +86,7 @@ test.describe("M9-31 what the live address answers", () => {
       expect([301, 308]).not.toContain(response.status);
       expect(String(response.headers["cache-control"] ?? "")).not.toContain("immutable");
       for (const name of SECURITY) expect(response.headers[name], name).toBe(normal.headers[name]);
-      expect(String(response.headers["content-security-policy"])).toContain("form-action 'none'");
+      expect(String(response.headers["content-security-policy"])).toContain("form-action 'self'");
       expect(response.headers["x-frame-options"]).toBe("DENY");
     }
 

@@ -45,6 +45,7 @@ export {
   type ItemsBlock,
   type HoursBlock,
   type LatestPostsBlock,
+  type FormBlock,
   type ListItem,
   type PublishDoc,
   type SocialBlock,
@@ -54,6 +55,16 @@ export {
   type TextBlock,
 } from "./schema";
 export { LIMITS, codePointLength, singleLine, truncateToCodePoints } from "./limits";
+export {
+  DEFAULT_CONSENT,
+  FORM_DEFAULTS,
+  FORM_KINDS,
+  FORM_KIND_LABELS,
+  FORM_KIND_MESSAGE,
+  formKindLabel,
+  switchFormKind,
+  type FormKind,
+} from "./form";
 export {
   APP_STORES,
   APP_STORE_LABELS,
@@ -131,7 +142,7 @@ export {
   type ProfileOptionKey,
   type ProfileOptions,
 } from "./profile-options";
-export { BLOCK_ID_PATTERN, blockIdsOf, freshenBlockIds, newBlockId } from "./ids";
+export { BLOCK_ID_PATTERN, UUID_PATTERN, blockIdsOf, freshenBlockIds, newBlockId } from "./ids";
 export {
   EMAIL_ERROR_MESSAGE,
   MAX_EMAIL_LENGTH,

@@ -35,7 +35,8 @@ set -euo pipefail
 # shellcheck source=lib/local-env-placeholders.sh
 . "$ROOT/scripts/lib/local-env-placeholders.sh"
 
-DEV_PORT=3000
+# HL_DEV_PORT runs a second checkout beside the main one (its own dev port and root domain).
+DEV_PORT="${HL_DEV_PORT:-3000}"
 DEV_URL="http://localhost:${DEV_PORT}"
 ENV_FILE="${ENV_FILE:-$ROOT/.env.local}"
 DEV_LOG="$ROOT/tmp/dev.log"
@@ -177,7 +178,7 @@ start_dev_server() {
   # can be stopped with one `kill -- -PID`. stdin must not be the terminal: a background process
   # group that reads the tty is stopped (SIGTTIN) and startup would hang.
   set -m
-  nohup pnpm dev >"$DEV_LOG" 2>&1 </dev/null &
+  nohup pnpm dev --port "$DEV_PORT" >"$DEV_LOG" 2>&1 </dev/null &
   echo $! >"$DEV_PID_FILE"
   set +m
   DEV_STARTED_BY_US=1

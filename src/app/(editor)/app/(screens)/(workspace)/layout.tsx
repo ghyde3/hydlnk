@@ -82,6 +82,7 @@ export default async function WorkspaceLayout({ children }: { children: ReactNod
       key={current.id}
       pageId={current.id}
       ownerId={user.id}
+      accountEmail={user.email}
       plan={plan}
       handle={current.handle}
       address={handleAddress(current.handle)}

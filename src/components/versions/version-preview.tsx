@@ -53,7 +53,13 @@ export function VersionPage({
     if ((event.target as Element).closest("a")) event.preventDefault();
   }
   const page = (
-    <div data-testid="version-page" onClickCapture={onClickCapture} className="w-full">
+    <div
+      data-testid="version-page"
+      onClickCapture={onClickCapture}
+      // A form block (M17-07) in an old version posts nowhere.
+      onSubmitCapture={(event) => event.preventDefault()}
+      className="w-full"
+    >
       <PreviewFonts tokens={doc.tokens} nameFont={doc.profile.nameFont} />
       <PageRenderer
         doc={doc}

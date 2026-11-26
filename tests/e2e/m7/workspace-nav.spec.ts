@@ -17,7 +17,8 @@ const accountMenu = (page: Page) => page.getByRole("menu", { name: "Account" });
 const current = (page: Page) => nav(page).locator("a[aria-current='page']");
 
 test.describe("M7-01 sidebar: one Editor item", () => {
-  test("M7-01 the sidebar holds Editor, Analytics and Domains, and Editor covers the workspace", async ({
+  // M17-08 supersedes M7-01's lists: Audience joins after Analytics.
+  test("M7-01 the sidebar holds Editor, Analytics, Audience and Domains, and Editor covers the workspace", async ({
     page,
     context,
   }, info) => {
@@ -25,8 +26,8 @@ test.describe("M7-01 sidebar: one Editor item", () => {
     await signedInUser(context, { label: "n7" });
     await page.goto(url("app", "/editor"));
     const links = nav(page).getByRole("link");
-    await expect(links).toHaveText(["Editor", "Analytics", "Domains"]);
-    for (const [index, href] of ["/editor", "/analytics", "/domains"].entries()) {
+    await expect(links).toHaveText(["Editor", "Analytics", "Audience", "Domains"]);
+    for (const [index, href] of ["/editor", "/analytics", "/audience", "/domains"].entries()) {
       await expect(links.nth(index)).toHaveAttribute("href", href);
       expect((await links.nth(index).boundingBox())!.height).toBe(44);
       expect((await links.nth(index).locator("svg").boundingBox())!.width).toBe(16);
@@ -41,6 +42,7 @@ test.describe("M7-01 sidebar: one Editor item", () => {
     }
     for (const [path, label] of [
       ["/analytics", "Analytics"],
+      ["/audience", "Audience"],
       ["/domains", "Domains"],
     ] as const) {
       await page.goto(url("app", path));
@@ -321,9 +323,9 @@ test.describe("M7-01 admin", () => {
 });
 
 test.describe("M7-01 phone tab bar", () => {
-  const TABS = ["Editor", "Stats", "Domains", "Account"];
+  const TABS = ["Editor", "Stats", "Audience", "Domains", "Account"];
 
-  test("M7-01 four tabs in order; Editor is current on every workspace screen, Account on settings", async ({
+  test("M7-01 five tabs in order (Audience since M17-08); Editor is current on every workspace screen, Account on settings", async ({
     page,
     context,
   }, info) => {
@@ -336,6 +338,7 @@ test.describe("M7-01 phone tab bar", () => {
       ["/share", "Editor"],
       ["/editor/history", "Editor"],
       ["/analytics", "Stats"],
+      ["/audience", "Audience"],
       ["/domains", "Domains"],
       ["/settings", "Account"],
     ];

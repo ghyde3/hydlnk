@@ -63,25 +63,11 @@ export async function rateLimit(
   windowSeconds: number,
   options: RateLimitOptions = {},
 ): Promise<RateLimitResult> {
-  if (
-    !Number.isInteger(limit) ||
-    limit < 1 ||
-    !Number.isInteger(windowSeconds) ||
-    windowSeconds < 1
-  ) {
-    throw new RangeError("rateLimit needs a whole limit and window of at least 1");
-  }
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  checkArguments(limit, windowSeconds);
   try {
     const store = options.store ?? createSupabaseRateLimitStore();
     const bucket = rateLimitBucket(key, options.secret ?? visitorHashSecret());
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error("the counter store did not answer in time")),
-        options.timeoutMs ?? RATE_LIMIT_TIMEOUT_MS,
-      );
-    });
-    return await Promise.race([store.hit(bucket, limit, windowSeconds), timeout]);
+    return await inTime(store.hit(bucket, limit, windowSeconds), options.timeoutMs);
   } catch (error) {
     const reason = error instanceof Error ? error.message : "unknown error";
     if (options.failClosed === true) {
@@ -90,7 +76,94 @@ export async function rateLimit(
     }
     console.error("[rate-limit] the counter store failed; allowing the request:", reason);
     return { allowed: true, retryAfter: 0 };
+  }
+}
+
+/** `work`, or a rejection once `timeoutMs` (default `RATE_LIMIT_TIMEOUT_MS`) has passed. */
+async function inTime<T>(work: Promise<T>, timeoutMs = RATE_LIMIT_TIMEOUT_MS): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("the counter store did not answer in time")),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([work, timeout]);
   } finally {
     if (timer) clearTimeout(timer);
+  }
+}
+
+function checkArguments(limit: number, windowSeconds: number): void {
+  if (
+    !Number.isInteger(limit) ||
+    limit < 1 ||
+    !Number.isInteger(windowSeconds) ||
+    windowSeconds < 1
+  ) {
+    throw new RangeError("rateLimit needs a whole limit and window of at least 1");
+  }
+}
+
+/** Reads a bucket the way `hit` would answer it, without counting (`rate_limit_peek`). */
+export interface RateLimitPeekStore {
+  /** What one more hit of `bucket` would be answered now; counts nothing. */
+  peek(bucket: string, limit: number, windowSeconds: number): Promise<RateLimitResult>;
+}
+
+/**
+ * What `rateLimit(key, limit, windowSeconds)` would answer now, counting nothing: a limit that only
+ * some outcomes spend asks first and counts with `rateLimit` once the outcome is known (the form
+ * routes' per-site hour counts stored submissions only, forms attack pass finding 1). Fails open like
+ * `rateLimit`: a store error or a timeout reads as allowed.
+ */
+export async function rateLimitPeek(
+  key: string,
+  limit: number,
+  windowSeconds: number,
+  options: { store?: RateLimitPeekStore; secret?: string; timeoutMs?: number } = {},
+): Promise<RateLimitResult> {
+  checkArguments(limit, windowSeconds);
+  try {
+    const store = options.store ?? createSupabaseRateLimitStore();
+    const bucket = rateLimitBucket(key, options.secret ?? visitorHashSecret());
+    return await inTime(store.peek(bucket, limit, windowSeconds), options.timeoutMs);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown error";
+    console.error("[rate-limit] the counter store failed; allowing the request:", reason);
+    return { allowed: true, retryAfter: 0 };
+  }
+}
+
+/** Reads a bucket without counting a hit (`rate_limit_age`). */
+export interface RateLimitAgeStore {
+  /** Seconds since the oldest hit of `bucket` within the window, or null when there is none. */
+  age(bucket: string, windowSeconds: number): Promise<number | null>;
+}
+
+/**
+ * How long ago the oldest hit of `key` within `windowSeconds` was, in seconds, or null when there is
+ * none; it counts nothing, so asking never starts a window. The open marker's read (M17-06): only
+ * `GET /f/{pageId}/o` starts the marker, a POST only asks. Fails open the one safe way for its one
+ * caller: a store error or a timeout reads as null ("no marker"), which sends the visitor to the
+ * confirm page, never past the fill-time check.
+ */
+export async function rateLimitAge(
+  key: string,
+  windowSeconds: number,
+  options: { store?: RateLimitAgeStore; secret?: string; timeoutMs?: number } = {},
+): Promise<number | null> {
+  if (!Number.isInteger(windowSeconds) || windowSeconds < 1) {
+    throw new RangeError("rateLimitAge needs a whole window of at least 1");
+  }
+  try {
+    const store = options.store ?? createSupabaseRateLimitStore();
+    const bucket = rateLimitBucket(key, options.secret ?? visitorHashSecret());
+    return await inTime(store.age(bucket, windowSeconds), options.timeoutMs);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "unknown error";
+    console.error("[rate-limit] the counter store failed; reading no hit:", reason);
+    return null;
   }
 }

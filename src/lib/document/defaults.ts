@@ -1,4 +1,5 @@
 import { newBlockId } from "./ids";
+import { DEFAULT_CONSENT, FORM_DEFAULTS } from "./form";
 import { PROFILE_OPTION_DEFAULTS } from "./profile-options";
 import type { AppStore, BookStore } from "./stores";
 import type {
@@ -157,6 +158,20 @@ export const blockDefaults: Record<BlockType, () => Block> = {
     type: "latest_posts",
     visible: true,
     count: 3,
+  }),
+  // A sign-up form with its default texts (M17-03).
+  form: () => ({
+    id: newBlockId(),
+    type: "form",
+    visible: true,
+    kind: "signup",
+    heading: "",
+    description: "",
+    askName: false,
+    buttonLabel: FORM_DEFAULTS.signup.buttonLabel,
+    successMessage: FORM_DEFAULTS.signup.successMessage,
+    consent: DEFAULT_CONSENT,
+    notify: false,
   }),
   // Two sample items to overwrite (M12-01).
   items: () => ({

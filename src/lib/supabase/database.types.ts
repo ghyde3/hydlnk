@@ -673,6 +673,95 @@ export type Database = {
           },
         ]
       }
+      form_submission_usage: {
+        Row: {
+          accepted: number
+          month: string
+          notify_skipped: number
+          notify_skipped_day: string | null
+          owner_id: string
+          refused: number
+          refused_daily: number
+        }
+        Insert: {
+          accepted?: number
+          month: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
+          owner_id: string
+          refused?: number
+          refused_daily?: number
+        }
+        Update: {
+          accepted?: number
+          month?: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
+          owner_id?: string
+          refused?: number
+          refused_daily?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_submission_usage_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_submissions: {
+        Row: {
+          block_id: string
+          created_at: string
+          email: string
+          entry_id: string | null
+          id: string
+          kind: string
+          message: string
+          name: string
+          site_id: string
+        }
+        Insert: {
+          block_id: string
+          created_at?: string
+          email: string
+          entry_id?: string | null
+          id?: string
+          kind: string
+          message?: string
+          name?: string
+          site_id: string
+        }
+        Update: {
+          block_id?: string
+          created_at?: string
+          email?: string
+          entry_id?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          name?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_submissions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       image_cleanup_queue: {
         Row: {
           owner_id: string
@@ -1740,6 +1829,30 @@ export type Database = {
         }[]
       }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
+      form_month_stored: {
+        Args: { p_month: string; p_owner: string }
+        Returns: number
+      }
+      form_submission_counts: {
+        Args: { p_site_id: string }
+        Returns: {
+          block_id: string
+          kind: string
+          latest: string
+          total: number
+        }[]
+      }
+      form_usage: {
+        Args: { p_uid: string }
+        Returns: {
+          month: string
+          notify_skipped_today: number
+          refused: number
+          refused_daily: number
+          stored: number
+        }[]
+      }
+      form_usage_month: { Args: never; Returns: string }
       is_reserved_entry_slug: { Args: { p_slug: string }; Returns: boolean }
       is_reserved_site_path: { Args: { p_path: string }; Returns: boolean }
       live_term_counts: {
@@ -1908,6 +2021,8 @@ export type Database = {
           content_bytes: number
           custom_types: number
           entries_per_type: number
+          form_submissions_per_month: number
+          form_submissions_per_site_day: number
           max_domains: number
           max_pages: number
           max_saved_themes: number
@@ -1975,7 +2090,18 @@ export type Database = {
       }
       purge_old_events: { Args: never; Returns: number }
       purge_trashed_entries: { Args: never; Returns: number }
+      rate_limit_age: {
+        Args: { p_bucket: string; p_window_seconds: number }
+        Returns: number
+      }
       rate_limit_hit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
+        Returns: {
+          allowed: boolean
+          retry_after: number
+        }[]
+      }
+      rate_limit_peek: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: {
           allowed: boolean
@@ -1990,6 +2116,25 @@ export type Database = {
           p_was_published?: boolean
         }
         Returns: boolean
+      }
+      record_form_notify_skipped: {
+        Args: { p_owner: string }
+        Returns: undefined
+      }
+      record_form_submission: {
+        Args: {
+          p_block_id: string
+          p_email: string
+          p_entry_id: string
+          p_kind: string
+          p_message: string
+          p_name: string
+          p_site_id: string
+        }
+        Returns: {
+          owner_id: string
+          status: string
+        }[]
       }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }

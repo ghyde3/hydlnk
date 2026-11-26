@@ -313,6 +313,25 @@ export function publishBlock(block: Block): Block | null {
         ...cleanOverrides(block.overrides),
       };
     }
+    case "form": {
+      // Empty heading and description are dropped; each switch is kept only for the kind that reads it
+      // (a sign-up's `notify` and a contact form's `askName` publish as false).
+      const heading = block.heading?.trim() ?? "";
+      const description = block.description?.trim() ?? "";
+      return {
+        ...base,
+        type: "form",
+        kind: block.kind,
+        ...(heading ? { heading } : {}),
+        ...(description ? { description } : {}),
+        askName: block.kind === "signup" && block.askName,
+        notify: block.kind === "contact" && block.notify,
+        buttonLabel: block.buttonLabel.trim(),
+        successMessage: block.successMessage.trim(),
+        consent: block.consent.trim(),
+        ...cleanOverrides(block.overrides),
+      };
+    }
     case "items": {
       const heading = block.heading?.trim() ?? "";
       return {

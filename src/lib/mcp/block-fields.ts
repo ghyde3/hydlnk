@@ -6,6 +6,8 @@ import {
   LIMITS,
   SOCIAL_PLATFORMS,
   DAY_KEYS,
+  FORM_KINDS,
+  FORM_KIND_MESSAGE,
   HOURS_TIMEZONES,
   appStoresLimitMessage,
   bookStoresLimitMessage,
@@ -31,6 +33,7 @@ export const UNSETTABLE: Readonly<Record<string, string>> = {
   lock: "A link’s lock can only be set in the app.",
   utm: "A link’s UTM tags can only be set in the app.",
   marks: "Text formatting can only be set in the app.",
+  notify: "Email notifications can only be set in the app.",
 };
 
 const TYPE_NAMES: Record<BlockType, string> = {
@@ -53,6 +56,7 @@ const TYPE_NAMES: Record<BlockType, string> = {
   items: "items",
   hours: "hours",
   latest_posts: "latest posts",
+  form: "form",
 };
 
 export type FieldMode = "add" | "update";
@@ -243,6 +247,19 @@ function fieldSchemas(mode: FieldMode): Record<BlockType, z.ZodType> {
         overrides,
       })
       .partial(),
+    // A sign-up or contact form (M17-03): its kind and texts. `notify` is refused (UNSETTABLE).
+    form: z
+      .strictObject({
+        kind: z.enum(FORM_KINDS, { error: FORM_KIND_MESSAGE }),
+        heading: nullable(text),
+        description: nullable(text),
+        askName: z.boolean(),
+        buttonLabel: text,
+        successMessage: text,
+        consent: text,
+        overrides,
+      })
+      .partial(),
     hours: z
       .strictObject({
         timezone: text,
@@ -281,6 +298,16 @@ export const BLOCK_FIELD_KEYS: Readonly<Record<BlockType, readonly string[]>> = 
   items: ["heading", "layout", "items", "overrides"],
   hours: ["timezone", "days", "note", "overrides"],
   latest_posts: ["heading", "count", "categoryId", "overrides"],
+  form: [
+    "kind",
+    "heading",
+    "description",
+    "askName",
+    "buttonLabel",
+    "successMessage",
+    "consent",
+    "overrides",
+  ],
 };
 
 export const BLOCK_OVERRIDE_NAMES: readonly string[] = BLOCK_OVERRIDE_KEYS;
