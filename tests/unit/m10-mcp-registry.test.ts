@@ -296,7 +296,7 @@ describe("add_block's description matches the field schemas", () => {
 
   // page_link, items and hours (M12-05) are listed in the `fields` property, so the description stays
   // inside its limit; the description points there.
-  const IN_FIELDS = ["page_link", "items", "hours"] as const;
+  const IN_FIELDS = ["page_link", "items", "hours", "latest_posts"] as const;
   const IN_DESCRIPTION = BLOCK_TYPES.filter(
     (type) => !(IN_FIELDS as readonly string[]).includes(type),
   );
@@ -349,6 +349,7 @@ function sampleValue(type: string, key: string): unknown {
     const day = { closed: true };
     return { mon: day, tue: day, wed: day, thu: day, fri: day, sat: day, sun: day };
   }
+  if (type === "latest_posts" && key === "count") return 3;
   if (key === "icons") return [{ platform: "github", url: "https://github.com/x" }];
   if (key === "links") return [{ store: "amazon", url: "https://example.com" }];
   if (key === "cells") return [{ title: "A" }, { title: "B" }];

@@ -309,6 +309,8 @@ const TENANT_ALLOWED: Record<string, string> = {
   "server-only": "marks the server modules of the render path",
   "@supabase/supabase-js": "the secret-key client of the published-page query (server only)",
   "simple-icons": "brand marks as SVG paths, drawn into static markup at server render (Wave K)",
+  marked:
+    "lexes a post body into tokens at server render (src/lib/blog/markdown.ts, Wave B); never parses to HTML and never ships to the browser",
 };
 const TENANT_FORBIDDEN = [
   "lucide-react",

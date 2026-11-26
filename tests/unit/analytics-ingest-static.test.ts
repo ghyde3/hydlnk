@@ -142,7 +142,10 @@ describe("M4-21 where the beacon is, and where it is not", () => {
     // (The builder's module and the style filter of the state pages take the CSS and the script path from
     // the assets folder; only live-page.tsx writes the tag.)
     expect(users.filter((file) => !file.startsWith("src/lib/tenant-assets/")).sort()).toEqual([
+      // The archive and post builders (Wave B) take the CSS and the font preloads; the tag is live-page's.
+      "src/lib/tenant-render/archive-html.tsx",
       "src/lib/tenant-render/live-page.tsx",
+      "src/lib/tenant-render/post-html.tsx",
       "src/lib/tenant-render/state-css.ts",
     ]);
     const tagWriters = users.filter((file) => /TENANT_SCRIPT_SRC/.test(read(file)) && !file.startsWith("src/lib/tenant-assets/"));
