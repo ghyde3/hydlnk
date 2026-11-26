@@ -224,9 +224,9 @@ describe("(b) determinism", () => {
       body: "## Heading\n\nA paragraph with **bold**, *italic*, ~~strike~~ and a [link](https://example.com).\n\n- one\n- two\n\n> quoted\n\n```\ncode\n```",
       nodes: 30,
     },
-    "a table": { body: "| a | b |\n|---|:-:|\n| 1 | *2* |\n| 3 |", nodes: 12 },
+    "a table": { body: "| a | b |\n|---|:-:|\n| 1 | *2* |\n| 3 |\n|", nodes: 13 },
     "a task list in a quote": { body: "> - [ ] a\n> - [x] b\n>\n> c", nodes: 13 },
-    "links and references": { body: "[a][r], [b](u \"t\"), <http://x.co>, www.y.co and z@w.co\n\n[r]: v", nodes: 14 },
+    "links and references": { body: "[a][r], [b](u \"t\"), <http://x.co>, www.y.co and z@w.co\n\n[r]: v", nodes: 17 },
   };
 
   for (const [name, { body, nodes }] of Object.entries(BODIES)) {
@@ -283,6 +283,8 @@ describe("the limits and their messages", () => {
       quotes: (k: number) => `${"> ".repeat(k)}a`,
       lists: (k: number) => Array.from({ length: k }, (_, d) => `${"  ".repeat(d)}- a`).join("\n"),
       emphasis: (k: number) => `${"*a ".repeat(k)}b${" c*".repeat(k)}`,
+      // An autolink's text is one level below the link, like any other children.
+      "emphasis around an autolink": (k: number) => `${"*a ".repeat(k)}http://x.co${" c*".repeat(k)}`,
       "lists in quotes": (k: number) => `${"> - ".repeat(Math.ceil(k / 2)).slice(0, k * 2)}a`,
     })) {
       let k = 1;

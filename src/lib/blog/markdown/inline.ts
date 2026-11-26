@@ -172,7 +172,7 @@ class InlineRun {
   /** The nodes of `[from, to)`, emphasis matched. */
   private range(from: number, to: number): NodeList {
     const s = this.src;
-    const c = new Cursor(s, from, to);
+    const c = new Cursor(s, from, to, this.ctx.budget);
     while (c.i < to) {
       const i = c.i;
       const code = s.charCodeAt(i);
@@ -591,7 +591,10 @@ class InlineRun {
 
   // Building -----------------------------------------------------------------------------------------
 
-  /** The node list as tokens: adjacent text merged, children built one level deeper. */
+  /**
+   * The node list as tokens: adjacent text merged, children built one level deeper. Every token of
+   * the result is charged once: text here, the others when the cursor made them.
+   */
   private build(list: NodeList, depth: number): Token[] {
     const budget = this.ctx.budget;
     budget.depth(depth);
@@ -621,9 +624,14 @@ class InlineRun {
         parts = null;
       }
       if (node === null) return out;
+      // The token itself was charged when the cursor made it; its children are charged here.
       const token = node.token as Token & { tokens?: Token[] };
       if (node.children) token.tokens = this.build(node.children, depth + 1);
-      budget.node();
+      else if (token.tokens !== undefined && token.tokens.length > 0) {
+        // An autolink's text, made with the token: one level deeper, one node each.
+        budget.depth(depth + 1);
+        for (let k = 0; k < token.tokens.length; k += 1) budget.node();
+      }
       out.push(token);
     }
   }
@@ -644,6 +652,7 @@ class Cursor implements EmphasisSink {
     private readonly src: string,
     readonly from: number,
     readonly to: number,
+    private readonly budget: Budget,
   ) {
     this.pend = from;
     this.i = from;
@@ -664,6 +673,7 @@ class Cursor implements EmphasisSink {
     const b = cn.a + use;
     on.b -= use;
     cn.a += use;
+    this.budget.node();
     const type = closer.char === TILDE ? "del" : use === 2 ? "strong" : "em";
     const token = { type, raw: s.slice(a, b), text: s.slice(a + use, b - use), tokens: [] } as
       | Tokens.Em
@@ -709,7 +719,9 @@ class Cursor implements EmphasisSink {
     this.place({ kind: "token", token, children: null, prev: null, next: null }, at, end);
   }
 
+  /** Every token is charged when it is made, so a body past the limit stops at once. */
   place(node: TokenNode, at: number, end: number): void {
+    this.budget.node();
     this.flush(at);
     this.append(node);
     this.i = end;

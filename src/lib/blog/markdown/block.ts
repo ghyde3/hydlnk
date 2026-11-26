@@ -401,6 +401,9 @@ export class BlockLexer {
       // memory grow with rows x columns).
       const cells = splitCells(lines[r]!);
       if (cells.length > titles.length) cells.length = titles.length;
+      // The renderer draws a `<tr>` for every row: one with cells is paid for by them (a cell
+      // and its text, two nodes, for at most two elements), one with none is charged itself.
+      if (cells.length === 0) this.node();
       token.rows.push(this.cells(cells, align, false, depth));
     }
     return { token, next: k };
