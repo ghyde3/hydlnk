@@ -50,6 +50,7 @@ const ROUTES = {
   restore: () => import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/restore/route"),
   terms: () => import("@/app/(editor)/app/api/pages/[id]/terms/route"),
   term: () => import("@/app/(editor)/app/api/pages/[id]/terms/[termId]/route"),
+  draft: () => import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/draft/route"),
   revisions: () => import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/revisions/route"),
 } as const;
 type RouteName = keyof typeof ROUTES;
@@ -69,7 +70,7 @@ async function call(
   params: Record<string, string>,
   opts: CallOptions = {},
 ) {
-  const mod = (await ROUTES[name]()) as Record<
+  const mod = (await ROUTES[name]()) as unknown as Record<
     string,
     (request: Request, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>
   >;
@@ -558,6 +559,34 @@ describe.skipIf(!run)("the Posts app routes", () => {
     }
   });
 
+  it("draft save: a write from elsewhere mid-session (as MCP makes) answers conflict and is kept", async () => {
+    const { updateEntryWithClient } = await import("@/lib/content");
+    const params = { id: a.pageId, entryId: postA };
+    const held = (await row(postA)).rev;
+    const elsewhere = await updateEntryWithClient(admin, {
+      actor: { userId: a.userId, source: "mcp" },
+      entryId: postA,
+      expectedRev: held,
+      draft: { title: "Mine", slug: "mine", body: "Written by an assistant." },
+    });
+    expect(elsewhere.ok).toBe(true);
+    const stale = await call("draft", "POST", params, {
+      body: { rev: held, draft: { title: "Mine", slug: "mine", body: "Typed in the editor." } },
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.json).toEqual({ kind: "conflict", currentRev: held + 1 });
+    expect((await row(postA)).draft).toMatchObject({ body: "Written by an assistant." });
+    // A body over 512 KiB is refused by the schema, and nothing is stored.
+    const big = await call("draft", "POST", params, {
+      body: {
+        rev: held + 1,
+        draft: { title: "Mine", slug: "mine", body: "x".repeat(512 * 1024 + 1) },
+      },
+    });
+    expect(big.status).toBe(422);
+    expect((await row(postA)).rev).toBe(held + 1);
+  });
+
   it("revisions: a post of an enabled blog lists and restores; another account's does not", async () => {
     const recorded = await admin.rpc("record_entry_revision", {
       p_entry_id: postA,
@@ -679,8 +708,16 @@ describe.skipIf(!run)("the Posts app routes", () => {
       name: `Tag ${n}`,
       slug: `tag-fill-${n}`,
     }));
-    const filled = await admin.from("content_terms").insert(fill).select("id");
-    if (filled.error) throw new Error(filled.error.message);
+    // In batches: one insert of 500 rows fires the cap's trigger 500 times in a single request.
+    const filled = { data: [] as Array<{ id: string }> };
+    for (let at = 0; at < fill.length; at += 100) {
+      const batch = await admin
+        .from("content_terms")
+        .insert(fill.slice(at, at + 100))
+        .select("id");
+      if (batch.error) throw new Error(batch.error.message);
+      filled.data.push(...batch.data);
+    }
     try {
       const out = await call(
         "terms",
