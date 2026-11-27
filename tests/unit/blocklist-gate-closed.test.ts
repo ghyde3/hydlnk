@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { siteAccessAnswer } from "./access-fake";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emptyDraft } from "@/lib/document";
 
@@ -47,9 +48,18 @@ function fakeAdmin(
 ) {
   const writes: string[] = [];
   const rpcSpy = vi.fn(rpc);
+  const doc = (opts.draft ?? draft) as { blocks: unknown };
+  // Stage 1b: the site row holds the design (its own blocks are frozen and never read) and Home's
+  // blocks are the '/' page entry; the site has no other page.
   const reads: Record<string, unknown> = {
-    pages: { id: PAGE, owner_id: USER, draft: opts.draft ?? draft },
+    pages: { id: PAGE, owner_id: USER, draft: { ...doc, blocks: [] } },
     accounts: { suspended_at: null },
+    content_types: { id: "33333333-3333-4333-8333-333333333330" },
+    content_entries: {
+      id: "44444444-4444-4444-8444-444444444440",
+      rev: 1,
+      draft: { path: "/", title: "", description: "", blocks: doc.blocks },
+    },
   };
   const from = (table: string) => {
     const chain: Record<string, unknown> = {};
@@ -66,6 +76,11 @@ function fakeAdmin(
       return { order: () => ({ range: answer }) };
     };
     chain.eq = () => chain;
+    for (const name of ["is", "neq", "not", "order"]) chain[name] = () => chain;
+    // The list of the site's other page entries is awaited as a whole: there are none.
+    if (table === "content_entries") {
+      chain.then = (resolve: (value: unknown) => void) => resolve({ data: [], error: null });
+    }
     chain.maybeSingle = async () => ({ data: reads[table] ?? null, error: null });
     chain.update = () => {
       writes.push(table);
@@ -73,7 +88,15 @@ function fakeAdmin(
     };
     return chain;
   };
-  return { admin: { from, rpc: rpcSpy } as unknown as SupabaseClient, writes, rpcSpy };
+  // Wave F: the access rule answers from this site's row (USER owns PAGE); every other rpc is the
+  // blocklist's, recorded by rpcSpy.
+  const rpcOf = (fn: string, args: unknown) =>
+    fn === "site_access"
+      ? Promise.resolve(
+          siteAccessAnswer([{ id: PAGE, owner_id: USER }], [{ id: USER, plan: "free", suspended_at: null }], args),
+        )
+      : (rpcSpy as unknown as (fn: string, args: unknown) => ReturnType<typeof rpc>)(fn, args);
+  return { admin: { from, rpc: rpcOf } as unknown as SupabaseClient, writes, rpcSpy };
 }
 
 describe("M5-03 the publish gate and the blocklist", () => {

@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(process.cwd());
 const RENDERER_DIR = join(ROOT, "src/components/page");
+const POST_DIR = join(ROOT, "src/components/post/");
 
 function walk(dir: string, accept: (file: string) => boolean): string[] {
   const out: string[] = [];
@@ -141,8 +142,17 @@ describe("M2-05 renderer code: untrusted content", () => {
     const blocks = read(join(RENDERER_DIR, "blocks.tsx"));
     // M11-07: the one other href is a same-site page link, made by `internalHref` (menu.ts: "/" or
     // "/" plus a valid sub-page path, else null) and nothing else.
-    expect([...blocks.matchAll(/\bhref=[^\s>]*/g)].map((m) => m[0])).toEqual(["href={href}"]);
+    // M16-07: and a latest-posts entry, whose href is made by `postHref` (blog/types.ts: the
+    // archive path and the slug both checked again, else null and the entry is not drawn).
+    expect([...blocks.matchAll(/\bhref=[^\s>]*/g)].map((m) => m[0])).toEqual([
+      "href={href}",
+      "href={href}",
+    ]);
     expect(blocks).toMatch(/const href = internalHref\(/);
+    expect(blocks).toMatch(
+      /const href = latest \? postHref\(latest\.archivePath, post\.slug\) : null;/,
+    );
+    expect([...blocks.matchAll(/\bconst href\b/g)]).toHaveLength(2);
     expect((blocks.match(/outboundHref\(/g) ?? []).length).toBeGreaterThanOrEqual(5);
     expect(blocks).toMatch(/mailtoLink\(/);
     const outbound = read(join(RENDERER_DIR, "outbound.ts"));
@@ -177,6 +187,16 @@ describe("M2-05 renderer code: untrusted content", () => {
       /^@\/lib\/routing\/urls$/,
       // M11-07: the site menu and page-link helpers: pure functions of the document, no database.
       /^@\/lib\/site\/menu$/,
+      // M16-07: the latest-posts block: its class name (a constant) and `postHref`, a pure function
+      // of the archive path and the slug. Neither module imports a client or reads a database.
+      /^@\/lib\/blog\/test-ids$/,
+      /^@\/lib\/blog\/types$/,
+      // M17-04: the form block's paths, field names, fixed labels and result-page states. Pure: it
+      // imports only the document module.
+      /^@\/lib\/forms\/contract$/,
+      // M17-04: the form block's paths, field names, fixed labels and result-page states. Pure: it
+      // imports only the document module.
+      /^@\/lib\/forms\/contract$/,
       // M9-04: the brand marks' path data (plain data, CC0), imported by name in brand-marks.ts only.
       /^simple-icons$/,
     ];
@@ -203,11 +223,23 @@ describe("M2-05 one renderer", () => {
 
   it("keeps the renderer's markup (data-page-root, the pg- classes) inside src/components/page", () => {
     // The editor's block list rows carry data-block-id too, but that is a row hook, not page markup.
+    // Wave B (M16-04, M16-05): a post and an archive are drawn inside the page's frame by the
+    // components of src/components/post, which use the renderer's pg- classes for their own parts.
+    // They never draw the root: `data-page-root` stays in src/components/page alone.
     const offenders = srcFiles
-      .filter((f) => !f.startsWith(RENDERER_DIR))
+      .filter((f) => !f.startsWith(RENDERER_DIR) && !f.startsWith(POST_DIR))
       .filter((f) => /data-page-root|["'`\s]pg-[a-z]/.test(read(f)))
       .map(rel);
     expect(offenders).toEqual([]);
+    const postFiles = srcFiles.filter((f) => f.startsWith(POST_DIR));
+    expect(postFiles.length).toBeGreaterThanOrEqual(4);
+    for (const file of postFiles) {
+      expect(read(file), rel(file)).not.toMatch(/data-page-root=/);
+      const code = read(file)
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/(^|[^:])\/\/.*$/gm, "$1");
+      expect(code, rel(file)).not.toMatch(/dangerouslySetInnerHTML|["']use client["']/);
+    }
   });
 
   it("defines PageRenderer once, and every importer reaches it through the same module", () => {

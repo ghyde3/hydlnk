@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient, supabaseUrl } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
-import { rawRequest, restAs } from "../fixtures/http";
+import { cleanupUsers, desktopOnly, phoneOnly, publishHome } from "../fixtures/data";
+import { rawRequest } from "../fixtures/http";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { BLOCK_TYPES, BLOCK_TYPE_LABELS, LIMITS, draftDocSchema, newBlockId } from "@/lib/document";
 import {
   accessToken,
@@ -76,7 +77,7 @@ function dividers(n: number) {
 // ---------------------------------------------------------------------------------------------
 
 test.describe("M2-10 add a block", () => {
-  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store, Map, Page link, Items and Hours), 4px radius, #D9D6D0 border and a brass plus", async ({
+  test("M2-10 / M9-15 the chips in the order of BLOCK_TYPES (the nine originals, then FAQ, Contact, Discount code, Book, App store, Map, Page link, Items, Hours and Latest posts), 4px radius, #D9D6D0 border and a brass plus", async ({
     page,
     context,
   }) => {
@@ -114,6 +115,9 @@ test.describe("M2-10 add a block", () => {
       "Page link",
       "Items",
       "Hours",
+      // Wave B (M16-07) and Wave D (M17-03).
+      "Latest posts",
+      "Form",
     ]);
     const first = chips.first();
     expect(await css(first, "border-top-left-radius")).toBe("4px");
@@ -222,13 +226,11 @@ test.describe("M2-10 add a block", () => {
   test("M2-10 direct API: a draft of 51 blocks is accepted by the database", async ({
     context,
   }) => {
+    // M15-14: a browser's PostgREST write of Home's blocks is refused (HL013); the 51-block draft is
+    // planted in Home's entry with the secret key, and the database takes it.
     const user = await emptyUser(context, "ad4");
     const token = await accessToken(context);
-    const res = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      body: { draft: draftWith(user.handle, dividers(LIMITS.blocks + 1)) },
-    });
-    expect(res.status).toBe(200);
+    await abuseHomeBlocks(token, user.pageId, dividers(LIMITS.blocks + 1));
     expect((await pageRow(user.pageId)).draft.blocks).toHaveLength(51);
   });
 
@@ -527,7 +529,7 @@ test.describe("M2-12 visibility toggle", () => {
   }) => {
     const user = await seededUser(context, "vi4");
     await openEditor(page);
-    const live0 = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live0 = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live0.body).toContain("Studio rental by the hour");
     await toggle(page, IDS.link2).click();
     await page
@@ -536,12 +538,16 @@ test.describe("M2-12 visibility toggle", () => {
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
 
+    // `row.published` is the live published document on a moved site (the Home entry's blocks over
+    // the design in pages.published). The pages.published row also holds a frozen pre-move copy of
+    // the blocks (PLAN.md, content model); it is never read, so it is not asserted here. The step's
+    // literal 'absent from pages.published' cannot hold for that copy without a product change.
     const row = await pageRow(user.pageId);
     const published = JSON.stringify(row.published);
     expect(published).not.toContain("Studio rental by the hour");
     expect(published).not.toContain("maraokafor.example/studio");
     expect(JSON.stringify(row.draft)).toContain("Studio rental by the hour");
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.body).not.toContain("Studio rental by the hour");
     expect(live.body).not.toContain("maraokafor.example/studio");
     await expect(rowOf(page, IDS.link2)).toBeVisible(); // still in the editor list
@@ -555,11 +561,8 @@ test.describe("M2-12 visibility toggle", () => {
     const token = await accessToken(context);
     const draft = (await pageRow(user.pageId)).draft;
     const hiddenAll = { ...draft, blocks: draft.blocks.map((b) => ({ ...b, visible: false })) };
-    const res = await restAs(token, `/pages?id=eq.${user.pageId}`, {
-      method: "PATCH",
-      body: { draft: hiddenAll },
-    });
-    expect(res.status).toBe(200);
+    // M15-14: the browser write is refused (HL013); the hostile draft goes into Home's entry.
+    await abuseHomeBlocks(token, user.pageId, hiddenAll.blocks);
     await openEditor(page);
     await page
       .getByTestId("workspace-toolbar")
@@ -569,6 +572,8 @@ test.describe("M2-12 visibility toggle", () => {
     const row = await pageRow(user.pageId);
     expect((row.published as { blocks: unknown[] }).blocks).toEqual([]);
     expect(row.draft.blocks).toHaveLength(10);
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
+    expect(live.body).not.toContain("Studio rental by the hour");
   });
 
   test("M2-12 phone: the hit area is 44px both ways and nothing overflows; desktop: the toggle sits at the right edge", async ({
@@ -676,20 +681,13 @@ test.describe("M2-13 delete with undo", () => {
       user.pageId,
       draftWith(user.handle, [{ id, type: "header", visible: true, text: "Only block here" }]),
     );
-    await adminClient()
-      .from("pages")
-      .update({
-        published: {
-          version: 1,
-          profile: { name: user.handle, bio: "", photo: null },
-          theme: { ref: null, overrides: {} },
-          tokens: (await import("@/lib/theme")).SYSTEM_DEFAULT_TOKENS,
-          blocks: [{ id, type: "header", visible: true, text: "Only block here" }],
-        },
-        published_at: new Date().toISOString(),
-      })
-      .eq("id", user.pageId)
-      .throwOnError();
+    await publishHome(user.pageId, {
+      version: 1,
+      profile: { name: user.handle, bio: "", photo: null },
+      theme: { ref: null, overrides: {} },
+      tokens: (await import("@/lib/theme")).SYSTEM_DEFAULT_TOKENS,
+      blocks: [{ id, type: "header", visible: true, text: "Only block here" }],
+    });
     const storage: string[] = [];
     page.on("request", (r) => {
       if (r.url().includes("/storage/v1/")) storage.push(`${r.method()} ${r.url()}`);
@@ -705,7 +703,7 @@ test.describe("M2-13 delete with undo", () => {
     await reloadEditor(page);
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
     expect(await pageRow(user.pageId).then((r) => r.draft.blocks)).toEqual([]);
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.body).toContain("Only block here");
     expect(storage).toEqual([]);
   });
@@ -759,7 +757,7 @@ test.describe("M2-13 delete with undo", () => {
     expect(box.x + box.width).toBeLessThanOrEqual(390);
     const publish = (await page
       .getByTestId("workspace-toolbar")
-      .getByRole("button", { name: "Publish" })
+      .getByRole("button", { name: "Publish", exact: true })
       .boundingBox())!;
     expect(box.y).toBeGreaterThan(publish.y + publish.height);
     await expectNoHorizontalScroll(page);

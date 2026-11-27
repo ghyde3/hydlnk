@@ -2,7 +2,7 @@ import { expect, type BrowserContext, type Locator, type Page } from "@playwrigh
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
 import { adminClient } from "../fixtures/auth";
 import { rand, signedInUser, type SignedInUser } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pageRow, setDraft, waitForEditorHydrated } from "../m2/editor-helpers";
 import { DESIGN_URL, openDesign } from "./design-helpers";
 
@@ -128,7 +128,7 @@ export async function switchTo(context: BrowserContext, pageId: string): Promise
  */
 export async function liveHtml(handle: string): Promise<string> {
   const { rawRequest } = await import("../fixtures/http");
-  const response = await rawRequest(`${handle}.localhost:3000`, "/");
+  const response = await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/");
   expect(response.status).toBe(200);
   return response.body.replace(/<script\b[\s\S]*?<\/script>/g, "");
 }

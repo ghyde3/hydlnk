@@ -11,6 +11,8 @@ import {
 import { ingestPage } from "../m4/analytics-ingest-helpers";
 import { expectDenied, rest } from "../m4/analytics-db-helpers";
 import { draftOf } from "../m2/blocks-helpers";
+import { expectClientBlockWriteRefused, writeHomeDraft } from "../fixtures/home-abuse";
+import { pageRow } from "../m2/editor-helpers";
 import {
   json,
   postApp,
@@ -116,11 +118,7 @@ test.describe("M7-12 block_domain", () => {
       ]),
     });
     expect((await tenantRaw(live.handle)).status).toBe(200);
-    const before = await adminClient()
-      .from("pages")
-      .select("published, published_at")
-      .eq("id", live.pageId)
-      .single();
+    const before = await pageRow(live.pageId);
 
     const admin = await signInAsAdmin(context, "blok");
     const cookie = await sessionCookie(context);
@@ -148,12 +146,9 @@ test.describe("M7-12 block_domain", () => {
 
     // Nothing was unpublished: the page still serves, and its published copy is untouched.
     expect((await tenantRaw(live.handle)).status).toBe(200);
-    const after = await adminClient()
-      .from("pages")
-      .select("published, published_at")
-      .eq("id", live.pageId)
-      .single();
-    expect(after.data).toEqual(before.data);
+    const after = await pageRow(live.pageId);
+    expect(after.published).toEqual(before.published);
+    expect(after.published_at).toEqual(before.published_at);
 
     // One audit row, written for this admin, with the counts.
     expect(await auditRows(domain)).toEqual([
@@ -311,7 +306,7 @@ test.describe("M7-12 unblock_domain", () => {
 });
 
 test.describe("M7-12 it takes effect at once, with no cache", () => {
-  test("M7-12 after a domain is added a draft that links to it is refused (HL005); after it is removed the same save goes through", async ({
+  test("M7-12 after a domain is added a draft that links to it is refused (HL005 on the Home entry write; the browser PATCH is HL013); after it is removed the same save goes through", async ({
     context,
   }, info) => {
     test.skip(!desktopOnly(info), "API only");
@@ -322,21 +317,21 @@ test.describe("M7-12 it takes effect at once, with no cache", () => {
     const user = await makeUser("blfxu");
     const handle = `zq-blfxu-${rand(5)}`;
     const pageId = await insertPage(user.id, handle);
-    const jwt = await accessTokenFor(user.email);
-    const draftWithLink = draftOf(handle, [linkBlock("lnkblk000009", `https://x.${domain}/`)]);
-    const save = () =>
-      rest(`pages?id=eq.${pageId}`, { method: "PATCH", jwt, body: { draft: draftWithLink } });
+    const blocks = [linkBlock("lnkblk000009", `https://x.${domain}/`)];
+    // A browser can no longer write Home's blocks (M15-14: HL013); the save is the secret-key write
+    // into Home's entry, whose blocklist check is the one under test.
+    await expectClientBlockWriteRefused(await accessTokenFor(user.email), pageId, blocks);
+    const save = () => writeHomeDraft(pageId, blocks);
 
     // Not listed yet: the save goes through.
-    expect((await save()).status).toBeLessThan(300);
+    expect((await save()).error).toBeNull();
     await postApp(blockPath(), { cookie, body: JSON.stringify({ domain, reason: "e2e" }) });
 
     const refused = await save();
-    expect(refused.status).toBe(400);
-    expect(refused.body).toMatchObject({ code: "HL005", message: "blocked_link" });
+    expect(refused.error).toMatchObject({ code: "HL005", message: "blocked_link" });
 
     await postApp(removePath(domain), { cookie });
-    expect((await save()).status).toBeLessThan(300);
+    expect((await save()).error).toBeNull();
   });
 
   test("M7-12 blocked_domains and the impact function are server only: nothing is read or written with the publishable key", async ({}, info) => {

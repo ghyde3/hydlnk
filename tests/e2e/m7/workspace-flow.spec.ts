@@ -3,7 +3,7 @@ import { axeViolations } from "../fixtures/a11y";
 import { adminClient } from "../fixtures/auth";
 import { addPage, cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { NEVER_STORED, appRaw, authCookies, cookieHeader } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import {
   emptyUser,
   expectDraft,
@@ -49,7 +49,7 @@ test.describe("M7-02 the gate and the isolation of the three routes", () => {
     for (const path of ["/editor", "/design", "/share"]) {
       const res = await appRaw(path);
       expect([302, 303, 307], path).toContain(res.status);
-      expect(new URL(res.location!, "http://app.localhost:3000").pathname, path).toBe("/login");
+      expect(new URL(res.location!, `http://app.localhost:${DEV_PORT}`).pathname, path).toBe("/login");
       for (const text of ["Mara Okafor", "Portrait", "Display name", "Share card", "QR code"]) {
         expect(res.body, `${path} ${text}`).not.toContain(text);
       }
@@ -66,15 +66,10 @@ test.describe("M7-02 the gate and the isolation of the three routes", () => {
     const otherContext = await browser.newContext();
     const other = await signedInUser(otherContext, { label: "w7o" });
     const secret = `Secret${mark()}`;
-    await adminClient()
-      .from("pages")
-      .update({
-        draft: {
-          ...(await pageRow(other.pageId)).draft,
-          profile: { name: secret, bio: "", photo: null },
-        },
-      })
-      .eq("id", other.pageId);
+    await setDraft(other.pageId, {
+      ...(await pageRow(other.pageId)).draft,
+      profile: { name: secret, bio: "", photo: null },
+    });
     await otherContext.close();
     await context.addCookies([{ name: "hl-page", value: other.pageId, url: url("app") }]);
     for (const tabName of TABS) {
@@ -345,9 +340,9 @@ test.describe("M7-02 rename, Publish and the stale-tab guard", () => {
       },
     );
     await expect(page.getByText("Published.")).toBeVisible();
-    expect(
-      ((await pageRow(user.pageId)).published as { tokens: { radius: number } }).tokens.radius,
-    ).toBe(20);
+    // The design half of the live document is on the pages row (Home's blocks are in its entry).
+    const live = await adminClient().from("pages").select("published").eq("id", user.pageId).single();
+    expect((live.data!.published as { tokens: { radius: number } }).tokens.radius).toBe(20);
     await expect(page.getByRole("button", { name: "Done" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Done" })).toHaveCount(0);
 
@@ -361,9 +356,8 @@ test.describe("M7-02 rename, Publish and the stale-tab guard", () => {
         timeout: 30_000,
       },
     );
-    expect((await pageRow(user.pageId)).published).toMatchObject({
-      share: { title: "Shared title" },
-    });
+    const shared = await adminClient().from("pages").select("published").eq("id", user.pageId).single();
+    expect(shared.data!.published).toMatchObject({ share: { title: "Shared title" } });
   });
 
   test("M7-02 a Publish the gate refuses takes you to the tab that holds what failed", async ({

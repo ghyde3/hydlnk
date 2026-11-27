@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { cleanupUsers, phoneOnly, signedInUser } from "../fixtures/data";
-import { appRaw, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { FAULT_COOKIE_IGNORED, appRaw, rawRequest } from "../fixtures/http";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
  * M9-10 with Sentry OFF (NEXT_PUBLIC_SENTRY_DSN unset, the default of every local run): nothing of
@@ -85,21 +85,21 @@ test.describe("M9-10 no route, no tunnel, on any host", () => {
     expect((await appRaw("/monitoring?x=1")).status).toBe(404);
 
     // A tenant host answers one plain 404 for any path: byte for byte the same as for an invented one.
-    const tenant = await rawRequest("mara.localhost:3000", "/monitoring");
-    const invented = await rawRequest("mara.localhost:3000", unknown);
+    const tenant = await rawRequest(`mara.localhost:${DEV_PORT}`, "/monitoring");
+    const invented = await rawRequest(`mara.localhost:${DEV_PORT}`, unknown);
     expect(tenant.status).toBe(404);
     expect(tenant.body).toBe(invented.body);
     expect(tenant.body).not.toMatch(/sentry/i);
 
-    const marketing = await rawRequest("localhost:3000", "/monitoring");
+    const marketing = await rawRequest(`localhost:${DEV_PORT}`, "/monitoring");
     expect(marketing.status).toBe(404);
-    expect((await rawRequest("localhost:3000", unknown)).status).toBe(404);
+    expect((await rawRequest(`localhost:${DEV_PORT}`, unknown)).status).toBe(404);
     for (const raw of [app, marketing]) expect(raw.body).not.toMatch(/sentry/i);
   });
 
   test("M9-10 a POST to /monitoring, where a tunnel would be, is not a route either", async ({}, info) => {
     test.skip(info.project.name !== "desktop", "raw HTTP: one project is enough");
-    for (const host of ["app.localhost:3000", "mara.localhost:3000", "localhost:3000"]) {
+    for (const host of [`app.localhost:${DEV_PORT}`, `mara.localhost:${DEV_PORT}`, `localhost:${DEV_PORT}`]) {
       const res = await rawRequest(host, "/monitoring", { method: "POST", body: "{}", headers: { "content-type": "application/json" } });
       expect([404, 405], `${host} POST /monitoring`).toContain(res.status);
     }
@@ -108,7 +108,7 @@ test.describe("M9-10 no route, no tunnel, on any host", () => {
 
 test.describe("M9-10 the error pages are the ones they always were", () => {
   test("M9-10 a thrown error on an app screen shows the app's own error panel and no Sentry request goes out", async ({ page, context }, info) => {
-    test.skip(Boolean(process.env.E2E_PROD_BUILD) && !process.env.HYDLNK_QUERY_COUNTER, "the fault cookie is honoured by the dev server and a hooked build only");
+    test.skip(FAULT_COOKIE_IGNORED, "the fault cookie is honoured by the dev server and a hooked build only");
     await signedIn(context);
     await context.addCookies([{ name: "hl-fault", value: "route-throw", url: url("app") }]);
     const seen = capture(page);

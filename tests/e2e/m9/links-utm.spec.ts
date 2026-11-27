@@ -1,6 +1,6 @@
 import { chromium, expect, test } from "@playwright/test";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
 import {
   IPHONE_UA,
@@ -270,7 +270,7 @@ test.describe("M9-27 a tap lands on a destination with the tags", () => {
     const hostname = hostnameFor("utm");
     await addDomainRow({ pageId: live.pageId, hostname, status: "verified" });
     // The raw request first: the redirect answers on the custom host with the tags.
-    const raw = await getClick(live, ID.plain, { host: `${hostname}:3000` });
+    const raw = await getClick(live, ID.plain, { host: `${hostname}:${DEV_PORT}` });
     expect(raw.status).toBe(302);
     expect(raw.location).toBe(
       `${stub.url("/custom")}?utm_source=hydlnk&utm_medium=link-in-bio&utm_campaign=spring`,
@@ -281,7 +281,7 @@ test.describe("M9-27 a tap lands on a destination with the tags", () => {
     });
     try {
       const page = await browser.newPage({ userAgent: IPHONE_UA });
-      await page.goto(`http://${hostname}:3000/`);
+      await page.goto(`http://${hostname}:${DEV_PORT}/`);
       await page.locator(`.pg-link[data-block-id="${ID.plain}"]`).click();
       await page.waitForURL((u) => u.host === `${stub.host}:${stub.port}`);
       expect(new URL(page.url()).search).toBe(

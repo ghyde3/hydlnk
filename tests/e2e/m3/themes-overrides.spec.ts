@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
-import { restAs } from "../fixtures/http";
+import { abuseHomeBlocks, homeEntryOf } from "../fixtures/home-abuse";
 import { expectNoHorizontalScroll } from "../helpers";
 import { css, draftOf, rowOf, showView, userWithDraft } from "../m2/blocks-helpers";
 import { accessToken, expectDraft, pageRow } from "../m2/editor-helpers";
@@ -444,17 +444,14 @@ test.describe("M3-18 direct-API abuse: block overrides", () => {
     pageId: string,
     overrides: Record<string, unknown>,
   ) {
-    const row = await pageRow(pageId);
-    const draft = JSON.parse(JSON.stringify(row.draft)) as DraftDoc;
-    draft.blocks = draft.blocks.map((block) =>
+    // After the content cutover (M15-16) Home's blocks live in its '/' entry: the browser PATCH of
+    // pages.draft is refused (HL013), and the hostile overrides are written into the entry directly.
+    const entry = await homeEntryOf(pageId);
+    const current = JSON.parse(JSON.stringify(entry.draft.blocks ?? [])) as Block[];
+    const blocks = current.map((block) =>
       block.id === A ? ({ ...block, overrides } as Block) : block,
     );
-    const result = await restAs(await accessToken(context), `/pages?id=eq.${pageId}`, {
-      method: "PATCH",
-      body: { draft },
-    });
-    expect(result.status).toBeLessThan(300);
-    expect(Array.isArray(result.body) && result.body.length === 1).toBe(true);
+    await abuseHomeBlocks(await accessToken(context), pageId, blocks);
   }
 
   test("M3-18 Publish keeps only the allowed override keys: a font and a background are dropped, the colour stays, the live block is unchanged", async ({

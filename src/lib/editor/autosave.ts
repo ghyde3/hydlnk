@@ -31,9 +31,10 @@ export type SaveStatus =
   | "saved" //      everything edited is stored
   | "error" //      the last write failed; retrying
   | "too-large" //  over the size limit: not sent (or refused by the database)
-  | "storage-full" // the account's 64 MiB sub-page cap (HL009): sub-page saves only, not retried
+  | "storage-full" // the account's 64 MiB cap (HL009): not retried until something is removed
   | "invalid" //    the draft does not pass the draft schema: not sent
   | "conflict" //   another tab saved first; reload to continue
+  | "lost-access" // the site is no longer the user's to edit (removed, paused; Wave F, M19-11)
   | "signed-out" // the session ended (the write was refused with 401): edits stay, no retry loop
   | "blocked"; //   a link points to a blocked site (M5-03): refused for good, until it is edited
 
@@ -41,7 +42,13 @@ export type SaveStatus =
 export type SaveResult =
   | { kind: "ok" }
   | { kind: "conflict" }
+  /** The write matched no row and the site is no longer readable: access ended (M19-11). Never retried. */
+  | { kind: "lost-access" }
   | { kind: "too-large" }
+  /** The account's 64 MiB cap (HL009) on page entries, Home's blocks included: not retried. */
+  | { kind: "storage-full" }
+  /** The server refused the draft as not valid: not retried (the client gate normally catches it). */
+  | { kind: "invalid" }
   /** The write was refused with 401: the session is gone. Not retried until the user is back. */
   | { kind: "unauthorized" }
   /** The database refused the draft: a link points to a blocked site (M5-03). Not retried. */
@@ -70,6 +77,20 @@ export interface AutosaveOptions {
   now?: () => number;
 }
 
+/**
+ * A hold on a save queue (M15-10): while it stands, no write is SENT. Edits are still taken
+ * (`schedule` works, typing is never blocked) and wait in the queue; `release()` lets the newest one
+ * go. Publish holds the queues it covers for the length of its request, so a save and a publish of
+ * the same entry never overlap: the publish can move the entry's rev, and a save sent meanwhile would
+ * carry the rev from before and be refused as a conflict (or, landing first, make the publish one).
+ */
+export interface SaveHold {
+  /** Resolves once the write that was already on the wire when the hold was taken has been answered. */
+  settled: Promise<void>;
+  /** Lets queued writes go. Safe to call twice. */
+  release: () => void;
+}
+
 export const AUTOSAVE_DEBOUNCE_MS = 800;
 export const AUTOSAVE_RETRY_DELAYS_MS = [1000, 2000, 4000, 5000] as const;
 
@@ -96,6 +117,11 @@ export class AutosaveQueue {
   private current: SaveStatus = "idle";
   private blockedSave: BlockedSave | null = null;
   private disposed = false;
+  private holds = 0;
+  private gate: Promise<void> | null = null;
+  private openGate: (() => void) | null = null;
+  /** The write on the wire (past the gate), as opposed to `inFlight`, which may be waiting at it. */
+  private sending: Promise<void> | null = null;
 
   constructor(options: AutosaveOptions) {
     this.save = options.save;
@@ -135,7 +161,12 @@ export class AutosaveQueue {
     this.version += 1;
     this.lastEditAt = this.now();
     // Keep the edits; the screen asks for a reload or a sign-in, and nothing is sent until then.
-    if (this.current === "conflict" || this.current === "signed-out") return;
+    if (
+      this.current === "conflict" ||
+      this.current === "signed-out" ||
+      this.current === "lost-access"
+    )
+      return;
     // After a failed write the indicator stays "Not saved" until a write succeeds; the retry timer
     // (already running) picks the new draft up.
     if (this.current === "error") return;
@@ -158,7 +189,13 @@ export class AutosaveQueue {
     if (this.current === "blocked") return false;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (this.inFlight) await this.inFlight;
-      if (this.current === "conflict" || this.current === "signed-out") return false;
+      if (
+        this.current === "conflict" ||
+        this.current === "signed-out" ||
+        this.current === "lost-access"
+      ) {
+        return false;
+      }
       if (!this.hasUnsaved) return stored();
       await this.run();
       if (this.current !== "pending" && this.current !== "saving") return stored();
@@ -176,6 +213,30 @@ export class AutosaveQueue {
       this.cancelTimer();
       void this.run();
     }
+  }
+
+  /** Stops writes from being sent until the hold is released (see `SaveHold`). Holds nest. */
+  hold(): SaveHold {
+    this.holds += 1;
+    if (this.gate === null) {
+      this.gate = new Promise<void>((open) => {
+        this.openGate = open;
+      });
+    }
+    let released = false;
+    return {
+      settled: (this.sending ?? Promise.resolve()).catch(() => undefined),
+      release: () => {
+        if (released) return;
+        released = true;
+        this.holds -= 1;
+        if (this.holds > 0) return;
+        const open = this.openGate;
+        this.gate = null;
+        this.openGate = null;
+        open?.();
+      },
+    };
   }
 
   dispose(): void {
@@ -213,11 +274,23 @@ export class AutosaveQueue {
   /** One write of the newest draft. Never runs two at once. */
   private run(): Promise<void> {
     if (this.inFlight) return this.inFlight;
-    const work = this.write().finally(() => {
+    const work = this.gated().finally(() => {
       this.inFlight = null;
     });
     this.inFlight = work;
     return work;
+  }
+
+  /** Waits out a hold, then writes: what is sent is the newest draft at that moment. */
+  private async gated(): Promise<void> {
+    while (this.gate !== null) await this.gate;
+    const sending = this.write();
+    this.sending = sending;
+    try {
+      await sending;
+    } finally {
+      this.sending = null;
+    }
   }
 
   private async write(): Promise<void> {
@@ -269,9 +342,21 @@ export class AutosaveQueue {
         this.cancelTimer();
         this.setStatus("conflict");
         return;
+      case "lost-access":
+        this.cancelTimer();
+        this.setStatus("lost-access");
+        return;
       case "too-large":
         this.cancelTimer();
         this.setStatus("too-large");
+        return;
+      case "storage-full":
+        this.cancelTimer();
+        this.setStatus("storage-full");
+        return;
+      case "invalid":
+        this.cancelTimer();
+        this.setStatus("invalid");
         return;
       case "unauthorized":
         // No timer: a 401 does not get better with waiting, and a loop would hammer the API.

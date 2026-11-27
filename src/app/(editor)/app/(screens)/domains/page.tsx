@@ -7,6 +7,7 @@ import type { PageOption } from "@/components/domains/page-options";
 import { StudioUpsell } from "@/components/domains/studio-upsell";
 import { showsStudioUpsell } from "@/components/domains/view-model";
 import { loadAccountUsage } from "@/lib/limits/usage";
+import { notFound } from "next/navigation";
 import { getAppContext } from "@/lib/pages/context";
 import { handleAddress } from "@/lib/pages/plans";
 import { loadDomainCards } from "./load-domains";
@@ -27,6 +28,8 @@ export const metadata: Metadata = { title: "Domains" };
  */
 export default async function DomainsScreen() {
   const { user, pages, current, plan } = await getAppContext();
+  // Owner-only (Wave F): with a shared site selected, Domains is not offered (the nav hides it).
+  if (!current.access.isOwner) notFound();
   const [usage, cards] = await Promise.all([loadAccountUsage(user.id), loadDomainCards(user.id)]);
   const options: PageOption[] = pages.map((page) => ({
     id: page.id,

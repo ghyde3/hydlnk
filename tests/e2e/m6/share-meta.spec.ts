@@ -9,7 +9,7 @@ import {
   rand,
   signedInUser,
 } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { publishDocOf, publishedPage } from "../m2/blocks-helpers";
 import { accessToken, expectDraft, openEditor, pageRow, seededUser } from "../m2/editor-helpers";
 import { pngSizeOf, rawBuffer, tenantGet } from "../m2/publish-helpers";
@@ -327,8 +327,8 @@ test.describe("M6-32 a verified custom host", () => {
     expect(tags.ogDescription).toBe("Custom host words");
     expect(tags.title).toBe("Mara Okafor - links");
     expect(tags.description).toBe("Photographer in Orlando");
-    expect(tags.ogUrl).toBe(`http://${host}:3000/`);
-    expect(tags.ogImage).toBe(`http://${host}:3000/og?v=${ms}`);
+    expect(tags.ogUrl).toBe(`http://${host}:${DEV_PORT}/`);
+    expect(tags.ogImage).toBe(`http://${host}:${DEV_PORT}/og?v=${ms}`);
     expect(tags.twitterImage).toBe(tags.ogImage);
     expect(metaContents(res.text, "og:title")).toEqual(["Custom host title"]);
 
@@ -435,8 +435,8 @@ test.describe("M6-32 timing on a custom host", () => {
     const ms = await msOf(user.pageId);
     expect(after.ogTitle).toBe("Custom host, after Publish");
     expect(after.twitterTitle).toBe("Custom host, after Publish");
-    expect(after.ogUrl).toBe(`http://${host}:3000/`);
-    expect(after.ogImage).toBe(`http://${host}:3000/og?v=${ms}`);
+    expect(after.ogUrl).toBe(`http://${host}:${DEV_PORT}/`);
+    expect(after.ogImage).toBe(`http://${host}:${DEV_PORT}/og?v=${ms}`);
     expect(metaContents(res.text, "og:title")).toEqual(["Custom host, after Publish"]);
     const image = await rawBuffer(host, "/og");
     expect(image.body.equals(imageBefore)).toBe(false);

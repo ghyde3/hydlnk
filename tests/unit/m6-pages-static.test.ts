@@ -37,7 +37,14 @@ function selectArguments(source: string): string[] {
 }
 
 describe("M6-10 isolation: nothing public reads a draft", () => {
-  const publicDirs = ["src/app/(tenant)", "src/app/(marketing)", "src/components/tenant"];
+  const publicDirs = [
+    "src/app/(tenant)",
+    "src/app/(marketing)",
+    "src/components/tenant",
+    // The blog's public reads and templates (Wave B, M16): published columns only.
+    "src/lib/blog",
+    "src/components/post",
+  ];
   const publicFiles = publicDirs.flatMap((dir) => walk(dir));
 
   it("finds the public modules", () => {
@@ -98,9 +105,11 @@ describe("M6-11 the owner's draft preview reads with the user's own session", ()
     expect(source).toContain("createServerSupabase");
   });
 
-  it("checks ownership from pages.owner_id and never reads the hl-page cookie", () => {
+  it("checks access through the one access helper and never reads the hl-page cookie", () => {
+    // Wave F (C14): the owner or a member may preview; the decision is the access rule's, for the
+    // verified session user and this page id (was: pages.owner_id equals the session user).
     const source = code(route);
-    expect(source).toMatch(/\.eq\("owner_id", user\.id\)/);
+    expect(source).toMatch(/siteAccessFor\(\{\s*actorId: user\.id,\s*siteId: pageId\.toLowerCase\(\),\s*need: "read"/);
     expect(source).not.toMatch(/hl-page|CURRENT_PAGE_COOKIE|getCurrentPage|cookies\(/);
   });
 

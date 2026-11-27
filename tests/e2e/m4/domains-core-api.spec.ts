@@ -12,6 +12,7 @@ import {
   makeSite,
   resetCooldown,
 } from "./domains-core-helpers";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M4-15 / M4-12 / M4-17 / M5-23, the HTTP and database edges of custom domains (the logic itself
@@ -70,7 +71,7 @@ test.describe("M4-15 POST /api/cron/verify-domains", () => {
     const host = hostnameFor("sw1");
     await addDomainRow({ pageId: site.pageId, hostname: host, status: "verified" });
     const headers = { authorization: `Bearer ${SECRET()}` };
-    for (const h of ["localhost:3000", "mara.localhost:3000", `${site.handle}.localhost:3000`, host, hostnameFor("nobody")]) {
+    for (const h of [`localhost:${DEV_PORT}`, `mara.localhost:${DEV_PORT}`, `${site.handle}.localhost:${DEV_PORT}`, host, hostnameFor("nobody")]) {
       const res = await rawRequest(h, SWEEP, { method: "POST", headers });
       expect(res.status, h).toBe(404);
       expect(res.body, h).not.toContain('"checked"');

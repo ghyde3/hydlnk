@@ -20,7 +20,7 @@ import { url } from "../helpers";
 let envCache: Record<string, string> | undefined;
 
 /** Local keys: process.env wins, .env.local (written by scripts/init.sh) fills the rest. Never log them. */
-function readEnv(name: string): string {
+export function readEnv(name: string): string {
   if (process.env[name]) return process.env[name]!;
   if (!envCache) {
     envCache = {};
@@ -40,6 +40,8 @@ function readEnv(name: string): string {
 }
 
 export const supabaseUrl = (): string => readEnv("NEXT_PUBLIC_SUPABASE_URL");
+/** The local Supabase API's port (54321 on the main stack; a worktree's own stack has its own). */
+export const supabasePort = (): string => new URL(supabaseUrl()).port;
 export const publishableKey = (): string => readEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
 
 /** supabase-js client acting as a signed-in user (publishable key plus their JWT): RLS applies. */
@@ -55,6 +57,16 @@ export function adminClient(): SupabaseClient {
   return createClient(supabaseUrl(), readEnv("SUPABASE_SECRET_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
+}
+
+/**
+ * Moves a site the old way (blocks in pages.draft/published) into page entries: Home's '/' entry
+ * plus sub-pages. The live renderer needs a published '/' entry, and the HL013 guard refuses block
+ * writes into pages on a moved site.
+ */
+export async function moveSite(siteId: string): Promise<void> {
+  const moved = await adminClient().rpc("move_site_content", { p_site: siteId });
+  if (moved.error) throw new Error(`move_site_content failed: ${moved.error.message}`);
 }
 
 export type Plan = "free" | "pro" | "studio";
@@ -133,6 +145,7 @@ async function ensurePage(admin: SupabaseClient, userId: string, handle: string)
     .select("id")
     .single();
   if (inserted.error) throw new Error(`creating page ${handle} failed: ${inserted.error.message}`);
+  await moveSite(inserted.data.id as string);
   return inserted.data.id as string;
 }
 
@@ -215,7 +228,8 @@ export async function openCallback(
   try {
     await page.route("**/*", async (route) => {
       const requested = new URL(route.request().url());
-      if (requested.host === "app.localhost:3000" && requested.pathname !== "/auth/callback") {
+      // The app host on this checkout's port (HL_DEV_PORT): a second checkout's redirect is stubbed too.
+      if (requested.host === new URL(url("app")).host && requested.pathname !== "/auth/callback") {
         await route.fulfill({ status: 200, contentType: "text/plain", body: "signed in" });
       } else {
         await route.continue();

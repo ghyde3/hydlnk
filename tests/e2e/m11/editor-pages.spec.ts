@@ -2,13 +2,16 @@ import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
-import { emptyUser, openEditor, pageRow, previewScreen } from "../m2/editor-helpers";
+import { emptyUser, openEditor, pageRow, previewScreen, setDraft } from "../m2/editor-helpers";
+import { entry, seedHome } from "../m15/entry-helpers";
 
 /**
  * M11-08 (the editor: the pages of a site), M11-07 step 3 (the page link's form) and the Free limit.
  * Every test makes its own user and site; mara's rows are never touched. One flow runs at both
  * viewports (phone 390x844 and desktop 1440x900): add two pages, rename, reorder, hide one from the
  * menu, delete one, hit the Free limit, with no sideways scroll and 44px targets on the way.
+ * Pages are page entries (1b1-18): a site here starts with its Home entry (`seedHome`), a deleted
+ * page goes to the trash, where it still counts toward the plan's pages per site.
  */
 
 test.afterAll(cleanupUsers);
@@ -24,14 +27,29 @@ interface SubRow {
   };
 }
 
+/** The site's sub-page entries that are not in the trash, oldest first. */
 async function subPages(siteId: string): Promise<SubRow[]> {
   const { data, error } = await adminClient()
-    .from("site_pages")
+    .from("content_entries")
     .select("id, draft, created_at")
-    .eq("page_id", siteId)
-    .order("created_at");
+    .eq("site_id", siteId)
+    .neq("draft->>path", "/")
+    .is("deleted_at", null)
+    .order("created_at")
+    .order("id");
   if (error) throw new Error(error.message);
   return data as unknown as SubRow[];
+}
+
+/** Every sub-page entry, trash included. */
+async function allSubPages(siteId: string): Promise<Array<{ id: string; deleted_at: string | null }>> {
+  const { data, error } = await adminClient()
+    .from("content_entries")
+    .select("id, deleted_at")
+    .eq("site_id", siteId)
+    .neq("draft->>path", "/");
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 async function navItems(siteId: string): Promise<string[]> {
@@ -54,6 +72,7 @@ async function addPage(page: Page, title: string, path?: string) {
 
 test("M11-08 add, rename, reorder, hide, delete and the Free limit", async ({ page, context }) => {
   const user = await emptyUser(context, "pgs");
+  await seedHome(user.pageId);
   await openEditor(page);
 
   // The list: Home only, at first. Home is the open page.
@@ -168,10 +187,14 @@ test("M11-08 add, rename, reorder, hide, delete and the Free limit", async ({ pa
   await expect(rowsOf(page)).toHaveCount(2);
   await expect(rowTitled(page, "Our Menu")).toHaveCount(0);
   expect(await subPages(user.pageId)).toHaveLength(1);
+  // Delete purges (M15-13): the entry is gone, not trashed.
+  expect((await allSubPages(user.pageId)).filter((row) => row.deleted_at !== null)).toHaveLength(0);
+  expect(await allSubPages(user.pageId)).toHaveLength(1);
   expect(await navItems(user.pageId)).toEqual([second.id]);
-  // Back to Home, and the limit message gives way to Add page again.
+  // Back to Home. The purged page freed its slot, so Add page is available again.
   await expect(rowsOf(page).first()).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("add-page")).toBeVisible();
+  await expect(page.getByTestId("page-limit-note")).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });
 
@@ -180,6 +203,7 @@ test("M11-08 a sub-page edits its blocks with the same builder and autosave, and
   context,
 }) => {
   const user = await emptyUser(context, "pgb");
+  const homeId = await seedHome(user.pageId);
   await openEditor(page);
   await addPage(page, "Gallery");
   const sub = async () => (await subPages(user.pageId))[0]!;
@@ -190,7 +214,7 @@ test("M11-08 a sub-page edits its blocks with the same builder and autosave, and
   await text.fill("Summer photos");
   await expect.poll(async () => (await sub()).draft.blocks.map((b) => b.type)).toEqual(["header"]);
   await expect.poll(async () => (await sub()).draft.blocks[0]?.text).toBe("Summer photos");
-  expect((await pageRow(user.pageId)).draft.blocks).toHaveLength(0);
+  expect((await entry(homeId)).draft.blocks).toHaveLength(0);
 
   // The preview draws the sub-page with the menu; a menu entry opens that page in the editor.
   if ((page.viewportSize()?.width ?? 1440) < 760) {
@@ -228,6 +252,7 @@ test("M11-07 the page link block links to Home or a page of the site", async ({
   context,
 }) => {
   const user = await emptyUser(context, "pgl");
+  const homeId = await seedHome(user.pageId);
   await openEditor(page);
   await addPage(page, "Contact us");
   await rowsOf(page).first().click();
@@ -243,9 +268,7 @@ test("M11-07 the page link block links to Home or a page of the site", async ({
   await page.locator('[data-field="label"]').first().fill("Get in touch");
   await expect
     .poll(async () => {
-      const blocks = (await pageRow(user.pageId)).draft.blocks as unknown as Array<
-        Record<string, unknown>
-      >;
+      const blocks = (await entry(homeId)).draft.blocks;
       return blocks.map((b) => [b.type, b.label, b.target]);
     })
     .toEqual([["page_link", "Get in touch", sub.id]]);
@@ -258,6 +281,7 @@ test("M11-05 a Publish that is refused for a sub-page opens that page and shows 
   context,
 }) => {
   const user = await emptyUser(context, "pge");
+  await seedHome(user.pageId);
   await openEditor(page);
   await addPage(page, "Broken");
   // A link block with no address cannot be published.
@@ -279,24 +303,29 @@ test("M11-07 the menu holds 20 pages: a 21st page is created outside it, and Sho
   context,
 }) => {
   const user = await emptyUser(context, "pgcap", { plan: "studio" });
+  await seedHome(user.pageId);
   const admin = adminClient();
+  const type = await admin
+    .from("content_types")
+    .select("id")
+    .eq("site_id", user.pageId)
+    .eq("key", "page")
+    .single();
   const rows = Array.from({ length: 20 }, (_, i) => ({
-    page_id: user.pageId,
+    site_id: user.pageId,
+    type_id: type.data!.id as string,
     draft: {
       path: `p${i + 1}`,
       title: `Page ${i + 1}`,
       description: "",
       blocks: [],
-    },
+    } as never,
   }));
-  const inserted = await admin.from("site_pages").insert(rows).select("id");
+  const inserted = await admin.from("content_entries").insert(rows).select("id");
   expect(inserted.error).toBeNull();
   const ids = inserted.data!.map((row) => row.id as string);
   const draft = (await pageRow(user.pageId)).draft as unknown as Record<string, unknown>;
-  await admin
-    .from("pages")
-    .update({ draft: { ...draft, nav: { show: true, items: ids } } })
-    .eq("id", user.pageId);
+  await setDraft(user.pageId, { ...draft, nav: { show: true, items: ids } });
 
   await openEditor(page);
   await addPage(page, "Page 21", "p21");

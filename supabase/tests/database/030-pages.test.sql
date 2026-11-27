@@ -8,7 +8,7 @@ select tests.create_supabase_user('a', 'a@example.test');   -- free
 select tests.create_supabase_user('b', 'b@example.test');   -- free
 select tests.create_supabase_user('d', 'd@example.test');   -- studio, for the constraint tests
 
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('d');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('d'));
 
 insert into public.pages (owner_id, handle, draft) values
   (tests.get_supabase_uid('a'), 'alpha-page',
@@ -195,7 +195,7 @@ select throws_ok(
 );
 
 reset role;
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 select tests.authenticate_as_service_role();
 select lives_ok(
   format($$ insert into public.pages (owner_id, handle, draft) values (%L, 'alpha-second', '{"version":1}') $$, tests.get_supabase_uid('a')),
@@ -234,7 +234,7 @@ select throws_ok(
 -- Handles: reserved, format, unique (as studio user d, who is under the limit)
 -- ---------------------------------------------------------------------------
 
-delete from public.pages where owner_id = tests.get_supabase_uid('d');
+delete from public.pages where owner_id = (select tests.get_supabase_uid('d'));
 
 select throws_ok(
   format($$ insert into public.pages (owner_id, handle, draft) values (%L, 'admin', '{"version":1}') $$, tests.get_supabase_uid('d')),

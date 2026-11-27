@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient, generateTokenHash, openCallback, signInAs } from "../fixtures/auth";
 import { uniq } from "../fixtures/data";
 import {
@@ -65,7 +65,7 @@ test.describe("M1-21 sign out ends the session", () => {
   }, testInfo) => {
     await signInAs(context, addr("so-get", testInfo.project.name));
     const session = await sessionOf(context);
-    const cookie = cookieHeader(await context.cookies("http://app.localhost:3000"));
+    const cookie = cookieHeader(await context.cookies(`http://app.localhost:${DEV_PORT}`));
     for (const path of [
       "/signout",
       "/sign-out",

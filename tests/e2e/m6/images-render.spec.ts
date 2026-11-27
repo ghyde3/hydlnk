@@ -8,7 +8,7 @@ import {
 } from "@playwright/test";
 import sharp from "sharp";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
-import { userClient } from "../fixtures/auth";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import {
   accessToken,
@@ -310,10 +310,9 @@ test.describe("M6-23 the Publish gate", () => {
     const oldHtml = await goodLive.page.locator(".pg-blocks").evaluate((el) => el.outerHTML);
     await goodLive.context.close();
 
-    // Now write three bad blocks straight to the draft with the publishable key (curl-equivalent),
-    // as the signed-in user, plus one hidden block that is just as bad.
+    // Now write three bad blocks straight to the draft (the signed-in user's own write is refused, HL013;
+    // the attacker's database write to Home's entry is taken), plus one hidden block that is just as bad.
     const token = await accessToken(context);
-    const client = userClient(token);
     const bad = (
       extra: Record<string, unknown>,
       ref: Record<string, unknown>,
@@ -347,8 +346,8 @@ test.describe("M6-23 the Publish gate", () => {
         bad({ shape: 'x"><b>' }, { focus: { x: 5, y: 5 } }, "hiddenbadblk", false),
       ],
     };
-    const { error } = await client.from("pages").update({ draft }).eq("id", user.pageId);
-    expect(error).toBeNull();
+    // M15-14: the browser write is refused (HL013); the bad blocks go into Home's entry.
+    await abuseHomeBlocks(token, user.pageId, draft.blocks);
 
     await page.reload();
     await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
@@ -375,8 +374,7 @@ test.describe("M6-23 the Publish gate", () => {
       rev: draft.rev + 5,
       blocks: [draft.blocks[3]!, { ...draft.blocks[0]!, shape: "wide", id: "okwideblock1" }],
     };
-    const second = await client.from("pages").update({ draft: onlyHidden }).eq("id", user.pageId);
-    expect(second.error).toBeNull();
+    await abuseHomeBlocks(token, user.pageId, onlyHidden.blocks);
     await page.reload();
     await expect(page.getByLabel("Display name", { exact: true })).toBeVisible();
     await publishButton(page).click();

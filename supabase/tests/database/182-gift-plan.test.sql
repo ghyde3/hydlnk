@@ -12,7 +12,7 @@ select tests.create_supabase_user('c', 'c-182@example.test');   -- pays Pro
 
 -- Free accounts start with paid_plan free and no gift.
 select is(
-  (select paid_plan || '|' || plan || '|' || coalesce(gift_plan, 'none') from public.accounts where id = tests.get_supabase_uid('a')),
+  (select paid_plan || '|' || plan || '|' || coalesce(gift_plan, 'none') from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'free|free|none',
   'a new account: paid free, plan free, no gift'
 );
@@ -102,19 +102,19 @@ select is(
   'ok', 'an admin gifts Pro to a free account'
 );
 select is(
-  (select plan || '|' || paid_plan || '|' || gift_plan || '|' || gift_reason from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan || '|' || paid_plan || '|' || gift_plan || '|' || gift_reason from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'pro|free|pro|press kit',
   'the effective plan is pro, paid_plan stays free, the reason is trimmed'
 );
 select ok(
-  (select gifted_by = '00000000-0000-4000-8000-000000000099' and gifted_at is not null from public.accounts where id = tests.get_supabase_uid('a')),
+  (select gifted_by = '00000000-0000-4000-8000-000000000099' and gifted_at is not null from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'the gift names the admin and the time'
 );
 
 -- A second gift replaces the first (Studio, no end date).
 select is(public.admin_set_gift(tests.get_supabase_uid('a'), 'studio', null, null, '00000000-0000-4000-8000-000000000099'), 'ok', 'a second gift replaces the first');
 select is(
-  (select plan || '|' || coalesce(gift_until::text, 'forever') || '|' || coalesce(gift_reason, 'none') from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan || '|' || coalesce(gift_until::text, 'forever') || '|' || coalesce(gift_reason, 'none') from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'studio|forever|none', 'studio with no end date and no reason'
 );
 
@@ -124,7 +124,7 @@ select is(
   'applied', 'the webhook applies a Pro subscription'
 );
 select is(
-  (select plan || '|' || paid_plan from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan || '|' || paid_plan from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'studio|pro', 'the webhook wrote paid_plan; the Studio gift still holds the plan'
 );
 
@@ -134,7 +134,7 @@ select is(
   'applied', 'the webhook cancels the subscription'
 );
 select is(
-  (select plan || '|' || paid_plan from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan || '|' || paid_plan from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'studio|free', 'a cancel does not remove an active gift'
 );
 
@@ -142,7 +142,7 @@ select is(
 select is(public.admin_end_gift(tests.get_supabase_uid('a')), 'ended', 'an admin ends the gift');
 select is(
   (select plan || '|' || paid_plan || '|' || coalesce(gift_plan, 'none') || '|' || (gift_until is null and gift_reason is null and gifted_by is null and gifted_at is null)::text
-     from public.accounts where id = tests.get_supabase_uid('a')),
+     from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'free|free|none|true', 'back to free with every gift column cleared'
 );
 select is(public.admin_end_gift(tests.get_supabase_uid('a')), 'none', 'ending again says there is no gift');
@@ -159,12 +159,12 @@ select is(
 );
 select is(public.admin_set_gift(tests.get_supabase_uid('c'), 'pro', null, 'oops', '00000000-0000-4000-8000-000000000099'), 'ok', 'a Pro gift to a Studio account is recorded');
 select is(
-  (select plan || '|' || paid_plan || '|' || gift_plan from public.accounts where id = tests.get_supabase_uid('c')),
+  (select plan || '|' || paid_plan || '|' || gift_plan from public.accounts where id = (select tests.get_supabase_uid('c'))),
   'studio|studio|pro', 'and the plan stays studio'
 );
 -- Ending that gift changes nothing either.
 select is(public.admin_end_gift(tests.get_supabase_uid('c')), 'ended', 'ending the lower gift');
-select is((select plan from public.accounts where id = tests.get_supabase_uid('c')), 'studio', 'the paid plan is untouched by the gift ending');
+select is((select plan from public.accounts where id = (select tests.get_supabase_uid('c'))), 'studio', 'the paid plan is untouched by the gift ending');
 
 -- ---------------------------------------------------------------------------
 -- Bad input
@@ -194,25 +194,25 @@ reset role;
 insert into public.pages (owner_id, handle, draft)
 select tests.get_supabase_uid('b'), 'zq-182-' || n, '{"version":1,"rev":0}'::jsonb from generate_series(1, 3) n;
 -- Time passes: the end date is now in the past, but the job has not run yet.
-update public.accounts set gift_until = now() - interval '1 minute' where id = tests.get_supabase_uid('b');
+update public.accounts set gift_until = now() - interval '1 minute' where id = (select tests.get_supabase_uid('b'));
 -- (Writing the end date recomputes at once; put the plan back as it stood in the minutes before the job,
 -- with the trigger off for that one write.)
 alter table public.accounts disable trigger recompute_account_plan;
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('b');
+update public.accounts set plan = 'pro' where id = (select tests.get_supabase_uid('b'));
 alter table public.accounts enable trigger recompute_account_plan;
 select tests.authenticate_as_service_role();
 
 select is(
-  (select plan from public.accounts where id = tests.get_supabase_uid('b')),
+  (select plan from public.accounts where id = (select tests.get_supabase_uid('b'))),
   'pro', 'until the job runs the plan still holds (the job is the one that ends it)'
 );
 select is((select count(*)::int from public.end_expired_gifts()), 1, 'the expiry job ends exactly the one expired gift');
 select is(
-  (select plan || '|' || paid_plan || '|' || coalesce(gift_plan, 'none') from public.accounts where id = tests.get_supabase_uid('b')),
+  (select plan || '|' || paid_plan || '|' || coalesce(gift_plan, 'none') from public.accounts where id = (select tests.get_supabase_uid('b'))),
   'free|free|none', 'the expired gift returns the account to its paid plan'
 );
 select is(
-  (select count(*)::int from public.pages where owner_id = tests.get_supabase_uid('b')),
+  (select count(*)::int from public.pages where owner_id = (select tests.get_supabase_uid('b'))),
   3, 'nothing is deleted: the three pages are still there on Free'
 );
 select throws_ok(

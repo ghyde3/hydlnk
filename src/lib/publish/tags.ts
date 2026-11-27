@@ -8,6 +8,16 @@ export function pageTag(pageId: string): string {
   return `page:${pageId}`;
 }
 
+/** Tag of one typed entry's cached HTML (a post page). Publish, unpublish, trash and restore of it expire it. */
+export function entryTag(entryId: string): string {
+  return `entry:${entryId}`;
+}
+
+/** Tag of what is cached per content type: the post index, archive pages, the feed, terms and redirects. */
+export function typeTag(typeId: string): string {
+  return `type:${typeId}`;
+}
+
 /**
  * Tag of the cached 404 of a handle nobody owns (yet). The claim flow expires it with
  * `invalidateHandle` so a freshly claimed handle shows its placeholder at once; without that, the
@@ -40,5 +50,8 @@ export const PAGE_REVALIDATE_SECONDS = 86_400;
  *
  * "3": the three gradient tokens joined the token set (M6-41; migration 20261006000000 added them
  * to every stored complete token set).
+ *
+ * "4": the public reads moved to page entries (1b1-12): Home's blocks and every sub-page come from
+ * `content_entries`, so every page regenerates once from the new source.
  */
-export const PUBLIC_READ_CACHE_VERSION = "3";
+export const PUBLIC_READ_CACHE_VERSION = "4";

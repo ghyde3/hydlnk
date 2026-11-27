@@ -35,10 +35,13 @@ const MEDIA_ORIGIN = `http://localhost:${SERVER_PORT}`;
 test.describe.configure({ timeout: 120_000 });
 
 /**
- * The browser side of this feature lives in shared files that other Wave D agents are editing (the
- * upload control, the Design background control, the draft saver, the Publish action and the page
- * renderer): each is a few lines that import from src/lib/media. A test that needs one of those hooks
- * skips itself until the hook is in the tree, and runs by itself once it is.
+ * The browser side of this feature lives in shared files (the upload control, the Design background
+ * control, the draft saver, the Publish step and the page renderer): each is a few lines that import
+ * from src/lib/media. They were built in parallel in Wave D, so these specs once skipped themselves
+ * until a hook was in the tree. Every hook is in now, so a missing one FAILS the spec that needs it
+ * (never a silent skip). Publish runs the cleanup through the one post-publish step
+ * (`afterPagePublished`, src/lib/publish/after-publish.ts) and its one entry point
+ * (`cleanupMediaQuietly`), by hand and by schedule.
  */
 const source = (file: string): string => readFileSync(join(process.cwd(), file), "utf8");
 const UPLOAD_WIRED = source("src/components/editor/image-upload-control.tsx").includes(
@@ -47,10 +50,12 @@ const UPLOAD_WIRED = source("src/components/editor/image-upload-control.tsx").in
 const DESIGN_WIRED = source("src/components/design/sections/background-section.tsx").includes(
   "prepareImageForUpload",
 );
-const PUBLISH_WIRED = source("src/lib/publish/actions.ts").includes("cleanupMediaQuietly");
+const PUBLISH_WIRED =
+  source("src/lib/publish/actions.ts").includes("afterPagePublished(") &&
+  source("src/lib/publish/after-publish.ts").includes("cleanupMediaQuietly(");
 const SAVE_WIRED = source("src/lib/editor/save-client.ts").includes("scheduleMediaCleanup");
 const RENDER_WIRED = source("src/components/page/profile.tsx").includes('decoding="async"');
-const NOT_WIRED = "needs the shared-file hook from src/lib/media (see the Wave D image notes)";
+const NOT_WIRED = "the shared-file hook from src/lib/media is missing (see the Wave D image notes)";
 
 const owners: string[] = [];
 test.afterAll(async () => {
@@ -98,7 +103,7 @@ test.describe("M5-11 the avatar in the editor", () => {
     page,
     context,
   }) => {
-    test.skip(!UPLOAD_WIRED, NOT_WIRED);
+    expect(UPLOAD_WIRED, NOT_WIRED).toBe(true);
     const user = await newUser(context, "w11");
     await openEditor(page);
     const phone = await makeJpeg({
@@ -240,7 +245,8 @@ test.describe("M5-11 the avatar in the editor", () => {
     expect(await img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     expect(requests.filter((u) => u.includes("/_next/image"))).toEqual([]);
     expect(requests.some((u) => u.includes(photo.path))).toBe(true);
-    if (RENDER_WIRED) await expect(img).toHaveAttribute("decoding", "async");
+    expect(RENDER_WIRED, NOT_WIRED).toBe(true);
+    await expect(img).toHaveAttribute("decoding", "async");
     await live.close();
   });
 
@@ -248,7 +254,7 @@ test.describe("M5-11 the avatar in the editor", () => {
     page,
     context,
   }) => {
-    test.skip(!RENDER_WIRED, NOT_WIRED);
+    expect(RENDER_WIRED, NOT_WIRED).toBe(true);
     const user = await newUser(context, "w11d");
     await openEditor(page);
     await fileInput(page).setInputFiles({
@@ -488,7 +494,7 @@ test.describe("M5-13 inline errors", () => {
     page,
     context,
   }) => {
-    test.skip(!UPLOAD_WIRED, NOT_WIRED);
+    expect(UPLOAD_WIRED, NOT_WIRED).toBe(true);
     const user = await newUser(context, "w13");
     await openEditor(page);
     await fileInput(page).setInputFiles({
@@ -573,7 +579,7 @@ test.describe("M5-13 inline errors", () => {
     page,
     context,
   }) => {
-    test.skip(!DESIGN_WIRED, NOT_WIRED);
+    expect(DESIGN_WIRED, NOT_WIRED).toBe(true);
     const user = await newUser(context, "w13d");
     await openDesign(page);
     const input = page.getByTestId("background-file");
@@ -637,7 +643,7 @@ test.describe("M5-14 the editor works the cleanup queue", () => {
     page,
     context,
   }) => {
-    test.skip(!PUBLISH_WIRED, NOT_WIRED);
+    expect(PUBLISH_WIRED, NOT_WIRED).toBe(true);
     const user = await newUser(context, "w14");
     await openEditor(page);
     const pick = (color: [number, number, number], name: string) =>
@@ -679,7 +685,7 @@ test.describe("M5-14 the editor works the cleanup queue", () => {
     page,
     context,
   }) => {
-    test.skip(!SAVE_WIRED, NOT_WIRED);
+    expect(SAVE_WIRED, NOT_WIRED).toBe(true);
     test.setTimeout(150_000);
     const user = await newUser(context, "w14u");
     await adminClient()

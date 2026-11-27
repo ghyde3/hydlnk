@@ -3,7 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { addPage, cleanupUsers, desktopOnly, rand, signedInUser } from "../fixtures/data";
 import { appRaw, authCookies, cookieHeader } from "../fixtures/http";
 import { failVercelStub, removalCalls, vercelIds } from "../fixtures/vercel-stub";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 
 /**
  * The Vercel steps of M4-19 (delete a page) and M4-34 (delete the account): every custom domain is
@@ -140,7 +140,9 @@ test.describe("M4-34 deleting the account removes its custom domains through the
 
     // The stub recovers: the same dialog finishes the job.
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
     expect(await userExists(user.userId)).toBe(false);
     expect(await domainRows(user.pageId)).toEqual([]);
     await expectRemoved(hosts);

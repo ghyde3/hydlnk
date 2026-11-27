@@ -9,7 +9,7 @@ import {
   signedInUser,
 } from "../fixtures/data";
 import { FAULT_COOKIE_IGNORED, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { openEditor, pageRow, statusChip } from "../m2/editor-helpers";
 import { rawBytes } from "./pages-helpers";
 
@@ -162,7 +162,7 @@ test.describe("M6-13 the database side", () => {
     test.skip(!desktopOnly(info), "raw API, no UI");
     const owner = await signedInUser(context, { label: "nm4" });
     const token = await accessTokenFor(owner.email);
-    const host = `${owner.handle}.localhost:3000`;
+    const host = `${owner.handle}.localhost:${DEV_PORT}`;
     // Next puts a different request id into every page, so the markup is compared without it.
     const stable = (html: string) => html.replace(/self\.__next_r="[^"]*"/g, "");
     const pageBefore = stable((await rawRequest(host, "/")).body);

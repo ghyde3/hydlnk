@@ -44,6 +44,10 @@ export async function GET(request: NextRequest) {
     return respond({ ok: false, error: "load_failed" });
   }
 
+  // Owner-only (Wave F, G3): a member's request answers like a missing page.
+  if (!context.current.access.isOwner) {
+    return NextResponse.json({ ok: false, error: "not_found" }, { status: 404, headers: NO_STORE });
+  }
   const range = parseRange(request.nextUrl.searchParams.get("range"));
   const page = parsePageFilter(request.nextUrl.searchParams.get("filter"));
   return respond(

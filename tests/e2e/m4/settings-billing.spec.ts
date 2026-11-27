@@ -10,7 +10,7 @@ import {
   signedInUser,
 } from "../fixtures/data";
 import { appRaw } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
  * M4-05, M4-32 and M4-33: the Settings & billing screen. One smoke per state on both projects
@@ -65,7 +65,7 @@ test.describe("M4-05 Settings & billing: plan band and plan cards", () => {
     test.skip(!desktopOnly(info), "one raw request is enough");
     const res = await appRaw("/settings");
     expect(res.status).toBe(307);
-    expect(new URL(res.location!, "http://app.localhost:3000").pathname).toBe("/login");
+    expect(new URL(res.location!, `http://app.localhost:${DEV_PORT}`).pathname).toBe("/login");
     expect(res.body).not.toContain("Current plan");
     expect(res.body).not.toContain("Upgrade to");
   });

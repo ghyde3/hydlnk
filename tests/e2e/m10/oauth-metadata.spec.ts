@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { desktopOnly } from "../fixtures/data";
+import { DEV_PORT } from "../helpers";
 import { appRaw, rawRequest } from "../fixtures/http";
 import { ISSUER, RESOURCE, ownIp } from "../fixtures/oauth";
 
@@ -55,10 +56,10 @@ test.describe("M10-03 authorization server metadata", () => {
       revocation_endpoint_auth_methods_supported: ["none"],
       client_id_metadata_document_supported: true,
       authorization_response_iss_parameter_supported: true,
-      service_documentation: "http://localhost:3000/connect",
+      service_documentation: `http://localhost:${DEV_PORT}/connect`,
     });
     // The issuer is the origin the document was fetched from, no trailing slash (RFC 8414 section 3.3).
-    expect(doc.issuer).toBe("http://app.localhost:3000");
+    expect(doc.issuer).toBe(`http://app.localhost:${DEV_PORT}`);
   });
 
   test("no jwks, userinfo or introspection endpoint, no offline_access, and nothing secret", async ({}, info) => {
@@ -166,7 +167,7 @@ test.describe("M10-03 protected resource metadata", () => {
         scopes_supported: ["hydlnk.read", "hydlnk.write", "hydlnk.publish"],
         bearer_methods_supported: ["header"],
         resource_name: "HYDLNK",
-        resource_documentation: "http://localhost:3000/connect",
+        resource_documentation: `http://localhost:${DEV_PORT}/connect`,
       });
     });
   }
@@ -228,7 +229,7 @@ test.describe("M10-03 every endpoint the metadata names exists", () => {
 
   test("the metadata and the endpoints exist on the app host only", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
-    for (const host of ["localhost:3000", "mara.localhost:3000"]) {
+    for (const host of [`localhost:${DEV_PORT}`, `mara.localhost:${DEV_PORT}`]) {
       for (const path of [
         AS_PATH,
         PR_PATHS[0]!,

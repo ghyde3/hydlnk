@@ -31,16 +31,22 @@ describe.skipIf(!run)("a page id as pageId (local Supabase)", () => {
   const who = (o: TestOwner) => ({ userId: o.userId });
   async function addSubPage(o: TestOwner, path: string, blocks: unknown[] = []): Promise<string> {
     const draft = { path, title: `Page ${path}`, description: "", blocks };
+    const type = await admin
+      .from("content_types")
+      .select("id")
+      .eq("site_id", o.pageId)
+      .eq("key", "page")
+      .single();
     const { data, error } = await admin
-      .from("site_pages")
-      .insert({ page_id: o.pageId, draft: draft as never })
+      .from("content_entries")
+      .insert({ site_id: o.pageId, type_id: type.data!.id, draft: draft as never })
       .select("id")
       .single();
     if (error) throw new Error(error.message);
     return data.id as string;
   }
   const subRow = async (id: string) =>
-    (await admin.from("site_pages").select("*").eq("id", id).single()).data as any;
+    (await admin.from("content_entries").select("*").eq("id", id).single()).data as any;
   const homeRow = async (o: TestOwner) =>
     (await admin.from("pages").select("draft").eq("id", o.pageId).single()).data as any;
   const linkBlock = (id: string, label: string) => ({
@@ -127,7 +133,10 @@ describe.skipIf(!run)("a page id as pageId (local Supabase)", () => {
     const theirs = await owner("pid-theirs");
     const foreign = await addSubPage(theirs, "secret", [linkBlock("blk-pid-foreign", "Secret")]);
     const gone = await addSubPage(mine, "gone");
-    await admin.from("site_pages").delete().eq("id", gone);
+    await admin
+      .from("content_entries")
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", gone);
     const answers: unknown[] = [];
     for (const pageId of [foreign, gone, "0b1c2d3e-0000-4000-8000-000000000000", "not-a-uuid"]) {
       for (const [tool, args] of [

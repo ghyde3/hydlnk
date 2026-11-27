@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
-import { adminClient } from "../fixtures/auth";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { adminClient, supabaseUrl } from "../fixtures/auth";
 import {
   cleanupUsers,
   insertPage,
@@ -176,7 +176,7 @@ test.describe("M1-11 signup handle field", () => {
     await expect(status(page)).toHaveText(MESSAGES.taken);
 
     // Before JS runs: the initial HTML already holds the normalized value.
-    const html = await rawRequest("app.localhost:3000", "/signup?handle=Mara");
+    const html = await rawRequest(`app.localhost:${DEV_PORT}`, "/signup?handle=Mara");
     expect(html.status).toBe(200);
     expect(html.body).toMatch(
       /<input[^>]*id="su-handle"[^>]*value="mara"|<input[^>]*value="mara"[^>]*id="su-handle"/,
@@ -195,7 +195,7 @@ test.describe("M1-11 signup handle field", () => {
     await page.goto(url("app", `/signup?handle=${hostile}`));
     await expect(handleInput(page)).toHaveValue("scriptalert1script");
     expect(dialogs).toBe(0);
-    const html = await rawRequest("app.localhost:3000", `/signup?handle=${hostile}`);
+    const html = await rawRequest(`app.localhost:${DEV_PORT}`, `/signup?handle=${hostile}`);
     expect(html.body).not.toContain("<script>alert(1)");
     expect(html.body).not.toContain("alert(1)</script>");
 
@@ -291,7 +291,7 @@ test.describe("M1-12 signup with an email sign-in link", () => {
     const device = await browser.newContext();
     const other = await device.newPage();
     await other.goto(link);
-    await other.waitForURL("http://app.localhost:3000/editor", { timeout: 30_000 });
+    await other.waitForURL(`http://app.localhost:${DEV_PORT}/editor`, { timeout: 30_000 });
     await device.close();
 
     const userId = await userIdByEmail(email);
@@ -353,7 +353,7 @@ test.describe("M1-12 signup with an email sign-in link", () => {
     const device = await browser.newContext();
     const other = await device.newPage();
     await other.goto(link);
-    await other.waitForURL("http://app.localhost:3000/editor", { timeout: 30_000 });
+    await other.waitForURL(`http://app.localhost:${DEV_PORT}/editor`, { timeout: 30_000 });
     await device.close();
 
     const pages = await pagesOf(userId);
@@ -437,7 +437,7 @@ test.describe("M1-12 signup with an email sign-in link", () => {
  * (the pending-handle cookie claimed after sign-in) is unchanged. Google's script is stubbed.
  */
 test.describe("M1-13 Google on signup (replaced by the Google Identity Services button)", () => {
-  const AUTHORIZE = "http://127.0.0.1:54321/auth/v1/authorize**";
+  const AUTHORIZE = `${supabaseUrl()}/auth/v1/authorize**`;
 
   test("M1-13 a usable handle reaches the server with the credential, never leaves for Supabase's authorize endpoint and sets no handle cookie when sign-in is refused", async ({
     page,
@@ -468,7 +468,7 @@ test.describe("M1-13 Google on signup (replaced by the Google Identity Services 
     expect(left).toBe(false);
     expect(page.url()).toBe(url("app", `/signup?handle=${handle}`));
     expect(urls.filter((u) => u.includes("/auth/v1/authorize"))).toEqual([]);
-    const cookies = await context.cookies("http://app.localhost:3000");
+    const cookies = await context.cookies(`http://app.localhost:${DEV_PORT}`);
     expect(cookies.find((c) => c.name === "hl-pending-handle")).toBeUndefined();
     expect(cookies.filter((c) => c.name.startsWith("sb-"))).toEqual([]);
   });
@@ -504,7 +504,7 @@ test.describe("M1-13 Google on signup (replaced by the Google Identity Services 
     expect(state.clicks).toBe(0);
     expect(state.inits).toHaveLength(1);
     expect(page.url()).toContain("/signup");
-    const cookies = await context.cookies("http://app.localhost:3000");
+    const cookies = await context.cookies(`http://app.localhost:${DEV_PORT}`);
     expect(cookies.find((c) => c.name === "hl-pending-handle")).toBeUndefined();
   });
 
@@ -545,7 +545,11 @@ test.describe("M1-13 Google on signup (replaced by the Google Identity Services 
       // The cookie is set when signup starts, before the user comes back through /auth/callback.
       if (cookieValue !== null) {
         await context.addCookies([
-          { name: "hl-pending-handle", value: cookieValue, url: "http://app.localhost:3000" },
+          {
+            name: "hl-pending-handle",
+            value: cookieValue,
+            url: `http://app.localhost:${DEV_PORT}`,
+          },
         ]);
       }
       const { userId } = await signIn(context, email, opts);
@@ -553,7 +557,7 @@ test.describe("M1-13 Google on signup (replaced by the Google Identity Services 
       await page.goto(url("app", "/claim"));
       await page.waitForLoadState("domcontentloaded");
       const landed = new URL(page.url()).pathname;
-      const left = (await context.cookies("http://app.localhost:3000")).find(
+      const left = (await context.cookies(`http://app.localhost:${DEV_PORT}`)).find(
         (c) => c.name === "hl-pending-handle",
       );
       await context.close();

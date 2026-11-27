@@ -14,14 +14,15 @@
  * page check fails. Only the audited site is requested.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { createFixtures, removeFixtures } from "./lib/lighthouse-fixtures";
 import { DESKTOP, PHONE } from "./lib/viewports";
 
-const PORT = 3000;
+// LIGHTHOUSE_PORT lets a run sit beside a dev server on :3000 (the default).
+const PORT = Number(process.env.LIGHTHOUSE_PORT ?? 3000);
 const OUT_DIR = path.resolve(process.cwd(), "tmp", "lighthouse");
 const USAGE =
   "Usage: pnpm lighthouse [--skip-build] [--reuse-server] [--url https://{handle}.hydlnk.com]";
@@ -167,7 +168,7 @@ function isRootHostOf(host: string, tenantHost: string): boolean {
 }
 
 /** HYDLNK's own root hosts: a custom domain's images come from here too, not from the custom host. */
-const ROOT_HOSTS = new Set(["hydlnk.com", "localhost:3000"]);
+const ROOT_HOSTS = new Set(["hydlnk.com", `localhost:${PORT}`]);
 
 function sameSite(requestUrl: string, pageUrl: string): boolean {
   return new URL(requestUrl).origin === new URL(pageUrl).origin;
@@ -274,7 +275,16 @@ async function checkPage(browser: Browser, url: string): Promise<PageReport> {
     for (const el of Array.from(document.querySelectorAll<HTMLElement>("a[href], button"))) {
       const rect = el.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) continue;
-      if (rect.width < 43.5 || rect.height < 43.5) {
+      // WCAG 2.5.8 inline exception, as tests/e2e/helpers.ts applies it: a link inside running text
+      // (a word in a post's paragraph) is measured by its height only; a short word cannot be 44px
+      // wide. A bare inline link is a real target and is measured like any other.
+      const inRunningText =
+        el.tagName === "A" &&
+        getComputedStyle(el).display === "inline" &&
+        Array.from(el.parentNode?.childNodes ?? []).some(
+          (node) => node.nodeType === Node.TEXT_NODE && (node.textContent ?? "").trim() !== "",
+        );
+      if ((!inRunningText && rect.width < 43.5) || rect.height < 43.5) {
         small.push(
           `${el.tagName.toLowerCase()}.${el.className} "${(el.textContent ?? el.getAttribute("aria-label") ?? "").trim().slice(0, 24)}" ${Math.round(rect.width)}x${Math.round(rect.height)}`,
         );
@@ -373,6 +383,13 @@ async function main(): Promise<number> {
           const build = spawnSync("pnpm", ["build"], { stdio: "ignore" });
           if (build.status !== 0) fail("pnpm build failed (run `pnpm build` to see why).");
         }
+        // The Data Cache is on disk and outlives a build and a server: a handle looked up in an
+        // earlier run would still name that run's fixture site, which is deleted by now, and its
+        // pages would be the 404. This run's server starts with none.
+        await rm(path.resolve(process.cwd(), ".next", "cache", "fetch-cache"), {
+          recursive: true,
+          force: true,
+        });
         server = startServer();
       }
       await waitFor(base);
@@ -380,7 +397,10 @@ async function main(): Promise<number> {
       madeFixtures = true;
       targets = [
         { name: "mara", url: `http://mara.localhost:${PORT}/` },
-        ...fixtures.map((f) => ({ name: f.name, url: `http://${f.handle}.localhost:${PORT}/` })),
+        ...fixtures.map((f) => ({
+          name: f.name,
+          url: `http://${f.handle}.localhost:${PORT}${f.path ?? "/"}`,
+        })),
       ];
     }
 

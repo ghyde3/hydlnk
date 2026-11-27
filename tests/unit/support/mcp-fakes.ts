@@ -1,4 +1,5 @@
-import type { ActivityRow, OwnedPage, ToolDeps, ToolIdentity } from "@/lib/mcp/types";
+import type { ActivityRow, OwnedEntry, OwnedPage, ToolDeps, ToolIdentity } from "@/lib/mcp/types";
+import { loadEnvLocal } from "../publish-support";
 
 /**
  * Fakes for the MCP tests (Wave L): dependencies with spies, so a test can prove the ORDER of the
@@ -6,7 +7,9 @@ import type { ActivityRow, OwnedPage, ToolDeps, ToolIdentity } from "@/lib/mcp/t
  */
 
 // The public environment the modules under test validate at import. Defaults only: a real value in
-// the environment (a CI job, a loaded .env.local) wins.
+// the environment (a CI job, a loaded .env.local) wins. .env.local is loaded first, so a checkout
+// with its own local stack (another API port) never sends the tests' writes to another stack.
+loadEnvLocal();
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= "http://127.0.0.1:54321";
 process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??= "test-publishable-key";
 process.env.NEXT_PUBLIC_ROOT_DOMAIN ??= "localhost:3000";
@@ -35,6 +38,29 @@ export function ownedPage(over: Partial<OwnedPage> = {}): OwnedPage {
     createdAt: "2026-10-01T00:00:00Z",
     updatedAt: "2026-10-01T00:00:00Z",
     publishedAt: null,
+    ...over,
+  };
+}
+
+export const ENTRY_A = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+export const TYPE_A = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+export function ownedEntry(over: Partial<OwnedEntry> = {}): OwnedEntry {
+  return {
+    id: ENTRY_A,
+    siteId: PAGE_A,
+    ownerId: USER_A,
+    typeId: TYPE_A,
+    typeKey: "post",
+    rev: 3,
+    status: "draft",
+    hasUnpublishedChanges: false,
+    publishedAt: null,
+    firstPublishedAt: null,
+    createdAt: "2026-10-01T00:00:00Z",
+    updatedAt: "2026-10-01T00:00:00Z",
+    deletedAt: null,
+    liveSlug: null,
     ...over,
   };
 }
@@ -72,6 +98,10 @@ export function makeDeps(over: Partial<ToolDeps> = {}) {
           livePath: null,
         },
       };
+    },
+    loadEntry: async (_userId, entryId, options) => {
+      calls.push("entry");
+      return { ok: true, entry: ownedEntry({ id: entryId, typeKey: options.types[0] ?? "post" }) };
     },
     recordActivity: async (row) => {
       calls.push("activity");

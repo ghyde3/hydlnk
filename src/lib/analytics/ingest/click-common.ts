@@ -1,3 +1,4 @@
+import { UUID_PATTERN } from "@/lib/document/ids";
 import { isBot } from "./bot";
 import { countryFromHeaders } from "./country";
 import { deviceFromUserAgent } from "./device";
@@ -6,11 +7,13 @@ import { noticePageHtml } from "./notice-page";
 import type { IngestDeps } from "./types";
 
 /**
- * The pieces the click redirect's GET and HEAD (click.ts) and the link lock's POST (lock-gate.ts)
- * share: the id patterns, the notice response and the recording of a click. No behavior of its own.
+ * The pieces the click redirect's GET and HEAD (click.ts), the link lock's POST (lock-gate.ts) and the
+ * form routes (src/lib/forms/submit.ts) share: the id patterns, the notice response, the recording of
+ * a click and the capped body read. No behavior of its own.
  */
 
-export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The page id pattern, shared with the form routes (src/lib/forms/contract.ts `isUuid`). */
+export const UUID = UUID_PATTERN;
 export const BLOCK_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 export function errorMessage(error: unknown): string {
@@ -51,7 +54,7 @@ export function recordClick(
   request: Request,
   pageId: string,
   blockId: string,
-  deps: IngestDeps,
+  deps: Pick<IngestDeps, "visitorHash" | "now" | "schedule" | "insertEvent">,
   subPageId?: string,
 ): void {
   if (request.method === "HEAD") return;
@@ -80,4 +83,34 @@ export function recordClick(
       console.error("[analytics] recording a click failed:", errorMessage(error));
     }
   });
+}
+
+/** The body as text, or `"too-large"` once it passes the cap: never reads more than the cap plus one chunk. */
+export async function readBodyUpTo(
+  request: Request,
+  maxBytes: number,
+): Promise<string | "too-large"> {
+  const declared = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > maxBytes) return "too-large";
+  const reader = request.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return "too-large";
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }

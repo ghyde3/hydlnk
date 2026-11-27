@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Card } from "@/components/app/screen";
 import { PRODUCT_DOMAIN } from "@/lib/pages/plans";
 import { DeletePageDialog } from "./delete-page-dialog";
@@ -15,10 +16,28 @@ export interface PagesCardPage {
  * "{handle}.hydlnk.com" address, its Live or Not published chip and a danger "Delete page" button
  * that opens the confirmation dialog. Sits below the plan cards and above Account.
  */
-export function PagesCard({ pages }: { pages: PagesCardPage[] }) {
+export function PagesCard({
+  pages,
+  showMembers,
+}: {
+  pages: PagesCardPage[];
+  /** The current site is the user's own (R10): /members is the owner's screen, so a member gets no link. */
+  showMembers: boolean;
+}) {
   return (
     <Card className="flex flex-col gap-3.5">
-      <h2 className="text-sm font-semibold">Sites</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">Sites</h2>
+        {/* Wave F (M19-09): who works on the current site; the owner's only. */}
+        {showMembers ? (
+          <Link
+            href="/members"
+            className="inline-flex min-h-11 items-center text-sm font-semibold text-ink underline"
+          >
+            Members
+          </Link>
+        ) : null}
+      </div>
       <ul className="flex flex-col">
         {pages.map((page) => (
           <li

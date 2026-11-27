@@ -1,5 +1,6 @@
 import {
   BLOCK_TYPE_LABELS,
+  FORM_KIND_LABELS,
   SOCIAL_PLATFORM_LABELS,
   appStoreLabel,
   singleLine,
@@ -136,6 +137,20 @@ export function blockRowSummary(block: Block): BlockRowSummary {
         typeLabel,
         title: line(block.heading ?? "", "Items"),
         sub: count(block.items.length, "item", "items"),
+      };
+    case "latest_posts":
+      // M16-07: the heading when there is one, and how many posts it shows.
+      return {
+        typeLabel,
+        title: line(block.heading ?? "", "Latest posts"),
+        sub: count(block.count, "post", "posts"),
+      };
+    case "form":
+      // M17-07: the heading, or what kind of form it is; the kind under it.
+      return {
+        typeLabel,
+        title: line(block.heading ?? "", FORM_KIND_LABELS[block.kind]),
+        sub: FORM_KIND_LABELS[block.kind],
       };
     case "hours":
       // M12-02: the renderer worker may refine this.

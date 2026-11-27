@@ -6,6 +6,7 @@ import { draftOf, userWithDraft, uploadImage } from "../m2/blocks-helpers";
 import { makePng } from "../m2/editor-images";
 import {
   expectDraft,
+  pageRow,
   openEditor,
   reloadEditor,
   rowOf,
@@ -224,11 +225,7 @@ test.describe("M6-21 the Icon field", () => {
       await expect(preview).toHaveText("Link 01");
     });
     await expect
-      .poll(
-        async () =>
-          (await adminClient().from("pages").select("draft").eq("id", user.pageId).single()).data!
-            .draft.blocks[0].icon,
-      )
+      .poll(async () => draftBlock((await pageRow(user.pageId)).draft, IDS.a)?.icon)
       .toEqual({ type: "builtin", name: "instagram" });
 
     // Another icon replaces it; only that one is pressed.

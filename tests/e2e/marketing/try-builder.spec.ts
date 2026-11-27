@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { axeViolations } from "../fixtures/a11y";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { supabasePort } from "../fixtures/auth";
 
 /**
  * The try-it builder on an audience page (#try; the TikTok page, preset: Kai Brennan, Ember). It left the
@@ -80,7 +81,7 @@ test.describe("audience page try-it builder", () => {
 
     // No Supabase traffic and nothing from another host: fonts are self-hosted.
     const origin = new URL(url()).host;
-    expect(requests.filter((u) => /supabase|:54321/i.test(u))).toEqual([]);
+    expect(requests.filter((u) => new RegExp(`supabase|:${supabasePort()}`, "i").test(u))).toEqual([]);
     expect(requests.map((u) => new URL(u).host).filter((host) => host !== origin)).toEqual([]);
   });
 

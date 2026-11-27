@@ -243,11 +243,11 @@ test.describe("the protocol", () => {
       expect(result.instructions.length).toBeLessThanOrEqual(1200);
       expect(init.headers.get("mcp-session-id")).toBeNull();
       expect((await mcp.initialized()).status).toBe(202);
-      expect(await mcp.listTools()).toHaveLength(14);
+      expect(await mcp.listTools()).toHaveLength(31);
     }
   });
 
-  test("M10-21 tools/list is the pinned table of fourteen for any valid token, whatever its scopes", async () => {
+  test("M10-21, M18-12 tools/list is the pinned table of thirty-one for any valid token, whatever its scopes", async () => {
     const user = await makeUser("mcp-list", { plan: "free" });
     const mcp = new McpClient((await mintToken(user.id, READ_ONLY_SCOPES)).token);
     await mcp.initialize();
@@ -267,6 +267,19 @@ test.describe("the protocol", () => {
       ["get_page", "Get a page", true, false, true, false, "hydlnk.read"],
       ["get_analytics", "Get page analytics", true, false, true, false, "hydlnk.read"],
       ["get_domains", "List custom domains", true, false, true, false, "hydlnk.read"],
+      ["list_content_types", "List content types", true, false, true, false, "hydlnk.read"],
+      ["list_entries", "List posts", true, false, true, false, "hydlnk.read"],
+      ["get_entry", "Get a post", true, false, true, false, "hydlnk.read"],
+      ["list_terms", "List categories and tags", true, false, true, false, "hydlnk.read"],
+      [
+        "list_revisions",
+        "List the saved versions of a post or page",
+        true,
+        false,
+        true,
+        false,
+        "hydlnk.read",
+      ],
       ["update_profile", "Update the profile", false, false, true, false, "hydlnk.write"],
       ["add_block", "Add a block", false, false, false, false, "hydlnk.write"],
       ["update_block", "Update a block", false, false, true, false, "hydlnk.write"],
@@ -283,7 +296,27 @@ test.describe("the protocol", () => {
         "hydlnk.write",
       ],
       ["set_theme", "Change the theme", false, false, true, false, "hydlnk.write"],
+      ["create_entry", "Create a post", false, false, false, false, "hydlnk.write"],
+      ["update_entry", "Update a post", false, false, true, false, "hydlnk.write"],
+      ["delete_entry", "Move a post to the trash", false, true, true, false, "hydlnk.write"],
+      ["restore_entry", "Restore a post from the trash", false, false, true, false, "hydlnk.write"],
+      ["create_term", "Add a category or tag", false, false, false, false, "hydlnk.write"],
+      ["restore_revision", "Bring back a saved version", false, false, true, false, "hydlnk.write"],
       ["create_preview_link", "Create a preview link", false, false, false, false, "hydlnk.write"],
+      ["rename_term", "Rename a category or tag", false, true, true, false, "hydlnk.publish"],
+      ["delete_term", "Delete a category or tag", false, true, true, false, "hydlnk.publish"],
+      ["publish_entry", "Publish one post or page", false, true, true, false, "hydlnk.publish"],
+      ["unpublish_entry", "Take a post off the site", false, true, true, false, "hydlnk.publish"],
+      ["publish_design", "Publish the design", false, true, true, false, "hydlnk.publish"],
+      [
+        "update_content_type",
+        "Turn the blog on or off, or move it",
+        false,
+        true,
+        true,
+        false,
+        "hydlnk.publish",
+      ],
       ["publish_page", "Publish a page", false, true, true, false, "hydlnk.publish"],
     ]);
     for (const tool of tools) {
@@ -305,7 +338,7 @@ test.describe("the protocol", () => {
     expect(
       (discover.message!.result as { supportedVersions: string[] }).supportedVersions,
     ).toContain("2026-07-28");
-    expect(await mcp.listTools()).toHaveLength(14);
+    expect(await mcp.listTools()).toHaveLength(31);
     await insertPage(user.id, uniq("era"));
     const pages = await mcp.call<{ pages: unknown[] }>("list_pages");
     expect(pages.pages).toHaveLength(1);
@@ -341,14 +374,14 @@ test.describe("the protocol", () => {
     expect(JSON.parse(bad.text).error.code).toBe(-32700);
   });
 
-  test("M10-02 a body over 256 KB is a 413 and one just under it is read", async () => {
+  test("M10-02, M18-02 a body over 1 MiB is a 413 and one just under it is read", async () => {
     const user = await makeUser("mcp-size", { plan: "pro" });
     const token = (await mintToken(user.id)).token;
     const big = JSON.stringify({
       jsonrpc: "2.0",
       id: 1,
       method: "tools/list",
-      params: { pad: "x".repeat(300 * 1024) },
+      params: { pad: "x".repeat(1100 * 1024) },
     });
     const refused = await post(big, bearer(token));
     expect(refused.response.status).toBe(413);
@@ -356,7 +389,7 @@ test.describe("the protocol", () => {
       jsonrpc: "2.0",
       id: 1,
       method: "tools/list",
-      params: { pad: "x".repeat(200 * 1024) },
+      params: { pad: "x".repeat(900 * 1024) },
     });
     expect(
       (await post(fine, { ...bearer(token), "mcp-protocol-version": "2025-06-18" })).response

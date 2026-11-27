@@ -11,6 +11,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -101,14 +103,12 @@ describe.skipIf(!run)(
 
     const owner = async (label: string, blocks: Block[] = []) => {
       const made = await makeOwner(admin, label, (handle) => draftOf(handle, blocks));
+      await moveHome(admin, made.pageId);
       owners.push(made);
       return made;
     };
     const writeBlocks = async (o: TestOwner, blocks: Block[]) => {
-      const { error } = await admin
-        .from("pages")
-        .update({ draft: draftOf("Alpha", blocks) as never })
-        .eq("id", o.pageId);
+      const { error } = await setPageDraft(admin, o.pageId, draftOf("Alpha", blocks));
       expect(error).toBeNull();
     };
     const publish = (o: TestOwner) =>

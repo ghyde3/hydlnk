@@ -11,7 +11,7 @@ import {
   stubSubscriptionStatus,
 } from "../fixtures/stripe-stub";
 import { failVercelStub, removalCalls } from "../fixtures/vercel-stub";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { billingUser } from "./billing-helpers";
 import {
   addVerifiedDomains,
@@ -117,7 +117,9 @@ test.describe("M4-34 the whole chain: Stripe, then Vercel, then files, then the 
 
     // ---- Everything recovers: the same dialog finishes the job.
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
     expect(await userExists(user.userId)).toBe(false);
     expect(await imagesOf(user.userId)).toEqual([]);
     expect(await domainHostsOf([user.pageId])).toEqual([]);
@@ -139,7 +141,7 @@ test.describe("M4-34 the whole chain: Stripe, then Vercel, then files, then the 
     expect(total).toBe(cancelsAfterVercelFailure);
 
     // The handle answers 404 at once and is free again.
-    expect((await customGet(`${user.handle}.localhost:3000`)).status).toBe(404);
+    expect((await customGet(`${user.handle}.localhost:${DEV_PORT}`)).status).toBe(404);
     const { data: claimed } = await adminClient()
       .from("pages")
       .select("id")
@@ -167,11 +169,13 @@ test.describe("M4-34 the whole chain: Stripe, then Vercel, then files, then the 
     const dialog = await openDialog(page);
     await dialog.getByLabel("Type your handle to confirm").fill(user.handle);
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
 
     // Immediately: no polling, no waiting for a cache window.
     for (const host of hosts) expect((await customGet(host)).status, host).toBe(404);
-    expect((await customGet(`${user.handle}.localhost:3000`)).status).toBe(404);
+    expect((await customGet(`${user.handle}.localhost:${DEV_PORT}`)).status).toBe(404);
     for (const host of hosts) expect((await removalCalls(host)).length).toBeGreaterThanOrEqual(1);
   });
 });
@@ -321,7 +325,9 @@ test.describe("M4-34 abuse, with custom domains and images in play", () => {
       { pageId: victim.pageId, hostname: victimHost, userId: victim.userId },
     );
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
 
     // Mine is gone, theirs is whole.
     expect(await userExists(me.userId)).toBe(false);
@@ -382,7 +388,9 @@ test.describe("M4-34 the dialog when the domain step fails", () => {
 
     // Vercel recovers; the same dialog finishes.
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
     expect(await userExists(user.userId)).toBe(false);
   });
 });

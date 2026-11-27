@@ -83,6 +83,7 @@ export default async function SettingsScreen({ searchParams }: PageProps<"/app/s
           }
         />
         <PagesCard
+          showMembers={current.access.isOwner}
           pages={pages.map((page) => ({
             id: page.id,
             handle: page.handle,

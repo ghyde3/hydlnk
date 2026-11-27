@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useId, type MouseEvent } from "react";
-import { useAccountPlan } from "@/components/versions/plan-context";
+import { useSitePlan } from "@/components/versions/plan-context";
 import { PLAN_LIMITS } from "@/lib/limits";
 import { HISTORY_ROUTE } from "@/lib/versions/messages";
 import { useWorkspace } from "../workspace-context";
@@ -18,7 +18,7 @@ import { CARD, CARD_TITLE, SECONDARY_BUTTON } from "./styles";
  */
 export function HistoryCard() {
   const router = useRouter();
-  const plan = useAccountPlan();
+  const plan = useSitePlan();
   const { autosave, isDesktop } = useWorkspace();
   const headingId = useId();
   if (isDesktop) return null;

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { TenantFonts } from "@/components/design/tenant-fonts";
 import { PageRenderer } from "@/components/page/page-renderer";
+import { PostArticle } from "@/components/post/post-article";
 import { ShareBar } from "@/components/previews/preview-bars";
 import { PreviewFrame } from "@/components/previews/preview-frame";
 import { formatLinkDate } from "@/lib/previews/dates";
@@ -26,11 +27,18 @@ export const dynamic = "force-dynamic";
  * tracking, no way out (the frame stops links), embeds stay inert. This is the one ungated route that
  * reads a draft, and it does so with the secret key under the rules of src/lib/previews/shared.ts.
  * Anything that is not an active link ends in `notFound()`: one 404 with one body.
+ *
+ * `/share/{token}/entry/{entryId}` (M16-16) draws one post's saved draft inside the same shell, with
+ * the article component of the live post page: embeds inert, terms as plain text, no beacon. The
+ * loader finds the entry inside the link's own site; another site's entry, a page entry, a trashed
+ * post and a malformed id are the same 404.
  */
 
 const load = cache(async (token: string, path: string) =>
   loadSharedPreview(createAdminSupabase(), token, new Date(), path),
 );
+
+const UNTITLED_POST = "Untitled post";
 
 async function currentToken(): Promise<string> {
   return (await headers()).get(SHARE_TOKEN_HEADER) ?? "";
@@ -47,14 +55,12 @@ export async function generateMetadata(): Promise<Metadata> {
   if (shared.kind === "inactive") {
     return { title: { absolute: "Preview link not active" }, robots };
   }
-  return {
-    title: {
-      absolute: shared.subPage
-        ? `Preview of ${shared.subPage.title}`
-        : `Preview of ${shared.doc.profile.name}`,
-    },
-    robots,
-  };
+  const name = shared.post
+    ? shared.post.view.title || UNTITLED_POST
+    : shared.subPage
+      ? shared.subPage.title
+      : shared.doc.profile.name;
+  return { title: { absolute: `Preview of ${name}` }, robots };
 }
 
 export default async function SharedPreviewPage() {
@@ -73,6 +79,23 @@ export default async function SharedPreviewPage() {
           inertEmbeds
           {...(shared.site ? { site: shared.site } : {})}
           {...(shared.subPage ? { subPage: shared.subPage } : {})}
+          {...(shared.post
+            ? {
+                main: {
+                  kind: "post" as const,
+                  title: shared.post.view.title || UNTITLED_POST,
+                  node: (
+                    <PostArticle
+                      post={shared.post.view}
+                      archivePath={shared.post.archivePath}
+                      terms={shared.post.terms}
+                      ownerId={shared.post.ownerId}
+                      embeds="inert"
+                    />
+                  ),
+                },
+              }
+            : {})}
           chrome={{ badge: showBadge(shared.plan), reportHref: null }}
         />
       </PreviewFrame>

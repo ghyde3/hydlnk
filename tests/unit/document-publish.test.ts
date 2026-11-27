@@ -346,7 +346,11 @@ describe("block defaults (M2-10)", () => {
           type === "divider" ||
           type === "page_link" ||
           type === "items" ||
-          type === "hours",
+          type === "hours" ||
+          // latest_posts holds no content of its own: a count, and the posts come from the site (M16-07).
+          type === "latest_posts" ||
+          // a form starts with its button label, success message and consent line (M17-03).
+          type === "form",
       );
     }
   });

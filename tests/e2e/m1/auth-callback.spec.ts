@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient, generateTokenHash, openCallback } from "../fixtures/auth";
 import { uniq } from "../fixtures/data";
 import { authCookies, authUser, requestLinkByApi, restAs, sessionOf } from "../fixtures/http";
@@ -37,7 +37,7 @@ test.describe("M1-04 auth callback signs in from the emailed link in any browser
     // callback -> "/" (the landing) -> wherever the auth gate sends this account.
     expect(chain[0]!.status).toBe(303);
     expect(chain.map((hop) => hop.url)).toContain(ROOT);
-    expect(new URL(finalUrl).host).toBe("app.localhost:3000");
+    expect(new URL(finalUrl).host).toBe(`app.localhost:${DEV_PORT}`);
     expect(new URL(finalUrl).pathname).not.toBe("/login");
 
     const session = await sessionOf(context);
@@ -120,7 +120,7 @@ test.describe("M1-04 auth callback signs in from the emailed link in any browser
         `${CALLBACK}?token_hash=${hashedToken}&type=email&${evil.replace("\\", "%5C")}`,
       );
       expect(chain[1]!.url).toBe(ROOT); // the callback's own redirect: exactly the landing
-      expect(new URL(finalUrl).host).toBe("app.localhost:3000");
+      expect(new URL(finalUrl).host).toBe(`app.localhost:${DEV_PORT}`);
     });
   }
 

@@ -65,4 +65,6 @@ export const DESTRUCTIVE_IDEMPOTENT: ToolAnnotationSet = {
   openWorldHint: false,
 };
 
+export const HOME_BLOCK_REV = "On Home, ifRev is get_page's rev, not designRev.";
+
 export const DRAFT_ONLY = "Changes the draft only. Nothing is live until publish_page.";

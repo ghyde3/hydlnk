@@ -51,7 +51,30 @@ function query(table: string) {
       entry.filters.push([column, value]);
       return builder;
     },
+    not(column: string, value: unknown) {
+      entry.filters.push([column, value]);
+      return builder;
+    },
     async maybeSingle() {
+      // 1b1-12: Home's blocks come from the site's Home page entry (the page type, then the entry).
+      if (table === "content_types") return { data: { id: "type-page" }, error: null };
+      if (table === "content_entries")
+        return {
+          data:
+            page && page.published
+              ? {
+                  id: "entry-home",
+                  published: {
+                    path: "/",
+                    title: "",
+                    description: "",
+                    blocks: (page.published as { blocks: unknown }).blocks,
+                  },
+                  published_at: page.published_at,
+                }
+              : null,
+          error: null,
+        };
       if (entry.select.startsWith("id,"))
         return {
           data: page
@@ -84,7 +107,8 @@ describe("M2-22 the public query is server-only and selects published only", () 
   it("never selects draft or *, only published, published_at, the owner's account row and a handle's page id", () => {
     const selects = [...SOURCE.matchAll(/\.select\(\s*"([^"]*)"\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
-      "published, published_at, accounts!inner(plan, suspended_at)",
+      // Wave E (M20-03): the site's schedule clock, the instant a boundary sweep expired it for.
+      "published, published_at, schedule_clock, accounts!inner(plan, suspended_at)",
       "id, accounts!inner(suspended_at)",
       // M11-06: the handle's page id for the sub-page routes, nothing else of the row.
       "id",
@@ -119,7 +143,13 @@ describe("M2-25 the live page reads only `published`: no call to themes", () => 
     expect(html).toContain("--t-bg:#16120E");
 
     expect(calls.length).toBeGreaterThan(0);
-    expect(calls.map((c) => c.table).sort()).toEqual(["pages", "pages"]);
+    // The site row (design) and Home's page entry (blocks, 1b1-12): the page type, then the entry.
+    expect(calls.map((c) => c.table).sort()).toEqual([
+      "content_entries",
+      "content_types",
+      "pages",
+      "pages",
+    ]);
     expect(calls.some((c) => c.table === "themes")).toBe(false);
   });
 

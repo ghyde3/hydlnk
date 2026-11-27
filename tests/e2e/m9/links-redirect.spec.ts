@@ -2,7 +2,7 @@ import { chromium, expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { expireOwnerPages } from "../fixtures/expire";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { PRODUCTION_BUILD } from "../fixtures/http";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
 import { eventsOf } from "../m4/analytics-ingest-helpers";
@@ -86,7 +86,7 @@ test.describe("M9-31 what the live address answers", () => {
       expect([301, 308]).not.toContain(response.status);
       expect(String(response.headers["cache-control"] ?? "")).not.toContain("immutable");
       for (const name of SECURITY) expect(response.headers[name], name).toBe(normal.headers[name]);
-      expect(String(response.headers["content-security-policy"])).toContain("form-action 'none'");
+      expect(String(response.headers["content-security-policy"])).toContain("form-action 'self'");
       expect(response.headers["x-frame-options"]).toBe("DENY");
     }
 
@@ -143,7 +143,7 @@ test.describe("M9-31 what the live address answers", () => {
     const hostname = hostnameFor("rd");
     await addDomainRow({ pageId: live.pageId, hostname, status: "verified" });
     for (const method of ["GET", "HEAD"]) {
-      const response = await getPage(`${hostname}:3000`, { method });
+      const response = await getPage(`${hostname}:${DEV_PORT}`, { method });
       expect(response.status, method).toBe(302);
       expect(response.location).toBe(`/r/${live.pageId}/${TARGET}`);
       expect(response.setCookies).toEqual([]);
@@ -173,7 +173,7 @@ test.describe("M9-31 what the live address answers", () => {
     expect(gone.status).toBe(404);
     expect(gone.location).toBeNull();
 
-    expect((await getPage("nobody-rd5.example.org:3000")).status).toBe(404);
+    expect((await getPage(`nobody-rd5.example.org:${DEV_PORT}`)).status).toBe(404);
   });
 
   test("M9-31 a target that cannot be resolved (a locked link, a link that is gone) is ignored: the page renders normally", async ({}, info) => {
@@ -274,7 +274,7 @@ test.describe("M9-31 in a browser", () => {
     try {
       for (const userAgent of [IPHONE_UA, undefined]) {
         const page = await mapped.newPage({ ...(userAgent ? { userAgent } : {}) });
-        await page.goto(`http://${hostname}:3000/`);
+        await page.goto(`http://${hostname}:${DEV_PORT}/`);
         await page.waitForURL((u) => u.host === `${stub.host}:${stub.port}`);
         expect(new URL(page.url()).search).toBe(TAGS);
         await page.close();

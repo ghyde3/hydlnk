@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { draftOf, makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 
+vi.mock("server-only", () => ({}));
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 /**
@@ -78,6 +79,22 @@ describe.skipIf(!run)("M6-10 loadSharedPreview (local Supabase)", () => {
     return made;
   };
 
+  /** Home's blocks are its page entry's draft (1b1-14), written straight, as a lenient draft is. */
+  const setHomeBlocks = async (made: TestOwner, blocks: unknown[]) => {
+    const type = await admin
+      .from("content_types")
+      .select("id")
+      .eq("site_id", made.pageId)
+      .eq("key", "page")
+      .single();
+    const row = await admin.from("content_entries").insert({
+      site_id: made.pageId,
+      type_id: type.data!.id,
+      draft: { path: "/", title: "", description: "", blocks } as never,
+    });
+    expect(row.error).toBeNull();
+  };
+
   beforeAll(async () => {
     const { createClient } = await import("@supabase/supabase-js");
     admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
@@ -143,10 +160,7 @@ describe.skipIf(!run)("M6-10 loadSharedPreview (local Supabase)", () => {
       },
       { id: "img-incompl1", type: "image", visible: true, image: null, alt: "", link: "" } as never,
     ]);
-    await admin
-      .from("pages")
-      .update({ draft: draft as never })
-      .eq("id", a.pageId);
+    await setHomeBlocks(a, draft.blocks);
     const result = await load(token);
     expect(result.kind).toBe("active");
     if (result.kind !== "active") return;
@@ -179,6 +193,7 @@ describe.skipIf(!run)("M6-10 loadSharedPreview (local Supabase)", () => {
       .update({ draft: draft as never })
       .eq("id", a.pageId);
     expect(saved.error).toBeNull();
+    await setHomeBlocks(a, draft.blocks);
 
     const result = await load(token);
     expect(result.kind).toBe("active");

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { emptyDraft, toPublishForm, type Block, type PublishDoc } from "@/lib/document";
 import { SYSTEM_DEFAULT_TOKENS, type TokenSet } from "@/lib/theme";
-import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
+import { adminClient, moveSite, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { expireOwnerPages } from "../fixtures/expire";
 import {
   accessTokenFor,
@@ -9,9 +9,11 @@ import {
   desktopOnly,
   makeUser,
   rand,
+  publishHome,
   signedInUser,
 } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { setDraft } from "./editor-helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pngSizeOf, rawBuffer, tenantGet } from "./publish-helpers";
 
 /**
@@ -68,6 +70,7 @@ async function publishedPage(
   }
   const { data, error } = await adminClient().from("pages").insert(row).select("id").single();
   if (error) throw new Error(`page insert failed: ${error.message}`);
+  await moveSite(data.id as string);
   return { userId: user.id, pageId: data.id as string, handle, doc };
 }
 
@@ -125,8 +128,7 @@ test.describe("M2-22 public page", () => {
     const draft = emptyDraft(fx.handle);
     draft.profile.name = "DRAFT-ONLY-7f3a";
     draft.blocks = [link("lnk-draft-001", "DRAFT-BLOCK-7f3a")];
-    const { error } = await adminClient().from("pages").update({ draft }).eq("id", fx.pageId);
-    expect(error).toBeNull();
+    await setDraft(fx.pageId, draft);
 
     for (const headers of [{}, { RSC: "1" }] as Record<string, string>[]) {
       let res = await tenantGet(fx.handle, "/", headers);
@@ -193,10 +195,10 @@ test.describe("M2-22 public page", () => {
   }) => {
     const context = await browser.newContext();
     await signedInUser(context, { label: "ck" });
-    const cookies = await context.cookies("http://mara.localhost:3000");
+    const cookies = await context.cookies(`http://mara.localhost:${DEV_PORT}`);
     expect(cookies.filter((c) => c.name.startsWith("sb-"))).toEqual([]);
     expect(
-      (await context.cookies("http://app.localhost:3000")).some((c) => c.name.startsWith("sb-")),
+      (await context.cookies(`http://app.localhost:${DEV_PORT}`)).some((c) => c.name.startsWith("sb-")),
     ).toBe(true);
 
     const page = await context.newPage();
@@ -204,7 +206,7 @@ test.describe("M2-22 public page", () => {
     expect(response?.status()).toBe(200);
     expect(await response?.headerValue("set-cookie")).toBeNull();
     expect(
-      (await context.cookies("http://mara.localhost:3000")).filter((c) => c.name.startsWith("sb-")),
+      (await context.cookies(`http://mara.localhost:${DEV_PORT}`)).filter((c) => c.name.startsWith("sb-")),
     ).toEqual([]);
 
     const raw = await tenantGet("mara");
@@ -215,7 +217,7 @@ test.describe("M2-22 public page", () => {
   test("M2-22 response headers: the closed CSP (M8-07: script-src 'self', no nonce, no inline script), nosniff, referrer policy", async () => {
     const res = await tenantGet("mara");
     expect(res.headers["content-security-policy"]).toBe(
-      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      `default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:${DEV_PORT}; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
     );
     expect(res.headers["content-security-policy"]).not.toMatch(/nonce|unsafe-eval/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
@@ -366,7 +368,7 @@ test.describe("M2-28 Made with HYDLNK", () => {
     const free = await publishedPage("bfree", { plan: "free" });
     await page.goto(url(free.handle));
     await expect(badge(page)).toHaveCount(1);
-    await expect(badge(page)).toHaveAttribute("href", "http://localhost:3000");
+    await expect(badge(page)).toHaveAttribute("href", `http://localhost:${DEV_PORT}`);
     await expect(badge(page)).toHaveAttribute("rel", "noopener");
     // Inside the renderer's footer slot, not a block.
     await expect(page.locator("[data-page-footer] a", { hasText: "Made with HYDLNK" })).toHaveCount(
@@ -581,7 +583,7 @@ test.describe("M2-29 Report this page", () => {
       const hrefs = [...res.text.matchAll(/<a[^>]*href="([^"]*)"[^>]*>Report this page<\/a>/g)].map(
         (m) => m[1],
       );
-      expect(hrefs, handle).toEqual([`http://localhost:3000/report?page=${pageId}`]);
+      expect(hrefs, handle).toEqual([`http://localhost:${DEV_PORT}/report?page=${pageId}`]);
     }
     const zero = await tenantGet(empty.handle);
     expect(zero.text).not.toContain("data-block-id");
@@ -596,7 +598,7 @@ test.describe("M2-29 Report this page", () => {
     });
     await page.goto(url(fx.handle));
     const href = (await report(page).getAttribute("href"))!;
-    expect(href).toBe(`http://localhost:3000/report?page=${fx.pageId}`);
+    expect(href).toBe(`http://localhost:${DEV_PORT}/report?page=${fx.pageId}`);
     expect(href).not.toContain(fx.handle);
     expect(await report(page).textContent()).toBe("Report this page");
   });
@@ -652,9 +654,9 @@ test.describe("M2-30 OG image and social metadata", () => {
       "Portrait & studio photographer · Orlando, FL",
     );
     expect(metaContent(html, "property", "og:type")).toBe("website");
-    expect(metaContent(html, "property", "og:url")).toBe("http://mara.localhost:3000/");
+    expect(metaContent(html, "property", "og:url")).toBe(`http://mara.localhost:${DEV_PORT}/`);
     const image = decode(metaContent(html, "property", "og:image"))!;
-    expect(image).toMatch(/^http:\/\/mara\.localhost:3000\/og(\?v=\d+)?$/);
+    expect(image).toMatch(new RegExp(String.raw`^http:\/\/mara\.localhost:${DEV_PORT}\/og(\?v=\d+)?$`));
     expect(metaContent(html, "name", "twitter:card")).toBe("summary_large_image");
     expect(decode(metaContent(html, "name", "twitter:image"))).toBe(image);
   });
@@ -724,7 +726,7 @@ test.describe("M2-30 OG image and social metadata", () => {
 
     const draft = emptyDraft(fx.handle);
     draft.profile.name = "Zq Draft Edit";
-    await adminClient().from("pages").update({ draft }).eq("id", fx.pageId);
+    await setDraft(fx.pageId, draft);
     expect((await tenantGet(fx.handle, "/og")).body.equals(before)).toBe(true);
 
     // A Publish: the new published copy and published_at.
@@ -732,10 +734,7 @@ test.describe("M2-30 OG image and social metadata", () => {
       ...fx.doc,
       profile: { ...fx.doc.profile, name: "Zq After Publish" },
     };
-    await adminClient()
-      .from("pages")
-      .update({ published: next, published_at: new Date().toISOString() })
-      .eq("id", fx.pageId);
+    await publishHome(fx.pageId, next);
     // Publish expires the page's tag (a production build caches the image under it); this write
     // went straight to the database, so expire it the way an admin action does.
     await expireOwnerPages(browser, fx.userId);

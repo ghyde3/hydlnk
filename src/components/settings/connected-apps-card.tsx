@@ -3,6 +3,7 @@ import { clientEnv } from "@/lib/env/client";
 import { loadConnectedApps, type ConnectedApp } from "@/lib/oauth/grants";
 import {
   CONNECTED_APPS_INTRO,
+  SHARED_SITES_NOT_INCLUDED,
   CONNECTED_APPS_LINK,
   CONNECTED_APPS_LOAD_ERROR,
   CONNECTED_APPS_TITLE,
@@ -38,7 +39,9 @@ export async function ConnectedAppsCard({ userId }: { userId: string }) {
   return (
     <Card className="flex flex-col gap-3.5">
       <h2 className="text-sm font-semibold">{CONNECTED_APPS_TITLE}</h2>
-      <p className="text-sm leading-relaxed text-text-2">{CONNECTED_APPS_INTRO}</p>
+      <p className="text-sm leading-relaxed text-text-2">
+        {CONNECTED_APPS_INTRO} {SHARED_SITES_NOT_INCLUDED}
+      </p>
       {apps === null ? (
         <p role="alert" className="text-sm text-bad">
           {CONNECTED_APPS_LOAD_ERROR}

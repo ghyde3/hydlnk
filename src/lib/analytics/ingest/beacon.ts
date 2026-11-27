@@ -4,7 +4,7 @@ import { countryFromHeaders } from "./country";
 import { deviceFromUserAgent } from "./device";
 import { allowedOriginHost } from "./origin";
 import { referrerHost } from "./referrer";
-import type { IngestDeps } from "./types";
+import type { BeaconPage, IngestDeps } from "./types";
 
 /**
  * POST /api/e: the view beacon (M4-21, M4-23, M5-01). Every request is counted by the rate limiter
@@ -15,8 +15,9 @@ import type { IngestDeps } from "./types";
  *   bot      missing or automated user agent: 204, nothing recorded
  *   body     {pageId, subPageId?, referrer}; anything else: 204, nothing recorded
  *   page     unknown, unpublished or suspended: 204, nothing recorded
- *   subpage  a `subPageId` that is not a LIVE sub-page of that site: 204, nothing recorded (M11-09)
  *   origin   not the page's own origin or one of its verified custom hosts, or missing: 204
+ *   item     a `subPageId` that is not a LIVE sub-page (M11-09), an enabled archive (the Post type's
+ *            id) or a live post (M16-11) of that site: 204, nothing recorded
  *   record   one `events` row: type 'view', device, country, visitor hash, referrer hostname
  *
  * Every "ignored" case answers the same 204 with the same headers, so the endpoint is no oracle for
@@ -120,11 +121,9 @@ export async function handleBeacon(request: Request, deps: IngestDeps): Promise<
   });
   if (!ownHost) return accepted();
 
-  // A sub-page view counts only for a live sub-page of the site this host serves (the origin check
-  // above is that host check): a deleted, unpublished or foreign id records nothing.
-  if (body.subPageId !== null && !(page.subPageIds ?? []).includes(body.subPageId)) {
-    return accepted();
-  }
+  // A view of anything but Home counts only for a live item of the site this host serves (the
+  // origin check above is that host check): a deleted, unpublished or foreign id records nothing.
+  if (body.subPageId !== null && !(await isLiveItem(page, body.subPageId))) return accepted();
 
   try {
     await deps.insertEvent({
@@ -145,6 +144,24 @@ export async function handleBeacon(request: Request, deps: IngestDeps): Promise<
     console.error("[analytics] recording a view failed:", errorMessage(error));
   }
   return accepted();
+}
+
+/**
+ * Is `id` something of this site a view may be recorded for (M11-09, M16-11)? A live sub-page, an
+ * enabled archive (the Post type's id: archive, paging and term pages send it) or a live post. The
+ * first two are in the cached site read; the post check is the site's own cached post index
+ * (`isLivePost`), asked last. A check that fails is logged without the id and counts as "no".
+ */
+async function isLiveItem(page: BeaconPage, id: string): Promise<boolean> {
+  if ((page.subPageIds ?? []).includes(id)) return true;
+  if ((page.archiveTypeIds ?? []).includes(id)) return true;
+  if (!page.isLivePost) return false;
+  try {
+    return (await page.isLivePost(id)) === true;
+  } catch (error) {
+    console.error("[analytics] the post check for a view failed:", errorMessage(error));
+    return false;
+  }
 }
 
 function errorMessage(error: unknown): string {

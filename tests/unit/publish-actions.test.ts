@@ -12,45 +12,80 @@ const getSessionUser = vi.fn();
 vi.mock("@/lib/auth/session", () => ({ getSessionUser }));
 
 const publishPageCore = vi.fn();
-vi.mock("@/lib/publish/core", () => ({ publishPageCore }));
+const publishSitePageCore = vi.fn();
+const publishDesignCore = vi.fn();
+vi.mock("@/lib/publish/core", () => ({ publishPageCore, publishSitePageCore, publishDesignCore }));
 
 const cleanupMediaQuietly = vi.fn();
 vi.mock("@/lib/media/cleanup-admin", () => ({ cleanupMediaQuietly }));
 
 const rateLimit = vi.fn();
 vi.mock("@/lib/rate-limit", () => ({ rateLimit }));
+// Wave F: the actions ask the access helper for the site's owner (rate keys, the media queue). Here
+// the session user owns the page, so the owner key and the user key are one.
+vi.mock("@/lib/access/server", () => ({
+  siteAccessFor: async ({ siteId }: { siteId: string }) => ({
+    ok: true,
+    access: {
+      actorId: "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01",
+      ownerId: "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01",
+      siteId,
+    },
+  }),
+}));
 
-const { publishPage } = await import("@/lib/publish/actions");
+const { publishPage, publishSitePage, publishDesign } = await import("@/lib/publish/actions");
+type PublishExpected = import("@/lib/publish/core").PublishExpected;
 
 const PAGE = "00000000-0000-4000-8000-0000000000B1";
 const USER = "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01";
+const ENTRY = "00000000-0000-4000-8000-0000000000e1";
 
 beforeEach(() => {
   updateTag.mockClear();
   cleanupMediaQuietly.mockReset();
   getSessionUser.mockReset();
   publishPageCore.mockReset();
+  publishSitePageCore.mockReset();
+  publishDesignCore.mockReset();
   rateLimit.mockReset();
   rateLimit.mockResolvedValue({ allowed: true, retryAfter: 0 });
 });
 
 const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
-describe("M2-23 publishPage is a Server Action that takes a page id and nothing else", () => {
+// M15-10 rewrote the first two tests: the module now exports three actions, and publishPage takes
+// the revs the editor holds beside the id. What they guard is unchanged: no action takes a document.
+describe("M2-23 publishPage is a Server Action that takes ids and revs, never a document", () => {
   it("the module is 'use server' and exports only async functions", () => {
     const text = source("src/lib/publish/actions.ts");
     expect(text.trimStart().startsWith('"use server"')).toBe(true);
-    expect(text.match(/^export (?!type\b|interface\b)/gm)).toHaveLength(1);
-    expect(text).toMatch(/^export async function publishPage\(pageId: string\)/m);
+    const exported = text.match(/^export (?!type\b|interface\b).*$/gm) ?? [];
+    expect(exported).toHaveLength(3);
+    for (const line of exported) expect(line).toMatch(/^export async function publish/);
+    expect(text).toMatch(
+      /^export async function publishPage\(\n  pageId: string,\n  expected\?: PublishExpected,\n\)/m,
+    );
+    expect(text).toMatch(
+      /^export async function publishSitePage\(\n  pageId: string,\n  entryId: string,\n  expectedRev: number,\n\)/m,
+    );
+    expect(text).toMatch(
+      /^export async function publishDesign\(\n  pageId: string,\n  expectedRev: string \| null,\n\)/m,
+    );
   });
 
-  it("its signature takes a string and no document (type test)", () => {
-    expectTypeOf(publishPage).parameters.toEqualTypeOf<[string]>();
+  it("its signature takes a string and revs, and no document (type test)", () => {
+    expectTypeOf(publishPage).parameters.toEqualTypeOf<[string, (PublishExpected | undefined)?]>();
+    expectTypeOf(publishSitePage).parameters.toEqualTypeOf<[string, string, number]>();
+    expectTypeOf(publishDesign).parameters.toEqualTypeOf<[string, string | null]>();
     // @ts-expect-error a document cannot be passed
     void (() => publishPage("id", { profile: { name: "x" } }));
     // @ts-expect-error a document cannot stand in for the id
     void (() => publishPage({ profile: { name: "x" } }));
-    expect(publishPage.length).toBe(1);
+    // @ts-expect-error a document cannot stand in for the rev
+    void (() => publishSitePage("id", "entry", { blocks: [] }));
+    // @ts-expect-error a document cannot stand in for the rev
+    void (() => publishDesign("id", { theme: {} }));
   });
 
   it("the gate imports the secret-key client under server-only, the action does not touch it", () => {
@@ -80,7 +115,11 @@ describe("M2-26 Publish calls updateTag, inside the action, on success only", ()
     publishPageCore.mockResolvedValue({ ok: true, publishedAt: "2026-10-02T01:00:00.000Z" });
     await publishPage(PAGE);
     expect(cleanupMediaQuietly).toHaveBeenCalledTimes(1);
-    expect(cleanupMediaQuietly).toHaveBeenCalledWith(USER);
+    // Re-review finding 1: as the publisher's access (the one entry point derives the scope).
+    expect(cleanupMediaQuietly).toHaveBeenCalledWith(
+      { actorId: USER, ownerId: USER, siteId: PAGE.toLowerCase() },
+      {},
+    );
     expect(updateTag.mock.invocationCallOrder[0]!).toBeLessThan(
       cleanupMediaQuietly.mock.invocationCallOrder[0]!,
     );
@@ -108,6 +147,85 @@ describe("M2-26 Publish calls updateTag, inside the action, on success only", ()
     expect(publishPageCore).toHaveBeenCalledWith({ pageId: PAGE, userId: null });
     expect(updateTag).not.toHaveBeenCalled();
     expect(cleanupMediaQuietly).not.toHaveBeenCalled();
+  });
+});
+
+describe("M15-10 Publish all changes, Publish page and Publish design", () => {
+  const expected: PublishExpected = { designRev: "7", entries: { [ENTRY]: 3 } };
+
+  it("publishPage hands the revs the editor holds to the gate, with the session user", async () => {
+    getSessionUser.mockResolvedValue({ id: USER });
+    publishPageCore.mockResolvedValue({ ok: true, publishedAt: "2026-10-02T01:00:00.000Z" });
+    await publishPage(PAGE, expected);
+    expect(publishPageCore).toHaveBeenCalledWith({ pageId: PAGE, userId: USER, expected });
+  });
+
+  it("publishSitePage passes ids, the rev and the session user; the tag expires on success only", async () => {
+    getSessionUser.mockResolvedValue({ id: USER });
+    const ok = { ok: true, publishedAt: "2026-10-02T01:00:00.000Z", rev: 4, unchanged: false };
+    publishSitePageCore.mockResolvedValue(ok);
+    expect(await publishSitePage(PAGE, ENTRY, 3)).toEqual(ok);
+    expect(publishSitePageCore).toHaveBeenCalledWith({
+      pageId: PAGE,
+      entryId: ENTRY,
+      expectedRev: 3,
+      userId: USER,
+      source: "editor",
+    });
+    expect(updateTag).toHaveBeenCalledTimes(1);
+    expect(updateTag).toHaveBeenCalledWith(`page:${PAGE.toLowerCase()}`);
+    expect(publishPageCore).not.toHaveBeenCalled();
+    expect(publishDesignCore).not.toHaveBeenCalled();
+  });
+
+  it("publishDesign passes the id, the rev key and the session user; the tag expires on success only", async () => {
+    getSessionUser.mockResolvedValue({ id: USER });
+    publishDesignCore.mockResolvedValue({ ok: true, publishedAt: "2026-10-02T01:00:00.000Z" });
+    await publishDesign(PAGE, "7");
+    expect(publishDesignCore).toHaveBeenCalledWith({
+      pageId: PAGE,
+      expectedRev: "7",
+      userId: USER,
+    });
+    expect(updateTag).toHaveBeenCalledTimes(1);
+    expect(publishSitePageCore).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["conflict", { ok: false, reason: "conflict", errors: [], currentRev: 9 }],
+    ["not_found", { ok: false, reason: "not_found", errors: [] }],
+  ])("a %s answer is returned as it is and touches no cache", async (_label, result) => {
+    getSessionUser.mockResolvedValue({ id: USER });
+    publishSitePageCore.mockResolvedValue(result);
+    publishDesignCore.mockResolvedValue(result);
+    expect(await publishSitePage(PAGE, ENTRY, 3)).toEqual(result);
+    expect(await publishDesign(PAGE, "7")).toEqual(result);
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(cleanupMediaQuietly).not.toHaveBeenCalled();
+  });
+
+  it("the two new actions share Publish's rate limit and call no gate past it", async () => {
+    getSessionUser.mockResolvedValue({ id: USER });
+    rateLimit.mockResolvedValue({ allowed: false, retryAfter: 120 });
+    const limited = { ok: false, errors: [], reason: "rate_limited" };
+    expect(await publishSitePage(PAGE, ENTRY, 3)).toEqual(limited);
+    expect(await publishDesign(PAGE, "7")).toEqual(limited);
+    expect(rateLimit).toHaveBeenCalledWith(`publish:${USER}`, 60, 3600);
+    expect(publishSitePageCore).not.toHaveBeenCalled();
+    expect(publishDesignCore).not.toHaveBeenCalled();
+    expect(updateTag).not.toHaveBeenCalled();
+  });
+
+  it("without a session the gates answer, with a null user and no rate count", async () => {
+    getSessionUser.mockResolvedValue(null);
+    const refused = { ok: false, errors: [], reason: "unauthorized" };
+    publishSitePageCore.mockResolvedValue(refused);
+    publishDesignCore.mockResolvedValue(refused);
+    await publishSitePage(PAGE, ENTRY, 3);
+    await publishDesign(PAGE, null);
+    expect(publishSitePageCore).toHaveBeenCalledWith(expect.objectContaining({ userId: null }));
+    expect(publishDesignCore).toHaveBeenCalledWith(expect.objectContaining({ userId: null }));
+    expect(rateLimit).not.toHaveBeenCalled();
   });
 });
 

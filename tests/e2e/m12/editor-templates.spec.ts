@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, rand } from "../fixtures/data";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { addPageEntry, seedHome, subPageEntries } from "../m15/entry-helpers";
 import { emptyUser, openEditor, pageRow } from "../m2/editor-helpers";
 
 /**
@@ -19,19 +20,19 @@ const TEMPLATES = [
   { id: "musician", pages: ["Shows", "Merch"], word: "t-shirt" },
 ] as const;
 
-async function drafts(siteId: string) {
+/** The site's sub-page entries (Home's '/' entry left out), oldest first. */
+const drafts = (siteId: string) => subPageEntries(siteId);
+
+/** Home's blocks, which live in its '/' entry. */
+async function homeBlockCount(siteId: string): Promise<number> {
   const { data, error } = await adminClient()
-    .from("site_pages")
-    .select("id, draft, published, live_path")
-    .eq("page_id", siteId)
-    .order("created_at");
+    .from("content_entries")
+    .select("draft")
+    .eq("site_id", siteId)
+    .eq("draft->>path", "/")
+    .maybeSingle();
   if (error) throw new Error(error.message);
-  return data as unknown as {
-    id: string;
-    draft: { path: string; title: string; blocks: unknown[] };
-    published: unknown;
-    live_path: string | null;
-  }[];
+  return ((data?.draft as { blocks?: unknown[] } | undefined)?.blocks ?? []).length;
 }
 
 for (const template of TEMPLATES) {
@@ -40,6 +41,7 @@ for (const template of TEMPLATES) {
     context,
   }) => {
     const user = await emptyUser(context, "tpl");
+    await seedHome(user.pageId); // a site starts with its Home entry
     await openEditor(page);
 
     const card = page.getByTestId("site-templates");
@@ -66,7 +68,8 @@ for (const template of TEMPLATES) {
         const row = await pageRow(user.pageId);
         const nav = (row.draft as { nav?: { items?: string[] } }).nav?.items ?? [];
         return (
-          JSON.stringify(nav) === JSON.stringify(subs.map((s) => s.id)) && row.draft.blocks.length
+          JSON.stringify(nav) === JSON.stringify(subs.map((s) => s.id)) &&
+          (await homeBlockCount(user.pageId))
         );
       })
       .toBeGreaterThan(0);
@@ -98,11 +101,8 @@ test("M12-03 the template is only offered on an empty Home, and the Free limit i
 }) => {
   const user = await emptyUser(context, "tpl");
   // A Free site already at two pages has no room for a template's two.
-  const admin = adminClient();
-  await admin.from("site_pages").insert({
-    page_id: user.pageId,
-    draft: { path: "extra", title: "Extra", description: "", blocks: [] },
-  });
+  await seedHome(user.pageId);
+  await addPageEntry(user.pageId, { path: "extra", title: "Extra" });
   await openEditor(page);
   await expect(page.getByTestId("site-templates-limit")).toBeVisible();
   await expect(page.getByTestId("site-template")).toHaveCount(0);

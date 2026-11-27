@@ -3,6 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { rand, signedInUser, type SignedInUser } from "../fixtures/data";
 import { appRaw, authCookies, cookieHeader, type RawResponse } from "../fixtures/http";
 import { addStubSubscription, priceIds, type StubRequest } from "../fixtures/stripe-stub";
+import { DEV_PORT } from "../helpers";
 
 /**
  * Shared by the billing specs that drive /api/billing/checkout and /api/billing/portal: sign-in,
@@ -12,7 +13,7 @@ import { addStubSubscription, priceIds, type StubRequest } from "../fixtures/str
  */
 
 export const STUB_ORIGIN = "http://127.0.0.1:12111";
-export const APP_ORIGIN = "http://app.localhost:3000";
+export const APP_ORIGIN = `http://app.localhost:${DEV_PORT}`;
 const FORM = { "content-type": "application/x-www-form-urlencoded" };
 
 /** POST a urlencoded form to an app-host path. `context` null means no session cookie at all. */

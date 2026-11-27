@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { cleanupUsers } from "../fixtures/data";
-import { restAs } from "../fixtures/http";
+import { cleanupUsers, publishHome } from "../fixtures/data";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import {
   L1,
@@ -247,12 +247,8 @@ test.describe("M6-28 abuse: hostile marks written straight to the draft", () => 
         {},
         "text-hostile-01",
       );
-      const next = { ...draftWith(user.handle, [safe, bad]), rev: before.draft.rev + 1 };
-      const write = await restAs(await accessToken(context), `/pages?id=eq.${user.pageId}`, {
-        method: "PATCH",
-        body: { draft: next },
-      });
-      expect(write.status, JSON.stringify(write.body)).toBe(200);
+      // M15-14: the browser write is refused (HL013); the hostile block goes into Home's entry.
+      await abuseHomeBlocks(await accessToken(context), user.pageId, [safe, bad]);
 
       await openEditor(page);
       await publishButton(page).click();
@@ -313,11 +309,8 @@ test.describe("M6-28 abuse: hostile marks written straight to the draft", () => 
       blocks: { marks: { url: string }[] }[];
     };
     tampered.blocks[0]!.marks[0]!.url = "javascript:alert(1)";
-    const { error } = await adminClient()
-      .from("pages")
-      .update({ published: tampered })
-      .eq("id", fx.pageId);
-    expect(error).toBeNull();
+    // The live blocks of a moved site are Home's entry's published copy.
+    await publishHome(fx.pageId, tampered);
     const response = await page.goto(fx.url);
     expect(response?.status()).toBeLessThan(500);
     await expect(page.locator("a[href^='javascript']")).toHaveCount(0);

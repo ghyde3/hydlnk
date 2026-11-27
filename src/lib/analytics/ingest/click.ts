@@ -61,7 +61,7 @@ async function openTarget(
   const pageId = params.pageId.toLowerCase();
   let target: ClickTarget | null;
   try {
-    target = await deps.resolveClickTarget(pageId, params.blockId);
+    target = await deps.resolveClickTarget(pageId, params.blockId, deps.now().getTime());
   } catch (error) {
     console.error("[analytics] loading the click target failed:", errorMessage(error));
     return notice(

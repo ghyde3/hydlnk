@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { url, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { emptyDraft } from "@/lib/document";
 import { claimHandleWithClient } from "@/lib/handles/claim-core";
 import { adminClient, deleteUser } from "../fixtures/auth";
@@ -53,7 +53,7 @@ test.describe("M1-15 placeholder for a claimed handle", () => {
     await page.goto(url(handle));
     await expect(page.getByText("Nothing published here yet.")).toBeVisible();
 
-    const res = await rawRequest(`${handle}.localhost:3000`, "/");
+    const res = await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/");
     expect(res.status).toBe(200);
     expect(res.body).toMatch(/class="tenant-root[^"]*"[^>]*style="[^"]*--t-bg:#F7F7F5/);
     expect(res.body).not.toContain("--hl-");
@@ -61,7 +61,7 @@ test.describe("M1-15 placeholder for a claimed handle", () => {
     expect(res.body).not.toMatch(/<aside|<nav|tab-?bar|sidebar/i);
     expect(res.body).not.toContain("fonts.googleapis.com");
 
-    expect([...hosts]).toEqual([`${handle}.localhost:3000`]);
+    expect([...hosts]).toEqual([`${handle}.localhost:${DEV_PORT}`]);
     const fontFamily = await page.locator("h1").evaluate((el) => getComputedStyle(el).fontFamily);
     expect(fontFamily).toMatch(/system-ui|sans-serif/);
   });
@@ -74,7 +74,7 @@ test.describe("M1-15 placeholder for a claimed handle", () => {
     const { error } = await adminClient().from("pages").update({ draft }).eq("handle", handle);
     expect(error).toBeNull();
 
-    const res = await rawRequest(`${handle}.localhost:3000`, "/");
+    const res = await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/");
     expect(res.status).toBe(200);
     expect(res.body).not.toContain("DRAFT-MARKER-7f3a");
     expect(res.body).toContain("Nothing published here yet.");
@@ -82,7 +82,7 @@ test.describe("M1-15 placeholder for a claimed handle", () => {
 
   test("M1-15 no cookies in or out, auth cookies change nothing, app routes are 404, host casing is ignored", async () => {
     const { handle } = await claimed("ck");
-    const host = `${handle}.localhost:3000`;
+    const host = `${handle}.localhost:${DEV_PORT}`;
     const plain = await rawRequest(host, "/");
     expect(plain.status).toBe(200);
     expect(plain.headers["set-cookie"]).toBeUndefined();
@@ -142,7 +142,7 @@ test.describe("M1-15 404 for an unclaimed handle", () => {
     page,
   }) => {
     const handle = `zq-none-${rand()}`;
-    const res = await rawRequest(`${handle}.localhost:3000`, "/");
+    const res = await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/");
     expect(res.status).toBe(404);
     expect(res.headers["cache-control"]).toMatch(NOT_FOUND_CACHE);
     expect(res.headers["set-cookie"]).toBeUndefined();
@@ -154,10 +154,10 @@ test.describe("M1-15 404 for an unclaimed handle", () => {
     const claim = page.getByRole("link", { name: `Claim ${handle}` });
     await expect(claim).toHaveAttribute(
       "href",
-      `http://app.localhost:3000/signup?handle=${handle}`,
+      `http://app.localhost:${DEV_PORT}/signup?handle=${handle}`,
     );
     const home = page.getByRole("link", { name: "Go to hydlnk.com" });
-    await expect(home).toHaveAttribute("href", "http://localhost:3000/");
+    await expect(home).toHaveAttribute("href", `http://localhost:${DEV_PORT}/`);
 
     // HYDLNK UI styling: page #F4F3F0, ink text.
     const bg = await page.locator("main").evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -170,7 +170,7 @@ test.describe("M1-15 404 for an unclaimed handle", () => {
     page,
   }) => {
     const handle = `zq-flip-${rand()}`;
-    const host = `${handle}.localhost:3000`;
+    const host = `${handle}.localhost:${DEV_PORT}`;
     await page.goto(url(handle));
     expect((await rawRequest(host, "/")).status).toBe(404);
 
@@ -201,7 +201,11 @@ test.describe("M1-15 404 for an unclaimed handle", () => {
   });
 
   test("M1-15 two labels, a malformed label and a reserved handle are plain 404s without cookies", async () => {
-    for (const host of ["a.b.localhost:3000", "-x1.localhost:3000", "api.localhost:3000"]) {
+    for (const host of [
+      `a.b.localhost:${DEV_PORT}`,
+      `-x1.localhost:${DEV_PORT}`,
+      `api.localhost:${DEV_PORT}`,
+    ]) {
       const res = await rawRequest(host, "/");
       expect(res.status, host).toBe(404);
       expect(res.headers["cache-control"], host).toMatch(NOT_FOUND_CACHE);

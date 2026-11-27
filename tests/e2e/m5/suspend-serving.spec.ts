@@ -2,7 +2,7 @@ import { expect, test, type Browser } from "@playwright/test";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { appRaw, sessionOf } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import {
   json,
   postApp,
@@ -205,7 +205,7 @@ test.describe("M5-08 suspended pages stop serving", () => {
     const replay = await appRaw("/editor", {
       method: "POST",
       cookie: await sessionCookie(context),
-      headers: { ...headers, origin: "http://app.localhost:3000" },
+      headers: { ...headers, origin: `http://app.localhost:${DEV_PORT}` },
       body: recorded!.body,
     });
     expect(replay.body, replay.body.slice(0, 300)).toContain("account_suspended");

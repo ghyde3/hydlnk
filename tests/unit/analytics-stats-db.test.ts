@@ -3,6 +3,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { rollupRawEvents, type RawEvent } from "@/lib/analytics/dashboard/aggregate";
 import { createAdminStatsSource } from "@/lib/analytics/dashboard/source";
 import { loadStats } from "@/lib/analytics/stats";
+import { createEntryWithClient } from "@/lib/content/entries-core";
+import { blocks as fixtureBlocks } from "./fixtures/page-document";
 import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -39,15 +41,37 @@ describe.skipIf(!run)("M4-26 stats query on the local database", () => {
   async function owner(label: string, plan: "free" | "pro") {
     const made = await makeOwner(admin, label, undefined, plan);
     owners.push(made);
-    const published = {
-      version: 1,
-      blocks: [{ id: BLOCK, type: "link", label: "Book", url: "https://example.com/book" }],
-    };
+    const blocks = [{ id: BLOCK, type: "link", label: "Book", url: "https://example.com/book" }];
+    const published = { version: 1, blocks };
     const { error } = await admin
       .from("pages")
       .update({ published, published_at: new Date().toISOString() })
       .eq("id", made.pageId);
     if (error) throw new Error(error.message);
+    // Home's blocks are its page entry (1b1-13): the link names are read from there.
+    const homeBlocks = [
+      { ...fixtureBlocks.link, id: BLOCK, label: "Book", url: "https://example.com/book" },
+    ];
+    const actor = { userId: made.userId, source: "editor" as const };
+    const home = await createEntryWithClient(admin as never, {
+      actor,
+      siteId: made.pageId,
+      typeKey: "page",
+      draft: {
+        path: "/",
+        title: "",
+        description: "",
+        blocks: homeBlocks,
+      },
+    });
+    if (!home.ok) throw new Error(`home entry: ${home.error}`);
+    // The generic writer publishes sub-pages; Home's published copy is set the way the move does.
+    const copy = { path: "/", title: "", description: "", blocks: homeBlocks };
+    const live = await admin
+      .from("content_entries")
+      .update({ published: copy, published_at: new Date().toISOString() })
+      .eq("id", home.id);
+    if (live.error) throw new Error(`home publish: ${live.error.message}`);
     return made;
   }
 
@@ -240,7 +264,10 @@ describe.skipIf(!run)("M4-26 stats query on the local database", () => {
       from.mockClear();
       const refused = await loadStats({ ownerId: free.userId, pageId: free.pageId, range }, source);
       expect(refused).toMatchObject({ ok: false, error: "plan_required" });
-      expect(from.mock.calls.map(([table]) => table)).toEqual(["pages"]);
+      // The site row first, then the page entries; never a stats table.
+      const tables = from.mock.calls.map(([table]) => table);
+      expect(tables[0]).toBe("pages");
+      expect(tables.filter((table) => /^(daily_|events)/.test(table))).toEqual([]);
     }
 
     from.mockClear();

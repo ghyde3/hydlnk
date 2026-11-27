@@ -5,6 +5,8 @@ import { stubBase, vercelIds } from "../fixtures/vercel-stub";
 import { createVercelClient } from "@/lib/domains/vercel-client";
 import type { DomainDeps } from "@/lib/domains/deps";
 import { sendDomainLiveEmail } from "@/lib/domains/email";
+import { DEV_PORT } from "../helpers";
+import { MAILPIT } from "../fixtures/mailpit";
 
 /**
  * Shared setup of the custom-domains server specs (tests/e2e/m4/domains-core-*.spec.ts): users with
@@ -133,9 +135,11 @@ export function realDeps(overrides: Partial<DomainDeps> = {}): DomainDeps & { lo
     }),
     expirePage: (pageId) => void expired.push(pageId),
     sendLiveEmail: async ({ to, hostname }) => {
-      await sendDomainLiveEmail({ to, hostname }, {});
+      // The suite's own Mailpit (MAILPIT_URL, the one the specs read): with no env the transport
+      // falls back to localhost:54324, which on a second checkout is another stack's inbox.
+      await sendDomainLiveEmail({ to, hostname }, { MAILPIT_URL: MAILPIT });
     },
-    rootDomain: "localhost:3000",
+    rootDomain: `localhost:${DEV_PORT}`,
     log: (message) => void logs.push(message),
     ...overrides,
     logs,

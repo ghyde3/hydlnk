@@ -1,5 +1,6 @@
 import { codePointLength, truncateToCodePoints } from "./limits";
 import { lockMarker } from "./lock";
+import { hasWindow, type BlockSchedule } from "./schedule";
 import { isHttpUrl } from "./url";
 
 /**
@@ -13,6 +14,7 @@ import { isHttpUrl } from "./url";
 
 export const REDIRECT_PICK_MESSAGE = "Pick a link from your page.";
 export const REDIRECT_LOCKED_MESSAGE = "Pick a link that isn’t locked.";
+export const REDIRECT_SCHEDULED_MESSAGE = "Pick a link that isn’t scheduled.";
 export const REDIRECT_LOOP_MESSAGE = "A link back to this page can’t be used for redirect mode.";
 /** Under the select in the editor when the chosen link was hidden, locked or removed since. */
 export const REDIRECT_GONE_MESSAGE = "This link is no longer available for redirect mode.";
@@ -28,12 +30,17 @@ interface BlockLike {
   url?: unknown;
   label?: unknown;
   lock?: unknown;
+  schedule?: unknown;
 }
 
 const asBlock = (value: unknown): BlockLike =>
   typeof value === "object" && value !== null ? (value as BlockLike) : {};
 
-/** A link block that can be the target: visible, a valid http(s) address, no lock. */
+/**
+ * A link block that can be the target: visible, a valid http(s) address, no lock, and no time window
+ * (M20-02): a page that redirects to a link that comes and goes would answer differently by the
+ * minute, so a scheduled link is never the target.
+ */
 export function isEligibleRedirectLink(value: unknown): boolean {
   const block = asBlock(value);
   return (
@@ -41,7 +48,8 @@ export function isEligibleRedirectLink(value: unknown): boolean {
     block.visible !== false &&
     typeof block.url === "string" &&
     isHttpUrl(block.url.trim()) &&
-    lockMarker(block.lock) === null
+    lockMarker(block.lock) === null &&
+    !hasWindow(block.schedule as BlockSchedule | undefined)
   );
 }
 
@@ -94,6 +102,7 @@ export function redirectTargetIssue(
     return REDIRECT_PICK_MESSAGE;
   }
   if (lockMarker(block.lock) !== null) return REDIRECT_LOCKED_MESSAGE;
+  if (hasWindow(block.schedule as BlockSchedule | undefined)) return REDIRECT_SCHEDULED_MESSAGE;
   let host: string;
   try {
     host = new URL(block.url.trim()).hostname.toLowerCase().replace(/\.+$/, "");

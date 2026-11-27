@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { Block, PublishDoc } from "@/lib/document";
+import type { FormRenderState } from "@/lib/forms/contract";
 import type { SiteContext } from "@/lib/site/menu";
 import { tokensToCssVars } from "@/lib/theme";
 import { backgroundImageUrl, gradientIsCustom } from "./background";
@@ -43,6 +44,14 @@ export interface PageRendererProps {
    * Home's. `doc` still supplies the site's theme, fonts, banner and profile.
    */
   subPage?: { title: string; blocks: readonly Block[] };
+  /**
+   * Draw a post or an archive page (Wave B, M16-04, M16-05) where a sub-page's blocks go: the same
+   * small site header, menu, footer, badge and report link, with `node` as the content. An archive's
+   * `title` is the page's one `<h1>`; a post draws its own title inside its article.
+   */
+  main?: { kind: "post" | "archive"; title: string; node: ReactNode };
+  /** A form block's result page (Wave D, M17-06): see `BlockContext.form`. */
+  formState?: FormRenderState;
 }
 
 /**
@@ -68,6 +77,8 @@ export function PageRenderer({
   inertLinks,
   site,
   subPage,
+  main,
+  formState,
 }: PageRendererProps) {
   const { tokens } = doc;
   const ctx: BlockContext = {
@@ -77,7 +88,15 @@ export function PageRenderer({
     ...(thumbnail ? { thumbnail } : {}),
     ...(inertEmbeds ? { inertEmbeds } : {}),
     ...(inertLinks ? { inertLinks } : {}),
-    ...(site ? { site: { hrefs: site.hrefs } } : {}),
+    ...(formState ? { form: formState } : {}),
+    ...(site
+      ? {
+          site: {
+            hrefs: site.hrefs,
+            ...(site.latestPosts !== undefined ? { latestPosts: site.latestPosts } : {}),
+          },
+        }
+      : {}),
   };
   // The background image is drawn only from the owner's page-media bucket: the URL is rebuilt from
   // a validated path, and anything else (a third-party address, a bad row) draws no image.
@@ -113,17 +132,23 @@ export function PageRenderer({
       )}
       {banner ? <Banner banner={banner} pageId={pageId} thumbnail={thumbnail === true} /> : null}
       <div className="pg-column">
-        {subPage ? (
+        {subPage || main ? (
           <SiteHeader profile={doc.profile} link={thumbnail !== true} />
         ) : (
           <Profile profile={doc.profile} />
         )}
         {site?.menu ? <SiteMenu items={site.menu.items} mode={site.menu.mode} /> : null}
-        {subPage ? <h1 className="pg-pagetitle">{subPage.title}</h1> : null}
+        {subPage ? (
+          <h1 className="pg-pagetitle">{subPage.title}</h1>
+        ) : main?.kind === "archive" ? (
+          <h1 className="pg-pagetitle">{main.title}</h1>
+        ) : null}
         <main className="pg-blocks">
-          {(subPage ? subPage.blocks : doc.blocks).map((block) => (
-            <BlockView key={block.id} block={block} ctx={ctx} />
-          ))}
+          {main
+            ? main.node
+            : (subPage ? subPage.blocks : doc.blocks).map((block) => (
+                <BlockView key={block.id} block={block} ctx={ctx} />
+              ))}
         </main>
         {chrome ? <PageFooter chrome={chrome} /> : null}
         {footer}

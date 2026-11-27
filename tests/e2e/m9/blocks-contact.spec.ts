@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { adminClient, userClient } from "../fixtures/auth";
+import { adminClient } from "../fixtures/auth";
+import { abuseHomeBlocks } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, phoneOnly, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
@@ -630,8 +631,7 @@ test.describe("M9-17 the abuse cases", () => {
     context,
   }) => {
     const user = await userWithDraft(context, "ca1");
-    const client = userClient(await accessTokenFor(user.email));
-    const draft = draftOf(user.handle, [
+    const blocks = [
       contact({ id: "contact-bad-phone1", phone: "javascript:alert(1)", email: "" }),
       contact({
         id: "contact-bad-mail1",
@@ -641,9 +641,9 @@ test.describe("M9-17 the abuse cases", () => {
       contact({ id: "contact-bad-mail2", phone: "", email: "a@b.example,c@d.example" }),
       contact({ id: "contact-bad-name1", name: "Mara\u0007Okafor" }),
       contact({ id: "contact-bad-tel-2", phone: "tel:+1555@evil.example", email: "" }),
-    ]);
-    const write = await client.from("pages").update({ draft }).eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    ];
+    // The browser's write is refused (M15-14); the same hostile draft is planted in Home's entry.
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, blocks);
     await openEditor(page);
     await page.getByRole("button", { name: "Publish", exact: true }).first().click();
     const alert = page.getByRole("alert").filter({ hasText: "before publishing" });
@@ -660,23 +660,16 @@ test.describe("M9-17 the abuse cases", () => {
     context,
   }) => {
     const user = await userWithDraft(context, "ca2");
-    const client = userClient(await accessTokenFor(user.email));
-    const write = await client
-      .from("pages")
-      .update({
-        draft: draftOf(user.handle, [
-          contact({
-            id: "contact-hidden-03",
-            visible: false,
-            phone: "javascript:alert(1)",
-            email: "x",
-            name: "",
-          }),
-          { id: "header-ctc-00001", type: "header", visible: true, text: "Hello" },
-        ]),
-      })
-      .eq("id", user.pageId);
-    expect(write.error).toBeNull();
+    await abuseHomeBlocks(await accessTokenFor(user.email), user.pageId, [
+      contact({
+        id: "contact-hidden-03",
+        visible: false,
+        phone: "javascript:alert(1)",
+        email: "x",
+        name: "",
+      }),
+      { id: "header-ctc-00001", type: "header", visible: true, text: "Hello" },
+    ]);
     await openEditor(page);
     await publishFromEditor(page, user.pageId);
     const stored = JSON.stringify((await publishedOf(user.pageId)).published);

@@ -64,9 +64,12 @@ describe("M11-12 the route asks for the cached HTML only after the site index na
   it("respond.ts calls getSubPageHtml with entry.id (the index's id), never with the path alone", async () => {
     const { readFileSync } = await import("node:fs");
     const text = readFileSync("src/lib/tenant-render/respond.ts", "utf8");
-    expect(text).toMatch(/getSubPageHtml\(page\.pageId, entry\.id, entry\.path, handle\)/);
-    expect(text.indexOf("if (!entry) return plainNotFoundResponse()")).toBeLessThan(
-      text.indexOf("getSubPageHtml(page.pageId"),
+    // Wave B: one optional fifth argument, the Post type's id (a tag only), never anything a visitor typed.
+    expect(text).toMatch(
+      /getSubPageHtml\(\s*page\.pageId,\s*entry\.id,\s*entry\.path,\s*handle,\s*\.\.\.\(posts \? \[posts\.typeId\] : \[\]\),?\s*\)/,
+    );
+    expect(text.indexOf("if (!archive) return plainNotFoundResponse()")).toBeLessThan(
+      text.indexOf("await getSubPageHtml("),
     );
     // The routes stay dynamic: no entry is stored per invented path.
     const route = readFileSync("src/app/(tenant)/t/[handle]/p/[path]/route.ts", "utf8");

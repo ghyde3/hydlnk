@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, rand } from "../fixtures/data";
-import { expectNoHorizontalScroll } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll } from "../helpers";
 import { rawBuffer } from "../m2/publish-helpers";
 import { saveIndicator } from "../m2/editor-helpers";
 import {
@@ -119,7 +119,7 @@ test.describe("M6-29 the editor refuses a blocked link in text", () => {
       timeout: 20_000,
     });
     const published = (await pageRow(user.pageId)).published_at;
-    expect((await rawBuffer(`${user.handle}.localhost:3000`, "/")).status).toBe(200);
+    expect((await rawBuffer(`${user.handle}.localhost:${DEV_PORT}`, "/")).status).toBe(200);
 
     // The domain is listed after the draft was saved and published.
     await listDomain(late);
@@ -137,7 +137,7 @@ test.describe("M6-29 the editor refuses a blocked link in text", () => {
     await expect(linkRow(page).getByText(BLOCKED, { exact: true })).toBeVisible();
     expect((await pageRow(user.pageId)).published_at).toBe(published);
     // The blocked link is not served: the live page is the old one, untouched.
-    const live = await rawBuffer(`${user.handle}.localhost:3000`, "/");
+    const live = await rawBuffer(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
 
     if (isPhone(page)) {

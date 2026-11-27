@@ -100,13 +100,13 @@ describe("M11-09 the site-wide block index", () => {
 
 describe("M11-09 the document that holds a block", () => {
   it("returns Home's document, with no sub-page id, for a Home block", () => {
-    const held = documentForBlock(site(), "home-link-0001");
+    const held = documentForBlock(site(), "home-link-0001", Date.now());
     expect(held?.subPageId).toBeUndefined();
     expect(resolveLink(held!.doc, "home-link-0001")?.url).toContain("https://home.example/a");
   });
 
   it("returns the sub-page's blocks and its id for a sub-page block, with Home's UTM tags", () => {
-    const held = documentForBlock(site(), "item-link-0001");
+    const held = documentForBlock(site(), "item-link-0001", Date.now());
     expect(held?.subPageId).toBe(SUB_A);
     const link = resolveLink(held!.doc, "item-link-0001");
     expect(link?.url).toContain("https://shop.example/item");
@@ -114,11 +114,11 @@ describe("M11-09 the document that holds a block", () => {
   });
 
   it("answers null for an unknown id, or one whose document fails its schema", () => {
-    expect(documentForBlock(site(), "no-such-block")).toBeNull();
+    expect(documentForBlock(site(), "no-such-block", Date.now())).toBeNull();
     const broken = { ...site(), subPages: [{ id: SUB_A, published: { blocks: "nope" } }] };
-    expect(documentForBlock(broken, "item-link-0001")).toBeNull();
+    expect(documentForBlock(broken, "item-link-0001", Date.now())).toBeNull();
     // The index names a page that has since gone from the read.
-    expect(documentForBlock({ ...site(), subPages: [] }, "item-link-0001")).toBeNull();
+    expect(documentForBlock({ ...site(), subPages: [] }, "item-link-0001", Date.now())).toBeNull();
   });
 
   it("never lets a sub-page speak for Home's banner", () => {
@@ -132,7 +132,7 @@ describe("M11-09 the document that holds a block", () => {
       subPages,
       index: buildBlockIndex(withBanner, subPages),
     };
-    const held = documentForBlock(read, "item-link-0001");
+    const held = documentForBlock(read, "item-link-0001", Date.now());
     expect(held?.doc.banner).toBeUndefined();
   });
 });
@@ -157,7 +157,7 @@ describe("M11-09 a click on a sub-page block", () => {
   }
 
   const resolveFromSite = (id: string) => {
-    const held = documentForBlock(site(), id);
+    const held = documentForBlock(site(), id, Date.now());
     if (!held) return null;
     const link = resolveLink(held.doc, id);
     return link

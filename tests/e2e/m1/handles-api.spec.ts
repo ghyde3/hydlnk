@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, insertPage, makeUser, rand } from "../fixtures/data";
 import { postgrest, rawRequest } from "../fixtures/http";
@@ -13,7 +13,7 @@ test.describe("M1-02 handle availability endpoint", () => {
   test.afterAll(cleanupUsers);
 
   const check = async (query: string) => {
-    const res = await rawRequest("app.localhost:3000", `/api/handles/check${query}`);
+    const res = await rawRequest(`app.localhost:${DEV_PORT}`, `/api/handles/check${query}`);
     return { ...res, json: JSON.parse(res.body) as { handle: string; status: string } };
   };
 
@@ -86,7 +86,7 @@ test.describe("M1-02 handle availability endpoint", () => {
     expect(res.headers["cache-control"]).toMatch(/no-store/);
 
     for (const method of ["POST", "PUT", "DELETE"]) {
-      const bad = await rawRequest("app.localhost:3000", "/api/handles/check?handle=zz", {
+      const bad = await rawRequest(`app.localhost:${DEV_PORT}`, "/api/handles/check?handle=zz", {
         method,
       });
       expect(bad.status, method).toBe(405);
@@ -116,7 +116,7 @@ test.describe("M1-02 handle availability endpoint", () => {
   });
 
   test("M1-02 host scoping: tenant and root hosts do not serve the endpoint", async () => {
-    for (const host of ["mara.localhost:3000", "localhost:3000"]) {
+    for (const host of [`mara.localhost:${DEV_PORT}`, `localhost:${DEV_PORT}`]) {
       const res = await rawRequest(host, "/api/handles/check?handle=zz");
       expect(res.status, host).toBe(404);
     }

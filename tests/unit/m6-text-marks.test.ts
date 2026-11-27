@@ -492,10 +492,38 @@ describe("M6-28 no raw HTML anywhere: structured marks only", () => {
     };
     const names = Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
     const banned =
-      /^(marked|markdown-it|remark.*|rehype.*|unified|mdast.*|micromark.*|showdown|snarkdown|commonmark|html-react-parser|react-markdown|sanitize-html|dompurify|isomorphic-dompurify|parse5|htmlparser2|cheerio|turndown|slate|lexical|prosemirror.*|quill|draft-js)$/;
+      /^(markdown-it|remark.*|rehype.*|unified|mdast.*|micromark.*|showdown|snarkdown|commonmark|html-react-parser|react-markdown|sanitize-html|dompurify|isomorphic-dompurify|parse5|htmlparser2|cheerio|turndown|slate|lexical|prosemirror.*|quill|draft-js)$/;
     // M9-12: the text editor is the one approved exception, `@tiptap/*` (it converts at the edge and
     // never stores or renders HTML: tests/unit/m9-text-boundary.test.ts holds that line).
+    // `marked` is approved for post bodies only (Gary, 2026-10-11); the next test keeps it out of
+    // text blocks.
     expect(names.filter((name) => banned.test(name))).toEqual([]);
+  });
+
+  it("text blocks never import a Markdown parser (marked is for post bodies only)", () => {
+    const roots = ["src/lib/tenant-render", "src/components/blocks", "src/lib/document"];
+    const named = [
+      "src/lib/document/marks.ts",
+      "src/lib/document/marks-edit.ts",
+      "src/components/page/blocks.tsx",
+    ];
+    const files = [
+      ...roots.flatMap((r) => walk(join(process.cwd(), r))),
+      ...named.map((f) => join(process.cwd(), f)),
+    ];
+    const importsParser =
+      /(?:from\s*|import\s*\(?\s*|require\(\s*)["'](?:marked|@tiptap\/markdown)(?:\/[^"']*)?["']/;
+    const offenders = files
+      .filter((file) =>
+        importsParser.test(
+          readFileSync(file, "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, "")
+            .replace(/\/\/.*$/gm, ""),
+        ),
+      )
+      .map((file) => file.slice(process.cwd().length + 1));
+    expect(files.length).toBeGreaterThan(3);
+    expect(offenders).toEqual([]);
   });
 
   it("the marks module and the renderer never parse the text", () => {

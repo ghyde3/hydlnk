@@ -6,6 +6,7 @@ import { requireLocalEnv } from "../fixtures/stripe-stub";
 import { markDnsReady } from "../fixtures/vercel-stub";
 import { addDomainRow, domainRowOf, hostnameFor, makeSite } from "../m4/domains-core-helpers";
 import { liveEmailContent } from "@/lib/domains/live-email";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M9-09: the "your domain is live" email, rebuilt with react-email. One flow end to end against the
@@ -67,7 +68,7 @@ test.describe("M9-09 the message Mailpit receives", () => {
 
   test("M9-09 the route is unchanged on other hosts: the sweep is a 404 on a tenant host", async ({}, info) => {
     test.skip(!desktopOnly(info), "an HTTP data flow: one project is enough");
-    const res = await rawRequest("mara.localhost:3000", SWEEP, {
+    const res = await rawRequest(`mara.localhost:${DEV_PORT}`, SWEEP, {
       method: "POST",
       headers: { authorization: `Bearer ${SECRET()}` },
     });

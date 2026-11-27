@@ -42,24 +42,44 @@ import {
   type SitePageItem,
   type SubPageSummary,
 } from "@/lib/site-pages/pages";
+import type { SaveHold } from "@/lib/editor/autosave";
 import { SubPageSaver, type SubBlocked, type SubSaveStatus } from "@/lib/site-pages/saver";
-import { createSubPageSaveFn } from "@/lib/site-pages/save-client";
+import { createSubPageRevisions, createSubPageSaveFn } from "@/lib/site-pages/save-client";
 import {
   instantiateSiteTemplate,
   siteTemplateById,
   type SiteTemplateId,
 } from "@/lib/site-templates/catalog";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
+import { latestPostsCategories, usesLatestPosts } from "@/lib/site/live";
+import { previewBlocks } from "@/lib/document/schedule";
+import { useMinuteClock } from "@/lib/schedule/use-minute-clock";
 import type { WorkspaceAction } from "@/components/workspace/workspace-reducer";
+import { useLatestPosts } from "@/components/blocks/use-latest-posts";
 import { docOf, initSiteState, siteReducer, type SubPageSettings } from "./site-state";
 
-/** One sub-page as the workspace opens it (the layout's read of `site_pages`). */
+/** One sub-page as the workspace opens it (the layout's read of the site's page entries). */
 export interface SubPageInit {
   id: string;
   draft: SubPageDraft;
   published: SubPagePublish | null;
   livePath: string | null;
   createdAt: string;
+  /** The page entry's `rev`: the revision this page's saves are checked against (M15-01). */
+  rev: number;
+}
+
+/**
+ * A type of the site that has an archive (the blog), as the menu needs it (M16-08): its id is what a
+ * menu item stores, and the live site links it to `/{path}` under the type's plural label while it
+ * is on. Structurally the server's `ArchiveType` (`src/lib/site/page-entries-core.ts`).
+ */
+export interface SiteArchive {
+  typeId: string;
+  key: string;
+  path: string;
+  labelPlural: string;
+  enabled: boolean;
 }
 
 export type SiteAddResult = { ok: true; id: string } | { ok: false; message: string };
@@ -108,7 +128,12 @@ export interface SiteValue {
   duplicate: (id: string) => Promise<SiteAddResult>;
   /** Each sub-page's state against the live site (M12-08). */
   pageStates: Readonly<Record<string, PageState>>;
+  /** Adds a page's id, or an archive's type id (M16-08), to the draft menu, or takes it out. */
   toggleMenu: (id: string) => void;
+  /** The site's types with an archive, on or off: Publish keeps a menu item that names one. */
+  archives: readonly SiteArchive[];
+  /** Called when the blog is turned on or off, or its address changes, in this session. */
+  setArchive: (archive: SiteArchive) => void;
   moveInMenu: (id: string, direction: -1 | 1) => void;
   /** Drag and drop: put a menu page where another one is. */
   reorderMenu: (id: string, overId: string) => void;
@@ -118,11 +143,45 @@ export interface SiteValue {
   limitMessage: string;
   /** Writes the sub-pages' pending edits; true when everything is stored. */
   flush: () => Promise<boolean>;
+  /**
+   * Hold the sub-pages' save queue while a publish that covers a sub-page is out (M15-10): edits are
+   * taken and wait, nothing is sent until `release()`. See `SaveHold`.
+   */
+  holdSaves: () => SaveHold;
+  /** True while a sub-page edit is not stored yet (asked right after a hold: was something typed since the flush). */
+  hasUnsaved: () => boolean;
   saveStatus: SubSaveStatus;
   /** A sub-page differs from what is live (an edit, or never published): Publish has something to do. */
   dirty: boolean;
-  /** Called after a successful Publish with the sub-pages as they were saved. */
-  markPublished: () => void;
+  /**
+   * The sub-pages' publish forms as they are now. Publish takes it right after `flush()` (what is
+   * stored, so what the server will publish) and hands it back to `markPublished` or
+   * `markPagePublished`: an edit typed while the publish was answering is not what went live.
+   */
+  snapshotForms: () => ReadonlyMap<string, SubPagePublish>;
+  /**
+   * Called after a successful Publish all changes with the forms that were published (`snapshotForms`
+   * taken before the call), the revs the publish answered (what it left, under its locks) and the
+   * revs it was sent with. Each page takes the answered rev while it still holds the one sent. The
+   * revs are never read again from here: a rev another writer made must stay a conflict.
+   */
+  markPublished: (
+    published: ReadonlyMap<string, SubPagePublish>,
+    revs: Readonly<Record<string, number>>,
+    sent: Readonly<Record<string, number>>,
+  ) => void;
+  /**
+   * Called after Publish page on one sub-page (M15-10): `form` (from `snapshotForms`, taken before
+   * the call) is live. `rev` is the rev the server answered and `sent` the one the publish was checked
+   * against: it is adopted only while the editor still holds `sent`.
+   */
+  markPagePublished: (
+    id: string,
+    published: { rev: number; sent: number; form: SubPagePublish | undefined },
+  ) => void;
+  /** The entry rev the editor holds for each sub-page: what its saves, Publish page and Publish all are checked against. */
+  revisions: () => Record<string, number>;
+
   /** Called after a successful Unpublish (M14-02): no sub-page is live any more, every draft stays. */
   markUnpublished: () => void;
   preview: PreviewSite;
@@ -149,12 +208,32 @@ export function useSitePages(args: {
   siteId: string;
   plan: PlanId;
   initial: readonly SubPageInit[];
+  /** Page entries in the trash when the editor opened: they still count toward the limit. */
+  trashedPages?: number;
+  /** The site's types with an archive as the editor opened (M16-08). */
+  initialArchives?: readonly SiteArchive[];
   homeTitle: string;
   nav: DraftDoc["nav"];
+  /** Home's blocks: a latest-posts block there needs the posts too. */
+  homeBlocks: DraftDoc["blocks"];
   editDraft: (update: (draft: DraftDoc) => DraftDoc, group?: string) => void;
 }): SiteValue {
-  const { siteId, plan, homeTitle, nav, editDraft } = args;
+  const { siteId, plan, homeTitle, nav, homeBlocks, editDraft } = args;
   const [initial] = useState(() => args.initial);
+  // Trashed pages keep a place in the limit until they are purged; a delete here adds one.
+  const [trashed, setTrashed] = useState(() => args.trashedPages ?? 0);
+  const [archives, setArchives] = useState<readonly SiteArchive[]>(
+    () => args.initialArchives ?? [],
+  );
+  const setArchive = useCallback(
+    (archive: SiteArchive) =>
+      setArchives((current) =>
+        current.some((held) => held.typeId === archive.typeId)
+          ? current.map((held) => (held.typeId === archive.typeId ? archive : held))
+          : [...current, archive],
+      ),
+    [],
+  );
   const [state, dispatch] = useReducer(siteReducer, initial, initSiteState);
   const [activeId, setActiveId] = useState<string>(HOME_PAGE_ID);
 
@@ -173,9 +252,13 @@ export function useSitePages(args: {
   const [saveStatus, setSaveStatus] = useState<SubSaveStatus>("idle");
   const [blocked, setBlocked] = useState<Record<string, SubBlocked>>({});
   const saverRef = useRef<SubPageSaver | null>(null);
+  // The entry rev each page was last loaded or saved at: every save is checked against it.
+  const [revisions] = useState(() =>
+    createSubPageRevisions(Object.fromEntries(initial.map((page) => [page.id, page.rev]))),
+  );
   useEffect(() => {
     const saver = new SubPageSaver({
-      save: createSubPageSaveFn(),
+      save: createSubPageSaveFn(revisions, siteId),
       onStatus: setSaveStatus,
       onBlocked: (id, refusal) =>
         setBlocked((current) => {
@@ -205,7 +288,7 @@ export function useSitePages(args: {
       void saver.flush().finally(() => saver.dispose());
       saverRef.current = null;
     };
-  }, []);
+  }, [revisions, siteId]);
 
   // Edits not stored yet: the browser asks before the tab closes, as it does for Home's.
   useEffect(() => {
@@ -253,7 +336,7 @@ export function useSitePages(args: {
     [homeTitle, nav, summaries],
   );
   const resolvedNav = useMemo(() => resolveNav(nav), [nav]);
-  const limit = pageLimitState(plan, state.ids.length);
+  const limit = pageLimitState(plan, state.ids.length + trashed);
   const limitMessage = pagesPerSiteMessage(plan, limit.used);
 
   const select = useCallback(
@@ -382,12 +465,14 @@ export function useSitePages(args: {
           id?: string;
           draft?: SubPageDraft;
           createdAt?: string;
+          rev?: number;
           message?: string;
         } | null;
         if (!response.ok || !body?.id || !body.draft) {
           return { ok: false, message: body?.message ?? "Couldn’t add the page. Try again." };
         }
         const id = body.id;
+        if (typeof body.rev === "number") revisions.set(id, body.rev);
         setCreatedAt((current) =>
           new Map(current).set(id, body.createdAt ?? new Date().toISOString()),
         );
@@ -404,19 +489,28 @@ export function useSitePages(args: {
         };
       }
     },
-    [siteId, setNav],
+    [siteId, setNav, revisions],
   );
 
-  const remove = useCallback<SiteValue["remove"]>(
-    async (id) => {
+  const removePage = useCallback(
+    async (id: string, purge: boolean): Promise<SiteDeleteResult> => {
       try {
-        const response = await fetch(`/api/pages/${siteId}/sub-pages/${id}`, { method: "DELETE" });
+        const response = await fetch(
+          `/api/pages/${siteId}/sub-pages/${id}${purge ? "?purge=1" : ""}`,
+          { method: "DELETE" },
+        );
         if (!response.ok && response.status !== 404) {
           const body = (await response.json().catch(() => null)) as { message?: string } | null;
           return { ok: false, message: body?.message ?? "Couldn’t delete the page. Try again." };
         }
+        if (response.ok) {
+          const done = (await response.json().catch(() => null)) as { purged?: boolean } | null;
+          // The page went to the trash, where it still counts, unless it was purged.
+          if (done?.purged !== true) setTrashed((current) => current + 1);
+        }
         // Gone on the server: stop writing it, leave the menu and go home if it was open.
         saverRef.current?.drop(id);
+        revisions.delete(id);
         dispatch({ type: "remove", id });
         setNav((current) => removeFromNav(current, id));
         setPublishedForms((current) => {
@@ -433,8 +527,9 @@ export function useSitePages(args: {
         };
       }
     },
-    [siteId, setNav],
+    [siteId, setNav, revisions],
   );
+  const remove = useCallback<SiteValue["remove"]>((id) => removePage(id, false), [removePage]);
 
   const applyTemplate = useCallback<SiteValue["applyTemplate"]>(
     async (id) => {
@@ -467,7 +562,7 @@ export function useSitePages(args: {
         });
         if (!result.ok) {
           // All or nothing: a page that was made is taken back.
-          for (const pageId of created) await remove(pageId);
+          for (const pageId of created) await removePage(pageId, true);
           return { ok: false, message: result.message };
         }
         created.push(result.id);
@@ -476,7 +571,7 @@ export function useSitePages(args: {
       setActiveId(HOME_PAGE_ID);
       return { ok: true };
     },
-    [limit.max, limit.used, limitMessage, state.ids, state.editors, add, remove, editDraft],
+    [limit.max, limit.used, limitMessage, state.ids, state.editors, add, removePage, editDraft],
   );
 
   const duplicate = useCallback<SiteValue["duplicate"]>(
@@ -495,6 +590,11 @@ export function useSitePages(args: {
   );
 
   const flush = useCallback(async () => (await saverRef.current?.flush()) ?? true, []);
+  const holdSaves = useCallback(
+    (): SaveHold => saverRef.current?.hold() ?? { settled: Promise.resolve(), release: () => {} },
+    [],
+  );
+  const hasUnsaved = useCallback(() => saverRef.current?.hasUnsaved ?? false, []);
 
   const forms = useMemo(() => {
     const map = new Map<string, SubPagePublish>();
@@ -519,34 +619,101 @@ export function useSitePages(args: {
   useEffect(() => {
     formsRef.current = forms;
   }, [forms]);
-  const markPublished = useCallback(() => {
-    const current = formsRef.current;
-    setPublishedForms(new Map(current));
-    setLivePaths(new Map([...current].map(([id, form]) => [id, form.path])));
-  }, []);
+  const snapshotForms = useCallback(
+    (): ReadonlyMap<string, SubPagePublish> => new Map(formsRef.current),
+    [],
+  );
+  const markPublished = useCallback<SiteValue["markPublished"]>(
+    (published, revs, sent) => {
+      // What went live is what was stored when Publish was sent, not what has been typed since.
+      setPublishedForms(new Map(published));
+      setLivePaths(new Map([...published].map(([id, form]) => [id, form.path])));
+      for (const [id, rev] of Object.entries(revs)) {
+        const was = sent[id];
+        if (was !== undefined) revisions.adopt(id, rev, was);
+      }
+    },
+    [revisions],
+  );
+
+  const markPagePublished = useCallback<SiteValue["markPagePublished"]>(
+    (id, { rev, sent, form }) => {
+      if (form) {
+        setPublishedForms((current) => new Map(current).set(id, form));
+        setLivePaths((current) => new Map(current).set(id, form.path));
+      }
+      revisions.adopt(id, rev, sent);
+    },
+    [revisions],
+  );
+  const idsRef = useRef(state.ids);
+  useEffect(() => {
+    idsRef.current = state.ids;
+  }, [state.ids]);
+  const revisionsNow = useCallback(() => {
+    const held: Record<string, number> = {};
+    for (const id of idsRef.current) {
+      const rev = revisions.get(id);
+      if (rev !== undefined) held[id] = rev;
+    }
+    return held;
+  }, [revisions]);
 
   const markUnpublished = useCallback(() => {
     setPublishedForms(new Map());
+    // Unpublish moves no rev (unpublish_site clears the published copies only): nothing to adopt,
+    // and nothing is re-read.
     setLivePaths(new Map());
   }, []);
 
+  // The categories the latest-posts blocks of every page filter by: their older posts are read too.
+  // The posts are read only while some page holds such a block (a site without one never asks).
+  const allBlocks = useMemo(
+    () => [...homeBlocks, ...[...forms.values()].flatMap((form) => form.blocks)],
+    [homeBlocks, forms],
+  );
+  const latestCategories = useMemo(() => latestPostsCategories(allBlocks), [allBlocks]);
+  const { latest: latestPosts } = useLatestPosts(
+    siteId,
+    latestCategories,
+    usesLatestPosts(allBlocks),
+  );
+  const minute = useMinuteClock();
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({
       id,
       path: state.settings[id]!.path.trim(),
       title: titleOf({ title: state.settings[id]!.title }),
     }));
-    const menu = buildMenu(nav, live, effectiveId, "links");
-    const site: SiteContext = { hrefs: hrefsOf(live), menu };
+    // The archives that are on join the menu as the live site draws them (M16-08): the type's id,
+    // its path and its plural label. One that is off is skipped, as on the live site.
+    const menu = buildMenu(
+      nav,
+      [
+        ...live,
+        ...archives
+          .filter((archive) => archive.enabled)
+          .map((archive) => ({
+            id: archive.typeId,
+            path: archive.path,
+            title: archive.labelPlural,
+          })),
+      ],
+      effectiveId,
+      "links",
+    );
+    // What a latest-posts block draws (M16-07): the site's published posts, null while the blog is off.
+    const site: SiteContext = { hrefs: hrefsOf(live), menu, latestPosts };
     if (isHome) return { site };
     return {
       site,
       subPage: {
         title: titleOf({ title: state.settings[effectiveId]!.title }),
-        blocks: forms.get(effectiveId)?.blocks ?? [],
+        // As Home's preview: every block that has not ended (Wave E, M20-06).
+        blocks: previewBlocks(forms.get(effectiveId)?.blocks ?? [], minute),
       },
     };
-  }, [state.ids, state.settings, nav, effectiveId, isHome, forms]);
+  }, [state.ids, state.settings, nav, effectiveId, isHome, forms, latestPosts, archives, minute]);
 
   const hrefToId = useCallback(
     (href: string) => {
@@ -580,6 +747,8 @@ export function useSitePages(args: {
     duplicate,
     pageStates,
     toggleMenu,
+    archives,
+    setArchive,
     moveInMenu,
     reorderMenu,
     menuShown: resolvedNav.show,
@@ -587,9 +756,14 @@ export function useSitePages(args: {
     limit,
     limitMessage,
     flush,
+    holdSaves,
+    hasUnsaved,
     saveStatus,
     dirty,
+    snapshotForms,
     markPublished,
+    markPagePublished,
+    revisions: revisionsNow,
     markUnpublished,
     preview,
     applyPublishErrors,

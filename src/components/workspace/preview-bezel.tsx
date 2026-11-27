@@ -74,6 +74,8 @@ export function PreviewBezel({
         data-testid="preview-screen"
         data-page-frame=""
         onClickCapture={onClickCapture}
+        // A form block (M17-07) posts nowhere from the editor: no request leaves for /f/.
+        onSubmitCapture={(event) => event.preventDefault()}
         className={`h-full overflow-x-hidden overflow-y-auto rounded-[30px] ${
           tappable
             ? "[&_[data-block-id]]:cursor-pointer [&_[data-item-id]]:cursor-pointer [&_[data-profile-part]]:cursor-pointer [&_iframe]:pointer-events-none"

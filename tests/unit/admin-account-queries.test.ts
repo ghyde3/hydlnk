@@ -27,6 +27,32 @@ describe.skipIf(!run)("admin account, audit and draft view reads (local Supabase
     owners.push(made);
     return made;
   };
+  /** A page entry (the sub-page's home since 1b1): through the writer, or straight into the table. */
+  const addPage = async (siteId: string, ownerId: string, draft: unknown, raw = false) => {
+    if (!raw) {
+      const { createEntryWithClient } = await import("@/lib/content/entries-core");
+      const made = await createEntryWithClient(admin as never, {
+        actor: { userId: ownerId, source: "editor" },
+        siteId,
+        typeKey: "page",
+        draft,
+      });
+      if (!made.ok) throw new Error(`page entry: ${made.error}`);
+      return { error: null, id: made.id };
+    }
+    const type = await admin
+      .from("content_types")
+      .select("id")
+      .eq("site_id", siteId)
+      .eq("key", "page")
+      .single();
+    const row = await admin
+      .from("content_entries")
+      .insert({ site_id: siteId, type_id: type.data!.id, draft: draft as never })
+      .select("id")
+      .single();
+    return { error: row.error, id: row.data?.id };
+  };
   const auditRows = async (accountId: string, action?: string) => {
     let query = admin
       .from("admin_audit")
@@ -167,9 +193,7 @@ describe.skipIf(!run)("admin account, audit and draft view reads (local Supabase
     const inserted = [];
     for (const path of paths) {
       const draft = { ...emptySubPageDraft("items", "Title"), path };
-      inserted.push(
-        await admin.from("site_pages").insert({ page_id: a.pageId, draft: draft as never }),
-      );
+      inserted.push(await addPage(a.pageId, a.userId, draft, true));
     }
     const stored = inserted.filter((r) => !r.error).length;
     const view = await drafts.loadAdminDraftView(admin as never, a.pageId, "");
@@ -182,14 +206,7 @@ describe.skipIf(!run)("admin account, audit and draft view reads (local Supabase
 
   it("loadAdminDraftView shows the draft (Home and a page), reads nothing it need not and writes nothing", async () => {
     const a = await owner("dv-a", "pro");
-    const sub = await admin
-      .from("site_pages")
-      .insert({
-        page_id: a.pageId,
-        draft: emptySubPageDraft("items", "Items") as never,
-      })
-      .select("id")
-      .single();
+    const sub = await addPage(a.pageId, a.userId, emptySubPageDraft("items", "Items"));
     expect(sub.error).toBeNull();
     const before = await admin
       .from("pages")

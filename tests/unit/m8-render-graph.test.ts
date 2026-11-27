@@ -181,6 +181,12 @@ describe("M8-04 the routes are static and cached, never dynamic", () => {
       `${TENANT}/sites/[pageId]/og/route.ts`,
       `${TENANT}/t/[handle]/hl-query-count/route.ts`,
       `${TENANT}/t/[handle]/hl-fail-next-read/route.ts`,
+      // The routes under an archive (Wave B, M16-03): every one dynamic, four per host.
+      ...[`${TENANT}/t/[handle]`, `${TENANT}/sites/[pageId]`].flatMap((host) =>
+        ["e/[slug]", "n/[n]", "x/[taxonomy]/[term]/[n]", "feed"].map(
+          (tail) => `${host}/a/[archive]/${tail}/route.ts`,
+        ),
+      ),
     ]) {
       expect(read(route), route).toMatch(/export const dynamic = "force-dynamic"/);
     }
@@ -225,7 +231,7 @@ describe("M8-03 the tenant group has no page, layout or boundary file any more",
 });
 
 describe("M8-02 one renderer, one module that outputs block markup", () => {
-  it("PageRenderer's props are the seven it had plus the three of Wave M: site, subPage and inertLinks", () => {
+  it("PageRenderer's props are the seven it had, the three of Wave M (site, subPage, inertLinks), Wave B's main and Wave D's formState", () => {
     const text = code(read("src/components/page/page-renderer.tsx"));
     const body = /export interface PageRendererProps \{([\s\S]*?)\n\}/.exec(text)![1]!;
     const props = [...body.matchAll(/^\s{2}(\w+)\??:/gm)].map((match) => match[1]);
@@ -240,6 +246,8 @@ describe("M8-02 one renderer, one module that outputs block markup", () => {
       "inertLinks",
       "site",
       "subPage",
+      "main",
+      "formState",
     ]);
   });
 

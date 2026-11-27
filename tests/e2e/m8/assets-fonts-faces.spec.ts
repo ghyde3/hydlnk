@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { buildFontFaces, buildFontPreloads, type FontManifest } from "@/lib/tenant-assets/fonts";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M8-01 steps 3 and 4 in real Chrome, with the font bytes served from three real woff2 files that
@@ -46,7 +47,7 @@ const MANIFEST: FontManifest = {
 };
 
 const TOKENS = { fontHeading: "Fraunces", fontBody: "Geist", weightHeading: 600 };
-const URL_OF = "http://mara.localhost:3000/__m8-fonts";
+const URL_OF = `http://mara.localhost:${DEV_PORT}/__m8-fonts`;
 
 function page(text: string): string {
   const preloads = buildFontPreloads(TOKENS, MANIFEST)
@@ -69,7 +70,7 @@ async function visit(browserPage: import("@playwright/test").Page, text: string)
   });
   await browserPage.route("**/*", async (route) => {
     const u = new URL(route.request().url());
-    if (u.host !== "mara.localhost:3000") {
+    if (u.host !== `mara.localhost:${DEV_PORT}`) {
       otherRequests.push(u.host);
       return route.abort();
     }

@@ -114,8 +114,13 @@ export function siteErrors(home: PublishDoc, subPages: readonly SiteSubPage[]): 
  * restore). Stored as `publishNav` says: absent when it is the default, so a site that never used a
  * menu publishes byte-identically to before.
  */
-export function homeForSite(home: PublishDoc, subPageIds: readonly string[]): PublishDoc {
-  const nav = publishNav(pruneNav(home.nav, subPageIds));
+export function homeForSite(
+  home: PublishDoc,
+  subPageIds: readonly string[],
+  typeIds: readonly string[] = [],
+): PublishDoc {
+  // `typeIds` (M16-08): this site's content types with an archive; a menu item naming one is kept.
+  const nav = publishNav(pruneNav(home.nav, subPageIds, typeIds));
   const { nav: _dropped, ...rest } = home;
   void _dropped;
   return nav ? { ...rest, nav } : rest;

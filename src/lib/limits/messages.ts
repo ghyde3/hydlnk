@@ -1,3 +1,4 @@
+import { TERMS_PER_TYPE } from "@/lib/blog/types";
 import { formatLimitBytes } from "./format";
 import { PLAN_LABELS, PLAN_LIMITS, type PlanId } from "./table";
 
@@ -80,3 +81,109 @@ export function planBlurb(plan: PlanId): string {
 
 /** Why a Free account cannot publish redirect mode (M9-31): the sentence the Publish gate and the Share tab use. */
 export const REDIRECT_MODE_MESSAGE = "Redirect mode is part of Pro. Upgrade to use it.";
+
+/**
+ * Why a Free account cannot schedule (Wave E, M20-11, HL017): the block Schedule section, the
+ * schedule dialog and a Publish refused for a copy that still holds a block time.
+ */
+export const SCHEDULING_PLAN_MESSAGE =
+  "Scheduling is part of Pro. Upgrade to schedule, or remove the block times to publish.";
+
+/**
+ * HL018 (M20-11): a site holds `scheduledPerSite` pending schedules already, or the account holds
+ * `scheduledPerAccount` across its sites.
+ */
+export function scheduleLimitMessage(plan: PlanId, scope: "site" | "account" = "site"): string {
+  const limits = PLAN_LIMITS[plan];
+  if (scope === "account") {
+    return `Your sites already have ${limits.scheduledPerAccount.toLocaleString("en-US")} scheduled changes, the most ${PLAN_LABELS[plan]} allows. Cancel one or let one run first.`;
+  }
+  return `This site already has ${limits.scheduledPerSite.toLocaleString("en-US")} scheduled changes, the most ${PLAN_LABELS[plan]} allows. Cancel one or let one run first.`;
+}
+
+const grouped = (count: number) => count.toLocaleString("en-US");
+const postNoun = (count: number) => (count === 1 ? "post" : "posts");
+
+/** "25", "1,000", or "Unlimited" for Studio (its 100,000 is a fair-use cap): posts per site as copy shows it (M16-12). */
+export function formatPostsLimit(plan: PlanId): string {
+  return plan === "studio" ? "Unlimited" : grouped(PLAN_LIMITS[plan].entriesPerType);
+}
+
+/**
+ * The line in the Posts screen's header (M16-12), the trash counted in `used` as HL010 counts it:
+ *   Free    "3 of 25 posts"
+ *   Pro     "40 of 1,000 posts"
+ *   Studio  "40 posts · Unlimited"
+ */
+export function postsUsageText(plan: PlanId, used: number): string {
+  if (plan === "studio") return `${grouped(used)} ${postNoun(used)} · Unlimited`;
+  return `${grouped(used)} of ${formatPostsLimit(plan)} posts`;
+}
+
+/**
+ * Why a new post is refused (HL010, M16-12), by plan:
+ *   Free    "Free includes 25 posts, the trash included. Pro includes 1,000."
+ *   Pro     "You’ve used 1,000 of 1,000 posts, the trash included. Studio includes unlimited posts."
+ *   Studio  "You’ve used 100,000 of 100,000 posts, the trash included."
+ */
+export function postLimitMessage(
+  plan: PlanId,
+  used: number = PLAN_LIMITS[plan].entriesPerType,
+): string {
+  const own = grouped(PLAN_LIMITS[plan].entriesPerType);
+  if (plan === "free") {
+    return `${PLAN_LABELS.free} includes ${own} posts, the trash included. ${PLAN_LABELS.pro} includes ${grouped(PLAN_LIMITS.pro.entriesPerType)}.`;
+  }
+  const head = `You’ve used ${grouped(used)} of ${own} posts, the trash included.`;
+  return plan === "pro" ? `${head} ${PLAN_LABELS.studio} includes unlimited posts.` : head;
+}
+
+/** Why a new category or tag is refused (HL015, M16-14). The cap is the same on every plan. */
+export const TERM_LIMIT_MESSAGE = `A blog holds up to ${TERMS_PER_TYPE} categories and tags. Delete one to add another.`;
+
+/** "87 / 100 this month": the Audience screen's meter of form submissions (M17-02). */
+export function formMeterText(plan: PlanId, stored: number): string {
+  return `${grouped(stored)} / ${grouped(PLAN_LIMITS[plan].formSubmissionsPerMonth)} this month`;
+}
+
+/**
+ * The line under the meter (security review A1): what is counted, that deleting frees a place, and
+ * the per-site daily cap. "Counts what your forms hold from the 1st of the month (UTC). Deleting a
+ * submission frees its place. Each site takes up to 20 a day."
+ */
+export function formMeterHelp(plan: PlanId): string {
+  return `Counts what your forms hold from the 1st of the month (UTC). Deleting a submission frees its place. Each site takes up to ${grouped(PLAN_LIMITS[plan].formSubmissionsPerSiteDay)} a day.`;
+}
+
+/**
+ * The notice once a site's daily cap refused anything this month, or null:
+ *   "A site reached its limit of 20 form submissions a day on Free. 3 were not saved this month.
+ *    Delete what you don’t need to make room, or wait until tomorrow (UTC)."
+ */
+export function formDailyLimitNotice(plan: PlanId, refusedDaily: number): string | null {
+  if (refusedDaily <= 0) return null;
+  return `A site reached its limit of ${grouped(PLAN_LIMITS[plan].formSubmissionsPerSiteDay)} form submissions a day on ${PLAN_LABELS[plan]}. ${grouped(refusedDaily)} ${refusedDaily === 1 ? "was" : "were"} not saved this month. Delete what you don’t need to make room, or wait until tomorrow (UTC).`;
+}
+
+/**
+ * The notice once owner message emails were skipped today by their hourly cap (forms attack pass,
+ * finding 6), or null: "Today 4 message emails were not sent: at most 30 go out an hour. Every
+ * message is saved here."
+ */
+export function formNotifySkippedNotice(skippedToday: number, perHour: number): string | null {
+  if (skippedToday <= 0) return null;
+  const emails = skippedToday === 1 ? "message email was" : "message emails were";
+  return `Today ${grouped(skippedToday)} ${emails} not sent: at most ${grouped(perHour)} go out an hour. Every message is saved here.`;
+}
+
+/**
+ * The Audience screen's notice once anything was refused this month (M17-02), by plan:
+ *   "You’ve reached this month’s limit of 100 form submissions on Free. 12 were not saved. Upgrade to
+ *    keep more, or wait until the 1st."
+ * Studio has no plan to upgrade to, so its notice ends after the count. Null when nothing was refused.
+ */
+export function formLimitNotice(plan: PlanId, refused: number): string | null {
+  if (refused <= 0) return null;
+  const head = `You’ve reached this month’s limit of ${grouped(PLAN_LIMITS[plan].formSubmissionsPerMonth)} form submissions on ${PLAN_LABELS[plan]}. ${grouped(refused)} ${refused === 1 ? "was" : "were"} not saved.`;
+  return plan === "studio" ? head : `${head} Upgrade to keep more, or wait until the 1st.`;
+}

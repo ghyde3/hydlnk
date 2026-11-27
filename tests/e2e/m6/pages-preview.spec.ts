@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, makeUser, signIn, signedInUser } from "../fixtures/data";
 import { appRaw, cookieHeader } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { emptyUser, openEditor } from "../m2/editor-helpers";
 import { makeLink, getShare, randomIp, visibleText } from "./pages-helpers";
 
@@ -181,7 +181,7 @@ test.describe("M6-11 what it shows", () => {
     await expect(page.locator("[data-preview-bar] [data-publish-status]")).toHaveText(
       /Unpublished changes/,
     );
-    const live = await page.request.get(`http://${owner.handle}.localhost:3000/`);
+    const live = await page.request.get(`http://${owner.handle}.localhost:${DEV_PORT}/`);
     expect(await live.text()).not.toContain(MARK);
   });
 
@@ -196,7 +196,7 @@ test.describe("M6-11 what it shows", () => {
       /Not published/,
     );
     await expect(page.locator("h1")).toHaveCount(1);
-    const live = await page.request.get(`http://${owner.handle}.localhost:3000/`);
+    const live = await page.request.get(`http://${owner.handle}.localhost:${DEV_PORT}/`);
     expect(live.status()).toBe(200);
     expect(await live.text()).toContain("Nothing published here yet.");
   });

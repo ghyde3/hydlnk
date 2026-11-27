@@ -1990,3 +1990,658 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
+/* Posts (Wave B, M16-04) ------------------------------------------------------------------------ */
+
+/* A post page: the article where a sub-page's blocks go. Reading text, left-aligned whatever the
+   page's alignment, sized from the theme's scale. Long words wrap, code and tables scroll inside
+   their own box, so the page never scrolls sideways at 390px. Tokens only. */
+[data-page-root] .pg-post {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  min-width: 0;
+  color: var(--t-text);
+  text-align: left;
+}
+
+[data-page-root] .pg-post-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-page-root] .pg-post-title {
+  margin: 8px 0 0;
+  color: var(--t-text);
+  font-family: var(--t-font-heading);
+  font-size: calc(30px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.15;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-post-meta {
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+  line-height: 1.4;
+}
+
+[data-page-root] .pg-post-featured {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--t-radius);
+}
+
+[data-page-root] .pg-post-body {
+  min-width: 0;
+  color: var(--t-text);
+  font-size: calc(16px * var(--t-scale));
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-post-body > :first-child {
+  margin-top: 0;
+}
+
+[data-page-root] .pg-post-body > :last-child {
+  margin-bottom: 0;
+}
+
+[data-page-root] .pg-post-body p,
+[data-page-root] .pg-post-body ul,
+[data-page-root] .pg-post-body ol,
+[data-page-root] .pg-post-body blockquote,
+[data-page-root] .pg-post-body pre,
+[data-page-root] .pg-post-body .pg-post-table,
+[data-page-root] .pg-post-body .pg-embed {
+  margin: 0 0 1.1em;
+}
+
+[data-page-root] .pg-post-body h2,
+[data-page-root] .pg-post-body h3,
+[data-page-root] .pg-post-body h4 {
+  margin: 1.6em 0 0.5em;
+  color: var(--t-text);
+  font-family: var(--t-font-heading);
+  font-weight: var(--t-weight-heading);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-post-body h2 {
+  font-size: calc(23px * var(--t-scale));
+}
+
+[data-page-root] .pg-post-body h3 {
+  font-size: calc(19px * var(--t-scale));
+}
+
+[data-page-root] .pg-post-body h4 {
+  font-size: calc(16px * var(--t-scale));
+}
+
+[data-page-root] .pg-post-body ul,
+[data-page-root] .pg-post-body ol {
+  padding-left: 1.4em;
+}
+
+[data-page-root] .pg-post-body li {
+  margin: 0.25em 0;
+}
+
+[data-page-root] .pg-post-body li > ul,
+[data-page-root] .pg-post-body li > ol,
+[data-page-root] .pg-post-body li > p {
+  margin-bottom: 0.4em;
+}
+
+[data-page-root] .pg-post-body blockquote {
+  padding: 2px 0 2px 16px;
+  border-left: 3px solid var(--t-accent);
+  color: var(--t-text-muted);
+}
+
+[data-page-root] .pg-post-body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+[data-page-root] .pg-post-body hr {
+  height: 0;
+  margin: 1.8em 0;
+  border: 0;
+  border-top: var(--t-border-width) solid var(--t-border);
+}
+
+[data-page-root] .pg-post-body code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--t-text) 10%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+[data-page-root] .pg-post-body pre {
+  max-width: 100%;
+  padding: 14px 16px;
+  overflow-x: auto;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: color-mix(in srgb, var(--t-text) 6%, transparent);
+  line-height: 1.5;
+  overflow-wrap: normal;
+  white-space: pre;
+}
+
+[data-page-root] .pg-post-body pre code {
+  padding: 0;
+  background: none;
+}
+
+/* A body link: the accent, always underlined, and tall enough to tap (the padding of an inline box
+   does not change the line spacing). */
+[data-page-root] .pg-post-body a {
+  padding-block: 14px;
+  color: var(--t-accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+[data-page-root] .pg-post-body a:focus-visible,
+[data-page-root] .pg-post-term:focus-visible,
+[data-page-root] .pg-post-navlink:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+[data-page-root] .pg-post-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.4em 0;
+  border-radius: var(--t-radius);
+}
+
+[data-page-root] .pg-post-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+[data-page-root] .pg-post-table table {
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.94em;
+  overflow-wrap: normal;
+}
+
+[data-page-root] .pg-post-table th,
+[data-page-root] .pg-post-table td {
+  padding: 8px 12px;
+  border: var(--t-border-width) solid var(--t-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+[data-page-root] .pg-post-table th {
+  font-weight: 700;
+}
+
+[data-page-root] .pg-post-table [data-align="center"] {
+  text-align: center;
+}
+
+[data-page-root] .pg-post-table [data-align="right"] {
+  text-align: right;
+}
+
+[data-page-root] .pg-post-terms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-page-root] .pg-post-termitem {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+}
+
+[data-page-root] .pg-post-term {
+  display: inline-flex;
+  align-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  font-size: calc(13px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+/* Previous and next: two links side by side, stacked when the column is narrow. */
+[data-page-root] .pg-post-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 8px;
+}
+
+[data-page-root] .pg-post-navlink {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px 14px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  text-align: left;
+  text-decoration: none;
+}
+
+[data-page-root] .pg-post-navlink[rel="next"] {
+  text-align: right;
+}
+
+[data-page-root] .pg-post-navlabel {
+  color: var(--t-text-muted);
+  font-size: calc(12px * var(--t-scale));
+  line-height: 1.2;
+}
+
+[data-page-root] .pg-post-navtitle {
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Archive pages (Wave B, M16-05) ---------------------------------------------------------------- */
+
+/* The list of a blog, a category or a tag: one card per post (the whole card is one link), then the
+   pager. The picture keeps its box from its width and height attributes. */
+[data-page-root] .pg-archive {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-width: 0;
+  color: var(--t-text);
+  text-align: left;
+}
+
+[data-page-root] .pg-archive-kicker,
+[data-page-root] .pg-archive-empty {
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.4;
+  text-align: center;
+}
+
+[data-page-root] .pg-archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-page-root] .pg-archive-card {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+}
+
+[data-page-root] .pg-archive-link {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 16px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+  color: var(--t-text);
+  text-decoration: none;
+}
+
+[data-page-root] .pg-archive-link:focus-visible,
+[data-page-root] .pg-archive-page:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+[data-page-root] .pg-archive-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: calc(var(--t-radius) * 0.6);
+  object-fit: cover;
+}
+
+[data-page-root] .pg-archive-title {
+  margin: 0;
+  font-family: var(--t-font-heading);
+  font-size: calc(19px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-archive-date {
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+  line-height: 1.3;
+}
+
+[data-page-root] .pg-archive-excerpt {
+  margin: 0;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Three columns: "Page 1 of 2" stays centered on the page, the previous link at the start and the
+   next one at the end, whichever of them is there. */
+[data-page-root] .pg-archive-pager {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-page-root] .pg-archive-pager > :first-child {
+  justify-self: start;
+}
+
+[data-page-root] .pg-archive-pager > :last-child {
+  justify-self: end;
+}
+
+[data-page-root] .pg-archive-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  color: var(--t-text);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  text-decoration: none;
+}
+
+[data-page-root] .pg-archive-count {
+  color: var(--t-text-muted);
+  font-size: calc(13px * var(--t-scale));
+  text-align: center;
+}
+
+/* Latest posts block (Wave B, M16-07) ----------------------------------------------------------- */
+
+/* The newest posts as a short list of links, each at least 44px tall. Block overrides arrive as
+   inline variables on the block's root. */
+[data-page-root] .pg-latest {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  color: var(--t-text);
+}
+
+[data-page-root] .pg-latest-heading {
+  margin: 0;
+  font-family: var(--t-font-heading);
+  font-size: calc(18px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root][data-align="left"] .pg-latest-heading {
+  text-align: left;
+}
+
+[data-page-root] .pg-latest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-page-root] .pg-latest-item {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+}
+
+[data-page-root] .pg-latest-link {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 12px 16px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+  color: var(--t-text);
+  text-align: left;
+  text-decoration: none;
+}
+
+[data-page-root] .pg-latest-link:focus-visible {
+  outline: 2px solid var(--t-accent);
+  outline-offset: 2px;
+}
+
+[data-page-root] .pg-latest-title {
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-latest-date {
+  color: var(--t-text-muted);
+  font-size: calc(12px * var(--t-scale));
+  line-height: 1.3;
+}
+
+/* Form block (Wave D, M17-04) ------------------------------------------------------------------- */
+
+/* A card of labeled fields, the button and the consent line under it. Plain HTML, no script: the
+   controls take the page's colors, fonts and radius, 16px text (so phones do not zoom) and at least
+   44px of height. The honeypot field is moved off screen (never `display: none`, which some bots
+   read as a hint), and out of the tab order by its own tabindex. */
+[data-page-root] .pg-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  border: var(--t-border-width) solid var(--t-border);
+  border-radius: var(--t-radius);
+  background: var(--t-surface);
+  color: var(--t-text);
+  text-align: left;
+}
+
+[data-page-root] .pg-form-heading {
+  margin: 0 0 4px;
+  font-family: var(--t-font-heading);
+  font-size: calc(20px * var(--t-scale));
+  font-weight: var(--t-weight-heading);
+  line-height: 1.2;
+  text-transform: var(--t-letter-case);
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-desc,
+[data-page-root] .pg-form-note {
+  margin: 0 0 8px;
+  color: var(--t-text-muted);
+  font-size: calc(14px * var(--t-scale));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-label {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+[data-page-root] .pg-form-input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border: max(var(--t-border-width), 1px) solid var(--t-border);
+  border-radius: min(var(--t-radius), 12px);
+  background: var(--t-bg);
+  color: var(--t-text);
+  font-family: var(--t-font-body);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+[data-page-root] .pg-form-message {
+  min-height: 120px;
+  resize: vertical;
+}
+
+[data-page-root] .pg-form-input[aria-invalid="true"] {
+  border-color: var(--t-accent);
+  border-width: 2px;
+}
+
+[data-page-root] .pg-form-error {
+  margin: 4px 0 0;
+  color: var(--t-text);
+  font-size: calc(14px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+[data-page-root] .pg-form-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* The button is a link button (the page's button style), at least 44px tall. */
+[data-page-root] .pg-form-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  margin-top: 16px;
+  padding: 10px 18px;
+  border: var(--t-border-width) solid var(--t-button-bg);
+  border-radius: var(--t-radius);
+  background: var(--t-button-bg);
+  color: var(--t-button-text);
+  font: inherit;
+  font-size: calc(15px * var(--t-scale));
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+[data-page-root] .pg-form[data-button-style="outline"] .pg-form-submit {
+  border-color: var(--t-accent);
+  border-width: max(var(--t-border-width), 1px);
+  background: transparent;
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+[data-page-root] .pg-form[data-button-style="soft"] .pg-form-submit {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--t-accent) 16%, transparent);
+  color: var(--t-text);
+  font-weight: 500;
+}
+
+[data-page-root] .pg-form[data-button-style="shadow"] .pg-form-submit {
+  box-shadow: 3px 3px 0 color-mix(in srgb, var(--t-text) 55%, var(--t-bg));
+}
+
+[data-page-root] .pg-form[data-button-style="pill"] .pg-form-submit {
+  border-radius: 999px;
+}
+
+[data-page-root] .pg-form-consent {
+  margin: 8px 0 0;
+  color: var(--t-text-muted);
+  font-size: calc(12px * var(--t-scale));
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-sent {
+  margin: 0;
+  font-size: calc(16px * var(--t-scale));
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+[data-page-root] .pg-form-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 44px;
+  margin-top: 8px;
+  font-size: calc(15px * var(--t-scale));
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}

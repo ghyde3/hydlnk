@@ -41,7 +41,7 @@ beforeEach(() => {
 
 describe("DELETE /api/pages/{id}/sub-pages/{subId}", () => {
   it("expires the site's cache after a delete, with the site id", async () => {
-    mocks.core.mockResolvedValue({ ok: true, id: SUB, siteId: SITE });
+    mocks.core.mockResolvedValue({ ok: true, id: SUB, siteId: SITE, purged: false });
     const response = await del();
     expect(response.status).toBe(200);
     expect(mocks.invalidatePage).toHaveBeenCalledTimes(1);
@@ -49,7 +49,7 @@ describe("DELETE /api/pages/{id}/sub-pages/{subId}", () => {
   });
 
   it("a failed expiry does not fail the delete (the 24-hour backstop remains)", async () => {
-    mocks.core.mockResolvedValue({ ok: true, id: SUB, siteId: SITE });
+    mocks.core.mockResolvedValue({ ok: true, id: SUB, siteId: SITE, purged: false });
     mocks.invalidatePage.mockImplementation(() => {
       throw new Error("cache down");
     });

@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { FAULT_COOKIE_IGNORED, rawRequest } from "../fixtures/http";
 import {
@@ -89,7 +89,7 @@ test.describe("M5-15 a page with nothing to show", () => {
     await expect(statusChip(page)).toHaveAttribute("data-publish-status", "published", {
       timeout: 20_000,
     });
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).toContain(user.handle);
     expect(live.body).not.toContain(label);
@@ -109,7 +109,7 @@ test.describe("M5-15 a page with nothing to show", () => {
     await expect(statusChip(page)).toHaveAttribute("data-publish-status", "published", {
       timeout: 20_000,
     });
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).toContain(user.handle);
   });
@@ -310,7 +310,7 @@ test.describe("M5-15 Publish fails on the way (the Server Action answers 500 or 
       const user = await seededUser(context, `pf${mode}`);
       await openEditor(page);
       const before = (await pageRow(user.pageId)).published;
-      const liveBefore = await rawRequest(`${user.handle}.localhost:3000`, "/");
+      const liveBefore = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
       expect(liveBefore.status).toBe(200);
 
       const edited = `Pf${mark()}`;
@@ -335,7 +335,7 @@ test.describe("M5-15 Publish fails on the way (the Server Action answers 500 or 
       await expect(publishButton(page)).toBeEnabled();
       expect((await pageRow(user.pageId)).published).toEqual(before);
       expect((await pageRow(user.pageId)).draft.profile.name).toBe(edited);
-      const liveDuring = await rawRequest(`${user.handle}.localhost:3000`, "/");
+      const liveDuring = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
       expect(liveDuring.body).not.toContain(edited);
 
       // Retry once the failure is gone.
@@ -345,7 +345,7 @@ test.describe("M5-15 Publish fails on the way (the Server Action answers 500 or 
         timeout: 20_000,
       });
       await expect(notice).toHaveCount(0);
-      const liveAfter = await rawRequest(`${user.handle}.localhost:3000`, "/");
+      const liveAfter = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
       expect(liveAfter.body).toContain(edited);
     });
   }

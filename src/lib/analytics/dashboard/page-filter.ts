@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { stripHiddenCharacters } from "@/lib/document";
 
 /**
  * The Analytics page filter (M11-09): which page of the site the numbers are for. `all` is every
- * page of the site, `home` is the link-in-bio page, and a UUID is one sub-page (live, or deleted:
- * its history stays). Rollup rows keep Home under the nil UUID and raw events keep it as null, so
+ * page of the site, `home` is the link-in-bio page, and a UUID is one item: a sub-page (live, or
+ * deleted: its history stays), a post by its entry id, or a blog's archive by the Post type's id
+ * (M16-11). Rollup rows keep Home under the nil UUID and raw events keep it as null, so
  * the two readers translate `home` themselves; nothing else in the app knows either encoding.
  */
 
@@ -39,6 +41,30 @@ export interface PageOption {
 export interface SubPageInfo {
   id: string;
   title: string;
+}
+
+/** The archive of the built-in Post type in the page select (M16-11). */
+export const BLOG_LABEL = "Blog";
+/** How many posts the page select names (the most viewed in the range). */
+export const POST_OPTIONS_MAX = 50;
+const UNTITLED_POST = "Untitled post";
+
+/**
+ * The page select's name for a content type's archive (M16-11): "Blog" for the built-in Post type,
+ * the type's plural label for any other. Its archive, paging and term pages all count under the
+ * type's id, so it is one entry.
+ */
+export function archiveLabel(type: { key: string; labelPlural: string }): string {
+  if (type.key === "post") return BLOG_LABEL;
+  return stripHiddenCharacters(type.labelPlural).trim() || "Archive";
+}
+
+/**
+ * A post's name in the page select (M16-11): its published title without hidden characters, or
+ * "Untitled post" for anything that is not a usable string.
+ */
+export function postOptionTitle(title: unknown): string {
+  return (typeof title === "string" ? stripHiddenCharacters(title).trim() : "") || UNTITLED_POST;
 }
 
 /**

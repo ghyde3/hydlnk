@@ -1,3 +1,5 @@
+import type { PlanId } from "@/lib/limits";
+import type { FormBlock } from "@/lib/document";
 import type { RateLimitOptions, RateLimitResult } from "@/lib/rate-limit";
 import type { VisitorHashInput } from "./hash";
 
@@ -11,7 +13,10 @@ export interface EventRow {
   device: string;
   country: string | null;
   visitor_hash: string;
-  /** The sub-page the event happened on (M11-09). Absent = Home (stored as null). */
+  /**
+   * The item the event happened on: a sub-page (M11-09), a post's entry id or, for archive, paging
+   * and term pages, the Post type's id (M16-11). Absent = Home (stored as null).
+   */
   sub_page_id?: string | null;
 }
 
@@ -22,6 +27,17 @@ export interface BeaconPage {
   customHosts: string[];
   /** Ids of the site's LIVE sub-pages (published ones), for the beacon's page check (M11-09). */
   subPageIds?: string[];
+  /**
+   * Ids of the site's ENABLED content types that have an archive (M16-11): the Post type's id is
+   * what an archive, paging or term page sends as its item id.
+   */
+  archiveTypeIds?: string[];
+  /**
+   * Is this id a LIVE post of an enabled archive of THIS site (M16-11)? Bound to the site by the
+   * lookup, so the beacon cannot ask about another site. Asked last (after the origin check) and
+   * only for an id that is neither a sub-page nor an archive. Absent = no id passes this way.
+   */
+  isLivePost?: (entryId: string) => Promise<boolean>;
 }
 
 /**
@@ -50,6 +66,22 @@ export interface ClickTarget {
 }
 
 /**
+ * A form block as the form routes read it (Wave D, M17-06): the visible block from the site's
+ * PUBLISHED documents, never from the request, and the hosts that may serve it.
+ */
+export interface FormTarget {
+  block: FormBlock;
+  /** The owner's plan: the per-site rate of the form routes follows its daily cap. */
+  plan: PlanId;
+  /** `pages.handle` of the site: `{handle}.{root}` serves it. */
+  handle: string;
+  /** Hostnames of the site's VERIFIED custom domains. */
+  customHosts: string[];
+  /** The sub-page (page entry) whose published document holds the block; absent for Home. */
+  subPageId?: string;
+}
+
+/**
  * Everything the two handlers touch outside the request: the limiter, the clock, the database and
  * `after()`. The routes pass the real ones (`./deps`); the unit tests pass spies, which is how the
  * order of the steps (limit, then lookup, then insert) and the fail-open behaviour are proven.
@@ -67,7 +99,8 @@ export interface IngestDeps {
   insertEvent: (row: EventRow) => Promise<void>;
   lookupBeaconPage: (pageId: string) => Promise<BeaconPage | null>;
   /** The link (block, icon or cell) in the page's published document with the hosts that serve it, or null. */
-  resolveClickTarget: (pageId: string, id: string) => Promise<ClickTarget | null>;
+  /** `now`: the server clock (never the request's), for the link's time window (M20-05). */
+  resolveClickTarget: (pageId: string, id: string, now: number) => Promise<ClickTarget | null>;
   /**
    * Does `code` open this code lock (scrypt, constant-time compare)? Defaults to the real one
    * (`verifyLockCode`); the unit tests pass a spy to prove it runs only after the limiter.

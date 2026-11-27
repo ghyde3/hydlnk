@@ -4,10 +4,10 @@ import { AuditTable } from "@/components/admin/audit-table";
 import { StateChip } from "@/components/admin/chips";
 import { formatWhen } from "@/components/admin/format";
 import { Card, ScreenBody, ScreenHeader } from "@/components/app/screen";
-import { getAccountDetail } from "@/lib/admin/account-queries";
+import { getAccountDetail, getAccountTeam, type AccountTeamRow } from "@/lib/admin/account-queries";
 import {
-  SITE_BYTES_CAP,
   formatDate,
+  siteBytesCap,
   stripeCustomerUrl,
   type AccountDetail,
 } from "@/lib/admin/account-view";
@@ -52,7 +52,10 @@ function planLimit(plan: string): number {
 export default async function AdminAccount({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
   const { id } = await params;
-  const account: AccountDetail | null = await getAccountDetail(id);
+  const [account, team]: [AccountDetail | null, AccountTeamRow[]] = await Promise.all([
+    getAccountDetail(id),
+    getAccountTeam(id),
+  ]);
   if (!account) notFound();
 
   const suspended = account.suspendedAt !== null;
@@ -188,6 +191,23 @@ export default async function AdminAccount({ params }: { params: Promise<{ id: s
         </Card>
 
         <Card className="flex flex-col gap-3">
+          <h2 className={H2}>Team</h2>
+          {team.length === 0 ? (
+            <p className="text-sm text-text-2">No members, and no site shared with this account.</p>
+          ) : (
+            <ul className="flex flex-col gap-1.5" data-testid="admin-team">
+              {team.map((row) => (
+                <li key={`${row.direction}-${row.siteId}-${row.userId}`} className={DD}>
+                  {row.direction === "owned"
+                    ? `${row.email ?? "A deleted account"} is ${row.role === "publisher" ? "a publisher" : "an editor"} of ${row.handle}`
+                    : `${row.role === "publisher" ? "Publisher" : "Editor"} of ${row.handle} (owner ${row.email ?? "unknown"})`}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card className="flex flex-col gap-3">
           <h2 className={H2}>Storage</h2>
           <dl className="grid gap-3 hl:grid-cols-2">
             <Fact label="Uploads">
@@ -197,7 +217,7 @@ export default async function AdminAccount({ params }: { params: Promise<{ id: s
             </Fact>
             <Fact label="Sub-pages">
               <span data-site-bytes="">
-                {formatBytes(account.siteBytes)} of {formatLimitBytes(SITE_BYTES_CAP)}
+                {formatBytes(account.siteBytes)} of {formatLimitBytes(siteBytesCap(account.plan))}
               </span>
             </Fact>
           </dl>

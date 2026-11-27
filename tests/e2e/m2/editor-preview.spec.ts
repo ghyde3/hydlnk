@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { LIMITS, newBlockId } from "@/lib/document";
@@ -14,6 +14,7 @@ import {
   rows,
   saveIndicator,
   seededUser,
+  setDraft,
 } from "./editor-helpers";
 
 /**
@@ -44,19 +45,13 @@ function manyBlocks(n: number) {
 }
 
 async function seedBlocks(pageId: string, handle: string, blocks: unknown[]) {
-  const { error } = await adminClient()
-    .from("pages")
-    .update({
-      draft: {
-        version: 1,
-        rev: 0,
-        profile: { name: handle, bio: "A long page", photo: null },
-        theme: { ref: "00000000-0000-4000-8000-000000000001", overrides: {} },
-        blocks,
-      },
-    })
-    .eq("id", pageId);
-  if (error) throw new Error(error.message);
+  await setDraft(pageId, {
+    version: 1,
+    rev: 0,
+    profile: { name: handle, bio: "A long page", photo: null },
+    theme: { ref: "00000000-0000-4000-8000-000000000001", overrides: {} },
+    blocks,
+  });
 }
 
 test.describe("M2-06 desktop: two columns", () => {
@@ -319,11 +314,11 @@ test.describe("M2-28 / M2-29 the preview shows the same footer as the live page"
     const footer = previewScreen(page).locator("[data-page-footer]");
     const badge = footer.getByRole("link", { name: "Made with HYDLNK" });
     const report = footer.getByRole("link", { name: "Report this page" });
-    await expect(badge).toHaveAttribute("href", "http://localhost:3000");
+    await expect(badge).toHaveAttribute("href", `http://localhost:${DEV_PORT}`);
     await expect(badge).toHaveAttribute("rel", "noopener");
     await expect(report).toHaveAttribute(
       "href",
-      `http://localhost:3000/report?page=${user.pageId}`,
+      `http://localhost:${DEV_PORT}/report?page=${user.pageId}`,
     );
 
     await badge.click();
@@ -339,7 +334,7 @@ test.describe("M2-28 / M2-29 the preview shows the same footer as the live page"
     const footer = previewScreen(page).locator("[data-page-footer]");
     await expect(footer.getByRole("link", { name: "Report this page" })).toHaveAttribute(
       "href",
-      `http://localhost:3000/report?page=${user.pageId}`,
+      `http://localhost:${DEV_PORT}/report?page=${user.pageId}`,
     );
     await expect(footer.getByRole("link", { name: "Made with HYDLNK" })).toHaveCount(0);
   });

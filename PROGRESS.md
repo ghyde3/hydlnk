@@ -2,6 +2,205 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-11-27 — Final audit, fixes and flips on `m22-integration` (M16 to M20)
+
+On `m22-integration` (draft PR #40, label `full-ci`). Flipped 48 rows to `passes: true`; features: 382 of 427. Nothing merged or released.
+
+- **Flipped:** M16-01, 02, 03, 06, 07, 09, 10, 11, 12, 14, 15, 16; M17-03, 04, 05, 07, 09, 10; M18-01 to M18-11, M18-13; M19-01 to 06, 08, 12, 13, 16, 17; M20-01, 02, 03, 05, 07, 09, 10.
+- **How:** a strict step-by-step audit (reviewer) of b304ce0 proved 40. A fix pass (cb23068, a391ba6, 65244f6) closed the gaps the audit named, and a re-audit at a391ba6 proved 6 more. M19-04 (probes of all 11 member-readable tables plus `pages.published`, now in the CI integration step, 38653ef) and M20-07 (a page row's Schedule shows the full PublishAlert list, `tests/e2e/scheduling/schedule-issues.spec.ts`, 65244f6) were fixed exactly as the re-audit asked.
+- **Security, from the final review and the attack on the combined line:**
+  - L1: the scheduled fire now re-checks the creator under locks. HL022, migration `20261127004800_fire_rechecks_creator.sql`, pgTAP 240.
+  - L2: the CSV formula guard normalises with NFKC (`m9-analytics-export-csv.test.ts:110`).
+  - Six surviving mutations now fail tests (`m19t-mcp-owner-only.test.ts:166,:220`, `m19-owner-only-routes.test.ts`, `m20-worker.test.ts:172`).
+  - Volatile `get_supabase_uid` in WHERE clauses was fixed in 76 pgTAP files. 060 and 135 are now scoped to their own rows.
+- **CI run 45951613816 on 65244f6:**
+  - Verify (typecheck, lint, unit, db, integration) passed.
+  - Browser suite: shards 3 and 7 fully green; the other six passed 3,013 tests with 3 flaky (`m5/images-api:460`, `m15/publish-races:137` phone, `:194` desktop; each passed on retry).
+  - Hard failures are only the by-design conflicts with older rows:
+    - `m1/shell.spec.ts:74, :192, :254, :460` (M1-16 steps 1 and 4, M1-17 step 1 and M1-18 step 2 against M17-08 step 4 and M19-09 step 9)
+    - `m2/blocks-forms:178` (M2-16)
+    - `m3/themes-overrides:113` (M3-17)
+    - `m7/workspace-share:257` (M7-04 step 7)
+    - `m9/app-shell-icons:115` and `m9/proving-app-shell:134` (M9-02, phone)
+- **Local at 65244f6:** unit 599 files and 13,317+ tests; pgTAP 109 files and 3,710 tests on a reset database.
+- **Still `passes: false` in M16 to M20, and why:**
+  - **Need records or runs Gary owns:**
+    - M16-04 and M16-05 (`pnpm lighthouse`)
+    - M16-17, M17-12, M18-14, M19-14, M19-15, M20-12 (the security and adversarial records cover the code, but some listed tries were not attempted; see the attack report summary in PLAN)
+    - M20-04 and M20-08 (production cache, pg_cron, Vault)
+  - **Need Gary's decision or a superseding row:**
+    - M16-08 (the menu says "Posts", the step says "Blog")
+    - M16-13 (the lexer refuses some bodies under 512 KiB)
+    - M17-01, 02, 06, 08, 11
+    - M18-12 (`rename_term`, `delete_term` and `update_content_type` take no ifRev)
+    - M20-06, M20-11
+  - **Not yet built or tested in the browser:**
+    - M19-07, 09, 10, 11
+- **Known:**
+  - CI builds sometimes fail to download Google fonts, so shards never run. Re-run, or vendor the app fonts.
+  - About 90 unit files with stack suites are not in the CI integration step. They ran locally with `REQUIRE_SUPABASE=1`.
+  - The fire's lock order (entry, schedule, accounts) can deadlock with a member removal (accounts, schedules). That surfaces as a database error, and the worker retries.
+
+## 2026-11-27 — Integration of the six items on `m22-integration` (M15 to M20)
+
+On `m22-integration` (worktree `/home/user/hydlnk-team`, stack `hydlnk-team`, server :3400), from `origin/m21-team-access` @1fa0d35 (content model, blog to 9ff5c56, forms, scheduling, team) plus `origin/m17-blog` @aa8ee5e (the lexer) and `origin/m18-mcp-content` @34b2ff7 (the MCP content tools). Nothing flipped (the orchestrator flips after CI). No PR.
+
+- **Merges:** m17-blog merged clean (df8a019). m18-mcp-content (95af716) conflicted in `docs/features.json` (two branches appending rows at one place: resolved from the parsed JSON, every row of every branch m15 to m21 and m18 present once and byte-identical, 427 rows), `revisions-core.ts` (the team activity limit, then m18's body check, both before any write), `tests/e2e/fixtures/auth.ts` and `tests/unit/support/mcp-fakes.ts`. Compile seams fixed in the merge: the MCP publish tools called the cleanup with a bare owner id (now `deferMediaCleanup`, `src/lib/mcp/commit.ts`, one helper for all four MCP callers, the owner acting); `contentFailure` maps the team codes (`forbidden` as `not_found`, `rate_limited` with a 60 s retry); the static guard's allowlist counts m18's owner-filtered image read (`listOwnedPostImageDocs`); the schema snapshot takes `list_entries`' `scheduled` filter (the writer's one status list).
+- **Access under team (73cd02c):** `checkPostBody` and `postDraftIssues` took the ACTOR as the media folder's owner; they now take the site owner from the access helper (`siteFor` / `access.ownerId`, carried on the entry read). `publishDesignCore` gains `source`, and `publish_design` passes "mcp" (it defaulted to "editor"). Every other MCP writer call already carried `source: "mcp"` or an `owner_id` filter.
+- **M19-13 on all 31 tools (6beb74c, a2c048c):** `tests/unit/m19t-mcp-owner-only.test.ts`: a member's token on a shared site gets the same error object as a missing id from the 14 page tools and the 17 content tools (site id, sub-page, post, trashed post, tag), nothing on the site changes, `get_domains` lists none of its domains, and the owner's token still reads and writes.
+- **Tests fixed:** `m5/images-cleanup.spec.ts` near-cap reclaim and publishable-key abuse now assert the queue exactly (the dropped image's row gone; the new upload's grace row present and dated 15 minutes ahead; the refused client insert left the server's row unchanged) instead of an empty queue; `m5/images-wiring.spec.ts`' `PUBLISH_WIRED` checks the real path (`afterPagePublished` and its `cleanupMediaQuietly`) and every wiring flag is now an assertion, never a skip; `m10/flow.spec.ts:402` and `m9/sentry-off.spec.ts:111` skipped on every CI production shard (they read `HYDLNK_QUERY_COUNTER` from the test process, which CI sets for the server only): they now ask the server (`testHooksOn`, shared with `oauth-cimd`) and use the shared `FAULT_COOKIE_IGNORED`; 102 spec and fixture files that wrote `:3000` (a browser `goto`, a `fetch`, a cookie URL or an expected address) use `DEV_PORT`, so a run on another port never reaches the server on :3000 (`rawRequest` already mapped its Host header).
+- **Evidence:** `pnpm db:reset`, `pnpm db:types` (no diff); typecheck and lint pass; `pnpm test:db` 108 files, 3,693 tests (on a reset database: pgTAP 185 test 31 and 224 fail on one the browser suite has filled, a pre-existing data dependence); `REQUIRE_SUPABASE=1 pnpm test --retry 2` 597 files, 13,300 tests (the last full run counted 7 skips: `m10-oauth-safe-fetch-live` cannot bind :12113 while a Playwright stub holds it; alone, 9 passed). Browser suite on a production build (`HL_DEV_PORT=3400 HL_E2E_SERVER=start E2E_PROD_BUILD=1 CI=1`, Mailpit :54624), passed / failed / skipped per folder after the fixes: m15 40/0/0; m16 92/0/7 (1 flaky); m18 6/0/0; m10 237/0/93 (the 2 M10-18 failures fixed, rerun green); forms 43/0/9; scheduling 19/0/3; team 17/0/1; m5 293/0/105 (suspend-writes fixed, rerun green; 1 flaky); m6 699/6/156; m7 254/2/116; m2 380/2/55 (1 flaky); m3 159/4/29; m4 406/4/219 (the 7 others fixed, rerun green); m8 134/0/82; m9 596/4/123 (text-editor-keys fixed; 1 flaky); rerun of every fixed spec 171 passed, and domains-core-flow 17 passed. Skips are one-viewport specs and specs that need a hand-started production server (`HL_PROD_PORT`). **Still failing:** by design (rows contradicted as worded, PLAN "Superseding rows needed"): `m3/themes-overrides.spec.ts:113` (M3-17), `m2/blocks-forms.spec.ts:178` (M2-16), `m7/workspace-share.spec.ts:257` (M7-04), `m9/app-shell-icons.spec.ts:115` and `m9/proving-app-shell.spec.ts:134` on the phone (M7-01, M9-02); need network to example.com (Playwright routes only the first URL of a redirect, so the `/r` hop to the real host is not stubbed; this sandbox cannot reach it): `m6/history-duplicate.spec.ts:320`, `m6/text-links.spec.ts:197`, `m6/wave-g-done.spec.ts:364`, `m4/analytics-ingest-click.spec.ts:65` and `:98`, `m9/page-banner.spec.ts:299`; the bundled Chromium: `m3/sections-live.spec.ts:282` reads `align-items: flow-start` from the left-aligned profile although every CSS source and build output says `flex-start` (the rule is unchanged since M2).
+- **Found by the run and fixed:** a suspended owner's disabled Publish said the member's sentence (team access made `canPublish` false for a suspended owner): the suspension is named first, in the workspace and the post editor (M5-09, `m5/suspend-writes.spec.ts:255`); four specs followed team access and scheduling where their rows still hold (limits-downgrade's upload sends the site header, the switcher walk passes Members, the M4-18 check exempts the schedules read as it exempts the blog reads, connected-apps reads headings by role, block-style ignores box-less inputs on a phone); `SERVER_PORT` fell back to 3000, five specs matched the Supabase API on :54321, and the domain-live email went to the Mailpit on :54324 (all three now the suite's own).
+- **Other stacks touched during this run (before the fixes):** the first m5 batch's raw uploads and m16's `menu-archive` and `share-post` navigations reached the server on :3000 (uploads answered 403 there, nothing stored; GETs only), and one domain-live email was posted to the Mailpit on :54324. No other stack's database or Storage was written by this branch's code.
+- **Reported, not changed:** pgTAP files share number prefixes 140, 209 and 210 (pre-existing, from October and the m15 line; nothing in features.json names them, so they were left to keep PROGRESS's references valid). Migration versions are unique.
+
+## 2026-11-27 — Team access (M19, #39): what was built, every pass, and what is left
+
+Built in Wave F on `m21-team-access` (the Wave F fixes entry below has the first round). Rows M19-01 to M19-17, all `passes: false`.
+
+- **Built:** one access rule in SQL (`access.site_access_rows`, `public.site_access`), one TypeScript decision (`decide()`, `src/lib/access`), policies for members on every site-scoped table, invites by email, the Members screen and its activity log, work on a shared site (editor, publisher), immediate removal, MCP owner-only, forms and schedules under team access.
+- **Passes:** security and correctness reviews (Wave F fixes entry: S1 to S7, R4 to R13); attack pass (518b8fc a member's cleanup only its own site's rows past Undo; 59adfae the activity flood; 9798a61 the AST guard; 5e793a8 the invite link sends no Referer and is rate limited in the proxy; 6d6b92e pgTAP 227); security re-review (4895831 one cleanup entry point deriving its scope from the actor, every run past Undo; f2cd83b takedowns their own activity kind; 6718236 a member's trash of someone else's never-live draft recorded; a266145, 1fa0d35 pins).
+- **Evidence on this branch:** see the integration entry; `tests/e2e/team` 17 passed, 1 skipped (invite.spec.ts rerun after the port fix: passed); unit `m19*` (34 files) in the full run.
+- **Still without proof:** M19-07 checkout and portal, Analytics and Audience refused to a publisher at the route; M19-09 role select and Remove in the browser, the 50-site cap in the UI, paused after downgrade on screen, the switcher; M19-10 paused not selectable, the theme filter in the UI, post body images displayed, the admin team screen; M19-11 demotion, downgrade and suspension with the tab open. M19-13 step 2 is now proven (integration entry). M19-14 needs the T1 to T22 curl results written here by a verifier who did not build the wave; M19-15 a final security-reviewer run on the combined line.
+- **For Gary:** G7 Privacy and Terms sentences (Wave F fixes entry); "Confirm email" ON in production and the password-verification hook; the defaults in PLAN, "Decisions waiting for Gary (2026-11-27)", Team access.
+
+## 2026-11-27 — Scheduling (M20, #38): what was built, every pass, and what is left
+
+Built in Wave E on `m20-scheduling` (Wave E fixes entry below). Rows M20-01 to M20-12, all `passes: false`.
+
+- **Built:** block time windows decided on the server at render, the one-minute sweep that expires a site at a boundary, scheduled publish (a snapshot) and unpublish of a page or post, the worker behind `/api/cron/run-schedules`, status, cancel and reschedule, Pro and Studio only.
+- **Passes:** correctness and security review (Wave E fixes entry: the deferred cancel trigger, backoff, round-robin claims, `publish_dry_run`, per-account cap, awaited expiry); ac2cca6 renumbered its pgTAP file to 230.
+- **Evidence on this branch:** `tests/e2e/scheduling` 19 passed, 3 skipped; unit `m20-*` (14 files) in the full run; pgTAP 221 to 224 and 230.
+- **Still without proof:** M20-04 step 4 and M20-08 step 1 run on Vercel and pg_cron with the Vault secrets (production configuration); M20-12 steps 1 and 3 need a security-reviewer and an adversarial-verifier run on the combined line. M20-06 contradicts M3-17 step 4 (`tests/e2e/m3/themes-overrides.spec.ts:129` fails by design).
+- **For Gary:** the planner's defaults and the caps (PLAN, Decisions waiting for Gary, Scheduling).
+
+## 2026-11-27 — Forms (M17, #37): the attack pass, and what is left
+
+After the Wave D fixes entry below, on `m19-forms`. Rows M17-01 to M17-12, all `passes: false`.
+
+- **Attack pass, findings 1 to 8:** 15b9ae3 the site's hour counts stored posts and bots are dropped after the same steps (1, 3); 119a37c and 6d8d7e3 one response-time floor for every POST outcome, 400 ms from a corrected measurement (2); 5f5cabc one link rule for the checks, the blocklist and the email (4); 65d5451 only the exact `/f` route shapes pass the proxy (5); e9987e1 a monthly intake ceiling that deleting never gives back, and Audience says when owner emails were skipped (6); bd21c46 one spelling per address (NFKC, no format characters, no mixed-script domains) (7); d2cf9df the race, UTC-line and CSV tests fail on the mutants they name (8); ba2ecc5 pgTAP 231 to 233.
+- **Evidence on this branch:** `tests/e2e/forms` 43 passed, 9 skipped; unit `m17f-*` (26 files) in the full run.
+- **Still without proof:** M17-11 step 3 (Gary's Privacy sentence, blocks the release); M17-12 a security-reviewer run on the combined line with the threat-model answers written here; M17-01, 02, 06, 08 need superseding rows (PLAN).
+- **For Gary:** PLAN, Decisions waiting for Gary, Forms.
+
+## 2026-11-27 — MCP content tools (M18, #36): seventeen tools through the one writer
+
+Built on `m18-mcp-content` (no entry was written there). Rows M18-01 to M18-14, all `passes: false`.
+
+- **Built (b9c336c to 8378b4e):** the entry door (`page: "entry"`, `src/lib/mcp/entry-access.ts`), exact results with body ranges and a content hash, 1 MiB requests; `list_content_types`, `list_entries`, `get_entry`, `list_terms`, `list_revisions`, `create_entry`, `update_entry` (with `bodyEdits`), `delete_entry`, `restore_entry`, `create_term`, `rename_term`, `delete_term`, `publish_entry`, `unpublish_entry`, `publish_design`, `update_content_type`, `restore_revision`: 31 tools in all.
+- **Review round:** b6ac9c5 an oversized body is refused before it is built or lexed; 3db2d95 `update_content_type` is all or nothing; 8482285 a taken slug at publish is `publish_refused`; 62a94ce `publishIssues` holds Publish's body and image checks; 2b1efed the image resolver reads only image fields; 377d689 term changes and trashing a live post count against the per-item bucket; 89a1661 `restore_revision` runs the body checks; 11f5dbe the publish permission names the blog; 7fa6b22 titles stay out of the server's sentences; 6f8d088 `publish_design` refuses a null rev. Lexer round: d5aadf4, f3f068f, 71bfe8d, b36e678, 11ada21, 4f2b1e3, 2fd869c (the lexer's refusal is `invalid_input` on `body` at every tool).
+- **Evidence on this branch:** `tests/e2e/m18` 6 passed; unit `m18-*` (26 files) and `m10-mcp-registry` (31 schemas) in the full run.
+- **Still without proof:** M18-14 has no security-reviewer or adversarial-verifier record; the twelve Wave C defaults wait for Gary (every row).
+
+## 2026-11-27 — The Markdown lexer replaces marked at run time (M16-04, M16-13, #35)
+
+On `m17-lexer`, merged into `m17-blog` (d54bc21), tip aa8ee5e. No entry was written there.
+
+- **Built:** a linear-time lexer that emits marked-shaped tokens (4610ed5, `src/lib/blog/markdown/`); it is the one entry for save, publish, render and the body editor, and counted limits (150,000 pieces, 23 nesting levels) replace the work meter (bce0c31, d67a571); the editor serializer writes what the live page reads back the same (eb2cbb5, 4f9a9cf, 975cbee).
+- **Passes:** linearity fixes (f302e8f, 1972eed, dd58f72, 9559796, 0fcdc45); three adversarial passes, the third with findings 1 to 7 (686b41d, eb2cbb5, aa8ee5e, d631c90).
+- **Evidence on this branch:** `tests/unit/m17-markdown-parity.test.ts` (every difference from marked pinned), `m17-markdown-linear.test.ts` (timed lexes in a killed worker, a super-linear search, seeded fuzzers), `m17-markdown-address.test.ts`, `m17-body-editor-tokens.test.ts`, and the MCP limits through every tool (`m18-mcp-hostile-markdown`), all in the full unit run.
+- **For Gary:** the limits and the measured refusal sizes, heading levels, a stored body the lexer refuses drawn as text, and the CLAUDE.md `marked` line (PLAN, Decisions waiting for Gary).
+
+## 2026-11-27 — Blog (M16, #35): posts, archives, the editor and the share link
+
+Built on `m17-blog` on top of the content model (no entry was written there). Rows M16-01 to M16-17, all `passes: false`.
+
+- **Built:** blog database additions (01b8692: slug redirects, the HL015 term cap, the archive order index, live term counts); the fixed archive shapes in the proxy (921166a); post, archive and term pages, the feed, the sitemap, slug redirects and the Latest posts block (429c49e); per-entry and per-type cache tags (b02f4d9); views of posts (a17083d); the Posts screen, the post editor and Add blog (90966d6, 5a3c01e); a post draft through the share link (4a83ff3).
+- **Fix rounds:** bd09711 headings drawn at the editor's level; 4304b71 Latest posts by category however old; 13b79f8 old slugs on a blog of over 5,000 posts; b116829 a failed expiry is retried and reported; a9b7ba6 a refused turn-on restores the archive path; e1fa8e4 term changes expire their type and site; 9d989da Preview never opens a turned-off share link; f8ed0ad the expiry retry is rate limited; 6c74a5a accounts with posts can be deleted; bb934e2 invented archive shapes are dynamic 404s.
+- **Evidence on this branch:** `tests/e2e/m16` 92 passed, 7 skipped, 1 flaky (posts-preview-links' editor load under load; posts-editor rerun after the port fix: passed); unit `m16-*` (27 files) in the full run.
+- **Still without proof:** M16-04 step 5 and M16-05 step 5 (`pnpm lighthouse` not run here); M16-17 has no security-reviewer or adversarial-verifier record.
+
+## 2026-11-26 — Wave F (team access) fixes: the security and correctness reviews (M19-01 to M19-17)
+
+On `m21-team-access` (worktree `/home/user/hydlnk-team`, stack `hydlnk-team`, server :3400). Nothing flipped (integration decides). Not pushed.
+
+- **Base fix rounds merged:** `origin/m20-scheduling` (ac2cca6) and `origin/m19-forms` (ba2ecc5). Conflicts resolved in post-editor, limits table and its test, publish/actions (the shared `afterPagePublished` with the OWNER's queue), the m20 worker test and the generated types (regenerated).
+- **Migration history, plainly:** the four team migrations were pushed only on this unmerged branch as `20261126200000`-`200300`, the versions the forms round uses. They are renamed, same content, to `20261126220000_site_access_rule`, `220100_site_team_tables`, `220200_site_access_policies`, `220300_site_team_functions` (3bfc6e2), so team access runs after `20261126210000_scheduling_review_fixes`. Their content did not need to change: they recreate no `plan_limits`, `page_versions_select_own` is rewritten from the current (versions_kept) definition, and `schedule_entry_as` wraps the current `schedule_entry` signature. New migrations: `20261126220400_team_review_fixes` (S1 accept, R8 takedown doors, the rule-based rename guard, `access.owner_only_tables()`) and `20261126220500_upload_cleanup_queue` (S3). One comment-only edit to `220400` after its commit (unpushed): the owner-only list's mirror moved to `tests/unit/m19-owner-only-tables.ts`.
+- **Fixes:** S1 password-only sessions cannot accept (13ef7ef); S2 an editor never spends the owner's publish key (98f4663); S3/R9/G22 uploads queued with a 15-minute grace in the owner's queue, uploads need `x-hl-site`, saves drain the owner's queue (b205912); S4 MCP passes `source: "mcp"` (e54720e); S5 the static guard (c8d6c2e); S6 Sentry drops `/invite/{token}` (82bae9b); S7 the invite cookie (13ef7ef, 3376f6d); R4 site plan (735e342); R5 posts forbidden and the editor's post bar (8c550db); R6 owner's address on the form (14be744); R8 locked-row takedown (33fdb3f); R10 Members link, id case, member's custom domain (a48d294); R13 copies (9c1bc2b, c8d6c2e); publish_dry_run takes `access.ownerId` (c9fa07d). Test files renamed to `tests/unit/m19-team-probe.test.ts` and `tests/unit/m19-access-static.test.ts` (M19-04, M19-12). New proofs: `m19-owner-only-refusals` (M19-07), M19-16 step 5 asserted directly in `m20-worker`.
+- **Evidence:** `pnpm db:reset`, `pnpm db:types` (no diff); typecheck, lint pass; `pnpm test:db` 104 files, 3,656 tests; `REQUIRE_SUPABASE=1 pnpm test --retry 2` 561 files, 12,216 tests; on a production build (`HL_DEV_PORT=3400 HL_E2E_SERVER=start E2E_PROD_BUILD=1 CI=1`, Mailpit :54624) `tests/e2e/team` 16 passed, `tests/e2e/scheduling` + `tests/e2e/forms` 62 passed, 12 phone skips. Every fix was turned red once by reverting it.
+- **For Gary:** "Confirm email" must be ON in production's Auth settings, and the password-verification hook this log already calls for is still needed (S1 refuses a password-only session at accept, but sign-up itself is Supabase's). G22: an upload without `x-hl-site` (an editor tab from before this wave) is refused with "The editor was updated. Reload the page, then add the image again." The upload grace is 15 minutes (past the 10-second Undo window, for a retried save); confirm or change `UPLOAD_UNUSED_GRACE_SECONDS`. `.claude/rules/supabase-migrations.md` still names `tests/unit/m19t-access-static.test.ts`; the file is now `m19-access-static.test.ts` (rules not edited here).
+- **G7, proposed sentences (not edited):** Privacy: "When a site owner invites you, we store your email address with the invite and send the invite to it. Once you join, the owner sees your email address, your role and a log of what you publish, schedule, trash or delete on their site, and the site's members see the owner's email address." Terms: "A site owner is responsible for the people they invite and for what they publish on the site. Members work under the owner's plan and limits, and the owner can change their role or remove them at any time."
+- **Rows this wave contradicts as worded (not edited):** M1-02 step 6, M6-48 step 5, M6-11 step 2, M6-13, M7-01 steps 1 and 5, the Share-tab rows (the M6-31/M6-33 static pin that the editor reads the domain with the owner's session: a member's Share tab now reads it through the access helper in `src/lib/team/shared-domain.ts`), and M15-10's `m15-mcp-publish-scope` pin of publish_page's exact gate input (it now carries `source: "mcp"`).
+- **Still without proof:** M19-07 checkout and portal (account-level, nothing site-scoped to refuse) and Analytics/Audience refused to a publisher at the route (static pin plus an editor's 404 only); M19-09 role select and Remove in the browser, the 50-site cap in the UI (SQL only), paused after a downgrade on the screen, the switcher entry point; M19-10 paused not selectable, the theme filter in the UI, post body images displayed, the admin team screen; M19-11 demotion, downgrade and suspension with the tab open (removal only); M19-13 step 2 for the 17 content tools on `m18-mcp-content` (not on this line: provable only at the final integration).
+
+## 2026-11-26 — Wave E fixes: the correctness and security review of scheduling (M20-01 to M20-12)
+
+On `m20-scheduling` (worktree `/home/user/hydlnk-sched`, stack `hydlnk-sched`). Nothing flipped (integration decides).
+
+- **Migration history, honestly:** the wave's two first migration files (`20261126184409_scheduling.sql`, `20261126191310_scheduling_claim_window.sql`, never pushed) were folded into one, `20261126193000_scheduling.sql`, when the forms fix round was merged (d521d95), so the order stays forms-then-scheduling. That file is pushed; every fix here goes forward in `20261126210000_scheduling_review_fixes.sql` (its header lists each function it recreates and from which definition).
+- **Database:** the hand-publish cancel is a deferred constraint trigger on the state the transaction leaves (Publish all changes' path swap is no unpublish; an unchanged hand publish still cancels); a fire with newer edits records the snapshot as the published revision; `finish_schedule` answers the row's status and backs a retry off min(2^attempts, 30) minutes; `release_schedule_claim`; round-robin claims; `publish_dry_run` (Schedule runs Publish's own SQL rules, rolled back); no boundary advances in SQL (`run-schedules cannot reach the app` without the Vault secrets); type off cancels pending publishes; per-account cap (Pro 100, Studio 1,000, for Gary); pending snapshots in the HL009 bytes; 20 finished rows per entry; `schedule_clock` capped at now() + 1 minute; T24 refused.
+- **App:** awaited expiry before a boundary is acknowledged (`expireTagsNow`); sweep and worker run side by side; per-row budget with release; a lost fire answer still expires; scheduled page publishes share `afterPagePublished` with Publish; both editors adopt a fired rev (`useFireWatch` + `firedRevToAdopt`); schedule routes through one Zod schema and the shared rate limiter.
+- **Tests:** pgTAP 224 (new), 221-223 updated where behavior changed on purpose; unit `m20-run`, `m20-adopt`, `m20-schedule-summaries`, and the m20 worker, boundaries, cron-route, schedule-core (DB), routes (DB), window-render, window-schema, local-time files extended; e2e `scheduling/review-fixes.spec.ts`; `window-cache.spec.ts` now lets real time pass instead of rewriting `published`. Every fix was mutated away once and its test went red.
+- **Evidence (this worktree's stack):** `pnpm db:reset`, `pnpm db:types` (no diff); typecheck and lint pass; `pnpm test:db` 95 files, 3,384 tests; `pnpm test --retry 2` 11,715 passed, with 2 failures and 6 "worker failed to start" errors that were the machine's load (13.5 of 16 GB in use by other sessions): those 9 files rerun alone pass (222 tests); `tests/e2e/scheduling` plus `m3/themes-overrides.spec.ts` on a production build (`next start` on :3300): 39 passed, 9 skipped (desktop-only and production-only specs on the phone project), 2 failed, both the M3-17 assertion below.
+- **Owner decisions:** M3-17 (passes: true) says the expanded block editor renders no "Schedule" field and `tests/e2e/m3/themes-overrides.spec.ts:129` asserts it; M20-06 puts a Schedule section in every block's editor. Not resolved by moving the word; left for Gary. The per-account caps and the backoff schedule are planner defaults for Gary to confirm.
+- **Known:** a sub-page whose schedule fired while the workspace is open takes the new rev, but its row in the publish bar shows its old state until the next load.
+
+## 2026-11-26 — Wave D fixes: the security and review findings, and the missing proofs (M17-01 to M17-10)
+
+On `m19-forms`, after merging `origin/m17-blog` (9ff5c56). Nothing flipped: every M17 row stays `passes: false` (integration decides).
+
+- **Migration `20261126185204_form_submissions_stored_cap.sql`:** `plan_limits()` gains `form_submissions_per_site_day` (20 / 500 / 5,000); the HL016 trigger locks the account's usage row for the month and counts the rows its sites HOLD from this month (`form_month_stored`, shared with `form_usage`) and the rows the site holds today, so deleting junk gives its places back (orchestrator's decision, for Gary: supersedes M17-02 step 2 and M17-08 step 2's "does not change"); `form_submission_usage.stored` dropped, `refused_daily` added; `form_submissions.visitor_hash` dropped (M17-01 steps 1-2 name it: for Gary); `record_form_submission` answers `over_daily_limit` and `invalid_email|name|message` for a 23514; `rate_limit_age` reads a limiter bucket without counting.
+- **Routes:** cross-site 403 before the ids; `unavailable` from the store is the 404 notice; the POST only reads the open marker; per-site hourly rate = a quarter of the plan's daily cap (5 / 125 / 1,250, supersedes M17-06 step 6's 600: for Gary); every `/f` response carries `TENANT_PAGE_CSP`, `no-store`, `noindex`, DENY; failures log class and code only; the form path never stores a data-cache miss. Email: "Name / Email (as typed by the visitor)", message links never anchors, only a confirmed sign-in address. Audience: labels from the published documents, `?page=` clamped. Editor: every form text field has a counter.
+- **Owner decision recorded (PLAN and here):** M17-02 step 3's "pgTAP: two concurrent calls at 99 store exactly one" is met by a Vitest database test, `tests/unit/m17f-forms-limit-race.test.ts`, with two psql sessions proven to overlap (B waits on A's lock in `pg_stat_activity` before A commits): one pgTAP transaction cannot hold two sessions.
+- **Evidence (this worktree's stack):** `pnpm db:reset`, `pnpm db:types` (no diff); typecheck and lint pass; `pnpm test:db` 91 files, 3,225 tests; `pnpm test --retry 2` 521 files, 11,775 tests; `tests/e2e/forms` + `m7/workspace-nav.spec.ts` 54 passed, 18 phone skips of raw-HTTP tests, on a production build (`HL_DEV_PORT=3200 HL_E2E_SERVER=start E2E_PROD_BUILD=1 CI=1`); the chip list (M2-10) and the features catalog 12 passed.
+- **Known:** `/r` and `/c` still store one data-cache entry per invented page id (pre-existing, unbounded in count, each a day fresh; `tests/unit/m17f-forms-resolve.test.ts` documents it).
+
+## 2026-11-26 — Wave D: the form block, email capture and Audience (M17-01 to M17-12)
+
+On `m19-forms` (worktree `/home/user/hydlnk-forms`, its own local Supabase stack `hydlnk-forms` on ports 54420-54429, dev server :3200), built from `m17-blog` by one lead builder. Nothing flipped: every M17 row stays `passes: false` until integration runs the reviews and the full suite (M17-11 also waits for Gary's Privacy Policy sentence, M17-12 for the security review).
+
+- **Built:** migration `20261126162408_form_submissions.sql` (pgTAP 219, 220; HL016); the `form` block (document, renderer, editor panel, MCP); `/f/{pageId}/{blockId}` and `/f/{pageId}/o` with the fifteen-step POST, the signed confirm token and the open marker; the confirm, error and sent pages; `form-action 'self'`; the owner message and limit emails (react-email, the shared `sendMessage`); Audience (`/audience`, CSV export, delete actions, nav); PLAN.md and DESIGN.md text.
+- **Evidence (local, this worktree's stack):** `pnpm test:db` 89 files, 3,161 tests; `pnpm test --retry 2` 515 files, 11,709 tests (with `NEXT_PUBLIC_ROOT_DOMAIN=localhost:3000`, which the unit tests assume); typecheck and lint pass; `tests/e2e/forms` 35 passed (7 phone skips of raw-HTTP tests) on `next dev --webpack` :3200 and on a production build (`next start`, `HL_E2E_SERVER=start E2E_PROD_BUILD=1 CI=1`); `tests/e2e/m7/workspace-nav.spec.ts` and the chip-order spec pass on the production build.
+- **Known:** turbopack `next dev` cannot compile `next/font/google` in this container (`next/font/google queries have exactly one entry`); webpack dev and the turbopack production build work. Specs that hard-code port 3000 cannot run from a second checkout (they reach the main checkout's server). `tmp/plans/wave-d-forms.md` section 10 lists Gary's open decisions.
+
+## 2026-11-26 — Content model, stage 1b: the page move and per-page publishing (M15-05 to M15-17)
+
+On `m16-content` (draft PR #32, label `full-ci`), built in a cloud session by an orchestrator with builder, reviewer, security-reviewer, design-verifier and adversarial-verifier agents. Flipped to `passes: true`: M15-10, M15-11, M15-13, M15-14, M15-15, M15-16, M15-17. Features: 334 of 355. Nothing was merged or released.
+
+- **Built, still `passes: false`** (strict acceptance audit at e241163):
+  - **M15-05:** every step has a test except "refused with HL013 for every role": an authenticated write to a moved `site_pages` row is refused by RLS (0 rows, or 42501), so the HL013 trigger never runs for that role (pgTAP 202:145-150). Gary decides whether that counts.
+  - **M15-06:** the step "site_click_pairs returns the same set with Home at null" is deliberately not done (pgTAP 207:124 asserts the opposite): doing it in one release breaks click tracking on the deployed build. Needs two releases or a superseding row.
+  - **M15-07:** step 4 says a version restore writes blocks to entries; M15-10 made History design-only (ed05938). Needs a superseding row from Gary.
+  - **M15-08:** the production-copy dry runs cannot run here; no test pins "never reads .env.production".
+  - **M15-09, M15-12:** the reviews ran and every finding but one accepted low is fixed; the record is in PLAN ("Security review record, stages 1b-1 and 1b-2") and waits for Gary's decisions.
+- **M15-10:** migrations `20261126051628_per_page_publish.sql`, `20261126063714_per_page_publish_checks.sql`, `20261126074805_publish_site_revs.sql`; pgTAP 209, 210, 213, 215; unit `m15-publish-per-page`, `-design`, `-all-changes`, `-status`, `-races`, `-serialize`, `-concurrent`, `m15-publish-bar`, `m15-entry-revisions-route`, `m15-mcp-publish-scope`; e2e `tests/e2e/m15/per-page-publish.spec.ts`, `publish-races.spec.ts`, `publish-bar-design.spec.ts` at 390x844 and 1440x900. design-verifier, measured in the running app at 58115e8 (the two later commits change no markup): no gaps (12 pages: rows 109px, no overlap; phone sheet meets the tab bar at 787px; Tab order follows the toolbar; one status chip at 390, 759, 760 and 1440). The publish bar has no mockup: it was built from DESIGN.md, with a new token `--hl-good-text` and a 6px phone toolbar gap for Gary to confirm.
+- **M15-11:** `tests/unit/m15-hidden-links.test.ts`, `tests/e2e/m15/hidden-links.spec.ts`.
+- **M15-13:** `delete_page_entry` in one transaction, menu link included (migrations `20261126000001`, `20261126000002`; pgTAP 211, 212; `m11-editor-sub-pages-core.test.ts`).
+- **M15-14 to M15-17:** `tests/e2e/fixtures/home-abuse.ts` (asserts HL013) and the specs that use it; `m5/blocklist-api.spec.ts`, `m7/blocked-links-api.spec.ts`, `m13/admin-account-details.spec.ts`; `m3/themes-overrides.spec.ts:447`; `m6/share-card.spec.ts:640`, `m7/workspace-share.spec.ts:268`, `m10/mcp-tools.spec.ts`, `m15-editor-save-entries.test.ts`.
+- **Attack passes:** one on the move (five lows, fixed) and three on publishing. The second found a rollback file that left `publish_site` executable by clients (529ef0c) and two lost-edit orderings; the fix is that a save and a publish of the same entry never overlap and the editor adopts only the revs the publish function answers. The third found two more orderings (e241163, ad3ffcc). 13 of 14 deliberate mutations of the first fix round were caught; the survivor now has a test.
+- **Checks at e241163 (local, cloud container):** typecheck and lint pass; `pnpm test --retry 2` 10,833 passed; `pnpm test:db` 84 files, 3,016 tests; `tests/e2e/m15` plus the touched m7 and m9 specs pass at both sizes; `pnpm build` passes and its client chunks hold no publish function or key names.
+- **CI:** run 45794100401 on e241163 failed two M15-10 browser tests that only fail on the production build: the phone status chip wrapped to two lines (1.2px of room at 390px) and the new A2 race test waited on the end of the action's body. Fixed in 054e102 (phone toolbar gaps 4px; under 381px the chip still wraps inside its 44px button) and 6df0c9d. Run 45804893085 on 6df0c9d: Verify and all eight browser shards green.
+- **Known:**
+  - `tests/e2e/m7/toolbar-menus.spec.ts:64` (desktop menu keyboard) fails now and then under load on `next dev`; 12 of 12 alone. `m6/wave-g-done.spec.ts:365` cannot pass in a container without access to example.com.
+  - Database-backed unit files can deadlock when the suite runs while another process uses the database; run them with `--retry 2` and nothing else on the database.
+  - A style-only commit of seven formatter-touched files is on the branch.
+- **Next:** the blog (stages 2 and 3) on a branch stacked on this one.
+
+## 2026-10-12 — Content model, stages 0 and 1a (M15-01 to M15-04)
+
+On `m16-content` (draft PR #32). Flipped to `passes: true`: M15-01, M15-02, M15-03, M15-04. Features: 327 of 342. This is feature 1 of the CMS evolution (plan doc "HYDLNK Next Evolution Plan"; spec docs/PLAN.md "Content model (feature 1, Wave N)").
+
+- **How it was built** (Gary, 2026-10-11): short single-task agents (Sonnet builds, Opus review and adversarial verify, Haiku for mechanical runs), orchestrated as workflows. `.claude/agents/` gained `adversarial-verifier`, and `reviewer` and `security-reviewer` now run on Opus.
+- **Libraries** approved by Gary on 2026-10-11 and pinned: `@tiptap/markdown` 3.31.4, `@tiptap/core` 3.31.4, `marked` 17.0.6 (99a7598).
+- **M15-01:** sub-page saves check `updated_at` (ff2846c). Evidence:
+  - `tests/unit/m15-sub-page-save-revision.test.ts`;
+  - `tests/e2e/m15/subpage-revision.spec.ts`, 4 passed at 390x844 and 1440x900 (local `next dev`);
+  - the m11 editor-pages and tenant-subpages specs, 34 passed.
+- **M15-02:** migrations `20261014000001` to `000006` and `000009`. pgTAP 189 to 195 and 198. `tests/unit/content-rls.test.ts` (publishable-key probe on all six tables) and `content-reserved-sql.test.ts`. The reserved-path list lives in `src/lib/document/path.ts`, not the `src/lib/site-pages/path.ts` the row names; `RESERVED_ENTRY_SLUGS` sits beside it, with a SQL parity test. The stage 1b move rules and byte guard are in PLAN.
+- **M15-03:** `src/lib/content` (kernel, schemas, entries, publish, trash, list, terms, revisions), with migrations `000007` (publish), `000008` (trash and purge) and `000010` (revision byte budget). pgTAP 196, 197 and 199, and 15 `tests/unit/m15-content-*` files (118 tests against the local stack, including a concurrent publish and update). Two checkpoints (an Opus review plus the adversarial verifier) found and fixed:
+  - Markdown blocklist bypasses: links in tables, character references, long URLs;
+  - an HL008 bypass;
+  - another user's image paths accepted;
+  - raw page drafts published;
+  - untyped errors.
+- **M15-04:** the Opus security review found no critical or high issues. The two medium findings are fixed (c99e4c3): the scheme check is now an allowlist, and revision snapshots are bounded. Two low items were hardened (870f7f9): the move flag works only for privileged roles, and moved sub-pages are read-only. The rest are recorded in PLAN with Gary's decisions (2026-10-12): revisions are pruned oldest first, and the known items are fixed before stages 3 and 4.
+- **Checks:**
+  - CI run 38334322319 (head 4546905): Verify green, with the content integration tests now in its Supabase step.
+  - Local `pnpm verify`: typecheck clean, lint 0 errors, unit 10,511 passed (the 2 failures were the known `createUser` flake and passed alone), db 68 files and 2,633 tests.
+- **Known, next:**
+  - The editor adopts new sub-page revisions after Publish, so an MCP edit landing in that window goes unnoticed (recorded in PLAN).
+  - Next is stage 1b: moving sub-pages and Home into content entries, per the "Moving pages in" rules in PLAN.
+
 ## 2026-10-11 — Proving pass (PR #30): 20 rows proven, Unpublish, Lighthouse
 
 On `m15-proving` (PR #30). Flipped to `passes: true`: M4-21, M7-06, M7-07, M4-08, M9-02, M9-05, M9-06, M9-07, M9-08, M9-14, M14-01, M14-02, M14-03, M1-08, M1-13, M1-29, M1-30, M4-03, M4-09, M14-06. Features: 323 of 338.

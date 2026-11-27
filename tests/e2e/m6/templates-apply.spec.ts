@@ -93,8 +93,14 @@ test.describe("M6-40 apply to an empty page", () => {
     expect(stored.profile.photo).toBe(user.before.profile.photo);
 
     // One PATCH to the pages table, carrying only the draft column; nothing else was written.
+    // After the cutover (M15-14) Home's blocks save through the entry route: one POST with the template's blocks.
     expect(writes.patches).toHaveLength(1);
     expect(Object.keys(writes.patches[0]!.body)).toEqual(["draft"]);
+    expect("blocks" in (writes.patches[0]!.body.draft as object)).toBe(false);
+    expect(writes.entryPosts).toHaveLength(1);
+    expect(describeBlocks(writes.entryPosts[0]!.body.draft!.blocks as DraftDoc["blocks"])).toEqual(
+      describeTemplate(MUSICIAN),
+    );
     expect(writes.others).toEqual([]);
     expect(writes.serverActions).toEqual([]);
 
@@ -234,6 +240,11 @@ test.describe("M6-40 apply to a page that has content", () => {
     // One edit, one write; saved themes are as they were; no Storage call, no other write.
     await expect(saveIndicator(page)).toHaveText("Saved", { timeout: 3_000 });
     expect(writes.patches).toHaveLength(1);
+    expect("blocks" in (writes.patches[0]!.body.draft as object)).toBe(false);
+    expect(writes.entryPosts).toHaveLength(1);
+    expect(describeBlocks(writes.entryPosts[0]!.body.draft!.blocks as DraftDoc["blocks"])).toEqual(
+      describeTemplate(MUSICIAN),
+    );
     expect(writes.others).toEqual([]);
     expect(await userThemeRows(user.userId)).toEqual(themesBefore);
   });

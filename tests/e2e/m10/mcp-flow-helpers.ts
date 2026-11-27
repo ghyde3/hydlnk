@@ -3,12 +3,13 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { rand, signedInUser } from "../fixtures/data";
 import type { ToolSession } from "../fixtures/official-mcp-client";
-import { openEditor, pageRow, statusChip } from "../m2/editor-helpers";
-import { url } from "../helpers";
+import { openEditor, pageRow, setDraft, statusChip } from "../m2/editor-helpers";
+import { homeEntryOf } from "../fixtures/home-abuse";
+import { DEV_PORT, url } from "../helpers";
 
 /**
  * The shared part of the Wave L end-to-end flows (M10-24 to M10-33): a fixture user with a page whose
- * draft differs from what is live, and `runEveryTool`, which works that page through all fourteen tools
+ * draft differs from what is live, and `runEveryTool`, which works that page through all the page tools
  * the way an AI would and checks every result for the documented shape and for nothing internal. The
  * minted-token spec and the real OAuth dance (flow.spec.ts) run the very same steps.
  */
@@ -49,7 +50,7 @@ export function expectNothingInternal(result: unknown, userId: string, allowed: 
 }
 
 export async function tenantHtml(handle: string, path = ""): Promise<string> {
-  const response = await fetch(`http://${handle}.localhost:3000/${path}`);
+  const response = await fetch(`http://${handle}.localhost:${DEV_PORT}/${path}`);
   return response.text();
 }
 
@@ -60,7 +61,10 @@ export interface FlowUser {
   pageId: string;
   image: { path: string; imageId: string };
   /** The draft as the fixture left it: it differs from the published page. */
+  /** Home's entry rev: what the block tools take as ifRev. */
   rev: number;
+  /** The design's rev (the pages row): what update_profile and set_theme take as ifRev. */
+  designRev: number;
 }
 
 /** A Pro user with a published page (a copy of the demo page) whose draft then differs from it, and an image of their own on a card. */
@@ -74,8 +78,13 @@ export async function prepareFlowUser(context: BrowserContext, label: string): P
   );
   draft.profile.bio = "Bio from the draft";
   draft.rev += 1;
-  await adminClient().from("pages").update({ draft }).eq("id", user.pageId);
-  return { ...user, image, rev: draft.rev };
+  await setDraft(user.pageId, draft);
+  return {
+    ...user,
+    image,
+    rev: Number((await homeEntryOf(user.pageId)).rev),
+    designRev: draft.rev,
+  };
 }
 
 export interface FlowEnv {
@@ -91,7 +100,7 @@ export interface FlowEnv {
 }
 
 /**
- * Works the page through all fourteen tools in the order an AI would, publishes, and sees the new
+ * Works the page through all the page tools in the order an AI would, publishes, and sees the new
  * content live on the very next request. At the end the activity log holds exactly one row per call
  * and none carries the canary text planted in the page.
  */
@@ -130,11 +139,17 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
   expect((await mcp.initialize()).status).toBe(200);
   await mcp.initialized();
   const tools = await mcp.listTools();
+  // The 31 tools in the pinned order (src/lib/mcp/tools/index.ts, M18-12).
   expect(tools.map((tool) => tool.name)).toEqual([
     "list_pages",
     "get_page",
     "get_analytics",
     "get_domains",
+    "list_content_types",
+    "list_entries",
+    "get_entry",
+    "list_terms",
+    "list_revisions",
     "update_profile",
     "add_block",
     "update_block",
@@ -143,7 +158,19 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     "create_page",
     "update_page_settings",
     "set_theme",
+    "create_entry",
+    "update_entry",
+    "delete_entry",
+    "restore_entry",
+    "create_term",
+    "restore_revision",
     "create_preview_link",
+    "rename_term",
+    "delete_term",
+    "publish_entry",
+    "unpublish_entry",
+    "publish_design",
+    "update_content_type",
     "publish_page",
   ]);
 
@@ -167,21 +194,29 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
 
   // get_page: the draft, with its rev and the image's id.
   const read = await call<any>("get_page", { pageId: user.pageId });
-  expect(read.page).toMatchObject({ id: user.pageId, hasUnpublishedChanges: true, rev: user.rev });
+  expect(read.page).toMatchObject({
+    id: user.pageId,
+    hasUnpublishedChanges: true,
+    rev: user.rev,
+    designRev: user.designRev,
+  });
   expect(read.profile.bio).toBe("Bio from the draft");
   const card = read.blocks.find((block: { type: string }) => block.type === "card");
   expect(card.image).toEqual({ imageId: user.image.imageId, width: 1, height: 1 });
   let rev: number = read.page.rev;
+  // Home's blocks and the design each have a rev (a moved site): block tools take the first, update_profile and set_theme the second.
+  let designRev: number = read.page.designRev;
   const ifRev = () => ({ pageId: user.pageId, ifRev: rev });
 
   // The writes.
   const profile = await call<any>("update_profile", {
-    ...ifRev(),
+    pageId: user.pageId,
+    ifRev: designRev,
     bio: `New bio ${CANARY}`,
     showName: true,
   });
   expect(profile.profile.bio).toBe(`New bio ${CANARY}`);
-  rev = profile.rev;
+  designRev = profile.rev;
   const link = await call<any>("add_block", {
     ...ifRev(),
     type: "link",
@@ -220,8 +255,12 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
   });
   rev = moved.rev;
   expect(moved.order[0].id).toBe(faq.blockId);
-  const themed = await call<any>("set_theme", { ...ifRev(), theme: "Ivory" });
-  rev = themed.rev;
+  const themed = await call<any>("set_theme", {
+    pageId: user.pageId,
+    ifRev: designRev,
+    theme: "Ivory",
+  });
+  designRev = themed.rev;
   expect(themed.theme).toMatchObject({ kind: "system", name: "Ivory" });
 
   // A private preview link shows the saved draft, including text that exists only in the draft.
@@ -292,7 +331,13 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     path: "specials",
   });
   expect(created).toMatchObject({ title: "Specials", path: "/specials", inMenu: true });
-  rev = created.homeRev;
+  // create_page's designRev (homeRev is the same number, kept for older clients) is the design rev (the
+  // menu change is a design write), not the rev Home's block tools take; get_page names both.
+  const afterCreate = (await call<any>("get_page", { pageId: user.pageId })).page;
+  expect(created.designRev).toBe(afterCreate.designRev);
+  expect(created.homeRev).toBe(created.designRev);
+  designRev = created.designRev;
+  rev = afterCreate.rev;
   let subRev: number = created.rev;
   const sub = { pageId: user.pageId, subPageId: created.subPageId };
   const items = await call<any>("add_block", {
@@ -398,14 +443,17 @@ export async function runEveryTool(env: FlowEnv): Promise<void> {
     ),
   ).toEqual(["hours", "items"]);
   // Not live yet: neither the page nor the link to it.
-  expect((await fetch(`http://${user.handle}.localhost:3000/specials`)).status).toBe(404);
+  expect((await fetch(`http://${user.handle}.localhost:${DEV_PORT}/specials`)).status).toBe(404);
   expect(await tenantHtml(user.handle)).not.toContain("See the specials");
 
   // Publish: the old content is live until the call, the new content is live on the very next request.
   const before = await tenantHtml(user.handle);
   expect(before).not.toContain("A paragraph written by an assistant.");
   const published = await call<any>("publish_page", { pageId: user.pageId });
-  expect(published).toMatchObject({ published: true, url: `http://${user.handle}.localhost:3000` });
+  expect(published).toMatchObject({
+    published: true,
+    url: `http://${user.handle}.localhost:${DEV_PORT}`,
+  });
   const after = await tenantHtml(user.handle);
   // The whole site went live: the new page, and the link from Home to it.
   const specials = await tenantHtml(user.handle, "specials");

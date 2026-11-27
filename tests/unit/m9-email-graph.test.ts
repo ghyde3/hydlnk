@@ -41,22 +41,44 @@ function importsDirectly(source: string, targetPath: string): boolean {
 }
 
 describe("M9-09 the template is imported by the domains server code and nowhere else", () => {
-  it("src/emails/ exists and holds the one template", () => {
-    expect(listFiles("src/emails")).toEqual(["src/emails/domain-live.tsx"]);
+  // Wave D (M17-10) adds the two form emails, built by src/lib/forms/email-content.ts (server only).
+  it("src/emails/ exists and holds the domain-live template and the two form templates", () => {
+    expect(listFiles("src/emails").sort()).toEqual([
+      "src/emails/domain-live.tsx",
+      "src/emails/form-limit.tsx",
+      "src/emails/form-message.tsx",
+      // Wave F (M19-08): the site invite, built by src/lib/team/invite-email.ts (server only).
+      "src/emails/site-invite.tsx",
+    ]);
   });
 
-  it("the only importer of src/emails/* is src/lib/domains/live-email.ts", () => {
+  it("the only importers of src/emails/* are the two content builders (and the templates' shared colors)", () => {
     const importers = importersOf((path) => path.startsWith("src/emails/"));
-    expect(importers).toEqual(["src/lib/domains/live-email.ts"]);
+    expect(importers.sort()).toEqual([
+      "src/emails/form-limit.tsx",
+      "src/emails/form-message.tsx",
+      "src/emails/site-invite.tsx",
+      "src/lib/domains/live-email.ts",
+      "src/lib/forms/email-content.ts",
+      "src/lib/team/invite-email.ts",
+    ]);
   });
 
-  it("react-email (and its renderer) is imported only by src/emails and src/lib/domains/live-email.ts", () => {
+  it("react-email (and its renderer) is imported only by src/emails and the two content builders", () => {
     const names = new Set(REACT_EMAIL);
     const importers = new Set<string>();
     for (const file of allSource) {
       for (const [pkg, files] of walk([file]).packages) if (names.has(pkg) && files.has(file)) importers.add(file);
     }
-    expect([...importers].sort()).toEqual(["src/emails/domain-live.tsx", "src/lib/domains/live-email.ts"]);
+    expect([...importers].sort()).toEqual([
+      "src/emails/domain-live.tsx",
+      "src/emails/form-limit.tsx",
+      "src/emails/form-message.tsx",
+      "src/emails/site-invite.tsx",
+      "src/lib/domains/live-email.ts",
+      "src/lib/forms/email-content.ts",
+      "src/lib/team/invite-email.ts",
+    ]);
   });
 });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Plus } from "lucide-react";
+import { Check, ChevronDown, LogOut, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,6 +13,8 @@ import {
   type KeyboardEvent,
 } from "react";
 import { selectPage } from "@/lib/pages/actions";
+import { leaveSite } from "@/lib/team/actions";
+import { ROLE_LABELS, type MemberRole } from "@/lib/team/constants";
 import { handleAddress } from "@/lib/pages/plans";
 import { Icon } from "./icon";
 
@@ -22,6 +24,13 @@ export interface SwitcherPage {
   /** The page's private name (M6-13): the first line of its menu item, the address under it. */
   name: string;
   published: boolean;
+}
+
+/** A site shared with the user (Wave F): listed with its owner; a paused one is not selectable. */
+export interface SwitcherShared extends SwitcherPage {
+  ownerEmail: string | null;
+  role: MemberRole;
+  active: boolean;
 }
 
 /** #6FBF8E once the page has been published, #A9A49B before (M1-18). */
@@ -55,12 +64,15 @@ function StatusDot({ published }: { published: boolean }) {
  */
 export function PageSwitcherMenu({
   pages,
+  shared = [],
   currentId,
   variant,
   limitMessage,
   suspended = false,
 }: {
   pages: SwitcherPage[];
+  /** Sites shared with the user (Wave F, M19-10), paused ones included. */
+  shared?: SwitcherShared[];
   currentId: string;
   variant: "sidebar" | "chip";
   limitMessage: string | null;
@@ -75,7 +87,8 @@ export function PageSwitcherMenu({
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
   const menuId = useId();
 
-  const current = pages.find((page) => page.id === currentId) ?? pages[0];
+  const sharedCurrent = shared.find((site) => site.id === currentId) ?? null;
+  const current = pages.find((page) => page.id === currentId) ?? sharedCurrent ?? pages[0];
   const address = handleAddress(current?.handle ?? "");
 
   const close = useCallback((returnFocus: boolean) => {
@@ -88,10 +101,10 @@ export function PageSwitcherMenu({
     if (!open) return;
     const index = Math.max(
       0,
-      pages.findIndex((page) => page.id === currentId),
+      [...pages, ...shared].findIndex((page) => page.id === currentId),
     );
     itemRefs.current[index]?.focus();
-  }, [open, pages, currentId]);
+  }, [open, pages, shared, currentId]);
 
   // Outside click closes the menu. Focus goes back to the button unless the click landed on
   // something else focusable.
@@ -109,8 +122,10 @@ export function PageSwitcherMenu({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
-  // Pages, then "New page", then (at the limit) "See plans".
-  const itemCount = pages.length + (limitMessage === null || suspended ? 1 : 2);
+  // Own sites, shared sites, then Members (an own site) or Leave (a shared one), then "New site",
+  // then (at the limit) "See plans".
+  const afterSites = pages.length + shared.length;
+  const itemCount = afterSites + 1 + (limitMessage === null || suspended ? 1 : 2);
 
   const moveFocus = (from: number, delta: number | "first" | "last") => {
     const count = itemCount;
@@ -154,6 +169,23 @@ export function PageSwitcherMenu({
     if (page.id === currentId) return;
     startTransition(async () => {
       await selectPage(page.id);
+      router.refresh();
+    });
+  };
+
+  // Leaving the current shared site (M19-10): the gate then lands on the user's own site or /claim.
+  const leave = () => {
+    if (!sharedCurrent) return;
+    close(true);
+    if (
+      !window.confirm(
+        `Leave ${handleAddress(sharedCurrent.handle)}? You’ll need a new invite to come back.`,
+      )
+    )
+      return;
+    startTransition(async () => {
+      await leaveSite(sharedCurrent.id);
+      router.push("/editor");
       router.refresh();
     });
   };
@@ -244,11 +276,91 @@ export function PageSwitcherMenu({
               </button>
             );
           })}
+          {shared.length > 0 ? (
+            <>
+              <div className="my-1 border-t border-ink-line" role="separator" />
+              <p className="px-2.5 pt-1 pb-0.5 font-mono text-[11px] tracking-[0.08em] text-on-ink-muted uppercase">
+                Shared with you
+              </p>
+              {shared.map((site, offset) => {
+                const index = pages.length + offset;
+                const checked = site.id === currentId;
+                return (
+                  <button
+                    key={site.id}
+                    ref={(node) => {
+                      itemRefs.current[index] = node;
+                    }}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={checked}
+                    aria-disabled={site.active ? undefined : "true"}
+                    tabIndex={-1}
+                    data-shared-site=""
+                    onClick={(event) => (site.active ? choose(site) : event.preventDefault())}
+                    className={`flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left font-mono text-[13px] hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2 ${
+                      site.active ? "" : "cursor-not-allowed text-on-ink-muted"
+                    }`}
+                  >
+                    <StatusDot published={site.published} />
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                      <span className="truncate font-sans text-[13px] font-semibold">
+                        {site.name}
+                      </span>
+                      <span className="text-[11px] text-on-ink-muted [overflow-wrap:anywhere]">
+                        {handleAddress(site.handle)} · {ROLE_LABELS[site.role]}
+                        {site.active ? "" : " · Paused"}
+                      </span>
+                      {site.ownerEmail ? (
+                        <span className="text-[11px] text-on-ink-muted [overflow-wrap:anywhere]">
+                          Owner: {site.ownerEmail}
+                        </span>
+                      ) : null}
+                    </span>
+                    {checked && (
+                      <span className="text-brass">
+                        <Icon icon={Check} size={14} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </>
+          ) : null}
           <div className="my-1 border-t border-ink-line" role="separator" />
+          {sharedCurrent ? (
+            <button
+              ref={(node) => {
+                itemRefs.current[afterSites] = node;
+              }}
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              onClick={leave}
+              className="flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-on-ink hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2"
+            >
+              <Icon icon={LogOut} size={15} />
+              Leave this site
+            </button>
+          ) : (
+            <Link
+              ref={(node) => {
+                itemRefs.current[afterSites] = node;
+              }}
+              href="/members"
+              role="menuitem"
+              tabIndex={-1}
+              onClick={() => close(false)}
+              className="flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-[13px] font-semibold text-on-ink no-underline hover:bg-ink-raised-2 focus-visible:bg-ink-raised-2"
+            >
+              <Icon icon={Users} size={15} />
+              Members
+            </Link>
+          )}
           {limitMessage === null ? (
             <Link
               ref={(node) => {
-                itemRefs.current[pages.length] = node;
+                itemRefs.current[afterSites + 1] = node;
               }}
               href="/pages/new"
               role="menuitem"
@@ -263,7 +375,7 @@ export function PageSwitcherMenu({
             <>
               <button
                 ref={(node) => {
-                  itemRefs.current[pages.length] = node;
+                  itemRefs.current[afterSites + 1] = node;
                 }}
                 type="button"
                 role="menuitem"
@@ -286,7 +398,7 @@ export function PageSwitcherMenu({
               {suspended ? null : (
                 <Link
                   ref={(node) => {
-                    itemRefs.current[pages.length + 1] = node;
+                    itemRefs.current[afterSites + 2] = node;
                   }}
                   href="/settings#plans"
                   role="menuitem"

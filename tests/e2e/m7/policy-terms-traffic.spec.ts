@@ -12,6 +12,7 @@ import {
 } from "../m4/analytics-ingest-helpers";
 import { signInAsAdmin, signInAsUser, tenantRaw } from "../m5/admin-helpers";
 import { flagOf, seedFlaggedPage } from "../m5/traffic-helpers";
+import { LOCAL_DB_CONTAINER } from "../../../scripts/lib/local-db";
 
 /**
  * M7-10 and M7-11: the Terms say the two-month rule, the claim about what counts as a view is true,
@@ -112,7 +113,7 @@ function insertOldRuleFlag(pageId: string): boolean {
       "docker",
       [
         "exec",
-        "supabase_db_hydlnk",
+        LOCAL_DB_CONTAINER,
         "psql",
         "-U",
         "postgres",

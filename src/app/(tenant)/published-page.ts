@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { publishedDocSchema, type PublishDoc } from "@/lib/document";
+import { documentAt, effectiveNow, publishedDocSchema, type PublishDoc } from "@/lib/document";
 import { countPublicQuery } from "@/lib/publish/query-counter";
 import {
   MISSING_REVALIDATE_SECONDS,
@@ -11,11 +11,24 @@ import {
   pageTag,
 } from "@/lib/publish/tags";
 import { handleSchema } from "@/lib/schemas";
+import { getPublishedHomeWithClient } from "@/lib/site/page-entries";
 import { failIfArmed } from "@/lib/tenant-render/fault";
 
 export interface PublishedPage {
   pageId: string;
+  /**
+   * The published document as a visitor sees it at `at`: Home's blocks outside their time window
+   * (M20-03) are already gone, so nothing downstream (redirect mode, the head, the FAQ JSON-LD, the
+   * CSS split, the menu) can draw one.
+   */
   document: PublishDoc;
+  /**
+   * The instant this response is generated for (M20-03): the later of the server's clock and the
+   * site's schedule clock (`pages.schedule_clock`, set by the boundary sweep before it expires the
+   * site), so a function whose clock lags Postgres still draws the state it was expired for. A
+   * sub-page's blocks are filtered at the same instant.
+   */
+  at: number;
   publishedAt: string | null;
   /** The owner's `accounts.plan`, read here with the page; the footer badge follows it (M2-28). */
   plan: string;
@@ -38,14 +51,21 @@ export type TenantPageState =
 
 /** What the cached public read hands back: plain JSON, so the data cache can store it. */
 type PublicRead =
-  | { state: "published"; published: unknown; publishedAt: string | null; plan: string }
+  | {
+      state: "published";
+      published: unknown;
+      publishedAt: string | null;
+      plan: string;
+      /** `pages.schedule_clock` (M20-04). */
+      clock: string | null;
+    }
   | { state: "unpublished" }
   | { state: "suspended" }
   | { state: "missing" };
 
 /**
  * The public query (M2-22): `published`, `published_at` and the owner's `accounts` row, for one
- * page id, and nothing else. Never `draft`, never `*`. Server-only, with the secret key: RLS does
+ * page id, plus Home's published page entry for its blocks, and nothing else. Never `draft`, never `*`. Server-only, with the secret key: RLS does
  * not apply, so this query is the access rule. A suspended owner reads as `suspended` and the
  * document is never returned for it, so a cached copy of this read cannot carry the page's content
  * (and the tag `invalidateAccountPages` expires drops it at suspend and unsuspend).
@@ -53,9 +73,10 @@ type PublicRead =
 async function readPublic(pageId: string): Promise<PublicRead> {
   failIfArmed({ pageId });
   countPublicQuery(pageId);
-  const { data, error } = await createAdminSupabase()
+  const client = createAdminSupabase();
+  const { data, error } = await client
     .from("pages")
-    .select("published, published_at, accounts!inner(plan, suspended_at)")
+    .select("published, published_at, schedule_clock, accounts!inner(plan, suspended_at)")
     .eq("id", pageId)
     .maybeSingle();
   // A database failure is a 500, not a 404: nobody should see "not found" for a page that exists.
@@ -63,11 +84,36 @@ async function readPublic(pageId: string): Promise<PublicRead> {
   if (!data) return { state: "missing" };
   if (data.accounts.suspended_at !== null) return { state: "suspended" };
   if (data.published === null) return { state: "unpublished" };
+  // The design is the site row's (`pages.published`, minus its frozen blocks); the blocks are Home's
+  // page entry (1b1-12). A site with no published Home entry has nothing to show.
+  const home = await getPublishedHomeWithClient(client, pageId);
+  if (!home) return { state: "unpublished" };
+  const blocks = (home.published as { blocks?: unknown } | null)?.blocks;
   return {
     state: "published",
-    published: data.published,
+    published: { ...(data.published as Record<string, unknown>), blocks },
     publishedAt: data.published_at ?? null,
     plan: data.accounts.plan,
+    clock: data.schedule_clock ?? null,
+  };
+}
+
+/**
+ * The page a published read shows NOW (M20-03): the whole published copy stays in the cache (the
+ * filter is never inside a cache key); the time windows are decided here, once per generation.
+ */
+function publishedPage(
+  pageId: string,
+  read: Extract<PublicRead, { state: "published" }>,
+  document: PublishDoc,
+): PublishedPage {
+  const at = effectiveNow(Date.now(), read.clock);
+  return {
+    pageId,
+    document: documentAt(document, at),
+    at,
+    publishedAt: read.publishedAt,
+    plan: read.plan,
   };
 }
 
@@ -169,10 +215,7 @@ export async function getTenantPageState(handle: string): Promise<TenantPageStat
     console.error(`Published document for "${handle}" failed validation`, parsed.error.issues);
     return missing(handle);
   }
-  return {
-    kind: "published",
-    page: { pageId, document: parsed.data, publishedAt: read.publishedAt, plan: read.plan },
-  };
+  return { kind: "published", page: publishedPage(pageId, read, parsed.data) };
 }
 
 /** The published page for a handle, or null when there is nothing published to show. */
@@ -207,10 +250,7 @@ export async function getTenantPageStateById(pageId: string): Promise<TenantPage
     console.error(`Published document for page ${pageId} failed validation`, parsed.error.issues);
     return { kind: "missing" };
   }
-  return {
-    kind: "published",
-    page: { pageId, document: parsed.data, publishedAt: read.publishedAt, plan: read.plan },
-  };
+  return { kind: "published", page: publishedPage(pageId, read, parsed.data) };
 }
 
 // ---------------------------------------------------------------------------------------------

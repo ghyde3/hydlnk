@@ -197,22 +197,24 @@ describe("M5-11 processUpload: stores the pipeline's WebP under a content-hash n
     expect(result.ok).toBe(true);
   });
 
-  it("identical bytes uploaded again are taken off the cleanup queue first", async () => {
+  // S3 (Wave F): the queue hook now dates the path its grace ahead (queue_new_upload) instead of
+  // deleting the row; it still runs before the existence check, so a cleanup in between finds nothing.
+  it("identical bytes uploaded again are queued with their grace first (out of the cleanup's sight)", async () => {
     const png = makePng(40, 40);
-    const unqueue = vi.fn(async () => undefined);
-    const first = await processUpload(request([file(png)]), UID, storage, undefined, { unqueue });
-    const second = await processUpload(request([file(png)]), UID, storage, undefined, { unqueue });
+    const queue = vi.fn(async () => undefined);
+    const first = await processUpload(request([file(png)]), UID, storage, undefined, { queue });
+    const second = await processUpload(request([file(png)]), UID, storage, undefined, { queue });
     expect(first.ok && second.ok).toBe(true);
-    expect(unqueue).toHaveBeenCalledTimes(2);
-    expect(unqueue).toHaveBeenCalledWith(first.ok ? first.image.path : "");
+    expect(queue).toHaveBeenCalledTimes(2);
+    expect(queue).toHaveBeenCalledWith(first.ok ? first.image.path : "");
   });
 
-  it("a failing unqueue is logged and does not fail the upload", async () => {
-    const unqueue = vi.fn(async () => {
+  it("a failing queue hook is logged and does not fail the upload", async () => {
+    const queue = vi.fn(async () => {
       throw new Error("queue down");
     });
     const result = await processUpload(request([file(makePng(8, 8))]), UID, storage, undefined, {
-      unqueue,
+      queue,
     });
     expect(result.ok).toBe(true);
   });

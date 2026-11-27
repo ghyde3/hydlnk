@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import sharp from "sharp";
 import { adminClient } from "../fixtures/auth";
+import { pageRow } from "../m2/editor-helpers";
 import { cleanupUsers, setPlan } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
@@ -91,14 +92,12 @@ test.describe("M7-15 images load through /media", () => {
   }) => {
     const context = await browser.newContext();
     const s = await seed(context, "mps");
-    const admin = adminClient();
-    const { data, error } = await admin
-      .from("pages")
-      .select("draft, published")
-      .eq("id", s.pageId)
-      .single();
-    expect(error).toBeNull();
-    for (const doc of [data!.draft, data!.published] as Record<string, unknown>[]) {
+    // The design half (the background) is on the pages row; Home's blocks are in its entry.
+    const data = await pageRow(s.pageId);
+    const live = await adminClient().from("pages").select("published").eq("id", s.pageId).single();
+    expect(live.error).toBeNull();
+    const publishedDoc = { ...(live.data!.published as object), blocks: (data.published as { blocks: unknown }).blocks };
+    for (const doc of [data.draft, publishedDoc] as Record<string, unknown>[]) {
       const json = JSON.stringify(doc);
       expect(json).toContain(s.bgStored); // the stored form, untouched
       expect(json).not.toContain("/media/"); // nothing relative is ever stored

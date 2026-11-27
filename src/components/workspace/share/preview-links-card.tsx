@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
+import { forgetPreview } from "@/lib/posts/preview-link";
 import { createPreviewLink, listPreviewLinks, revokePreviewLink } from "@/lib/previews/actions";
 import { formatLinkDate } from "@/lib/previews/dates";
 import { PREVIEW_LINK_LIMIT, PREVIEW_LINK_MESSAGES } from "@/lib/previews/messages";
@@ -156,6 +157,8 @@ export function PreviewLinksCard() {
         return;
       }
       setTurnedOff((current) => new Set(current).add(id));
+      // A post's Preview in this tab must not open the link again (M16-16).
+      forgetPreview(pageId, id);
       setAtLimit(false);
       if (created?.id === id) setCreated(null);
     } catch {

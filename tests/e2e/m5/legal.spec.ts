@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { axeViolations } from "../fixtures/a11y";
 import { rawRequest } from "../fixtures/http";
 import { desktopOnly, phoneOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
  * M5-24: the Privacy and Terms pages. Both exist from the marketing site (PR #4, PR #7); this spec
@@ -25,7 +25,7 @@ for (const { path, title } of PAGES) {
     test(`M5-24 ${path} answers 200 on the marketing host with one h1, a Last updated date and no cookie`, async ({
       page,
     }) => {
-      const raw = await rawRequest("localhost:3000", path);
+      const raw = await rawRequest(`localhost:${DEV_PORT}`, path);
       expect(raw.status).toBe(200);
       expect(raw.headers["set-cookie"]).toBeUndefined();
 

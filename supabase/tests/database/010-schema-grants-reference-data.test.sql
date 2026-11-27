@@ -2,7 +2,7 @@
 -- a loosened grant or a function that became callable through the API.
 
 begin;
-select plan(46);
+select plan(47);
 
 -- ---------------------------------------------------------------------------
 -- RLS is on for every public table
@@ -62,7 +62,14 @@ select tables_are(
     -- Wave N: the app announcement (184)
     'announcements',
     -- Wave N: hosts of blocked OAuth apps, server only (187)
-    'oauth_blocked_hosts'
+    'oauth_blocked_hosts',
+    -- Wave N: the content model, owners read, the server writes (189)
+    'content_types', 'content_entries', 'content_entry_revisions', 'content_terms', 'content_entry_terms',
+    'site_paths', 'content_slug_redirects',
+    -- Wave D: form submissions (owners read and delete) and the month counter, server only (219, 220)
+    'form_submissions', 'form_submission_usage',
+    -- Wave E: scheduled publishing, owners read (not snapshot, claim, lease), the server writes (221)
+    'content_schedules'
   ],
   'public holds exactly the contract tables'
 );
@@ -202,18 +209,68 @@ select set_eq(
       ('site_pages|service_role|INSERT|*'),
       ('site_pages|service_role|UPDATE|*'),
       ('site_pages|service_role|DELETE|*'),
+      -- Wave N: the content model. Owners read; the server writes.
+      ('content_types|authenticated|SELECT|*'),
+      ('content_types|service_role|SELECT|*'),
+      ('content_types|service_role|INSERT|*'),
+      ('content_types|service_role|UPDATE|*'),
+      ('content_types|service_role|DELETE|*'),
+      ('content_entries|authenticated|SELECT|*'),
+      ('content_entries|service_role|SELECT|*'),
+      ('content_entries|service_role|INSERT|*'),
+      ('content_entries|service_role|UPDATE|*'),
+      ('content_entries|service_role|DELETE|*'),
+      ('content_entry_revisions|authenticated|SELECT|*'),
+      ('content_entry_revisions|service_role|SELECT|*'),
+      ('content_entry_revisions|service_role|INSERT|*'),
+      ('content_entry_revisions|service_role|UPDATE|*'),
+      ('content_entry_revisions|service_role|DELETE|*'),
+      ('content_terms|authenticated|SELECT|*'),
+      ('content_terms|service_role|SELECT|*'),
+      ('content_terms|service_role|INSERT|*'),
+      ('content_terms|service_role|UPDATE|*'),
+      ('content_terms|service_role|DELETE|*'),
+      ('content_entry_terms|authenticated|SELECT|*'),
+      ('content_entry_terms|service_role|SELECT|*'),
+      ('content_entry_terms|service_role|INSERT|*'),
+      ('content_entry_terms|service_role|UPDATE|*'),
+      ('content_entry_terms|service_role|DELETE|*'),
+      ('content_slug_redirects|authenticated|SELECT|*'),
+      ('content_slug_redirects|service_role|SELECT|*'),
+      ('site_paths|authenticated|SELECT|*'),
+      ('site_paths|service_role|SELECT|*'),
+      ('site_paths|service_role|DELETE|*'),
       -- Wave N: the announcement. Owners read the active row, five columns (no created_by); only the server writes.
       ('announcements|authenticated|SELECT|ends_at,id,link,message,starts_at'),
       ('announcements|service_role|SELECT|*'),
       ('announcements|service_role|INSERT|*'),
       ('announcements|service_role|UPDATE|*'),
-      ('announcements|service_role|DELETE|*')
+      ('announcements|service_role|DELETE|*'),
+      -- Wave D: form submissions. Owners read and delete; nobody updates; the secret key reads,
+      -- deletes and inserts (HL016 counts it). The owner's grant is still a column grant (id,
+      -- site_id, entry_id, block_id, kind, email, name, message, created_at); since visitor_hash was
+      -- dropped (20261126185204) it covers every column, which this listing prints as '*' (a column
+      -- added later is not in it and would show here as a column list). The usage table
+      -- (form_submission_usage) is deliberately absent: only the definer functions reach it.
+      ('form_submissions|authenticated|SELECT|*'),
+      ('form_submissions|authenticated|DELETE|*'),
+      ('form_submissions|service_role|SELECT|*'),
+      ('form_submissions|service_role|INSERT|*'),
+      ('form_submissions|service_role|DELETE|*'),
+      -- Wave E (221): the owner reads every column but snapshot, claim and locked_until.
+      ('content_schedules|authenticated|SELECT|action,attempts,created_at,created_by,entry_id,finished_at,fired_from_rev,fired_rev,id,result_code,run_at,scheduled_rev,site_id,source,status'),
+      ('content_schedules|service_role|SELECT|*'),
+      ('content_schedules|service_role|INSERT|*'),
+      ('content_schedules|service_role|UPDATE|*'),
+      ('content_schedules|service_role|DELETE|*')
   $$,
   'anon, authenticated and service_role hold exactly the allowlisted table and column privileges'
 );
 
 -- plan_limits (M4-02) is the one deliberate exception: it takes a plan name and returns the public
 -- pricing numbers, nothing per account. Anything else added here must be justified the same way.
+-- form_submission_counts (Wave D, M17-01) is security invoker: it reads form_submissions as the
+-- caller, so RLS returns nothing of another user's site (pinned in 219).
 select set_eq(
   $$
     select p.proname::text
@@ -223,8 +280,15 @@ select set_eq(
       and (has_function_privilege('anon', p.oid, 'EXECUTE')
            or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
   $$,
-  $$ values ('plan_limits') $$,
-  'the only function in public executable by anon or authenticated is plan_limits'
+  $$ values ('plan_limits'), ('form_submission_counts') $$,
+  'the only functions in public executable by anon or authenticated are plan_limits and the security invoker form_submission_counts'
+);
+-- The exception holds only while it stays security invoker: a definer rewrite would read every site.
+select is(
+  (select p.prosecdef from pg_proc p
+   where p.oid = 'public.form_submission_counts(uuid)'::regprocedure),
+  false,
+  'form_submission_counts is security invoker (prosecdef = false), so RLS decides what it counts'
 );
 
 select is_empty(
@@ -248,17 +312,17 @@ select is_empty(
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, 20, false, 0, 0) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, 500, true, 50, 100) $$,
   'pro: 3 pages, unlimited saved themes, 1 domain, 100 MB, 365 days of analytics, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, 5000, true, 500, 1000) $$,
   'studio: 15 pages, unlimited saved themes, 15 domains, 1 GB, 365 days of analytics, breakdowns, 25 versions'
 );
 select throws_ok(

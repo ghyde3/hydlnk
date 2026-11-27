@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { LIMITS } from "@/lib/document";
+import { siteAccessAnswer } from "./access-fake";
 import { fullPublished } from "./fixtures/page-document";
 
 vi.mock("server-only", () => ({}));
@@ -36,7 +37,9 @@ const actions = await import("@/lib/versions/actions");
 /**
  * M6-49: the two actions take two ids and no document, and check in this order, reading and writing
  * nothing before the previous check passes: no session, a page that is not the user's, a suspended
- * owner, a plan that keeps no versions, a version id that is not this page's, then the work. A table
+ * owner, a plan that keeps no versions, a version id that is not this page's, then the work. Since
+ * Wave F the page, the suspension and the plan come from the one access rule (`site_access`), asked
+ * before any table is read. A table
  * runs every branch against a recording stand-in for the secret-key client and shows that none of
  * the failing ones writes (and that a failing early check reads nothing that comes after it).
  */
@@ -176,6 +179,8 @@ function fakeAdmin(world: World) {
       from,
       rpc(fn: string, args: unknown) {
         calls.push({ kind: "rpc", table: fn, filters: [], payload: args });
+        // Wave F: the one access rule (public.site_access), answered from the world's rows.
+        if (fn === "site_access") return Promise.resolve(siteAccessAnswer(world.pages, world.accounts, args));
         const rows = world.blockedHosts.map((host) => ({
           block_id: "link-portraits",
           item_id: null,
@@ -258,7 +263,7 @@ const FAILING: Case[] = [
     name: "a page that does not exist",
     input: { pageId: "00000000-0000-4000-8000-00000000ffff", versionId: VERSION, userId: OWNER },
     reason: "forbidden",
-    reads: ["pages"],
+    reads: [],
   },
   {
     name: "another user's page (the version id is not looked at)",
@@ -268,77 +273,77 @@ const FAILING: Case[] = [
       userId: OWNER,
     },
     reason: "forbidden",
-    reads: ["pages"],
+    reads: [],
   },
   {
     name: "a suspended owner",
     world: { accounts: [{ id: OWNER, plan: "pro", suspended_at: "2026-10-01T00:00:00Z" }] },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "account_suspended",
-    reads: ["pages", "accounts"],
+    reads: [],
   },
   {
     name: "a Free plan (no version row is read)",
     world: { accounts: [{ id: OWNER, plan: "free", suspended_at: null }] },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "plan_required",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "a Free plan with a garbage version id still says plan_required",
     world: { accounts: [{ id: OWNER, plan: "free", suspended_at: null }] },
     input: { pageId: PAGE, versionId: "' or 1=1 --", userId: OWNER },
     reason: "plan_required",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "an unknown plan name reads as Free",
     world: { accounts: [{ id: OWNER, plan: "enterprise", suspended_at: null }] },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "plan_required",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "a version id that is not a uuid",
     input: { pageId: PAGE, versionId: "x", userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "an empty version id",
     input: { pageId: PAGE, versionId: "", userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "a 10,000 character version id",
     input: { pageId: PAGE, versionId: "9".repeat(10_000), userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "SQL in the version id",
     input: { pageId: PAGE, versionId: "1; drop table pages", userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "an unknown version id",
     input: { pageId: PAGE, versionId: UNKNOWN_VERSION, userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
   {
     name: "a version of the owner's other page given with this page's id",
     input: { pageId: PAGE, versionId: FOREIGN_VERSION, userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
   {
     name: "another user's version id with this page's id",
     input: { pageId: PAGE, versionId: THEIR_VERSION, userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
   {
     name: "a stored document that does not parse (the raw JSON is never returned)",
@@ -354,7 +359,7 @@ const FAILING: Case[] = [
     },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "error",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
 ];
 
@@ -377,8 +382,14 @@ describe("M6-49 the order of the checks, and no failing branch writes", () => {
         ) {
           expect(tablesRead(calls)).not.toContain("page_versions");
         }
-        // No cache call exists in this module at all (see the static test below); no rpc ran either.
-        expect(calls.some((c) => c.kind === "rpc")).toBe(false);
+        // No cache call exists in this module at all (see the static test below); no rpc ran but
+        // the access rule (Wave F: public.site_access, before anything is read).
+        expect(calls.filter((c) => c.kind === "rpc").map((c) => c.table)).toEqual(
+          kase.input.userId && /^[0-9a-f-]{36}$/.test(String(kase.input.userId)) &&
+            typeof kase.input.pageId === "string" && /^[0-9a-f-]{36}$/.test(kase.input.pageId)
+            ? ["site_access"]
+            : [],
+        );
       });
     }
   }
@@ -396,7 +407,8 @@ describe("M6-49 the work", () => {
     if (!result.ok) throw new Error("unreachable");
     expect(result.doc.profile.name).toBe(fullPublished.profile.name);
     expect(writes(calls)).toEqual([]);
-    expect(calls.some((c) => c.kind === "rpc")).toBe(false);
+    // The only rpc is the access rule (Wave F).
+    expect(calls.filter((c) => c.kind === "rpc").map((c) => c.table)).toEqual(["site_access"]);
     // it never asks for another page's version, whatever the id says
     const versionReads = calls.filter((c) => c.table === "page_versions");
     expect(versionReads).toHaveLength(1);
@@ -449,6 +461,8 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 0,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const written = writes(calls);
@@ -486,7 +500,10 @@ describe("M6-49 the work", () => {
     expect((writes(calls)[0]!.payload as { draft: { rev: number } }).draft.rev).toBe(1);
   });
 
-  it("M6-49 restore with a missing photo, card image, image-block image and background counts them and nulls them", async () => {
+  // M15-10 rewrote the three restore tests below: History restores the design only, so only the
+  // design's images (photo, logo, share image, background) are looked up, counted and nulled. The
+  // images inside blocks are not restored, so they are neither asked about nor counted.
+  it("M6-49 restore with a missing photo and background counts them and nulls them; block images are not counted", async () => {
     const bg = `http://127.0.0.1:54321/storage/v1/object/public/page-media/${OWNER}/bg-aaaaaaaa.webp`;
     process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
     const doc = {
@@ -504,8 +521,10 @@ describe("M6-49 the work", () => {
     expect(result).toEqual({
       ok: true,
       restored: 8,
-      missingImages: 5,
+      missingImages: 2,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const draft = (
@@ -540,10 +559,10 @@ describe("M6-49 the work", () => {
   };
   type WrittenDraft = {
     share?: { title?: string; image?: unknown };
-    blocks: { id: string; icon?: unknown }[];
+    blocks?: { id: string; icon?: unknown }[];
   };
 
-  it("M6-49 restore with a missing link thumbnail and share image drops the thumbnail, nulls the share image and counts both", async () => {
+  it("M6-49 restore with a missing link thumbnail and share image nulls the share image and counts it; the thumbnail is not asked about", async () => {
     const world = makeWorld({
       versions: [{ id: VERSION, page_id: PAGE, version_no: 8, document: docWithThumbAndShare }],
     });
@@ -563,18 +582,21 @@ describe("M6-49 the work", () => {
     expect(result).toEqual({
       ok: true,
       restored: 8,
-      missingImages: 2,
+      missingImages: 1,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
-    expect(asked).toEqual(expect.arrayContaining([THUMB, SHARE_PIC]));
+    expect(asked).toContain(SHARE_PIC);
+    expect(asked).not.toContain(THUMB);
     const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
-    const link = draft.blocks.find((b) => b.id === "link-thumb-1")!;
-    expect("icon" in link).toBe(false);
+    // The version's blocks are not written: the link with the thumbnail never reaches the draft.
+    expect((draft.blocks ?? []).find((b) => b.id === "link-thumb-1")).toBeUndefined();
     expect(draft.share).toEqual({ title: "Mara", image: null });
   });
 
-  it("M6-49 restore with the thumbnail and share image stored keeps both in the draft", async () => {
+  it("M6-49 restore with the share image stored keeps it in the draft; the version's blocks are not written", async () => {
     const world = makeWorld({
       versions: [{ id: VERSION, page_id: PAGE, version_no: 8, document: docWithThumbAndShare }],
     });
@@ -588,13 +610,12 @@ describe("M6-49 the work", () => {
       restored: 8,
       missingImages: 0,
       pagesRestored: 0,
+      recreated: 0,
+      entries: [],
       notRestored: [],
     });
     const draft = (writes(calls)[0]!.payload as { draft: WrittenDraft }).draft;
-    expect(draft.blocks.find((b) => b.id === "link-thumb-1")?.icon).toEqual({
-      type: "image",
-      image: { path: THUMB, width: 96, height: 96 },
-    });
+    expect((draft.blocks ?? []).find((b) => b.id === "link-thumb-1")).toBeUndefined();
     expect(draft.share).toEqual(docWithThumbAndShare.share);
   });
 

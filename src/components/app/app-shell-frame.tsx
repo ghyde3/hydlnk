@@ -6,10 +6,11 @@ import { isCurrentUserAdmin } from "@/lib/admin/auth";
 import type { AppContext } from "@/lib/pages/context";
 import { AppLogo } from "./app-logo";
 import { SidebarNav, TabBar } from "./app-nav";
-import { PageSwitcher, type SwitcherPage } from "./page-switcher";
+import { PageSwitcher, type SwitcherPage, type SwitcherShared } from "./page-switcher";
 import { PlanCard } from "./plan-card";
 import { AccountMenu } from "./account-menu";
 import { AnnouncementBanner } from "./announcement-banner";
+import { SharedSiteBanner } from "@/components/team/shared-site-banner";
 
 /**
  * The signed-in app chrome (DESIGN.md -> Layout and responsive rules), shared by every screen:
@@ -29,13 +30,24 @@ export async function AppShellFrame({
   context: AppContext;
   children: ReactNode;
 }) {
-  const { user, pages, current, plan, pageLimit, suspended } = context;
+  const { user, pages, shared, current, plan, pageLimit, suspended } = context;
+  const { isOwner } = current.access;
   const admin = await isCurrentUserAdmin();
   const switcherPages: SwitcherPage[] = pages.map((page) => ({
     id: page.id,
     handle: page.handle,
     name: page.name,
     published: page.published_at !== null,
+  }));
+  // Wave F (M19-10): sites shared with the user, with their owner; a paused one is listed, not selectable.
+  const switcherShared: SwitcherShared[] = shared.map((site) => ({
+    id: site.id,
+    handle: site.handle,
+    name: site.name,
+    published: site.id === current.id ? current.published_at !== null : false,
+    ownerEmail: site.ownerEmail,
+    role: site.role,
+    active: site.state === "active",
   }));
 
   return (
@@ -44,7 +56,12 @@ export async function AppShellFrame({
         <AppLogo size="bar" />
         <div className="flex min-w-0 items-center gap-2">
           {admin ? <AdminLink variant="bar" /> : null}
-          <PageSwitcher pages={switcherPages} currentId={current.id} variant="chip" />
+          <PageSwitcher
+            pages={switcherPages}
+            shared={switcherShared}
+            currentId={current.id}
+            variant="chip"
+          />
         </div>
       </header>
 
@@ -54,9 +71,14 @@ export async function AppShellFrame({
           <span className="px-2 font-mono text-[11px] tracking-[0.08em] text-on-ink-muted uppercase">
             Page
           </span>
-          <PageSwitcher pages={switcherPages} currentId={current.id} variant="sidebar" />
+          <PageSwitcher
+            pages={switcherPages}
+            shared={switcherShared}
+            currentId={current.id}
+            variant="sidebar"
+          />
         </div>
-        <SidebarNav />
+        <SidebarNav isOwner={isOwner} />
         <div className="flex-1" />
         <PlanCard plan={plan} pageCount={pages.length} pageLimit={pageLimit} />
         {admin ? <AdminLink variant="sidebar" /> : null}
@@ -66,10 +88,13 @@ export async function AppShellFrame({
       <main className="flex min-w-0 flex-1 flex-col pb-[calc(84px+env(safe-area-inset-bottom))] hl:pb-0">
         <AnnouncementBanner />
         {suspended ? <SuspendedBanner /> : null}
+        {isOwner ? null : (
+          <SharedSiteBanner ownerEmail={context.ownerEmail} role={current.access.role} />
+        )}
         <SuspensionProvider suspended={suspended}>{children}</SuspensionProvider>
       </main>
 
-      <TabBar />
+      <TabBar isOwner={isOwner} />
     </div>
   );
 }

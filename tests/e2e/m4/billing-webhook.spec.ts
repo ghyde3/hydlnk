@@ -15,6 +15,7 @@ import {
   stubRetrieves,
   subscriptionEvent,
 } from "../fixtures/stripe-stub";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M4-03 (the webhook accepts only what Stripe signed) and M4-04 (it writes the plan and the
@@ -152,7 +153,7 @@ test.describe("M4-03 signature check", () => {
   test("M4-03 GET, PUT and DELETE on the route return 405", async () => {
     const { body, signature } = signed({ id: eventId(), type: "invoice.paid" });
     for (const method of ["GET", "PUT", "DELETE"]) {
-      const response = await postWebhook(body, signature, "app.localhost:3000", method);
+      const response = await postWebhook(body, signature, `app.localhost:${DEV_PORT}`, method);
       expect(response.status, method).toBe(405);
     }
   });
@@ -180,7 +181,7 @@ test.describe("M4-03 signature check", () => {
     });
     const { body, signature } = signed(event);
     const before = JSON.stringify(await row(account.id));
-    for (const host of ["mara.localhost:3000", "localhost:3000", "links.example.test"]) {
+    for (const host of [`mara.localhost:${DEV_PORT}`, `localhost:${DEV_PORT}`, "links.example.test"]) {
       const validlySigned = await postWebhook(body, signature, host);
       expect(validlySigned.status, `${host} signed`).toBe(404);
       // A forged signature gets the same 404, not a 400: the signature is never evaluated.

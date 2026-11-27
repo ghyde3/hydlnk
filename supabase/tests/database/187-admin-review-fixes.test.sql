@@ -94,12 +94,12 @@ select ok(not public.oauth_host_blocked(array['evil.example.test']), 'its return
 -- ---------------------------------------------------------------------------
 
 select is(public.admin_set_gift(tests.get_supabase_uid('a'), 'studio', null, 'press', '00000000-0000-4000-8000-000000000099'), 'ok', 'a Studio gift on account a');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
-select is((select plan from public.accounts where id = tests.get_supabase_uid('a')), 'studio', 'Pro paid, Studio gifted: the plan is studio');
-update public.accounts set plan = 'free' where id = tests.get_supabase_uid('a');
-select is((select plan from public.accounts where id = tests.get_supabase_uid('a')), 'studio', 'a direct update of plan to free ends with studio');
-update public.accounts set plan = 'pro' where id = tests.get_supabase_uid('b');
-select is((select plan from public.accounts where id = tests.get_supabase_uid('b')), 'free', 'a direct update of plan on a free account ends with free');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
+select is((select plan from public.accounts where id = (select tests.get_supabase_uid('a'))), 'studio', 'Pro paid, Studio gifted: the plan is studio');
+update public.accounts set plan = 'free' where id = (select tests.get_supabase_uid('a'));
+select is((select plan from public.accounts where id = (select tests.get_supabase_uid('a'))), 'studio', 'a direct update of plan to free ends with studio');
+update public.accounts set plan = 'pro' where id = (select tests.get_supabase_uid('b'));
+select is((select plan from public.accounts where id = (select tests.get_supabase_uid('b'))), 'free', 'a direct update of plan on a free account ends with free');
 
 -- ---------------------------------------------------------------------------
 -- gifted_by is private, gift_reason is not
@@ -117,7 +117,7 @@ select tests.clear_authentication();
 
 reset role;
 select is(public.admin_set_gift(tests.get_supabase_uid('b'), 'pro', now() + interval '1 hour', 'trial', '00000000-0000-4000-8000-000000000099'), 'ok', 'a Pro gift on account b');
-update public.accounts set gift_until = now() - interval '1 minute' where id = tests.get_supabase_uid('b');
+update public.accounts set gift_until = now() - interval '1 minute' where id = (select tests.get_supabase_uid('b'));
 select tests.authenticate_as_service_role();
 select is(
   (select string_agg(account_id::text, ',') from public.end_expired_gifts()),
@@ -125,7 +125,7 @@ select is(
 );
 reset role;
 select is(
-  (select action || '|' || admin_id::text || '|' || (detail->>'expired') || '|' || (detail->>'gift_plan') from public.admin_audit where account_id = tests.get_supabase_uid('b')),
+  (select action || '|' || admin_id::text || '|' || (detail->>'expired') || '|' || (detail->>'gift_plan') from public.admin_audit where account_id = (select tests.get_supabase_uid('b'))),
   'end_gift|00000000-0000-0000-0000-000000000000|true|pro', 'one end_gift audit row with the system actor'
 );
 

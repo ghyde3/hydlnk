@@ -15,7 +15,7 @@ A multi-tenant link-in-bio platform that wins on design control: block layouts, 
 
 | Area | In v1 | Deferred |
 | --- | --- | --- |
-| Accounts | Email magic link + Google OAuth, handle claim, reserved handles | Team members, roles |
+| Accounts | Email magic link + Google OAuth, handle claim, reserved handles; team members with roles (editor, publisher) on Studio sites (Wave F) | Owner transfer |
 | Profile | Photo (upload/replace/remove, initials fallback), display name, bio (160 chars) | Verified badge |
 | Blocks | Link button (optional icon or thumbnail, featured style), link card, header, text (bold, italic, links), image (focus point and shape), social icon row, embed (YouTube, Spotify, Vimeo, TikTok, Instagram, SoundCloud, Apple Music, Twitch; tap to play), divider, 2-column grid | Forms, email capture, product/checkout blocks, scheduled links |
 | Design | Theme tokens editor, per-block overrides, Google Fonts allowlist, backgrounds (solid, gradient, image), saved themes | Custom CSS/HTML, public theme gallery |
@@ -51,7 +51,16 @@ tenant  ──▶ │ host proxy: hydlnk.com | app.* | {handle}.*      │      
 
 Each page is one JSON document (profile + blocks + theme reference + token overrides) with a draft and a published copy; everything relational sits around it. Publishing freezes the fully resolved tokens into the published copy, so nothing reaches a live page without Publish.
 
-**RLS is the permission system.** The publishable key ships to every browser, so anything a policy allows, a user can do directly with curl; Next.js server code is not a boundary for the `authenticated` role. Server code that writes with the secret key checks ownership itself.
+**RLS is the permission system.** The publishable key ships to every browser, so anything a policy allows, a user can do directly with curl; Next.js server code is not a boundary for the `authenticated` role. Server code that writes with the secret key checks access itself, through the access helper.
+
+**The one access rule (Wave F).** `access.site_access_rows(user)` is the only statement of who may read, edit and publish a site: the owner (`pages.owner_id`, never a member row) and the members of `team.site_members` (role `editor` or `publisher`), a member's access holding only while the row exists, the owner's effective plan includes team access (`plan_site_members` > 0: Studio, gifts count), the owner is not suspended and the member is not suspended. Everything else is a projection of it: every site-scoped policy reads `access.accessible_site_ids(need)`; SQL functions that take an actor call `public.require_site_access`; server code calls `requireSiteAccess` / `requireEntryAccess` / `requireTermAccess` (`src/lib/access`), which read `public.site_access` and decide with the pure `decide()` (MCP stays owner-only there). Needs, ordered: read < edit < publish < owner. Nothing about access is cached across requests. A member acting on a site is charged to and limited by the site's owner (plan, folder, quota, every `p_owner_id`).
+
+| Action on a shared site | editor | publisher | owner |
+| --- | --- | --- | --- |
+| Read the drafts, pages, posts, terms, revisions, versions, schedules, the owner's saved themes | yes | yes | yes |
+| Edit drafts, create pages and posts, add terms, restore a revision or version into the draft, upload (owner's folder) | yes | yes | yes |
+| Publish, unpublish a post, trash or delete anything live, purge, rename or delete a term, schedule | no | yes | yes |
+| Unpublish or delete the site, rename, blog settings, domains, billing, members, invites, MCP, share links, analytics, Audience, saved-theme writes | no | no | yes |
 
 | Table | Key columns | Access |
 | --- | --- | --- |
@@ -67,13 +76,139 @@ Each page is one JSON document (profile + blocks + theme reference + token overr
 | `oauth_authorization_codes` | `id`, `client_id`, `user_id`, `redirect_uri`, `scopes_requested`, `code_challenge`, `resource`, `status`, `code_hash` | Server only. The pending request, then the issued code: 60 seconds, single use, only its SHA-256 stored. |
 | `oauth_grants` | `id`, `user_id`, `client_id`, `scopes`, `authorized_at`, `revoked_at` | Server only. One row per person and app; at most 20 active per person (trigger HL007). Deleted with the account. |
 | `oauth_tokens` | `id`, `grant_id`, `user_id`, `kind` (access/refresh), `token_hash` unique, `scopes`, `resource`, `expires_at`, `last_used_at` | Server only. Opaque tokens, only the SHA-256 stored; one live refresh token per grant (partial unique index); a reused refresh token ends the grant. Expired rows purged by cron. |
+| `team.site_members` | `site_id`, `user_id`, `role` (editor/publisher), `invited_by`, `created_at` | Server only, in the private `team` schema (not exposed by the API): RLS on, no policy, no privilege. Written only by the team functions (owner checks through the rule). The owner is never a member (trigger). Deleted with the site or the member's account. |
+| `team.site_invites` | `id`, `site_id`, `email`, `token_hash` unique, `role`, `invited_by`, `expires_at`, `accepted_at`, `accepted_by`, `revoked_at` | Server only. Only the SHA-256 of the token; 7 days; single use; one pending invite per site and address; at most 10 members plus pending invites per site (HL019), 20 invites a day per owner (HL020); accepting needs the session's confirmed email to equal the invited one (HL021); 50 shared sites per account. The link `GET /invite/{token}` writes nothing but the HttpOnly resume cookie, is limited in the proxy to 30 a minute per client address (`invite-link:{ip}`, like `/share/*`) and never sends a Referer; Accept is a POST limited to 10 in ten minutes per user. |
+| `team.site_activity` | `id`, `site_id`, `actor_id`, `role`, `action`, `entry_id`, `at`, `times` | Server only. Publish-class actions and team changes on sites that have a team (autosaves are not recorded); purged after 180 days. Bounded (team attack pass, finding 2): every recorded change is limited to 30 a minute per actor (`src/lib/team/activity-limit.ts`), the same change by the same actor on the same entry within a minute is one row with a count (`times`), trash and restore of an entry that was never live are not recorded, and the Members screen lists the newest 25 of each kind (team changes, publishes, other content changes). |
 | `mcp_activity` | `id`, `user_id`, `client_id`, `grant_id`, `tool`, `page_id`, `ok`, `error_code`, `at` | Server only. One row per tool call and never any content (no column could hold an argument, a result, a URL or an address); rows go after `MCP_ACTIVITY_RETENTION_DAYS` days (`src/lib/mcp/constants.ts`). |
+| `form_submissions` | `id`, `site_id`, `entry_id` (null for Home), `block_id`, `kind` (signup/contact), `email`, `name`, `message`, `created_at` | Owner reads own (via the site) and deletes own. Insert is server only, through `record_form_submission` after the public route's checks; no client insert or update. No IP address, user agent or visitor hash is stored (`visitor_hash` was dropped by 20261126185204). |
+| `form_submission_usage` | `owner_id`, `month`, `refused`, `refused_daily` | Server only. One row per account and UTC month: the lock the HL016 trigger takes before it counts the rows the account's sites hold, and the month's refusals over the monthly and the per-site daily cap. |
 
 - **Handles belong to pages.** `pages.handle` is the subdomain: unique and checked against `reserved_handles` (which includes `www`, `app`, `api` and other system names). Signup claims the handle for the user's first page. Profile content (photo, name, bio) lives in the page document.
 - **Seed vs migration.** Reserved handles and system themes ship in migrations so they reach production; `seed.sql` is local demo data only.
 - **JSON for blocks.** The editor saves the whole layout at once, ordering is array order, and Zod validates it on write. Each block carries a nanoid so analytics can key on it.
 - **Public reads** go through a server-side query that only returns `published`, never `draft`. The one exception is the share link below.
 - **Events** are append-only. Keep 60 days raw (M8-12, was 90); `pg_cron` rolls them into `daily_stats` nightly.
+
+## Team access (Wave F)
+
+The access rule and the team tables are in the Data model above. The ownership inventory (2.4), the commands that re-run it (2.5) and the threat model of the attack pass (3, T1 to T22) are copied here word for word from the wave plan (`wave-f-team-access-v2.md`, refreshed 2026-11-26 against `m18-mcp-content` @ 11ada21); the numbers are the plan's. The verifier of M19-14 re-runs 2.5, maps every hit to a row of 2.4, and attempts every row T1 to T22.
+
+### 2.4 TypeScript ownership checks (93 grouped rows)
+
+Classes: **A** must accept members (call the helper), **A\*** also swap actor for `access.ownerId`/`access.plan`, **C** member reads, **B** owner-only (left as is, allowlisted), **D** owner-scoped data (D\* = input must be the owner; signature unchanged).
+
+A, must accept members (34 rows):
+
+| # | Where | Today | v2 need and change |
+| --- | --- | --- | --- |
+| A1 | `src/lib/content/guards.ts` `ownedSite` (~:31-49) | `.eq("owner_id", userId)` | replaced by `requireSiteAccess`; kept as a deprecated wrapper for one package, then deleted |
+| A2 | `guards.ts` `ownedEntry` (~:51-73) | `.eq("pages.owner_id", userId)` | `requireEntryAccess`: site taken from the entry row, never the URL |
+| A3\* | `guards.ts` `activeAccount` (:13-28) | actor's plan and suspension | removed from the writer path; `access.plan`, `access.ownerSuspended` |
+| A4 | `content/entries-core.ts:70-72` create | owned site + active | `edit` |
+| A5 | `entries-core.ts:103-105` update draft | owned entry | `edit` |
+| A6\* | `content/publish-core.ts:37-39,109,113-119` publish | owned entry; images in actor folder; `p_owner_id: actor` | `publish`; :109, :115 owner |
+| A7\* | `publish-core.ts:133-135` unpublish | `p_owner_id: actor` | `publish`; owner |
+| A8\* | `content/trash-core.ts:27-30,55-57` trash | owned entry | `publish` when live, else `edit`; owner |
+| A9\* | `trash-core.ts:65-75` restore | owned entry | `edit`; owner |
+| A10 | `trash-core.ts:88-94` purge | owned entry | `publish` (G17) |
+| A11 | `content/revisions-core.ts:71,99,128` restore revision | owned entry + active | `edit` |
+| A12 | `content/terms-core.ts:49-52` `writableSite` for create (:74), rename (:139), delete (:172) | owned site + active | create `edit`; rename/delete `publish` (G16) |
+| A13 | `terms-core.ts:205-207` set entry terms | owned entry | `edit` |
+| A14 | `content/types-core.ts:38-41` `ownedType` (enable :69, update :92) | owned site | `owner` (G14) |
+| A15\* | `content/site-page-publish-core.ts:26,36` | `ownerId` passed in | caller passes `access.ownerId` |
+| A16\* | `content/index.ts:81` `checkPostBody`, `:105` `postDraftIssues` | `actor.userId/` prefix | owner's prefix (MCP is owner-only, so the owner equals the actor there anyway) |
+| A17 | `site-pages/sub-pages-core.ts:102-125` private copies of `activeAccountPlan` and `ownedSite` | duplicates | deleted; helper |
+| A18\* | `sub-pages-core.ts:140-143,181` create page | own plan | `edit`; `access.plan` |
+| A19\* | `sub-pages-core.ts:226-248` delete page | `p_owner_id: userId` | `publish` when live, else `edit`; owner |
+| A20 | `site-pages/entry-save-core.ts:172`, `entry-revisions-core.ts:51-63,84,137` | actor to the writer; `isEntryOfSite` binds the entry to the URL site | no change (the writer decides; URL binding stays as a second filter) |
+| A21\* | `lib/posts/routes-core.ts:66,71-72,102,256` `planOf(userId)` | actor's plan for the limits shown | `access.plan` |
+| A22 | `api/pages/[id]/posts/latest/route.ts:28` | `ownedSite` | `read` |
+| A23\* | `publish/core.ts:169-203` `publishPageCore` | `owner_id !== userId` (:190); actor suspension (:196-203) | `publish`; owner at :222, :285, :297-298, :324, :360, :400 |
+| A24\* | `publish/link-rules.ts:70-79` | `accounts.plan` by `input.userId` | input becomes `ownerId` |
+| A25 | `publish/core.ts:647-692` `openOwnedSite` | `owner_id !== userId` (:677); suspension (:681-688) | `publish`; returns `ownerId` and `actorId` |
+| A26\* | `publish/core.ts:726-866` `publishSitePageCore` | userId at :805, :866 | owner |
+| A27\* | `publish/core.ts:931-1066` `publishDesignCore` | userId at :982, :992-996, :1042, :1066 | owner |
+| A28\* | `publish/actions.ts:40-57` | rate key and `cleanupMediaQuietly(userId)` | rate keys actor and owner; cleanup owner |
+| A29\* | `versions/core.ts:98-155` `openVersion` | `owner_id !== userId` (:121); actor plan (:125-134) | preview `read`, restore `edit`; `open.ownerId = access.ownerId`; `access.plan` |
+| A30 | `versions/core.ts:221-253,344-348,364,396` | scoped by `open.ownerId` | correct once A29 holds |
+| A31\* | `api/media/route.ts:47-52` | folder, quota, unqueue, suspension all `user.id` | form field `site`: helper `edit`; folder, quota, unqueue owner; rate limit and uploader suspension actor; a `site` the user cannot edit, or no `site` while the current site is shared, stores nothing (G22) |
+| A32\* | `api/media/cleanup/route.ts:39,53` | caller's queue | optional `site`: `edit`, owner's queue |
+| A33 | `editor/save-client.ts:95-113`, `versions/client.ts:46` (browser UPDATE of `pages.draft`) | RLS | no write change; policy 2 decides; add lost-access detection (M19-11) |
+| A34 | routes passing the session user to cores: `entries/[entryId]/{draft,revisions,revisions/[rev]/restore,publish,unpublish,trash,restore,expire}`, `entries/[entryId]` (GET), `posts`, `terms`, `terms/[termId]`, `types`, `types/post`, `sub-pages`, `sub-pages/[subId]` | auth via `gate` (`lib/posts/route-http.ts:38`) or `getSessionUser` | none (cores decide) |
+
+C, member reads (18 rows):
+
+| # | Where | Change |
+| --- | --- | --- |
+| C1 | `auth/gate.ts:23-28` `listOwnPages` | keep (own only); add `listSharedSites` (server, `list_shared_sites`) |
+| C2 | `gate.ts:45,56,69-72` | `/claim` only when own and active shared are both empty; `resumeOauthRequest` after it; `resumeInvite` added (WP2) |
+| C3 | `pages/current.ts:17-19` | choose among own and active shared |
+| C4 | `pages/context.ts:23-40` | adds `shared`, `current.access {role, ownerId, canEdit, canPublish}`, `sitePlan`; `plan` stays the user's own |
+| C5 | `pages/actions.ts:23-28` `selectPage` | helper `read` |
+| C6 | `editor/page-data.ts:42-51` | drop the owner filter (caller passes an approved site) |
+| C7 | `site-pages/load.ts:56,80,102` | none (policies 3-8) |
+| C8 | `site-pages/entry-revs-client.ts:5` | none |
+| C9 | `versions/load.ts:51-63` | drop the filter; `ownerId = access.ownerId` |
+| C10 | `versions/client.ts:27` | none |
+| C11 | `themes/load.ts:13-26`, `themes/client.ts:70`, `workspace-provider.tsx:229` | filter to system plus `access.ownerId` |
+| C12 | `(workspace)/layout.tsx:49,84` | `ownerId={access.ownerId}`, `plan={sitePlan}`, new props `role`, `canPublish`, `userId` |
+| C13 | `(screens)/editor/history/page.tsx:30-68` | `sitePlan`; `loadHistory(current, access.ownerId, kept)` |
+| C14 | `preview/[pageId]/page.tsx:45-57` | helper `read`; owner's plan |
+| C15 | `query-core.ts:29,150,266`, `revisions-core.ts:19`, `terms-core.ts:260`, `types-core.ts:143` (get/list/count) | `read` |
+| C16 | `(screens)/posts/page.tsx:18-25`, `posts/load.ts:27-67`, `posts/[entryId]/page.tsx:19,28` | `sitePlan`; `ownerId={access.ownerId}` to `post-editor.tsx:64,95,441` and on to `body-editor.tsx:43-45,93` (D9) |
+| C17 | `workspace-provider.tsx`, `workspace-context.tsx`, `design/design-screen.tsx`, `design/types.ts`, `themes/use-theme-library.ts:233-358` | split `ownerId` (site owner: media prefix, theme scope) from `userId` (theme inserts); theme writes hidden unless owner |
+| C18 | `editor/page-address.ts:13`, `domains/primary.ts` | members read no `domains` row: use the public `getPrimaryDomain(siteId)` |
+
+B, owner-only, code unchanged and allowlisted (25 rows): B1 `publish/unpublish.ts:32-62` + `unpublish-action.ts`; B2 `pages/delete-page-core.ts:69-131`, `delete-page.ts`, `api/pages/[id]/route.ts`; B3 `pages/create-page-core.ts:41-94`, `api/pages/route.ts`, `(screens)/pages/new`; B4 handles claim (`claim-core.ts`, `claim.ts`, `actions.ts`, `api/handles/claim`); B5 `components/editor/page-name.tsx:96-98` (browser rename; new SQL trigger refuses non-owners); B6 `domains/core.ts:68-399`, `domains/actions.ts`, `api/domains/[id]`, `(screens)/domains`; B7 `domains/verify.ts`; B8 `previews/core.ts:63-163` (`ownsPage`), `previews/actions.ts` (page and post share links); B9 `analytics/stats.ts:81-173`, `analytics/dashboard/source.ts:266-271` `resolvePage`; B10 `(screens)/analytics/page.tsx:27`, `analytics/stats/route.ts:50`, `analytics/export/route.ts:75` (each also refuses when `current.access.role !== "owner"`); B11 `mcp/page-access.ts:132-204`; B12 `mcp/page-access.ts:351-492`; B13 `mcp/page-access.ts:218-305` plus tools `get-domains`, `list-pages`, `list-content-types`, `get-analytics`, `get-page`, `set-theme`; B14 `mcp/entry-access.ts:31-35` (through the writer; `decide` makes `mcp` mean `owner`); B15 `mcp/run-tool.ts:241-381`, `tools/content-common.ts:158,180,201` (per-user keys are fine); B16 `editor/draft-write.ts:184-221,318` (MCP draft writer); B17 `api/pages/[id]/types/post` (`setPostTypeCore`, via A14); B18 billing (`api/billing/checkout`, `portal`, `billing/account.ts`, `gift-queries.ts`, `settings/billing-summary.ts`); B19 `limits/usage.ts:16`, `(screens)/settings/page.tsx:50-94`; B20 connected apps, `lib/oauth/**`; B21 `pages/delete-account.ts:73-92`; B22 `publish/invalidate.ts:20` (expire all of an account's sites at suspension); B23 `themes/client.ts:85-136` writes; B24 new `src/lib/team/**` (need `owner`); B25 Wave D `(screens)/audience`, `audience/export`, `lib/forms/notify.ts`.
+
+D, owner-scoped data (16 rows): D1\* `content/images.ts:102-110` `checkOwnImages`; D2\* `publish/core.ts:447-563` (`loadThemeTokens`, `checkPlaced`, `checkImages`, `checkBackground`); D3\* `versions/restore.ts:24-193`; D4\* `media/upload.ts:205,273,318`, `media/quota.ts:19-44`; D5 `media/rate-limit.ts` (uploader); D6\* `media/cleanup-admin.ts:22-98`, `media/cleanup.ts:64-96`; D7 `previews/shared.ts:99-279` (resolves by site owner; correct); D8 renderer `post-body.tsx:43-45` `ownMediaSrc`, `post-article.tsx:33-36`, `tenant-render/post-html.tsx:165`, `archive-html.tsx` (owner from the published row; correct); D9\* `posts/body-editor/body-editor.tsx:43-45,93` (needs the owner from C16; this is the only D row edited); D10 `mcp/images.ts`, `tools/get-entry.ts:56` `imageUrlPrefix` (owner-only); D11 `lib/admin/*`; D12 `analytics/admin/*`; D13 admin components, `admin-draft/[pageId]`; D14 `templates/load.ts`; D15 public reads and ingest (`(tenant)/published-page.ts`, `site/published.ts`, `site/page-entries.ts`, `blog/published.ts`, `analytics/ingest/**`); D16 `links/actions.ts`, `links/hash-code.ts`.
+
+Totals: A 34 (31 with code), C 18 (15 with code), B 25, D 16 (D9 edited; D1-D4, D6 receive the owner through callers). **47 rows edited.**
+
+**Storage keyed by `{ownerId}/`:** there is no client Storage policy; every upload goes through `POST /api/media`. The v2 rule: a member's upload to S goes under `{S.owner}/`, counts on the owner's quota and queue, and is rate-limited per uploader. This stays correct with post bodies: `uploadPathOf` (`media/upload-path.ts:19`) only parses the address and has no owner in it; `checkOwnImages`, `postDraftIssues`, `ownMediaSrc`, `ownImage`, `displaySrc`, `checkPlaced` and versions `ownedImagePaths` all compare against one owner id. So the folder must be the owner's, and every caller must pass `access.ownerId` (A6, A16, A23-A27, A29, C16/D9). An image a member uploaded to their own folder cannot be used on S (publish refuses it). That is intended: no cross-account file references. A member's images stay in the owner's folder after removal, under the owner's control. The three senders (`components/editor/image-upload-control.tsx:135`, which also serves the post body and post fields; `design/sections/background-section.tsx:53`; `blocks/forms/link-thumb-upload.tsx:86`) add `site`.
+
+### 2.5 Re-run commands
+
+```
+cd <worktree>
+P='owner_id|ownerId|ownedEntry|ownedSite|ownsPage|loadOwnedPage|loadOwnedSubPage|p_owner|activeAccount|planOf|loadAccountPlan|listOwned'
+grep -rnE "$P" src --include=*.ts --include=*.tsx | grep -v database.types   # 336 lines, 82 files at 11ada21
+grep -rlE createAdminSupabase src | wc -l                                       # 65
+grep -rnE "createBrowserSupabase\(|createServerSupabase\(" src | grep -v ^src/lib/supabase | wc -l   # 32
+grep -rnoE 'rpc\(\s*"[a-z_]+"' src                                              # every SQL writer call
+grep -nEi "^\s*(create|drop) policy" supabase/migrations/*.sql                  # walk in order; last wins
+grep -nEi "create (or replace )?function|drop function" supabase/migrations/*.sql
+grep -n "grant execute" supabase/migrations/*.sql | grep -E "authenticated|anon" # only plan_limits today
+```
+
+Every grep hit maps to a row in 2.4, or the verifier stops and reports it.
+
+### 3. Threat model and abuse cases (attack pass, M19-14)
+
+| # | Attack | Control | Proof |
+| --- | --- | --- | --- |
+| T1 | Member escalates role: writes `site_members.role`, inserts own member row, accepts an invite with `role` in the body, invites self as publisher | team tables: RLS on, no policy, no grant; role is set only by `create_site_invite` (owner) and `set_site_member_role` (owner); accept reads role from the invite row | pgTAP 224, 225; probe |
+| T2 | Member performs an owner action via server (unpublish/delete/rename site, domains, share links, analytics, CSV, Audience, blog settings, invites, member changes, billing) | B rows unchanged; team cores need `owner`; SQL team functions call `require_site_access(...,'owner')` under lock | `tests/e2e/m19/escalation.spec.ts`; unit per core |
+| T3 | Same with the publishable key | owner-only policies untouched; `pages` grants stay `draft, name`; `name` trigger; no new client-executable function except `accessible_site_ids(text)` and `shared_theme_owner_ids()` | pgTAP 227; probe |
+| T4 | Editor publishes: publish, unpublish post, trash a live entry, delete a live page, purge, rename/delete term, schedule, restore-then-publish | `decide` needs `publish`; trash/delete of a live item counts as publish; schedule routes need `publish` | unit rule table; e2e |
+| T5 | Cross-site via any id-taking route: `/api/pages/{A}/entries/{entryOfB}`, `sub-pages/{subOfB}`, `terms/{termOfB}`, `/preview/{B}`, media `site=B`, `hl-page` cookie=B, version id of B, MCP `pageId`=B | access decided on the entry's/term's own `site_id` from the database; the URL site is a second equality; cookie only picks among accessible sites | pgTAP 226 (member of A reads nothing of B in each M table); unit per route; probe |
+| T6 | Removed or paused member's cached session (open tab, JWT still valid) | access computed per statement (RLS) and per request (helper); never in a JWT claim, cookie, module variable, `unstable_cache` or `"use cache"`; React `cache()` per request only | pgTAP 226 (delete row, next statement sees nothing); e2e `removal.spec.ts`; static test |
+| T7 | Removed member's MCP token | member tokens never reach shared sites (`mcp` means `owner`); nothing to revoke | unit: shared site id is `not_found`, `list_pages` omits it |
+| T8 | Removed member and share links | members cannot create links; links the owner made stay valid until revoked (they are the owner's); removal offers "Turn off active share links" | e2e Share tab has no link card for members; action refused |
+| T9 | Removed publisher's pending schedule | `remove_site_member` and loss of publisher role cancel pending `content_schedules` rows with `created_by` = member; `fire_scheduled_publish` re-checks `site_access(created_by)` (owner rows always pass) | pgTAP 228, worker unit |
+| T10 | Invite replay, revoke, expiry, concurrent accept | `accept_site_invite` locks the row `for update`; pending, unrevoked and `expires_at > now()` required; one answer P0002 | pgTAP 225 |
+| T11 | Invite forwarded or leaked to another account | acceptor's confirmed email read from `auth.users` inside SQL, compared lowercased; HL021 | pgTAP 225; e2e |
+| T12 | Mail scanner prefetch | GET never writes; accept is a POST Server Action | e2e |
+| T13 | Token guessing | 256 random bits, SHA-256 stored, `/invite/*` rate-limited in the proxy | unit, pgTAP |
+| T14 | Invite spam | Studio only; HL020 20/day/owner; fixed copy, no `pages.name`, no free text | pgTAP 228; email unit |
+| T15 | Limit bypass through members | every enforcer keys on the site owner; TS quota and plan reads use the owner | pgTAP 228; media unit |
+| T16 | Member fills the owner's quota or publish budget | per-uploader upload rate; publish rate key per owner (G18); owner removes the member | unit |
+| T17 | Membership oracle | policy functions take no user argument; `site_access`/`require_site_access` are service_role only; no access = the same `not_found` as a missing id | pgTAP 226 |
+| T18 | Downgrade or suspension leaves access | plan and both suspensions read inside `site_access_rows` on every call | pgTAP 226 |
+| T19 | Widened `pages` select leaks shared sites into own-account lists (settings, delete account, domains, page limit) | those reads keep `.eq("owner_id")` (B3, B6, B19, B21, C1) | unit and e2e |
+| T20 | Owner invites self, duplicate member | trigger refuses owner as member; PK `(site_id, user_id)`; one pending invite per `(site, email)` | pgTAP 224 |
+| T21 | Member reads form submissions | D1/D2 policies untouched; Audience refuses non-owners; `form_submission_counts` follows D1 | probe; e2e |
+| T22 | Email change onto an invited address | `double_confirm_changes = true` (config.toml:225); G8 for production | config test |
 
 ## Tenant page design system
 
@@ -102,6 +237,20 @@ Views via client beacon (sent by the page's one script, after `load`), clicks vi
 - **Uniques without cookies.** `visitor_hash` = hash of IP + user agent + daily rotating salt. No cookie banner.
 - **Bots.** Drop known bot user agents and HEAD requests before insert.
 - **Dashboard.** 7/30/90-day/1-year views, clicks and CTR per link, top referrers, device and country splits, from `daily_stats` plus today's raw events.
+
+## Forms and audience (Wave D)
+
+One block type, `form`, with two kinds: `signup` (an email address, and a name when the owner asks for one) and `contact` (a name, an email address and a message). It is not the `contact` block type (contact details); in copy it is "Sign-up form" or "Contact form".
+
+- **The block.** `kind`, an optional `heading` (80) and `description` (200), `askName` (sign-up only), `buttonLabel` (30), `successMessage` (160) and `consent` (200), the three required at Publish, and `notify` (contact only: email each message to the account's own sign-in address; never another recipient). A new block is a sign-up with "Subscribe", "Thanks. You’re on the list." and the consent line "Your details go to the owner of this page, who may contact you."
+- **Plain HTML, no script.** The block is a `<form method="post" action="/f/{pageId}/{blockId}">` drawn by the one renderer; the tenant script is unchanged (M8-05). The confirm, error and sent states are small themed pages of their own (`src/lib/tenant-render/form-page.tsx`), never states of the cached live page. The tenant policy's `form-action` is `'self'`.
+- **Routes**, on a page's own hosts only (`isTrackingPath`, `hostServesPage` on the real Host header), all `force-dynamic`: `GET /f/{pageId}/o` (the open marker, a 43-byte image the live page loads only when it holds a visible form), `POST /f/{pageId}/{blockId}` (a submission) and `GET`/`HEAD` of the same path (the sent page). Every `/f` page is `no-store`, `noindex`, sets no cookie and loads no script.
+- **A submission**, cheapest checks first and nothing stored before the last step: cross-site POST (403, before anything else), ids, 10 POSTs per client in 10 minutes, `application/x-www-form-urlencoded` and 32 KB, a visible form block in the PUBLISHED document of a site whose owner is not suspended, the host, then bot user agents and the honeypot (answered exactly like a success), the field rules (422 with the values typed), the fill time (the open marker at least 3 seconds old, which only `GET /f/{pageId}/o` starts and a POST only reads through `rate_limit_age`, or a signed single-use token from the confirm page at least 2 seconds and at most an hour old), blocked link hosts in a message (dropped like a success; 503 when the blocklist cannot answer), 3 accepted per client and form in 10 minutes and, per site an hour, a quarter of the plan's daily cap per site (5 / 125 / 1,250), then `record_form_submission`. A stored submission answers 303 to the sent page; a site unpublished between the lookup and the store answers the 404 notice; a value a table check refuses (never expected: the app strips exactly what the checks refuse, U+2028 and U+2029 are not control characters to Postgres and are kept) answers that field's 422 page, never a 503; after the response one click event is recorded with the block's id and, for a contact form with `notify`, the owner email is sent. Nothing a visitor typed, and no IP address or user agent, is ever logged (a failure logs a constant line, the error's class and its code, never its message). Every `/f` response, whatever its status, carries `TENANT_PAGE_CSP`, `no-store`, `noindex` and `X-Frame-Options: DENY`; the HYDLNK notices of `/r` and `/c` keep their own stricter policy.
+- **Limits.** Per account and UTC month, the submissions its sites HOLD that were sent this month: Free 100, Pro 5,000, Studio 50,000; and per site and UTC day, the rows that site holds from today: Free 20, Pro 500, Studio 5,000 (`plan_limits().form_submissions_per_site_day`). Both are HL016 in one `BEFORE INSERT` trigger, so even the secret key cannot pass them; it takes the account's usage row for the month `FOR UPDATE` before it counts, so concurrent inserts at a cap store exactly what fits. Deleting a submission gives its place back (orchestrator's decision of 2026-11-26 after the security review, for Gary to confirm: a spammer could otherwise burn a month's allowance in an hour and real visitors would then see "sent" with nothing stored); a duplicate sign-up (same form, same address in any letter case) is not stored and not counted. Over either cap the visitor still sees the sent page, nothing is stored and no message email goes out; the owner sees a notice on Audience and gets one email on the first refusal of a month by the monthly cap (none for the daily cap).
+- **Audience** (`/audience` on the app host, the current site): the month's meter and the over-limit notice, a filter by form, 50 a page newest first, Delete and "Delete all from this form" (Server Actions under RLS, 60 a minute), and CSV export on every plan (`/audience/export`, `csvCell` on every cell, at most the newest 50,000 rows). Reads go through the signed-in user's session under RLS.
+- **What is stored about a visitor:** what they typed and the time. No visitor hash (dropped after the security review: nothing read it, and it tied an address to that day's analytics). Duplicates are found by the address on the form; the limits key on the client through the rate limiter's hashed keys, which never reach this table.
+- **Accepted risks (security review, for Gary):** there is no double opt-in, so anyone can sign a third party's address up to a sign-up form with a non-browser client (the fill-time token and the limits slow it, nothing proves the address is theirs); HYDLNK never emails the people who sign up or write (only the owner gets the message email), so an owner's list is the owner's responsibility (the Audience screen says so).
+- **Proofs that are not where a row names them (owner decision):** M17-02 step 3 asks pgTAP for "two concurrent calls at 99 store exactly one"; one pgTAP transaction cannot hold two sessions, so the case is a Vitest database test with two psql sessions that are proven to overlap (`tests/unit/m17f-forms-limit-race.test.ts`), and pgTAP 220 has every other case.
 
 ## Sites with pages (Wave M)
 
@@ -142,6 +291,250 @@ Gary picked all ten tools in the Admin Plan review (2026-10-06), with reserved h
 - **See a draft for support (M13-11).** A read-only view of any site's draft (Home and its pages) on the app host, with the same inert rendering as the share preview; each opening is written to the audit log; the Privacy Policy says staff may view an unpublished draft to help with a support request or a report, and that each view is logged.
 - **Housekeeping.** M5-08, M5-09 and M7-13 (built earlier, not fully proven) get the tests that prove them.
 
+## Content model (feature 1, Wave N)
+
+Decided by Gary on 2026-10-11 in the plan doc "HYDLNK Next Evolution Plan" (https://claude.ai/artifact/UgmZ2dAtAoinuQTCcWdv5b, section 7). HYDLNK becomes a small CMS:
+- Pages, posts and, later, user-defined types are entries in one table.
+- Each entry publishes on its own.
+- The site row (`pages`) keeps only site-wide design.
+
+Stage 1a builds the tables and the one writer. Stage 1b moves sub-pages and Home into them. Stage 2 serves posts publicly. Stage 3 is the editor UI. Stage 4 is the MCP tools.
+
+### Tables (stage 1a)
+
+**`content_types`**
+- Columns:
+  - `id`
+  - `site_id` → `pages.id`, on delete cascade
+  - `key`: `page`, `post`, or a custom key matching `^[a-z][a-z0-9-]{1,30}$`
+  - `label`, `label_plural`
+  - `kind`: `builtin` or `custom`
+  - `body_format`: `blocks` or `markdown`
+  - `archive_path`: null for `page`, `blog` for `post`
+  - `enabled`
+  - `field_schema` (jsonb, default `[]`)
+  - `settings` (jsonb: page size, sort)
+  - `position`, `created_at`, `updated_at`
+- `key` is unique per site.
+- Every site has a built-in `page` type (enabled, blocks) and a built-in `post` type (Markdown, archive `blog`). The `post` type starts disabled; "Add → Blog" enables it.
+- A trigger on `pages` insert creates both rows. The migration backfills every existing site.
+
+**`content_entries`**
+- Columns:
+  - `id`: default `gen_random_uuid()`, but an explicit id is accepted (stage 1b keeps sub-page ids)
+  - `site_id`
+  - `type_id` → `content_types`, on delete restrict
+  - `draft` (jsonb, not null)
+  - `published` (jsonb, null)
+  - `published_at`, `first_published_at`
+  - `scheduled_at` (null until stage 5)
+  - `rev` (bigint, starts at 1)
+  - `deleted_at`, `created_at`, `updated_at`
+  - Generated: `live_path` (a page's published path), `live_slug` (a typed entry's published slug)
+- **Scheduling (Wave E, M20).** `scheduled_at` now mirrors the pending scheduled publish (a trigger on `content_schedules`). `content_schedules` holds one pending row per (entry, action): `publish` (with a snapshot of the draft and the rev it was taken at) or `unpublish`; owners read their rows (never `snapshot`, `claim`, `locked_until`), every write is a service-role function (`schedule_entry`, `cancel_schedule`, `claim_due_schedules`, `fire_scheduled_publish`, `fire_scheduled_unpublish`, `finish_schedule`). A hand publish cancels the pending publish, a hand unpublish the pending unpublish, a trash both, in the same transaction. Blocks carry an optional `schedule: {from?, until?}` (UTC minutes); the live page, `/r`, `/c` and the form routes decide it at `max(server clock, pages.schedule_clock)`. The pg_cron job `run-schedules` (each minute) POSTs `/api/cron/run-schedules` only when a block boundary (`content_entries.next_boundary_at`) or a schedule is due; the route expires the site at a boundary (then acknowledges it) and fires due schedules through the same Publish gates as a hand publish, as the owner with source `system`, `published_at` = the scheduled time. Plan: `scheduling` (Free no, Pro and Studio yes, HL017) and `scheduled_per_site` (Pro 50, Studio 500, HL018), enforced in the database. A publish more than 24 hours late fails as `missed`; an unpublish always runs; a refusal at fire time (plan, suspension, blocklist, invalid snapshot, taken slug or path) ends the row as failed and it never fires later by itself.
+- `live_slug` is unique per site and type (a partial unique index where it is not null). A slug may not be one of the words stage 2 routes under an archive: `page`, `category`, `tag`, `feed.xml`. That list sits beside the path reserved words, as one list.
+- Same-site integrity: a trigger refuses an entry whose type belongs to another site. The same rule covers `content_terms.type_id` and both halves of `content_entry_terms`. This is tested in pgTAP.
+- Checks:
+  - `published` and `published_at` are null together.
+  - `draft` is an object of at most 1 MiB; `published` is at most 2 MiB.
+  - The document shape is validated by the writer (Zod), not the database.
+- A page's draft is today's sub-page document (`path`, `title`, `description`, `blocks`). Home is the page whose path is `/`.
+- A post's draft holds:
+  - `title`, `slug`, `excerpt`
+  - `body` (Markdown)
+  - `featuredImage` (a media reference)
+  - `seo`: `title`, `description`, `ogImage`, `noindex`
+  - `terms`: category and tag ids
+  - `fields`
+
+**`content_entry_revisions`**
+- Columns:
+  - `id`, `entry_id` (cascade), `site_id`
+  - `rev`
+  - `snapshot` (the draft at that rev)
+  - `was_published`
+  - `source`: `editor`, `mcp`, `builder` or `system`
+  - `created_at`
+- Unique on (`entry_id`, `rev`).
+- A revision is recorded at every publish, and on a save when the newest revision is older than 10 minutes.
+- Pruned per entry to the plan's `revisions_kept`, keeping the newest.
+
+**`content_terms`**
+- Columns: `id`, `site_id`, `type_id`, `taxonomy` (`category` or `tag`), `slug`, `name`, `parent_id`, `position`, `created_at`.
+- Unique on (`site_id`, `type_id`, `taxonomy`, `slug`).
+- A category nests at most one level; tags are flat.
+
+**`content_entry_terms`**
+- Columns: (`entry_id`, `term_id`).
+- The live membership, rebuilt from the published copy at publish and cleared at unpublish.
+
+**`site_paths`**
+- Columns: (`site_id`, `path`) as primary key, plus `entry_id` or `type_id`. Exactly one of them is set.
+- The registry of every claimed URL root on a site:
+  - a page's draft path and live path;
+  - an enabled type's archive path;
+  - `/` for Home.
+- It refuses:
+  - a clash between any two claims;
+  - a reserved word (the list in `src/lib/document/path.ts` and the SQL check, kept as one list).
+- Maintained by triggers on `content_entries` and `content_types`.
+- A draft path that clashes is refused at save time (HL012), not only at publish. That is new compared with today's sub-pages.
+- Ordering, instead of a cross-table check: no user can enable a post type before stage 1b ships, because the editor and MCP expose it only in stages 3 and 4. So until then, `site_paths` only needs to watch the content tables.
+
+**Stage 2 additions (Wave B, M16-01, migration `blog_stage_2`):**
+- `content_slug_redirects` (`site_id`, `type_id`, `from_slug`, `entry_id`, `created_at`; primary key `type_id, from_slug`): the old slugs of a published entry, so a changed slug answers 301.
+  - Its one writer is a trigger on `content_entries.published`. A republish that changes the live slug records the old one against the entry. A slug that goes live again (the same entry or a later one) deletes its row, so a live post always wins over a redirect.
+  - A first publish, an unpublish and a trash record nothing. The newest 200 per type are kept. Rows go with their entry, type or site.
+  - Access: RLS on; the owner may SELECT rows of their own sites; `service_role` may SELECT (the public lookup); no role has a write grant, the secret key included.
+  - A row points at the entry, not at a slug, so there is no chain to follow. The reader must still check the entry is live.
+- `content_entries_live_order_idx` on `(site_id, type_id, first_published_at desc, id)` for live, untrashed entries: the archive order.
+- `live_term_counts(site, type)`: a type's terms with the number of published, untrashed entries on each (a term with none is listed at 0). `service_role` only.
+- Redirects for a changed archive path or page path are not built.
+- The private share link of a site (M16-16) shows the saved draft of any post of that same site at `/share/{token}/entry/{entryId}`: this is intended (a share link previews the whole site's drafts, its posts included), and the entry is always looked up inside the link's own site.
+
+**Deferred:**
+- `content_relations` arrives in stage 5.
+
+**Access rules**
+- RLS is on for every table.
+- A signed-in user may SELECT rows of their own sites (`exists` on `pages.owner_id = auth.uid()`). `anon` gets nothing.
+- No INSERT, UPDATE or DELETE grant goes to `anon` or `authenticated`. Writes go through the server writer (service role), which checks ownership itself.
+- Public reads (stage 2) are server-only queries that return published copies only.
+
+**Limits** (new `plan_limits` columns, mirrored in `src/lib/limits/table.ts` under the parity test):
+
+| Limit | Free | Pro | Studio | Code |
+|---|---|---|---|---|
+| `entries_per_type`: every non-page type, posts first; pages keep `pages_per_site` | 25 | 1,000 | 100,000 (shown as Unlimited) | HL010 |
+| `custom_types` | 0 | 3 | 100 (shown as Unlimited) | HL011, enforced now by a count trigger on custom types |
+| `revisions_kept` | 10 | 50 | 200 | Pruning, not an error |
+| `content_bytes` per account (drafts and published copies of entries and sub-pages) | 64 MiB (today's HL009 value) | 1 GiB | 5 GiB | HL009, now by plan |
+
+- A path claim refused by `site_paths` raises HL012 (taken or reserved).
+- A type holds at most 500 terms, categories and tags together, on every plan: the 501st insert raises HL015 (a trigger on `content_terms`; the writer answers `term_limit`). It is not a plan limit and is not in `plan_limits`.
+- Posts per plan are `entries_per_type` (HL010): nothing new in SQL for the blog; `218-posts-per-plan.test.sql` pins it.
+- Trashed entries count toward the limits until purged, so trash is never free overflow.
+- A downgrade deletes nothing: existing entries stay live, and new ones over the limit are refused.
+
+**Media**
+- `media_paths_in_use` also text-scans `content_entries.draft` and `.published`, and `content_entry_revisions.snapshot`.
+- An image used only by an entry is never queued for deletion.
+
+### The writer (stage 1a)
+
+- `src/lib/content` is server-only and the only module that writes the content tables. A static test holds this, as `m10-mcp-static` does for MCP.
+- Callers pass an actor: user id plus source (`editor`, `mcp` or `builder`).
+- The writer checks:
+  - the site's owner;
+  - suspension;
+  - the type is enabled.
+- Another user's entry answers the same not-found as a missing one.
+- Every write carries `expectedRev`. A stale one returns `conflict` with the current revision and changes nothing.
+- Validation is Zod: lenient for drafts, strict for publish. The built-in `post` schema is in code. Custom types compile from `field_schema` in stage 5.
+- Operations:
+  - enable and update a type (archive path, labels);
+  - create, update, publish, unpublish, trash and restore an entry;
+  - list entries (type, status, term, title search; sort; keyset cursor; at most 100 per call);
+  - get an entry;
+  - list and restore revisions;
+  - create, rename and delete terms;
+  - set an entry's terms;
+  - (stage 2) list a site's types, list a type's terms, and count a type's entries, trash included. These three are reads: they check ownership only, so they work for a type that is off and for a suspended owner.
+- Publish and unpublish are single SQL functions (service role only, empty `search_path`), so each one is atomic.
+  - Publish copies the draft, sets the dates, rebuilds the term links, updates `site_paths` and records a revision.
+  - Publish never touches `pages`, `site_pages` or `page_versions`.
+  - Cache expiry (stage 2, M16-09): after a publish, unpublish, trash or restore, a page entry expires the site's `page:<id>` tag; an entry of any other type expires `entry:<id>` and `type:<typeId>` and leaves the site tag alone. Turning a type on or off, or changing its labels or archive path, expires `type:<typeId>` and `page:<id>`. The write stands if the expiry fails.
+  - A list row and a single entry carry `hasUnpublishedChanges`: a live entry whose draft differs from its published copy (key order aside).
+- Trash clears the live copy at once and keeps the draft. Restore works for 30 days. A daily job purges older trash.
+
+**Post bodies are untrusted Markdown** (orchestrator decision, 2026-10-12, from the M15-03 checks):
+- Publish refuses any link or image whose scheme is not http, https, `mailto:` or `tel:` (for example `javascript:` and `data:`), with a typed issue the author can act on.
+- The writer also checks every link and image host against the blocklist: in tables, in raw HTML and behind HTML character references. It fails closed on URLs it cannot parse.
+- Stage 2 renders with `marked` with raw HTML escaped as text, never passed through, and only http(s) links. Images come only from HYDLNK media, and embeds only from the existing allowlist, on a line of their own.
+- Body images (stage 2, M16-04): Publish takes an image in a body only when its address is, character for character, the stored address of an upload (`storageUrl(path)`: this project's Storage, the `page-media` bucket, a `{uid}/{file}.{jpg|png|webp}` path), the path is in the owner's own folder and the file exists. Any other address answers `invalid` with "Use an image from your uploads."; so does a body with more than 50 distinct images. A draft save does not check this, so an old draft is refused only when it is published. Such an address is not sent to the link blocklist (it is HYDLNK's own Storage). Raw HTML `<img>` is not an image: the renderer shows it as text.
+- The post schemas, limits and list enums live in `@/lib/content/schemas`. That module is free of server-only imports, so the editor and MCP use the same rules as the writer.
+
+**Content model security review (M15-04, 2026-10-12): decisions and known items** (both confirmed by Gary on 2026-10-12: revision history is pruned, oldest first, to fit the cap; the known items are fixed before stages 3 and 4)
+- **Stage 2 must not trust the publish check alone.** The post-body scheme check is an allowlist: http, https, `mailto:`, `tel:`, or a plain relative reference. The renderer must still allowlist its own final `href` and `src`, escape raw HTML, and never reuse the publish check as its only filter.
+- **Revision storage.** Revision snapshots count against the plan's `content_bytes` by pruning: the oldest are dropped first, silently, so history is bounded at about one extra cap per account.
+- **Fixed in the same wave:**
+  - the `hydlnk.content_move` flag is honored only for privileged roles, never `authenticated` or `anon`;
+  - moved `site_pages` rows are read-only under RLS.
+- **Known items, to settle before the writer is reachable from the editor (stage 3) or MCP (stage 4):**
+  - ~~a per-type cap on terms~~ closed in stage 2 (HL015, 500 per type, M16-01);
+  - ~~body images restricted to the owner's own media~~ closed in stage 2 (refused at Publish, M16-04; the renderer keeps its own check);
+  - custom `fields` validated by type (stage 5). Until then no MCP tool takes `fields`, and `update_entry` carries the stored `fields` over untouched (M18-05);
+  - trashed page entries and the Home exemption under HL008: still open, not part of the blog wave. As of `20261014000009`, the page count includes trashed page entries and leaves out any page entry whose draft or published path is `/`. Not reachable from MCP: `delete_entry` and `restore_entry` take posts only, so the connector cannot make a trashed page (M18-07);
+  - the editor adopting new sub-page revisions after Publish (an MCP edit made during that window goes unnoticed): addressed in 1b-2 (`publish_site_revs` answers the revs under the publish locks, see the 1b-2 note below); not touched by the blog wave. A per-item publish through MCP moves only that entry's rev, so the editor's next save of it is a `conflict` (M18-08);
+  - revisions pruned when a plan drops or a gift ends (accepted, as with versions).
+
+### Stage 4: the MCP content tools (Wave C, M18)
+
+Seventeen tools on the existing MCP server, all through the one writer (`@/lib/content`) with the source `mcp` and the user of the verified token. No SQL: every limit is a trigger that was already there (HL010 posts per plan, HL015 terms, HL009 content bytes, HL012 paths and slugs).
+
+- **Tools.** Reads (`hydlnk.read`): `list_content_types`, `list_entries`, `get_entry`, `list_terms`, `list_revisions`. Draft writes (`hydlnk.write`): `create_entry`, `update_entry`, `delete_entry`, `restore_entry`, `create_term`, `restore_revision`. Live changes (`hydlnk.publish`): `rename_term`, `delete_term`, `publish_entry`, `unpublish_entry`, `publish_design`, `update_content_type`. `tools/list` returns the reads first, then the draft writes, then everything behind publish, `publish_page` last.
+- **The scope rule.** Anything that changes what a visitor can see needs `hydlnk.publish`: publishing and unpublishing, the design, the blog switch and its address, and renaming or deleting a term (live term pages change with no Publish step). Trashing a LIVE post takes its live copy down, so `delete_entry` asks for `hydlnk.publish` at run time for that one case (`requirePublish`). No new scope word: existing connections get the tools under the scopes they hold.
+- **The entry mode.** `runTool` resolves an `entryId` under the token's user before the handler runs (`src/lib/mcp/entry-access.ts`, reading through the writer's `getEntry`). Another account's entry, an entry of another site than the `pageId` sent, a type the tool does not take, the wrong side of the trash, a random id and a malformed id are one `not_found`. `publish_entry`, `list_revisions` and `restore_revision` also take a page, as `pageId` with `subPageId`; Home's entry id is never printed. Pages are never trashed, restored or unpublished one by one through MCP.
+- **Revs.** Every write to an existing entry requires `ifRev` (an integer from 1) and passes it to the writer as sent; `publish_design` requires `ifDesignRev`. A `conflict` carries no current rev: the client reads again before it writes again.
+- **Exact content.** A content tool's result is never shortened (`ToolSuccess.exact`); `get_entry` returns the body in ranges of code points (`MCP_BODY_RANGE_CHARS` 12,000, at most `MCP_BODY_RANGE_MAX_CHARS` 30,000) with `bodyChars`, `nextOffset` and `contentHash` (SHA-256 of the UTF-8 body). `update_entry` takes a whole `body` or `bodyEdits` (up to 20 exact find and replace steps). The endpoint reads at most 1 MiB (`MCP_MAX_BODY_BYTES`), so a full 512 KiB body can be sent. The page tools (every tool but the seventeen content tools) keep the 60 KiB shortening.
+- **A save through MCP is checked like a publish.** `create_entry` and `update_entry` call the writer's `checkPostBody` on the whole next body (after `bodyEdits` are applied): only http, https, `mailto:` and `tel:` addresses, every image the exact stored address of the caller's own existing upload, at most 50 images. The editor's lenient draft save is unchanged, and Publish runs every check again. A body the editor saved with a remote image can be changed through MCP only once the image is fixed.
+- **Limits.** `MCP_ITEM_PUBLISH_PER_HOUR` 60 per person across tokens for the four tools that change one item of the live site (`changesLive`), counted only for a call that passed the ownership check; `publish_page` keeps `MCP_PUBLISH_PER_HOUR` 10. Lists are bounded by count (`MCP_LIST_ENTRIES_MAX` 50 entries, 500 terms, `MCP_LIST_REVISIONS_MAX` 200 revisions). Two failure codes were added: `type_disabled` and `limit_reached` (eighteen in all).
+- **Not in this wave:** `get_guide`, MCP resources, the public guides and `llms.txt`; custom types and scheduling (stage 5); file tools (stage 6); reading a revision's content.
+- **Defaults built in Wave C, waiting for Gary's yes** (the plan's twelve): no new scope; everything live behind publish, term changes and the blog switch included; a read-only connection reads post drafts and trashed posts, as it reads page drafts; request size 1 MiB; content results never shortened; 60 per-item publishes an hour; pages take `publish_entry` and the revision tools but are never trashed through MCP; `publish_page` publishes no post; guides are a follow-up wave; the body checks run at save; no rev in a conflict answer; no revision content in v1.
+
+### Moving pages in (stage 1b), in this order
+
+1. For each `site_pages` row, insert a `page` entry with the same id. Copy the draft, published copy and `published_at`, and register its paths.
+2. For each site, insert Home as a `page` entry with a new id and path `/`:
+   - its draft blocks come from `pages.draft.blocks`, and its published blocks from `pages.published.blocks`;
+   - the site document then keeps only theme, menu, profile, share card, banner, UTM and redirect.
+3. Convert `page_versions`:
+   - each version's Home blocks and `sub_pages` snapshots become `content_entry_revisions` (source `system`), up to the plan's `revisions_kept`;
+   - its design part stays as a design version.
+4. Move every reader of `site_pages` to entries: the renderer, share links, `site_click_pairs`, MCP, the sitemap and the publish path.
+   - `events.sub_page_id` already holds these ids, so analytics history is kept.
+   - The old Home route reads Home's entry.
+5. Before any switch, do a dry run on a copy of production data, with a per-site comparison of the live HTML before and after.
+6. `site_pages` stays read-only until production checks pass. It is dropped in a later release with Gary's explicit yes.
+
+**Rules for the move** (orchestrator decisions, 2026-10-12, from the M15-02 review):
+- **Bytes.** The move marks each copied `site_pages` row as moved (`moved_at`), and moved rows stop counting toward `account_site_bytes`, so nothing counts twice. The rows stay read-only for rollback. The move runs inside a service-role-only SQL function that sets a transaction-local flag. The HL009 trigger honors that flag only for the move, so an account already near its cap is not blocked mid-move. Afterwards it simply cannot add more until it is under its cap, as after a downgrade.
+- **Draft paths.** A sub-page draft path that the new registry refuses (reserved, malformed, `/` or a clash) becomes its live path if that path is valid and free, otherwise `suggestPath(title, taken)`. The original draft is kept in the entry's first revision (source `system`), so nothing is lost.
+- **Counting pages.** During the transition, HL008 counts Home plus a site's `page` entries (trash included) and ignores `site_pages` rows. After the move, no new `site_pages` rows are created.
+- **Links in Markdown.** Only the server writer writes content entries, so `src/lib/content` checks the links in a Markdown body against the blocklist (`blocked_links_in`) at save and publish. The database check stays on block documents.
+
+**Stage 1b shape and publishing decisions (Gary, 2026-10-12):**
+- **One cutover.** All accounts move in one release, once a dry run on a copy of production shows byte-identical live HTML for every site. There is no per-account flag and no dual code path.
+- **Copy only.** The move never strips or deletes: `site_pages` (marked moved), `pages.draft` and `pages.published` blocks, and `page_versions` stay as they are. So Vercel Instant Rollback restores the old site, and a reverse function copies back any entry edits made between the deploy and a rollback.
+- **Removing the old copies** is a later, separate release with Gary's explicit yes.
+- **1b-2: per-page publishing.**
+  - Each page and post publishes on its own.
+  - Publish design covers theme, menu and profile.
+  - Publish all changes publishes everything that changed.
+  - Menu links and page-link blocks to an unpublished page are hidden on the live site until it is published; Publish is never blocked for them.
+  - History restores the site design, and each page or post restores from its own revisions.
+  - MCP `publish_page` keeps meaning "publish all changes"; per-item and design publish tools come with the content tools in stage 4 (built in Wave C: `publish_entry` and `publish_design`, M18-08 and M18-09; `publish_page` still publishes no post).
+  - Home's own title and SEO description wait for stage 3; until then Home's title stays the profile name.
+  - The publish bar is built from DESIGN.md and checked by design-verifier at 390 and 1440.
+
+**Stage 1b-1 build decisions (orchestrator, 2026-10-13, from the checkpoints):**
+- **Deleting a sub-page** stays immediate and permanent, as today. The entry and its revisions are purged, not trashed, until stage 3 brings trash to the editor, so the page limit frees at once.
+- **New sites** get their Home entry at claim time; publishing also moves a site that has none.
+- **Known risk, the migration push:** publishing breaks if the production push stops between `20261015000001` and `000008`. The runbook says to run `supabase/rollback/content-move-rollback.sql` at once if the push fails.
+- **Known risk, upload quota:** frozen copies keep removed images counting toward the upload quota until the old copies are removed in the later cleanup release.
+- **Known low item:** the editor's client size check tests the merged Home draft against 256 KiB. The database caps Home's entry at 256 KiB minus the design size minus 64 bytes, so a Home draft within about 100 bytes of the limit passes the client check and is then refused by the server with the usual too-large message. Nothing is lost. Tighten the client check with the stage 3 editor work.
+- **Checking the move:** after the production migrations, the move's counts are checked read-only before the merge (one `/` entry per site, ids kept, `moved_at` on every row). No audit table is added.
+
+**Security review record, stages 1b-1 and 1b-2 (2026-11-26; rows M15-09 and M15-12 stay open until Gary confirms):**
+- **1b-1 (M15-05 to M15-08):** security-reviewer found no critical, high or medium issue. The adversarial pass found five low items, all fixed: the legacy-read scan closed its bypasses and the design save sends no blocks (0b2e406); Undo checks the design rev and every entry rev before its first write (bf798db); a design-only save confirms Home's entry rev (ef8cb2e); deleting a page removes its menu link in the same transaction (9dd0681). Open for Gary: the "known low item" and the two "known risk" lines above are the orchestrator's calls, not yet his; and an authenticated write to a moved `site_pages` row is refused by RLS (no row changes, or 42501 on insert), not by the HL013 trigger that M15-05 step 5 names.
+- **1b-2 (M15-10, M15-11):** security-reviewer found no critical, high or medium issue and two low ones, both fixed in `20261126063714_per_page_publish_checks.sql` (d188b0e): Publish all compares every rev under the database locks (`p_expected_revs`, `stale_rev`), and `publish_site_page` refuses a block id another live page holds (HL014, `block_id_clash`). Three adversarial passes followed. Fixed: the content-move rollback file recreated `publish_site` without its revoke (529ef0c, with a test that runs each rollback file and lists what clients can execute); the editor adopted revs from an unlocked re-read (now `publish_site_revs` answers them under the locks, f8a59b5); a save could overlap a publish of the same entry (saves now wait, f8a59b5, e241163, ad3ffcc). Left as is: a redirect set by Publish design while a Home publish removes its target block can go live pointing at a missing block; serving it is gated again at render (`src/lib/tenant-render/redirect.ts`), and only the owner's own site is affected. The production build's client chunks hold none of the publish function names or key names (checked at e241163).
+
+1a's schema must accept steps 1 to 3 without another DDL change. That means:
+- an explicit entry id;
+- today's sub-page document as a draft;
+- `/` in `site_paths`;
+- `system` revisions.
+
 ## Milestones
 
 Each ends in something you can click. The gate to opening signup is running Gary's own brands on it.
@@ -173,9 +566,10 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 | Footer badge | "Made with HYDLNK" | Removable | Removable |
 | Uploads | 10 MB | 100 MB | 1 GB |
 | Analytics | Per-link clicks, 30 days; CSV export of that range | 1 year, referrers, country, device; CSV export | Same as Pro (CSV export is on every plan since Wave K, M9-26) |
+| Form submissions per month | 100 | 5,000 | 50,000 |
 | Version history | — | Last 25 published versions: preview and restore | Last 25 published versions: preview and restore |
 | Scheduled links (not in v1) | — | Later | Later |
-| Team access | — | — | Invite editors per page |
+| Team access | — | — | Up to 10 members and invites per site (editors and publishers) |
 
 - **Billing.** The products, prices, customer portal and webhook are kept as data in `scripts/stripe/catalog.json` and checked or applied with `scripts/stripe/setup-live.sh` (runbook: `docs/stripe-go-live.md`; a live dry run on 2026-10-06 found Stripe already matching). Stripe Checkout for upgrades, one webhook (`/api/stripe/webhook` on `app.hydlnk.com`) that writes `plan` to `accounts`, Stripe's hosted customer portal behind "Manage billing". No billing UI to build. Stripe stays in the HYDLNK sandbox while Vercel is on Hobby (no commercial use); switch to live with the move to Pro.
 - **Limits** are enforced server-side on write (page count, domain count, upload bytes), never only hidden in the UI.
@@ -216,7 +610,7 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Link lock guessing limits (2026-10-04, Wave K security review, M9-29, M9-30): a code lock is checked on the server (scrypt, constant-time compare) behind three limits, all counted before a code is hashed and all failing closed: per client and link (5 a minute) and per client overall (20 in ten minutes); per link across all clients (60 an hour), the heat of the link; and, once a link is over that, one try per client per ten minutes on it (`lock-slow`). Nothing is ever a ceiling on the link, so a stranger cannot lock real visitors out, and a visitor who types the right code first time is not slowed; a sustained guessing run drops from 5 tries a minute per address to 1 in ten. Known limits: the heat counts tries, not only wrong ones; the limiter's window cannot pass an hour; and many addresses still get one try each per ten minutes, so the code's length is the real defence. The code rule stays 4 to 32 characters (the acceptance steps of M9-29 and M9-30 name it); the editor shows a hint, not an error, under a code that is digits only and shorter than 6. Raising the minimum to 6 is Gary's call.
 - Redirect mode loops (2026-10-04, Wave K security review, M9-31): Publish refuses a redirect target on the page's own hosts, but two pages in redirect mode may point at each other (A to B to A). That is accepted: the browser stops after about 20 hops, every hop goes through `/r` and its 60-a-minute limit, and the only effect is more clicks in the owner's own analytics. Refusing every `*.{root}` target would also stop a legitimate redirect to the owner's other page.
 
-- MCP connector and our own OAuth 2.1 authorization server on the app host (Gary, 2026-10-04, Wave L): every plan, the full tool set including publish; `mcp-handler` 2.2.0 and the MCP server SDK 2.3.0, server only; no client SDK; no new subdomain (issuer `https://app.hydlnk.com`, endpoint `https://app.hydlnk.com/mcp`). Twelve tools in three scopes (`hydlnk.read`, `hydlnk.write`, `hydlnk.publish`), each of which the person can untick on the consent screen; opaque hashed tokens (access 1 hour, refresh 60 days, rotated, a reused refresh token ends the connection); Client ID Metadata Documents and open Dynamic Client Registration (rate limited) for clients; at most 20 connected apps per person; tool calls limited to 60 a minute and 600 an hour per person and 10 publishes an hour; an activity log of tool, page and outcome only, deleted after `MCP_ACTIVITY_RETENTION_DAYS` days. Rules in `.claude/rules/mcp-oauth.md`.
+- MCP connector and our own OAuth 2.1 authorization server on the app host (Gary, 2026-10-04, Wave L): every plan, the full tool set including publish; `mcp-handler` 2.2.0 and the MCP server SDK 2.3.0, server only; no client SDK; no new subdomain (issuer `https://app.hydlnk.com`, endpoint `https://app.hydlnk.com/mcp`). Thirty-one tools in three scopes (`hydlnk.read`, `hydlnk.write`, `hydlnk.publish`; the page tools from Waves L and M and the seventeen content tools from Wave C, see "Stage 4" under Content model), each of which the person can untick on the consent screen; opaque hashed tokens (access 1 hour, refresh 60 days, rotated, a reused refresh token ends the connection); Client ID Metadata Documents and open Dynamic Client Registration (rate limited) for clients; at most 20 connected apps per person; tool calls limited to 60 a minute and 600 an hour per person, 10 whole-site publishes an hour (`publish_page`) and 60 per-item changes to the live site an hour (`MCP_ITEM_PUBLISH_PER_HOUR`, M18-01); an activity log of tool, page and outcome only, deleted after `MCP_ACTIVITY_RETENTION_DAYS` days. Rules in `.claude/rules/mcp-oauth.md`.
 - MCP connector security review (2026-10-04, Wave L security review, M10-33): (1) no limit is keyed on a client id alone: a client address is shared by everyone who connects that app, so the token endpoint has only its per-address limit before the code or token is checked; (2) the three real client documents (Claude, Claude Code, ChatGPT; `src/lib/oauth/known-clients.ts`) are counted against the caller's address only for the document fetch, and an expired cached document stands in for up to a week when the host is slow, down or being asked for too much (never when the new document is invalid); (3) the authorize endpoint sends an error to a client's return address only for a known client, or a metadata client the signed-in person already holds a grant for, and shows the error page for every other client (a registered client never is trusted), so it cannot act as a redirector; (4) a vendor's name (Claude, Anthropic, ChatGPT, OpenAI) is accepted only for a client that returns to that vendor's own site or to this computer, no client may return to this product's own hosts, and a registered app is introduced on the consent screen as unverified with the host you go back to; (5) registration has a per-address limit and no overall bucket; (6) a verified token has 120 requests a minute of any kind, and a rate_limited tool refusal leaves an activity row once a minute per token; (7) a request stored with nobody signed in is limited to 20 a minute per address; (8) referrer names in `get_analytics` are marked as untrusted visitor text. Known trade-offs, accepted for launch: a metadata client that declares `private_key_jwt` (ChatGPT does) is still treated as a public client, so its refresh tokens are bearer-only and rotation with reuse detection is the protection (the metadata advertises only `none`; when a client needs more, fetch its `jwks_uri` through the safe fetch and require a valid assertion at the refresh grant); write stays pre-ticked on the consent screen and publish starts unticked unless the person already holds publish for that app (Gary, 2026-10-04, M10-37); a signed-out request is still a stored row until the hourly purge, now bounded per address.
 - MCP connector second security review (2026-10-04, M10-38; no critical or high findings): (1) client-metadata rows that no grant and no request refers to are capped at 5,000 (oldest first, never a known client) and a never-granted row is purged after 4 hours, not 7 days; (2) every client that is not one of the three known documents is introduced as unverified on the consent screen, a metadata client as well as a registered one; (3) document names are resolved with a c-ares Resolver (1.5 seconds, one try, both families) and not `dns.lookup`, so slow names cannot occupy libuv's thread pool; (4) `/oauth/token` allows 600 a minute per address; (5) an expired cached document stands in only when the host is slow or down, never when the caller is rate limited; (6) a second consent ends only the tokens that hold more than the new scopes (the one-live-refresh-token-per-grant index stays, so a second install's code exchange retires the first install's refresh token; independent installs would need the index relaxed to one per install); (7) a narrowed refresh stays narrowed; (8) a used code presented by another client ends nothing; (9) referrer labels in `get_analytics` are cut at 60 characters; (10) a malformed bearer on `/mcp` is counted before the wrapper runs; (11) refresh grace window, Gary's orchestrator decided: a refresh token rotated in the last 60 seconds and presented again by the same client is exchanged again and what the first exchange issued is revoked, a reuse after 60 seconds or by another client still ends the grant; (12) a name holding "hydlnk" is accepted when every return address is loopback (Claude Code's fallback registration name "Claude Code (hydlnk)"). Not fixed, on purpose: look-alike letters in client names (the unverified heading covers it), bearer path matching variants (no cookie route is reachable), per-credential limit keys.
 - MCP connector third security review (2026-10-04, M10-40): (1) the 60 second refresh grace window of the second review is removed: "same client" is only the public client id, so a thief with an old refresh token could use the window to take over a family silently or regain scopes the app narrowed; any presentation of a rotated refresh token now ends its family (one install, since M10-39); (2) the `/mcp` endpoint waits at most 30 seconds for the SDK's answer and then cancels the stream and answers a 500 `server_error` (a legacy batch of a call plus its cancellation made the SDK drop the answer); batches stay accepted because the SDK negotiates 2025-03-26; (3) a replayed used code ends its family only with the matching PKCE verifier; (4) rotation, `oauth_end_family` and `oauth_end_grant` all lock the grant row first. Accepted, not fixed: concurrent refreshes by one app sharing a token store (two installs on one store racing the same token) end that family, so such an app must serialize its refreshes; the more than 5,000 row trim ordering of metadata clients is unchanged; a second consent keeps the other families alive, and Connected apps Revoke is the way to end every install.
@@ -230,10 +624,101 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Admin wave content approved (Gary, 2026-10-06): the 274 pre-filled reserved handles are kept as they are, including first names and everyday words (max, stan, chase, later, target, square and the like), removable one by one on /admin/reserved; the Privacy Policy sentence "HYDLNK staff may view an unpublished draft to help with a support request or to investigate a report, and each view is logged." ships as written.
 - Proving pass decisions (Gary, 2026-10-07): `lighthouse` approved as a dev-only dependency for M5-21; the 'matches the commit before' screenshot steps of M9-02, M9-05, M9-06, M9-07, M9-08 and M9-14 are replaced by today's tests (M14-01); next/font/google's build-time font download is accepted under the no-remote-fonts rule (M14-01); a site can be unpublished back to its placeholder (M14-02, new).
 - Proving pass decisions, production evidence (Gary, 2026-10-11): M1-08 and M1-13 (the replaced Google redirect button) pass with M1-29 and M1-30 (M14-03); with production on live Stripe, the sandbox halves of M4-06 and M4-07 run locally and Gary's live upgrade is the production evidence (M14-04); M4-35 is proven on Gary's real domain links.hyde-co.com and real upgrade, with no cleanup (M14-05); *.vercel.app preview and deployment addresses keep serving the HYDLNK site, never a tenant page (M14-06, replacing M4-09 step 3's 404 for them). Gary confirmed on production: Google sign-in and sign-up, the Google app published, custom SMTP configured and delivering to a non-team address, the HYDLNK sign-in email template, and a live upgrade that flipped the plan.
+- Content model, feature 1 (Gary, 2026-10-11; the plan doc "HYDLNK Next Evolution Plan", section 7): one shared table for pages, posts and later custom types, with sub-pages and Home moved in now; Home is the page at `/`; every page and post publishes on its own, with Publish design and Publish all changes; menu links to unpublished pages hidden; posts written in rich text and stored as Markdown; URLs `/{archive path}/{slug}`; categories and tags in v1; scheduling in stage 5; no byline; simple comments later; import after the MVP; posts Free 25, Pro 1,000, Studio unlimited (100,000 safety cap); custom types Pro 3, Studio unlimited; revisions Free 10, Pro 50, Studio 200; the larger MCP and page limits approved. See "Content model (feature 1, Wave N)".
+- Content model security review, M15-04 (Gary, 2026-10-12): revision snapshots stay within the plan's content_bytes by pruning the oldest first (history is bounded at about one extra cap per account), and the six low known items in "Content model" are fixed before the writer is reachable from the editor (stage 3) or MCP (stage 4).
+- Stage 1b of the content model (Gary, 2026-10-12): one cutover after a byte-identical dry run on a copy of production (no per-account flag), copy-only move with Vercel Instant Rollback as the way back; per-page publishing with Publish design and Publish all changes; links to unpublished pages hidden; History restores design, pages restore from their own revisions; MCP publish_page = publish all changes until stage 4; Home's title stays the profile name until stage 3; publish bar from DESIGN.md, checked by design-verifier. See "Content model".
+- Forms and email capture (Gary, 2026-11-26; Wave D, M17-01 to M17-12): moved from Deferred into scope. One `form` block (sign-up, contact); plain HTML with no script (M8-05 stays as it is); the tenant policy's form-action becomes 'self'; submissions per month Free 100, Pro 5,000, Studio 50,000, counted on intake and not given back by deleting; over the limit the visitor still sees the success page and the owner sees a notice; CSV on every plan; message emails only to the account's own address.
+- Team access (Gary, Wave F, M19-01 to M19-17): v1 rules. The unit is the site; roles editor and publisher; analytics, CSV, Audience and form submissions are owner-only (G3); share links owner-only (G4); members read and restore versions into the draft (G5) and read and apply the owner's saved themes without writing them (G6); MCP and connected apps stay owner-only, and the consent screen says "Sites shared with you aren’t included." (G10); an account with no site of its own may work on a shared one (G11); rename and blog settings are the owner's (G14); term rename and delete, and purging a trashed post, are publisher actions (G16, G17); publish counts on the actor and on the owner (G18); a removed or demoted publisher's pending schedules are canceled, and each fire re-checks the creator (G19). Downgrading deletes nothing: access pauses and resumes with the plan. The kill switch is a forward migration making `plan_site_members` return 0.
+
+## Decisions waiting for Gary (2026-11-27)
+
+One list of every default the six items were built on (blog M16, the Markdown lexer M16-04/M16-13, MCP content tools M18, forms M17, scheduling M20, team access M19) that Gary has not confirmed, with where each lives. To change one: edit the named constant, or add a forward migration (a named migration is never edited). The integration of the six on `m22-integration` chose nothing new beyond the two marked "integration".
+
+**Blog (M16, #35)**
+- A type holds at most 500 categories and tags (HL015, not a plan limit): `20261126095510_blog_stage_2.sql`.
+- Old slugs redirect (301), the newest 200 per type, the live slug always wins; a changed archive path or page path does not redirect: same migration, `content_slug_redirects`.
+- Body images only as the exact stored address of an upload in the site owner's folder, at most 50 per body (`BODY_IMAGES_MAX`, `src/lib/content/images.ts`); checked at Publish (and by MCP at save), not by the editor's draft save.
+- A share link previews every post draft of its own site at `/share/{token}/entry/{entryId}` (`src/lib/previews/shared.ts`).
+
+**Markdown lexer (M16-04, M16-13, #35)**
+- Our own linear-time lexer (`src/lib/blog/markdown/`) reads every body at save, publish, render and in the editor; `marked` is no longer reached at run time (only its types and `@tiptap/markdown`'s parser use it).
+- Limits, counted, no clock: 150,000 pieces (`MARKDOWN_MAX_NODES`) and 23 nesting levels (`MARKDOWN_MAX_NESTING`, depth 24), in `src/lib/blog/markdown/limits.ts`, whose header holds the measured realistic refusal sizes (a 6-column table from about 370 KiB, a one-word bullet list from about 326 KiB, a one-word checklist from about 391 KiB, one-word paragraphs from about 277 KiB). Whether such bodies should be accepted is Gary's call.
+- A body stored before the bound that the lexer refuses is drawn as plain text (`src/lib/blog/markdown/index.ts` header).
+- Heading levels: the editor writes `##` to `####`, drawn as h2 to h4; a `#` is drawn as h2 and levels 5 and 6 as h4 (the title is the one h1): `src/components/post/post-body.tsx`.
+- CLAUDE.md's dependency line for `marked` ("renders post bodies from Markdown to static HTML at publish, server only") is no longer accurate; its wording is Gary's (CLAUDE.md is not edited by agents). `tests/unit/dependencies-policy.test.ts` pins that marked is not reached at run time.
+
+**MCP content tools (M18, #36)**
+- The twelve Wave C defaults, listed under "Stage 4: the MCP content tools" above: no new scope; everything live behind `hydlnk.publish` (term rename and delete, the blog switch and its address included); a read-only connection reads post drafts and trashed posts; request size 1 MiB (`MCP_MAX_BODY_BYTES`); content results never shortened, a body in ranges of 12,000 characters, at most 30,000 (`MCP_BODY_RANGE_CHARS`, `MCP_BODY_RANGE_MAX_CHARS`); 60 per-item live changes an hour per person (`MCP_ITEM_PUBLISH_PER_HOUR`), all in `src/lib/mcp/constants.ts`; pages take `publish_entry` and the revision tools but are never trashed or unpublished one by one; `publish_page` publishes no post; guides, `llms.txt` and resources are a later wave; the body checks run at save (`checkPostBody`); no rev in a `conflict` answer; no revision content in v1. Trashing a live post asks for `hydlnk.publish` at run time.
+- Integration: `list_entries` filters by the writer's one status list, which scheduling extended with `scheduled` (`LIST_STATUSES`, `src/lib/content/schemas/enums.ts`); a content write past the team activity limit answers the connector's `rate_limited` with a 60-second retry (`src/lib/mcp/content-failure.ts`).
+- Team access keeps MCP owner-only (G10): a member's token reaches none of the 31 tools on a shared site (`decide()` rule 2, `src/lib/access/decide.ts`).
+
+**Forms (M17, #37)**
+- Caps on what a site holds: per site and UTC day Free 20, Pro 500, Studio 5,000 (`form_submissions_per_site_day`, `20261126185204_form_submissions_stored_cap.sql`); per site an hour a quarter of that, 5 / 125 / 1,250 (`FORM_SITE_HOURLY_SHARE` = 4, `src/lib/forms/submit.ts`); deleting a submission gives its place back. Supersedes M17-02 step 2, M17-06 step 6 (600 an hour) and M17-08 step 2 (see "Superseding rows needed").
+- A monthly intake ceiling of five times the monthly cap (500 / 25,000 / 250,000) that deleting never gives back, refused as the monthly cap is: `20261126200100_form_intake_ceiling.sql`.
+- The owner's message email at most 30 an hour; skipped emails are counted per UTC day and shown on Audience: same migration (`form-notify`).
+- Every POST answer waits at least 400 ms plus up to 10 ms of jitter, whatever the outcome (`FORM_POST_FLOOR_MS`, `FORM_POST_JITTER_MS`, `src/lib/forms/contract.ts`).
+- `visitor_hash` dropped (M17-01 steps 1 and 2 name it); over a cap the visitor still sees the sent page and nothing is stored; submissions kept until the owner or the account deletes them; Audience a fourth sidebar item and fifth phone tab; no inline success (M8-05); no double opt-in and no email to visitors (the Open items below say more).
+
+**Scheduling (M20, #38)**
+- Pending schedules per site Pro 50, Studio 500, Free none (`plan_limits`, `20261126193000_scheduling.sql`); per account Pro 100, Studio 1,000 (`scheduled_per_account`, `20261126210000_scheduling_review_fixes.sql`).
+- A failed fire is retried after min(2^attempts, 30) minutes, at most 5 attempts (`finish_schedule` and `claim_due_schedules`, same migration).
+- 30 schedule writes a minute per account (`SCHEDULE_RATE_LIMIT`, `src/lib/schedule/routes-core.ts`).
+- The newest 20 finished schedule rows kept per entry (`schedule_entry`, `20261126210000`).
+- A site's `schedule_clock` is read capped at now() + 1 minute (same migration).
+- The rest of the planner's defaults (a publish over 24 hours late is "Didn't publish", Pro and Studio only, browser time zone, no email on failure, single pages and posts only, suspension or downgrade at fire time fails the row) are the Scheduling item under Open. Once confirmed, "Scheduled links are out of v1" (Decided), the Monetization row "Scheduled links (not in v1)" and the MVP scope's "scheduled links" are edited.
+- M3-17 step 4 (`passes: true`: "no 'Schedule' field") against M20-06 (a Schedule section in every block's editor): `tests/e2e/m3/themes-overrides.spec.ts:129` fails by design until Gary chooses.
+
+**Team access (M19, #39)**
+- 30 recorded site-activity changes a minute per actor, any site (`SITE_ACTIVITY_RATE_LIMIT`, `src/lib/team/activity-limit.ts`).
+- The Members screen lists the newest 25 rows of each activity kind; repeats by the same actor within a minute collapse into one row: `20261126220700_site_activity_bounds.sql`; takedowns and overwrites are their own kind (`20261127004600_activity_destructive_kind.sql`); a never-live entry's trash is skipped only when the actor is its owner or creator (`20261127004700_activity_trash_never_live.sql`).
+- 30 invite-link opens a minute per client address, in the proxy (`INVITE_LINK_LIMIT`, `src/lib/routing/invite-limit.ts`); accepting at most 10 in 10 minutes per user (`src/lib/team/actions.ts`); 20 invites a day per owner, 50 shared sites per account, invite links last 7 days (`src/lib/team/constants.ts`, `20261126220300_site_team_functions.sql`).
+- A new upload is out of the cleanup's sight for 15 minutes (`UPLOAD_UNUSED_GRACE_SECONDS`, `src/lib/media/limits.ts`; `20261126220500_upload_cleanup_queue.sql`).
+- An upload without the site header (`x-hl-site`, `UPLOAD_SITE_HEADER`, `src/lib/media/upload-site.ts`) is refused: "The editor was updated. Reload the page, then add the image again." (G22: an editor tab from before the wave).
+- Every media cleanup, by any caller, takes only rows queued more than the 10-second Undo window ago (`UNDO_WINDOW_MS`, `src/lib/media/cleanup-client.ts`; `cleanupScopeFor`, `src/lib/media/cleanup.ts`).
+- The G7 Privacy and Terms sentences (PROGRESS, Wave F fixes entry) are proposed, not edited; M19-17 waits on them.
+
+**Superseding rows needed** (features.json rows are never reworded, so each needs a new row; verified against the merged `docs/features.json` and the code on 2026-11-27)
+- M3-17 step 4 (true): "renders no 'Schedule' field (scheduled links are out of v1)". Every block's editor has a Schedule section (M20-06). #38.
+- M2-16 step 1 (true): "the divider panel has only Move up, Move down and Delete block" (its spec pins the current list: the swatch, Move up, Move down, Duplicate block, Delete block). Every block panel now also has the Schedule section's toggle (M20-06): `tests/e2e/m2/blocks-forms.spec.ts:178` fails by design, with M3-17 (found by the integration run). #38.
+- M7-04 step 7 (true): the Share tab "calls no endpoint but the draft save, the shared upload route and the three preview-link actions". The workspace's publish bar now reads the site's schedules (`GET /api/pages/{id}/schedules`, `fetchSiteSchedules`, M20-10) on every tab, Share included: `tests/e2e/m7/workspace-share.spec.ts:257` fails by design until Gary chooses (found by the integration run). #38.
+- M8-07 step 1 (true): the exact tenant policy string ends "form-action 'none'; frame-ancestors 'none'". `TENANT_PAGE_CSP` has `form-action 'self'` (M17-05). #37.
+- M9-29 step 3 (true): "the tenant page's CSP, `form-action 'none'`, ... are unchanged". Same change. #37.
+- M4-09 step 5 (true): "On a custom host only the page, its OG image, /r/*, /api/e and static assets are served". `/f/*` (the form POST, its result pages and the open marker) is served too, and `/c` since M9-18. #37.
+- M9-09 step 6 (true): "`src/emails/` is imported by `src/lib/domains/*` server code and nowhere else". The forms email (`src/lib/forms/email-content.ts`) and the team invite email (`src/lib/team/invite-email.ts`) import it. #37, #39.
+- M7-01 steps 1, 5 and 9 (true): the sidebar "holds exactly three links" (Editor, Analytics, Domains) and the phone bar "four tabs". Audience is a fourth sidebar item and a fifth phone tab (Forms, Open): `tests/e2e/m9/app-shell-icons.spec.ts:114` and `tests/e2e/m9/proving-app-shell.spec.ts:134` (four tab-bar links, M9-02) fail by design on the phone project (found by the integration run). #37.
+- M4-10 step 7 (true): the phone tab bar "Editor, Design, Stats, Domains, Account". Already not the case since M7-01 (Design is a workspace tab), and Audience is added. #37.
+- M9-02 step 1 (true): the scope lists "the sidebar and the phone tab bar (Editor, Analytics, Domains, Account)". The bar now holds Audience, and the Posts, Audience, Members and Schedule screens add icons. #35, #37, #38, #39.
+- M17-01 steps 1 and 2: `visitor_hash` in the table and "never `visitor_hash`" in the grant. Dropped by `20261126185204`. #37.
+- M17-02 step 2: "Deleting a row does not lower the count." M17-08 step 2: "The month's count does not change." Deleting gives places back (with the intake ceiling that it never gives back). #37.
+- M17-06 step 6: "600 per site in an hour". Per plan 5 / 125 / 1,250. #37.
+- M1-02 step 6 (true): "GET /rest/v1/pages?select=handle returns only the caller's own rows". A member also reads the sites shared with them (`pages_select_own` now uses `access.accessible_site_ids('read')`). #39.
+- M6-48 step 5 (true): page_versions "allows select only to the page's owner". Members read versions (G5). #39.
+- M6-11 step 2 (true): the preview is "owner-only ... ownership is checked from `pages.owner_id`". The access rule decides, and a member may preview. #39.
+- M6-13 step 2 (true): "the existing `pages_update_own` policy (owner, not suspended) governs it". `pages_update_own` is now the access rule's edit check; renaming stays owner-only through the `guard_site_owner_columns` trigger (G14). #39.
+- M6-31 and M6-33 (true; the `m6-share-static` pin that the editor reads the domain with the owner's session): a member's Share tab reads it through `src/lib/team/shared-domain.ts`. #39.
+- M15-10 (true; the `m15-mcp-publish-scope` pin of `publish_page`'s exact gate input): it now carries `source: "mcp"`, and `publish_design` passes it too (integration). #39.
+- M15-07 step 4: "version restore writes design to pages.draft and blocks to entries". History is design-only since M15-10 (ed05938). #32.
+- M15-06 step 5: "site_click_pairs returns the same set with Home at null". pgTAP 207 asserts the opposite; needs two releases or a superseding row. #32.
+- M15-05 step 5: "refused with HL013 for every role". RLS refuses an authenticated write first (0 rows or 42501), so HL013 never runs for that role. #32.
+- Holding today, but their stated reason is no longer true: M1-26 step 3 ("removed because scheduled links, team access and exports are out of v1") and M4-05 step 5 ("nothing on the screen mentions ... team access, CSV export or scheduled links (all deferred from v1)"). The marketing pages and the plan cards still mention none of them; a superseding row is needed the day they do.
+- Checked and not contradicted: M8-09 step 3 (its fixture page holds no form, so no open marker loads); M4-10 step 6 (the Studio upsell copy).
 
 ## Open
 
-- Final prices for Pro and Studio.
-- Auth email provider. Supabase's built-in email only reaches the team's own addresses (about 2 per hour), which is fine while Gary is the only user. Custom SMTP (Resend recommended) must be in place before signup opens.
 - Custom domain for Supabase Auth (a paid Supabase add-on). Until then, sign-in emails and Google's consent screen show the `supabase.co` address.
-- Publish the Google OAuth app before signup opens. It's in Testing, so only listed test users can sign in with Google.
+- Forms (Wave D), for Gary before release: the Privacy Policy sentence about form submissions and the open marker (blocks the release; the wave does not edit the policy), and whether the Terms need a line that owners must have a lawful reason to contact people.
+- Forms (Wave D): over the month's limit the visitor still sees the success page (their message is lost without their knowing); confirm, or show "This form isn’t taking responses right now."
+- Forms (Wave D): deleting a submission now gives the month's allowance back (the cap counts rows stored this month), with a per-site daily cap of 20 / 500 / 5,000 and a per-site hourly rate of a quarter of that: the orchestrator's decision after the security review (2026-11-26), superseding "not given back by deleting" in Decided and M17-02 step 2, M17-06 step 6 (600 per site an hour) and M17-08 step 2 ("The month's count does not change"); for Gary to confirm. The `visitor_hash` column of M17-01 steps 1 and 2 was dropped too; confirm.
+- Forms (Wave D): submissions are kept until the owner deletes them or the account is deleted; say if they should expire.
+- Forms (Wave D): Audience as a fourth sidebar item and a fifth phone tab (supersedes M7-01's lists); confirm, or put it under Analytics.
+- Forms (Wave D): inline success without leaving the page is not built (M8-05 forbids `fetch` in the tenant script); it needs a row that supersedes M8-05 and a larger size cap.
+- Scheduling (Wave E, 2026-11-26, built on the planner's defaults; Gary to confirm, and this supersedes "Scheduled links are out of v1" and the Monetization row "Scheduled links (not in v1)" once confirmed): every block type can carry a time window; the cached page changes at a boundary by a one-minute sweep that expires the site (no visitor-side script); a scheduled publish makes live the version scheduled (a snapshot); Pro and Studio only (Pro 50, Studio 500 pending per site); a publish over 24 hours late is skipped as "Didn't publish"; times shown in the browser's zone, none stored; a link outside its window answers the same 404 as an unknown link; a failed schedule shows in the editor and the Posts list only (no email); single pages and posts only; a suspension or downgrade at fire time fails the row for good.
+- Forms (Wave D): message emails stay off in production until `SMTP_HOST` is set (M5-22 is open); the pricing table, FAQ and features page do not mention forms yet.
+
+## Closed (moved from Open, 2026-11-27)
+
+These were still under Open after Decided recorded them; moved here word for word so the history stays.
+
+- "Final prices for Pro and Studio." Closed by Decided: Prices (2026-10-02), Stripe live (Gary, 2026-10-06), and the live upgrade Gary confirmed on production (Proving pass decisions, production evidence, 2026-10-11).
+- "Auth email provider. Supabase's built-in email only reaches the team's own addresses (about 2 per hour), which is fine while Gary is the only user. Custom SMTP (Resend recommended) must be in place before signup opens." Closed by Decided: Proving pass decisions, production evidence (Gary, 2026-10-11): custom SMTP configured and delivering to a non-team address. (Message emails for forms and team invites still wait on `SMTP_HOST` in the app's own environment, M5-22: see Open.)
+- "Publish the Google OAuth app before signup opens. It's in Testing, so only listed test users can sign in with Google." Closed by Decided: Proving pass decisions, production evidence (Gary, 2026-10-11): the Google app published.

@@ -636,11 +636,28 @@ test.describe("M6-33 safety", () => {
       /[?&]_rsc=/, // the router's prefetch of another workspace tab (M7-02)
       /\/media\/[^/]+\/img-/, // the uploaded picture through our own address (M7-14)
     ];
+    // After the content cutover the editor reads the entry revs (a GET, never a write) before a save.
+    const entryRevRead = (r: { method: string; url: string }) =>
+      r.method === "GET" && /\/rest\/v1\/content_entries\?select=id%2Crev&site_id=eq\./.test(r.url);
     const stray = seen.filter(
       (request) =>
-        !/^(blob|data):/.test(request.url) && !allowed.some((pattern) => pattern.test(request.url)),
+        !/^(blob|data):/.test(request.url) &&
+        !entryRevRead(request) &&
+        !allowed.some((pattern) => pattern.test(request.url)),
     );
     expect(stray).toEqual([]);
+    // M15-17: every design-only save first reads Home's entry rev, exactly once: as many reads as
+    // saves (the card's edits send no blocks, so each PATCH of pages is one), and nothing else ever
+    // goes to content_entries (no entry write).
+    const designSaves = seen.filter(
+      (r) => r.method === "PATCH" && /\/rest\/v1\/pages\?/.test(r.url),
+    );
+    expect(designSaves.length).toBeGreaterThan(0);
+    expect(seen.filter(entryRevRead)).toHaveLength(designSaves.length);
+    expect(seen.filter((r) => /\/content_entries\b/.test(r.url))).toHaveLength(designSaves.length);
+    expect(
+      seen.filter((r) => /\/content_entries\b|\/entries\//.test(r.url) && r.method !== "GET"),
+    ).toEqual([]);
     // The draft save is a PATCH of pages and nothing else is written.
     const writes = seen.filter(
       (r) => r.method !== "GET" && r.method !== "HEAD" && r.method !== "OPTIONS",

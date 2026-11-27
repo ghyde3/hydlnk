@@ -2,7 +2,7 @@ import { LIMITS } from "@/lib/document/limits";
 import type { McpScope } from "./constants";
 
 /**
- * The sixteen failure codes of a tool call, pinned (M10-22). The activity log stores one of these for
+ * The eighteen failure codes of a tool call, pinned (M10-22). The activity log stores one of these for
  * a failed call, and every tool answers with one of them and a sentence a person can act on. A code
  * is never a database code, a stack or a path.
  */
@@ -23,6 +23,8 @@ export const TOOL_ERROR_CODES = [
   "rate_limited",
   "account_suspended",
   "server_error",
+  "type_disabled",
+  "limit_reached",
 ] as const;
 export type ToolErrorCode = (typeof TOOL_ERROR_CODES)[number];
 
@@ -68,17 +70,30 @@ export const MESSAGES = {
   tookTooLong: "This took too long. Try again.",
   draftUnreadable: "This page’s draft can’t be read. Open it in the editor.",
   nothingToChange: "Nothing to change.",
+  entry_not_found:
+    "We couldn’t find that. Call list_entries to see your posts, or list_pages for pages.",
+  entryIdRequired: "entryId is required. Call list_entries.",
+  entryIdWithSubPage: "Send entryId or subPageId, not both.",
+  entryConflict:
+    "This changed while I was working on it. Call get_entry again and redo the change.",
+  blogOff: "The blog is off for this site. Turn it on with update_content_type or in the app.",
+  term_not_found: "We couldn’t find that category or tag. Call list_terms.",
+  entryTooLarge: "That is too large to save. Shorten it and try again.",
+  postLimit: "This site is at its limit of posts, the trash included.",
   planFree30: "Free keeps 30 days of numbers. Pro and Studio show up to a year.",
 } as const;
 
 /** The plain-words version of what a missing scope would have allowed, for the 'connect it again' sentence. */
 const SCOPE_VERBS: Record<McpScope, { verb: string; allow: string }> = {
-  "hydlnk.read": { verb: "see your pages", allow: "See your sites, pages and analytics" },
+  "hydlnk.read": { verb: "see your pages", allow: "See your sites, pages, posts and analytics" },
   "hydlnk.write": { verb: "edit your drafts", allow: "Edit your drafts" },
-  "hydlnk.publish": { verb: "publish your pages", allow: "Publish your pages" },
+  "hydlnk.publish": {
+    verb: "publish your pages and posts",
+    allow: "Publish your pages and posts",
+  },
 };
 
-/** 'This connection can’t publish your pages. In HYDLNK open Settings, remove this app under Connected apps, then connect it again and allow “Publish your pages”.' */
+/** 'This connection can’t publish your pages and posts. In HYDLNK open Settings, remove this app under Connected apps, then connect it again and allow “Publish your pages and posts”.' */
 export function insufficientScopeMessage(scope: McpScope): string {
   const { verb, allow } = SCOPE_VERBS[scope];
   return `This connection can’t ${verb}. In HYDLNK open Settings, remove this app under Connected apps, then connect it again and allow “${allow}”.`;

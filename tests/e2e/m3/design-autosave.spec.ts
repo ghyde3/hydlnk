@@ -2,7 +2,7 @@ import { expect, test, type Request } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { publishableKey } from "../fixtures/auth";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pageRow, seededUser, statusChip } from "../m2/editor-helpers";
 import {
   computed,
@@ -60,7 +60,7 @@ test.describe("M3-07 design autosave", () => {
     await expect(statusChip(page)).toHaveText("Unpublished changes");
     await showPreview(page);
     expect(await computed(previewRoot(page), "--t-radius")).toBe("20px");
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).toContain("--t-radius:12px");
     expect(live.body).not.toContain("--t-radius:20px");

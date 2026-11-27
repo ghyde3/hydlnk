@@ -2,7 +2,7 @@ import { axeViolations } from "../fixtures/a11y";
 import { expect, test, type Request } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { waitForClicks } from "../m4/analytics-ingest-helpers";
 import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 import {
@@ -335,7 +335,7 @@ test.describe("M6-05 analytics of a copy", () => {
       timeout: 20_000,
     });
 
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).toContain(`/r/${user.pageId}/${original}`);
     expect(live.body).toContain(`/r/${user.pageId}/${copy}`);
@@ -343,7 +343,7 @@ test.describe("M6-05 analytics of a copy", () => {
     await page.route("https://example.com/**", (route) =>
       route.fulfill({ status: 200, contentType: "text/html", body: "<title>destination</title>" }),
     );
-    await page.goto(`http://${user.handle}.localhost:3000/`);
+    await page.goto(url(user.handle));
     await page.locator(`a[data-block-id="${copy}"]`).click();
     await page.waitForURL("https://example.com/book");
     const clicks = await waitForClicks(user.pageId, 1);
@@ -418,7 +418,7 @@ test.describe("M6-05 abuse: repeated ids written straight to the database", () =
       timeout: 20_000,
     });
     const before = await pageRow(user.pageId);
-    const liveBefore = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const liveBefore = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(liveBefore.status).toBe(200);
     await patchDraftAsUser(context, user.pageId, {
       ...before.draft,
@@ -454,7 +454,7 @@ test.describe("M6-05 abuse: repeated ids written straight to the database", () =
     const after = await pageRow(user.pageId);
     expect(after.published).toEqual(before.published);
     expect(after.published_at).toBe(before.published_at);
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).toContain("Text 1");
     for (const text of forbidden) expect(live.body).not.toContain(text);

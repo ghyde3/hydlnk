@@ -307,3 +307,61 @@ values
    'links.nico-stuck.example', 'pending', now() - interval '3 days', now() - interval '5 minutes'),
   ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-0000000000b2',
    'go.nico-failing.example', 'error', now() - interval '2 hours', now() - interval '5 minutes');
+
+-- ---------------------------------------------------------------------------
+-- Content move (M15-05). The inserts above are the legacy shape (blocks in pages.draft, sub-pages in
+-- site_pages). The same two functions the cutover migration runs now move every demo site into page
+-- entries, so each db:reset ends in the moved state: Home at '/' and c1/c2 as page entries.
+-- ---------------------------------------------------------------------------
+select public.move_all_content();
+select public.convert_all_versions();
+
+-- ---------------------------------------------------------------------------
+-- Team access (Wave F, M19-01): Noor has no site of her own. She is an editor of Nico's Studio site
+-- (active) and of Mara's site, which is paused because Mara is on Pro (team access is part of
+-- Studio). She signs in with a magic link like Mara.
+-- ---------------------------------------------------------------------------
+
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change, email_change_token_new,
+  email_change_token_current, phone_change, phone_change_token, reauthentication_token
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  '00000000-0000-4000-8000-0000000000a3',
+  'authenticated',
+  'authenticated',
+  'noor@example.test',
+  extensions.crypt(gen_random_uuid()::text, extensions.gen_salt('bf')),
+  now(),
+  '{"provider": "email", "providers": ["email"]}',
+  '{}',
+  now(),
+  now(),
+  '', '', '', '', '', '', '', ''
+);
+
+insert into auth.identities (
+  id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at
+) values (
+  gen_random_uuid(),
+  '00000000-0000-4000-8000-0000000000a3',
+  '00000000-0000-4000-8000-0000000000a3',
+  jsonb_build_object(
+    'sub', '00000000-0000-4000-8000-0000000000a3',
+    'email', 'noor@example.test',
+    'email_verified', true,
+    'phone_verified', false
+  ),
+  'email',
+  now(),
+  now(),
+  now()
+);
+
+insert into team.site_members (site_id, user_id, role, invited_by) values
+  ('00000000-0000-4000-8000-0000000000b2', '00000000-0000-4000-8000-0000000000a3', 'editor',
+   '00000000-0000-4000-8000-0000000000a2'),
+  ('00000000-0000-4000-8000-0000000000b1', '00000000-0000-4000-8000-0000000000a3', 'editor',
+   '00000000-0000-4000-8000-0000000000a1');

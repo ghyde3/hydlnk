@@ -2,7 +2,7 @@ import {
   PLAN_IDS,
   PLAN_LIMITS,
   SQL_COLUMNS,
-  type LimitKey,
+  type SqlLimitKey,
   type PlanId,
   type PlanLimits,
 } from "./table";
@@ -37,7 +37,7 @@ export function comparePlanLimits(
   rows: PlanLimitRows,
 ): LimitMismatch[] {
   const mismatches: LimitMismatch[] = [];
-  const keys = Object.keys(SQL_COLUMNS) as LimitKey[];
+  const keys = Object.keys(SQL_COLUMNS) as SqlLimitKey[];
   const known = new Set<string>(Object.values(SQL_COLUMNS));
 
   for (const plan of PLAN_IDS) {

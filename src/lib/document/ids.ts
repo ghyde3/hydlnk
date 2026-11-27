@@ -1,6 +1,9 @@
 /** Block, social-icon and grid-cell ids: 8-24 characters of A-Za-z0-9_- (nanoid's alphabet). */
 export const BLOCK_ID_PATTERN = /^[A-Za-z0-9_-]{8,24}$/;
 
+/** A page, entry or row id as Postgres prints a uuid (any letter case accepted). */
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 const ID_LENGTH = 12;
 

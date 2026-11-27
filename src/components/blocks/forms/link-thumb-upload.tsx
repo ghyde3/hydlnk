@@ -1,5 +1,7 @@
 "use client";
 
+import { useUploadSite } from "@/components/media/upload-site";
+import { uploadSiteHeaders } from "@/lib/media/upload-site";
 import { Upload } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
@@ -40,6 +42,7 @@ export function LinkThumbUpload({
   /** An upload finished (the new reference) or Remove was pressed (null). */
   onImage: (image: ImageRef | null) => void;
 }) {
+  const site = useUploadSite();
   const suspended = useAccountSuspended();
   const inputId = useId();
   const helpId = useId();
@@ -83,7 +86,11 @@ export function LinkThumbUpload({
       const body = new FormData();
       body.append("file", file);
       body.append("kind", LINK_THUMB_UPLOAD_KIND);
-      const response = await fetch("/api/media", { method: "POST", body });
+      const response = await fetch("/api/media", {
+        method: "POST",
+        body,
+        headers: uploadSiteHeaders(site),
+      });
       if (!response.ok) {
         // The route says what is wrong in `message` (M5-13); over the plan's total (M4-31) the same
         // field carries the plan's sentence, and sending the same file again is worth offering once

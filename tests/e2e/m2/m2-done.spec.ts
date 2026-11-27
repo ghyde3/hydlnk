@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { confirmPhoto } from "../m6/position-dialog-helpers";
 import { addBlock, expectDraft, rowOf, showView } from "./blocks-helpers";
 import { emptyUser, openEditor, pageRow, previewScreen, statusChip } from "./editor-helpers";
@@ -287,7 +287,7 @@ test("M2-31 a page with every block type renders identically in preview and live
   expect(row.draft.blocks).toHaveLength(10);
   const publishedBlocks = (row.published as { blocks: { id: string; type: string }[] }).blocks;
   expect(publishedBlocks.map((b) => b.type)).toEqual([...BLOCK_TYPES]);
-  const raw = await rawRequest(`${user.handle}.localhost:3000`, "/");
+  const raw = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
   expect(raw.status).toBe(200);
   expect(raw.body).not.toContain(HIDDEN_TEXT);
   expect(JSON.stringify(row.published)).not.toContain(HIDDEN_TEXT);
@@ -354,7 +354,7 @@ test("M2-31 a page with every block type renders identically in preview and live
   await expect(statusChip(page)).toHaveAttribute("data-publish-status", "unpublished-changes");
   await showView(page, "Preview");
   await expect(previewScreen(page)).toContainText(newBio);
-  const stale = await rawRequest(`${user.handle}.localhost:3000`, "/");
+  const stale = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
   expect(stale.body).toContain(BIO);
   expect(stale.body).not.toContain("Now booking spring.");
 
@@ -365,7 +365,7 @@ test("M2-31 a page with every block type renders identically in preview and live
   });
   await live.reload();
   await expect(live.locator("[data-page-root]")).toContainText("Now booking spring.");
-  expect((await rawRequest(`${user.handle}.localhost:3000`, "/")).body).toContain(
+  expect((await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/")).body).toContain(
     "Now booking spring.",
   );
 });

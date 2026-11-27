@@ -1,9 +1,15 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { expectNoHorizontalScroll } from "../helpers";
 import { css, rowOf, rows, showView } from "../m2/blocks-helpers";
-import { expectDraft, openEditor, pageRow, saveIndicator, statusChip } from "../m2/editor-helpers";
+import {
+  expectDraft,
+  openEditor,
+  pageRow,
+  saveIndicator,
+  setDraft,
+  statusChip,
+} from "../m2/editor-helpers";
 import { tenantGet } from "../m2/publish-helpers";
 import {
   COLOR,
@@ -111,19 +117,21 @@ test.describe("M6-46 the controls in every block's panel", () => {
       // Under the block's own fields: no field of the block sits below the group's top. A link's
       // own tags and its lock (M9-28, M9-30) are groups of their own that follow it.
       const groupTop = (await group.boundingBox())!.y;
-      const fieldBottoms = await panel
-        .locator("input, select, textarea")
-        .evaluateAll(
-          (els, groupEl) =>
-            els
-              .filter(
-                (el) =>
-                  !(groupEl as Element).contains(el) &&
-                  !el.closest('[data-testid="link-tags-field"], [data-testid="link-lock-field"]'),
-              )
-              .map((el) => el.getBoundingClientRect().bottom),
-          await group.elementHandle(),
-        );
+      const fieldBottoms = await panel.locator("input, select, textarea").evaluateAll(
+        (els, groupEl) =>
+          els
+            .filter(
+              (el) =>
+                !(groupEl as Element).contains(el) &&
+                !el.closest('[data-testid="link-tags-field"], [data-testid="link-lock-field"]'),
+            )
+            .map((el) => el.getBoundingClientRect())
+            // A hidden input (a file picker) has no box: its 0 is no position on the page, and
+            // reads as "below" once the panel has scrolled the group above the viewport (phone).
+            .filter((box) => box.width > 0 || box.height > 0)
+            .map((box) => box.bottom),
+        await group.elementHandle(),
+      );
       for (const bottom of fieldBottoms) expect(bottom, pair).toBeLessThanOrEqual(groupTop + 1);
 
       const text = (await group.textContent()) ?? "";
@@ -452,9 +460,16 @@ test.describe("M6-46 resetting and bad input", () => {
   }) => {
     const user = await open(page, context, "bse9");
     const bodies: string[] = [];
+    let entryPosts = 0;
     page.on("request", (request) => {
-      if (request.method() === "PATCH" && request.url().includes("/rest/v1/pages")) {
+      const designPatch = request.method() === "PATCH" && request.url().includes("/rest/v1/pages");
+      const entryPost =
+        request.method() === "POST" &&
+        /\/api\/pages\/[^/]+\/entries\/[^/]+\/draft$/.test(new URL(request.url()).pathname);
+      if (designPatch) bodies.push(request.postData() ?? "");
+      if (entryPost) {
         bodies.push(request.postData() ?? "");
+        entryPosts += 1;
       }
     });
     const MESSAGE = "Use a #RRGGBB color, for example #C46A4F.";
@@ -484,11 +499,12 @@ test.describe("M6-46 resetting and bad input", () => {
 
     // Nothing the editor wrote was ever a value the block schema rejects.
     expect(bodies.length).toBeGreaterThan(0);
+    expect(entryPosts, "the block edits went in POSTs to the entry route").toBeGreaterThan(0);
     for (const body of bodies) {
       expect(body).not.toContain("</style>");
       expect(body).not.toContain("javascript:");
-      const draft = JSON.parse(body).draft as DraftDoc;
-      for (const block of draft.blocks) {
+      const draft = JSON.parse(body).draft as { blocks?: DraftDoc["blocks"] };
+      for (const block of draft.blocks ?? []) {
         const overrides = (block as { overrides?: unknown }).overrides;
         if (overrides !== undefined) {
           expect(blockOverridesSchema.safeParse(overrides).success, JSON.stringify(overrides)).toBe(
@@ -512,8 +528,7 @@ test.describe("M6-46 resetting and bad input", () => {
           ? ({ ...block, overrides: { radius: 32, borderWidth: 1.5 } } as typeof block)
           : block,
     );
-    const { error } = await adminClient().from("pages").update({ draft }).eq("id", user.pageId);
-    expect(error).toBeNull();
+    await setDraft(user.pageId, draft);
     await openEditor(page);
 
     let panel = await expand(page, ID.image.a);

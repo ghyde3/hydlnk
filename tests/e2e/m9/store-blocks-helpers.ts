@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { insertPage, makeUser, rand } from "../fixtures/data";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 import { publishDocOf, uploadImage } from "../m2/blocks-helpers";
 import type { Block, PublishDoc } from "@/lib/document";
 
@@ -89,7 +89,7 @@ export function collectRequests(page: Page): string[] {
 
 /** The hosts of `requests` that are neither the page's own host nor the root (media) host. */
 export function foreignHosts(requests: string[], handle: string): string[] {
-  const own = new Set([`${handle}.localhost:3000`, "localhost:3000"]);
+  const own = new Set([`${handle}.localhost:${DEV_PORT}`, `localhost:${DEV_PORT}`]);
   return [...new Set(requests.map((request) => new URL(request).host))].filter(
     (host) => !own.has(host),
   );

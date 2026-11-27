@@ -4,7 +4,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, rand, trackEmail } from "../fixtures/data";
 import { rawRequest, sessionOf } from "../fixtures/http";
 import { getMessage, messagesTo, signInLinkFrom, waitForMessages } from "../fixtures/mailpit";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 
 /**
  * M1-28, the milestone's done-when flow, through the real UI at both viewports (phone 390x844 and
@@ -92,7 +92,7 @@ test("M1-28 signing up gives you handle.hydlnk.com showing a placeholder page", 
   ]);
 
   // 5. The tenant host now serves the placeholder at once: no stale 404, no cookies either way.
-  const served = await rawRequest(`${handle}.localhost:3000`, "/");
+  const served = await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/");
   expect(served.status).toBe(200);
   expect(served.setCookies).toEqual([]);
   expect(served.body).toContain("Nothing published here yet.");
@@ -109,7 +109,10 @@ test("M1-28 signing up gives you handle.hydlnk.com showing a placeholder page", 
   await tenant.close();
 
   // 6. A second visitor cannot take it: the endpoint says taken, signup refuses it, no email goes out.
-  const check = await rawRequest("app.localhost:3000", `/api/handles/check?handle=${handle}`);
+  const check = await rawRequest(
+    `app.localhost:${DEV_PORT}`,
+    `/api/handles/check?handle=${handle}`,
+  );
   expect(JSON.parse(check.body)).toEqual({ handle, status: "taken" });
   const visitor = await (await freshDevice(browser)).newPage();
   await visitor.goto(url("app", `/signup?handle=${handle}`));
@@ -127,7 +130,7 @@ test("M1-28 signing up gives you handle.hydlnk.com showing a placeholder page", 
   await editor.goto(url("app", "/settings"));
   await editor.locator("main").getByRole("button", { name: "Sign out" }).click();
   await expect(editor).toHaveURL(url("app", "/login"));
-  expect((await rawRequest(`${handle}.localhost:3000`, "/")).status).toBe(200);
+  expect((await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/")).status).toBe(200);
 
   // Supabase sends one link per address per 60 s; wait out the window the way a user would.
   const wait = sentAt + 62_000 - Date.now();
@@ -153,12 +156,17 @@ test("M1-28 signing up gives you handle.hydlnk.com showing a placeholder page", 
   const dialog = editor.getByRole("dialog", { name: "Delete your account?" });
   await dialog.getByLabel("Type your handle to confirm").fill(handle);
   await dialog.getByRole("button", { name: "Delete account" }).click();
-  await expect(editor).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+  await expect(editor).toHaveURL(
+    new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+  );
   await expect(
     editor.getByRole("status").filter({ hasText: "Your account was deleted." }),
   ).toBeVisible();
-  expect((await rawRequest(`${handle}.localhost:3000`, "/")).status).toBe(404);
-  const freed = await rawRequest("app.localhost:3000", `/api/handles/check?handle=${handle}`);
+  expect((await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/")).status).toBe(404);
+  const freed = await rawRequest(
+    `app.localhost:${DEV_PORT}`,
+    `/api/handles/check?handle=${handle}`,
+  );
   expect(JSON.parse(freed.body)).toEqual({ handle, status: "available" });
   expect((await accounts(userId!)).data).toEqual([]);
   expect((await pages(userId!)).data).toEqual([]);

@@ -8,7 +8,9 @@ import {
 import { embedErrorMessage, parseEmbed } from "./embed";
 import { IMAGE_SHAPES, IMAGE_SHAPE_MESSAGE, focusSchema, type Focus } from "./focus";
 import { BLOCK_ID_PATTERN } from "./ids";
+import { FORM_KINDS, FORM_KIND_MESSAGE } from "./form";
 import { LIMITS, codePointLength } from "./limits";
+import { SCHEDULE_MESSAGES, scheduleInstant } from "./schedule";
 import { linkUtmSchema, lockSchema, pageUtmSchema, redirectSchema } from "./link-fields";
 import {
   ALIGN_VALUES,
@@ -99,6 +101,8 @@ export const BLOCK_TYPES = [
   "page_link",
   "items",
   "hours",
+  "latest_posts",
+  "form",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
 
@@ -121,6 +125,8 @@ export const BLOCK_TYPE_LABELS: Record<BlockType, string> = {
   page_link: "Page link",
   items: "Items",
   hours: "Hours",
+  latest_posts: "Latest posts",
+  form: "Form",
 };
 
 /** Social platforms, in the order of the platform select. `email` stores an address, not a URL. */
@@ -392,9 +398,37 @@ const draftBlockImageRef = imageRefSchema.extend({ focus: z.custom<Focus>().opti
  */
 const blockOverrides = z.object(blockOverridesSchema.shape);
 
+/**
+ * A block's time window (M20-02), on every block type: two optional UTC instants. A draft keeps any
+ * short string in either (the editor writes the canonical form; a half-typed or foreign value waits
+ * for Publish); Publish wants each set time canonical (`YYYY-MM-DDTHH:MM:00Z`, a real instant) and
+ * `from` before `until`. Top-level blocks only: icons, cells and items follow their block.
+ */
+function scheduleSchema(mode: Mode) {
+  if (mode !== "publish") {
+    const time = z.string().max(40).optional();
+    return z.object({ from: time, until: time });
+  }
+  const time = z
+    .string()
+    .refine((value) => scheduleInstant(value) !== null, { error: SCHEDULE_MESSAGES.time })
+    .optional();
+  return z.object({ from: time, until: time }).superRefine((value, ctx) => {
+    const from = scheduleInstant(value.from);
+    const until = scheduleInstant(value.until);
+    if (from !== null && until !== null && from >= until) {
+      ctx.addIssue({ code: "custom", path: ["until"], message: SCHEDULE_MESSAGES.order });
+    }
+  });
+}
+
 function buildBlocks(mode: Mode) {
   const publish = mode === "publish";
-  const common = { id: idSchema, visible: z.boolean().default(true) };
+  const common = {
+    id: idSchema,
+    visible: z.boolean().default(true),
+    schedule: scheduleSchema(mode).optional(),
+  };
 
   const link = z.object({
     ...common,
@@ -746,6 +780,47 @@ function buildBlocks(mode: Mode) {
     overrides: blockOverrides.optional(),
   });
 
+  // The newest posts of the site's blog (Wave B, M16-07): an optional heading, how many (1 to 6)
+  // and an optional category (a term id). The posts are never stored in the document: the renderer
+  // reads them from the site context, so the block holds no URL and no tenant text but the heading.
+  const latestPosts = z.object({
+    ...common,
+    type: z.literal("latest_posts"),
+    heading: text(mode, { max: LIMITS.latestPostsHeading }).optional(),
+    count: z
+      .number()
+      .int()
+      .min(LIMITS.latestPostsMin, {
+        error: `Show ${LIMITS.latestPostsMin} to ${LIMITS.latestPostsMax} posts.`,
+      })
+      .max(LIMITS.latestPostsMax, {
+        error: `Show ${LIMITS.latestPostsMin} to ${LIMITS.latestPostsMax} posts.`,
+      })
+      .default(LIMITS.latestPostsDefault),
+    categoryId: z.uuid({ error: "Choose a category." }).optional(),
+    overrides: blockOverrides.optional(),
+  });
+
+  // A sign-up or contact form (Wave D, M17-03). The visitor's fields are fixed by the kind; the
+  // block holds only the owner's texts and two switches. `askName` is read for a sign-up only and
+  // `notify` (email each message to the account's own address) for a contact form only.
+  const form = z.object({
+    ...common,
+    type: z.literal("form"),
+    kind: z.enum(FORM_KINDS, { error: FORM_KIND_MESSAGE }),
+    heading: text(mode, { max: LIMITS.formHeading }).optional(),
+    description: text(mode, { max: LIMITS.formDescription }).optional(),
+    askName: z.boolean().default(false),
+    buttonLabel: text(mode, { max: LIMITS.formButton, required: "Add a button label." }),
+    successMessage: text(mode, {
+      max: LIMITS.formSuccess,
+      required: "Add a message to show after sending.",
+    }),
+    consent: text(mode, { max: LIMITS.formConsent, required: "Add a consent line." }),
+    notify: z.boolean().default(false),
+    overrides: blockOverrides.optional(),
+  });
+
   const block = z.discriminatedUnion("type", [
     link,
     card,
@@ -765,6 +840,8 @@ function buildBlocks(mode: Mode) {
     pageLink,
     items,
     hours,
+    latestPosts,
+    form,
   ]);
 
   // The display options (M6-15, M6-17) are the same in both modes: a bad value fails the draft
@@ -872,6 +949,8 @@ export type MapBlock = Extract<Block, { type: "map" }>;
 export type PageLinkBlock = Extract<Block, { type: "page_link" }>;
 export type ItemsBlock = Extract<Block, { type: "items" }>;
 export type HoursBlock = Extract<Block, { type: "hours" }>;
+export type LatestPostsBlock = Extract<Block, { type: "latest_posts" }>;
+export type FormBlock = Extract<Block, { type: "form" }>;
 export type ListItem = ItemsBlock["items"][number];
 export type BookLink = BookBlock["links"][number];
 export type AppLink = AppsBlock["links"][number];
@@ -946,37 +1025,32 @@ export function requireUniqueIds(
 }
 
 /** The draft: what the editor autosaves. Lenient about completeness; strict about structure. */
-export const draftDocSchema = z
-  .object({
-    version: z.literal(1),
-    /** Bumped by one on every save; the stale-tab guard filters the update on the stored value. */
-    rev: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-    profile: lenient.profile,
-    /** The share card (M6-32). Absent until one of its three fields is filled in. */
-    share: lenient.share.optional(),
-    /** The support banner (M9-23). Absent until one is set up. */
-    banner: lenient.banner.optional(),
-    /** The page's default UTM tags (M9-27). Absent until one value is set. */
-    utm: lenient.utm.optional(),
-    /** Redirect mode (M9-31): the live page answers with a redirect to this link. Absent means off. */
-    redirect: lenient.redirect.optional(),
-    /** The site menu (M11-07). Absent means the default: shown, no items. */
-    nav: navSchema.optional(),
-    theme: themeSchema,
-    blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
-  })
-  .superRefine(requireUniqueIds);
+export const draftDocObject = z.object({
+  version: z.literal(1),
+  /** Bumped by one on every save; the stale-tab guard filters the update on the stored value. */
+  rev: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  profile: lenient.profile,
+  /** The share card (M6-32). Absent until one of its three fields is filled in. */
+  share: lenient.share.optional(),
+  /** The support banner (M9-23). Absent until one is set up. */
+  banner: lenient.banner.optional(),
+  /** The page's default UTM tags (M9-27). Absent until one value is set. */
+  utm: lenient.utm.optional(),
+  /** Redirect mode (M9-31): the live page answers with a redirect to this link. Absent means off. */
+  redirect: lenient.redirect.optional(),
+  /** The site menu (M11-07). Absent means the default: shown, no items. */
+  nav: navSchema.optional(),
+  theme: themeSchema,
+  blocks: z.array(lenient.block).max(LIMITS.blocks, tooManyBlocks),
+});
+export const draftDocSchema = draftDocObject.superRefine(requireUniqueIds);
 export type DraftDoc = Omit<z.infer<typeof draftDocSchema>, "profile"> & { profile: Profile };
 
-/**
- * The Publish gate's validator for a draft-shaped document. Everything `draftDocSchema` checks,
- * plus: the display name is required, and every visible block is complete and safe (required
- * fields filled, http(s) URLs only, embed URLs on the allowlist, uploaded images, no control or
- * bidi characters, newlines only in text blocks). Hidden blocks are exempt from the completeness
- * rules because Publish drops them. Its issues carry the same paths as the draft, with messages
- * written for the editor ("Add a link label.").
- */
-export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
+/** The design half of the Publish gate (profile, share card, utm, redirect, banner); no blocks. */
+export function refinePublishDesign(
+  doc: Pick<DraftDoc, "profile" | "share" | "utm" | "redirect" | "banner">,
+  ctx: z.core.$RefinementCtx,
+): void {
   const profile = strict.profile.safeParse(doc.profile);
   if (!profile.success) {
     for (const issue of profile.error.issues) {
@@ -1017,6 +1091,18 @@ export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
       }
     }
   }
+}
+
+/**
+ * The Publish gate's validator for a draft-shaped document. Everything `draftDocSchema` checks,
+ * plus: the display name is required, and every visible block is complete and safe (required
+ * fields filled, http(s) URLs only, embed URLs on the allowlist, uploaded images, no control or
+ * bidi characters, newlines only in text blocks). Hidden blocks are exempt from the completeness
+ * rules because Publish drops them. Its issues carry the same paths as the draft, with messages
+ * written for the editor ("Add a link label.").
+ */
+export const publishDocSchema = draftDocSchema.superRefine((doc, ctx) => {
+  refinePublishDesign(doc, ctx);
   doc.blocks.forEach((block, index) => {
     if (block.visible === false) return;
     const result = strict.block.safeParse(block);

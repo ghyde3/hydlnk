@@ -16,6 +16,7 @@ import {
   rawBuffer,
   type Part,
 } from "./publish-helpers";
+import { uploadSiteHeader } from "../fixtures/upload-site";
 
 /**
  * M2-08: the page-media bucket and the one server-only upload route, POST /api/media on the app
@@ -50,6 +51,7 @@ async function upload(cookie: string | undefined, parts: Part[], opts: { origin?
     method: "POST",
     cookie,
     headers: {
+      ...(await uploadSiteHeader(cookie)),
       "content-type": contentType,
       ...(opts.origin ? { origin: opts.origin } : {}),
     },
@@ -250,7 +252,7 @@ test.describe("M2-08 page-media bucket and upload route", () => {
     const huge = await rawBuffer(APP_HOST, "/api/media", {
       method: "POST",
       cookie: user.cookie,
-      headers: { "content-type": contentType },
+      headers: { ...(await uploadSiteHeader(user.cookie)), "content-type": contentType },
       body: hugeBody,
     }).catch((error: Error) => ({ status: 0, text: error.message }));
     expect([413, 0]).toContain(huge.status);

@@ -8,8 +8,9 @@
  * eval script (there is no nonce, and none is needed: a per-request nonce would make every page
  * dynamic and uncacheable), styles inline only (the theme arrives as inline `--t-*` properties and
  * one `<style>` element), fonts from the host, images from the host and the canonical media origin,
- * XHR and beacons to the host, frames only from the nine embed providers, nothing else, and nobody
- * can frame a tenant page. Tenant content is also escaped and validated before it is rendered; this
+ * XHR and beacons to the host, frames only from the nine embed providers, form posts to the host only
+ * (`form-action 'self'`, Wave D: the form block's same-origin POST to `/f/...` and the link lock's to
+ * `/r/...`, both with their own cross-site checks), nothing else, and nobody can frame a tenant page. Tenant content is also escaped and validated before it is rendered; this
  * is the second wall.
  *
  * Decision (Waves G+H security review): `frame-src` lists exact hosts, no wildcard. Two entries are
@@ -80,7 +81,7 @@ export const TENANT_PAGE_CSP = [
   FRAME_SRC,
   "object-src 'none'",
   "base-uri 'none'",
-  "form-action 'none'",
+  "form-action 'self'",
   "frame-ancestors 'none'",
 ].join("; ");
 

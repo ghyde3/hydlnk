@@ -9,6 +9,8 @@ import { createServerSupabase } from "@/lib/supabase/server";
  * page's handle address is always live, so the QR code still opens it) and is logged.
  */
 export async function loadPrimaryDomain(pageId: string): Promise<string | null> {
+  // Wave F: domains stay owner-only (domains_select_own), so on a shared site a member reads none
+  // and the QR code and share card use the handle address, which is always live.
   try {
     const supabase = await createServerSupabase();
     const { data, error } = await supabase

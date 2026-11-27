@@ -3,8 +3,9 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, insertPage, makeUser, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { setOwnerSuspended } from "../fixtures/expire";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
+import { addPageEntry, subPageEntries, writeEntry } from "../m15/entry-helpers";
 import { emptyUser, openEditor, pageRow } from "../m2/editor-helpers";
 import {
   BACK_PAGE_LINK,
@@ -27,7 +28,7 @@ test.describe.configure({ timeout: 120_000 });
 
 const get = (host: string, path = "/", opts: Parameters<typeof rawRequest>[2] = {}) =>
   rawRequest(host, path, opts);
-const tenantHost = (site: Pick<LiveSite, "handle">) => `${site.handle}.localhost:3000`;
+const tenantHost = (site: Pick<LiveSite, "handle">) => `${site.handle}.localhost:${DEV_PORT}`;
 const h1s = (html: string) => [...html.matchAll(/<h1[^>]*>([^<]*)<\/h1>/g)].map((m) => m[1]);
 
 async function expectSubPageLayout(page: Page) {
@@ -51,10 +52,7 @@ test.describe("M11-05 a whole-site Publish from the editor", () => {
       .poll(async () => (await pageRow(site.pageId)).published !== null, { timeout: 30_000 })
       .toBe(true);
 
-    const { data } = await adminClient()
-      .from("site_pages")
-      .select("id, live_path, published_at")
-      .eq("page_id", site.pageId);
+    const data = await subPageEntries(site.pageId);
     expect(data?.map((row) => row.live_path).sort()).toEqual([DIRECTIONS.path, ITEMS.path]);
     expect(data?.every((row) => row.published_at !== null)).toBe(true);
 
@@ -117,8 +115,10 @@ test.describe("M11-08 deleting a page of the menu from the editor", () => {
 
     // Home's draft menu no longer lists it (the autosave of Home), and the row is gone.
     await expect.poll(navOf, { timeout: 15_000 }).toEqual([site.directionsId]);
-    const rows = await adminClient().from("site_pages").select("id").eq("page_id", site.pageId);
-    expect(rows.data?.map((row) => row.id)).toEqual([site.directionsId]);
+    const rows = await subPageEntries(site.pageId);
+    expect(rows.filter((row) => row.deleted_at === null).map((row) => row.id)).toEqual([
+      site.directionsId,
+    ]);
 
     // Live, on the very next request: the page is 404 and the menu lists only the other page.
     expect((await get(host, `/${ITEMS.path}`)).status).toBe(404);
@@ -174,30 +174,34 @@ test.describe("M11-06 mara's seeded sub-pages", () => {
 
   test("M11-06 over HTTP: the real paths, /og and the reserved paths", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
-    const items = await get("mara.localhost:3000", "/items");
+    const items = await get(`mara.localhost:${DEV_PORT}`, "/items");
     expect(items.status).toBe(200);
     expect(h1s(items.body)).toEqual(["Prints and gear"]);
-    expect(items.body).toContain('<link rel="canonical" href="http://mara.localhost:3000/items">');
+    expect(items.body).toContain(
+      `<link rel="canonical" href="http://mara.localhost:${DEV_PORT}/items">`,
+    );
     expect(items.body).toContain("<title>Prints and gear · Mara Okafor</title>");
     expect(items.headers["content-security-policy"]).toBeTruthy();
-    expect((await get("mara.localhost:3000", "/directions")).status).toBe(200);
-    expect((await get("mara.localhost:3000", "/og")).headers["content-type"]).toContain(
+    expect((await get(`mara.localhost:${DEV_PORT}`, "/directions")).status).toBe(200);
+    expect((await get(`mara.localhost:${DEV_PORT}`, "/og")).headers["content-type"]).toContain(
       "image/png",
     );
-    expect((await get("mara.localhost:3000", "/")).status).toBe(200);
+    expect((await get(`mara.localhost:${DEV_PORT}`, "/")).status).toBe(200);
     // The routes that used to be (and still are) the plain 404 on a tenant host.
     for (const path of ["/api", "/r", "/app", "/sitemap", "/robots"]) {
-      expect((await get("mara.localhost:3000", path)).status, path).toBe(404);
+      expect((await get(`mara.localhost:${DEV_PORT}`, path)).status, path).toBe(404);
     }
     // `/hl-query-count` is the test hook: the plain 404 on a server without HYDLNK_QUERY_COUNTER=1, the
     // hook's own answer (200) on the production-build harness that runs with it. Never a sub-page.
-    const hook = await get("mara.localhost:3000", "/hl-query-count");
+    const hook = await get(`mara.localhost:${DEV_PORT}`, "/hl-query-count");
     if (hook.status === 200) expect(JSON.parse(hook.body)).toHaveProperty("count");
     else expect(hook.status).toBe(404);
     // The internal route is never reachable by typing it.
-    expect((await get("mara.localhost:3000", "/t/mara/p/items")).status).toBe(404);
+    expect((await get(`mara.localhost:${DEV_PORT}`, "/t/mara/p/items")).status).toBe(404);
     // Only GET and HEAD.
-    expect((await get("mara.localhost:3000", "/items", { method: "POST" })).status).toBe(404);
+    expect((await get(`mara.localhost:${DEV_PORT}`, "/items", { method: "POST" })).status).toBe(
+      404,
+    );
   });
 });
 
@@ -207,15 +211,7 @@ test.describe("M11-06 a path that is not a live page answers the branded 404", (
   }, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("nf", { plan: "pro" });
-    const draftOnly = await adminClient()
-      .from("site_pages")
-      .insert({
-        page_id: site.pageId,
-        draft: { path: "later", title: "Later", description: "", blocks: [] },
-      })
-      .select("id")
-      .single();
-    expect(draftOnly.error).toBeNull();
+    await addPageEntry(site.pageId, { path: "later", title: "Later" });
 
     expect((await get(tenantHost(site), `/${ITEMS.path}`)).status).toBe(200);
     for (const path of [
@@ -263,7 +259,7 @@ test.describe("M11-06 a path that is not a live page answers the branded 404", (
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("np", { live: false, homePublished: false });
     expect((await get(tenantHost(site), `/${ITEMS.path}`)).status).toBe(404);
-    expect((await get(`zq-nobody-${rand(6)}.localhost:3000`, "/items")).status).toBe(404);
+    expect((await get(`zq-nobody-${rand(6)}.localhost:${DEV_PORT}`, "/items")).status).toBe(404);
   });
 });
 
@@ -284,13 +280,15 @@ test.describe("M11-06 a verified custom domain serves the sub-pages", () => {
     expect(items.status).toBe(200);
     expect(h1s(items.body)).toEqual([ITEMS.title]);
     // The canonical is the custom domain (the site's primary host), on the same scheme and port.
-    expect(items.body).toContain(`<link rel="canonical" href="http://${live}:3000/${ITEMS.path}">`);
-    expect(items.body).toContain(`http://${live}:3000/og?v=`);
+    expect(items.body).toContain(
+      `<link rel="canonical" href="http://${live}:${DEV_PORT}/${ITEMS.path}">`,
+    );
+    expect(items.body).toContain(`http://${live}:${DEV_PORT}/og?v=`);
     expect(items.body).toContain(`${ITEMS.title} · ${site.name}`);
     // The handle host names the same primary host.
     const onHandle = await get(tenantHost(site), `/${ITEMS.path}`);
     expect(onHandle.body).toContain(
-      `<link rel="canonical" href="http://${live}:3000/${ITEMS.path}">`,
+      `<link rel="canonical" href="http://${live}:${DEV_PORT}/${ITEMS.path}">`,
     );
 
     expect((await get(live, `/${DIRECTIONS.path}`)).status).toBe(200);
@@ -320,9 +318,9 @@ test.describe("M11-06 a verified custom domain serves the sub-pages", () => {
         hasTouch: info.project.use.hasTouch,
       });
       const page = await context.newPage();
-      await page.goto(`http://${live}:3000/`);
+      await page.goto(`http://${live}:${DEV_PORT}/`);
       await page.locator("nav.pg-menu").getByRole("link", { name: ITEMS.title }).click();
-      await expect(page).toHaveURL(`http://${live}:3000/${ITEMS.path}`);
+      await expect(page).toHaveURL(`http://${live}:${DEV_PORT}/${ITEMS.path}`);
       await expect(page.locator("h1")).toHaveText(ITEMS.title);
       await expectSubPageLayout(page);
     } finally {
@@ -352,6 +350,8 @@ test.describe("M11-06 redirect mode and a suspended owner apply to every page", 
   test("M11-06 redirect mode: a live sub-page sends the visitor through the click redirect, an invented path is still a 404", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("rd", { plan: "pro" });
+    // Home's live blocks are in its entry: the redirect is a design field, written to the pages row's
+    // published document with its blocks as they are.
     const admin = adminClient();
     const home = await admin.from("pages").select("published").eq("id", site.pageId).single();
     const published = home.data!.published as { blocks: { id: string; type: string }[] };
@@ -375,12 +375,7 @@ test.describe("M11-10 sitemap, robots and the head", () => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("sm", { plan: "pro" });
     // A page that is not live stays out of the sitemap.
-    await adminClient()
-      .from("site_pages")
-      .insert({
-        page_id: site.pageId,
-        draft: { path: "later", title: "Later", description: "", blocks: [] },
-      });
+    await addPageEntry(site.pageId, { path: "later", title: "Later" });
     const sitemap = await get(tenantHost(site), "/sitemap.xml");
     expect(sitemap.status).toBe(200);
     expect(sitemap.headers["content-type"]).toContain("application/xml");
@@ -398,11 +393,11 @@ test.describe("M11-10 sitemap, robots and the head", () => {
 
   test("M11-10 mara's sitemap, a custom domain's sitemap on the primary host, and the marketing sitemap unchanged", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
-    const mara = await get("mara.localhost:3000", "/sitemap.xml");
+    const mara = await get(`mara.localhost:${DEV_PORT}`, "/sitemap.xml");
     expect(locsOf(mara.body)).toEqual([
-      "http://mara.localhost:3000/",
-      "http://mara.localhost:3000/directions",
-      "http://mara.localhost:3000/items",
+      `http://mara.localhost:${DEV_PORT}/`,
+      `http://mara.localhost:${DEV_PORT}/directions`,
+      `http://mara.localhost:${DEV_PORT}/items`,
     ]);
 
     const site = await makeLiveSite("smc", { plan: "studio" });
@@ -411,27 +406,27 @@ test.describe("M11-10 sitemap, robots and the head", () => {
     const custom = await get(live, "/sitemap.xml");
     expect(custom.status).toBe(200);
     expect(locsOf(custom.body)).toEqual([
-      `http://${live}:3000/`,
-      `http://${live}:3000/${DIRECTIONS.path}`,
-      `http://${live}:3000/${ITEMS.path}`,
+      `http://${live}:${DEV_PORT}/`,
+      `http://${live}:${DEV_PORT}/${DIRECTIONS.path}`,
+      `http://${live}:${DEV_PORT}/${ITEMS.path}`,
     ]);
     // The handle host of the same site lists the primary host too.
     expect(locsOf((await get(tenantHost(site), "/sitemap.xml")).body)[0]).toBe(
-      `http://${live}:3000/`,
+      `http://${live}:${DEV_PORT}/`,
     );
     expect((await get(live, "/robots.txt")).body).toContain(
-      `Sitemap: http://${live}:3000/sitemap.xml`,
+      `Sitemap: http://${live}:${DEV_PORT}/sitemap.xml`,
     );
     // An unknown host and a pending one have no sitemap.
     expect((await get(hostnameFor("nobody"), "/sitemap.xml")).status).toBe(404);
     expect((await get(hostnameFor("nobody"), "/robots.txt")).body).not.toContain("Sitemap:");
 
     // The marketing sitemap is the marketing pages, never a site's.
-    const marketing = await get("localhost:3000", "/sitemap.xml");
+    const marketing = await get(`localhost:${DEV_PORT}`, "/sitemap.xml");
     expect(marketing.status).toBe(200);
-    expect(locsOf(marketing.body)[0]).toBe("http://localhost:3000/");
+    expect(locsOf(marketing.body)[0]).toBe(`http://localhost:${DEV_PORT}/`);
     expect(marketing.body).not.toContain("mara.localhost");
-    expect((await get("app.localhost:3000", "/sitemap.xml")).status).toBe(404);
+    expect((await get(`app.localhost:${DEV_PORT}`, "/sitemap.xml")).status).toBe(404);
   });
 
   test("M11-10 an unpublished or suspended site has no sitemap", async ({ browser }, info) => {
@@ -497,18 +492,12 @@ test.describe("M11-05 behaviour after a publish", () => {
   test("M11-05 editing a published page's draft changes nothing live; a page created later is not live", async ({}, info) => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const site = await makeLiveSite("ed", { plan: "pro" });
-    const admin = adminClient();
-    await admin
-      .from("site_pages")
-      .update({ draft: { path: ITEMS.path, title: "Edited title", description: "", blocks: [] } })
-      .eq("id", site.itemsId);
+    await writeEntry(site.itemsId, {
+      draft: { path: ITEMS.path, title: "Edited title", description: "", blocks: [] },
+    });
     const items = (await get(tenantHost(site), `/${ITEMS.path}`)).body;
     expect(h1s(items)).toEqual([ITEMS.title]);
-    const created = await admin.from("site_pages").insert({
-      page_id: site.pageId,
-      draft: { path: "fresh", title: "Fresh", description: "", blocks: [] },
-    });
-    expect(created.error).toBeNull();
+    await addPageEntry(site.pageId, { path: "fresh", title: "Fresh" });
     expect((await get(tenantHost(site), "/fresh")).status).toBe(404);
   });
 
@@ -517,7 +506,7 @@ test.describe("M11-05 behaviour after a publish", () => {
     const user = await makeUser("plain");
     const handle = `zq-plain-${rand(5)}`;
     await insertPage(user.id, handle, {});
-    const response = await get(`${handle}.localhost:3000`, "/items");
+    const response = await get(`${handle}.localhost:${DEV_PORT}`, "/items");
     expect(response.status).toBe(404);
     // A site that is not a user's of this run: unrelated 404 panel, never a draft.
     expect(response.body).not.toContain("Zq ");

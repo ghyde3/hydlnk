@@ -8,6 +8,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  setPageDraft,
+  moveHome,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -68,14 +70,12 @@ describe.skipIf(!run)("M9-21/22 the Publish gate refuses raw-JSON abuse (local S
   /** A user with a live page (so "unchanged" means something), then `blocks` written as the draft. */
   async function refused(label: string, blocks: Block[]) {
     const o = await makeOwner(admin, label, (handle) => draftOf(handle, [header]));
+    await moveHome(admin, o.pageId);
     owners.push(o);
     const first = await core.publishPageCore({ pageId: o.pageId, userId: o.userId }, { admin });
     expect(first.ok).toBe(true);
     const before = await publishedOf(admin, o.pageId);
-    const { error } = await admin
-      .from("pages")
-      .update({ draft: draftOf("Alpha", blocks) as never })
-      .eq("id", o.pageId);
+    const { error } = await setPageDraft(admin, o.pageId, draftOf("Alpha", blocks));
     expect(error).toBeNull();
     const result = await core.publishPageCore({ pageId: o.pageId, userId: o.userId }, { admin });
     expect(await publishedOf(admin, o.pageId)).toEqual(before);

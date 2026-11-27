@@ -101,6 +101,12 @@ export interface StatsSource {
   dailySiteUniques?(pageId: string, fromDay: string, toDay: string): Promise<Map<string, number>>;
   /** Sub-page ids that have history (rollup or raw rows), whether or not the page still exists. */
   historicPageIds?(pageId: string): Promise<string[]>;
+  /**
+   * M16-11: the site's live posts that have views since `fromDay` (the first day of the range), by
+   * title, plus `selected` when it is a live post. It reads history, so `gather` asks only after
+   * the plan check, with a window the plan allows. Optional: without it no post is named.
+   */
+  viewedPosts?(pageId: string, fromDay: string, selected: PageFilter): Promise<SubPageInfo[]>;
 }
 
 export interface LoadStatsInput {
@@ -175,8 +181,11 @@ async function gather(
 
   const published = page.published !== null && page.published !== undefined;
   const subPages: SubPageInfo[] = (page.subPages ?? []).map(({ id, title }) => ({ id, title }));
+  // After the plan check (M4-30): both read history. The posts named are the ones with views in
+  // this range (M16-11); every other id with history is a "Deleted page" or gets no entry.
+  const posts = (await source.viewedPosts?.(input.pageId, window.start, filter)) ?? [];
   const historic = (await source.historicPageIds?.(input.pageId)) ?? [];
-  const options = buildPageOptions(subPages, historic, filter);
+  const options = buildPageOptions([...subPages, ...posts], historic, filter);
   if (!(await source.hasActivity(input.pageId))) {
     return { ok: true, window, plan, page, published, recorded: null, filter, options };
   }

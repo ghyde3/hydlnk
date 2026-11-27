@@ -57,8 +57,32 @@ function code(file: string): string {
 }
 
 describe("the tools share code and never reach the database client themselves", () => {
-  it("scans the fourteen tools and the registry", () => {
-    expect(toolFiles.length).toBeGreaterThanOrEqual(16);
+  it("scans the thirty-one tools, their shared modules and the registry", () => {
+    expect(toolFiles.length).toBeGreaterThanOrEqual(35);
+    // Every content tool of M18 is among the files scanned below.
+    for (const name of [
+      "list-content-types",
+      "list-entries",
+      "get-entry",
+      "list-terms",
+      "list-revisions",
+      "create-entry",
+      "update-entry",
+      "delete-entry",
+      "restore-entry",
+      "create-term",
+      "restore-revision",
+      "rename-term",
+      "delete-term",
+      "publish-entry",
+      "unpublish-entry",
+      "publish-design",
+      "update-content-type",
+      "content-common",
+      "publish-common",
+    ]) {
+      expect(toolFiles, name).toContain(`${MCP_DIR}/tools/${name}.ts`);
+    }
   });
 
   it("no module under tools/ imports the secret-key client or supabase-js", () => {
@@ -85,6 +109,84 @@ describe("the tools share code and never reach the database client themselves", 
   });
 });
 
+describe("the content tools write through the one writer, as the token's user (M18-12)", () => {
+  const CONTENT = [
+    "list-content-types",
+    "list-entries",
+    "get-entry",
+    "list-terms",
+    "list-revisions",
+    "create-entry",
+    "update-entry",
+    "delete-entry",
+    "restore-entry",
+    "create-term",
+    "restore-revision",
+    "rename-term",
+    "delete-term",
+    "publish-entry",
+    "unpublish-entry",
+    "publish-design",
+    "update-content-type",
+  ].map((name) => `${MCP_DIR}/tools/${name}.ts`);
+
+  it("no file under src/lib/mcp imports past the writer's index, the Posts route cores or a client", () => {
+    for (const file of mcpFiles) {
+      const source = code(file);
+      expect(source, file).not.toMatch(/from "@\/lib\/content\/(?!schemas(?:\/|"))/);
+      expect(source, file).not.toMatch(/@\/lib\/posts\/(routes-core|client|routes)/);
+      expect(source, file).not.toMatch(/@\/lib\/supabase\/(server|browser)/);
+    }
+  });
+
+  it("no content tool names a content table, calls an rpc or builds a query: the writer does", () => {
+    for (const file of CONTENT) {
+      const source = code(file);
+      expect(source, file).not.toMatch(
+        /\.from\(|\.rpc\(|["'`]content_(types|entries|terms|entry_terms|entry_revisions)["'`]/,
+      );
+      expect(source, file).not.toMatch(/call\.admin\s*\.\s*(from|rpc)/);
+    }
+  });
+
+  it("the actor is built in one place from the call: the token's user and the source mcp", () => {
+    const common = code(`${MCP_DIR}/tools/content-common.ts`);
+    expect(common).toMatch(
+      /mcpActor = \(call: ToolCall\): ContentActor => \(\{\s*userId: call\.userId,\s*source: "mcp",?\s*\}\)/,
+    );
+    for (const file of [...CONTENT, `${MCP_DIR}/post-write.ts`, `${MCP_DIR}/entry-access.ts`]) {
+      const source = code(file);
+      // No other actor literal, and never a source but mcp.
+      expect(source, file).not.toMatch(/source: "(editor|builder|system)"/);
+      for (const match of source.matchAll(/actor: ([^,}\n]+)/g)) {
+        expect(match[1]!.trim(), file).toMatch(/^(mcpActor\(call\)|actor)$/);
+      }
+    }
+    expect(code(`${MCP_DIR}/entry-access.ts`)).toMatch(
+      /const actor = \{ userId, source: "mcp" as const \};/,
+    );
+  });
+
+  it("the entry lookup is the only reader of an entry's documents outside page-access, and drops the published copy", () => {
+    const access = code(`${MCP_DIR}/entry-access.ts`);
+    expect(access).toMatch(/getEntry\(\{ actor, entryId \}\)/);
+    // Of `published` it keeps the slug and nothing else.
+    expect(access.match(/found\.published\b/g)).toHaveLength(1);
+    expect(access).toMatch(
+      /liveSlug: found\.status === "published" \? slugOf\(found\.published\) : null/,
+    );
+    for (const file of mcpFiles.filter((name) => !name.endsWith("entry-access.ts"))) {
+      expect(code(file), file).not.toMatch(/\bgetEntry\(/);
+    }
+  });
+
+  it("every content tool that changes the live site expires the cache inside its handler, never deferred", () => {
+    for (const file of CONTENT) {
+      expect(code(file), file).not.toMatch(/defer\([^)]*invalidate/);
+    }
+  });
+});
+
 describe("the draft is read in one place and written in one", () => {
   it("only page-access.ts and the draft writer select the draft column", () => {
     const selecting = ownFiles.filter((file) =>
@@ -103,29 +205,41 @@ describe("the draft is read in one place and written in one", () => {
     expect(source).toContain('.eq("owner_id", userId)');
   });
 
-  it("every site_pages read in page-access joins the site and filters on its owner in the same query (M12-05)", () => {
+  it("every page-entry read in page-access joins the site and filters on its owner in the same query (M12-05, 1b1-20)", () => {
     const source = code(`${MCP_DIR}/page-access.ts`);
+    expect(source).not.toMatch(/site_pages/);
     const chains = source
       .split("admin\n")
       .slice(1)
-      .filter((chain) => /\.from\("site_pages"\)/.test(chain.slice(0, 40)));
-    expect(chains.length).toBeGreaterThanOrEqual(3);
-    for (const chain of chains) {
-      const query = chain.slice(0, 600);
+      .filter((chain) => /\.from\("content_entries"\)/.test(chain.slice(0, 40)));
+    const joined = chains.filter((chain) =>
+      /SITE_JOIN|ENTRY_BASE|ENTRY_WITH_DOCS/.test(chain.slice(0, 200)),
+    );
+    expect(joined.length).toBeGreaterThanOrEqual(4);
+    for (const chain of joined) {
+      const query = chain.slice(0, 700);
       expect(query).toMatch(/\.eq\("site\.owner_id", userId\)/);
+      expect(query).toMatch(/\.is\("deleted_at", null\)/);
     }
+    // The one read without the join is Home's entry of sites the caller has just owner-checked.
+    expect(chains.length - joined.length).toBe(1);
     expect(source).toMatch(
       /SITE_JOIN = `site:pages\$\{String\.fromCharCode\(33\)\}inner\(owner_id\)`/,
     );
   });
 
-  it("the draft writer reads and writes a sub-page only under the site it just owner-checked", () => {
+  it("the draft writer reads a sub-page entry only under the site it just owner-checked, and writes it only through the content writer (1b1-19)", () => {
     const source = code(DRAFT_WRITER);
-    expect(source).toMatch(
-      /\.from\("site_pages"\)[\s\S]*?\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/,
+    // The read is one shared function that filters on id and site; the writer only delegates to it.
+    expect(source).toContain("readSubPageEntryWithClient(loose, siteId, entryId)");
+    const reader = code("src/lib/site/page-entries-core.ts");
+    expect(reader).toMatch(
+      /readSubPageEntryWithClient[\s\S]*?\.from\("content_entries"\)[\s\S]*?\.eq\("id", entryId\)\s*\.eq\("site_id", siteId\)/,
     );
-    expect(source).toMatch(/base\.eq\("id", subPageId\)\s*\.eq\("page_id", pageId\)/);
-    expect(source).toMatch(/\.eq\("updated_at", subRow\.updated_at\)/);
+    expect(source).toContain("readSubPageEntry(loose, pageId, subPageId)");
+    expect(source).toMatch(/updateEntryWithClient\(admin, \{\s*actor: \{ userId, source: "mcp" \}/);
+    expect(source).not.toMatch(/\.from\("site_pages"\)/);
+    expect(source).not.toMatch(/\.from\("content_entries"\)\s*\.update/);
   });
 
   it("the draft writer's update sets the draft column and nothing else, filtered on id, owner and rev", () => {

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emptyDraft, type Block, type DraftDoc } from "@/lib/document";
+import { UNDO_WINDOW_MS } from "@/lib/media/cleanup-client";
 
 /**
  * Shared setup for the publishing integration tests (M2-23, M2-25, M2-26...): they run against the
@@ -84,6 +85,83 @@ export async function makeOwner(
   return { userId, email, pageId: page.data.id as string, handle };
 }
 
+/**
+ * Move a site the way stage 1b does for a Free-to-Studio account: Home's blocks become the '/' page
+ * entry (a copy), and the site row keeps the same document as its frozen copy. Opt-in, for tests of
+ * code that reads Home from its entry (Publish); makeOwner alone gives the pre-move layout.
+ */
+export async function moveHome(admin: SupabaseClient, pageId: string): Promise<string> {
+  const row = await admin.from("pages").select("draft").eq("id", pageId).single();
+  if (row.error) throw new Error(`moveHome: ${row.error.message}`);
+  const blocks = (row.data.draft as { blocks?: unknown } | null)?.blocks ?? [];
+  const type = await admin
+    .from("content_types")
+    .select("id")
+    .eq("site_id", pageId)
+    .eq("key", "page")
+    .single();
+  if (type.error) throw new Error(`moveHome: ${type.error.message}`);
+  const made = await admin
+    .from("content_entries")
+    .insert({
+      site_id: pageId,
+      type_id: type.data.id,
+      draft: { path: "/", title: "", description: "", blocks } as never,
+    })
+    .select("id")
+    .single();
+  if (made.error) throw new Error(`moveHome: ${made.error.message}`);
+  return made.data.id as string;
+}
+
+/**
+ * Save a whole page document the way the editor now does (stage 1b): everything but `blocks` goes to
+ * `pages.draft` (whose frozen blocks stay untouched, or the guard refuses with HL013), and `blocks` to
+ * Home's page entry, created when the site has none. A document without `blocks` leaves Home's blocks as
+ * they are. Returns the first error, shaped like a Supabase result.
+ */
+export async function setPageDraft(
+  admin: SupabaseClient,
+  pageId: string,
+  doc: unknown,
+): Promise<{ error: { message: string; code?: string } | null }> {
+  const { blocks, ...design } = (doc ?? {}) as { blocks?: unknown } & Record<string, unknown>;
+  const current = await admin.from("pages").select("draft").eq("id", pageId).single();
+  if (current.error) return { error: current.error };
+  const frozen = (current.data.draft as { blocks?: unknown } | null)?.blocks ?? [];
+  const saved = await admin
+    .from("pages")
+    .update({ draft: { ...design, blocks: frozen } as never })
+    .eq("id", pageId);
+  if (saved.error) return { error: saved.error };
+  if (blocks === undefined) return { error: null };
+  const type = await admin
+    .from("content_types")
+    .select("id")
+    .eq("site_id", pageId)
+    .eq("key", "page")
+    .single();
+  if (type.error) return { error: type.error };
+  const entry = { path: "/", title: "", description: "", blocks };
+  const home = await admin
+    .from("content_entries")
+    .select("id")
+    .eq("site_id", pageId)
+    .eq("type_id", type.data.id)
+    .eq("draft->>path", "/")
+    .maybeSingle();
+  if (home.error) return { error: home.error };
+  const written = home.data
+    ? await admin
+        .from("content_entries")
+        .update({ draft: entry as never })
+        .eq("id", home.data.id)
+    : await admin
+        .from("content_entries")
+        .insert({ site_id: pageId, type_id: type.data.id, draft: entry as never });
+  return { error: written.error };
+}
+
 export async function removeOwners(admin: SupabaseClient, owners: TestOwner[]): Promise<void> {
   await Promise.all(
     owners.map((o) => admin.auth.admin.deleteUser(o.userId).catch(() => undefined)),
@@ -123,3 +201,15 @@ export async function publishedOf(admin: SupabaseClient, pageId: string) {
   if (error) throw new Error(error.message);
   return data as { published: unknown; published_at: string | null };
 }
+
+/** The owner's own media cleanup run (`cleanupMediaFor`'s access): the owner acting on their whole queue. */
+export const ownerRun = (userId: string) => ({ actorId: userId, ownerId: userId, siteId: null });
+
+/**
+ * A cleanup run's options as the editor makes it, past the Undo window (every run sees only rows queued
+ * more than UNDO_WINDOW_MS ago, team access re-review finding 1).
+ */
+export const pastUndo = (admin: SupabaseClient) => ({
+  admin,
+  now: new Date(Date.now() + UNDO_WINDOW_MS + 1_000),
+});

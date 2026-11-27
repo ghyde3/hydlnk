@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { cleanupUsers } from "../fixtures/data";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { rawBuffer, tenantGet } from "../m2/publish-helpers";
 import {
   CASES,
@@ -28,12 +28,12 @@ test.describe("M6-26 and M6-27 live embeds", () => {
     const res = await tenantGet(fx.handle);
     expect(res.status).toBe(200);
     expect(res.headers["content-security-policy"]).toBe(
-      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      `default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:${DEV_PORT}; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
     );
     expect(res.headers["content-security-policy"]).not.toMatch(/nonce|unsafe-eval/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
-    const app = await rawBuffer("app.localhost:3000", "/login");
+    const app = await rawBuffer(`app.localhost:${DEV_PORT}`, "/login");
     expect(String(app.headers["content-security-policy"] ?? "")).not.toMatch(
       /vimeo|tiktok|instagram|soundcloud|apple|twitch/,
     );
@@ -226,8 +226,10 @@ test.describe("M6-26 and M6-27 live embeds", () => {
     page,
   }) => {
     const { adminClient } = await import("../fixtures/auth");
+    const { homeEntryOf } = await import("../fixtures/home-abuse");
     const fx = await liveEmbeds("emevil", [CASES.find((c) => c.provider === "vimeo")!]);
-    // Written straight to `published` with the secret key (Publish would refuse every one of these).
+    // Written straight to Home's entry `published` with the secret key (Publish would refuse every one
+    // of these); the live page reads Home's blocks from there, the pages.published copy is frozen.
     const evil = [
       "https://vimeo.com.evil.example/123456",
       "https://evil.example/x",
@@ -244,7 +246,11 @@ test.describe("M6-26 and M6-27 live embeds", () => {
       url: u,
       caption: "Evil",
     })) as never;
-    const { error } = await adminClient().from("pages").update({ published }).eq("id", fx.pageId);
+    const home = await homeEntryOf(fx.pageId);
+    const { error } = await adminClient()
+      .from("content_entries")
+      .update({ published: { ...(home.published as object), blocks: published.blocks } })
+      .eq("id", home.id);
     expect(error).toBeNull();
     const response = await page.goto(url(fx.handle));
     expect(response?.status()).toBeLessThan(500);

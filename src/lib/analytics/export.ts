@@ -46,8 +46,26 @@ const NEVER_IN_A_CELL =
 const FORMULA_START = /^[=+\-@\t\r]/;
 
 /**
+ * What a spreadsheet may skip before it looks for a formula: white space (line feed and the Unicode
+ * spaces included), controls and invisible format characters.
+ */
+const SKIPPED_LEAD = /^[\s\p{Cc}\p{Cf}]+/u;
+
+/**
+ * Whether a spreadsheet could read the cell as a formula: it starts with a formula character as it
+ * is, or after compatibility normalisation (NFKC: a full-width `＝` is `=`) and the leading white
+ * space and controls a spreadsheet may skip (a leading line feed or space before `=`).
+ */
+function readsAsFormula(text: string): boolean {
+  return (
+    FORMULA_START.test(text) || FORMULA_START.test(text.normalize("NFKC").replace(SKIPPED_LEAD, ""))
+  );
+}
+
+/**
  * One cell of a CSV file (RFC 4180). A number is written bare. A string loses the characters in
- * `NEVER_IN_A_CELL`, then, when it starts with `=`, `+`, `-`, `@`, a tab or a carriage return, gets
+ * `NEVER_IN_A_CELL`, then, when it starts with `=`, `+`, `-`, `@`, a tab or a carriage return (as
+ * it is, or once normalised and past its leading white space: `readsAsFormula`), gets
  * a leading apostrophe so a spreadsheet opens it as text and never runs it (a link label of
  * `=HYPERLINK("http://evil.example","x")` is the case this is for). A cell with a comma, a quote, a
  * carriage return or a line feed is wrapped in quotes and its quotes are doubled, so it round-trips
@@ -56,7 +74,7 @@ const FORMULA_START = /^[=+\-@\t\r]/;
 export function csvCell(value: string | number): string {
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "0";
   let text = value.replace(NEVER_IN_A_CELL, "");
-  if (FORMULA_START.test(text)) text = `'${text}`;
+  if (readsAsFormula(text)) text = `'${text}`;
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
@@ -64,7 +82,11 @@ export function csvCell(value: string | number): string {
 export const CSV_BOM = "\uFEFF";
 const EOL = "\r\n";
 
-function csv(header: readonly string[], rows: readonly (readonly (string | number)[])[]): string {
+/** A whole CSV file: the byte order mark, the header, the rows, CRLF line ends, every cell through `csvCell`. */
+export function csv(
+  header: readonly string[],
+  rows: readonly (readonly (string | number)[])[],
+): string {
   const lines = [header, ...rows].map((cells) => cells.map(csvCell).join(","));
   return `${CSV_BOM}${lines.join(EOL)}${EOL}`;
 }

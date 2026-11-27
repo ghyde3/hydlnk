@@ -12,7 +12,7 @@ import {
   signed,
   subscriptionEvent,
 } from "../fixtures/stripe-stub";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { SERVER_PORT, rawBuffer, tenantGet } from "../m2/publish-helpers";
 import { addDomainRow, hostnameFor } from "./domains-core-helpers";
 
@@ -91,7 +91,7 @@ const remove = (fx: Fx, subscriptionId: string, created: number) =>
     created,
   });
 
-const dev = (handle: string, path = "/") => rawRequest(`${handle}.localhost:3000`, path);
+const dev = (handle: string, path = "/") => rawRequest(`${handle}.localhost:${DEV_PORT}`, path);
 
 async function publishedOf(pageId: string) {
   const { data, error } = await adminClient()
@@ -144,7 +144,7 @@ test.describe("M4-08 the badge follows the plan (dev server)", () => {
     test.skip(!desktopOnly(info), "a data flow");
     const fx = await freeUserWithPage("bd-cust");
     const host = hostnameFor("bdc");
-    const custom = () => rawBuffer(`${host}:3000`, "/");
+    const custom = () => rawBuffer(`${host}:${DEV_PORT}`, "/");
 
     // A custom domain needs a paid plan to be added: the signed webhook is what makes the account Pro.
     const created = create(fx, "proMonthly");

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, insertPage, makeUser, rand } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
  * M5-05 the report form and the public page's footer link, on the phone (390x844) and desktop
@@ -238,14 +238,14 @@ test.describe("M5-05 layout", () => {
 });
 
 test.describe("M5-05 the public page's footer link", () => {
-  test("M5-05 'Report this page' on http://mara.localhost:3000 is 44px tall and opens the form with mara.hydlnk.com", async ({ page }) => {
+  test(`M5-05 'Report this page' on http://mara.localhost:${DEV_PORT} is 44px tall and opens the form with mara.hydlnk.com`, async ({ page }) => {
     await page.goto(url("mara"));
     const link = page.getByRole("link", { name: "Report this page" });
     await expect(link).toBeVisible();
     const box = await link.boundingBox();
     expect(box!.height).toBeGreaterThanOrEqual(44);
     expect(box!.width).toBeGreaterThanOrEqual(44);
-    await expect(link).toHaveAttribute("href", `http://localhost:3000/report?page=${MARA_PAGE_ID}`);
+    await expect(link).toHaveAttribute("href", `http://localhost:${DEV_PORT}/report?page=${MARA_PAGE_ID}`);
 
     await link.click();
     await page.waitForURL(`**/report?page=${MARA_PAGE_ID}`);

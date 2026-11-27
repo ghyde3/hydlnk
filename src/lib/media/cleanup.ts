@@ -1,5 +1,6 @@
 import "server-only";
 import { IMAGE_PATH_PATTERN } from "@/lib/document";
+import { UNDO_WINDOW_MS } from "./cleanup-client";
 
 /**
  * The cleanup of replaced and removed images (M5-14), written against injected dependencies so the
@@ -27,9 +28,45 @@ import { IMAGE_PATH_PATTERN } from "@/lib/document";
  * bucket (M4-31).
  */
 
+/**
+ * What one cleanup run may see (team access): the rows queued before `before` (past the editor's Undo
+ * window, for EVERY run, the owner's included, so no run deletes what anyone dropped a moment ago and
+ * may still bring back with Undo), and, when `siteId` is set, only the rows that site's writes queued.
+ * `siteId` null is the owner's whole queue. Never built by a caller: `cleanupScopeFor` derives it from
+ * who is acting, inside the one entry point (`cleanupMediaFor` in "./cleanup-admin").
+ */
+export interface CleanupScope {
+  siteId: string | null;
+  before: Date;
+}
+
+/**
+ * Who runs a cleanup and on what (team access re-review, finding 1): the acting user (`actorId`, null
+ * for the system: a scheduled publish), the site OWNER whose folder and queue it is, and the site the
+ * call is about (null: the owner's own account-wide call, such as the cleanup route without a site).
+ * Every caller passes this, never a bare owner id, so none can forget the scope.
+ */
+export interface CleanupAccess {
+  actorId: string | null;
+  ownerId: string;
+  siteId: string | null;
+}
+
+/**
+ * The scope of a run (finding 1): the owner acting works the whole queue, a member or the system only
+ * the named site's rows; either way only rows queued more than UNDO_WINDOW_MS before `now`. A call
+ * that is not the owner's and names no site may see nothing (null).
+ */
+export function cleanupScopeFor(access: CleanupAccess, now: Date = new Date()): CleanupScope | null {
+  const before = new Date(now.getTime() - UNDO_WINDOW_MS);
+  if (access.actorId !== null && access.actorId === access.ownerId) return { siteId: null, before };
+  if (access.siteId === null) return null;
+  return { siteId: access.siteId, before };
+}
+
 export interface CleanupDeps {
-  /** The owner's queued paths, oldest first, at most `limit`. */
-  listQueue(ownerId: string, limit: number): Promise<string[]>;
+  /** The owner's queued paths (only those `scope` allows, when given), oldest first, at most `limit`. */
+  listQueue(ownerId: string, limit: number, scope?: CleanupScope): Promise<string[]>;
   /** The subset of `paths` that any draft, published document or saved theme of the owner names. */
   inUse(ownerId: string, paths: string[]): Promise<string[]>;
   /** Removes these objects from Storage. Every path starts with `{ownerId}/`; a missing object is fine. */
@@ -70,9 +107,14 @@ export function isOwnedMediaPath(ownerId: string, path: string): boolean {
 export async function cleanupOwnerMedia(
   ownerId: string,
   deps: CleanupDeps,
+  scope?: CleanupScope,
 ): Promise<CleanupResult> {
   const result: CleanupResult = { deleted: [], kept: [], discarded: [] };
-  const queued = [...new Set(await deps.listQueue(ownerId, CLEANUP_QUEUE_LIMIT))];
+  const queued = [
+    ...new Set(
+      await (scope ? deps.listQueue(ownerId, CLEANUP_QUEUE_LIMIT, scope) : deps.listQueue(ownerId, CLEANUP_QUEUE_LIMIT)),
+    ),
+  ];
   if (queued.length === 0) return result;
 
   const owned: string[] = [];

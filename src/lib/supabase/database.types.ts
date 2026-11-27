@@ -173,6 +173,394 @@ export type Database = {
         }
         Relationships: []
       }
+      content_entries: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          draft: Json
+          first_published_at: string | null
+          id: string
+          live_path: string | null
+          live_slug: string | null
+          next_boundary_at: string | null
+          published: Json | null
+          published_at: string | null
+          rev: number
+          scheduled_at: string | null
+          site_id: string
+          type_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          draft: Json
+          first_published_at?: string | null
+          id?: string
+          live_path?: string | null
+          live_slug?: string | null
+          next_boundary_at?: string | null
+          published?: Json | null
+          published_at?: string | null
+          rev?: number
+          scheduled_at?: string | null
+          site_id: string
+          type_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          draft?: Json
+          first_published_at?: string | null
+          id?: string
+          live_path?: string | null
+          live_slug?: string | null
+          next_boundary_at?: string | null
+          published?: Json | null
+          published_at?: string | null
+          rev?: number
+          scheduled_at?: string | null
+          site_id?: string
+          type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entries_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entries_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_entry_revisions: {
+        Row: {
+          created_at: string
+          entry_id: string
+          id: string
+          rev: number
+          site_id: string
+          snapshot: Json
+          source: string
+          was_published: boolean
+        }
+        Insert: {
+          created_at?: string
+          entry_id: string
+          id?: string
+          rev: number
+          site_id: string
+          snapshot: Json
+          source: string
+          was_published?: boolean
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string
+          id?: string
+          rev?: number
+          site_id?: string
+          snapshot?: Json
+          source?: string
+          was_published?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entry_revisions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entry_revisions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_entry_terms: {
+        Row: {
+          entry_id: string
+          term_id: string
+        }
+        Insert: {
+          entry_id: string
+          term_id: string
+        }
+        Update: {
+          entry_id?: string
+          term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_entry_terms_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_entry_terms_term_id_fkey"
+            columns: ["term_id"]
+            isOneToOne: false
+            referencedRelation: "content_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_schedules: {
+        Row: {
+          action: string
+          attempts: number
+          claim: string | null
+          created_at: string
+          created_by: string
+          entry_id: string
+          finished_at: string | null
+          fired_from_rev: number | null
+          fired_rev: number | null
+          id: string
+          locked_until: string | null
+          result_code: string | null
+          run_at: string
+          scheduled_rev: number | null
+          site_id: string
+          snapshot: Json | null
+          source: string
+          status: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          claim?: string | null
+          created_at?: string
+          created_by: string
+          entry_id: string
+          finished_at?: string | null
+          fired_from_rev?: number | null
+          fired_rev?: number | null
+          id?: string
+          locked_until?: string | null
+          result_code?: string | null
+          run_at: string
+          scheduled_rev?: number | null
+          site_id: string
+          snapshot?: Json | null
+          source: string
+          status?: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          claim?: string | null
+          created_at?: string
+          created_by?: string
+          entry_id?: string
+          finished_at?: string | null
+          fired_from_rev?: number | null
+          fired_rev?: number | null
+          id?: string
+          locked_until?: string | null
+          result_code?: string | null
+          run_at?: string
+          scheduled_rev?: number | null
+          site_id?: string
+          snapshot?: Json | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_schedules_entry_site_fkey"
+            columns: ["entry_id", "site_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id", "site_id"]
+          },
+          {
+            foreignKeyName: "content_schedules_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_slug_redirects: {
+        Row: {
+          created_at: string
+          entry_id: string
+          from_slug: string
+          site_id: string
+          type_id: string
+        }
+        Insert: {
+          created_at?: string
+          entry_id: string
+          from_slug: string
+          site_id: string
+          type_id: string
+        }
+        Update: {
+          created_at?: string
+          entry_id?: string
+          from_slug?: string
+          site_id?: string
+          type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_slug_redirects_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_slug_redirects_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_slug_redirects_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_terms: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_id: string | null
+          position: number
+          site_id: string
+          slug: string
+          taxonomy: string
+          type_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          parent_id?: string | null
+          position?: number
+          site_id: string
+          slug: string
+          taxonomy: string
+          type_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_id?: string | null
+          position?: number
+          site_id?: string
+          slug?: string
+          taxonomy?: string
+          type_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_terms_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "content_terms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_terms_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_terms_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_types: {
+        Row: {
+          archive_path: string | null
+          body_format: string
+          created_at: string
+          enabled: boolean
+          field_schema: Json
+          id: string
+          key: string
+          kind: string
+          label: string
+          label_plural: string
+          position: number
+          settings: Json
+          site_id: string
+          updated_at: string
+        }
+        Insert: {
+          archive_path?: string | null
+          body_format: string
+          created_at?: string
+          enabled?: boolean
+          field_schema?: Json
+          id?: string
+          key: string
+          kind: string
+          label: string
+          label_plural: string
+          position?: number
+          settings?: Json
+          site_id: string
+          updated_at?: string
+        }
+        Update: {
+          archive_path?: string | null
+          body_format?: string
+          created_at?: string
+          enabled?: boolean
+          field_schema?: Json
+          id?: string
+          key?: string
+          kind?: string
+          label?: string
+          label_plural?: string
+          position?: number
+          settings?: Json
+          site_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_types_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_dim_stats: {
         Row: {
           clicks: number
@@ -366,21 +754,113 @@ export type Database = {
           },
         ]
       }
+      form_submission_usage: {
+        Row: {
+          accepted: number
+          month: string
+          notify_skipped: number
+          notify_skipped_day: string | null
+          owner_id: string
+          refused: number
+          refused_daily: number
+        }
+        Insert: {
+          accepted?: number
+          month: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
+          owner_id: string
+          refused?: number
+          refused_daily?: number
+        }
+        Update: {
+          accepted?: number
+          month?: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
+          owner_id?: string
+          refused?: number
+          refused_daily?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_submission_usage_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      form_submissions: {
+        Row: {
+          block_id: string
+          created_at: string
+          email: string
+          entry_id: string | null
+          id: string
+          kind: string
+          message: string
+          name: string
+          site_id: string
+        }
+        Insert: {
+          block_id: string
+          created_at?: string
+          email: string
+          entry_id?: string | null
+          id?: string
+          kind: string
+          message?: string
+          name?: string
+          site_id: string
+        }
+        Update: {
+          block_id?: string
+          created_at?: string
+          email?: string
+          entry_id?: string | null
+          id?: string
+          kind?: string
+          message?: string
+          name?: string
+          site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "form_submissions_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "form_submissions_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       image_cleanup_queue: {
         Row: {
           owner_id: string
           path: string
           queued_at: string
+          site_id: string | null
         }
         Insert: {
           owner_id: string
           path: string
           queued_at?: string
+          site_id?: string | null
         }
         Update: {
           owner_id?: string
           path?: string
           queued_at?: string
+          site_id?: string | null
         }
         Relationships: []
       }
@@ -771,6 +1251,7 @@ export type Database = {
           owner_id: string
           published: Json | null
           published_at: string | null
+          schedule_clock: string | null
           updated_at: string
         }
         Insert: {
@@ -782,6 +1263,7 @@ export type Database = {
           owner_id: string
           published?: Json | null
           published_at?: string | null
+          schedule_clock?: string | null
           updated_at?: string
         }
         Update: {
@@ -793,6 +1275,7 @@ export type Database = {
           owner_id?: string
           published?: Json | null
           published_at?: string | null
+          schedule_clock?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -962,6 +1445,7 @@ export type Database = {
           draft: Json
           id: string
           live_path: string | null
+          moved_at: string | null
           page_id: string
           published: Json | null
           published_at: string | null
@@ -972,6 +1456,7 @@ export type Database = {
           draft: Json
           id?: string
           live_path?: string | null
+          moved_at?: string | null
           page_id: string
           published?: Json | null
           published_at?: string | null
@@ -982,6 +1467,7 @@ export type Database = {
           draft?: Json
           id?: string
           live_path?: string | null
+          moved_at?: string | null
           page_id?: string
           published?: Json | null
           published_at?: string | null
@@ -993,6 +1479,49 @@ export type Database = {
             columns: ["page_id"]
             isOneToOne: false
             referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_paths: {
+        Row: {
+          entry_id: string | null
+          path: string
+          site_id: string
+          type_id: string | null
+        }
+        Insert: {
+          entry_id?: string | null
+          path: string
+          site_id: string
+          type_id?: string | null
+        }
+        Update: {
+          entry_id?: string | null
+          path?: string
+          site_id?: string
+          type_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_paths_entry_id_fkey"
+            columns: ["entry_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_paths_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_paths_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "content_types"
             referencedColumns: ["id"]
           },
         ]
@@ -1099,6 +1628,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_site_invite: {
+        Args: { p_methods: string[]; p_token_hash: string; p_user: string }
+        Returns: string
+      }
       account_upload_bytes: { Args: { p_uid: string }; Returns: number }
       account_usage: {
         Args: { p_uid: string }
@@ -1309,6 +1842,17 @@ export type Database = {
           signups: number
         }[]
       }
+      admin_site_team: {
+        Args: { p_account: string }
+        Returns: {
+          direction: string
+          email: string
+          handle: string
+          role: string
+          site_id: string
+          user_id: string
+        }[]
+      }
       admin_traffic_flags: {
         Args: { p_limit?: number; p_offset?: number; p_reviewed?: boolean }
         Returns: {
@@ -1331,6 +1875,7 @@ export type Database = {
         Args: { p_client_id: string }
         Returns: string
       }
+      advance_block_boundaries: { Args: { p_sites: string[] }; Returns: number }
       apply_subscription_state: {
         Args: {
           p_account_id: string
@@ -1355,23 +1900,204 @@ export type Database = {
       }
       blocklist_pct_decode: { Args: { p_text: string }; Returns: string }
       blocklist_url_host: { Args: { p_url: string }; Returns: string }
+      cancel_pending_schedules: {
+        Args: { p_action: string; p_code: string; p_entry_id: string }
+        Returns: number
+      }
+      cancel_schedule: {
+        Args: {
+          p_action: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+        }
+        Returns: number
+      }
+      charge_account_bytes: {
+        Args: { p_delta: number; p_owner: string }
+        Returns: undefined
+      }
       claim_domain_check: {
         Args: { p_cooldown_seconds?: number; p_id: string }
         Returns: boolean
       }
       claim_domain_live_email: { Args: { p_id: string }; Returns: boolean }
+      claim_due_schedules: {
+        Args: { p_lease?: string; p_limit?: number }
+        Returns: {
+          action: string
+          attempts: number
+          claim: string
+          created_by: string
+          entry_id: string
+          id: string
+          owner_id: string
+          run_at: string
+          site_id: string
+          snapshot: Json
+          type_id: string
+          type_key: string
+        }[]
+      }
+      claim_site_path: {
+        Args: {
+          p_entry: string
+          p_path: string
+          p_site: string
+          p_type: string
+        }
+        Returns: undefined
+      }
+      content_move_active: { Args: never; Returns: boolean }
+      convert_all_versions: { Args: never; Returns: Json }
+      convert_site_versions: { Args: { p_site: string }; Returns: Json }
+      create_site_invite: {
+        Args: {
+          p_actor: string
+          p_email: string
+          p_role: string
+          p_site: string
+          p_token_hash: string
+        }
+        Returns: string
+      }
+      delete_page_entry: {
+        Args: { p_entry_id: string; p_owner_id: string; p_site_id: string }
+        Returns: string
+      }
+      delete_page_entry_as: {
+        Args: {
+          p_actor: string
+          p_entry_id: string
+          p_owner_id: string
+          p_site_id: string
+        }
+        Returns: string
+      }
+      due_block_boundaries: { Args: { p_limit?: number }; Returns: string[] }
       end_expired_gifts: {
         Args: never
         Returns: {
           account_id: string
         }[]
       }
+      entry_next_boundary: {
+        Args: { p_after: string; p_published: Json }
+        Returns: string
+      }
+      finish_schedule: {
+        Args: {
+          p_claim: string
+          p_code: string
+          p_failed: boolean
+          p_id: string
+        }
+        Returns: string
+      }
+      fire_scheduled_publish: {
+        Args: { p_claim: string; p_id: string; p_published: Json }
+        Returns: Json
+      }
+      fire_scheduled_unpublish: {
+        Args: { p_claim: string; p_id: string }
+        Returns: Json
+      }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
+      form_month_stored: {
+        Args: { p_month: string; p_owner: string }
+        Returns: number
+      }
+      form_submission_counts: {
+        Args: { p_site_id: string }
+        Returns: {
+          block_id: string
+          kind: string
+          latest: string
+          total: number
+        }[]
+      }
+      form_usage: {
+        Args: { p_uid: string }
+        Returns: {
+          month: string
+          notify_skipped_today: number
+          refused: number
+          refused_daily: number
+          stored: number
+        }[]
+      }
+      form_usage_month: { Args: never; Returns: string }
+      is_reserved_entry_slug: { Args: { p_slug: string }; Returns: boolean }
+      is_reserved_site_path: { Args: { p_path: string }; Returns: boolean }
+      leave_site: {
+        Args: { p_site: string; p_user: string }
+        Returns: undefined
+      }
+      list_shared_sites: {
+        Args: { p_user: string }
+        Returns: {
+          handle: string
+          name: string
+          owner_email: string
+          owner_id: string
+          role: string
+          site_id: string
+          state: string
+        }[]
+      }
+      list_site_team: {
+        Args: { p_actor: string; p_site: string }
+        Returns: Json
+      }
+      live_term_counts: {
+        Args: { p_site: string; p_type: string }
+        Returns: {
+          id: string
+          live_count: number
+          name: string
+          parent_id: string
+          slug: string
+          taxonomy: string
+        }[]
+      }
+      lock_claimed_schedule: {
+        Args: { p_action: string; p_claim: string; p_id: string }
+        Returns: {
+          action: string
+          attempts: number
+          claim: string | null
+          created_at: string
+          created_by: string
+          entry_id: string
+          finished_at: string | null
+          fired_from_rev: number | null
+          fired_rev: number | null
+          id: string
+          locked_until: string | null
+          result_code: string | null
+          run_at: string
+          scheduled_rev: number | null
+          site_id: string
+          snapshot: Json | null
+          source: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "content_schedules"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
       media_paths_in_use: {
         Args: { p_paths: string[]; p_uid: string }
         Returns: string[]
+      }
+      media_queue_paths: {
+        Args: { p_owner: string; p_paths: string[]; p_site: string }
+        Returns: undefined
       }
       media_upload_rate_hit: {
         Args: { p_limit: number; p_uid: string; p_window_seconds: number }
@@ -1379,6 +2105,12 @@ export type Database = {
           allowed: boolean
           retry_after: number
         }[]
+      }
+      move_all_content: { Args: never; Returns: Json }
+      move_site_content: { Args: { p_site: string }; Returns: Json }
+      note_entry_creator: {
+        Args: { p_actor: string; p_entry: string }
+        Returns: undefined
       }
       oauth_bind_request: {
         Args: { p_csrf_hash: string; p_id: string; p_user: string }
@@ -1511,22 +2243,64 @@ export type Database = {
           user_id: string
         }[]
       }
+      page_block_ids: { Args: { p_blocks: Json }; Returns: string[] }
       plan_limits: {
         Args: { p_plan: string }
         Returns: {
           analytics_breakdowns: boolean
           analytics_history_days: number
+          content_bytes: number
+          custom_types: number
+          entries_per_type: number
+          form_submissions_per_month: number
+          form_submissions_per_site_day: number
           max_domains: number
           max_pages: number
           max_saved_themes: number
           max_upload_bytes: number
           pages_per_site: number
           redirect_mode: boolean
+          revisions_kept: number
+          scheduled_per_account: number
+          scheduled_per_site: number
+          scheduling: boolean
           versions_kept: number
         }[]
       }
+      plan_site_members: { Args: { p_plan: string }; Returns: number }
+      publish_design: {
+        Args: {
+          p_design: Json
+          p_expected_rev?: string
+          p_owner_id: string
+          p_page_id: string
+          p_published_at?: string
+        }
+        Returns: string
+      }
+      publish_dry_run: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+        }
+        Returns: undefined
+      }
+      publish_entry: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+          p_published_at?: string
+          p_source?: string
+        }
+        Returns: number
+      }
       publish_site: {
         Args: {
+          p_expected_revs?: Json
           p_home: Json
           p_owner_id: string
           p_page_id: string
@@ -1535,13 +2309,108 @@ export type Database = {
         }
         Returns: string
       }
+      publish_site_page: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+          p_published_at?: string
+          p_site_id: string
+          p_source?: string
+        }
+        Returns: Json
+      }
+      publish_site_revs: {
+        Args: {
+          p_expected_revs?: Json
+          p_home: Json
+          p_owner_id: string
+          p_page_id: string
+          p_published_at?: string
+          p_sub_pages: Json
+        }
+        Returns: Json
+      }
       purge_old_events: { Args: never; Returns: number }
+      purge_site_team: { Args: never; Returns: undefined }
+      purge_trashed_entries: { Args: never; Returns: number }
+      queue_new_upload:
+        | {
+            Args: { p_grace_seconds: number; p_owner: string; p_path: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_grace_seconds: number
+              p_owner: string
+              p_path: string
+              p_site: string
+            }
+            Returns: undefined
+          }
+      rate_limit_age: {
+        Args: { p_bucket: string; p_window_seconds: number }
+        Returns: number
+      }
       rate_limit_hit: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: {
           allowed: boolean
           retry_after: number
         }[]
+      }
+      rate_limit_peek: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
+        Returns: {
+          allowed: boolean
+          retry_after: number
+        }[]
+      }
+      record_entry_revision: {
+        Args: {
+          p_entry_id: string
+          p_max_age?: string
+          p_source: string
+          p_was_published?: boolean
+        }
+        Returns: boolean
+      }
+      record_form_notify_skipped: {
+        Args: { p_owner: string }
+        Returns: undefined
+      }
+      record_form_submission: {
+        Args: {
+          p_block_id: string
+          p_email: string
+          p_entry_id: string
+          p_kind: string
+          p_message: string
+          p_name: string
+          p_site_id: string
+        }
+        Returns: {
+          owner_id: string
+          status: string
+        }[]
+      }
+      record_site_activity: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_entry?: string
+          p_site: string
+        }
+        Returns: undefined
+      }
+      release_schedule_claim: {
+        Args: { p_claim: string; p_id: string }
+        Returns: boolean
+      }
+      remove_site_member: {
+        Args: { p_actor: string; p_site: string; p_user: string }
+        Returns: undefined
       }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
@@ -1551,11 +2420,76 @@ export type Database = {
         Args: { p_owner: string; p_paths: string[] }
         Returns: number
       }
+      require_schedule_creator: {
+        Args: { p_creator: string; p_site: string }
+        Returns: string
+      }
+      require_site_access: {
+        Args: { p_need: string; p_site: string; p_user: string }
+        Returns: string
+      }
+      restore_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
+      }
+      reverse_all_content: { Args: never; Returns: Json }
+      reverse_site_content: { Args: { p_site: string }; Returns: Json }
+      revoke_site_invite: {
+        Args: { p_actor: string; p_invite: string }
+        Returns: undefined
+      }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
       rollup_recent_days: { Args: { n: number }; Returns: number }
       run_domain_verification_sweep: { Args: never; Returns: undefined }
       run_gift_expiry_sweep: { Args: never; Returns: undefined }
       run_nightly_maintenance: { Args: never; Returns: undefined }
+      run_schedule_sweep: { Args: never; Returns: undefined }
+      schedule_entry: {
+        Args: {
+          p_action: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_run_at: string
+          p_source?: string
+        }
+        Returns: string
+      }
+      schedule_entry_as: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_run_at: string
+          p_source?: string
+        }
+        Returns: string
+      }
+      set_site_member_role: {
+        Args: {
+          p_actor: string
+          p_role: string
+          p_site: string
+          p_user: string
+        }
+        Returns: undefined
+      }
+      site_access: {
+        Args: { p_site: string; p_user: string }
+        Returns: {
+          can_edit: boolean
+          can_publish: boolean
+          can_read: boolean
+          is_owner: boolean
+          owner_id: string
+          owner_plan: string
+          role: string
+          site_id: string
+          state: string
+        }[]
+      }
       site_click_pairs: {
         Args: { p_page_id: string }
         Returns: {
@@ -1563,6 +2497,7 @@ export type Database = {
           sub_page_id: string
         }[]
       }
+      site_has_home_entry: { Args: { p_site: string }; Returns: boolean }
       site_page_doc_bytes: {
         Args: { p_draft: Json; p_published: Json }
         Returns: number
@@ -1578,6 +2513,27 @@ export type Database = {
           p_reason: string
         }
         Returns: string
+      }
+      suggest_site_path: {
+        Args: { p_taken?: string[]; p_title: string }
+        Returns: string
+      }
+      trash_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
+      }
+      trash_entry_as: {
+        Args: {
+          p_actor: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+        }
+        Returns: number
+      }
+      unpublish_entry: {
+        Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
       }
       unpublish_site: {
         Args: { p_owner_id: string; p_page_id: string }

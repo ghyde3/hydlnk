@@ -3,6 +3,7 @@ import { LOCAL_ADMIN_CLAIM } from "@/lib/admin/principal";
 import { adminClient, type Plan } from "../fixtures/auth";
 import { rand, signIn, trackUser, uniq } from "../fixtures/data";
 import { appRaw, authCookies, cookieHeader, rawRequest, type RawResponse } from "../fixtures/http";
+import { DEV_PORT } from "../helpers";
 
 /**
  * Helpers for the admin and suspension specs (Wave D: M5-04, M5-06..M5-09).
@@ -14,7 +15,7 @@ import { appRaw, authCookies, cookieHeader, rawRequest, type RawResponse } from 
  * (tests/unit/admin-principal.test.ts).
  */
 
-export const APP_HOST = "app.localhost:3000";
+export const APP_HOST = `app.localhost:${DEV_PORT}`;
 export const APP_ORIGIN = `http://${APP_HOST}`;
 
 /** A confirmed user whose JWT carries the local admin marker. Removed by cleanupUsers(). */
@@ -92,7 +93,7 @@ export const dismissPath = (reportId: string) => `/api/admin/reports/${reportId}
 
 /** GET a tenant host path without cookies. */
 export const tenantRaw = (handle: string, path = "/") =>
-  rawRequest(`${handle}.localhost:3000`, path);
+  rawRequest(`${handle}.localhost:${DEV_PORT}`, path);
 
 export const json = (res: RawResponse): Record<string, unknown> => {
   try {

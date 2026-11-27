@@ -17,10 +17,12 @@ import {
   mintToken,
 } from "../fixtures/mcp-client";
 import { openEditor, pageRow, saveIndicator } from "../m2/editor-helpers";
+import { homeEntryOf } from "../fixtures/home-abuse";
+import { DEV_PORT } from "../helpers";
 import { prepareFlowUser, runEveryTool } from "./mcp-flow-helpers";
 
 /**
- * Wave L, an AI client working a page through all fourteen tools (M10-24 to M10-32), end to end: the
+ * Wave L, an AI client working a page through all the page tools (M10-24 to M10-32), end to end: the
  * real server, the real database, the real publish gate and the real cache. A minted token stands in
  * for the OAuth dance (flow.spec.ts is the dance). Every result is checked for the documented shape
  * and for nothing internal; at the end the activity log holds exactly one row per call.
@@ -34,7 +36,7 @@ test.beforeEach(({}, info) =>
   test.skip(!desktopOnly(info), "pure HTTP and API rows: desktop only"),
 );
 
-test("M10-33 the fourteen tools in the order an AI would use them, on a Pro page, then publish and see it live at once", async ({
+test("M10-33 the page tools in the order an AI would use them, on a Pro page, then publish and see it live at once", async ({
   context,
   page,
 }) => {
@@ -86,6 +88,39 @@ test("M10-23 a tool write while an editor tab is open: the tab's next save is th
   expect((await pageRow(user.pageId)).draft).toEqual(before.draft);
 });
 
+test("M15-17 a design edit, then a tool write to Home's blocks, then another design edit: the second edit is the conflict state and overwrites nothing", async ({
+  context,
+  page,
+}) => {
+  const user = await signedInUser(context, { label: "mcp-tab2", plan: "pro" });
+  const token = await mintToken(user.userId);
+  const mcp = new McpClient(token.token);
+  await mcp.initialize();
+  await openEditor(page);
+  // Design edit 1 is saved: this tab has already confirmed Home's revision once.
+  const first = `first ${rand(4)}`;
+  await page.getByLabel("Bio", { exact: true }).fill(first);
+  await expect(saveIndicator(page)).toHaveText("Saved", { timeout: 15_000 });
+  expect((await pageRow(user.pageId)).draft.profile.bio).toBe(first);
+  // The tool writes Home's blocks while the tab stays open.
+  const added = await mcp.call<{ blockId: string; rev: number }>("add_block", {
+    pageId: user.pageId,
+    type: "header",
+    fields: { text: "Added between two design edits" },
+  });
+  const afterTool = await pageRow(user.pageId);
+  // Design edit 2 sends no blocks either: it must check Home's revision again and stop.
+  await page.getByLabel("Bio", { exact: true }).fill(`second ${rand(4)}`);
+  await expect(
+    page.getByText("This page changed in another tab. Reload to keep editing."),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(saveIndicator(page)).toHaveText("Not saved");
+  const stored = await pageRow(user.pageId);
+  expect(stored.draft).toEqual(afterTool.draft);
+  expect(stored.draft.blocks.some((block) => block.id === added.blockId)).toBe(true);
+  expect(stored.draft.profile.bio).toBe(first);
+});
+
 test("M10-23 two add_block calls started together never both write from the same rev: 20 rounds, blocks added equal successes, rev rises by exactly that", async () => {
   const user = await makeUser("mcp-race", { plan: "pro" });
   const pageId = await insertPage(user.id, uniq("race"));
@@ -93,7 +128,11 @@ test("M10-23 two add_block calls started together never both write from the same
   const first = new McpClient((await mintToken(user.id)).token);
   const second = new McpClient((await mintToken(user.id)).token);
   await Promise.all([first.initialize(), second.initialize()]);
-  const blocks = async () => (await pageRow(pageId)).draft;
+  // A blocks write on a moved site is guarded by and bumps Home's entry rev, not the design rev in pages.draft.
+  const blocks = async () => ({
+    blocks: (await pageRow(pageId)).draft.blocks,
+    rev: Number((await homeEntryOf(pageId)).rev),
+  });
   let before = await blocks();
   let added = 0;
   let conflicts = 0;
@@ -141,7 +180,9 @@ test("M10-22 scopes, suspension and the limits, over the wire", async () => {
     requiredScope: "hydlnk.write",
   });
   expect((denied.meta!["mcp/www_authenticate"] as string[])[0]).toMatch(
-    /^Bearer error="insufficient_scope", scope="hydlnk\.write", resource_metadata="http:\/\/app\.localhost:3000\/\.well-known\/oauth-protected-resource\/mcp"/,
+    new RegExp(
+      `^Bearer error="insufficient_scope", scope="hydlnk\\.write", resource_metadata="http://app\\.localhost:${DEV_PORT}/\\.well-known/oauth-protected-resource/mcp"`,
+    ),
   );
   const writer = new McpClient((await mintToken(user.id, READ_WRITE_SCOPES)).token);
   await writer.initialize();
@@ -158,7 +199,7 @@ test("M10-22 scopes, suspension and the limits, over the wire", async () => {
     .from("accounts")
     .update({ suspended_at: new Date().toISOString() })
     .eq("id", user.id);
-  expect(await writer.listTools()).toHaveLength(14);
+  expect(await writer.listTools()).toHaveLength(31);
   for (const [tool, args] of [
     ["list_pages", {}],
     ["get_page", { pageId }],
@@ -197,7 +238,7 @@ test("M10-22 rate limits: 60 list_pages calls a minute for one person, the 61st 
   await second.initialize();
   expect((await second.callTool("list_pages")).isError).toBe(false);
   // initialize and tools/list are never counted.
-  expect(await one.listTools()).toHaveLength(14);
+  expect(await one.listTools()).toHaveLength(31);
 });
 
 test("M10-32 the activity log: rows per token with their own client, a deleted page leaves null, deleting the person removes them", async () => {

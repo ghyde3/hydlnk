@@ -95,10 +95,17 @@ export function siteBlockIdClashes(
 
 /**
  * The menu without entries that are not pages of the site (left by a delete or a version restore).
- * Order is kept; a second copy of an id is dropped too. `show` is unchanged.
+ * Order is kept; a second copy of an id is dropped too. `show` is unchanged. `typeIds` (Wave B,
+ * M16-08) are the ids of this site's content types that have an archive: a menu item that names one
+ * is kept (the live site hides it while that type is off), and a type id of another site is dropped
+ * like any id that is not this site's.
  */
-export function pruneNav(nav: Partial<Nav> | undefined, liveSubPageIds: Iterable<string>): Nav {
-  const live = new Set(liveSubPageIds);
+export function pruneNav(
+  nav: Partial<Nav> | undefined,
+  liveSubPageIds: Iterable<string>,
+  typeIds: Iterable<string> = [],
+): Nav {
+  const live = new Set([...liveSubPageIds, ...typeIds]);
   const seen = new Set<string>();
   const items = resolveNav(nav).items.filter((id) => {
     if (!live.has(id) || seen.has(id)) return false;

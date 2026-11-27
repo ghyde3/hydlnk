@@ -23,7 +23,17 @@ export interface OwnedPage {
   createdAt: string;
   updatedAt: string;
   publishedAt: string | null;
-  /** Only when the tool asked for the draft (`needsDraft`). */
+  /**
+   * The rev of Home's '/' entry, which holds Home's blocks (the block tools' `ifRev`); absent when
+   * the site has no Home entry. `draft.rev` stays the design's rev.
+   */
+  homeRev?: number;
+  /** Home's entry id, for the entry tools that take a page. Internal: never put in a result. */
+  homeEntryId?: string;
+  /**
+   * Only when the tool asked for the draft (`needsDraft`): the site's design with Home's blocks from
+   * the Home entry, and the published document the same way.
+   */
   draft?: unknown;
   published?: unknown;
 }
@@ -36,9 +46,8 @@ export type LoadPageResult =
   { ok: true; page: OwnedPage; subPageId?: string } | { ok: false; failure: ToolFailureInfo };
 
 /**
- * A sub-page of one of the caller's sites (M12-05). `rev` is the page's `updated_at` as milliseconds:
- * a sub-page document has no rev of its own, and the database bumps `updated_at` on every write the
- * editor or a tool makes, so it plays the part of the optimistic lock.
+ * A sub-page of one of the caller's sites (M12-05). `rev` is the rev of its page entry,
+ * the optimistic lock of every write to it.
  */
 export interface OwnedSubPage {
   id: string;
@@ -55,8 +64,44 @@ export interface OwnedSubPage {
   published?: unknown;
 }
 
+/** `subPage` is null when the id named Home's entry: that means Home, which is the page itself. */
 export type LoadSubPageResult =
-  { ok: true; subPage: OwnedSubPage } | { ok: false; failure: ToolFailureInfo };
+  { ok: true; subPage: OwnedSubPage | null } | { ok: false; failure: ToolFailureInfo };
+
+/**
+ * An entry (a post, or a page) of one of the caller's sites, as the one entry lookup
+ * (`loadOwnedEntry`) returns it (M18-01). It never holds the published copy. `liveSlug` is the slug
+ * the live copy is at (the public address), or null when the entry is not live.
+ */
+export interface OwnedEntry {
+  id: string;
+  siteId: string;
+  /** The site's owner, from the access helper (the token user: MCP is owner-only, M19-13). */
+  ownerId: string;
+  typeId: string;
+  typeKey: "post" | "page";
+  rev: number;
+  status: "draft" | "published" | "trashed";
+  hasUnpublishedChanges: boolean;
+  publishedAt: string | null;
+  firstPublishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  liveSlug: string | null;
+  /** Only when the tool asked for the draft (`needsDraft`). */
+  draft?: unknown;
+}
+
+export interface LoadEntryOptions {
+  types: readonly ("post" | "page")[];
+  trashed: "no" | "yes" | "any";
+  allowDisabledType: boolean;
+  withDraft: boolean;
+}
+
+export type LoadEntryResult =
+  { ok: true; entry: OwnedEntry } | { ok: false; failure: ToolFailureInfo };
 
 export interface RateVerdict {
   allowed: boolean;
@@ -92,6 +137,12 @@ export interface ToolDeps {
     subPageId: string,
     options: { withDraft: boolean },
   ) => Promise<LoadSubPageResult>;
+  /** One entry under the token's user, of a type and trash side the tool takes (M18-01). */
+  loadEntry: (
+    userId: string,
+    entryId: string,
+    options: LoadEntryOptions,
+  ) => Promise<LoadEntryResult>;
   recordActivity: (row: ActivityRow) => Promise<void>;
   /** Runs work after the response (`after()` in production). */
   defer: (work: () => Promise<unknown> | unknown) => void;
@@ -119,6 +170,8 @@ export interface ToolCall extends ToolIdentity {
   page: OwnedPage | null;
   /** The sub-page named by `subPageId`, resolved under `page` (a site of the caller); else null (Home). */
   subPage: OwnedSubPage | null;
+  /** The entry an `entry` tool works on, resolved and ownership-checked; else null. */
+  entry: OwnedEntry | null;
   deps: ToolDeps;
   defer: ToolDeps["defer"];
   now: () => Date;
@@ -131,9 +184,26 @@ export interface ToolDefinition<Schema extends z.ZodType = z.ZodType> {
   scope: McpScope;
   annotations: ToolAnnotationSet;
   input: Schema;
-  /** `none`: the tool does not work on one page. `one`: `pageId`, or the only page the account has. */
-  page: "none" | "one";
-  /** The tool reads the draft (and the published page) of the page it works on. */
+  /**
+   * `none`: the tool does not work on one page. `one`: `pageId`, or the only page the account has.
+   * `entry`: one entry by `entryId` (or, for a tool that takes pages, a page by `pageId` and
+   * `subPageId`), resolved under the token's user before the handler runs (M18-01).
+   */
+  page: "none" | "one" | "entry";
+  /** `entry` tools: the types the tool takes. Any other type is `not_found`. */
+  entryTypes?: readonly ("post" | "page")[];
+  /** `entry` tools: `no` (the default) refuses a trashed entry, `yes` takes only a trashed one. */
+  entryTrash?: "no" | "yes" | "any";
+  /** `entry` tools: the tool also works on a post whose blog is off (reads, and taking a post down). */
+  allowDisabledType?: true;
+  /** The tool changes what visitors see: it counts against the per-item publish limit (M18-01). */
+  changesLive?: true;
+  /** `publish_page` only: it counts against the whole-site publish limit. */
+  publishesSite?: true;
+  /**
+   * The tool reads the draft (and the published page) of the page it works on; for an `entry` tool,
+   * the draft of the entry (never its published copy).
+   */
   needsDraft?: boolean;
   handler: (args: z.output<Schema>, call: ToolCall) => Promise<ToolSuccess>;
 }

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import sharp from "sharp";
 import { expect, test, type Page } from "@playwright/test";
-import { adminClient } from "../fixtures/auth";
 import {
   cleanupUsers,
   desktopOnly,
@@ -9,9 +8,9 @@ import {
   signedInUser,
   type SignedInUser,
 } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { addVerifiedDomains } from "../m4/lifecycle-helpers";
-import { emptyUser } from "../m2/editor-helpers";
+import { emptyUser, pageRow } from "../m2/editor-helpers";
 import { signInAsUser } from "../m5/admin-helpers";
 import { openShare } from "../m6/share-helpers";
 import { TEMPLATE_THEME_IDS } from "@/lib/templates/catalog";
@@ -260,8 +259,8 @@ test.describe("M9-25 defaults are M6-31, byte for byte", () => {
     await frameSwitch(page).click();
     await page.waitForTimeout(1500); // longer than the autosave's wait
     expect(requests).toEqual([]);
-    const row = await adminClient().from("pages").select("draft").eq("id", user.pageId).single();
-    expect(JSON.stringify(row.data!.draft)).not.toMatch(/0B2A5B|FBF6E9|Scan me|qr/i);
+    const row = await pageRow(user.pageId);
+    expect(JSON.stringify(row.draft)).not.toMatch(/0B2A5B|FBF6E9|Scan me|qr/i);
 
     await page.reload();
     await expect(styleGroup(page)).toBeVisible();
@@ -461,7 +460,8 @@ test.describe("M9-25 the logo", () => {
     const media = seen.filter((entry) => /\/media\//.test(entry));
     expect(seen.length, seen.join("\n")).toBeLessThanOrEqual(1);
     expect(media.length).toBeLessThanOrEqual(1);
-    for (const entry of media) expect(entry).toMatch(/^GET http:\/\/localhost:3000\/media\//);
+    for (const entry of media)
+      expect(entry).toMatch(new RegExp(String.raw`^GET http:\/\/localhost:${DEV_PORT}\/media\/`));
     expect(seen.filter((entry) => !entry.includes("/media/"))).toEqual([]);
 
     // Off and on again: the picture is not asked for a second time.
@@ -708,7 +708,7 @@ test.describe("M9-25 the files", () => {
     await signedInUser(context, { label: "qz2" });
     const cookie = cookieHeader(await authCookies(context));
     for (const path of ["/api/qr", "/qr", "/api/qr?text=https://evil.example&color=red"]) {
-      const res = await rawRequest("app.localhost:3000", path, { cookie });
+      const res = await rawRequest(`app.localhost:${DEV_PORT}`, path, { cookie });
       expect(res.status, path).toBe(404);
     }
   });

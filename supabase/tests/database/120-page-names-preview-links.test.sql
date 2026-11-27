@@ -182,7 +182,7 @@ select ok(
 -- a suspended owner cannot rename (M5-09); an unsuspended one can again
 select tests.clear_authentication();
 reset role;
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('a');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('a'));
 select tests.authenticate_as('a');
 select results_eq(
   $$ with u as (update public.pages set name = 'While suspended' where handle = 'zq120-alpha' returning 1) select count(*)::int from u $$,
@@ -196,7 +196,7 @@ select is(
 );
 select tests.clear_authentication();
 reset role;
-update public.accounts set suspended_at = null where id = tests.get_supabase_uid('a');
+update public.accounts set suspended_at = null where id = (select tests.get_supabase_uid('a'));
 select tests.authenticate_as('a');
 select results_eq(
   $$ with u as (update public.pages set name = 'Back again' where handle = 'zq120-alpha' returning 1) select count(*)::int from u $$,

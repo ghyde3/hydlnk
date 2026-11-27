@@ -1,5 +1,7 @@
 import { expect, type BrowserContext, type Page } from "@playwright/test";
-import { adminClient, supabaseUrl } from "../fixtures/auth";
+import { supabaseUrl } from "../fixtures/auth";
+import { publishHome } from "../fixtures/data";
+import { setDraft } from "../m2/editor-helpers";
 import {
   draftOf,
   publishDocOf,
@@ -87,11 +89,8 @@ export async function seed(context: BrowserContext, label: string): Promise<Seed
     blocks,
   };
   const published = publishDocOf(blocks, { name: "Media Test", photo, tokens });
-  const { error } = await adminClient()
-    .from("pages")
-    .update({ draft, published, published_at: new Date().toISOString() })
-    .eq("id", user.pageId);
-  if (error) throw new Error(`seeding the page failed: ${error.message}`);
+  await setDraft(user.pageId, draft);
+  await publishHome(user.pageId, published);
   return { ...user, photo, image, card, thumb, bg, bgStored };
 }
 

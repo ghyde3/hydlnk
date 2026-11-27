@@ -8,7 +8,7 @@ import {
 } from "@/lib/document";
 import { normalizeRequestHost } from "@/lib/analytics/ingest/host";
 import { clientEnv } from "@/lib/env/client";
-import { REDIRECT_MODE_MESSAGE, toPlanId, PLAN_LIMITS } from "@/lib/limits";
+import { REDIRECT_MODE_MESSAGE, SCHEDULING_PLAN_MESSAGE, PLAN_LIMITS, type PlanId } from "@/lib/limits";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -45,6 +45,27 @@ export function misplacedLockErrors(raw: unknown): PublishError[] {
   return errors;
 }
 
+/**
+ * One error per block of a publish form that carries a time window (M20-11), for a refusal with
+ * HL017: the database refuses a copy with windows on a plan without scheduling (the
+ * `enforce_entry_schedule` trigger is the authority, whatever the client sends); this names the
+ * blocks the owner has to change.
+ */
+export function scheduledBlockErrors(doc: {
+  blocks: ReadonlyArray<{ id: string; schedule?: unknown }>;
+}): PublishError[] {
+  return doc.blocks
+    .filter((block) => isRecord(block.schedule))
+    .map((block) => ({ blockId: block.id, field: "schedule", message: SCHEDULING_PLAN_MESSAGE }));
+}
+
+/** The errors of an HL017 refusal: the named blocks, or the plain notice when none can be named. */
+export function schedulePlanErrors(named: PublishError[]): PublishError[] {
+  return named.length > 0
+    ? named
+    : [{ blockId: null, field: "document", message: SCHEDULING_PLAN_MESSAGE }];
+}
+
 /** The hostnames the page answers on: its handle host and its verified custom domains. */
 export async function ownHostsOf(
   admin: SupabaseClient<Database>,
@@ -67,16 +88,18 @@ export async function ownHostsOf(
 
 export async function checkLinkRules(
   admin: SupabaseClient<Database>,
-  input: { pageId: string; userId: string; form: PublishDoc; raw: unknown },
+  /**
+   * `plan`: the site OWNER's effective plan from the access helper (`access.plan`, Wave F, R13):
+   * redirect mode is the owner's plan, whoever publishes, and the rule already read it (an unknown
+   * value there reads as Free: the gate fails closed).
+   */
+  input: { pageId: string; plan: PlanId; form: PublishDoc; raw: unknown },
 ): Promise<PublishError[]> {
   const errors = misplacedLockErrors(input.raw);
   const redirect = input.form.redirect;
   if (!redirect) return errors;
 
-  const account = await admin.from("accounts").select("plan").eq("id", input.userId).maybeSingle();
-  if (account.error) throw new Error(`Reading the plan failed: ${account.error.message}`);
-  // An unknown or missing plan reads as Free: the gate fails closed.
-  if (!PLAN_LIMITS[toPlanId(account.data?.plan)].redirectMode) {
+  if (!PLAN_LIMITS[input.plan].redirectMode) {
     errors.push({ blockId: null, field: "redirect", message: REDIRECT_MODE_MESSAGE });
     return errors;
   }

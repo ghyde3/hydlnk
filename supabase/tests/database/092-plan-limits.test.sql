@@ -10,8 +10,8 @@ select tests.create_supabase_user('p', 'p@example.test');   -- pro
 select tests.create_supabase_user('s', 's@example.test');   -- studio
 select tests.create_supabase_user('z', 'z@example.test');   -- free, no page at all
 
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('s');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('s'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000092a1', tests.get_supabase_uid('a'), 'lim-alpha', '{"version":1}'),
@@ -19,22 +19,22 @@ insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000092b2', tests.get_supabase_uid('p'), 'lim-pro-two', '{"version":1}');
 
 -- ---------------------------------------------------------------------------
--- plan_limits: nine columns (redirect_mode is M9-31, pages_per_site M11-04), unlimited is null, an unknown plan fails closed (M4-02)
+-- plan_limits: thirteen columns (redirect_mode is M9-31, pages_per_site M11-04, the four content limits M15-02), unlimited is null, an unknown plan fails closed (M4-02)
 -- ---------------------------------------------------------------------------
 
 select results_eq(
   $$ select * from public.plan_limits('free') $$,
-  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3) $$,
+  $$ values (1, 3, 0, 10485760::bigint, 30, false, 0, false, 3, 25, 0, 10, 67108864::bigint, 100, 20, false, 0, 0) $$,
   'free: 1 page, 3 saved themes, 0 domains, 10 MiB, 30 days of analytics, no breakdowns, no versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('pro') $$,
-  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10) $$,
+  $$ values (3, null::integer, 1, 104857600::bigint, 365, true, 25, true, 10, 1000, 3, 50, 1073741824::bigint, 5000, 500, true, 50, 100) $$,
   'pro: 3 pages, unlimited saved themes (null), 1 domain, 100 MiB, 365 days, breakdowns, 25 versions'
 );
 select results_eq(
   $$ select * from public.plan_limits('studio') $$,
-  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500) $$,
+  $$ values (15, null::integer, 15, 1073741824::bigint, 365, true, 25, true, 500, 100000, 100, 200, 5368709120::bigint, 50000, 5000, true, 500, 1000) $$,
   'studio: 15 pages, unlimited saved themes (null), 15 domains, 1 GiB, 365 days, breakdowns, 25 versions'
 );
 select throws_ok(
@@ -58,17 +58,17 @@ select throws_ok(
 -- ---------------------------------------------------------------------------
 
 select throws_ok(
-  $$ update public.accounts set paid_plan = 'enterprise' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = 'enterprise' where id = (select tests.get_supabase_uid('a')) $$,
   '23514', null,
   'accounts.plan rejects ''enterprise'''
 );
 select throws_ok(
-  $$ update public.accounts set paid_plan = 'Pro' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = 'Pro' where id = (select tests.get_supabase_uid('a')) $$,
   '23514', null,
   'accounts.plan rejects ''Pro'' (case matters)'
 );
 select throws_ok(
-  $$ update public.accounts set paid_plan = null where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = null where id = (select tests.get_supabase_uid('a')) $$,
   '23502', null,
   'accounts.plan is never null'
 );
@@ -107,8 +107,9 @@ select set_eq(
       and (has_function_privilege('anon', p.oid, 'EXECUTE')
            or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
   $$,
-  $$ values ('plan_limits') $$,
-  'plan_limits is the only function in public a client role may execute'
+  -- form_submission_counts (Wave D) is security invoker: RLS decides what it returns (219).
+  $$ values ('plan_limits'), ('form_submission_counts') $$,
+  'plan_limits and the security invoker form_submission_counts are the only functions in public a client role may execute'
 );
 
 -- ---------------------------------------------------------------------------
@@ -303,24 +304,24 @@ select is(
 -- ---------------------------------------------------------------------------
 
 select is(
-  (select count(*)::int from public.pages where owner_id = tests.get_supabase_uid('p')),
+  (select count(*)::int from public.pages where owner_id = (select tests.get_supabase_uid('p'))),
   3,
   'setup: the Pro account holds 3 pages'
 );
-update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'free' where id = (select tests.get_supabase_uid('p'));
 select is(
-  (select count(*)::int from public.pages where owner_id = tests.get_supabase_uid('p')),
+  (select count(*)::int from public.pages where owner_id = (select tests.get_supabase_uid('p'))),
   3,
   'a downgrade to Free keeps all 3 pages (3 of 1)'
 );
 select is(
   (select count(*)::int from public.domains d join public.pages pg on pg.id = d.page_id
-     where pg.owner_id = tests.get_supabase_uid('p')),
+     where pg.owner_id = (select tests.get_supabase_uid('p'))),
   1,
   'and the domain'
 );
 select is(
-  (select count(*)::int from public.themes where owner_id = tests.get_supabase_uid('p')),
+  (select count(*)::int from public.themes where owner_id = (select tests.get_supabase_uid('p'))),
   5,
   'and the 5 saved themes (Free allows 3)'
 );

@@ -13,7 +13,7 @@ import {
   stubSubscriptionStatus,
   subscriptionEvent,
 } from "../fixtures/stripe-stub";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { billingUser, type BillingUser } from "./billing-helpers";
 
 /**
@@ -148,10 +148,10 @@ test.describe("M4-34 deleting a paying account", () => {
     const files = await seedMedia(user);
     expect(await mediaOf(user.userId)).toHaveLength(files.length);
     const tenant = url(user.handle);
-    expect((await rawRequest(`${user.handle}.localhost:3000`, "/")).status).toBe(200);
+    expect((await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/")).status).toBe(200);
 
     await confirmDelete(page, user.handle);
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`));
 
     // Stripe: exactly one cancel request for each live subscription, none for the one that ended.
     expect(await cancelCalls(user.subscription!)).toHaveLength(1);
@@ -168,7 +168,7 @@ test.describe("M4-34 deleting a paying account", () => {
       const { data } = await adminClient().from(table).select("*").eq(column, user.userId);
       expect(data, table).toEqual([]);
     }
-    expect((await rawRequest(`${user.handle}.localhost:3000`, "/")).status).toBe(404);
+    expect((await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/")).status).toBe(404);
     expect(tenant).toContain(user.handle);
     // The handle can be claimed again.
     const { data: handle } = await adminClient().from("pages").select("id").eq("handle", user.handle);
@@ -214,11 +214,11 @@ test.describe("M4-34 deleting a paying account", () => {
       .single();
     expect(account!.plan).toBe("studio");
     expect(await stubSubscriptionStatus(user.subscription!)).toBe("active");
-    expect((await rawRequest(`${user.handle}.localhost:3000`, "/")).status).toBe(200);
+    expect((await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/")).status).toBe(200);
 
     // Stripe recovers: the same dialog finishes the job.
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`));
     expect(await stubSubscriptionStatus(user.subscription!)).toBe("canceled");
     expect(await userExists(user.userId)).toBe(false);
     expect(await mediaOf(user.userId)).toEqual([]);
@@ -236,7 +236,7 @@ test.describe("M4-34 deleting a paying account", () => {
     expect(await userExists(user.userId)).toBe(true);
     expect(await cancelCalls(user.subscription!)).toHaveLength(0);
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`));
     expect(await userExists(user.userId)).toBe(false);
   });
 
@@ -248,7 +248,7 @@ test.describe("M4-34 deleting a paying account", () => {
     const user = await billingUser(context, { label: "dd-free" });
     const before = (await stubRequests()).length;
     await confirmDelete(page, user.handle);
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`));
     expect(await userExists(user.userId)).toBe(false);
     // Another worker's test may be talking to the stub meanwhile: none of it names this account.
     const mine = (await stubRequests())
@@ -297,7 +297,7 @@ test.describe("M4-34 abuse", () => {
       { id: victim.userId, customer: victim.customer!, subscription: victim.subscription! },
     );
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`));
 
     expect(await userExists(me.userId)).toBe(false);
     expect(await cancelCalls(me.subscription!)).toHaveLength(1);
@@ -355,9 +355,9 @@ test.describe("M4-34 abuse", () => {
     for (const name of ["next-action", "content-type", "accept", "next-router-state-tree"]) {
       if (recorded!.headers[name]) headers[name] = recorded!.headers[name]!;
     }
-    const response = await rawRequest("app.localhost:3000", "/settings", {
+    const response = await rawRequest(`app.localhost:${DEV_PORT}`, "/settings", {
       method: "POST",
-      headers: { ...headers, origin: "http://app.localhost:3000" },
+      headers: { ...headers, origin: `http://app.localhost:${DEV_PORT}` },
       body: recorded!.body,
     });
     const location = String(response.headers.location ?? "");

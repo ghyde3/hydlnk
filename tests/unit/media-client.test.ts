@@ -237,6 +237,21 @@ describe("M5-14 scheduleMediaCleanup", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("R9: the call names the site saved (x-hl-site), and a save of another site sends the pending one first", async () => {
+    const { scheduleMediaCleanup, UNDO_WINDOW_MS } = await import("@/lib/media/cleanup-client");
+    scheduleMediaCleanup("site-a");
+    scheduleMediaCleanup("site-b");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers).toEqual({
+      "x-hl-site": "site-a",
+    });
+    vi.advanceTimersByTime(UNDO_WINDOW_MS + 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1].headers).toEqual({
+      "x-hl-site": "site-b",
+    });
+  });
+
   it("a network failure is swallowed", async () => {
     fetchMock.mockRejectedValueOnce(new Error("offline"));
     const { scheduleMediaCleanup, UNDO_WINDOW_MS } = await import("@/lib/media/cleanup-client");

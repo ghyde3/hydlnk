@@ -325,7 +325,7 @@ test.describe("M10-35 the privacy policy", () => {
       /only as one-way hashes/,
       /names the action, the page, the time and whether it worked, and it never holds your content/,
       new RegExp(`We keep it for ${MCP_ACTIVITY_RETENTION_DAYS} days`),
-      /read your drafts, your analytics and your domain list, edit your drafts and publish your pages/,
+      /read your drafts, your analytics and your domain list, edit your drafts and publish your pages and posts/,
       /Anthropic for Claude or OpenAI for ChatGPT/,
       /under its own privacy policy/,
       /HYDLNK doesn’t send your data to an AI company on its own/,

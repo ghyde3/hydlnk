@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildMeters } from "@/lib/limits";
 import { makePng, multipart } from "../e2e/m2/publish-helpers";
-import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import { makeOwner, ownerRun, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
 
@@ -111,7 +111,7 @@ describe.skipIf(!run)("M4-31 / M4-32 upload quota and usage (local Supabase)", (
       request(size),
       userId,
       undefined,
-      adminUploadQuota(userId, admin),
+      adminUploadQuota(ownerRun(userId), admin),
       { transform: identity },
     );
     if (result.ok) objects.push(result.image.path);

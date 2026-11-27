@@ -28,7 +28,7 @@ select has_column('public', 'accounts', 'stripe_event_created_at', 'accounts has
 select ok(
   (select stripe_subscription_id is null and billing_interval is null and current_period_end is null
           and stripe_event_created_at is null and cancel_at_period_end = false
-     from public.accounts where id = tests.get_supabase_uid('a')),
+     from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'a new account holds no subscription state'
 );
 
@@ -44,12 +44,12 @@ select is(
   'a user sees exactly their own account row, new columns included'
 );
 select is(
-  (select plan from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'free',
   'and can read their own plan'
 );
 select is(
-  (select count(*)::int from public.accounts where id = tests.get_supabase_uid('b')),
+  (select count(*)::int from public.accounts where id = (select tests.get_supabase_uid('b'))),
   0,
   'another account''s row is not visible'
 );
@@ -67,7 +67,7 @@ select throws_ok($$ update public.accounts set billing_interval = 'year' $$, '42
 select throws_ok($$ update public.accounts set current_period_end = now() $$, '42501', null, 'a client cannot set current_period_end');
 select throws_ok($$ update public.accounts set cancel_at_period_end = true $$, '42501', null, 'a client cannot set cancel_at_period_end');
 select throws_ok($$ update public.accounts set stripe_event_created_at = '2000-01-01' $$, '42501', null, 'a client cannot set stripe_event_created_at');
-select throws_ok($$ update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('b') $$, '42501', null, 'a client cannot update another account either');
+select throws_ok($$ update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('b')) $$, '42501', null, 'a client cannot update another account either');
 select throws_ok($$ insert into public.accounts (id, plan) values (gen_random_uuid(), 'studio') $$, '42501', null, 'a client cannot insert an account');
 select throws_ok($$ delete from public.accounts $$, '42501', null, 'a client cannot delete an account');
 
@@ -114,13 +114,13 @@ select is(
 );
 select is(
   (select row(plan, stripe_subscription_id, billing_interval, current_period_end, cancel_at_period_end, stripe_event_created_at)::text
-     from public.accounts where id = tests.get_supabase_uid('a')),
+     from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '(pro,sub_1,month,"2026-11-02 10:00:00+00",f,"2026-10-02 10:00:00+00")',
   'plan, subscription, interval, period end, cancel flag and event time are stored'
 );
 
 create temp table before_replay as
-  select row(a.*)::text as snapshot from public.accounts a where a.id = tests.get_supabase_uid('a');
+  select row(a.*)::text as snapshot from public.accounts a where a.id = (select tests.get_supabase_uid('a'));
 grant select on before_replay to service_role;
 
 select is(
@@ -131,7 +131,7 @@ select is(
   'the same event delivered twice is accepted'
 );
 select is(
-  (select row(a.*)::text from public.accounts a where a.id = tests.get_supabase_uid('a')),
+  (select row(a.*)::text from public.accounts a where a.id = (select tests.get_supabase_uid('a'))),
   (select snapshot from before_replay),
   'and leaves the row byte-for-byte identical'
 );
@@ -144,12 +144,12 @@ select is(
   'a newer event moves the plan (Pro monthly to Studio yearly, cancel at period end)'
 );
 select is(
-  (select row(plan, billing_interval, cancel_at_period_end)::text from public.accounts where id = tests.get_supabase_uid('a')),
+  (select row(plan, billing_interval, cancel_at_period_end)::text from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '(studio,year,t)',
   'plan, interval and cancel flag follow the newer event'
 );
 
-update public.accounts set stripe_customer_id = 'cus_keep' where id = tests.get_supabase_uid('a');
+update public.accounts set stripe_customer_id = 'cus_keep' where id = (select tests.get_supabase_uid('a'));
 
 select is(
   public.apply_subscription_state(
@@ -160,7 +160,7 @@ select is(
 );
 select is(
   (select row(plan, stripe_subscription_id, billing_interval, current_period_end, cancel_at_period_end, stripe_customer_id)::text
-     from public.accounts where id = tests.get_supabase_uid('a')),
+     from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '(free,,,,f,cus_keep)',
   'it sets Free, clears the subscription columns and keeps the Stripe customer id'
 );
@@ -173,7 +173,7 @@ select is(
   'an update created before the delete (arriving after it) is stale'
 );
 select is(
-  (select plan from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'free',
   'and the account stays on Free'
 );
@@ -194,12 +194,12 @@ select is(
   'a cancel for the old subscription (sub_1) is ignored while sub_2 is current'
 );
 select is(
-  (select row(plan, stripe_subscription_id, billing_interval)::text from public.accounts where id = tests.get_supabase_uid('a')),
+  (select row(plan, stripe_subscription_id, billing_interval)::text from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '(pro,sub_2,year)',
   'the account keeps sub_2'
 );
 select is(
-  (select stripe_event_created_at from public.accounts where id = tests.get_supabase_uid('a')),
+  (select stripe_event_created_at from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '2026-10-02 13:00:00+00'::timestamptz,
   'an ignored event does not move the event clock'
 );
@@ -214,7 +214,7 @@ select is(
   'an event from the same second as the last one applied is not stale'
 );
 select is(
-  (select row(plan, stripe_subscription_id, billing_interval)::text from public.accounts where id = tests.get_supabase_uid('a')),
+  (select row(plan, stripe_subscription_id, billing_interval)::text from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '(studio,sub_2,year)',
   'and its state is what the row holds (the later arrival of two tied events wins)'
 );
@@ -227,7 +227,7 @@ select is(
 );
 select is(
   (select row(plan, stripe_subscription_id, billing_interval, current_period_end, cancel_at_period_end)::text
-     from public.accounts where id = tests.get_supabase_uid('a')),
+     from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '(free,,,,f)',
   'and clears the subscription columns'
 );
@@ -247,7 +247,7 @@ select is(
 );
 select is(
   (select row(plan, stripe_subscription_id, billing_interval, stripe_event_created_at)::text
-     from public.accounts where id = tests.get_supabase_uid('a')),
+     from public.accounts where id = (select tests.get_supabase_uid('a'))),
   '(pro,sub_2,year,"2026-10-02 14:00:00+00")',
   'and the account is back on sub_2 for the checks below'
 );
@@ -277,15 +277,15 @@ select throws_ok(
 
 -- Table constraints hold even for the server.
 select throws_ok(
-  $$ update public.accounts set billing_interval = 'week' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set billing_interval = 'week' where id = (select tests.get_supabase_uid('a')) $$,
   '23514', null, 'billing_interval only accepts month or year'
 );
 select throws_ok(
-  $$ update public.accounts set stripe_subscription_id = '' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set stripe_subscription_id = '' where id = (select tests.get_supabase_uid('a')) $$,
   '23514', null, 'an empty subscription id is refused'
 );
 select throws_ok(
-  $$ update public.accounts set stripe_subscription_id = 'sub_2' where id = tests.get_supabase_uid('b') $$,
+  $$ update public.accounts set stripe_subscription_id = 'sub_2' where id = (select tests.get_supabase_uid('b')) $$,
   '23505', null, 'two accounts cannot hold the same subscription'
 );
 

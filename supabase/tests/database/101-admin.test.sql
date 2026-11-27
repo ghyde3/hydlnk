@@ -12,8 +12,8 @@ select tests.create_supabase_user('a', 'a-admin101@example.test');   -- stays ac
 select tests.create_supabase_user('b', 'b-admin101@example.test');   -- gets suspended
 select tests.create_supabase_user('c', 'c-admin101@example.test');   -- two pages, for the search
 
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('b');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('c');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('b'));
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('c'));
 
 insert into public.pages (owner_id, handle, draft, published, published_at) values
   (tests.get_supabase_uid('a'), 'adm-alpha',
@@ -55,7 +55,7 @@ select lives_ok(
 -- ---------------------------------------------------------------------------
 
 reset role;
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('b');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('b'));
 select tests.authenticate_as('b');
 
 select is(
@@ -143,7 +143,7 @@ select lives_ok(
 -- ---------------------------------------------------------------------------
 
 reset role;
-update public.accounts set suspended_at = null where id = tests.get_supabase_uid('b');
+update public.accounts set suspended_at = null where id = (select tests.get_supabase_uid('b'));
 select tests.authenticate_as('b');
 
 select lives_ok(
@@ -313,30 +313,30 @@ select is(
 reset role;
 select tests.create_supabase_user('d', 'd-admin101@example.test');   -- no page, suspended
 select tests.create_supabase_user('e', 'e-admin101@example.test');   -- no page, active
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('d');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('d'));
 select tests.authenticate_as_service_role();
 select is(
-  (select count(*)::int from public.admin_search_pages('', 100, 0) where owner_id = tests.get_supabase_uid('d')),
+  (select count(*)::int from public.admin_search_pages('', 100, 0) where owner_id = (select tests.get_supabase_uid('d'))),
   1,
   'a suspended account with no page is in the default list'
 );
 select ok(
   (select page_id is null and handle is null and published_at is null and page_count = 0 and suspended_at is not null
-     from public.admin_search_pages('', 100, 0) where owner_id = tests.get_supabase_uid('d')),
+     from public.admin_search_pages('', 100, 0) where owner_id = (select tests.get_supabase_uid('d'))),
   'as a row with no page, no handle and a page count of 0'
 );
 select is(
-  (select count(*)::int from public.admin_search_pages('', 100, 0) where owner_id = tests.get_supabase_uid('e')),
+  (select count(*)::int from public.admin_search_pages('', 100, 0) where owner_id = (select tests.get_supabase_uid('e'))),
   0,
   'an active account with no page is not listed without a search'
 );
 select is(
-  (select owner_email from public.admin_search_pages('e-admin101', 10, 0) where owner_id = tests.get_supabase_uid('e')),
+  (select owner_email from public.admin_search_pages('e-admin101', 10, 0) where owner_id = (select tests.get_supabase_uid('e'))),
   'e-admin101@example.test',
   'but searching its email finds it'
 );
 select is(
-  (select count(*)::int from public.admin_search_pages('d-admin101', 10, 0) where owner_id = tests.get_supabase_uid('d') and suspended_at is not null),
+  (select count(*)::int from public.admin_search_pages('d-admin101', 10, 0) where owner_id = (select tests.get_supabase_uid('d')) and suspended_at is not null),
   1,
   'and a suspended no-page account is found by email too'
 );

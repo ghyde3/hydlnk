@@ -64,11 +64,12 @@ function failure(error: { code?: string } | null): ThemeOpFailure {
  */
 export async function fetchThemeLibrary(
   client: Client,
+  /** The site OWNER (Wave F, C11): system themes plus theirs, as the server-side loader reads. */
+  ownerId?: string,
 ): Promise<{ ok: true; themes: ThemeRow[] } | { ok: false }> {
   try {
-    const { data, error } = await client
-      .from("themes")
-      .select(COLUMNS)
+    const base = client.from("themes").select(COLUMNS);
+    const { data, error } = await (ownerId ? base.or(`owner_id.is.null,owner_id.eq.${ownerId}`) : base)
       .order("owner_id", { ascending: true, nullsFirst: true })
       .order("created_at", { ascending: true })
       .order("id", { ascending: true });

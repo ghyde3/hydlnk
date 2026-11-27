@@ -7,6 +7,7 @@ import {
 import { pickShape, publishFocus } from "./focus";
 import { publishTextAndMarks } from "./marks";
 import { publishLock } from "./lock";
+import { publishWindow } from "./schedule";
 import { publishNav } from "./nav";
 import { publishBanner, publishNameStyle } from "./page-extras";
 import { resolveProfileOptions } from "./profile-options";
@@ -153,7 +154,8 @@ function publishStoreLink<L extends { id: string; store: string; url: string }>(
 }
 
 export function publishBlock(block: Block): Block | null {
-  const base = { id: block.id, visible: true } as const;
+  // A block's time window (M20-02) rides on the base, so every type keeps it the same way.
+  const base = { id: block.id, visible: true as const, ...publishWindow(block.schedule) };
   switch (block.type) {
     case "link":
       return {
@@ -302,6 +304,36 @@ export function publishBlock(block: Block): Block | null {
         target: block.target.trim(),
         ...cleanOverrides(block.overrides),
       };
+    case "latest_posts": {
+      const heading = block.heading?.trim() ?? "";
+      return {
+        ...base,
+        type: "latest_posts",
+        ...(heading ? { heading } : {}),
+        count: block.count,
+        ...(block.categoryId ? { categoryId: block.categoryId.toLowerCase() } : {}),
+        ...cleanOverrides(block.overrides),
+      };
+    }
+    case "form": {
+      // Empty heading and description are dropped; each switch is kept only for the kind that reads it
+      // (a sign-up's `notify` and a contact form's `askName` publish as false).
+      const heading = block.heading?.trim() ?? "";
+      const description = block.description?.trim() ?? "";
+      return {
+        ...base,
+        type: "form",
+        kind: block.kind,
+        ...(heading ? { heading } : {}),
+        ...(description ? { description } : {}),
+        askName: block.kind === "signup" && block.askName,
+        notify: block.kind === "contact" && block.notify,
+        buttonLabel: block.buttonLabel.trim(),
+        successMessage: block.successMessage.trim(),
+        consent: block.consent.trim(),
+        ...cleanOverrides(block.overrides),
+      };
+    }
     case "items": {
       const heading = block.heading?.trim() ?? "";
       return {

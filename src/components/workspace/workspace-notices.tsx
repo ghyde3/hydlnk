@@ -18,10 +18,11 @@ export function WorkspaceNotices() {
     state,
     dispatch,
     autosave,
+    site,
     undoRedo,
     repaired,
     publishNote,
-    publish,
+    retryPublish,
     publishing,
     activeTab,
   } = useWorkspace();
@@ -35,6 +36,10 @@ export function WorkspaceNotices() {
         blockedHosts={autosave.blocked?.hosts}
         editorLink={activeTab !== "edit"}
       />
+      {/* A sub-page changed elsewhere (M15-01): the same banner and Reload as Home's, once. */}
+      {site.saveStatus === "conflict" && autosave.status !== "conflict" ? (
+        <SaveBanner status="conflict" />
+      ) : null}
       <UndoRedoNotice controls={undoRedo} />
       {repaired ? (
         <p
@@ -49,7 +54,7 @@ export function WorkspaceNotices() {
           kind="publish"
           action={
             publishNote.retry
-              ? { label: "Retry", onClick: publish, disabled: publishing }
+              ? { label: "Retry", onClick: retryPublish, disabled: publishing }
               : undefined
           }
         >

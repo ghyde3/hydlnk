@@ -5,6 +5,7 @@ import {
   PHOTO_SIZES,
   applyProfileOption,
   blockDefaults,
+  switchFormKind,
   blockSchema,
   changeSocialPlatform,
   DAY_KEYS,
@@ -31,6 +32,8 @@ import {
   stripHiddenCharacters,
   toPublishForm,
   type Block,
+  type FormBlock,
+  type FormKind,
   type BlockType,
   type DraftDoc,
   type ImageRef,
@@ -39,6 +42,7 @@ import {
 } from "@/lib/document";
 import { SOCIAL_PLATFORMS } from "@/lib/document";
 import { computePublishStatus, type PublishStatus } from "@/lib/editor/status";
+import { splitPublishState, type ItemPublishState } from "@/lib/publish/status";
 import { resolveTokens, type TokenSet } from "@/lib/theme";
 import { friendlyPublishError, friendlyPublishErrors } from "@/lib/themes/publish-errors";
 import { MESSAGES, ToolFailure, type ToolIssue } from "./errors";
@@ -143,7 +147,14 @@ function overridesView(block: Rec): Rec {
 /** One block as `get_page` shows it: `{ id, type, visible, ...the fields the write tools take }`. */
 export function blockView(input: Block): Rec {
   const block = input as unknown as Rec;
-  const base = { id: block.id, type: block.type, visible: block.visible !== false };
+  // A block's time window (M20-02) shows as stored; the MCP tools do not set one (a later wave).
+  const schedule = block.schedule as Rec | undefined;
+  const base = {
+    id: block.id,
+    type: block.type,
+    visible: block.visible !== false,
+    ...(schedule && (schedule.from || schedule.until) ? { schedule } : {}),
+  };
   const extras = overridesView(block);
   switch (block.type as BlockType) {
     case "link": {
@@ -286,6 +297,19 @@ export function blockView(input: Block): Rec {
         })),
         ...extras,
       };
+    case "form":
+      return {
+        ...base,
+        kind: block.kind,
+        ...(block.heading ? { heading: block.heading } : {}),
+        ...(block.description ? { description: block.description } : {}),
+        askName: block.askName === true,
+        buttonLabel: block.buttonLabel,
+        successMessage: block.successMessage,
+        consent: block.consent,
+        notify: block.notify === true,
+        ...extras,
+      };
     case "hours":
       return {
         ...base,
@@ -397,6 +421,40 @@ export function publishStatusOf(input: {
     published: parsed?.success ? parsed.data : null,
     form: toPublishForm(input.draft, input.themeTokens),
   });
+}
+
+/** An item's state in the words the tools have always answered with. */
+const STATUS_OF_STATE: Record<ItemPublishState, PublishStatus> = {
+  live: "published",
+  changed: "unpublished-changes",
+  draft: "not-published",
+};
+
+/**
+ * Home's own state and the design's (M15-10), from the same data as `publishStatusOf`:
+ * `publishStatus` is Home's blocks against Home's live blocks, `designStatus` is everything else of
+ * the publish form (theme, menu, profile) against the live design. Each can be published on its own
+ * in the editor, so one can be live while the other has changes.
+ */
+export function homeStatusesOf(input: {
+  draft: DraftDoc;
+  published: unknown;
+  publishedAt: string | null;
+  themeTokens: Partial<TokenSet> | null;
+}): { publishStatus: PublishStatus; designStatus: PublishStatus } {
+  const parsed =
+    input.published === null || input.published === undefined
+      ? null
+      : publishedDocSchema.safeParse(input.published);
+  const split = splitPublishState({
+    hasPublished: input.publishedAt !== null,
+    published: parsed?.success ? parsed.data : null,
+    form: toPublishForm(input.draft, input.themeTokens),
+  });
+  return {
+    publishStatus: STATUS_OF_STATE[split.home],
+    designStatus: STATUS_OF_STATE[split.design],
+  };
 }
 
 /** The stored draft, parsed; null when it cannot be read. */
@@ -820,6 +878,24 @@ export function patchBlock(
         block.items = mergeItems(block, fields.items as Rec[], ITEMS_MERGE, images);
       }
       break;
+    case "form": {
+      if (fields.kind !== undefined) {
+        Object.assign(
+          block,
+          switchFormKind(block as unknown as FormBlock, fields.kind as FormKind),
+        );
+      }
+      for (const key of ["heading", "description"] as const) {
+        if (fields[key] === undefined) continue;
+        if (fields[key] === null) delete block[key];
+        else block[key] = cleanLine(String(fields[key]));
+      }
+      if (fields.askName !== undefined) block.askName = fields.askName === true;
+      line("buttonLabel");
+      line("successMessage");
+      line("consent");
+      break;
+    }
     case "hours": {
       if (fields.timezone !== undefined) {
         const zone = String(fields.timezone).trim();

@@ -12,6 +12,7 @@ import {
   toolbar,
   undoButton,
 } from "./toolbar-helpers";
+import { DEV_PORT } from "../helpers";
 
 test.afterAll(cleanupUsers);
 
@@ -186,7 +187,7 @@ test.describe("M7-05 the Preview and ⋯ menus", () => {
     const tab = await popup;
     await expect
       .poll(() => tab.url(), { timeout: 15_000 })
-      .toBe(`http://app.localhost:3000/preview/${user.pageId}`);
+      .toBe(`http://app.localhost:${DEV_PORT}/preview/${user.pageId}`);
     await expect(tab.locator("body")).toContainText(typed.trim());
     await tab.close();
     expect((await pageRow(user.pageId)).draft.profile.name).toContain(typed.trim());

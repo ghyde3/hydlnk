@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import {
   cleanupUsers,
@@ -60,7 +60,7 @@ test.describe("M1-14 claim step", () => {
     await handleInput(page).fill(handle);
     await expect(status(page)).toHaveText(`${handle}.hydlnk.com is available`);
     await page.getByRole("button", { name: "Claim it" }).click();
-    await page.waitForURL("http://app.localhost:3000/editor", { timeout: 30_000 });
+    await page.waitForURL(`http://app.localhost:${DEV_PORT}/editor`, { timeout: 30_000 });
 
     const pages = await pagesOf(userId);
     expect(pages.map((p) => p.handle)).toEqual([handle]);
@@ -70,7 +70,7 @@ test.describe("M1-14 claim step", () => {
 
     // Revisiting /claim goes straight on to the editor.
     await page.goto(url("app", "/claim"));
-    await page.waitForURL("http://app.localhost:3000/editor");
+    await page.waitForURL(`http://app.localhost:${DEV_PORT}/editor`);
     await context.close();
   });
 
@@ -141,7 +141,7 @@ test.describe("M1-14 claim step", () => {
     const other = `zq-won-${rand()}`;
     await handleInput(landing).fill(other);
     await landing.getByRole("button", { name: "Claim it" }).click();
-    await landing.waitForURL("http://app.localhost:3000/editor", { timeout: 30_000 });
+    await landing.waitForURL(`http://app.localhost:${DEV_PORT}/editor`, { timeout: 30_000 });
     expect((await pagesOf(userId!)).map((p) => p.handle)).toEqual([other]);
     await device.close();
   });
@@ -153,7 +153,7 @@ test.describe("M1-14 claim step", () => {
     await signIn(context, `e2e-cl-new-${rand()}@example.com`);
     const page = await context.newPage();
     await page.goto(url("app", "/"));
-    await page.waitForURL("http://app.localhost:3000/claim");
+    await page.waitForURL(`http://app.localhost:${DEV_PORT}/claim`);
     await expect(page.getByRole("heading", { name: "Pick your handle" })).toBeVisible();
     await expect(page.getByText("was taken while you were signing up")).toHaveCount(0);
     await expect(handleInput(page)).toHaveValue("");
@@ -169,7 +169,7 @@ test.describe("M1-14 claim step", () => {
     await page.goto(url("app", "/claim"));
     await expect(page.getByRole("link", { name: "Sign out" })).toHaveCount(0);
     await page.getByRole("button", { name: "Sign out" }).click();
-    await page.waitForURL("http://app.localhost:3000/login");
+    await page.waitForURL(`http://app.localhost:${DEV_PORT}/login`);
     await context.close();
   });
 

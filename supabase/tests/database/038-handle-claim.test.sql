@@ -97,7 +97,7 @@ reset role;
 select tests.authenticate_as_service_role();
 
 select results_eq(
-  $$ select handle, published is null, published_at is null from public.pages where owner_id = tests.get_supabase_uid('holder') $$,
+  $$ select handle, published is null, published_at is null from public.pages where owner_id = (select tests.get_supabase_uid('holder')) $$,
   $$ values ('zq-holder-1'::text, true, true) $$,
   'the holder''s page is unchanged after every attempt above'
 );

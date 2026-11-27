@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { isEmailAddress } from "@/lib/document";
 import { HOSTNAME_MAX_LENGTH, HOSTNAME_PATTERN } from "./hostname";
 import { liveEmailContent } from "./live-email";
 
@@ -52,7 +53,9 @@ const LOCAL_FROM = "HYDLNK <hello@hydlnk.com>";
 
 /** True for a value that could be a stored domains.hostname: the database's own pattern, at most 253 characters. */
 export function isStoredHostname(value: unknown): value is string {
-  return typeof value === "string" && value.length <= HOSTNAME_MAX_LENGTH && HOSTNAME_PATTERN.test(value);
+  return (
+    typeof value === "string" && value.length <= HOSTNAME_MAX_LENGTH && HOSTNAME_PATTERN.test(value)
+  );
 }
 
 export async function sendDomainLiveEmail(
@@ -77,23 +80,55 @@ export async function sendDomainLiveEmail(
   }
 
   const content = await liveEmailContent(input.hostname);
+  return sendMessage({ to: input.to, ...content }, env, deps);
+}
+
+/** One message to send: its recipient, fixed subject, both parts and, optionally, a Reply-To. */
+export interface OutgoingMessage {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  /** Set only after `isEmailAddress` accepts it (the caller's and this function's check). */
+  replyTo?: string;
+}
+
+/**
+ * The transport of every HYDLNK email (the domain-live email, M5-23; the form emails, M17-10): SMTP
+ * through nodemailer when SMTP_HOST is set, Mailpit's HTTP API locally, skipped on a deployment
+ * without SMTP (one log line, nothing thrown). A Reply-To that is not a plain email address is left
+ * out, so nothing a visitor typed can add a header. Throws on a transport error; callers decide.
+ */
+export async function sendMessage(
+  message: OutgoingMessage,
+  env: EmailEnv,
+  deps: EmailSenderDeps = {},
+): Promise<"sent" | "skipped"> {
+  const kind = emailTransportKind(env);
+  if (kind === "skip") {
+    (deps.log ?? console.warn)("[email] SMTP_HOST is not set: the email was skipped");
+    return "skipped";
+  }
+  const replyTo = isEmailAddress(message.replyTo) ? message.replyTo : undefined;
   if (kind === "smtp") {
     const port = env.SMTP_PORT ? Number(env.SMTP_PORT) : 587;
     const transport = (deps.createTransport ?? nodemailer.createTransport)({
       host: env.SMTP_HOST,
       port,
       secure: port === 465,
-      auth: env.SMTP_USER && env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
+      auth:
+        env.SMTP_USER && env.SMTP_PASS ? { user: env.SMTP_USER, pass: env.SMTP_PASS } : undefined,
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 15_000,
     });
     await transport.sendMail({
       from: env.EMAIL_FROM ?? LOCAL_FROM,
-      to: input.to,
-      subject: content.subject,
-      text: content.text,
-      html: content.html,
+      to: message.to,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+      ...(replyTo ? { replyTo } : {}),
     });
     return "sent";
   }
@@ -105,10 +140,11 @@ export async function sendDomainLiveEmail(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       From: { Email: "hello@hydlnk.com", Name: "HYDLNK" },
-      To: [{ Email: input.to }],
-      Subject: content.subject,
-      Text: content.text,
-      HTML: content.html,
+      To: [{ Email: message.to }],
+      ...(replyTo ? { ReplyTo: [{ Email: replyTo }] } : {}),
+      Subject: message.subject,
+      Text: message.text,
+      HTML: message.html,
     }),
     signal: AbortSignal.timeout(5_000),
   });

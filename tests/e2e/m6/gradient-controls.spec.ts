@@ -7,7 +7,7 @@ import {
   themeCard,
   themeRowsOf,
 } from "../m3/themes-helpers";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { pageRow, seededUser, statusChip } from "../m2/editor-helpers";
 import {
   background,
@@ -325,7 +325,7 @@ test.describe("M6-42 the gradient panel", () => {
     await page.goto(url("app", "/editor"));
     await expect(statusChip(page)).toHaveText("Unpublished changes");
     const live = await context.newPage();
-    await live.goto(`http://${user.handle}.localhost:3000/`);
+    await live.goto(`http://${user.handle}.localhost:${DEV_PORT}/`);
     await expect(live.locator("[data-page-root]")).toHaveAttribute("data-bg-type", "solid");
     await page
       .getByTestId("workspace-toolbar")

@@ -11,7 +11,7 @@ import {
 } from "../fixtures/data";
 import { appRaw, authCookies, cookieHeader, rawRequest, sessionOf } from "../fixtures/http";
 import { LOCAL_ADMIN_CLAIM } from "@/lib/admin/principal";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import {
   dismissPath,
   json,
@@ -49,7 +49,7 @@ test.describe("M5-04 admin access", () => {
     for (const path of ADMIN_PATHS) {
       const res = await appRaw(path);
       expect(res.status, path).toBe(307);
-      expect(new URL(res.location ?? "", "http://app.localhost:3000").pathname, path).toBe(
+      expect(new URL(res.location ?? "", `http://app.localhost:${DEV_PORT}`).pathname, path).toBe(
         "/login",
       );
       expect(res.location ?? "", "no return-URL parameter").not.toContain("?");
@@ -88,7 +88,7 @@ test.describe("M5-04 admin access", () => {
   test("M5-04 the same paths on a tenant host are the tenant 404", async ({}, info) => {
     test.skip(!desktopOnly(info), "no UI involved");
     for (const path of ADMIN_PATHS) {
-      const res = await rawRequest("mara.localhost:3000", path);
+      const res = await rawRequest(`mara.localhost:${DEV_PORT}`, path);
       expect(res.status, path).toBe(404);
       expect(res.body, path).toContain("Page not found");
       expect(res.body, path).not.toContain("Reports");

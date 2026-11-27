@@ -1,5 +1,6 @@
 "use client";
 
+import type { SiteRole } from "@/lib/team/constants";
 import { createContext, useContext, type Dispatch } from "react";
 import type { Autosave } from "@/components/editor/use-autosave";
 import type { UndoRedo } from "@/components/editor/use-undo-redo";
@@ -10,6 +11,7 @@ import type { DraftDoc, PublishDoc } from "@/lib/document";
 import type { PageChrome } from "@/lib/editor/contracts";
 import type { EditorState } from "@/lib/editor/state";
 import type { PublishStatus } from "@/lib/editor/status";
+import type { ItemPublishState } from "@/lib/publish/status";
 import type { PlanId } from "@/lib/limits/table";
 import type { TokenSet } from "@/lib/theme";
 import type { WorkspaceAction } from "./workspace-reducer";
@@ -36,6 +38,17 @@ export interface PublishNote {
   retry: boolean;
 }
 
+/** What a publish action is running on (M15-10): everything, the design, or a page ("home" or a sub-page's id). */
+export type PublishTarget = "all" | "design" | (string & {});
+
+/** Each part's own state against the live site (M15-10): what the publish bar lists. */
+export interface PublishState {
+  design: ItemPublishState;
+  home: ItemPublishState;
+  /** By sub-page id. */
+  pages: Readonly<Record<string, ItemPublishState>>;
+}
+
 /** What the saved-themes list needs when the server could not read it (M5-16). */
 export interface ThemesLoad {
   failed: boolean;
@@ -46,8 +59,19 @@ export interface ThemesLoad {
 export interface WorkspaceValue {
   // Page identity. Live: the layout passes them on every render, so a rename (`router.refresh()`) updates `name`.
   pageId: string;
-  /** The signed-in user's id: the first path segment of the page's uploaded media. */
+  /** The site OWNER's id (Wave F): the first path segment of the page's uploaded media. */
   ownerId: string;
+  /** The signed-in user (the actor); equals `ownerId` on an own site. */
+  userId: string;
+  /** The user's role on this site. */
+  role: SiteRole;
+  /** The owner or a publisher: the publish-class controls show (an editor sees PUBLISH_FORBIDDEN_MESSAGE). */
+  canPublish: boolean;
+  /**
+   * The site OWNER's sign-in address: where a contact form's message emails go (M17-07, M17-10). On a
+   * shared site it is the owner's, never the member's (R6, `siteOwnerAddress`).
+   */
+  ownerEmail?: string;
   plan: PlanId;
   handle: string;
   /** `{handle}.hydlnk.com`, the display address (the mono line above the page name). */
@@ -86,9 +110,43 @@ export interface WorkspaceValue {
   publishedAt: string | null;
   /** `{liveUrl}/og?v=...` once the page is published, else null: the share preview shows it. */
   liveOgUrl: string | null;
+  /** Any publish action is running. */
   publishing: boolean;
-  /** Writes pending edits, then publishes. Works from every tab; a refusal takes you to what failed. */
+  /** Which one (M15-10), or null: the bar marks that button busy and turns the others off. */
+  publishingItem: PublishTarget | null;
+  /** The design's, Home's and each page's own state: the rows of the publish bar. */
+  publishState: PublishState;
+  /** Writes pending edits, then publishes all changes. Works from every tab; a refusal takes you to what failed. */
   publish: () => void;
+  /**
+   * The three publish actions (M15-10). Each writes pending edits first and resolves true when it
+   * went live; on a refusal it resolves false after showing what failed (the fields, or the note).
+   * `publishAll` is what `publish` calls.
+   */
+  publishAll: () => Promise<boolean>;
+  /** One page: "home" or a sub-page's id. The design and every other page stay as they are. */
+  publishPageById: (id: string) => Promise<boolean>;
+  /** Theme, menu and profile. No page changes. */
+  publishDesignOnly: () => Promise<boolean>;
+  /** Runs the publish action that last failed again (the note's Retry). */
+  retryPublish: () => void;
+  /** Restores a page's revision into its draft ("home" or a sub-page's id), then reloads the workspace. Publishes nothing. */
+  restoreRevision: (
+    id: string,
+    rev: number,
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /**
+   * Schedule or cancel for one page (Wave E): both queues write first, then `send` runs with the
+   * page's entry id and the rev this tab holds.
+   */
+  schedulePage: <T>(
+    id: string,
+    send: (entryId: string, rev: number) => Promise<T>,
+  ) => Promise<{ ok: true; value: T } | { ok: false; message: string }>;
+  /** The rev this tab holds for a page's entry ("home" or a sub-page's id), or null. */
+  pageRev: (id: string) => number | null;
+  /** Home's page entry id (its revisions are listed under it), or null when the site has none. */
+  homeEntryId: string | null;
   publishNote: PublishNote | null;
   /** Unpublish (M14-02): the site goes back to its placeholder; the draft stays. `message` is set on a refusal. */
   unpublish: () => Promise<{ ok: true } | { ok: false; message: string }>;

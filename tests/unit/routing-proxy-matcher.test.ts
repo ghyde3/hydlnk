@@ -93,6 +93,10 @@ describe("proxy matcher: everything routed by host still runs the proxy", () => 
     "/c/00000000-0000-4000-8000-0000000000b1/blk",
     "/c/00000000-0000-4000-8000-0000000000b1/blk.mp4",
     "/c/00000000-0000-4000-8000-0000000000b1/blk.png",
+    // The form routes (Wave D, M17-05) are a page's own routes like /r and /c.
+    "/f/00000000-0000-4000-8000-0000000000b1/formSign01",
+    "/f/00000000-0000-4000-8000-0000000000b1/o",
+    "/f/00000000-0000-4000-8000-0000000000b1/blk.png",
     // Near misses: a name or extension that merely looks static. Only files are skipped, so a
     // path under /marketing/ that is not a static file still gets its host's routing and 404.
     "/marketing",
@@ -112,8 +116,28 @@ describe("proxy matcher: everything routed by host still runs the proxy", () => 
     "/marketing/../t/mara",
     "/marketing/%2e%2e/t/mara",
     "/marketing/x.mp4/../../t/mara",
+    // A blog's feed (Wave B, M16-03): the one `.xml` path that is routed by host.
+    "/blog/feed.xml",
+    "/news-2/feed.xml",
+    "/blog/feed.xml?x=1",
   ])("%s", (path) => {
     expect(runs(path)).toBe(true);
+  });
+
+  it("only `/{segment}/feed.xml` is let through: every other .xml path is still skipped", () => {
+    for (const path of ["/feed.xml", "/blog/other.xml", "/blog/x/feed.xml", "/Blog/feed.xml"]) {
+      expect(runs(path), path).toBe(false);
+    }
+  });
+
+  it("no file in public/ has the feed's shape", () => {
+    const files = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name);
+        return statSync(path).isDirectory() ? files(path) : [path];
+      });
+    const paths = files("public").map((file) => `/${file.slice("public/".length)}`);
+    expect(paths.filter((path) => /^\/[a-z0-9-]+\/feed\.xml$/.test(path))).toEqual([]);
   });
 
   it("skips every file in public/ (so adding a showreel video or image never needs a matcher change)", () => {

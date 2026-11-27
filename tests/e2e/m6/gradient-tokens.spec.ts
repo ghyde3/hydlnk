@@ -2,8 +2,15 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { rawRequest, restAs } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
-import { accessToken, openEditor, pageRow, previewScreen, seededUser } from "../m2/editor-helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import {
+  accessToken,
+  openEditor,
+  pageRow,
+  previewScreen,
+  seededUser,
+  setDraft,
+} from "../m2/editor-helpers";
 import { liveHtml, seedTheme, setTheme } from "../m3/themes-helpers";
 import { setOverrides } from "../m3/design-helpers";
 import { resolveTokens, tokenSetSchema, TOKEN_KEYS, type TokenSet } from "@/lib/theme";
@@ -58,7 +65,7 @@ async function publishFromEditor(page: Page): Promise<void> {
 /** The live page, in a new tab of `context`, at the current viewport. */
 async function openLive(context: BrowserContext, handle: string): Promise<Page> {
   const live = await context.newPage();
-  await live.goto(`http://${handle}.localhost:3000/`);
+  await live.goto(`http://${handle}.localhost:${DEV_PORT}/`);
   await expect(live.locator("[data-page-root]")).toBeVisible();
   return live;
 }
@@ -313,7 +320,7 @@ test.describe("M6-41 hostile values", () => {
 
       // The first request for this page: nothing cached for it yet, so what is served is what the
       // gate decides now. It fails closed.
-      const response = await rawRequest(`${user.handle}.localhost:3000`, "/");
+      const response = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
       expect(response.status).toBe(404);
       expect(response.body).not.toContain("evil.example");
       expect(response.body).not.toContain("window.__x");
@@ -372,8 +379,7 @@ test.describe("M6-41 the public page at both sizes", () => {
       theme: { ref: SMOKE, overrides: {} },
     };
     expect(draft.blocks).toHaveLength(1);
-    const { error } = await adminClient().from("pages").update({ draft }).eq("id", user.pageId);
-    expect(error).toBeNull();
+    await setDraft(user.pageId, draft); // design to pages.draft, blocks to Home's entry
     await publishFromEditor(page);
 
     const live = await openLive(context, user.handle);

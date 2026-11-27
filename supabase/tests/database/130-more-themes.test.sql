@@ -316,11 +316,11 @@ select is(
 reset role;
 select tests.authenticate_as('b');
 select is_empty(
-  $$ select 1 from public.themes where owner_id = tests.get_supabase_uid('a') $$,
+  $$ select 1 from public.themes where owner_id = (select tests.get_supabase_uid('a')) $$,
   'B reads none of A''s saved themes (M6-44)'
 );
 select is_empty(
-  $$ with u as (update public.themes set name = 'Hijacked' where owner_id = tests.get_supabase_uid('a') returning id) select * from u $$,
+  $$ with u as (update public.themes set name = 'Hijacked' where owner_id = (select tests.get_supabase_uid('a')) returning id) select * from u $$,
   'B''s PATCH on A''s saved themes updates no row'
 );
 select is(

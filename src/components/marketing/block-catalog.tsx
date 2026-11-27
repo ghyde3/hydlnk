@@ -248,6 +248,32 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
       </Icon>
     ),
   },
+  {
+    id: "latest_posts",
+    name: "Latest posts",
+    short: "Your newest blog posts as links, on Home or any page.",
+    detail:
+      "Show 1 to 6 of your newest posts, all of them or one category. A new post appears on its own: there is nothing to republish.",
+    icon: (
+      <Icon>
+        <rect x="4" y="4.5" width="16" height="15" rx="2" />
+        <path d="M7.5 9h9M7.5 12.5h9M7.5 16h5" />
+      </Icon>
+    ),
+  },
+  {
+    id: "form",
+    name: "Form",
+    short: "A sign-up or contact form: collect email addresses and messages on your page.",
+    detail:
+      "Sign-ups keep each address once; contact messages can be emailed to you. Plain HTML that works with JavaScript off; read and export what people sent from Audience.",
+    icon: (
+      <Icon>
+        <rect x="4" y="5" width="16" height="14" rx="2" />
+        <path d="m4.5 6.5 7.5 6 7.5-6" />
+      </Icon>
+    ),
+  },
 ];
 
 const NUMBER_WORDS = [

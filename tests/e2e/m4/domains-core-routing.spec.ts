@@ -1,9 +1,16 @@
 import { chromium, expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { cleanupUsers, desktopOnly, makeUser, rand, signedInUser } from "../fixtures/data";
+import {
+  cleanupUsers,
+  desktopOnly,
+  makeUser,
+  rand,
+  setPublished,
+  signedInUser,
+} from "../fixtures/data";
 import { setOwnerSuspended, untilHostLookupExpires } from "../fixtures/expire";
 import { PRODUCTION_BUILD, rawRequest } from "../fixtures/http";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 import {
   addDomainRow,
   hostnameFor,
@@ -52,10 +59,7 @@ test.beforeAll(async ({}, info) => {
   // A verified domain whose page has nothing published: a draft never leaks.
   draftSite = await makeSite("rtd");
   const admin = adminClient();
-  await admin
-    .from("pages")
-    .update({ published: null, published_at: null })
-    .eq("id", draftSite.pageId);
+  await setPublished(draftSite.pageId, false);
   await addDomainRow({ pageId: draftSite.pageId, hostname: draftHost, status: "verified" });
   // A verified row for a *.vercel.app hostname (the validator refuses to add one; a direct insert shows the proxy never honours it).
   await addDomainRow({ pageId: site.pageId, hostname: vercelAppHost, status: "verified" });
@@ -68,7 +72,7 @@ test.describe("M4-09 a verified domain serves its published page", () => {
     expect(custom.status).toBe(200);
     expect(custom.body).toContain(site.name);
 
-    const tenant = await get(`${site.handle}.localhost:3000`);
+    const tenant = await get(`${site.handle}.localhost:${DEV_PORT}`);
     expect(tenant.status).toBe(200);
     expect(tenant.body).toContain(site.name);
     expect(markup(custom.body)).toBe(markup(tenant.body));
@@ -81,13 +85,13 @@ test.describe("M4-09 a verified domain serves its published page", () => {
     });
     try {
       const page = await browser.newPage();
-      await page.goto(`http://${live}:3000/`);
+      await page.goto(`http://${live}:${DEV_PORT}/`);
       await expect(page.getByText(site.name).first()).toBeVisible();
       expect(new URL(page.url()).pathname).toBe("/");
-      expect(new URL(page.url()).host).toBe(`${live}:3000`);
+      expect(new URL(page.url()).host).toBe(`${live}:${DEV_PORT}`);
       // Its og:url names the page's domain on the same scheme and port.
       const ogUrl = await page.locator('meta[property="og:url"]').getAttribute("content");
-      expect(ogUrl).toBe(`http://${live}:3000/`);
+      expect(ogUrl).toBe(`http://${live}:${DEV_PORT}/`);
     } finally {
       await browser.close();
     }
@@ -97,10 +101,10 @@ test.describe("M4-09 a verified domain serves its published page", () => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const spellings = [
       live.toUpperCase(),
-      `${live}:3000`,
-      `${live.toUpperCase()}:3000`,
+      `${live}:${DEV_PORT}`,
+      `${live.toUpperCase()}:${DEV_PORT}`,
       `${live}.`,
-      `${live}.:3000`,
+      `${live}.:${DEV_PORT}`,
     ];
     for (const host of spellings) {
       const res = await get(host);
@@ -156,7 +160,7 @@ test.describe("M4-09 everything else is the generic 404 with no tenant data", ()
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     for (const host of [
       "203.0.113.5",
-      "203.0.113.5:3000",
+      `203.0.113.5:${DEV_PORT}`,
       "localhost.example",
       "a_b.example.test",
       "xn--bcher-kva.example",
@@ -173,10 +177,10 @@ test.describe("M4-09 the internal route is unreachable directly", () => {
     test.skip(!desktopOnly(info), "pure HTTP: one project is enough");
     const id = site.pageId;
     const hosts = [
-      "localhost:3000",
-      "app.localhost:3000",
-      `${site.handle}.localhost:3000`,
-      "mara.localhost:3000",
+      `localhost:${DEV_PORT}`,
+      `app.localhost:${DEV_PORT}`,
+      `${site.handle}.localhost:${DEV_PORT}`,
+      `mara.localhost:${DEV_PORT}`,
       live,
       hostnameFor("none"),
     ];
@@ -245,8 +249,10 @@ test.describe("M4-09 a custom host serves the page, its OG image, /r/*, /api/e a
     const page = await get(live);
     const ogUrl = /property="og:url" content="([^"]+)"/.exec(page.body)?.[1];
     const ogImage = /property="og:image" content="([^"]+)"/.exec(page.body)?.[1];
-    expect(ogUrl).toBe(`http://${live}:3000/`);
-    expect(ogImage).toMatch(new RegExp(`^http://${live.replace(/\./g, "\\.")}:3000/og\\?v=\\d+$`));
+    expect(ogUrl).toBe(`http://${live}:${DEV_PORT}/`);
+    expect(ogImage).toMatch(
+      new RegExp(`^http://${live.replace(/\./g, "\\.")}:${DEV_PORT}/og\\?v=\\d+$`),
+    );
 
     const image = await get(live, new URL(ogImage!).pathname + new URL(ogImage!).search);
     expect(image.status).toBe(200);
@@ -273,9 +279,9 @@ test.describe("M4-09 a static-looking path cannot slip past the proxy's host che
     const id = "0b0e1f2a-3c4d-4e5f-8a9b-0c1d2e3f4a5b";
     const cookie = "sb-127-auth-token=base64-eyJhY2Nlc3NfdG9rZW4iOiJ4In0";
     const hosts = [
-      "localhost:3000",
-      `${site.handle}.localhost:3000`,
-      "mara.localhost:3000",
+      `localhost:${DEV_PORT}`,
+      `${site.handle}.localhost:${DEV_PORT}`,
+      `mara.localhost:${DEV_PORT}`,
       live,
       hostnameFor("none"),
     ];
@@ -296,11 +302,11 @@ test.describe("M4-09 a static-looking path cannot slip past the proxy's host che
       }
     }
     // Real static files are untouched by the matcher change.
-    const asset = await get("localhost:3000", "/marketing/demo/fennmoor-image.webp");
+    const asset = await get(`localhost:${DEV_PORT}`, "/marketing/demo/fennmoor-image.webp");
     expect(asset.status).toBe(200);
     expect(String(asset.headers["content-type"])).toMatch(/image\/webp/);
     const onTenant = await get(
-      `${site.handle}.localhost:3000`,
+      `${site.handle}.localhost:${DEV_PORT}`,
       "/marketing/demo/fennmoor-image.webp",
     );
     expect(onTenant.status).toBe(200);
@@ -330,7 +336,7 @@ test.describe("M4-09 changes show at the next request", () => {
 
     // The very next requests: no deploy, no wait.
     const custom = await get(host);
-    const tenant = await get(`${owner.handle}.localhost:3000`);
+    const tenant = await get(`${owner.handle}.localhost:${DEV_PORT}`);
     expect(custom.body).toContain(newName);
     expect(tenant.body).toContain(newName);
     expect(markup(custom.body)).toBe(markup(tenant.body));
@@ -351,7 +357,11 @@ test.describe("M4-09 changes show at the next request", () => {
       .from("domains")
       .update({ status: "verified", verified_at: new Date().toISOString() })
       .eq("id", id);
-    const live1 = await untilHostLookupExpires(() => get(host), (r) => r.status === 200, "none");
+    const live1 = await untilHostLookupExpires(
+      () => get(host),
+      (r) => r.status === 200,
+      "none",
+    );
     expect(live1.status).toBe(200);
     expect(live1.body).toContain(site.name);
 
@@ -369,7 +379,11 @@ test.describe("M4-09 changes show at the next request", () => {
 
     // Removed: 404 immediately, no stale copy.
     await admin.from("domains").delete().eq("id", id);
-    const gone = await untilHostLookupExpires(() => get(host), (r) => r.status === 404, "found");
+    const gone = await untilHostLookupExpires(
+      () => get(host),
+      (r) => r.status === 404,
+      "found",
+    );
     expect(gone.status).toBe(404);
     expect(gone.body).not.toContain(site.name);
     expect(gone.body).not.toContain(otherName.profile.name);
@@ -403,7 +417,7 @@ test("M4-09 sanity: the sign-in session of an owner never reaches a custom host"
   const owner = await signedInUser(context, { label: "rtc", plan: "studio" });
   const host = hostnameFor("ck");
   await addDomainRow({ pageId: owner.pageId, hostname: host, status: "verified" });
-  const cookies = (await context.cookies("http://app.localhost:3000"))
+  const cookies = (await context.cookies(`http://app.localhost:${DEV_PORT}`))
     .map((c) => `${c.name}=${c.value}`)
     .join("; ");
   expect(cookies).toMatch(/sb-/);

@@ -63,7 +63,7 @@ insert into public.pages (id, owner_id, handle, draft) values
    pg_temp.doc_with(pg_temp.thumb((select t1 from p))));
 
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a')),
+  (select count(*)::int from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a'))),
   0,
   'a draft with a thumbnail queues nothing'
 );
@@ -73,7 +73,7 @@ update public.pages
    set draft = pg_temp.doc_with(pg_temp.thumb((select t2 from p)))
  where id = '00000000-0000-4000-8000-0000000136a1';
 select results_eq(
-  $$ select path from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') $$,
+  $$ select path from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) $$,
   $$ select t1 from p $$,
   'replacing a thumbnail in the draft queues the old object, and only it'
 );
@@ -83,7 +83,7 @@ update public.pages
    set draft = pg_temp.doc_with(pg_temp.thumb((select t1 from p)))
  where id = '00000000-0000-4000-8000-0000000136a1';
 select results_eq(
-  $$ select path from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') $$,
+  $$ select path from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) $$,
   $$ select t2 from p $$,
   'putting the thumbnail back un-queues it (and queues the one it replaced)'
 );
@@ -96,7 +96,7 @@ update public.pages
    set draft = pg_temp.doc_with(pg_temp.thumb((select t2 from p)))
  where id = '00000000-0000-4000-8000-0000000136a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a')),
+  (select count(*)::int from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a'))),
   0,
   'a thumbnail the published page still names is not queued when the draft drops it'
 );
@@ -113,7 +113,7 @@ update public.pages
    set published = pg_temp.doc_with(pg_temp.thumb((select t2 from p))), published_at = now()
  where id = '00000000-0000-4000-8000-0000000136a1';
 select results_eq(
-  $$ select path from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') $$,
+  $$ select path from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) $$,
   $$ select t1 from p $$,
   'the Publish that drops the last reference queues the old thumbnail'
 );

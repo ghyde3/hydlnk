@@ -1,5 +1,7 @@
 "use client";
 
+import { useUploadSite } from "@/components/media/upload-site";
+import { uploadSiteHeaders } from "@/lib/media/upload-site";
 import { Upload } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { EDITOR_ICON_STROKE, Icon } from "@/components/app/icon";
@@ -70,6 +72,7 @@ export function ImageUploadControl({
   help: helpText,
   positioning: positioningVariant,
 }: ImageUploadControlProps) {
+  const site = useUploadSite();
   const noun = label ?? (kind === "avatar" ? "photo" : "image");
   // A suspended owner cannot upload (M5-09); the route answers 403 account_suspended regardless.
   const suspended = useAccountSuspended();
@@ -132,7 +135,11 @@ export function ImageUploadControl({
       const body = new FormData();
       body.append("file", file);
       body.append("kind", kind);
-      const response = await fetch("/api/media", { method: "POST", body });
+      const response = await fetch("/api/media", {
+        method: "POST",
+        body,
+        headers: uploadSiteHeaders(site),
+      });
       if (!response.ok) {
         // The route says what is wrong in `message` (M5-13); over the plan's total (M4-31) the same
         // field carries the plan's sentence, and sending the same file again is worth offering once
