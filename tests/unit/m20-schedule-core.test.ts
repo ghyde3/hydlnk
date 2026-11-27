@@ -41,20 +41,47 @@ const adminMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => adminMock.current }));
 
 const { run } = await stackIsUp();
-const {
-  scheduleEntryWithClient,
-  cancelScheduleWithClient,
-  listSchedulesWithClient,
-  createEntryWithClient,
-  publishEntryWithClient,
-  trashEntryWithClient,
-} = await import("@/lib/content");
-const { getEntryWithClient, listEntriesWithClient } = await import("@/lib/content/query-core");
-const { runSchedules } = await import("@/lib/schedule/run");
-const { updateEntryWithClient, listRevisionsWithClient } = await import("@/lib/content");
-const { enableTypeWithClient } = await import("@/lib/content/types-core");
-const { publishPageCore, publishSitePageCore } = await import("@/lib/publish/core");
-const { postState, POST_STATE_LABEL } = await import("@/lib/posts/status");
+
+// Imported in the suite's beforeAll (`loadModules`): these read the server and client env at import,
+// which the unit step has not.
+type Content = typeof import("@/lib/content");
+type QueryCore = typeof import("@/lib/content/query-core");
+type PublishCore = typeof import("@/lib/publish/core");
+type PostStatus = typeof import("@/lib/posts/status");
+let scheduleEntryWithClient: Content["scheduleEntryWithClient"];
+let cancelScheduleWithClient: Content["cancelScheduleWithClient"];
+let listSchedulesWithClient: Content["listSchedulesWithClient"];
+let createEntryWithClient: Content["createEntryWithClient"];
+let publishEntryWithClient: Content["publishEntryWithClient"];
+let trashEntryWithClient: Content["trashEntryWithClient"];
+let updateEntryWithClient: Content["updateEntryWithClient"];
+let listRevisionsWithClient: Content["listRevisionsWithClient"];
+let getEntryWithClient: QueryCore["getEntryWithClient"];
+let listEntriesWithClient: QueryCore["listEntriesWithClient"];
+let runSchedules: typeof import("@/lib/schedule/run").runSchedules;
+let enableTypeWithClient: typeof import("@/lib/content/types-core").enableTypeWithClient;
+let publishPageCore: PublishCore["publishPageCore"];
+let publishSitePageCore: PublishCore["publishSitePageCore"];
+let postState: PostStatus["postState"];
+let POST_STATE_LABEL: PostStatus["POST_STATE_LABEL"];
+
+async function loadModules() {
+  ({
+    scheduleEntryWithClient,
+    cancelScheduleWithClient,
+    listSchedulesWithClient,
+    createEntryWithClient,
+    publishEntryWithClient,
+    trashEntryWithClient,
+    updateEntryWithClient,
+    listRevisionsWithClient,
+  } = await import("@/lib/content"));
+  ({ getEntryWithClient, listEntriesWithClient } = await import("@/lib/content/query-core"));
+  ({ runSchedules } = await import("@/lib/schedule/run"));
+  ({ enableTypeWithClient } = await import("@/lib/content/types-core"));
+  ({ publishPageCore, publishSitePageCore } = await import("@/lib/publish/core"));
+  ({ postState, POST_STATE_LABEL } = await import("@/lib/posts/status"));
+}
 
 type Admin = SupabaseClient<Database>;
 const MINUTE = 60_000;
@@ -151,6 +178,7 @@ describe.skipIf(!run)("M20 scheduling through the content writer and the worker"
     );
 
   beforeAll(async () => {
+    await loadModules();
     adminMock.current = admin;
     pro = await makeOwner(admin as never, "m20-pro", undefined, "pro");
     free = await makeOwner(admin as never, "m20-free");

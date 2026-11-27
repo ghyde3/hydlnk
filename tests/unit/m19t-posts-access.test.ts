@@ -24,17 +24,27 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 120_000 });
  * publisher; the blog's settings (types/post) are owner-only.
  */
 const { run } = await stackIsUp();
-// After stackIsUp: the route cores read the server env (.env.local) at import.
-const { listTypesCore, createPostCore, getPostCore, postActionCore, setPostTypeCore, renameTermCore } =
-  await import("@/lib/posts/routes-core");
-const { PLAN_LIMITS } = await import("@/lib/limits/table");
+
+type RoutesCore = typeof import("@/lib/posts/routes-core");
 
 describe.skipIf(!run)("M19-06 the Posts routes under team access (local Supabase)", () => {
   let admin: SupabaseClient<Database>;
   let f: TeamFixture;
   let other: TestOwner;
+  // Imported in beforeAll: the route cores read the server env (.env.local) at import, which the unit
+  // step has not.
+  let listTypesCore: RoutesCore["listTypesCore"];
+  let createPostCore: RoutesCore["createPostCore"];
+  let getPostCore: RoutesCore["getPostCore"];
+  let postActionCore: RoutesCore["postActionCore"];
+  let setPostTypeCore: RoutesCore["setPostTypeCore"];
+  let renameTermCore: RoutesCore["renameTermCore"];
+  let PLAN_LIMITS: typeof import("@/lib/limits/table").PLAN_LIMITS;
 
   beforeAll(async () => {
+    ({ listTypesCore, createPostCore, getPostCore, postActionCore, setPostTypeCore, renameTermCore } =
+      await import("@/lib/posts/routes-core"));
+    ({ PLAN_LIMITS } = await import("@/lib/limits/table"));
     admin = adminClient() as SupabaseClient<Database>;
     adminMock.current = admin;
     f = await teamFixture(admin as never, "m19r");

@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isEmailAddress, stripHiddenCharacters } from "@/lib/document";
 import { parseSubmission } from "@/lib/forms/contract";
 import { localPsql } from "../../scripts/lib/local-db";
@@ -93,10 +93,14 @@ describe.skipIf(!run)(
     }, 120_000);
 
     describe("the real store sees one spelling per address (finding 7)", () => {
-      const admin = adminClient();
+      // Made in beforeAll: the describe body runs at collection, also in the unit step (no env).
+      let admin: ReturnType<typeof adminClient>;
       const owners: TestOwner[] = [];
+      beforeAll(() => {
+        admin = adminClient();
+      });
       afterAll(async () => {
-        await removeOwners(admin, owners);
+        if (admin) await removeOwners(admin, owners);
       });
 
       it("full-width, decomposed and upper-case spellings of a stored address are duplicates", async () => {

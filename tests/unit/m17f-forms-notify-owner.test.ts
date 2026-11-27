@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { stackIsUp } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
 
-// The local stack's URL and key come from .env.local before the server modules read the environment.
+// The local stack's URL and key come from .env.local before the server modules read the environment;
+// the notify module is imported in beforeAll, so the unit step (no env) skips this file cleanly.
 const { run } = await stackIsUp();
-const { readOwner } = await import("@/lib/forms/notify");
 
 /**
  * M17-10, review A3: the form emails go only to an account whose sign-in address is confirmed
@@ -14,6 +14,11 @@ const { readOwner } = await import("@/lib/forms/notify");
 describe.skipIf(!run)(
   "M17-10 only a confirmed sign-in address gets a form email (review A3, local Supabase)",
   () => {
+    let readOwner: typeof import("@/lib/forms/notify").readOwner;
+    beforeAll(async () => {
+      ({ readOwner } = await import("@/lib/forms/notify"));
+    });
+
     it("readOwner answers the address of a confirmed account and null for an unconfirmed one", async () => {
       const { createClient } = await import("@supabase/supabase-js");
       const admin = createClient(

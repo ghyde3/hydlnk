@@ -24,14 +24,18 @@ vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
  * an editor's trash of their own never-live draft is still not recorded. The SQL rule is pgTAP 239.
  */
 const { run } = await stackIsUp();
-const { createPostCore, postActionCore } = await import("@/lib/posts/routes-core");
-const { loadTeamCore } = await import("@/lib/team/core");
 
 describe.skipIf(!run)("finding 3: a never-live draft trashed by someone else is recorded (local Supabase)", () => {
   let admin: SupabaseClient<Database>;
   let f: TeamFixture;
+  // Imported in beforeAll: the route cores read the server env at import, which the unit step has not.
+  let createPostCore: typeof import("@/lib/posts/routes-core").createPostCore;
+  let postActionCore: typeof import("@/lib/posts/routes-core").postActionCore;
+  let loadTeamCore: typeof import("@/lib/team/core").loadTeamCore;
 
   beforeAll(async () => {
+    ({ createPostCore, postActionCore } = await import("@/lib/posts/routes-core"));
+    ({ loadTeamCore } = await import("@/lib/team/core"));
     admin = adminClient() as SupabaseClient<Database>;
     adminMock.current = admin;
     f = await teamFixture(admin as never, "m19tn");

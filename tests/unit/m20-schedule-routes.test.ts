@@ -29,8 +29,6 @@ vi.mock("@/lib/auth/session", () => ({ getSessionUser: async () => mocks.user })
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => mocks.admin }));
 
 const { run } = await stackIsUp();
-const route = await import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/schedule/route");
-const siteRoute = await import("@/app/(editor)/app/api/pages/[id]/schedules/route");
 
 const ORIGIN = "http://app.localhost:3000";
 const ahead = (minutes: number) =>
@@ -49,6 +47,9 @@ describe.skipIf(!run)("M20 the schedule routes", () => {
       )
     : (undefined as unknown as SupabaseClient<Database>);
   const owners: TestOwner[] = [];
+  // Imported in beforeAll: the routes read the server env at import, which the unit step has not.
+  let route: typeof import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/schedule/route");
+  let siteRoute: typeof import("@/app/(editor)/app/api/pages/[id]/schedules/route");
   let a: TestOwner;
   let b: TestOwner;
   let free: TestOwner;
@@ -95,6 +96,8 @@ describe.skipIf(!run)("M20 the schedule routes", () => {
   });
 
   beforeAll(async () => {
+    route = await import("@/app/(editor)/app/api/pages/[id]/entries/[entryId]/schedule/route");
+    siteRoute = await import("@/app/(editor)/app/api/pages/[id]/schedules/route");
     mocks.admin = admin;
     a = await makeOwner(admin as never, "m20r-a", undefined, "pro");
     b = await makeOwner(admin as never, "m20r-b", undefined, "pro");

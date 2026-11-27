@@ -148,6 +148,13 @@ jobs:
           tests/unit/admin-suspension.test.ts
           tests/unit/m20-schedule-core.test.ts
           tests/unit/m20-schedule-routes.test.ts
+          tests/unit/m17f-forms-db-rules.test.ts
+          tests/unit/m17f-forms-notify-owner.test.ts
+          tests/unit/m17f-forms-open-marker.test.ts
+          tests/unit/m19t-activity-flood.test.ts
+          tests/unit/m19t-posts-access.test.ts
+          tests/unit/m19t-trash-never-live.test.ts
+          tests/unit/m19t-cleanup-entry.test.ts
 
       - name: Supabase diagnostics
         if: failure()

@@ -25,15 +25,21 @@ vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
  * the owner's Members screen still lists the publish.
  */
 const { run } = await stackIsUp();
-const { createPostCore, postActionCore } = await import("@/lib/posts/routes-core");
-const { loadTeamCore } = await import("@/lib/team/core");
-const { SITE_ACTIVITY_RATE_LIMIT, SITE_ACTIVITY_RATE_LIMITED } = await import("@/lib/team/activity-limit");
 
 describe.skipIf(!run)("finding 2: a member cannot flood the activity log (local Supabase)", () => {
   let admin: SupabaseClient<Database>;
   let f: TeamFixture;
+  // Imported in beforeAll: the route cores read the server env at import, which the unit step has not.
+  let createPostCore: typeof import("@/lib/posts/routes-core").createPostCore;
+  let postActionCore: typeof import("@/lib/posts/routes-core").postActionCore;
+  let loadTeamCore: typeof import("@/lib/team/core").loadTeamCore;
+  let SITE_ACTIVITY_RATE_LIMIT: typeof import("@/lib/team/activity-limit").SITE_ACTIVITY_RATE_LIMIT;
+  let SITE_ACTIVITY_RATE_LIMITED: typeof import("@/lib/team/activity-limit").SITE_ACTIVITY_RATE_LIMITED;
 
   beforeAll(async () => {
+    ({ createPostCore, postActionCore } = await import("@/lib/posts/routes-core"));
+    ({ loadTeamCore } = await import("@/lib/team/core"));
+    ({ SITE_ACTIVITY_RATE_LIMIT, SITE_ACTIVITY_RATE_LIMITED } = await import("@/lib/team/activity-limit"));
     admin = adminClient() as SupabaseClient<Database>;
     adminMock.current = admin;
     f = await teamFixture(admin as never, "m19fl");

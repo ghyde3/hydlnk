@@ -25,8 +25,18 @@ const m = vi.hoisted(() => ({ user: null as { id: string } | null }));
 vi.mock("@/lib/auth/session", () => ({ getSessionUser: async () => m.user }));
 vi.mock("@/lib/rate-limit", () => ({ rateLimit: async () => ({ allowed: true, retryAfter: 0 }) }));
 vi.mock("next/cache", () => ({ updateTag: vi.fn(), revalidateTag: vi.fn(), unstable_cache: vi.fn() }));
+// The admin module reads the server env at import, which the unit step has not. The stand-in hands
+// off to the real module, which only the stack suite's beforeAll loads; the unit tests pass their own
+// client (`{ admin: client }`), so they never call it.
+const realAdmin = vi.hoisted(() => ({ create: null as null | (() => unknown) }));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminSupabase: () => {
+    if (!realAdmin.create) throw new Error("the real admin client is loaded by the stack suite only");
+    return realAdmin.create();
+  },
+}));
 
-// The env first (the admin module reads it on import); the stack part is skipped when it is down.
+// The env first; the stack part is skipped when it is down.
 const { run } = await stackIsUp();
 const { cleanupScopeFor } = await import("@/lib/media/cleanup");
 const { cleanupMediaFor } = await import("@/lib/media/cleanup-admin");
@@ -177,6 +187,9 @@ describe.skipIf(!run)("finding 1: the reviewer's race, with the real Publish act
   const objects: string[] = [];
 
   beforeAll(async () => {
+    realAdmin.create = (
+      await vi.importActual<typeof import("@/lib/supabase/admin")>("@/lib/supabase/admin")
+    ).createAdminSupabase;
     const { createClient } = await import("@supabase/supabase-js");
     admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
       auth: { persistSession: false },

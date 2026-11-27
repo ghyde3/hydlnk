@@ -1,8 +1,27 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { RateLimitAgeStore, RateLimitStore } from "@/lib/rate-limit";
 import { stackIsUp } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
+// `@/lib/rate-limit` reads the server env at import (the secret, and the store's secret-key client),
+// which the unit step has not. Both stand-ins hand off to the real modules, which only the stack
+// suite's beforeAll loads; the in-memory suite passes its own store and secret, so it calls neither.
+const real = vi.hoisted(() => ({
+  admin: null as null | (() => unknown),
+  secret: null as null | (() => string),
+}));
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminSupabase: () => {
+    if (!real.admin) throw new Error("the real admin client is loaded by the stack suite only");
+    return real.admin();
+  },
+}));
+vi.mock("@/lib/analytics/ingest/secret", () => ({
+  visitorHashSecret: () => {
+    if (!real.secret) throw new Error("the real secret is loaded by the stack suite only");
+    return real.secret();
+  },
+}));
 
 // The local stack's URL and key come from .env.local before the server modules read the environment.
 const { run } = await stackIsUp();
@@ -94,6 +113,17 @@ describe("M17-06 the open marker (in memory)", () => {
 describe.skipIf(!run)(
   "M17-06 the open marker against rate_limit_hit and rate_limit_age (local Supabase)",
   () => {
+    beforeAll(async () => {
+      real.admin = (
+        await vi.importActual<typeof import("@/lib/supabase/admin")>("@/lib/supabase/admin")
+      ).createAdminSupabase;
+      real.secret = (
+        await vi.importActual<typeof import("@/lib/analytics/ingest/secret")>(
+          "@/lib/analytics/ingest/secret",
+        )
+      ).visitorHashSecret;
+    });
+
     it("a read starts nothing; an open starts the marker and its age grows from the first open", async () => {
       const store = createSupabaseRateLimitStore();
       const limiter = (key: string, limit: number, window: number) =>
