@@ -157,6 +157,10 @@ describe.skipIf(!run)("M19-13 a member's MCP token reaches no shared site (local
     for (const name of ["list_content_types", "list_entries", "list_terms", "get_entry", "list_revisions"]) {
       expect(codeOf(await runTool(tools.toolByName(name)!, identity(o.userId), args[name]!, deps)), name).toBe("ok");
     }
+    // And the owner still writes: the post's draft takes the owner's edit at its current rev.
+    const rev = Number(before.data!.find((row) => row.id === postId)!.rev);
+    const edit = await runTool(tools.toolByName("update_entry")!, identity(o.userId), { entryId: postId, ifRev: rev, title: "Owner's edit" }, deps);
+    expect(codeOf(edit)).toBe("ok");
   });
 
   it("M19-13 all 31 tools are covered: 14 page tools and 17 content tools", () => {
