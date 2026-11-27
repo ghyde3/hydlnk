@@ -58,6 +58,10 @@ test("M20-07 schedule a sub-page from the publish bar, see Scheduled, cancel it"
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(row(page, subId).locator("[data-item-state]")).toHaveText("Scheduled");
+  // The row says when, in the browser's zone (M20-10 step 1).
+  await expect(page.getByTestId(`publish-row-scheduled-${subId}`)).toContainText(
+    `Publishes 10 Jan ${year}, 09:00 (Europe/London, GMT`,
+  );
   await expectNoHorizontalScroll(page);
 
   await page.getByTestId(`publish-row-schedule-${subId}`).click();

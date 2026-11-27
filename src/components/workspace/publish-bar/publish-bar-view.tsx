@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, type ReactNode } from "react";
+import { ScheduledAt } from "@/components/schedule/scheduled-at";
 import { ItemChip } from "./item-chip";
 import {
   NOT_LIVE_NOTE,
@@ -92,6 +93,12 @@ export function PublishBarView(props: PublishBarViewProps) {
                   >
                     {row.detail}
                   </p>
+                  {row.schedule?.publishAt ? (
+                    <ScheduledAt
+                      iso={row.schedule.publishAt}
+                      testId={`publish-row-scheduled-${row.key}`}
+                    />
+                  ) : null}
                 </div>
                 <ItemChip state={rowChipState(row)} />
               </div>

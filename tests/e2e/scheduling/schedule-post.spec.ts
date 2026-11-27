@@ -60,7 +60,9 @@ test("M20-07 schedule a post for tomorrow, see Scheduled, cancel it", async ({ p
   await page.goto(POSTS_URL);
   const row = page.locator(`[data-post-id="${id}"]`);
   await expect(row.locator("[data-post-state]")).toHaveText("Scheduled");
+  // The local time and zone (M20-10 step 1), as in the editor bar.
   await expect(row.getByTestId("posts-row-scheduled")).toContainText("Publishes");
+  await expect(row.getByTestId("posts-row-scheduled")).toContainText("09:00 (Europe/London, GMT");
   await page.getByTestId("posts-filter-status").selectOption("scheduled");
   await expect(page.locator(`[data-post-id="${id}"]`)).toBeVisible();
 
