@@ -1,4 +1,5 @@
 import { PLAN_LIMITS } from "@/lib/limits";
+import { ACTIVITY_RATE_LIMITED_MESSAGE } from "@/lib/team/messages";
 import type { RestoreFailure } from "./types";
 
 /**
@@ -73,6 +74,8 @@ export function restoreFailureMessage(failure: RestoreFailure): {
       return { message: "Your page changed in another tab. Reload, then try again.", retry: false };
     case "account_suspended":
       return { message: "Couldn’t restore. Your account is suspended.", retry: false };
+    case "rate_limited":
+      return { message: ACTIVITY_RATE_LIMITED_MESSAGE, retry: false };
     default:
       return {
         message: "Couldn’t restore that version. Your draft is safe. Try again.",

@@ -41,6 +41,7 @@ const CODES: Record<SubPageError, ToolErrorCode> = {
   doc_invalid: "invalid_input",
   create_failed: "server_error",
   delete_failed: "server_error",
+  rate_limited: "rate_limited",
 };
 
 export const createPage: ToolDefinition<typeof input> = {

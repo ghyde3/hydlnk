@@ -277,6 +277,7 @@ export function MembersScreen({
                   {item.email ?? "A former member"}
                 </span>{" "}
                 {ACTION_WORDS[item.action] ?? "made a change"}
+                {item.times > 1 ? ` (${item.times} times)` : null}
                 <span className="text-text-3"> · {dateOf(item.at)}</span>
               </li>
             ))}

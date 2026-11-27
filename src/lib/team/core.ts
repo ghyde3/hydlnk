@@ -229,6 +229,8 @@ export interface TeamActivity {
   email: string | null;
   role: string;
   action: string;
+  /** The same change repeated within a minute is one row with a count (finding 2). */
+  times: number;
 }
 export interface TeamData {
   members: TeamMember[];
@@ -272,6 +274,7 @@ export async function loadTeamCore(
       email: typeof row.email === "string" ? row.email : null,
       role: String(row.role),
       action: String(row.action),
+      times: Math.max(1, Number(row.times) || 1),
     })),
   };
 }

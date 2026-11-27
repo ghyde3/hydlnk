@@ -14,6 +14,7 @@ import {
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
 import { recordSiteActivity } from "@/lib/access";
+import { activityLimited } from "./activity";
 import { entryFor, siteFor, siteType } from "./guards";
 import { publishEntryWithClient, type EntryPlace } from "./publish-core";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
@@ -197,6 +198,8 @@ export async function scheduleEntryWithClient(
     const refused = await publishCheck(admin, input, ready.place, deps);
     if (refused) return refused;
   }
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   // schedule_entry_as re-checks publish access under the owner's lock and records the actor.
   const { data, error } = await admin.rpc("schedule_entry_as", {
     p_entry_id: input.entryId,
@@ -232,6 +235,8 @@ export async function cancelScheduleWithClient(
   }
   const ready = await prepare(admin, input);
   if (!ready.ok) return ready;
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   const { data, error } = await admin.rpc("cancel_schedule", {
     p_entry_id: input.entryId,
     p_owner_id: ready.access.ownerId,

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
 import { needForEntryWrite, recordSiteActivity, type EntryWriteOp } from "@/lib/access";
+import { activityLimited } from "./activity";
 import { entryFor, siteType } from "./guards";
 import type { EntryPlace } from "./publish-core";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
@@ -54,6 +55,8 @@ export async function trashEntryWithClient(
   if (!ready.ok) return ready;
   const { entry } = ready;
   if (entry.deleted_at !== null) return failure("not_found");
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   // R8: the database decides again on the LOCKED row (live: publish, draft: edit), through the rule,
   // so an editor never trashes an entry a publisher has just published (42501: forbidden).
   const { data, error } = await admin.rpc("trash_entry_as", {
@@ -76,6 +79,8 @@ export async function restoreEntryWithClient(
   if (!ready.ok) return ready;
   const { entry } = ready;
   if (entry.deleted_at === null) return failure("not_found");
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   const { data, error } = await admin.rpc("restore_entry", {
     p_entry_id: entry.id,
     p_owner_id: ready.access.ownerId,
@@ -109,6 +114,8 @@ export async function purgeEntryWithClient(
   ) {
     return failure("not_found");
   }
+  const limited = await activityLimited(owned.access);
+  if (limited) return limited;
   let query = admin
     .from("content_entries")
     .delete()

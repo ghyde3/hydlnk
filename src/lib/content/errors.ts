@@ -1,6 +1,6 @@
 import { readBlockedLinkError } from "@/lib/blocklist/error";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
-import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
+import { ACTIVITY_RATE_LIMITED_MESSAGE, PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import { SCHEDULING_PLAN_MESSAGE, TERM_LIMIT_MESSAGE } from "@/lib/limits/messages";
 import type { ContentErrorCode, ContentFailure } from "./types";
 
@@ -24,6 +24,7 @@ export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
   schedule_plan: 403,
   schedule_limit: 403,
   schedule_time: 400,
+  rate_limited: 429,
   error: 500,
 };
 
@@ -48,6 +49,7 @@ export const CONTENT_MESSAGES: Record<ContentErrorCode, string> = {
   schedule_plan: SCHEDULING_PLAN_MESSAGE,
   schedule_limit: "This site has as many scheduled changes as its plan allows. Cancel one first.",
   schedule_time: "Choose a time at least a minute from now and within a year.",
+  rate_limited: ACTIVITY_RATE_LIMITED_MESSAGE,
   error: "Something went wrong. Try again.",
 };
 

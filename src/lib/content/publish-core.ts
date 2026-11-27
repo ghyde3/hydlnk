@@ -6,6 +6,7 @@ import { placedBlockImages } from "@/lib/publish/placed-images";
 import { blockedBodyLinks, blockedPageLinks, unsafeBodySchemes } from "./blocklist";
 import { failure, mapDbError } from "./errors";
 import { recordSiteActivity } from "@/lib/access";
+import { activityLimited } from "./activity";
 import { entryFor, siteType } from "./guards";
 import { bodyShapeIssue } from "./body-shape";
 import { bodyImageIssue, checkOwnImages, postImages, type ImageUse } from "./images";
@@ -153,6 +154,8 @@ export async function publishEntryWithClient(
     };
   }
 
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   const publishedAt = (deps.now?.() ?? new Date()).toISOString();
   const { data, error } = await admin.rpc("publish_entry", {
     p_entry_id: entry.id,
@@ -188,6 +191,8 @@ export async function unpublishEntryWithClient(
     const out = (fired.data ?? {}) as { rev?: unknown; changed?: unknown };
     return { ok: true, rev: Number(out.rev), changed: out.changed === true, ...ready.place };
   }
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   const { data, error } = await admin.rpc("unpublish_entry", {
     p_entry_id: entry.id,
     p_owner_id: ready.access.ownerId,

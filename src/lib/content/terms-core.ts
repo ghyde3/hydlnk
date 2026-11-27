@@ -5,6 +5,7 @@ import { updateEntryWithClient } from "./entries-core";
 import { failure, mapDbError } from "./errors";
 import { TERMS_PER_TYPE } from "@/lib/blog/types";
 import { recordSiteActivity } from "@/lib/access";
+import { activityLimited } from "./activity";
 import { enabledType, entryFor, siteFor, siteType, termFor } from "./guards";
 import type { TermSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult } from "./types";
@@ -132,6 +133,8 @@ export async function renameTermWithClient(
     patch.slug = input.slug;
   }
   if (Object.keys(patch).length === 0) return failure("invalid", "Nothing to change.");
+  const limited = await activityLimited(found.access);
+  if (limited) return limited;
   const updated = await admin
     .from("content_terms")
     .update(patch)
@@ -152,6 +155,8 @@ export async function deleteTermWithClient(
 ): Promise<ContentResult<{ id: string; typeId: string }>> {
   const found = await termFor(admin, input.actor, input.siteId, input.termId, "publish");
   if (!found.ok) return found;
+  const limited = await activityLimited(found.access);
+  if (limited) return limited;
   const deleted = await admin
     .from("content_terms")
     .delete()

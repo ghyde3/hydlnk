@@ -9,6 +9,7 @@ import { MEDIA_BUCKET } from "@/lib/media/limits";
 import { mediaOrigin } from "@/lib/media/url";
 import { recordSiteActivity, requireSiteAccess, type SiteAccess } from "@/lib/access";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import { activityAllowed } from "@/lib/team/activity-limit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
 import {
@@ -397,6 +398,7 @@ export async function restorePageVersionCore(
     return failed("error");
   }
 
+  if (!(await activityAllowed(open.access.actorId))) return { ok: false, reason: "rate_limited" };
   // The design to `pages.draft`, guarded by its rev (the stale-tab guard).
   const update = open.admin
     .from("pages")

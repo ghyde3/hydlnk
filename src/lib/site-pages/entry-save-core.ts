@@ -67,6 +67,7 @@ export function fromFailure(f: ContentFailure): EntrySaveResponse {
       return { status, body: { kind: "slug", message: f.message } };
     case "entry_limit":
     case "term_limit":
+    case "rate_limited":
       return { status, body: { kind: "limit", message: f.message } };
     case "account_suspended":
       return {

@@ -4,6 +4,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { canonical, updateEntryWithClient } from "./entries-core";
 import { failure } from "./errors";
 import { recordSiteActivity } from "@/lib/access";
+import { activityLimited } from "./activity";
 import { entryFor, siteFor } from "./guards";
 import type { RevisionSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult, ContentSource } from "./types";
@@ -74,6 +75,8 @@ export async function restoreRevisionWithClient(
   }
   if (!found.data) return failure("not_found");
   const snapshot = found.data.snapshot;
+  const limited = await activityLimited(owned.access);
+  if (limited) return limited;
 
   let expectedRev = input.expectedRev;
   const replaces =

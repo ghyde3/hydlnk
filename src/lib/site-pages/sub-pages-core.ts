@@ -17,7 +17,8 @@ import {
   requireSiteAccess,
   type AccessRefusal,
 } from "@/lib/access";
-import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
+import { activityAllowed } from "@/lib/team/activity-limit";
+import { ACTIVITY_RATE_LIMITED_MESSAGE, PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import type { ContentActor } from "@/lib/content";
 import { pagesPerSiteMessage } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
@@ -51,7 +52,9 @@ export type SubPageError =
   | "path_taken"
   | "doc_invalid"
   | "create_failed"
-  | "delete_failed";
+  | "delete_failed"
+  /** Past the activity limit (team attack pass, finding 2). */
+  | "rate_limited";
 
 export type CreateSubPageResult =
   | {
@@ -80,6 +83,7 @@ export const SUB_PAGE_STATUS: Record<SubPageError, number> = {
   doc_invalid: 422,
   create_failed: 500,
   delete_failed: 500,
+  rate_limited: 429,
 };
 
 export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
@@ -94,6 +98,7 @@ export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
   doc_invalid: "That page’s content isn’t valid.",
   create_failed: "Couldn’t add the page. Try again.",
   delete_failed: "Couldn’t delete the page. Try again.",
+  rate_limited: ACTIVITY_RATE_LIMITED_MESSAGE,
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -172,6 +177,7 @@ export async function createSubPageWithClient(
     if (!parsed.success) return failure("doc_invalid");
     draft = parsed.data;
   }
+  if (!(await activityAllowed(access.actorId))) return failure("rate_limited");
   const made = await createEntryWithClient(admin, {
     actor: { userId: input.userId, source: input.source },
     siteId: site.id,
@@ -251,6 +257,7 @@ export async function deleteSubPageWithClient(
   // are all P0002. (Posts keep the 30-day trash; this door is for pages only.)
   // R8: decided again under the entry row's lock, through the rule (a page that went live since the
   // read above needs publish: 42501).
+  if (!(await activityAllowed(access.actorId))) return failure("rate_limited");
   const deleted = await admin.rpc("delete_page_entry_as", {
     p_entry_id: subPageId,
     p_site_id: site.id,
