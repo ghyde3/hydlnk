@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { rand } from "../fixtures/data";
 import { rawRequest, type RawResponse } from "../fixtures/http";
+import { DEV_PORT } from "../helpers";
 
 /**
  * Shared by the Wave E lifecycle specs (M4-33 downgrade, M4-34 account deletion): seeding custom
@@ -193,10 +194,10 @@ export function replayAction(
   for (const name of ["next-action", "content-type", "accept", "next-router-state-tree"]) {
     if (recorded.headers[name]) headers[name] = recorded.headers[name]!;
   }
-  return rawRequest("app.localhost:3000", path, {
+  return rawRequest(`app.localhost:${DEV_PORT}`, path, {
     method: "POST",
     ...(cookie ? { cookie } : {}),
-    headers: { ...headers, origin: "http://app.localhost:3000" },
+    headers: { ...headers, origin: `http://app.localhost:${DEV_PORT}` },
     body: recorded.body,
   });
 }

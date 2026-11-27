@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { cleanupUsers, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { addBlock } from "../m2/blocks-helpers";
 import { emptyUser, openEditor, statusChip } from "../m2/editor-helpers";
 import { entry, seedHome, subPageEntries } from "./entry-helpers";
@@ -26,7 +26,7 @@ test("M15-07 add a page and Publish, and it is live on the tenant host", async (
   const homeLine = `Welcome ${mark}`;
   const user = await emptyUser(context, "app");
   const homeId = await seedHome(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
   await openEditor(page);
 
   // Nothing is live yet.

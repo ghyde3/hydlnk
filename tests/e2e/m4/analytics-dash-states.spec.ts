@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
   ANALYTICS,
   dayAt,
@@ -149,8 +149,8 @@ test.describe("M4-29 sample data", () => {
     await page.goto(ANALYTICS());
     await expect(page.getByTestId("sample-chip")).toBeVisible();
 
-    const origin = `http://${b.handle}.localhost:3000`;
-    const res = await rawRequest(`${b.handle}.localhost:3000`, "/api/e", {
+    const origin = `http://${b.handle}.localhost:${DEV_PORT}`;
+    const res = await rawRequest(`${b.handle}.localhost:${DEV_PORT}`, "/api/e", {
       method: "POST",
       headers: {
         Origin: origin,

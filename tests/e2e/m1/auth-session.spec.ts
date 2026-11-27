@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { url } from "../helpers";
-import { signInAs } from "../fixtures/auth";
+import { DEV_PORT, url } from "../helpers";
+import { signInAs, supabasePort } from "../fixtures/auth";
 import { uniq } from "../fixtures/data";
 import {
   appRaw,
@@ -21,7 +21,7 @@ const handleFor = (label: string, project: string) => `${uniq(label)}-${project[
 async function appCookieHeader(
   context: import("@playwright/test").BrowserContext,
 ): Promise<string> {
-  return cookieHeader(await context.cookies("http://app.localhost:3000"));
+  return cookieHeader(await context.cookies(`http://app.localhost:${DEV_PORT}`));
 }
 
 test.describe("M1-06 session cookies are host-only on the app host; auth routes exist on the app host only", () => {
@@ -52,7 +52,7 @@ test.describe("M1-06 session cookies are host-only on the app host; auth routes 
     await signInAs(context, addr("ck-hosts", testInfo.project.name));
     const authCalls: string[] = [];
     page.on("request", (r) => {
-      if (/:54321\/auth\//.test(r.url())) authCalls.push(r.url());
+      if (r.url().includes(`:${supabasePort()}/auth/`)) authCalls.push(r.url());
     });
     for (const target of [url("mara"), url()]) {
       const response = await page.goto(target);
@@ -80,18 +80,20 @@ test.describe("M1-06 session cookies are host-only on the app host; auth routes 
 
   test("M1-06 tenant host: every app path is a 404", async () => {
     for (const path of APP_ONLY) {
-      expect((await rawRequest("mara.localhost:3000", path)).status, `mara ${path}`).toBe(404);
+      expect((await rawRequest(`mara.localhost:${DEV_PORT}`, path)).status, `mara ${path}`).toBe(
+        404,
+      );
     }
   });
 
   test("M1-06 root host: 404 for app paths, 308 to the app host for /login and /signup with the query kept", async ({}) => {
     for (const path of APP_ONLY.filter((p) => p !== "/login" && p !== "/signup")) {
-      expect((await rawRequest("localhost:3000", path)).status, `root ${path}`).toBe(404);
+      expect((await rawRequest(`localhost:${DEV_PORT}`, path)).status, `root ${path}`).toBe(404);
     }
     for (const path of ["/login", "/signup"]) {
-      const res = await rawRequest("localhost:3000", `${path}?handle=zq-keep&x=1`);
+      const res = await rawRequest(`localhost:${DEV_PORT}`, `${path}?handle=zq-keep&x=1`);
       expect(res.status, `root ${path}`).toBe(308);
-      expect(res.location).toBe(`http://app.localhost:3000${path}?handle=zq-keep&x=1`);
+      expect(res.location).toBe(`http://app.localhost:${DEV_PORT}${path}?handle=zq-keep&x=1`);
     }
   });
 
@@ -124,7 +126,7 @@ test.describe("M1-06 session cookies are host-only on the app host; auth routes 
     const session = await sessionOf(context);
     expect(cookie).toContain("sb-");
 
-    for (const host of ["mara.localhost:3000", "localhost:3000"]) {
+    for (const host of [`mara.localhost:${DEV_PORT}`, `localhost:${DEV_PORT}`]) {
       // The first request to a route compiles it in `next dev` and its HTML can differ a little
       // from the later ones (asset links), so warm the route up, then bracket the request that
       // carries the cookie between two that do not: it must look like either of them.
@@ -153,7 +155,7 @@ test.describe("M1-06 session cookies are host-only on the app host; auth routes 
     const appResponse = await appRaw("/login", { cookie: expired });
     expect(appResponse.setCookies.some((c) => isAuthCookie(c.split("=")[0]!))).toBe(true);
     // ... but the other hosts never touch the session, even when it needs a refresh.
-    for (const host of ["mara.localhost:3000", "localhost:3000"]) {
+    for (const host of [`mara.localhost:${DEV_PORT}`, `localhost:${DEV_PORT}`]) {
       const res = await rawRequest(host, "/", { cookie: expired });
       expect(res.setCookies, `${host} must not refresh`).toEqual([]);
     }
@@ -164,13 +166,15 @@ test.describe("M1-07 auth gate and landing redirects for app routes", () => {
   const GATED = ["/", "/editor", "/design", "/analytics", "/domains", "/settings", "/claim"];
   const SCREENS = ["/editor", "/design", "/analytics", "/domains", "/settings"];
   const pathOf = (location: string | null) =>
-    location ? new URL(location, "http://app.localhost:3000").pathname : null;
+    location ? new URL(location, `http://app.localhost:${DEV_PORT}`).pathname : null;
 
   test("M1-07 signed out: every gated route redirects to /login; /login and /signup render", async ({}) => {
     for (const path of GATED) {
       const res = await appRaw(path);
       expect([307, 308], path).toContain(res.status);
-      expect(res.location, path).toMatch(/^(http:\/\/app\.localhost:3000)?\/login$/);
+      expect(res.location, path).toMatch(
+        new RegExp(String.raw`^(http:\/\/app\.localhost:${DEV_PORT})?\/login$`),
+      );
     }
     for (const path of ["/login", "/signup"]) expect((await appRaw(path)).status).toBe(200);
   });
@@ -198,7 +202,9 @@ test.describe("M1-07 auth gate and landing redirects for app routes", () => {
     for (const path of ["/", "/login", "/signup", "/claim"]) {
       const res = await appRaw(path, { cookie });
       expect([307, 308], path).toContain(res.status);
-      expect(res.location, path).toMatch(/^(http:\/\/app\.localhost:3000)?\/editor$/);
+      expect(res.location, path).toMatch(
+        new RegExp(String.raw`^(http:\/\/app\.localhost:${DEV_PORT})?\/editor$`),
+      );
     }
   });
 

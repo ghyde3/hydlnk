@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { addDomainRow, hostnameFor } from "../m4/domains-core-helpers";
 import { pageRow } from "../m2/editor-helpers";
 import { ITEMS, locsOf, makeLiveSite } from "../m11/tenant-helpers";
@@ -29,7 +29,7 @@ test("M14-02 Unpublish takes the site back to its placeholder on every host, kee
   const site = await makeLiveSite("unp", { plan: "pro" });
   const custom = hostnameFor("unp");
   await addDomainRow({ pageId: site.pageId, hostname: custom, status: "verified" });
-  const handleHost = `${site.handle}.localhost:3000`;
+  const handleHost = `${site.handle}.localhost:${DEV_PORT}`;
   const get = (host: string, path = "/") => rawRequest(host, path);
   const admin = adminClient();
 

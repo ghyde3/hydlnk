@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { draftOf, userWithDraft } from "../m2/blocks-helpers";
 import { expectDraft, openEditor, rowOf, statusChip } from "../m2/editor-helpers";
 import { openTab, publishButton, undoButton, redoButton } from "../m7/workspace-helpers";
@@ -283,8 +283,8 @@ test.describe("M9-28 Link tags on a link", () => {
     });
 
     const live = {
-      host: `${user.handle}.localhost:3000`,
-      origin: `http://${user.handle}.localhost:3000`,
+      host: `${user.handle}.localhost:${DEV_PORT}`,
+      origin: `http://${user.handle}.localhost:${DEV_PORT}`,
       pageId: user.pageId,
     };
     const at = async (id: string) => (await getClick(live as never, id)).location;
@@ -548,8 +548,8 @@ test.describe("M9-30 Lock this link", () => {
     });
 
     const live = {
-      host: `${user.handle}.localhost:3000`,
-      origin: `http://${user.handle}.localhost:3000`,
+      host: `${user.handle}.localhost:${DEV_PORT}`,
+      origin: `http://${user.handle}.localhost:${DEV_PORT}`,
       pageId: user.pageId,
     };
     expect((await getClick(live as never, A)).status).toBe(200);
@@ -672,7 +672,7 @@ test.describe("M9-32 Redirect mode", () => {
     await expect(card(page).getByTestId("redirect-state")).toHaveText(
       "Visitors go straight to Link 02.",
     );
-    const host = `${user.handle}.localhost:3000`;
+    const host = `${user.handle}.localhost:${DEV_PORT}`;
     const live = await getPage(host);
     expect(live.status).toBe(302);
     expect(live.location).toBe(`/r/${user.pageId}/${B}`);

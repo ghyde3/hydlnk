@@ -35,7 +35,7 @@ test("M16-04 M16-06 M16-10 a post, the feed, the sitemap and an old slug's 301 o
   await addPost(site, typeId, { title: "Other post", slug: "other", publishedAt: daysBefore(1) });
   const hostname = hostnameFor("blog");
   await addDomainRow({ pageId: site.pageId, hostname, status: "verified" });
-  const host = `${hostname}:3000`;
+  const host = `${hostname}:${DEV_PORT}`;
   const origin = `http://${hostname}:${DEV_PORT}`;
   const get = (path: string) => rawRequest(host, path);
 

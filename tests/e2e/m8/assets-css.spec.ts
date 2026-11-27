@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M8-02 step 3 in real Chrome: the page's inline CSS (only the rules its block types need,
@@ -39,7 +40,7 @@ function render(variant: "full" | "links"): Rendered {
           maxBuffer: 16 * 1024 * 1024,
           env: {
             ...process.env,
-            NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000",
+            NEXT_PUBLIC_ROOT_DOMAIN: `localhost:${DEV_PORT}`,
             NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
             NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_test",
           },

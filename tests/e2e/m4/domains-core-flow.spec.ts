@@ -31,6 +31,7 @@ import {
   realDeps,
   resetCooldown,
 } from "./domains-core-helpers";
+import { DEV_PORT } from "../helpers";
 
 /**
  * The domain logic (src/lib/domains/core.ts and verify.ts, the code the server actions call) driven
@@ -109,7 +110,7 @@ test.describe("M4-11 add a custom domain through the Vercel Domains API", () => 
     const cases = [
       `https://${tag}.example.test`,
       `${tag}.example.test/page`,
-      `${tag}.example.test:3000`,
+      `${tag}.example.test:${DEV_PORT}`,
       `${tag} example.test`,
       `*.${tag}.example.test`,
       "localhost",

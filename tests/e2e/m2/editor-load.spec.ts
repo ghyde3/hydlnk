@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { homeEntryOf } from "../fixtures/home-abuse";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
@@ -85,7 +85,7 @@ test.describe("M2-03 the editor opens the current page's draft", () => {
   test("M2-03 signed out: a redirect to the sign-in route and none of any draft text", async () => {
     const res = await appRaw("/editor");
     expect([302, 303, 307]).toContain(res.status);
-    expect(new URL(res.location!, "http://app.localhost:3000").pathname).toBe("/login");
+    expect(new URL(res.location!, `http://app.localhost:${DEV_PORT}`).pathname).toBe("/login");
     for (const text of ["Mara Okafor", "Portrait", "Display name", "Bio"]) {
       expect(res.body).not.toContain(text);
     }

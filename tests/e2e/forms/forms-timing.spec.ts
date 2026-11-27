@@ -30,7 +30,7 @@ test("a dropped and a stored submission answer in the same time (medians within 
   test.skip(!usesProductionServer(process.env), "timing is measured on a production build");
   test.setTimeout(180_000);
   const live = await formPage("ftm", { plan: "studio" });
-  const host = `${live.handle}.localhost:3000`;
+  const host = `${live.handle}.localhost:${DEV_PORT}`;
   const origin = `http://${live.handle}.localhost:${DEV_PORT}`;
   // Shared address space (100.64.0.0/10), a fresh /16 a run: no other spec's clients.
   const base = 64 + Math.floor(Math.random() * 64);

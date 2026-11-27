@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { rawRequest, restAs } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
   accessToken,
   openEditor,
@@ -65,7 +65,7 @@ async function publishFromEditor(page: Page): Promise<void> {
 /** The live page, in a new tab of `context`, at the current viewport. */
 async function openLive(context: BrowserContext, handle: string): Promise<Page> {
   const live = await context.newPage();
-  await live.goto(`http://${handle}.localhost:3000/`);
+  await live.goto(`http://${handle}.localhost:${DEV_PORT}/`);
   await expect(live.locator("[data-page-root]")).toBeVisible();
   return live;
 }
@@ -320,7 +320,7 @@ test.describe("M6-41 hostile values", () => {
 
       // The first request for this page: nothing cached for it yet, so what is served is what the
       // gate decides now. It fails closed.
-      const response = await rawRequest(`${user.handle}.localhost:3000`, "/");
+      const response = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
       expect(response.status).toBe(404);
       expect(response.body).not.toContain("evil.example");
       expect(response.body).not.toContain("window.__x");

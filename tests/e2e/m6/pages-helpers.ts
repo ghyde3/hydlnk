@@ -14,7 +14,7 @@ import { appRaw, type RawResponse } from "../fixtures/http";
  * driving the dialog, and a replayed action can be compared with it.
  */
 
-export const APP_ORIGIN = "http://app.localhost:3000";
+export const APP_ORIGIN = `http://app.localhost:${DEV_PORT}`;
 export const INACTIVE = "This preview link isn’t active. Ask the owner for a new link.";
 
 const octet = () => Math.floor(Math.random() * 254) + 1;

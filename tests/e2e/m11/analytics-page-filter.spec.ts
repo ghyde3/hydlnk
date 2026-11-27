@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly, signIn } from "../fixtures/data";
 import { authCookies, cookieHeader, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { ANALYTICS, kpi } from "../m4/analytics-dash-helpers";
 import { HOME_LINK, ITEMS_LINK, ITEMS_TITLE, trafficSite } from "./analytics-helpers";
 
@@ -108,7 +108,7 @@ test("M11-09 the CSV export has a page column and follows the filter", async ({
   test.skip(!desktopOnly(info), "plain HTTP: one project is enough");
   await signIn(context, traffic.site.email);
   const cookie = cookieHeader(await authCookies(context));
-  const get = (path: string) => rawRequest("app.localhost:3000", path, { cookie });
+  const get = (path: string) => rawRequest(`app.localhost:${DEV_PORT}`, path, { cookie });
 
   const links = await get("/analytics/export?kind=links&range=7");
   expect(links.status).toBe(200);

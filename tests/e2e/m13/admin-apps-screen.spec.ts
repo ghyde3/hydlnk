@@ -12,7 +12,7 @@ import {
   removeClients,
   type RegisteredClient,
 } from "../fixtures/oauth";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { sessionCookie, signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
 
 /**
@@ -59,7 +59,7 @@ test.describe("M13-10 connected apps screen", () => {
     const refused = await appRaw("/api/admin/apps/block", {
       method: "POST",
       cookie: await sessionCookie(context),
-      headers: { "content-type": "application/json", origin: "http://app.localhost:3000" },
+      headers: { "content-type": "application/json", origin: `http://app.localhost:${DEV_PORT}` },
       body: JSON.stringify({ client_id: "hlc_" + "0".repeat(32), reason: "x" }),
     });
     expect(refused.status).toBe(403);

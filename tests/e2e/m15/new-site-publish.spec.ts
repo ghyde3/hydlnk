@@ -3,7 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, rand, trackEmail } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import { getMessage, signInLinkFrom, waitForMessages } from "../fixtures/mailpit";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 import { addBlock } from "../m2/blocks-helpers";
 import { openEditor, statusChip } from "../m2/editor-helpers";
 
@@ -68,9 +68,11 @@ test("M15-07 a new site made after the cutover publishes and serves its block", 
 
   // The handle host serves the block.
   await expect
-    .poll(async () => (await rawRequest(`${handle}.localhost:3000`, "/")).body, { timeout: 20_000 })
+    .poll(async () => (await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/")).body, {
+      timeout: 20_000,
+    })
     .toContain(headline);
-  const live = await rawRequest(`${handle}.localhost:3000`, "/");
+  const live = await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/");
   expect(live.status).toBe(200);
 
   // Exactly one '/' page entry, and it is the published one.

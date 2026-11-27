@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll } from "../helpers";
 import {
   APP_ORIGIN,
   getShare,
@@ -151,7 +151,7 @@ test("M16-16 the post address exists on the app host only", async ({}, info) => 
   const postId = await addDraftPost(site);
   const link = await makeLink(site.user.id, site.pageId);
   const { rawRequest } = await import("../fixtures/http");
-  for (const host of [`${site.handle}.localhost:3000`, "localhost:3000"]) {
+  for (const host of [`${site.handle}.localhost:${DEV_PORT}`, `localhost:${DEV_PORT}`]) {
     const response = await rawRequest(host, `/share/${link.token}/entry/${postId}`);
     expect(response.status, host).toBe(404);
     expect(response.body, host).not.toContain(TITLE);

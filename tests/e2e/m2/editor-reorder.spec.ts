@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
 import {
@@ -222,7 +222,7 @@ test.describe("M2-14 drag handles", () => {
   }) => {
     const user = await seededUser(context, "rd5");
     await openEditor(page);
-    const live = async () => (await rawRequest(`${user.handle}.localhost:3000`, "/")).body;
+    const live = async () => (await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/")).body;
     const before = await live();
     const orderOf = (html: string) =>
       html.indexOf("Book a session") < html.indexOf("Portrait sessions");

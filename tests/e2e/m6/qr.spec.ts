@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { emptyUser } from "../m2/editor-helpers";
 import { addVerifiedDomains } from "../m4/lifecycle-helpers";
 import { signInAsUser } from "../m5/admin-helpers";
@@ -204,7 +204,7 @@ test.describe("M6-31 what the files hold", () => {
     const cookie = cookieHeader(await authCookies(context));
     for (const path of ["/api/qr", "/qr", "/api/qr?text=https://evil.example", "/api/qr/mara"]) {
       for (const method of ["GET", "POST"]) {
-        const res = await rawRequest("app.localhost:3000", path, { cookie, method });
+        const res = await rawRequest(`app.localhost:${DEV_PORT}`, path, { cookie, method });
         expect(res.status, `${method} ${path}`).toBe(404);
       }
     }

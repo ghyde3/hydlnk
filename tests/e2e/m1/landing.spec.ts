@@ -3,6 +3,7 @@ import { pagesPerSiteItem, sitesText } from "@/lib/marketing/plan-limits";
 import { axeViolations } from "../fixtures/a11y";
 import { SHOWN_PRICES } from "../fixtures/prices";
 import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { supabasePort } from "../fixtures/auth";
 
 /**
  * Home page (M1-23 .. M1-27, redesigned in M11-01: HYDLNK as the frame, look stage in the hero,
@@ -72,7 +73,7 @@ test.describe("M1-23 header and hero", () => {
     const headers = await response.allHeaders();
     expect(headers["set-cookie"], "marketing host sets no cookie").toBeUndefined();
     expect((await page.context().cookies()).map((c) => c.name)).toEqual([]);
-    expect(requests.filter((u) => /supabase|:54321/i.test(u))).toEqual([]);
+    expect(requests.filter((u) => new RegExp(`supabase|:${supabasePort()}`, "i").test(u))).toEqual([]);
     // Nothing on the page comes from another host.
     const origins = new Set(requests.map((u) => new URL(u).host));
     expect([...origins].filter((host) => !host.endsWith(`localhost:${new URL(APP).port}`))).toEqual(

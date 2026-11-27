@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient, userClient } from "../fixtures/auth";
 import { axeViolations } from "../fixtures/a11y";
 import {
@@ -88,7 +88,7 @@ test.describe("M1-16 app shell: desktop sidebar and screen frame", () => {
     expect(box.height).toBeGreaterThanOrEqual(900);
 
     const logo = aside.getByRole("link", { name: "HYDLNK home" });
-    await expect(logo).toHaveAttribute("href", "http://localhost:3000/");
+    await expect(logo).toHaveAttribute("href", `http://localhost:${DEV_PORT}/`);
     expect((await logo.boundingBox())!.height).toBe(44);
     const diamond = logo.locator("span").first();
     expect(await diamond.evaluate((el) => (el as HTMLElement).offsetWidth)).toBe(8);

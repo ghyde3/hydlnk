@@ -7,7 +7,7 @@ import { expectClientBlockWriteRefused, homeEntryOf, writeHomeDraft } from "../f
 import { DAY_MS, dayAt, makeOwner, seed, signInOwner } from "../m4/analytics-dash-helpers";
 import { insertPage } from "../fixtures/data";
 import { rawBuffer } from "../m2/publish-helpers";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 import {
   L1,
   L2,
@@ -63,7 +63,7 @@ async function liveWith(label: string, draftBlocks: unknown[], publishedBlocks?:
   return { user, handle, pageId, form };
 }
 
-const host = (handle: string) => `${handle}.localhost:3000`;
+const host = (handle: string) => `${handle}.localhost:${DEV_PORT}`;
 /** A real browser's user agent: a click from nothing (curl, no header) is not counted. */
 const PHONE_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 Safari/604.1";
@@ -144,9 +144,12 @@ test.describe("M6-29 the click redirect for a link in text", () => {
     );
     expect(tricky.status).toBe(302);
     expect(tricky.headers.location).toBe("https://example.com/book");
-    const elsewhere = await rawBuffer(`evil-${rand(5)}.localhost:3000`, `/r/${pageId}/${L1}`);
+    const elsewhere = await rawBuffer(
+      `evil-${rand(5)}.localhost:${DEV_PORT}`,
+      `/r/${pageId}/${L1}`,
+    );
     expect(elsewhere.status).toBe(404);
-    const marketing = await rawBuffer("localhost:3000", `/r/${pageId}/${L1}`);
+    const marketing = await rawBuffer(`localhost:${DEV_PORT}`, `/r/${pageId}/${L1}`);
     expect(marketing.status).toBe(404);
 
     // The published document is changed to a hostile link behind the schema's back.

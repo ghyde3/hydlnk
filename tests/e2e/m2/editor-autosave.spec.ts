@@ -1,5 +1,5 @@
 import { expect, test, type Request } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient, signInAs } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, makeUser, moveSite, phoneOnly } from "../fixtures/data";
 import { rawRequest, restAs } from "../fixtures/http";
@@ -75,7 +75,7 @@ test.describe("M2-04 autosave", () => {
     const user = await seededUser(context, "as2");
     await openEditor(page);
     const before = await pageRow(user.pageId);
-    const liveBefore = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const liveBefore = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(liveBefore.status).toBe(200);
 
     // Hold the PATCH so the in-flight state can be observed.
@@ -102,7 +102,7 @@ test.describe("M2-04 autosave", () => {
     const after = await pageRow(user.pageId);
     expect(after.published).toEqual(before.published);
     expect(after.published_at).toBe(before.published_at);
-    const liveAfter = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const liveAfter = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(liveAfter.body).not.toContain(text);
     expect(liveAfter.status).toBe(200);
     // The public page still shows the published document (the old bio), not the edit.

@@ -14,7 +14,7 @@ import {
   stubSessionStatus,
   subscriptionEvent,
 } from "../fixtures/stripe-stub";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { SERVER_PORT, rawBuffer } from "../m2/publish-helpers";
 import {
   APP_ORIGIN,
@@ -227,7 +227,7 @@ test.describe("M4-06 the Checkout endpoint (API)", () => {
     const user = await billingUser(context, { label: "co-xsite" });
     const foreign: Record<string, string>[] = [
       { origin: "https://evil.example" },
-      { origin: "http://mara.localhost:3000" },
+      { origin: `http://mara.localhost:${DEV_PORT}` },
       { "sec-fetch-site": "cross-site" },
       { "sec-fetch-site": "same-site" },
     ];

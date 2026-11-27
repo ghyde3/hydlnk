@@ -40,6 +40,8 @@ export function readEnv(name: string): string {
 }
 
 export const supabaseUrl = (): string => readEnv("NEXT_PUBLIC_SUPABASE_URL");
+/** The local Supabase API's port (54321 on the main stack; a worktree's own stack has its own). */
+export const supabasePort = (): string => new URL(supabaseUrl()).port;
 export const publishableKey = (): string => readEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
 
 /** supabase-js client acting as a signed-in user (publishable key plus their JWT): RLS applies. */

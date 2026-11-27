@@ -3,7 +3,7 @@ import { DESKTOP, PHONE } from "../../../scripts/lib/viewports";
 import { adminClient, userClient } from "../fixtures/auth";
 import { expireOwnerPages } from "../fixtures/expire";
 import { cleanupUsers, desktopOnly, phoneOnly, publishHome, rand } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { dayAt, makeOwner, seed, signInOwner } from "../m4/analytics-dash-helpers";
 import { accessToken, expectDraft, pageRow, seededUser, setDraft, statusChip } from "../m2/editor-helpers";
 import { openEditor, previewScreen, showView } from "../m2/blocks-helpers";
@@ -176,7 +176,7 @@ test.describe("M9-23 the bar on the public page", () => {
     await expect(aside(page)).toBeVisible();
     await aside(page).getByRole("link", { name: "Dismiss message" }).click();
     await expect(aside(page)).toBeHidden();
-    expect([...hosts]).toEqual([`${live.handle}.localhost:3000`]);
+    expect([...hosts]).toEqual([`${live.handle}.localhost:${DEV_PORT}`]);
     await context.close();
   });
 
@@ -247,7 +247,7 @@ test.describe("M9-23 budget and analytics", () => {
     expect(
       await page.evaluate(() => (window as unknown as { __cls: number }).__cls),
     ).toBeLessThanOrEqual(0.05);
-    expect([...hosts]).toEqual([`${live.handle}.localhost:3000`]);
+    expect([...hosts]).toEqual([`${live.handle}.localhost:${DEV_PORT}`]);
     await context.close();
   });
 

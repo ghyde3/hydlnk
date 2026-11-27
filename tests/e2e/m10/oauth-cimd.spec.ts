@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import sharp from "sharp";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, rand, signedInUser } from "../fixtures/data";
-import { rawRequest } from "../fixtures/http";
+import { testHooksOn } from "../fixtures/http";
 import {
   authorizeUrl,
   authorizeRaw,
@@ -29,14 +29,6 @@ test.afterAll(async () => {
   await removeClients(made);
   await cleanupUsers();
 });
-
-async function hooksOn(): Promise<boolean> {
-  try {
-    return (await rawRequest("mara.localhost:3000", "/hl-query-count")).status === 200;
-  } catch {
-    return false;
-  }
-}
 
 async function stubUp(): Promise<boolean> {
   try {
@@ -89,7 +81,7 @@ test.beforeEach(async ({ context }, info) => {
   await ownAddress(context);
   test.skip(!desktopOnly(info), "one viewport is enough for the fetch path");
   test.skip(
-    !(await hooksOn()),
+    !(await testHooksOn()),
     "the test hooks are off on this server (HYDLNK_QUERY_COUNTER is not 1): CI runs this",
   );
   test.skip(!(await stubUp()), "the client-metadata stub is not running");

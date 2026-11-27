@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
 import { appRaw, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { getShare, makeLink } from "../m6/pages-helpers";
 import { postApp, sessionCookie, signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
 
@@ -105,9 +105,9 @@ test("M13-09 set, shown in the editor, escaped, dismissed per browser, replaced,
   await expectTapTargets(ownerPage, "[data-announcement]");
 
   // Never on a public page, the marketing site or the sign-in page.
-  const publicPage = await rawRequest(`${owner.handle}.localhost:3000`, "/");
+  const publicPage = await rawRequest(`${owner.handle}.localhost:${DEV_PORT}`, "/");
   expect(publicPage.body).not.toContain("Maintenance");
-  const marketing = await rawRequest("localhost:3000", "/");
+  const marketing = await rawRequest(`localhost:${DEV_PORT}`, "/");
   expect(marketing.body).not.toContain("Maintenance");
   expect((await appRaw("/login")).body).not.toContain("Maintenance");
   // ... nor on a private share preview, which is served from the app host.

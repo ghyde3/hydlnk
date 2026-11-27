@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { userClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, makeUser, phoneOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { accessToken, expectDraft, pageRow, seededUser, statusChip } from "../m2/editor-helpers";
 import { makePng } from "../m2/editor-images";
 import { openEditor } from "../m2/blocks-helpers";
@@ -170,7 +170,7 @@ test.describe("M9-24 the logo and the name on the public page", () => {
     expect([...fontFiles].some((file) => /fraunces-latin\./.test(file))).toBe(true);
     // The heading, the bio and the rest keep their fonts.
     expect(await familyOf(page.locator(".pg-bio"))).not.toMatch(/Fraunces/);
-    expect([...hosts].every((host) => host.endsWith(".localhost:3000"))).toBe(true);
+    expect([...hosts].every((host) => host.endsWith(`.localhost:${DEV_PORT}`))).toBe(true);
 
     // A name font equal to the heading font adds nothing.
     fontFiles.clear();
@@ -372,7 +372,7 @@ test.describe("M9-24 the Design tab: Name font and Name size", () => {
     // The live page at this viewport: the computed family and size are the chosen ones, and the
     // profile's markup is the preview's (compared in the browser, with the style attribute written
     // the way the browser's own CSS object model writes it).
-    await page.goto(`http://${user.handle}.localhost:3000/`);
+    await page.goto(`http://${user.handle}.localhost:${DEV_PORT}/`);
     await expect(h1(page)).toBeVisible();
     const liveHtml = await page.locator("header.pg-profile").evaluate(normalizedOuterHtml);
     expect(liveHtml).toContain('class="pg-name pg-name-xl pg-name-font"');

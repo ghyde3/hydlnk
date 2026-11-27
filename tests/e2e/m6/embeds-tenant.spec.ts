@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { cleanupUsers } from "../fixtures/data";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { rawBuffer, tenantGet } from "../m2/publish-helpers";
 import {
   CASES,
@@ -28,12 +28,12 @@ test.describe("M6-26 and M6-27 live embeds", () => {
     const res = await tenantGet(fx.handle);
     expect(res.status).toBe(200);
     expect(res.headers["content-security-policy"]).toBe(
-      "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:3000; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+      `default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; font-src 'self'; img-src 'self' http://localhost:${DEV_PORT}; connect-src 'self'; frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'`,
     );
     expect(res.headers["content-security-policy"]).not.toMatch(/nonce|unsafe-eval/);
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
     expect(res.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
-    const app = await rawBuffer("app.localhost:3000", "/login");
+    const app = await rawBuffer(`app.localhost:${DEV_PORT}`, "/login");
     expect(String(app.headers["content-security-policy"] ?? "")).not.toMatch(
       /vimeo|tiktok|instagram|soundcloud|apple|twitch/,
     );

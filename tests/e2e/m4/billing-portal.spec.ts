@@ -9,7 +9,7 @@ import {
   stubCalls,
   stubRequests,
 } from "../fixtures/stripe-stub";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import {
   APP_ORIGIN,
   STUB_ORIGIN,
@@ -366,7 +366,11 @@ test.describe("M4-07 the portal endpoint (API)", () => {
     test.setTimeout(240_000); // each host compiles its own 404 route on a cold dev server
     await billingUser(context, { label: "po-host", plan: "pro" });
     const cookie = cookieHeader(await authCookies(context));
-    for (const host of ["mara.localhost:3000", "localhost:3000", "links.example.test"]) {
+    for (const host of [
+      `mara.localhost:${DEV_PORT}`,
+      `localhost:${DEV_PORT}`,
+      "links.example.test",
+    ]) {
       for (const [path, body] of [
         ["/api/billing/portal", "intent=manage"],
         ["/api/billing/checkout", "plan=pro&interval=month"],

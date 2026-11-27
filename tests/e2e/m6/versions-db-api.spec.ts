@@ -3,6 +3,7 @@ import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, desktopOnly, signedInUser } from "../fixtures/data";
 import { postgrest, rawRequest, restAs } from "../fixtures/http";
 import { makeVersions, versionRows, type MadeVersion } from "./versions-helpers";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M6-48: what a user with the publishable key and curl can do to `page_versions`. Everything here is
@@ -246,7 +247,7 @@ test.describe("M6-48 versions are never public", () => {
       .eq("id", b.pageId);
     expect(JSON.stringify(await versionRows(b.pageId))).toContain(marker);
 
-    const host = `${b.handle}.localhost:3000`;
+    const host = `${b.handle}.localhost:${DEV_PORT}`;
     for (const path of ["/", "/og", "/does-not-exist"]) {
       const res = await rawRequest(host, path);
       expect(res.body, path).not.toContain(marker);
@@ -257,7 +258,7 @@ test.describe("M6-48 versions are never public", () => {
     await expect(page.locator("html")).not.toContainText(marker);
     expect(await page.content()).not.toContain(marker);
     // the click route knows a block id, never a version
-    const click = await rawRequest("localhost:3000", `/r/${b.pageId}/Bt5rJ1fGz6Os`);
+    const click = await rawRequest(`localhost:${DEV_PORT}`, `/r/${b.pageId}/Bt5rJ1fGz6Os`);
     expect(JSON.stringify(click)).not.toContain(marker);
   });
 });

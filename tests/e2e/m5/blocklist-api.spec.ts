@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { expectClientBlockWriteRefused, homeEntryOf, writeHomeDraft } from "../fixtures/home-abuse";
 import { accessTokenFor, cleanupUsers, desktopOnly, insertPage, makeUser, rand } from "../fixtures/data";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M5-03 direct-API abuse, on the moved model (M15-14). Home's blocks live in the '/' page entry, so
@@ -133,7 +134,7 @@ test.describe("M5-03 the draft write refuses a blocked link", () => {
   test("M5-03 localhost, IP literals and single-label hosts are refused through the API; a theme background image URL on the local storage origin is not a link", async ({}, info) => {
     test.skip(!desktopOnly(info), "no UI involved");
     const o = await owner("bl-builtin");
-    for (const url of ["http://localhost:3000/x", "http://127.0.0.1/", "http://[::1]/", "http://2130706433/", "https://intranet/"]) {
+    for (const url of [`http://localhost:${DEV_PORT}/x`, "http://127.0.0.1/", "http://[::1]/", "http://2130706433/", "https://intranet/"]) {
       await expectBlockedEverywhere(o, url, [linkBlock("b-1", url)]);
     }
     // A theme background image is a design field: it stays a PATCH of pages.draft and is not a link.

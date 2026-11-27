@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient, supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly, publishHome } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
@@ -529,7 +529,7 @@ test.describe("M2-12 visibility toggle", () => {
   }) => {
     const user = await seededUser(context, "vi4");
     await openEditor(page);
-    const live0 = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live0 = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live0.body).toContain("Studio rental by the hour");
     await toggle(page, IDS.link2).click();
     await page
@@ -547,7 +547,7 @@ test.describe("M2-12 visibility toggle", () => {
     expect(published).not.toContain("Studio rental by the hour");
     expect(published).not.toContain("maraokafor.example/studio");
     expect(JSON.stringify(row.draft)).toContain("Studio rental by the hour");
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.body).not.toContain("Studio rental by the hour");
     expect(live.body).not.toContain("maraokafor.example/studio");
     await expect(rowOf(page, IDS.link2)).toBeVisible(); // still in the editor list
@@ -572,7 +572,7 @@ test.describe("M2-12 visibility toggle", () => {
     const row = await pageRow(user.pageId);
     expect((row.published as { blocks: unknown[] }).blocks).toEqual([]);
     expect(row.draft.blocks).toHaveLength(10);
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.body).not.toContain("Studio rental by the hour");
   });
 
@@ -703,7 +703,7 @@ test.describe("M2-13 delete with undo", () => {
     await reloadEditor(page);
     await expect(page.getByText("No blocks yet. Add your first block above.")).toBeVisible();
     expect(await pageRow(user.pageId).then((r) => r.draft.blocks)).toEqual([]);
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.body).toContain("Only block here");
     expect(storage).toEqual([]);
   });

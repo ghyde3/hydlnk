@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { expectNoHorizontalScroll, url } from "../helpers";
 import { waitForEditorHydrated } from "../m2/editor-helpers";
+import { supabasePort } from "../fixtures/auth";
 
 /**
  * M9-02: Lucide icons in the app. One smoke per flow on both projects: the six app screens draw
@@ -26,8 +27,8 @@ const PORT = process.env.HL_DEV_PORT ?? "3000";
 const OWN_HOSTS = new Set([
   `app.localhost:${PORT}`,
   `localhost:${PORT}`,
-  "127.0.0.1:54321",
-  "localhost:54321",
+  `127.0.0.1:${supabasePort()}`,
+  `localhost:${supabasePort()}`,
   "fonts.googleapis.com",
   "fonts.gstatic.com",
 ]);

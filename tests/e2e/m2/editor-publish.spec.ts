@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly, setPublished, signedInUser } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
@@ -408,19 +408,19 @@ test.describe("M2-27 the status chip", () => {
     // M7-05: the header link is gone; the "Published." toast carries 'View live page' (M2-23), and
     // from 760px the Preview menu's item turns on at once.
     const link = page.getByRole("status").getByRole("link", { name: "View live page" });
-    await expect(link).toHaveAttribute("href", `http://${user.handle}.localhost:3000`);
+    await expect(link).toHaveAttribute("href", `http://${user.handle}.localhost:${DEV_PORT}`);
     await expect(link).toHaveAttribute("target", "_blank");
     expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     if (desktopOnly(info)) {
       await page.getByRole("button", { name: "Preview", exact: true }).click();
       const item = page.getByRole("menuitem", { name: "View live page" });
-      await expect(item).toHaveAttribute("href", `http://${user.handle}.localhost:3000`);
+      await expect(item).toHaveAttribute("href", `http://${user.handle}.localhost:${DEV_PORT}`);
       await expect(item).toHaveAttribute("target", "_blank");
       await page.keyboard.press("Escape");
     }
     const row = await pageRow(user.pageId);
     expect(row.published_at).not.toBeNull();
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
 
     // And an edit after Publish flips it again.

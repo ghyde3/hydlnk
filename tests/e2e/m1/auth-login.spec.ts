@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { uniq } from "../fixtures/data";
 import { getMessage, messagesTo, waitForMessages } from "../fixtures/mailpit";
@@ -106,7 +106,7 @@ test.describe("M1-03 log in page and email sign-in link", () => {
     expect(anchors).toHaveLength(1);
     const href = anchors[0]![1]!.replaceAll("&amp;", "&");
     expect(anchors[0]![2]!.replace(/<[^>]+>/g, "").trim()).toBe("Sign in to HYDLNK");
-    expect(href.startsWith("http://app.localhost:3000/auth/callback")).toBe(true);
+    expect(href.startsWith(`http://app.localhost:${DEV_PORT}/auth/callback`)).toBe(true);
     expect(href).not.toContain("supabase.co");
     expect(href).not.toContain("/auth/v1/verify");
     expect(message.Text).toContain(href);
@@ -345,7 +345,7 @@ test.describe("M1-08 Google on the log in page (replaced by the Google Identity 
   test("M1-08 the callback is in the local redirect allow-list", async () => {
     const config = readFileSync("supabase/config.toml", "utf8");
     const list = /additional_redirect_urls\s*=\s*\[([^\]]*)\]/.exec(config)?.[1] ?? "";
-    expect(list).toContain('"http://app.localhost:3000/auth/callback"');
+    expect(list).toContain(`"http://app.localhost:${DEV_PORT}/auth/callback"`);
   });
 
   test("M1-08 a failed external sign-in lands on /login with the message and no session", async ({

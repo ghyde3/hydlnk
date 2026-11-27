@@ -17,6 +17,7 @@ import {
   tool,
   userWithBlocks,
 } from "./text-helpers";
+import { supabasePort } from "../fixtures/auth";
 
 test.afterAll(cleanupUsers);
 
@@ -190,6 +191,7 @@ test.describe("M9-12 the editor's code arrives on demand", () => {
     ]);
     expect(storageAfter).toEqual(storageBefore);
     // Only the draft's own save (to the database host) leaves the page while editing.
-    for (const url of requests) expect(url, url).toMatch(/127\.0\.0\.1:54321|localhost:54321|app\.localhost/);
+    const own = new RegExp(String.raw`127\.0\.0\.1:${supabasePort()}|localhost:${supabasePort()}|app\.localhost`);
+    for (const url of requests) expect(url, url).toMatch(own);
   });
 });

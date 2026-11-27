@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
   draftWith,
   emptyUser,
@@ -160,7 +160,7 @@ test.describe("M5-03 the Editor refuses a link to a blocked site", () => {
     await expect(statusChip(page)).toHaveAttribute("data-publish-status", "published", {
       timeout: 20_000,
     });
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).toContain("Mine");
     const published = (await pageRow(user.pageId)).published_at;
@@ -181,7 +181,7 @@ test.describe("M5-03 the Editor refuses a link to a blocked site", () => {
     );
     await expect(rowOf(page, ID).getByText(BLOCKED)).toBeVisible();
     expect((await pageRow(user.pageId)).published_at).toBe(published);
-    const still = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const still = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(still.status).toBe(200);
     expect(still.body).toContain("Mine");
     if (isMobile) await expectNoHorizontalScroll(page);

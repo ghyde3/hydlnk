@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { authCookies, appRaw, cookieHeader, sessionOf } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { signInAsAdmin } from "../m5/admin-helpers";
 
 /**
@@ -415,7 +415,7 @@ test.describe("M7-01 old links keep working", () => {
     ]) {
       const response = await appRaw(path);
       expect(response.status, path).toBe(307);
-      expect(new URL(response.location!, "http://app.localhost:3000").pathname, path).toBe(
+      expect(new URL(response.location!, `http://app.localhost:${DEV_PORT}`).pathname, path).toBe(
         "/login",
       );
     }

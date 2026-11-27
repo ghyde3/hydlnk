@@ -1,5 +1,6 @@
 import http from "node:http";
 import { crc32, deflateSync } from "node:zlib";
+import { DEV_PORT } from "../helpers";
 
 /**
  * Helpers for the media, publishing and public-page specs (M2-08, M2-22 to M2-30): raw requests
@@ -7,8 +8,12 @@ import { crc32, deflateSync } from "node:zlib";
  * bodies, and tiny valid image files.
  */
 
-/** Port of the server under test: the shared dev server, or a production build (HL_PROD_PORT). */
-export const SERVER_PORT = Number(process.env.HL_PROD_PORT ?? 3000);
+/**
+ * Port of the server under test: a production build someone started by hand (HL_PROD_PORT), else the
+ * suite's own server (HL_DEV_PORT, 3000 by default). It used to fall back to 3000 itself, so a run on
+ * another port sent every raw request of these helpers to whatever answered on :3000.
+ */
+export const SERVER_PORT = Number(process.env.HL_PROD_PORT ?? DEV_PORT);
 
 export interface RawBufferResponse {
   status: number;

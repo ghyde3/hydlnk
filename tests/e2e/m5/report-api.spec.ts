@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, desktopOnly, insertPage, makeUser, rand } from "../fixtures/data";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 
 /**
  * M5-05 abuse cases against the report form's endpoint (POST /report/submit) and the table behind it
@@ -158,7 +158,7 @@ test.describe("M5-05 the endpoint validates on the server", () => {
     expect(huge.status).toBe(413);
     const evil = await post({ page: page.pageId, reason: "spam" }, ipv6(), { origin: "https://evil.example" });
     expect(evil.status).toBe(403);
-    const sameSite = await post({ page: page.pageId, reason: "spam" }, ipv6(), { origin: "http://localhost:3000" });
+    const sameSite = await post({ page: page.pageId, reason: "spam" }, ipv6(), { origin: `http://localhost:${DEV_PORT}` });
     expect(sameSite.status).toBe(200);
     expect(await reportsFor(page.pageId)).toHaveLength(1);
   });
@@ -251,7 +251,7 @@ test.describe("M5-05 filing, repeats and the honeypot", () => {
     expect(byHandle.status).toBe(200);
     const bare = await post({ address: page.handle, reason: "spam" });
     expect(bare.status).toBe(200);
-    const local = await post({ address: `${page.handle}.localhost:3000`, reason: "spam" });
+    const local = await post({ address: `${page.handle}.localhost:${DEV_PORT}`, reason: "spam" });
     expect(local.status).toBe(200);
     expect(await reportsFor(page.pageId)).toHaveLength(3);
 

@@ -1,3 +1,4 @@
+import { DEV_PORT } from "../helpers";
 /** Local Supabase inbox (Mailpit, address from `supabase status`). */
 export const MAILPIT = process.env.MAILPIT_URL ?? "http://127.0.0.1:54324";
 
@@ -51,8 +52,12 @@ export async function signInLinkFor(address: string, timeoutMs = 10_000): Promis
   if (!newest) throw new Error(`no email arrived for ${address}`);
   const { Text, HTML } = await getMessage(newest.ID);
   const found =
-    /http:\/\/app\.localhost:3000\/auth\/callback\?[^\s)"<]+/.exec(Text)?.[0] ??
-    /http:\/\/app\.localhost:3000\/auth\/callback\?[^"<]+/.exec(HTML)?.[0];
+    new RegExp(String.raw`http:\/\/app\.localhost:${DEV_PORT}\/auth\/callback\?[^\s)"<]+`).exec(
+      Text,
+    )?.[0] ??
+    new RegExp(String.raw`http:\/\/app\.localhost:${DEV_PORT}\/auth\/callback\?[^"<]+`).exec(
+      HTML,
+    )?.[0];
   if (!found) throw new Error(`no sign-in link in the email to ${address}`);
   return found.replaceAll("&amp;", "&");
 }

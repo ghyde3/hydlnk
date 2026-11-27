@@ -256,7 +256,7 @@ test.describe("M17-05 the routes and their hosts", () => {
   }) => {
     // Both sizes (M17-05 step 6): the raw answers, then the sent page in the browser at this size.
     const live = await formPage("fr1", { plan: "pro" });
-    const handleHost = `${live.handle}.localhost:3000`;
+    const handleHost = `${live.handle}.localhost:${DEV_PORT}`;
     const hostname = `links-${rand(6)}.example.test`;
     await addDomainRow({ pageId: live.pageId, hostname, status: "verified" });
     const customHost = `${hostname}:${DEV_PORT}`;
@@ -274,7 +274,7 @@ test.describe("M17-05 the routes and their hosts", () => {
       expect(marker.status, host).toBe(200);
       expect(marker.headers["content-type"]).toBe("image/gif");
     }
-    for (const host of ["localhost:3000", "app.localhost:3000"]) {
+    for (const host of [`localhost:${DEV_PORT}`, `app.localhost:${DEV_PORT}`]) {
       expect((await rawRequest(host, `/f/${live.pageId}/${SIGNUP_ID}`)).status, host).toBe(404);
     }
     // A POST to / is still 405; to a path that is no route, the plain 404.
@@ -296,7 +296,7 @@ test.describe("M17-05 the routes and their hosts", () => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
     test.setTimeout(120_000);
     const live = await formPage("fr5");
-    const host = `${live.handle}.localhost:3000`;
+    const host = `${live.handle}.localhost:${DEV_PORT}`;
     const uuid = () => crypto.randomUUID();
     const invented: string[] = [];
     for (let i = 0; i < 50; i++) {
@@ -310,7 +310,7 @@ test.describe("M17-05 the routes and their hosts", () => {
               body: "email=x%40example.test&hl_confirm=&t=",
               headers: {
                 "content-type": "application/x-www-form-urlencoded",
-                origin: `http://${host.replace(/:3000$/, `:${DEV_PORT}`)}`,
+                origin: `http://${host.replace(/:${DEV_PORT}$/, `:${DEV_PORT}`)}`,
                 "x-forwarded-for": randomIp(),
               },
             })
@@ -341,7 +341,7 @@ test.describe("M17-05 the routes and their hosts", () => {
   test("a path under /f/ that is no form route is the plain tenant 404 (forms attack pass, finding 5)", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
     const live = await formPage("fr6");
-    const host = `${live.handle}.localhost:3000`;
+    const host = `${live.handle}.localhost:${DEV_PORT}`;
     for (const path of [
       `/f/${live.pageId}`,
       `/f/${live.pageId}/${SIGNUP_ID}/extra`,
@@ -367,7 +367,7 @@ test.describe("M17-05 the routes and their hosts", () => {
   test("a cross-site POST is 403 and a POST with the wrong type 415; nothing is stored", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
     const live = await formPage("fr2");
-    const host = `${live.handle}.localhost:3000`;
+    const host = `${live.handle}.localhost:${DEV_PORT}`;
     const body = "email=x%40example.test&hl_confirm=&t=";
     const cross = await rawRequest(host, `/f/${live.pageId}/${SIGNUP_ID}`, {
       method: "POST",
@@ -410,7 +410,7 @@ test.describe("M17-05 the routes and their hosts", () => {
       .select("id")
       .single();
     expect(made.error).toBeNull();
-    const response = await rawRequest(`${live.handle}.localhost:3000`, "/f");
+    const response = await rawRequest(`${live.handle}.localhost:${DEV_PORT}`, "/f");
     expect(response.status).toBe(200);
     expect(response.body).toContain("F page");
   });
@@ -421,7 +421,7 @@ test.describe("M17-05 the routes and their hosts", () => {
     const live = await formPage("fr4", {
       blocks: [publishDocOf([]).blocks, signupForm({ visible: false })].flat() as never,
     });
-    const host = `${live.handle}.localhost:3000`;
+    const host = `${live.handle}.localhost:${DEV_PORT}`;
     const sent = await rawRequest(host, `/f/${live.pageId}/${SIGNUP_ID}`);
     expect(sent.status).toBe(404);
     const other = await rawRequest(host, `/f/${live.pageId}/notARealId1`);

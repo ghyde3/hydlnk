@@ -3,7 +3,7 @@ import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly, publishHome } from "../fixtures/data";
 import { pageRow } from "../m2/editor-helpers";
 import { authCookies, cookieHeader, rawRequest, type RawResponse } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
   ANALYTICS,
   GONE_BLOCK,
@@ -34,7 +34,7 @@ import {
 test.afterAll(cleanupUsers);
 test.describe.configure({ timeout: 180_000 });
 
-const HOST = "app.localhost:3000";
+const HOST = `app.localhost:${DEV_PORT}`;
 const BOM = "\uFEFF";
 
 let p: Owner;

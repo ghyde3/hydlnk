@@ -1,7 +1,7 @@
 import { randomBytes, scryptSync } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { cleanupUsers, desktopOnly } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { normalizeLockCode, type Block } from "@/lib/document";
 import {
   IPHONE_UA,
@@ -239,8 +239,8 @@ test.describe("M9-29 passing the lock", () => {
     expect(
       (
         await postClick(live, ID.code, body, {
-          host: "localhost:3000",
-          origin: "http://localhost:3000",
+          host: `localhost:${DEV_PORT}`,
+          origin: `http://localhost:${DEV_PORT}`,
         })
       ).status,
     ).toBe(404);

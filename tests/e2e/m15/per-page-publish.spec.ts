@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { emptyUser, openEditor, pageRow, statusChip } from "../m2/editor-helpers";
 import { expectOverrides } from "../m3/design-helpers";
 import { openHistory, rowFor } from "../m6/versions-helpers";
@@ -74,7 +74,7 @@ test("M15-10 Publish page, Publish design, Publish all changes and a page revisi
   const header = `Fresh ${mark}`;
   const user = await emptyUser(context, "pp", { plan: "pro" });
   const { homeId, subId } = await seedEntries(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
   const toolbar = page.getByTestId("workspace-toolbar");
   const publish = toolbar.getByRole("button", { name: "Publish", exact: true });
   const hasSurface = (body: string) => body.toLowerCase().includes(SURFACE.toLowerCase());

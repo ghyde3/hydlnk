@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { LIMITS, newBlockId } from "@/lib/document";
@@ -314,11 +314,11 @@ test.describe("M2-28 / M2-29 the preview shows the same footer as the live page"
     const footer = previewScreen(page).locator("[data-page-footer]");
     const badge = footer.getByRole("link", { name: "Made with HYDLNK" });
     const report = footer.getByRole("link", { name: "Report this page" });
-    await expect(badge).toHaveAttribute("href", "http://localhost:3000");
+    await expect(badge).toHaveAttribute("href", `http://localhost:${DEV_PORT}`);
     await expect(badge).toHaveAttribute("rel", "noopener");
     await expect(report).toHaveAttribute(
       "href",
-      `http://localhost:3000/report?page=${user.pageId}`,
+      `http://localhost:${DEV_PORT}/report?page=${user.pageId}`,
     );
 
     await badge.click();
@@ -334,7 +334,7 @@ test.describe("M2-28 / M2-29 the preview shows the same footer as the live page"
     const footer = previewScreen(page).locator("[data-page-footer]");
     await expect(footer.getByRole("link", { name: "Report this page" })).toHaveAttribute(
       "href",
-      `http://localhost:3000/report?page=${user.pageId}`,
+      `http://localhost:${DEV_PORT}/report?page=${user.pageId}`,
     );
     await expect(footer.getByRole("link", { name: "Made with HYDLNK" })).toHaveCount(0);
   });

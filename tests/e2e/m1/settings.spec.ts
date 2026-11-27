@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { adminClient, publishableKey, supabaseUrl, userClient } from "../fixtures/auth";
 import { axeViolations } from "../fixtures/a11y";
 import {
@@ -283,7 +283,9 @@ test.describe("M1-22 delete account", () => {
     await dialog.getByLabel("Type your handle to confirm").fill(user.handle);
     await dialog.getByRole("button", { name: "Delete account" }).click();
 
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
 
     // The session is gone: the captured refresh token cannot be exchanged, /editor sends to /login.
     const refresh = await fetch(`${supabaseUrl()}/auth/v1/token?grant_type=refresh_token`, {
@@ -345,7 +347,9 @@ test.describe("M1-22 delete account", () => {
     const dialog = dialogOf(page);
     await dialog.getByLabel("Type your handle to confirm").fill(user.handle);
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
     await expect(
       page.getByRole("status").filter({ hasText: "Your account was deleted." }),
     ).toBeVisible();
@@ -379,7 +383,9 @@ test.describe("M1-22 delete account", () => {
       }
     }, b.userId);
     await dialog.getByRole("button", { name: "Delete account" }).click();
-    await expect(page).toHaveURL(/^http:\/\/app\.localhost:3000\/login/);
+    await expect(page).toHaveURL(
+      new RegExp(String.raw`^http:\/\/app\.localhost:${DEV_PORT}\/login`),
+    );
 
     expect((await admin.auth.admin.getUserById(a.userId)).data.user).toBeNull();
     expect((await admin.auth.admin.getUserById(b.userId)).data.user).not.toBeNull();
@@ -442,9 +448,9 @@ test.describe("M1-22 delete account", () => {
       if (recorded!.headers[name]) headers[name] = recorded!.headers[name]!;
     }
     // No cookies: this caller has no session. node:http, because fetch would not send our Host.
-    const response = await rawRequest("app.localhost:3000", "/settings", {
+    const response = await rawRequest(`app.localhost:${DEV_PORT}`, "/settings", {
       method: "POST",
-      headers: { ...headers, origin: "http://app.localhost:3000" },
+      headers: { ...headers, origin: `http://app.localhost:${DEV_PORT}` },
       body: recorded!.body,
     });
     const location = String(response.headers.location ?? "");

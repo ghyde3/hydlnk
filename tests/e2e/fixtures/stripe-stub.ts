@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Stripe from "stripe";
 import { rawRequest, type RawResponse } from "./http";
+import { DEV_PORT } from "../helpers";
 
 /**
  * Helpers for the billing specs: the local Stripe stub (stripe-stub-server.ts), signed webhook
@@ -368,7 +369,7 @@ export function signed(
 export function postWebhook(
   body: string,
   signature: string | null,
-  host = "app.localhost:3000",
+  host = `app.localhost:${DEV_PORT}`,
   method = "POST",
 ): Promise<RawResponse> {
   return rawRequest(host, "/api/stripe/webhook", {

@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { insertPage, makeUser, rand } from "../fixtures/data";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 import { uploadImage } from "../m2/blocks-helpers";
 import { publishedDocSchema, type Block, type PublishDoc } from "@/lib/document";
 import { resolveTokens, type TokenOverrides } from "@/lib/theme";
@@ -84,8 +84,8 @@ export async function livePage(
     handle,
     pageId,
     url: url(handle),
-    host: `${handle}.localhost:3000`,
-    origin: `http://${handle}.localhost:3000`,
+    host: `${handle}.localhost:${DEV_PORT}`,
+    origin: `http://${handle}.localhost:${DEV_PORT}`,
     doc,
   };
 }

@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { cleanupUsers, makeUser, phoneOnly, desktopOnly } from "../fixtures/data";
 import { signInAs } from "../fixtures/auth";
 import { FAULT_COOKIE_IGNORED, PRODUCTION_BUILD, appRaw, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { routeGoogleScript } from "../fixtures/google-stub";
 import { emptyUser } from "../m2/editor-helpers";
 
@@ -116,7 +116,7 @@ test.describe("M5-20 the marketing 404", () => {
   test("M5-20 the root host's unknown path is a 404 with the marketing nav and footer", async ({
     page,
   }) => {
-    const raw = await rawRequest("localhost:3000", "/nope");
+    const raw = await rawRequest(`localhost:${DEV_PORT}`, "/nope");
     expect(raw.status).toBe(404);
     const response = await page.goto(url(null, "/nope"));
     expect(response?.status()).toBe(404);
@@ -131,7 +131,7 @@ test.describe("M5-20 an address that is not a handle", () => {
   test("M5-20 a reserved address says so, offers no claim button and answers 404", async ({
     page,
   }) => {
-    const raw = await rawRequest("admin.localhost:3000", "/");
+    const raw = await rawRequest(`admin.localhost:${DEV_PORT}`, "/");
     expect(raw.status).toBe(404);
     expect(raw.body).toContain("That address is reserved.");
     expect(raw.body).not.toMatch(/Claim /);
@@ -151,7 +151,7 @@ test.describe("M5-20 an address that is not a handle", () => {
     page,
   }) => {
     for (const host of ["ab", "-x1", "a--b-", "x".repeat(31)]) {
-      const raw = await rawRequest(`${host}.localhost:3000`, "/");
+      const raw = await rawRequest(`${host}.localhost:${DEV_PORT}`, "/");
       expect(raw.status, host).toBe(404);
       expect(raw.body, host).toContain("That address isn’t valid.");
       expect(raw.body, host).not.toMatch(/Claim /);
@@ -167,7 +167,7 @@ test.describe("M5-20 an address that is not a handle", () => {
   test("M5-20 a free, valid address still offers to claim it (nothing else changed)", async ({}, info) => {
     test.skip(!desktopOnly(info), "no UI involved");
     const raw = await rawRequest(
-      `zq-free-${Math.random().toString(36).slice(2, 8)}.localhost:3000`,
+      `zq-free-${Math.random().toString(36).slice(2, 8)}.localhost:${DEV_PORT}`,
       "/",
     );
     expect(raw.status).toBe(404);
@@ -176,10 +176,10 @@ test.describe("M5-20 an address that is not a handle", () => {
 
   test("M5-20 a reserved or invalid address does not echo itself back or leak the other panel", async ({}, info) => {
     test.skip(!desktopOnly(info), "no UI involved");
-    const reserved = await rawRequest("billing.localhost:3000", "/");
+    const reserved = await rawRequest(`billing.localhost:${DEV_PORT}`, "/");
     expect(reserved.body).toContain("That address is reserved.");
     expect(reserved.body).not.toContain("That address isn’t valid.");
-    const invalid = await rawRequest("ab.localhost:3000", "/");
+    const invalid = await rawRequest(`ab.localhost:${DEV_PORT}`, "/");
     expect(invalid.body).toContain("That address isn’t valid.");
     expect(invalid.body).not.toContain("That address is reserved.");
   });

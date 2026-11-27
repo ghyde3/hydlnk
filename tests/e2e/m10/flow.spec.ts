@@ -19,6 +19,7 @@ import {
   revokeRequest,
   rows,
 } from "../fixtures/oauth";
+import { testHooksOn } from "../fixtures/http";
 import { url } from "../helpers";
 import { pageRow } from "../m2/editor-helpers";
 import { prepareFlowUser, runEveryTool, tenantHtml, type FlowUser } from "./mcp-flow-helpers";
@@ -399,8 +400,10 @@ test("M10-33 a Client ID Metadata Document client runs the same dance (productio
   browser,
   context,
 }) => {
+  // Asked of the server: CI sets HYDLNK_QUERY_COUNTER for the build and `next start` only, so the
+  // test process's own environment never had it and this spec skipped on every shard.
   test.skip(
-    process.env.HYDLNK_QUERY_COUNTER !== "1",
+    !(await testHooksOn()),
     "the metadata-document fetch of a loopback address is allowed only while the test hooks are on (HYDLNK_QUERY_COUNTER=1, the production-build CI shards)",
   );
   const user: FlowUser = await prepareFlowUser(context, "flow-cimd");

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { PAGES_BLOG_TEST_IDS } from "@/lib/blog/test-ids";
 import { cleanupUsers } from "../fixtures/data";
 import { authCookies, cookieHeader, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll } from "../helpers";
 import { emptyUser, openEditor, pageRow, previewScreen, statusChip } from "../m2/editor-helpers";
 import { seedEntries } from "../m15/entry-helpers";
 import { expireBlog, publishNewPost } from "./owner-routes";
@@ -41,7 +41,7 @@ test("M16-08 the blog's menu item survives Publish, links to the archive and hid
 }) => {
   const user = await emptyUser(context, "ma", { plan: "pro" });
   await seedEntries(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
   const typeId = await postTypeId(user.pageId);
 
   await openEditor(page);
@@ -118,7 +118,7 @@ test("M16-08 renaming the archive path changes the live Home's menu link on the 
 }) => {
   const user = await emptyUser(context, "mr", { plan: "pro" });
   await seedEntries(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
 
   await openEditor(page);
   await page.getByTestId(PAGES_BLOG_TEST_IDS.addBlog).click();

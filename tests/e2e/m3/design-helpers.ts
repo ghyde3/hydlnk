@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 import { pageRow, setDraft, waitForEditorHydrated } from "../m2/editor-helpers";
 import { hidePreviewSheet, showPreviewSheet } from "../m7/phone-preview";
 
@@ -124,7 +124,7 @@ export async function publishFromEditor(page: Page): Promise<void> {
 /** The live page's HTML for a tenant handle (raw request, no browser cache). */
 export async function liveHtml(handle: string): Promise<string> {
   const { rawRequest } = await import("../fixtures/http");
-  const response = await rawRequest(`${handle}.localhost:3000`, "/");
+  const response = await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/");
   expect(response.status).toBe(200);
   return response.body;
 }

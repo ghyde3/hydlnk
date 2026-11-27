@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { FAULT_COOKIE_IGNORED, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { mark, pageRow, seededUser, setDraft } from "../m2/editor-helpers";
 import {
   expectOverrides,
@@ -244,7 +244,7 @@ test.describe("M5-16 the theme this page used was deleted", () => {
     await expect(page.getByTestId("theme-deleted-notice")).toHaveCount(0);
 
     const before = await pageRow(user.pageId);
-    const liveBefore = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const liveBefore = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     // Deleted with the secret key: the draft keeps pointing at it.
     const gone = await adminClient().from("themes").delete().eq("id", themeId);
     expect(gone.error).toBeNull();
@@ -268,7 +268,7 @@ test.describe("M5-16 the theme this page used was deleted", () => {
     expect(after.draft).toEqual(before.draft);
     expect(after.published).toEqual(before.published);
     expect(after.published_at).toBe(before.published_at);
-    const liveAfter = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const liveAfter = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(liveAfter.status).toBe(200);
     expect(tokensOf(liveAfter.body)).toEqual(tokensOf(liveBefore.body));
     expect(tokensOf(liveBefore.body).length).toBeGreaterThan(5);

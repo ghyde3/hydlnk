@@ -6,6 +6,7 @@ import { PUBLISH_CONFLICT_MESSAGE } from "@/components/workspace/publish-note";
 import { STALE_MESSAGE } from "@/lib/editor/messages";
 import { adminClient } from "../fixtures/auth";
 import { editSubPageHeader, entry, seedEntries } from "./entry-helpers";
+import { DEV_PORT } from "../helpers";
 
 /**
  * M15-10: editing while a publish is still out. A save and a publish of the same entry never overlap:
@@ -141,7 +142,7 @@ test("M15-10 an edit during Publish page of a sub-page waits for the answer, is 
   const [one, two, three] = [`One ${mark}`, `Two ${mark}`, `Three ${mark}`];
   const user = await emptyUser(context, "race", { plan: "pro" });
   const { subId } = await seedEntries(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
 
   await openEditor(page);
   await page
@@ -297,7 +298,7 @@ test("M15-10 A4, A5: typing while Publish all changes is out makes no conflict, 
   const [one, two, label] = [`One ${mark}`, `Two ${mark}`, `Label ${mark}`];
   const user = await emptyUser(context, "race", { plan: "pro" });
   const { homeId, subId } = await seedEntries(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
 
   await openEditor(page);
   await publishAllOnce(page);

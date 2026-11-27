@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
 import { addBlock } from "../m2/blocks-helpers";
 import { emptyUser, openEditor, pageRow, reloadEditor, statusChip } from "../m2/editor-helpers";
 import { addPageEntry, entry, seedHome, subPageEntries } from "./entry-helpers";
@@ -51,7 +51,7 @@ test("M15-11 a menu item and a page link to a page that is not live are hidden, 
   const homeLine = `Welcome ${mark}`;
   const user = await emptyUser(context, "hid");
   const homeId = await seedHome(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
   const toolbar = page.getByTestId("workspace-toolbar");
   await openEditor(page);
 
@@ -214,7 +214,7 @@ test("M15-11 the live site hides a page that is only named by the live design an
   const admin = adminClient();
   const user = await emptyUser(context, "hdb");
   const homeId = await seedHome(user.pageId);
-  const host = `${user.handle}.localhost:3000`;
+  const host = `${user.handle}.localhost:${DEV_PORT}`;
   const toolbar = page.getByTestId("workspace-toolbar");
   const fail = (what: string, error: { message: string } | null) => {
     if (error) throw new Error(`${what} failed: ${error.message}`);

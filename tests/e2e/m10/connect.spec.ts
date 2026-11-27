@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { axeViolations } from "../fixtures/a11y";
 import { desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
  * M10-34: the /connect page, "Use HYDLNK from Claude or ChatGPT". Document, sections in order,
@@ -44,7 +44,7 @@ test.describe("M10-34 the document", () => {
   test("M10-34 answers 200 on the marketing host with the title, one h1, a description, a canonical URL and no cookie", async ({
     page,
   }) => {
-    const raw = await rawRequest("localhost:3000", PATH);
+    const raw = await rawRequest(`localhost:${DEV_PORT}`, PATH);
     expect(raw.status).toBe(200);
     expect(raw.headers["set-cookie"]).toBeUndefined();
 

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, desktopOnly, signedInUser } from "../fixtures/data";
 import { NEVER_STORED, rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { ITEMS, makeLiveSite } from "../m11/tenant-helpers";
 import {
   INACTIVE,
@@ -80,7 +80,7 @@ test.describe("M6-10 the shared page, over HTTP", () => {
     const csp = String(res.headers["content-security-policy"]);
     expect(
       csp.startsWith(
-        "frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:3000; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; ",
+        `frame-src https://www.youtube-nocookie.com https://open.spotify.com https://player.vimeo.com https://www.tiktok.com https://www.instagram.com https://w.soundcloud.com https://embed.music.apple.com https://player.twitch.tv https://clips.twitch.tv; img-src 'self' http://localhost:${DEV_PORT}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; `,
       ),
     ).toBe(true);
     expect(csp).toMatch(/; script-src 'self' 'nonce-[A-Za-z0-9+/]{22}==' 'strict-dynamic'/);
@@ -107,11 +107,11 @@ test.describe("M6-10 the shared page, over HTTP", () => {
     expect(text).not.toContain("Report this page");
 
     // The live page of the same account never has it (the published copy is what it shows).
-    const live = await rawRequest(`${owner.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${owner.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).not.toContain(DRAFT_ONLY);
     // And mara's page, in case the string ever leaked across accounts.
-    const mara = await rawRequest("mara.localhost:3000", "/");
+    const mara = await rawRequest(`mara.localhost:${DEV_PORT}`, "/");
     expect(mara.body).not.toContain(DRAFT_ONLY);
   });
 

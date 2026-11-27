@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import { supabaseUrl } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, phoneOnly } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
@@ -133,7 +133,7 @@ test.describe("M2-07 display name and bio", () => {
     await expect(NAME(page)).toHaveValue(name);
     await expect(BIO(page)).toHaveValue(bio);
 
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.body).not.toContain(bio);
     expect(live.body).toContain(user.handle); // the published name
   });
@@ -298,7 +298,7 @@ test.describe("M2-09 profile photo", () => {
     if (phoneOnly(info)) await hidePreviewSheet(page);
 
     // Before Publish, the live page does not know the new image; after Publish it does.
-    const before = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const before = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(before.body).not.toContain(first.path);
 
     // Replace with a second file.
@@ -347,7 +347,7 @@ test.describe("M2-09 profile photo", () => {
     });
     await confirmPhoto(page);
     const photo = (await expectDraft(user.pageId, (d) => d.profile.photo !== null)).profile.photo!;
-    const before = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const before = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(before.body).not.toContain(photo.path);
 
     await page
@@ -355,7 +355,7 @@ test.describe("M2-09 profile photo", () => {
       .getByRole("button", { name: "Publish", exact: true })
       .click();
     await expect(page.locator("[data-publish-status]")).toHaveText("Published");
-    const live = await rawRequest(`${user.handle}.localhost:3000`, "/");
+    const live = await rawRequest(`${user.handle}.localhost:${DEV_PORT}`, "/");
     expect(live.status).toBe(200);
     expect(live.body).toContain(photo.path);
     expect(live.body).toMatch(new RegExp(`alt="${user.handle}"`));

@@ -229,7 +229,7 @@ test.describe("M10-03 every endpoint the metadata names exists", () => {
 
   test("the metadata and the endpoints exist on the app host only", async ({}, info) => {
     test.skip(!desktopOnly(info), "raw HTTP, no UI");
-    for (const host of ["localhost:3000", "mara.localhost:3000"]) {
+    for (const host of [`localhost:${DEV_PORT}`, `mara.localhost:${DEV_PORT}`]) {
       for (const path of [
         AS_PATH,
         PR_PATHS[0]!,

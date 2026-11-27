@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import { appRaw } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { signInAsAdmin, signInAsUser } from "../m5/admin-helpers";
 
 /**
@@ -26,7 +26,7 @@ test.describe("M13-02 admin account details", () => {
     const target = await signInAsUser(await page.context().browser()!.newContext(), "m13at");
     const res = await appRaw(`/admin/accounts/${target.userId}`);
     expect(res.status).toBe(307);
-    expect(new URL(res.location ?? "", "http://app.localhost:3000").pathname).toBe("/login");
+    expect(new URL(res.location ?? "", `http://app.localhost:${DEV_PORT}`).pathname).toBe("/login");
 
     await signInAsUser(context, "m13an");
     await page.goto(url("app", "/no-such-route-m13at"));

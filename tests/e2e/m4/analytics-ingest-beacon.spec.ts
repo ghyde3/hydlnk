@@ -3,7 +3,7 @@ import { PHONE, DESKTOP } from "../../../scripts/lib/viewports";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import { accessTokenFor, cleanupUsers, desktopOnly, rand } from "../fixtures/data";
 import { rawRequest } from "../fixtures/http";
-import { expectNoHorizontalScroll } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll } from "../helpers";
 import { addDomainRow, hostnameFor } from "./domains-core-helpers";
 import { openEditor, showView, userWithDraft, draftOf, previewScreen } from "../m2/blocks-helpers";
 import {
@@ -341,16 +341,16 @@ test.describe("M4-21 raw requests: what is recorded and what is ignored", () => 
     expect(added2.error?.message).toBeUndefined();
 
     // The Origin a browser sends from the custom host (local development serves it over http on the dev port).
-    const ok = await postBeacon(p, { pageId: p.pageId }, { origin: `http://${verified}:3000` });
+    const ok = await postBeacon(p, { pageId: p.pageId }, { origin: `http://${verified}:${DEV_PORT}` });
     expect(ok.status).toBe(204);
     expect(await countEvents(p.pageId)).toBe(1);
 
-    const notVerified = await postBeacon(q, { pageId: q.pageId }, { origin: `http://${pending}:3000` });
+    const notVerified = await postBeacon(q, { pageId: q.pageId }, { origin: `http://${pending}:${DEV_PORT}` });
     expect(notVerified.status).toBe(204);
     expect(await countEvents(q.pageId)).toBe(0);
 
     // A verified host of ANOTHER page does not unlock this one.
-    const crossed = await postBeacon(q, { pageId: q.pageId }, { origin: `http://${verified}:3000` });
+    const crossed = await postBeacon(q, { pageId: q.pageId }, { origin: `http://${verified}:${DEV_PORT}` });
     expect(crossed.status).toBe(204);
     expect(await countEvents(q.pageId)).toBe(0);
   });

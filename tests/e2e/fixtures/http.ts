@@ -90,14 +90,27 @@ export const PRODUCTION_BUILD =
  */
 export const FAULT_COOKIE_IGNORED = PRODUCTION_BUILD && !usesProductionServer(process.env);
 
+/**
+ * True when the server under test runs with the test hooks on (HYDLNK_QUERY_COUNTER=1: the dev server
+ * started that way, or the production build CI and playwright.config.ts start). Asked of the server,
+ * because the flag is the server's environment, not the test process's.
+ */
+export async function testHooksOn(): Promise<boolean> {
+  try {
+    return (await rawRequest(`mara.localhost:${DEV_PORT}`, "/hl-query-count")).status === 200;
+  } catch {
+    return false;
+  }
+}
+
 /** rawRequest to the app host. */
 export const appRaw = (path: string, opts?: Parameters<typeof rawRequest>[2]) =>
-  rawRequest("app.localhost:3000", path, opts);
+  rawRequest(`app.localhost:${DEV_PORT}`, path, opts);
 
 /** Absolute form of a Location header. */
 export const absolute = (
   location: string | null,
-  base = "http://app.localhost:3000",
+  base = `http://app.localhost:${DEV_PORT}`,
 ): string | null => (location ? new URL(location, base).toString() : null);
 
 // ---------------------------------------------------------------------------------------------
@@ -115,7 +128,9 @@ export const isAuthCookie = (name: string) => /^sb-.*-auth-token(\.\d+)?$/.test(
 
 /** The sb-...-auth-token cookies (chunks included) the context holds for the app host. */
 export async function authCookies(context: BrowserContext): Promise<Cookie[]> {
-  return (await context.cookies("http://app.localhost:3000")).filter((c) => isAuthCookie(c.name));
+  return (await context.cookies(`http://app.localhost:${DEV_PORT}`)).filter((c) =>
+    isAuthCookie(c.name),
+  );
 }
 
 export function cookieHeader(cookies: Pick<Cookie, "name" | "value">[]): string {

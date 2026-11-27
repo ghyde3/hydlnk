@@ -3,7 +3,7 @@ import { axeViolations } from "../fixtures/a11y";
 import { adminClient } from "../fixtures/auth";
 import { addPage, cleanupUsers, desktopOnly, phoneOnly, signedInUser } from "../fixtures/data";
 import { NEVER_STORED, appRaw, authCookies, cookieHeader } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import {
   emptyUser,
   expectDraft,
@@ -49,7 +49,7 @@ test.describe("M7-02 the gate and the isolation of the three routes", () => {
     for (const path of ["/editor", "/design", "/share"]) {
       const res = await appRaw(path);
       expect([302, 303, 307], path).toContain(res.status);
-      expect(new URL(res.location!, "http://app.localhost:3000").pathname, path).toBe("/login");
+      expect(new URL(res.location!, `http://app.localhost:${DEV_PORT}`).pathname, path).toBe("/login");
       for (const text of ["Mara Okafor", "Portrait", "Display name", "Share card", "QR code"]) {
         expect(res.body, `${path} ${text}`).not.toContain(text);
       }

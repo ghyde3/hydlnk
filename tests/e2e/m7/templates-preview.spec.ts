@@ -24,6 +24,7 @@ import {
   templateButton,
   templateThemeTokens,
 } from "./templates-helpers";
+import { supabasePort } from "../fixtures/auth";
 
 /**
  * M7-07, the template picker's cards: a live preview, what is inside and the style, on every card.
@@ -312,7 +313,11 @@ test.describe("M7-07 no cost to the page", () => {
     for (const family of wanted) expect(named).toContain(family);
 
     expect(log.filter((url) => /\/r\/|\/api\/e\b|\/api\/e\?|beacon/.test(url))).toEqual([]);
-    expect(log.filter((url) => /\/rest\/v1\/|\/storage\/v1\/|:54321/.test(url))).toEqual([]);
+    expect(
+      log.filter((url) =>
+        new RegExp(String.raw`\/rest\/v1\/|\/storage\/v1\/|:${supabasePort()}`).test(url),
+      ),
+    ).toEqual([]);
     expect(page.frames().length).toBe(framesBefore);
     await expect(dialogOf(page).locator("iframe")).toHaveCount(0);
 

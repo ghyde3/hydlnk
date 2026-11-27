@@ -8,7 +8,7 @@ import {
   signedInUser,
   type SignedInUser,
 } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { addVerifiedDomains } from "../m4/lifecycle-helpers";
 import { emptyUser, pageRow } from "../m2/editor-helpers";
 import { signInAsUser } from "../m5/admin-helpers";
@@ -460,7 +460,8 @@ test.describe("M9-25 the logo", () => {
     const media = seen.filter((entry) => /\/media\//.test(entry));
     expect(seen.length, seen.join("\n")).toBeLessThanOrEqual(1);
     expect(media.length).toBeLessThanOrEqual(1);
-    for (const entry of media) expect(entry).toMatch(/^GET http:\/\/localhost:3000\/media\//);
+    for (const entry of media)
+      expect(entry).toMatch(new RegExp(String.raw`^GET http:\/\/localhost:${DEV_PORT}\/media\/`));
     expect(seen.filter((entry) => !entry.includes("/media/"))).toEqual([]);
 
     // Off and on again: the picture is not asked for a second time.
@@ -707,7 +708,7 @@ test.describe("M9-25 the files", () => {
     await signedInUser(context, { label: "qz2" });
     const cookie = cookieHeader(await authCookies(context));
     for (const path of ["/api/qr", "/qr", "/api/qr?text=https://evil.example&color=red"]) {
-      const res = await rawRequest("app.localhost:3000", path, { cookie });
+      const res = await rawRequest(`app.localhost:${DEV_PORT}`, path, { cookie });
       expect(res.status, path).toBe(404);
     }
   });
