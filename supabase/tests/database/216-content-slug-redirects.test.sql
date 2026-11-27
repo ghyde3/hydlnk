@@ -6,10 +6,12 @@
 --     nothing; a slug that goes live again (the same post, or a later one) deletes its redirect row;
 --   * at most 200 rows per type are kept, oldest dropped;
 --   * a row must sit on its type's and its entry's site; a purged entry takes its rows with it;
---   * an old slug the table cannot hold (planted, never the writer's) does not stop the publish.
+--   * an old slug the table cannot hold (planted, never the writer's) does not stop the publish;
+--   * content_entries_live_order_idx exists: (site_id, type_id, first_published_at desc, id), live
+--     and untrashed rows only (the archive order).
 
 begin;
-select plan(38);
+select plan(39);
 
 select tests.create_supabase_user('a', 'a-216@example.test');
 select tests.create_supabase_user('b', 'b-216@example.test');
@@ -173,6 +175,13 @@ select is((select count(*)::int from public.content_slug_redirects
   'the newest are kept');
 select is((select count(*)::int from public.content_slug_redirects where type_id = '00000000-0000-4000-8000-00000216b0c1'), 1,
   'another type''s rows are not pruned');
+
+
+select is(
+  (select indexdef from pg_indexes
+    where schemaname = 'public' and tablename = 'content_entries' and indexname = 'content_entries_live_order_idx'),
+  'CREATE INDEX content_entries_live_order_idx ON public.content_entries USING btree (site_id, type_id, first_published_at DESC, id) WHERE ((published IS NOT NULL) AND (deleted_at IS NULL))',
+  'content_entries_live_order_idx: site, type, first publish newest first, id; live untrashed rows only');
 
 select * from finish();
 rollback;
