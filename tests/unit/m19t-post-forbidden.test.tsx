@@ -76,8 +76,13 @@ describe("R5 the post bar for an editor", () => {
     const page = readFileSync("src/app/(editor)/app/(screens)/posts/[entryId]/page.tsx", "utf8");
     expect(page).toContain("canPublish={current.access.canPublish}");
     const editor = readFileSync("src/components/posts/post-editor.tsx", "utf8");
-    expect(editor).toContain("publishForbidden={canPublish ? null : PUBLISH_FORBIDDEN_MESSAGE}");
+    // A member whose role cannot publish; a suspended owner is told about the suspension instead (M5-09).
+    expect(editor).toContain("const memberCannotPublish = !canPublish && !suspended;");
+    expect(editor).toContain("publishForbidden={memberCannotPublish ? PUBLISH_FORBIDDEN_MESSAGE : null}");
     expect(editor).toContain("{trashed || !canPublish ? null : (");
-    expect(editor).toContain('canPublish || meta.status !== "published"');
+    expect(editor).toContain('!memberCannotPublish || meta.status !== "published"');
+    // The workspace's Publish button: the suspension first, then the member's sentence.
+    const workspace = readFileSync("src/components/workspace/workspace-provider.tsx", "utf8");
+    expect(workspace).toMatch(/publishDisabledReason = suspended\s*\?\s*SUSPENDED_REASON\s*:\s*!props\.canPublish\s*\?\s*PUBLISH_FORBIDDEN_MESSAGE/);
   });
 });

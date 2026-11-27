@@ -51,7 +51,7 @@ describe.skipIf(!run)("M19-13 a member's MCP token reaches no shared site (local
     const owner = async (name: string, args: Record<string, unknown>) => {
       const result = await runTool(tools.toolByName(name)!, identity(o.userId), args, deps);
       if (result.isError) throw new Error(`${name}: ${JSON.stringify(result.structuredContent)}`);
-      return JSON.parse((result.content as Array<{ text: string }>)[1]!.text) as Record<string, any>;
+      return JSON.parse((result.content as Array<{ text: string }>)[1]!.text) as { id: string; term: { id: string } };
     };
     postId = (await owner("create_entry", { pageId: o.pageId, title: "Owner's post", slug: "owners-post" })).id;
     trashedId = (await owner("create_entry", { pageId: o.pageId, title: "Trashed", slug: "trashed-post" })).id;
