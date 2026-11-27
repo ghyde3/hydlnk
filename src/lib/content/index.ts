@@ -33,6 +33,8 @@ export { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core
 /** Publish page (M15-10): the one call of `publish_site_page`, for the Publish gate. */
 export { publishSitePageWithClient } from "./site-page-publish-core";
 export type { SitePagePublishWrite } from "./site-page-publish-core";
+/** HL022 (a fire's creator re-check) as the row's final code: the page fire reads it from the write. */
+export { fireAccessRefusal } from "./errors";
 
 import { invalidateEntry, invalidatePage, invalidateType } from "@/lib/publish/invalidate";
 import { createAdminSupabase } from "@/lib/supabase/admin";

@@ -3,8 +3,7 @@ import { placedBlockImages, type Placed } from "./placed-images";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { blockedLinksInPublished, checkBlocklist, loadBlockedDomains } from "@/lib/blocklist";
-import { publishSitePageWithClient, type PublishRun } from "@/lib/content";
-import { fireAccessRefusal } from "@/lib/content/errors";
+import { fireAccessRefusal, publishSitePageWithClient, type PublishRun } from "@/lib/content";
 import { designPublishSchema, prepareHomeEntryPublish } from "@/lib/content/schemas/page";
 import {
   PATH_MESSAGES,
