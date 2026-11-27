@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { clientEnv } from "@/lib/env/client";
 import { appOrigin } from "@/lib/routing/urls";
-import { restorePageRevisionWithClient } from "@/lib/site-pages/entry-revisions-core";
+import { PAGE_OR_POST, restorePageRevisionWithClient } from "@/lib/site-pages/entry-revisions-core";
 import { readEntrySaveBody } from "@/lib/site-pages/entry-save-core";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 
@@ -57,6 +57,7 @@ export async function POST(
       userId: user.id,
       siteId: id,
       entryId,
+      typeKeys: PAGE_OR_POST,
       rev,
       expectedRev: body.rev,
     });

@@ -25,8 +25,9 @@ import { Icon } from "@/components/app/icon";
 import { Field, FORM_BUTTON, controlClass } from "@/components/blocks/field";
 import { TextField } from "@/components/blocks/text-field";
 import { SUSPENDED_REASON, useAccountSuspended } from "@/components/admin/suspension-context";
+import { PagesBlogRow } from "@/components/posts/pages-blog-row";
 import { useWorkspace } from "@/components/workspace/workspace-context";
-import { SUB_PAGE_LIMITS, suggestPath } from "@/lib/document";
+import { SUB_PAGE_LIMITS, resolveNav, suggestPath } from "@/lib/document";
 import { PLAN_LIMITS } from "@/lib/limits/table";
 import { PAGE_STATE_LABEL, homePageState, type SitePageItem } from "@/lib/site-pages/pages";
 import { ToggleRow } from "./toggle-row";
@@ -41,9 +42,12 @@ import { ToggleRow } from "./toggle-row";
  *
  * A new page exists at once (it is created on the server) but is not live until Publish; deleting
  * one is immediate and lives on the page's own settings.
+ *
+ * Under the pages sits the blog (M16-02): "Add blog", or the "Blog" row that opens the Posts screen
+ * (`PagesBlogRow`, which loads its own data and starts from the archives the layout read).
  */
 export function PagesCard() {
-  const { site, plan, homeStatus } = useWorkspace();
+  const { site, plan, homeStatus, pageId, draft } = useWorkspace();
   const suspended = useAccountSuspended();
   const headingId = useId();
   const [adding, setAdding] = useState(false);
@@ -69,6 +73,29 @@ export function PagesCard() {
       </div>
 
       <PageList homeStatus={homeStatus} />
+
+      <PagesBlogRow
+        siteId={pageId}
+        initial={site.archives.find((archive) => archive.key === "post") ?? null}
+        menuItems={resolveNav(draft.nav).items}
+        onAddToMenu={(typeId) => {
+          // The same edit as a page's "Show in menu" (`addToNav`, with the menu's item limit).
+          if (!resolveNav(draft.nav).items.includes(typeId)) site.toggleMenu(typeId);
+        }}
+        onRemoveFromMenu={(typeId) => {
+          if (resolveNav(draft.nav).items.includes(typeId)) site.toggleMenu(typeId);
+        }}
+        onType={(type) => {
+          if (type.archivePath !== null)
+            site.setArchive({
+              typeId: type.typeId,
+              key: type.key,
+              path: type.archivePath,
+              labelPlural: type.labelPlural,
+              enabled: type.enabled,
+            });
+        }}
+      />
 
       {site.items
         .filter((item) => item.id !== site.activeId && site.pagesWithErrors.has(item.id))

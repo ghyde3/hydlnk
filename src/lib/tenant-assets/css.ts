@@ -47,6 +47,8 @@ const BLOCK_CLASS_FAMILIES: Record<string, readonly string[]> = {
   // The item and price list and the hours table (M12-01, M12-02).
   items: ["items", "item"],
   hours: ["hours"],
+  // The latest-posts list (Wave B, M16-07).
+  latest_posts: ["latest"],
 };
 
 /** Every block type with rules of its own, in the order of the table above. */
@@ -72,6 +74,9 @@ const FEATURE_CLASS_FAMILIES: Record<string, readonly string[]> = {
   // The site menu and a sub-page's header and title (M11-06, M11-07): only a page that draws them carries them.
   menu: ["menu"],
   sitehead: ["sitehead", "pagetitle"],
+  // A post page and an archive page (Wave B, M16-04, M16-05): only those pages carry their rules.
+  post: ["post"],
+  archive: ["archive"],
 };
 
 /** Every page feature with rules of its own. */
@@ -186,6 +191,10 @@ export interface TenantCssInput {
   menu?: boolean;
   /** The page is a sub-page: it draws the small site header and the title (M11-06). */
   subPage?: boolean;
+  /** The page is a post: the article, its body and the previous and next links (M16-04). */
+  post?: boolean;
+  /** The page is an archive, paged or term page: the list of cards and the pager (M16-05). */
+  archive?: boolean;
 }
 
 /**
@@ -195,11 +204,13 @@ export interface TenantCssInput {
  */
 export function pageFeaturesOf(
   doc: Pick<TenantCssInput, "banner" | "profile"> &
-    Partial<Pick<TenantCssInput, "blocks" | "menu" | "subPage">>,
+    Partial<Pick<TenantCssInput, "blocks" | "menu" | "subPage" | "post" | "archive">>,
 ): string[] {
   const features: string[] = [];
   if (doc.menu === true) features.push("menu");
   if (doc.subPage === true) features.push("sitehead");
+  if (doc.post === true) features.push("post");
+  if (doc.archive === true) features.push("archive");
   // A locked link (M9-30): only a link block with one of the two known lock kinds counts.
   if (doc.blocks?.some((block) => block.type === "link" && lockMarker(block.lock) !== null)) {
     features.push("lock");

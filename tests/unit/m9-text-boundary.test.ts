@@ -9,6 +9,13 @@ import { describe, expect, it } from "vitest";
  * and everything under them, the renderer, the share page, the marketing site, the one tenant
  * script). The editor stores structured marks only: it never reads or writes HTML, makes no request
  * and keeps nothing in the browser's storage.
+ *
+ * Wave B (M16-13) adds the library's second and last home: the post body editor
+ * (`src/components/posts/body-editor/`), which edits a post's Markdown body. Its one door is the
+ * post editor (`src/components/posts/post-editor.tsx`), and that component is drawn by one route
+ * only, `/posts/[entryId]`, whose whole purpose is that editor. So the library sits in that
+ * route's own chunk: the workspace (Edit, Design, Share) still loads none of it, and the rules
+ * for what a visitor receives are unchanged and now name both modules.
  */
 
 const ROOT = process.cwd();
@@ -16,6 +23,10 @@ const rel = (path: string) => relative(ROOT, path);
 const code = (source: string) => source.replace(/\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm, "$1");
 
 const EDITOR_DIR = "src/components/blocks/forms/text-editor";
+const BODY_EDITOR_DIR = "src/components/posts/body-editor";
+const BODY_EDITOR_DOOR = "src/components/posts/post-editor.tsx";
+const BODY_EDITOR_ROUTE = "src/app/(editor)/app/(screens)/posts/[entryId]/page.tsx";
+const LIBRARY_DIRS = [EDITOR_DIR, BODY_EDITOR_DIR];
 const BANNED = /^(@tiptap\/|prosemirror-)/;
 
 const EXTENSIONS = ["", ".ts", ".tsx", ".js", ".mjs", "/index.ts", "/index.tsx"];
@@ -92,7 +103,9 @@ describe("M9-12 nothing a visitor receives reaches the editor library", () => {
   });
 
   it("reaches no module of the text editor and no Tiptap or ProseMirror package", () => {
-    const editor = [...modules.keys()].map(rel).filter((file) => file.startsWith(EDITOR_DIR));
+    const editor = [...modules.keys()]
+      .map(rel)
+      .filter((file) => LIBRARY_DIRS.some((dir) => file.startsWith(dir)));
     expect(editor).toEqual([]);
     const banned = [...packages].filter(([spec]) => BANNED.test(spec));
     expect(banned).toEqual([]);
@@ -105,17 +118,21 @@ describe("M9-12 nothing a visitor receives reaches the editor library", () => {
     expect(form).toEqual([]);
   });
 
+  it("does not reach the post editor, the body editor's one door", () => {
+    expect([...modules.keys()].map(rel)).not.toContain(BODY_EDITOR_DOOR);
+  });
+
   it("the tenant script names neither library", () => {
     const script = readFileSync(resolve(ROOT, "src/lib/tenant-assets/script/tenant.js"), "utf8");
     expect(script).not.toMatch(/tiptap|prosemirror/i);
   });
 });
 
-describe("M9-12 the editor module is the only importer of the library", () => {
-  it("no file outside the editor module imports @tiptap or prosemirror at run time or build time", () => {
+describe("M9-12 the editor modules are the only importers of the library", () => {
+  it("no file outside the two editor modules imports @tiptap or prosemirror at run time or build time", () => {
     const offenders: string[] = [];
     for (const file of [...filesUnder("src"), ...filesUnder("scripts")]) {
-      if (file.startsWith(EDITOR_DIR)) continue;
+      if (LIBRARY_DIRS.some((dir) => file.startsWith(dir))) continue;
       const source = code(readFileSync(resolve(ROOT, file), "utf8"));
       if (/["'](@tiptap\/|prosemirror-)/.test(source)) offenders.push(file);
     }
@@ -144,6 +161,49 @@ describe("M9-12 the editor module is the only importer of the library", () => {
         /["'][^"']*text-editor\/[^"']*["']/.test(code(readFileSync(resolve(ROOT, file), "utf8"))),
       );
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("M16-13 the post body editor has one door, on one route", () => {
+  const sources = [
+    ...filesUnder("src/components"),
+    ...filesUnder("src/lib"),
+    ...filesUnder("src/app"),
+  ].map((file) => [file, code(readFileSync(resolve(ROOT, file), "utf8"))] as const);
+
+  it("only the post editor imports the body editor module", () => {
+    const importers = sources
+      .filter(([file]) => !file.startsWith(BODY_EDITOR_DIR))
+      .filter(([, source]) => /["'][^"']*body-editor\/[^"']*["']/.test(source))
+      .map(([file]) => file);
+    expect(importers).toEqual([BODY_EDITOR_DOOR]);
+  });
+
+  it("only the post's own route draws the post editor, so no other screen's bundle carries the library", () => {
+    const importers = sources
+      .filter(([file]) => file !== BODY_EDITOR_DOOR)
+      .filter(([, source]) => /["'][^"']*posts\/post-editor["']/.test(source))
+      .map(([file]) => file);
+    expect(importers).toEqual([BODY_EDITOR_ROUTE]);
+  });
+
+  it("the workspace (Edit, Design, Share) reaches neither the door nor the module", () => {
+    const { modules } = reach(filesUnder("src/app/(editor)/app/(screens)/(workspace)"));
+    const names = [...modules.keys()].map(rel);
+    expect(names.length).toBeGreaterThan(50);
+    expect(names).not.toContain(BODY_EDITOR_DOOR);
+    expect(names.filter((file) => file.startsWith(BODY_EDITOR_DIR))).toEqual([]);
+  });
+
+  it("the body editor never reads or writes HTML, makes no request and keeps nothing in storage", () => {
+    const offenders = sources
+      .filter(([file]) => file.startsWith(BODY_EDITOR_DIR))
+      .filter(([, source]) =>
+        /\b(getHTML|generateHTML|generateJSON|innerHTML|outerHTML|insertAdjacentHTML|dangerouslySetInnerHTML|fetch|XMLHttpRequest|WebSocket|sendBeacon|localStorage|sessionStorage|indexedDB|document\.cookie)\b/.test(
+          source,
+        ),
+      );
+    expect(offenders.map(([file]) => file)).toEqual([]);
   });
 });
 

@@ -41,6 +41,7 @@ export const BLOCK_LABEL: Record<BlockType, string> = {
   page_link: "Page link",
   items: "Items",
   hours: "Hours",
+  latest_posts: "Latest posts",
 };
 
 export interface TestPage {

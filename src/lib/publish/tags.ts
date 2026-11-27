@@ -8,6 +8,16 @@ export function pageTag(pageId: string): string {
   return `page:${pageId}`;
 }
 
+/** Tag of one typed entry's cached HTML (a post page). Publish, unpublish, trash and restore of it expire it. */
+export function entryTag(entryId: string): string {
+  return `entry:${entryId}`;
+}
+
+/** Tag of what is cached per content type: the post index, archive pages, the feed, terms and redirects. */
+export function typeTag(typeId: string): string {
+  return `type:${typeId}`;
+}
+
 /**
  * Tag of the cached 404 of a handle nobody owns (yet). The claim flow expires it with
  * `invalidateHandle` so a freshly claimed handle shows its placeholder at once; without that, the

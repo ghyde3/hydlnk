@@ -31,7 +31,11 @@ vi.mock("@/lib/env/client", () => ({
 const PAGE_ID = "00000000-0000-4000-8000-0000000000b1";
 const COLOR = "#C46A4F";
 // M11-07: page_link has no editor form or renderer yet; those workers drop this filter with theirs.
-const TYPES = BLOCK_TYPES.filter((type) => type !== "page_link" && type !== "items" && type !== "hours");
+// latest_posts (M16-07) draws from the site's posts, not from the block: tests/unit/m16-block-latest-posts.test.tsx covers its overrides.
+const TYPES = BLOCK_TYPES.filter(
+  (type) =>
+    type !== "page_link" && type !== "items" && type !== "hours" && type !== "latest_posts",
+);
 
 type Raw = Record<string, unknown>;
 const block = (type: BlockType, extra: Raw = {}): Raw => ({ ...fixtureBlocks[type], ...extra });

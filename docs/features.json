@@ -5856,6 +5856,231 @@
         "Tests: the M6-33 and M7-04 network checks allow exactly that one read and still assert no entry write and no other request; an AI write to Home's blocks while the editor is open, followed by a design-only edit, shows the conflict notice and overwrites nothing (M10-23)."
       ],
       "passes": true
+    },
+    {
+      "id": "M16-01",
+      "milestone": 16,
+      "area": "data",
+      "title": "Blog database additions: term cap, slug redirects, archive order index, live term counts",
+      "acceptance": [
+        "Migration adds `content_slug_redirects`, the HL015 term cap, `content_entries_live_order_idx` and `live_term_counts`; every new table has RLS on, default grants revoked, owner SELECT only, no client write.",
+        "pgTAP 216: the owner reads their own redirect rows; another user and anon read nothing and can write nothing with the publishable key; a republish with a new slug records the old one; a slug that goes live again deletes its redirect row; at most 200 rows per type are kept, oldest dropped.",
+        "pgTAP 217: the 501st term of a type is refused with HL015 for every plan; `live_term_counts` counts only published, untrashed entries and only service_role may execute it.",
+        "pgTAP 218: posts per plan: Free 26th post HL010, Pro 1,001st HL010, trashed posts count, a downgrade deletes nothing and refuses the next insert; pages are not counted.",
+        "Unit: `limits-parity` still passes; `content-rls` probes the new table with the publishable key."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-02",
+      "milestone": 16,
+      "area": "publishing",
+      "title": "Turning on the blog for a site",
+      "acceptance": [
+        "\"Add blog\" in the Pages panel enables the built-in Post type with archive path `blog`, and offers \"Add Blog to the menu\"; a site whose page already uses `/blog` is told the address is taken (HL012) and can choose another.",
+        "The archive path can be changed; a reserved word or a path used by a page is refused with the path message; turning the blog off takes `/blog` and every post URL to the 404 on the next request and deletes nothing.",
+        "Unit: `enableType` and `updateType` expire the site tag and the type tag; another user's site answers not-found; a suspended account is refused.",
+        "Playwright at 390x844 and 1440x900: add the blog, see the Blog row and the empty Posts screen; every control is at least 44px."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-03",
+      "milestone": 16,
+      "area": "routing",
+      "title": "Archive routes on tenant hosts and custom domains without a catch-all",
+      "acceptance": [
+        "Valid shapes are exactly `/{archive}`, `/{archive}/page/{n}`, `/{archive}/{slug}`, `/{archive}/category/{slug}`, `/{archive}/tag/{slug}`, the two term shapes with `/page/{n}`, and `/{archive}/feed.xml`; every other path of two or more segments is rewritten to the one plain 404 with no query string.",
+        "Unit (table-driven): `archiveRoute` accepts those shapes and refuses uppercase, dots, a trailing slash, `page/1`, `page/01`, `page/0`, five segments, reserved first segments and reserved slugs; the proxy rewrites each shape to its explicit internal route on a handle host and a custom host and sets the tenant headers; the matcher sends `/{segment}/feed.xml` through the proxy and still skips every file in `public/`.",
+        "Unit: a second segment under a first segment that is not a live archive answers the plain 404 after cached reads only: the query counter records no Postgres read on a warm cache (the M15-01 roadmap accept).",
+        "Unit: the render-graph scan pins every new route file as `force-dynamic` with no catch-all folder; a POST to any archive path is the plain 404.",
+        "Playwright at 390x844 and 1440x900: `/blog/anything-invented`, `/blog/page/999` and `/blog/category/none` are 404s on the handle host."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-04",
+      "milestone": 16,
+      "area": "publishing",
+      "title": "Post page: theme-styled, finished HTML",
+      "acceptance": [
+        "On the next request after Publish, `/blog/{slug}` shows the post on the handle host and on a verified custom domain; a draft, an unpublished post and a trashed post are 404; a post of a site that is not published or whose owner is suspended is never shown.",
+        "The page is drawn from the site's published tokens with the site header and menu, the title as the one `<h1>`, the date, reading time, featured image, categories and tags as links, the body, and previous and next links; it ships the one tenant script and no other JavaScript, and passes the tenant CSP.",
+        "Unit (renderer, hostile input): raw HTML in the body is shown as text; `javascript:`, `data:` and `vbscript:` links render as plain text even when planted directly in `published`; an image that is not the owner's own media is not drawn; a bare YouTube URL on its own line becomes the embed facade and any other host stays a link; body headings start at `<h2>`; tables scroll inside their own box.",
+        "Playwright at 390x844: publish a post with a heading, list, quote, code block, image and embed, open it on `mara.localhost:3000`; no horizontal scroll; links and tags are at least 44px tall. At 1440x900: the same post reads identically.",
+        "`pnpm lighthouse` thresholds hold on a post (fixture added to `scripts/lib/lighthouse-fixtures`)."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-05",
+      "milestone": 16,
+      "area": "publishing",
+      "title": "Archive, paging, category and tag pages",
+      "acceptance": [
+        "`/blog` lists published posts newest first by first publish date, 10 per page, with title, date, excerpt and featured image; `/blog/page/2` continues; category and tag pages list only their posts; an empty blog shows \"No posts yet\".",
+        "A page number past the last page, an unknown term and a term with no live posts are 404 and store no cache entry of their own.",
+        "Unit: the archive page reads at most the cached index and one cached page of cards; paging maths at 0, 10, 11 and 5,001 posts.",
+        "Playwright at 390x844 and 1440x900: 12 posts, page 1 and 2, a category page; no horizontal scroll.",
+        "`pnpm lighthouse` thresholds hold on the archive."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-06",
+      "milestone": 16,
+      "area": "seo",
+      "title": "Feed, sitemap, canonical and JSON-LD for posts",
+      "acceptance": [
+        "`/blog/feed.xml` is RSS 2.0 with the 20 newest posts (title, link, guid, pubDate, excerpt), `application/rss+xml`, on the primary host; every text value is XML-escaped; a disabled blog answers 404.",
+        "`/sitemap.xml` lists the archive and every live post that is not `noindex` (the first 5,000), on the primary host.",
+        "A post's head has its SEO title and description (falling back to title and excerpt), `og:image` from the share image, else the featured image, else the site image, a canonical on the primary host, `noindex` when set, and one JSON-LD `BlogPosting` (headline, datePublished, dateModified, image, mainEntityOfPage) serialized with `<` escaped.",
+        "Unit: feed and JSON-LD with hostile titles (`</script>`, `]]>`, control characters); canonical on a site with and without a custom domain."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-07",
+      "milestone": 16,
+      "area": "blocks",
+      "title": "Latest posts block",
+      "acceptance": [
+        "A `latest_posts` block (optional heading, count 1 to 6, optional category) draws the newest published posts as links to their pages on Home and on any sub-page; it draws nothing on a live page when the blog is off or has no posts, and the editor shows a hint instead.",
+        "Schema and renderer follow the add-block-type skill: block overrides apply, tokens only, text as React text, hrefs from the vetted internal builder.",
+        "Unit: schema accepts and refuses (count 0, count 7, a category that is not a UUID); renderer output for three posts; publishing a post refreshes a Home and a sub-page that hold the block without republishing them.",
+        "Playwright at 390x844 and 1440x900: add the block, publish, see the posts on `mara.localhost:3000`; publish another post and see it listed on the next request."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-08",
+      "milestone": 16,
+      "area": "publishing",
+      "title": "The archive in the site menu",
+      "acceptance": [
+        "The menu editor offers the blog as an item once it is on; the item is stored as the Post type's id, shown with the type's plural label, and links to `/{archive}`.",
+        "The item is hidden on the live site while the blog is off, and Publish design is never blocked by it; renaming the archive path changes the link on the next request.",
+        "Unit: `buildMenu` with an archive item (live, off, unknown id); `pruneNav` keeps a type id of this site and drops one of another site.",
+        "Playwright at 390x844 and 1440x900: the menu on Home, on a sub-page and on a post shows Blog, and it is marked current on archive and post pages."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-09",
+      "milestone": 16,
+      "area": "publishing",
+      "title": "Cache tags per entry, type and site",
+      "acceptance": [
+        "Post HTML is cached by entry id under `entry:<id>` and `page:<siteId>`; archive pages, the feed, the post index and latest-posts data under `type:<typeId>` and `page:<siteId>`.",
+        "Publish, unpublish, trash and restore of a post expire `entry:<id>` and `type:<typeId>` and not `page:<siteId>`; Publish design, a plan change and a suspension expire `page:<siteId>` and with it every post page.",
+        "Unit: the tags of each cached read; each writer call expires exactly its tags (a spy on `revalidateTag`); a page entry still expires the site tag; only the Publish action and the invalidation module import `revalidateTag` or `updateTag` (the existing scan).",
+        "Playwright against a production build (CI, `full-ci`): publish post B and post A's HTML is served from the cache while the archive and A's \"next\" link show B."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-10",
+      "milestone": 16,
+      "area": "routing",
+      "title": "A changed slug redirects",
+      "acceptance": [
+        "After a published post's slug changes and it is republished, the old URL answers 301 to the new one on both hosts; a later post that takes the old slug wins over the redirect.",
+        "An old slug not in the type's redirect list is the 404; the lookup is a cached read under the type tag.",
+        "Unit: redirect target is built from the vetted slug only; Playwright at 390x844 and 1440x900 follows one redirect."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-11",
+      "milestone": 16,
+      "area": "analytics",
+      "title": "Views of posts and of the archive",
+      "acceptance": [
+        "A post page's beacon carries the post's entry id and an archive, paging or term page carries the Post type's id, both in `subPageId`; the beacon records it only when it is a live post or an enabled archive of that site, and drops anything else with 204.",
+        "The Analytics page filter lists \"Blog\" and each post that has views in the range by its title; a trashed or purged post reads \"Deleted page\".",
+        "Unit: beacon accepts a live post id and the type id; refuses a draft post's id, another site's post id and a random UUID without a Postgres read on a warm cache when the post index is complete; `buildPageOptions` with posts.",
+        "Playwright at 390x844 and 1440x900: view a post twice, see it in Analytics under its title."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-12",
+      "milestone": 16,
+      "area": "editor",
+      "title": "Posts screen: list, filters, new post, limits",
+      "acceptance": [
+        "`/posts` lists the site's posts with title, status chip (Draft, Live, Unpublished changes, Trashed) and date; filters by status, category and a title search; sorts by updated or published date; loads 20 at a time.",
+        "\"New post\" creates a draft and opens it; at the plan's limit the button is replaced by the limit notice with the upgrade link, and the server refuses the insert (HL010) whatever the client sends.",
+        "The header shows \"{n} of {limit} posts\" (Studio: \"Unlimited\").",
+        "Unit: the list route answers only the caller's own site (another user's site id is 404), rejects a foreign Origin, and maps `entry_limit`.",
+        "Playwright at 390x844 and 1440x900: list, filter, new post; no horizontal scroll; every control at least 44px."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-13",
+      "milestone": 16,
+      "area": "editor",
+      "title": "Post editor: fields, body as Markdown, autosave and the conflict notice",
+      "acceptance": [
+        "Title, slug (suggested from the title until edited, checked with the slug rule as you type), body, excerpt, featured image, categories, tags, SEO title, SEO description and \"Hide from search engines\".",
+        "The body is edited in the Tiptap editor with headings 2 to 4, bold, italic, strike, links (http and https only), bullet and numbered lists, quote, code block, rule and images from the owner's uploads, and is stored as Markdown; a body the rich editor cannot hold without loss (a table, raw HTML) opens in a plain Markdown box instead and is saved byte for byte.",
+        "Autosave sends `{rev, draft}` to the entry draft route; a stale rev shows the conflict notice with \"Reload\" and overwrites nothing; the body's size is shown near the 512 KiB limit and a larger body is refused before the request.",
+        "Unit: Markdown round trip (`toMarkdown(fromMarkdown(x)) === x`) for the supported set; the loss check sends tables and HTML to source mode; an MCP-style write to the entry mid-session produces the conflict answer.",
+        "Playwright at 390x844 and 1440x900: write a post with every field, reload, everything is still there; the conflict notice appears after a direct database edit of the entry."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-14",
+      "milestone": 16,
+      "area": "editor",
+      "title": "Categories and tags",
+      "acceptance": [
+        "Categories (one level of nesting) and tags are created, renamed and deleted from the post editor's pickers; a deleted term leaves the posts and drops out of the live pages at their next publish.",
+        "Unit: term routes check ownership, Origin and JSON; the 501st term answers the limit message (HL015); a term of another site is not-found.",
+        "Playwright at 390x844 and 1440x900: add a category and two tags to a post, publish, see them on the post and on their archive pages."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-15",
+      "milestone": 16,
+      "area": "editor",
+      "title": "Publish, unpublish, revisions, trash and restore for a post",
+      "acceptance": [
+        "Publish validates and makes only that post live; issues are listed by field with a link to the field; Unpublish takes it down and keeps the draft; neither changes any other post, any page or the design.",
+        "Revisions lists the post's revisions and restores one into the draft; it goes live only on Publish.",
+        "Trash removes the live copy at once and moves the post to the Trashed filter; Restore brings it back as a draft within 30 days; a trashed post still counts toward the limit and the screen says so.",
+        "Unit: every route refuses another user's entry with the same not-found as a missing one, refuses a page entry on the post routes, and refuses a stale rev with a conflict; slug taken and slug reserved come back as field messages.",
+        "Playwright at 390x844 and 1440x900: publish, edit, see \"Unpublished changes\", publish again, restore the first revision, trash, restore."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-16",
+      "milestone": 16,
+      "area": "sharing",
+      "title": "The private share link shows a post draft",
+      "acceptance": [
+        "`/share/{token}/entry/{entryId}` draws that post's saved draft with the site's draft theme, the same article component as the live page, inert embeds and the share headers; \"Preview\" in the post editor opens it (creating a link when the site has none).",
+        "The entry must be a post of the link's own site and not trashed; another site's entry id, a page entry id, a malformed id and an inactive token all answer the one share 404; the tail never reaches a query unless it has that exact shape.",
+        "Unit: `loadSharedPreview` cases above with a spy client; hidden characters are stripped from the post fields; the static import-graph test for `(share)` still passes.",
+        "Playwright at 390x844 and 1440x900: preview a draft post signed out."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M16-17",
+      "milestone": 16,
+      "area": "security",
+      "title": "Security review of the blog wave",
+      "acceptance": [
+        "`security-reviewer` runs on the whole diff (routing, public reads, Markdown rendering, new routes on the app host, the share link, SQL) and reports no critical or high finding; every medium is fixed or recorded in PLAN with Gary's decision.",
+        "Checked by name: published only on every public read; no draft, excerpt or title of an unpublished post in any archive, feed, sitemap, index or 404; no cache entry or Postgres read keyed by an invented path beyond the limits in section 3; no cookie on tenant hosts; the renderer's own allowlist for `href` and `src`; XML and JSON-LD escaping; ownership, Origin and content-type checks on every new app route; RLS on the new table.",
+        "`adversarial-verifier` tries: a post slug equal to a page path, `/blog/page/2e0`, `%2F` in a slug, a 100,000-post type, a Markdown body with nested HTML in a table, a beacon for another site's post."
+      ],
+      "passes": false
     }
   ]
 }

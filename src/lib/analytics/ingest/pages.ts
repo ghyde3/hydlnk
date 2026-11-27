@@ -8,6 +8,7 @@ import { customOrigin } from "@/lib/routing/urls";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import { resolveLink } from "./link-target";
 import { getPublishedSubPage } from "@/lib/site/published";
+import { getSiteArchives, isLivePost } from "@/lib/blog/published";
 import {
   getPublishedHomeWithClient,
   listLivePagesWithClient,
@@ -57,12 +58,37 @@ async function readBeaconPage(pageId: string): Promise<BeaconRead> {
 }
 
 /**
+ * The ids of the site's enabled archives (M16-11): the Post type's id is what an archive, paging or
+ * term page sends. From the blog's own cached read (`getSiteArchives`, the site's tag: turning the
+ * blog on or off expires it). A failure here is logged and reads as "no archive": the views of
+ * Home and of the sub-pages must not stop counting because the blog's read failed.
+ */
+async function archiveTypeIdsOf(pageId: string): Promise<string[]> {
+  try {
+    const { archives } = await getSiteArchives(pageId);
+    return archives.map((archive) => archive.typeId.toLowerCase());
+  } catch (error) {
+    console.error(
+      "[analytics] reading the archives for a view failed:",
+      error instanceof Error ? error.message : "unknown error",
+    );
+    return [];
+  }
+}
+
+/**
  * For the view beacon: the handle, the verified custom hosts and the live sub-page ids of a published
  * site, which is what the Origin check and the sub-page check compare against. One read per site,
  * cached under the site's tag like the click read (Publish, a domain change and a suspension all
  * expire it), so a view costs no query of its own; `next dev` reads Postgres every time. Null for an
  * unknown id, a site with nothing published and a suspended owner. The documents are never read.
  * Throws when the database fails.
+ *
+ * With the blog (M16-11) it also names the site's enabled archives and hands over the post check,
+ * bound to this site's id: `isLivePost` reads the cached post indexes of this site's archives
+ * (published posts only) and makes one primary-key read only when an index is incomplete, so
+ * another site's post id, a draft's and an invented one are "no" without a query. Neither is part
+ * of the cached entry above: each is its own cached read under the site and type tags.
  */
 export async function lookupBeaconPage(pageId: string): Promise<BeaconPage | null> {
   const read =
@@ -73,7 +99,12 @@ export async function lookupBeaconPage(pageId: string): Promise<BeaconPage | nul
           ["beacon-page", "host-bound", PUBLIC_READ_CACHE_VERSION, pageId],
           { tags: [pageTag(pageId)], revalidate: PAGE_REVALIDATE_SECONDS },
         )(pageId);
-  return read.found ? read.page : null;
+  if (!read.found) return null;
+  return {
+    ...read.page,
+    archiveTypeIds: await archiveTypeIdsOf(pageId),
+    isLivePost: (entryId) => isLivePost(pageId, entryId),
+  };
 }
 
 /**

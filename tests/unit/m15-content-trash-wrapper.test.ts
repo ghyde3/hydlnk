@@ -13,9 +13,11 @@ vi.mock("@/lib/content/trash-core", () => ({
 
 import { restoreEntry, trashEntry } from "@/lib/content";
 
+/** A page entry (M16-09: only a page entry expires the site tag; a post expires its entry and type). */
+const page = (siteId: string) => ({ siteId, typeId: "t-page", typeKey: "page" });
 const input = { actor: { userId: "u", source: "editor" as const }, entryId: "e", expectedRev: 1 };
 
-describe("the trash and restore wrappers", () => {
+describe("the trash and restore wrappers, for a page entry", () => {
   beforeEach(() => {
     invalidatePage.mockReset();
     core.trash.mockReset();
@@ -23,13 +25,13 @@ describe("the trash and restore wrappers", () => {
   });
 
   it("trashEntry expires the site tag on ok", async () => {
-    core.trash.mockResolvedValueOnce({ ok: true, rev: 2, siteId: "s1" });
+    core.trash.mockResolvedValueOnce({ ok: true, rev: 2, ...page("s1") });
     await trashEntry(input);
     expect(invalidatePage).toHaveBeenCalledWith("s1");
   });
 
   it("restoreEntry expires the site tag on ok", async () => {
-    core.restore.mockResolvedValueOnce({ ok: true, rev: 3, siteId: "s2" });
+    core.restore.mockResolvedValueOnce({ ok: true, rev: 3, ...page("s2") });
     await restoreEntry(input);
     expect(invalidatePage).toHaveBeenCalledWith("s2");
   });
@@ -47,7 +49,7 @@ describe("the trash and restore wrappers", () => {
     invalidatePage.mockImplementationOnce(() => {
       throw new Error("boom");
     });
-    core.trash.mockResolvedValueOnce({ ok: true, rev: 2, siteId: "s1" });
+    core.trash.mockResolvedValueOnce({ ok: true, rev: 2, ...page("s1") });
     await expect(trashEntry(input)).resolves.toMatchObject({ ok: true });
     expect(log).toHaveBeenCalled();
     log.mockRestore();

@@ -1,7 +1,7 @@
 import "server-only";
 import { revalidateTag, updateTag } from "next/cache";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { handleTag, pageTag } from "./tags";
+import { entryTag, handleTag, pageTag, typeTag } from "./tags";
 
 /**
  * Expires the cached public page of every page an account owns (M2-28). The one function the Stripe
@@ -79,4 +79,43 @@ export function expireDeletedPages(pages: ReadonlyArray<{ id: string; handle: st
     }
   }
   if (failure) throw failure;
+}
+
+/** `revalidateTag` with immediate expiry for each tag: every one is attempted, then the first failure is raised. */
+function expireAll(tags: readonly string[]): void {
+  let failure: unknown = null;
+  for (const tag of tags) {
+    try {
+      revalidateTag(tag, { expire: 0 });
+    } catch (error) {
+      failure ??= error;
+    }
+  }
+  if (failure) throw failure;
+}
+
+/**
+ * Expires what the cache holds for one typed entry (a post) after its publish, unpublish, trash or
+ * restore (M16-09): `entry:<entryId>` (its own HTML) and `type:<typeId>` (the post index, the
+ * archive pages, the feed, the term counts, the redirects and every latest-posts list). NOT the
+ * site tag: publishing post B leaves post A's cached page, Home's design and every sub-page alone.
+ * The content writer calls it for every type but `page` (a page entry expires the site tag with
+ * `invalidatePage`). Immediate expiry, from Server Actions and Route Handlers alike.
+ */
+export function invalidateEntry(input: {
+  siteId: string;
+  typeId: string;
+  typeKey: string;
+  entryId: string;
+}): void {
+  expireAll([entryTag(input.entryId), typeTag(input.typeId)]);
+}
+
+/**
+ * Expires what the cache holds for one content type after it is turned on or off, renamed or its
+ * archive path changes (M16-09): `type:<typeId>` and also `page:<siteId>`, because the site's list
+ * of archives, its menu and every post page's HTML live under the site tag.
+ */
+export function invalidateType(input: { siteId: string; typeId: string }): void {
+  expireAll([typeTag(input.typeId), pageTag(input.siteId)]);
 }

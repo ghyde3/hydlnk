@@ -7,6 +7,8 @@ import { lookupKey, resolveCustomDomain } from "@/lib/routing/custom-domain";
 import { classifyHost, invalidHandleLabel } from "@/lib/routing/host";
 import { customOrigin } from "@/lib/routing/urls";
 import { getSiteIndex } from "@/lib/site/published";
+import { getPostIndex, getSiteArchives } from "@/lib/blog/published";
+import { archiveHref, postHref } from "@/lib/blog/types";
 
 /**
  * `/sitemap.xml` and the sitemap line of `/robots.txt` on a site's own hosts (M11-10). Both paths
@@ -16,7 +18,29 @@ import { getSiteIndex } from "@/lib/site/published";
  * its oldest verified custom domain when it has one, else its handle host. It is read from the cached
  * public read and the cached site index, so a Publish refreshes it with the pages. A site that is
  * not published, a suspended owner and an unknown host are 404.
+ *
+ * Wave B (M16-06): it also lists each enabled archive and every live post that is not `noindex`
+ * (the newest 5,000 per type: the cached post index), from cached reads under the site's and the
+ * type's tags, so a post's publish refreshes it too.
  */
+
+/** The paths a site's sitemap lists after Home: the live sub-pages, then each archive and its posts. */
+export async function sitePaths(pageId: string): Promise<string[]> {
+  const [index, { archives }] = await Promise.all([getSiteIndex(pageId), getSiteArchives(pageId)]);
+  const paths = index.map((page) => page.path);
+  for (const archive of archives) {
+    const home = archiveHref(archive.path);
+    if (home === null) continue;
+    paths.push(home.slice(1));
+    const posts = await getPostIndex(pageId, archive.typeId);
+    for (const post of posts.posts) {
+      if (post.noindex) continue;
+      const href = postHref(archive.path, post.slug);
+      if (href !== null) paths.push(href.slice(1));
+    }
+  }
+  return paths;
+}
 
 const PLAIN = "text/plain; charset=utf-8";
 const notFound = (): TextResponse => ({ status: 404, contentType: PLAIN, body: "Not found\n" });
@@ -32,10 +56,7 @@ export async function tenantSitemap(
     if (state.kind !== "published") return notFound();
     const primary = await getPrimaryDomain(state.page.pageId);
     const origin = primary ? customOrigin(primary, rootDomain) : tenantOrigin(handle, rootDomain);
-    return siteSitemapXml(
-      origin,
-      (await getSiteIndex(state.page.pageId)).map((page) => page.path),
-    );
+    return siteSitemapXml(origin, await sitePaths(state.page.pageId));
   }
   if (kind !== "custom") return null;
   if (invalidHandleLabel(host, rootDomain)) return notFound();
@@ -45,10 +66,7 @@ export async function tenantSitemap(
   const state = await getTenantPageStateById(pageId);
   if (state.kind !== "published") return notFound();
   const primary = (await getPrimaryDomain(pageId)) ?? hostname;
-  return siteSitemapXml(
-    customOrigin(primary, rootDomain),
-    (await getSiteIndex(pageId)).map((page) => page.path),
-  );
+  return siteSitemapXml(customOrigin(primary, rootDomain), await sitePaths(pageId));
 }
 
 /**

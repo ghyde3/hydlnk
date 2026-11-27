@@ -33,9 +33,19 @@ vi.mock("@/app/(tenant)/published-page", () => ({
 }));
 vi.mock("@/lib/handles/availability", () => ({ checkHandle: mocks.check }));
 vi.mock("@/lib/domains/primary", () => ({ getPrimaryDomain: mocks.primary }));
-vi.mock("@/lib/site/published", () => ({
-  getSiteIndex: mocks.index,
-  getPublishedSubPage: mocks.subPage,
+vi.mock("@/lib/site/published", async () => {
+  const { siteContextFrom } = await import("@/lib/site/live");
+  return {
+    getSiteIndex: mocks.index,
+    getPublishedSubPage: mocks.subPage,
+    // Wave B: the site context is built from the same (stubbed) index; this site has no blog.
+    getLiveSiteContext: async (pageId: string, doc: { nav?: unknown }, currentId: string) =>
+      siteContextFrom(await mocks.index(pageId), doc as never, currentId),
+  };
+});
+vi.mock("@/lib/blog/published", () => ({
+  getSiteArchives: async () => ({ archives: [], pagesWithPostLists: [] }),
+  getPostIndex: async () => ({ complete: true, total: 0, posts: [] }),
 }));
 
 const { PageRenderer } = await import("@/components/page/page-renderer");

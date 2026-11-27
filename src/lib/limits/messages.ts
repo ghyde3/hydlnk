@@ -1,3 +1,4 @@
+import { TERMS_PER_TYPE } from "@/lib/blog/types";
 import { formatLimitBytes } from "./format";
 import { PLAN_LABELS, PLAN_LIMITS, type PlanId } from "./table";
 
@@ -80,3 +81,43 @@ export function planBlurb(plan: PlanId): string {
 
 /** Why a Free account cannot publish redirect mode (M9-31): the sentence the Publish gate and the Share tab use. */
 export const REDIRECT_MODE_MESSAGE = "Redirect mode is part of Pro. Upgrade to use it.";
+
+const grouped = (count: number) => count.toLocaleString("en-US");
+const postNoun = (count: number) => (count === 1 ? "post" : "posts");
+
+/** "25", "1,000", or "Unlimited" for Studio (its 100,000 is a fair-use cap): posts per site as copy shows it (M16-12). */
+export function formatPostsLimit(plan: PlanId): string {
+  return plan === "studio" ? "Unlimited" : grouped(PLAN_LIMITS[plan].entriesPerType);
+}
+
+/**
+ * The line in the Posts screen's header (M16-12), the trash counted in `used` as HL010 counts it:
+ *   Free    "3 of 25 posts"
+ *   Pro     "40 of 1,000 posts"
+ *   Studio  "40 posts · Unlimited"
+ */
+export function postsUsageText(plan: PlanId, used: number): string {
+  if (plan === "studio") return `${grouped(used)} ${postNoun(used)} · Unlimited`;
+  return `${grouped(used)} of ${formatPostsLimit(plan)} posts`;
+}
+
+/**
+ * Why a new post is refused (HL010, M16-12), by plan:
+ *   Free    "Free includes 25 posts, the trash included. Pro includes 1,000."
+ *   Pro     "You’ve used 1,000 of 1,000 posts, the trash included. Studio includes unlimited posts."
+ *   Studio  "You’ve used 100,000 of 100,000 posts, the trash included."
+ */
+export function postLimitMessage(
+  plan: PlanId,
+  used: number = PLAN_LIMITS[plan].entriesPerType,
+): string {
+  const own = grouped(PLAN_LIMITS[plan].entriesPerType);
+  if (plan === "free") {
+    return `${PLAN_LABELS.free} includes ${own} posts, the trash included. ${PLAN_LABELS.pro} includes ${grouped(PLAN_LIMITS.pro.entriesPerType)}.`;
+  }
+  const head = `You’ve used ${grouped(used)} of ${own} posts, the trash included.`;
+  return plan === "pro" ? `${head} ${PLAN_LABELS.studio} includes unlimited posts.` : head;
+}
+
+/** Why a new category or tag is refused (HL015, M16-14). The cap is the same on every plan. */
+export const TERM_LIMIT_MESSAGE = `A blog holds up to ${TERMS_PER_TYPE} categories and tags. Delete one to add another.`;

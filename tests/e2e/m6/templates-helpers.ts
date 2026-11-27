@@ -137,6 +137,8 @@ export function describeBlocks(blocks: DraftDoc["blocks"]): string[] {
         return `page_link:${block.label}`;
       case "items":
         return `items:${block.items.length}`;
+      case "latest_posts":
+        return `latest_posts:${block.count}`;
       case "hours":
         return `hours:${block.timezone}`;
     }

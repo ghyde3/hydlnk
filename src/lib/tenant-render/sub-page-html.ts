@@ -5,10 +5,14 @@ import { getPrimaryDomain } from "@/lib/domains/primary";
 import { customOgImageUrl } from "@/lib/domains/urls";
 import { clientEnv } from "@/lib/env/client";
 import { ogImageUrl, tenantOrigin } from "@/lib/publish/urls";
-import { PAGE_REVALIDATE_SECONDS, PUBLIC_READ_CACHE_VERSION, pageTag } from "@/lib/publish/tags";
+import {
+  PAGE_REVALIDATE_SECONDS,
+  PUBLIC_READ_CACHE_VERSION,
+  pageTag,
+  typeTag,
+} from "@/lib/publish/tags";
 import { customOrigin } from "@/lib/routing/urls";
-import { siteContextFrom } from "@/lib/site/live";
-import { getPublishedSubPage, getSiteIndex } from "@/lib/site/published";
+import { getLiveSiteContext, getPublishedSubPage } from "@/lib/site/published";
 import { renderLiveSubPage } from "./live-page";
 
 /**
@@ -39,9 +43,19 @@ export function subPageHtmlKey(subPageId: string): string[] {
   return ["tenant-sub-page-html", PUBLIC_READ_CACHE_VERSION, subPageId];
 }
 
-/** The cache options of one site's pages: the site's tag and the backstop. */
-export function subPageHtmlOptions(pageId: string): { tags: string[]; revalidate: number } {
-  return { tags: [pageTag(pageId)], revalidate: PAGE_REVALIDATE_SECONDS };
+/**
+ * The cache options of one site's pages: the site's tag and the backstop. A page that holds a
+ * latest-posts block (Wave B, M16-07) also carries `type:<postsTypeId>`, so a post's publish
+ * refreshes it without the page being republished.
+ */
+export function subPageHtmlOptions(
+  pageId: string,
+  postsTypeId?: string,
+): { tags: string[]; revalidate: number } {
+  return {
+    tags: postsTypeId ? [pageTag(pageId), typeTag(postsTypeId)] : [pageTag(pageId)],
+    revalidate: PAGE_REVALIDATE_SECONDS,
+  };
 }
 
 export async function renderSubPageHtml(
@@ -53,12 +67,12 @@ export async function renderSubPageHtml(
   const state = await getTenantPageStateById(pageId);
   if (state.kind !== "published") return null;
   const { page } = state;
-  const [index, sub, hostname] = await Promise.all([
-    getSiteIndex(pageId),
+  const [sub, hostname] = await Promise.all([
     getPublishedSubPage(pageId, subPageId),
     getPrimaryDomain(pageId),
   ]);
   if (!sub) return null;
+  const site = await getLiveSiteContext(pageId, page.document, sub.id, sub.document.blocks);
 
   const rootDomain = clientEnv.NEXT_PUBLIC_ROOT_DOMAIN;
   let urls: { page: string; image: string } | null = null;
@@ -76,25 +90,29 @@ export async function renderSubPageHtml(
     document: page.document,
     subPage: sub.document,
     plan: page.plan,
-    site: siteContextFrom(index, page.document, sub.id),
+    site,
     urls,
   });
 }
 
-/** The page's finished HTML, from the Data Cache in production. `subPageId` must be a real page. */
+/**
+ * The page's finished HTML, from the Data Cache in production. `subPageId` must be a real page.
+ * `postsTypeId` is the Post type's id when the page holds a latest-posts block (the caller reads it
+ * from the site's cached archives): it only adds a tag, and never reaches the render.
+ */
 export function getSubPageHtml(
   pageId: string,
   subPageId: string,
   path: string,
   handle: string | null,
+  postsTypeId?: string,
 ): Promise<string | null> {
   if (process.env.NODE_ENV !== "production") {
     return renderSubPageHtml(pageId, subPageId, path, handle);
   }
-  return unstable_cache(renderSubPageHtml, subPageHtmlKey(subPageId), subPageHtmlOptions(pageId))(
-    pageId,
-    subPageId,
-    path,
-    handle,
-  );
+  return unstable_cache(
+    renderSubPageHtml,
+    subPageHtmlKey(subPageId),
+    subPageHtmlOptions(pageId, postsTypeId),
+  )(pageId, subPageId, path, handle);
 }

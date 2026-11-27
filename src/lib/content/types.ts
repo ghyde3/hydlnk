@@ -1,4 +1,6 @@
-export type ContentSource = "editor" | "mcp" | "builder" | "system";
+import type { ContentSource } from "./schemas/summaries";
+
+export type { ContentSource };
 
 /** Who is writing: a verified session or token user (never request input) and where the call came from. */
 export interface ContentActor {
@@ -16,6 +18,7 @@ export type ContentErrorCode =
   | "storage_full"
   | "entry_limit"
   | "type_limit"
+  | "term_limit"
   | "page_limit"
   | "path_taken"
   | "slug_taken"

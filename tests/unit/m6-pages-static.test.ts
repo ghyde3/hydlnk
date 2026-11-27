@@ -37,7 +37,14 @@ function selectArguments(source: string): string[] {
 }
 
 describe("M6-10 isolation: nothing public reads a draft", () => {
-  const publicDirs = ["src/app/(tenant)", "src/app/(marketing)", "src/components/tenant"];
+  const publicDirs = [
+    "src/app/(tenant)",
+    "src/app/(marketing)",
+    "src/components/tenant",
+    // The blog's public reads and templates (Wave B, M16): published columns only.
+    "src/lib/blog",
+    "src/components/post",
+  ];
   const publicFiles = publicDirs.flatMap((dir) => walk(dir));
 
   it("finds the public modules", () => {

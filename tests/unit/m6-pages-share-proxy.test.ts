@@ -227,6 +227,30 @@ describe("M6-10 the proxy branch for /share/*", () => {
     expect(response.headers.get("x-middleware-request-cookie")).toBeNull();
   });
 
+  it("a post's address (M16-16) is one more private link: the same rewrite, limit, headers and no cookie", async () => {
+    const ENTRY = "20000000-0000-4000-8000-00000000abcd";
+    const response = await proxy(
+      request(`/share/${TOKEN}/entry/${ENTRY}?x=1`, {
+        cookie: "sb-127-auth-token=secret",
+        "x-hl-share-path": "forged",
+      }),
+    );
+    expect(rewriteWithSession).not.toHaveBeenCalled();
+    expect(shareRateLimit).toHaveBeenCalledTimes(1);
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "http://app.localhost:3000/app/shared-draft?x=1",
+    );
+    // The token and the tail travel in request headers; the entry id is never a route parameter.
+    expect(response.headers.get(`x-middleware-request-${SHARE_TOKEN_HEADER}`)).toBe(TOKEN);
+    expect(response.headers.get("x-middleware-request-x-hl-share-path")).toBe(`entry/${ENTRY}`);
+    expect(response.headers.get("x-middleware-request-cookie")).toBeNull();
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("content-security-policy")).toContain("script-src 'self' 'nonce-");
+  });
+
   it("ignores everything else in the URL: an extra path, a query string and a ?page= parameter", async () => {
     const response = await shareProxy(
       request(`/share/${TOKEN}/other/path?page=00000000-0000-4000-8000-000000000001&x=1`),

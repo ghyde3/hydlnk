@@ -65,7 +65,7 @@ select tables_are(
     'oauth_blocked_hosts',
     -- Wave N: the content model, owners read, the server writes (189)
     'content_types', 'content_entries', 'content_entry_revisions', 'content_terms', 'content_entry_terms',
-    'site_paths'
+    'site_paths', 'content_slug_redirects'
   ],
   'public holds exactly the contract tables'
 );
@@ -231,6 +231,8 @@ select set_eq(
       ('content_entry_terms|service_role|INSERT|*'),
       ('content_entry_terms|service_role|UPDATE|*'),
       ('content_entry_terms|service_role|DELETE|*'),
+      ('content_slug_redirects|authenticated|SELECT|*'),
+      ('content_slug_redirects|service_role|SELECT|*'),
       ('site_paths|authenticated|SELECT|*'),
       ('site_paths|service_role|SELECT|*'),
       ('site_paths|service_role|DELETE|*'),

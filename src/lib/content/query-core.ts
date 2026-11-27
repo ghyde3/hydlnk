@@ -2,10 +2,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { decodeCursor, encodeCursor } from "./cursor";
+import { canonical } from "./entries-core";
 import { failure } from "./errors";
-import { ownedEntry, ownedSite } from "./guards";
+import { ownedEntry, ownedSite, siteType } from "./guards";
 import { LIST_SORTS, LIST_STATUSES } from "./schemas/enums";
 import type { EntryStatus, ListSort, ListStatus } from "./schemas/enums";
+import type { EntrySummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult } from "./types";
 
 type Admin = SupabaseClient<Database>;
@@ -27,11 +29,16 @@ export async function getEntryWithClient(
   const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
   if (!owned.ok) return owned;
   const e = owned.entry;
+  const type = await siteType(admin, e.site_id, e.type_id);
+  if (!type.ok) return type;
   return {
     ok: true as const,
     id: e.id,
     siteId: e.site_id,
     typeId: e.type_id,
+    typeKey: type.type.key,
+    hasUnpublishedChanges:
+      e.deleted_at === null && e.published !== null && differs(e.draft, e.published),
     draft: e.draft,
     published: e.published,
     rev: Number(e.rev),
@@ -45,17 +52,50 @@ export async function getEntryWithClient(
   };
 }
 
-export interface EntrySummary {
-  id: string;
-  rev: number;
-  status: EntryStatus;
-  title: string | null;
-  slug: string | null;
-  path: string | null;
-  publishedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  deletedAt: string | null;
+export type { EntrySummary };
+
+/** The draft against the published copy, key order aside (the compare a save uses to skip a no-op). */
+const differs = (draft: unknown, published: unknown) => canonical(draft) !== canonical(published);
+
+/**
+ * Which of these live entries have a draft that differs from the published copy. Publish records a
+ * revision at the rev it leaves, so an entry still at that rev has not been saved since and is
+ * settled without reading its documents; only the rest are read and compared.
+ */
+async function changedSincePublish(
+  admin: Admin,
+  live: ReadonlyArray<{ id: string; rev: number }>,
+): Promise<Set<string> | null> {
+  const changed = new Set<string>();
+  if (live.length === 0) return changed;
+  const ids = live.map((row) => row.id);
+  const marks = await admin
+    .from("content_entry_revisions")
+    .select("entry_id, rev")
+    .in("entry_id", ids)
+    .eq("was_published", true);
+  if (marks.error) {
+    console.error("[content] reading the published revisions failed", marks.error.message);
+    return null;
+  }
+  const publishedAt = new Set(marks.data.map((mark) => `${mark.entry_id}:${Number(mark.rev)}`));
+  const unsettled = live.filter((row) => !publishedAt.has(`${row.id}:${row.rev}`));
+  if (unsettled.length === 0) return changed;
+  const docs = await admin
+    .from("content_entries")
+    .select("id, draft, published")
+    .in(
+      "id",
+      unsettled.map((row) => row.id),
+    );
+  if (docs.error) {
+    console.error("[content] reading the entries failed", docs.error.message);
+    return null;
+  }
+  for (const doc of docs.data) {
+    if (doc.published !== null && differs(doc.draft, doc.published)) changed.add(doc.id);
+  }
+  return changed;
 }
 
 /** A PostgREST filter value inside or(...): quoted so commas, parens and dots stay literal. */
@@ -121,16 +161,36 @@ export async function listEntriesWithClient(
   }
   if (!type.data) return failure("not_found");
 
+  // The term filter reads the DRAFT's terms (what the list shows), not `content_entry_terms`, which
+  // holds the published copy's links only: a draft, or a post whose draft gained the term since its
+  // last publish, matches too. A term of another site or type matches nothing.
+  let termField: "categories" | "tags" | null = null;
+  if (input.termId) {
+    const term = await admin
+      .from("content_terms")
+      .select("taxonomy")
+      .eq("id", input.termId)
+      .eq("site_id", site.site.id)
+      .eq("type_id", type.data.id)
+      .maybeSingle();
+    if (term.error) {
+      console.error("[content] reading the term failed", term.error.message);
+      return failure("error");
+    }
+    if (!term.data) return { ok: true, items: [], nextCursor: null };
+    termField = term.data.taxonomy === "tag" ? "tags" : "categories";
+  }
+
   const col = COLUMN[sort];
   const select =
-    "id, rev, published_at, created_at, updated_at, deleted_at, title:draft->>title, slug:draft->>slug, path:draft->>path" +
-    (input.termId ? ", content_entry_terms!inner(term_id)" : "");
+    "id, rev, published_at, created_at, updated_at, deleted_at, title:draft->>title, slug:draft->>slug, path:draft->>path";
   let query = admin
     .from("content_entries")
     .select(select)
     .eq("site_id", site.site.id)
     .eq("type_id", type.data.id);
-  if (input.termId) query = query.eq("content_entry_terms.term_id", input.termId);
+  if (termField)
+    query = query.filter(`draft->terms->${termField}`, "cs", JSON.stringify([input.termId]));
   if (status === undefined) query = query.is("deleted_at", null);
   else if (status === "draft") query = query.is("deleted_at", null).is("published_at", null);
   else if (status === "published")
@@ -170,6 +230,11 @@ export async function listEntriesWithClient(
   const last = page[page.length - 1];
   const sortValue = (r: Raw) =>
     sort === "title" ? r.title : sort === "updated_at" ? r.updated_at : r.published_at;
+  const changed = await changedSincePublish(
+    admin,
+    page.filter((r) => statusOf(r) === "published").map((r) => ({ id: r.id, rev: Number(r.rev) })),
+  );
+  if (!changed) return failure("error");
   return {
     ok: true,
     items: page.map((r) => ({
@@ -183,7 +248,33 @@ export async function listEntriesWithClient(
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       deletedAt: r.deleted_at,
+      hasUnpublishedChanges: changed.has(r.id),
     })),
     nextCursor: raw.length > limit && last ? encodeCursor(sortValue(last), last.id) : null,
   };
+}
+
+/**
+ * How many entries of one type a site holds, drafts and the trash included (as HL010 counts them).
+ * A read: it checks ownership only. Another user's site, a missing one and an unknown type answer the
+ * same `not_found`.
+ */
+export async function countEntriesWithClient(
+  admin: Admin,
+  input: { actor: ContentActor; siteId: string; typeKey: string },
+): Promise<ContentResult<{ count: number }>> {
+  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  if (!site.ok) return site;
+  const type = await siteType(admin, site.site.id, input.typeKey);
+  if (!type.ok) return type;
+  const rows = await admin
+    .from("content_entries")
+    .select("id", { count: "exact", head: true })
+    .eq("site_id", site.site.id)
+    .eq("type_id", type.type.id);
+  if (rows.error || rows.count === null) {
+    console.error("[content] counting entries failed", rows.error?.message);
+    return failure("error");
+  }
+  return { ok: true, count: rows.count };
 }

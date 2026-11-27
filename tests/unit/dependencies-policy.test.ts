@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 import { describe, expect, it, vi } from "vitest";
-import { isClientModule, listFiles, rel, ROOT, walk } from "./support/module-graph";
+import { isClientModule, listFiles, rel, ROOT, stripComments, walk } from "./support/module-graph";
 
 /**
  * M9-14: the rules of CLAUDE.md's "Dependencies" section, held by tests. It reads files and
@@ -309,6 +309,8 @@ const TENANT_ALLOWED: Record<string, string> = {
   "server-only": "marks the server modules of the render path",
   "@supabase/supabase-js": "the secret-key client of the published-page query (server only)",
   "simple-icons": "brand marks as SVG paths, drawn into static markup at server render (Wave K)",
+  // Not `marked`: post bodies are lexed by src/lib/blog/markdown/ (M16-13), which imports only
+  // marked's token types. A value import of marked on the render path fails the allowlist test.
 };
 const TENANT_FORBIDDEN = [
   "lucide-react",
@@ -360,6 +362,21 @@ describe("M9-14 the tenant boundary: a public page reaches server-render package
     // the editor preview that sits in the same folder and is never imported by the render path.
     const client = [...live.files].filter(([, source]) => isClientModule(source)).map(([file]) => rel(file));
     expect(client).toEqual([]);
+  });
+
+  it("marked is not reached at run time: the post-body lexer is the module's own, marked is its types (M16-13)", () => {
+    // Post bodies are lexed by src/lib/blog/markdown/ (linear, bounded). It imports marked for the
+    // token types it emits (the contract with the renderer), which vanish at build time, and never
+    // calls marked's lexer, parser or renderer.
+    expect(graph.packages.get("marked")).toBeUndefined();
+    expect(live.packages.get("marked")).toBeUndefined();
+    const lexer = listFiles("src/lib/blog/markdown");
+    expect(lexer.length).toBeGreaterThan(5);
+    for (const file of lexer) {
+      const source = stripComments(read(rel(file)));
+      expect(source, rel(file)).not.toMatch(/\bimport\s+(?!type\b)[^;]*from\s+["']marked["']/);
+      expect(source, rel(file)).not.toMatch(/\.lex(?:er|Inline)?\(|\.parse(?:Inline)?\s*\(|\bmarked\s*\(/);
+    }
   });
 
   it("the packages the routes themselves reach are on the allowlist too (the narrower, real graph)", () => {

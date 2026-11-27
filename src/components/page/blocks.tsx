@@ -17,11 +17,14 @@ import {
   type GridBlock,
   type HeaderBlock,
   type ImageBlock,
+  type LatestPostsBlock,
   type LinkBlock,
   type PageLinkBlock,
   type SocialBlock,
   type TextBlock,
 } from "@/lib/document";
+import { BLOG_CLASSES } from "@/lib/blog/test-ids";
+import { postHref } from "@/lib/blog/types";
 import { mediaUrl } from "@/lib/media/url";
 import {
   BLOCK_OVERRIDE_KEYS,
@@ -90,7 +93,7 @@ export interface BlockContext {
    * on a page that is not drawn as part of a site (a demo): a page link to a sub-page then draws
    * nothing, while one to Home still resolves.
    */
-  site?: Pick<SiteContext, "hrefs">;
+  site?: Pick<SiteContext, "hrefs" | "latestPosts">;
 }
 
 /**
@@ -212,6 +215,82 @@ function PageLinkView({ block, ctx }: { block: PageLinkBlock; ctx: BlockContext 
     <a {...props} href={href}>
       {block.label}
     </a>
+  );
+}
+
+const LATEST_DATE = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" });
+
+/**
+ * The newest posts of the site's blog (Wave B, M16-07), as links to their pages: relative hrefs
+ * from `postHref` (the archive path and the slug both checked again), never routed through `/r`
+ * and not counted as clicks, like a page link. The posts come from the site context, never from
+ * the block. With the blog off or no post to show, the live page draws nothing; the editor preview
+ * shows a hint in the block's place.
+ */
+function LatestPostsView({ block, ctx }: { block: LatestPostsBlock; ctx: BlockContext }) {
+  const { style } = blockTokens(ctx.tokens, block.overrides);
+  const latest = ctx.site?.latestPosts ?? null;
+  const count = Number.isInteger(block.count) ? Math.min(Math.max(block.count, 1), 6) : 3;
+  const category = block.categoryId?.toLowerCase();
+  const posts = (latest?.posts ?? [])
+    .filter((post) => category === undefined || post.categoryIds.includes(category))
+    .flatMap((post) => {
+      const href = latest ? postHref(latest.archivePath, post.slug) : null;
+      return href === null ? [] : [{ post, href }];
+    })
+    .slice(0, count);
+  if (posts.length === 0) {
+    if (ctx.mode === "live") return null;
+    return (
+      <div
+        className="pg-placeholder"
+        data-block-id={block.id}
+        data-block-type="latest_posts"
+        style={style}
+      >
+        {latest === null
+          ? "Latest posts: turn on the blog to show them here"
+          : "Latest posts: publish a post to show it here"}
+      </div>
+    );
+  }
+  const heading = block.heading?.trim() ?? "";
+  const inert = ctx.thumbnail || ctx.inertLinks;
+  return (
+    <div
+      className={`pg-latest ${BLOG_CLASSES.latestPosts}`}
+      data-block-id={block.id}
+      data-block-type="latest_posts"
+      style={style}
+    >
+      {heading === "" ? null : <h2 className="pg-latest-heading">{heading}</h2>}
+      <ul className="pg-latest-list">
+        {posts.map(({ post, href }) => {
+          const time = Date.parse(post.publishedAt);
+          const inner = (
+            <>
+              <span className="pg-latest-title">{post.title}</span>
+              {Number.isNaN(time) ? null : (
+                <time className="pg-latest-date" dateTime={new Date(time).toISOString()}>
+                  {LATEST_DATE.format(time)}
+                </time>
+              )}
+            </>
+          );
+          return (
+            <li key={post.id} className="pg-latest-item">
+              {inert ? (
+                <span className="pg-latest-link">{inner}</span>
+              ) : (
+                <a className="pg-latest-link" href={href}>
+                  {inner}
+                </a>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -673,6 +752,8 @@ export function BlockView({ block, ctx }: { block: Block; ctx: BlockContext }) {
       return <ItemsView block={block} ctx={ctx} />;
     case "hours":
       return <HoursView block={block} ctx={ctx} />;
+    case "latest_posts":
+      return <LatestPostsView block={block} ctx={ctx} />;
     default:
       return null;
   }

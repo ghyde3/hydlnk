@@ -281,3 +281,40 @@ describe("M11-09 the CSV export and the page column", () => {
     );
   });
 });
+
+describe("M16-11 loadStats names the posts that have views in the range", () => {
+  const POST = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+
+  it("asks the source with the window's first day and the filter, and lists the posts after the pages", async () => {
+    const { source } = makeSource();
+    const viewedPosts = vi.fn(async () => [{ id: POST, title: "A viewed post" }]);
+    const result = await loadStats(input(POST), { ...source, viewedPosts });
+    if (!result.ok) throw new Error(result.error);
+    expect(viewedPosts).toHaveBeenCalledTimes(1);
+    expect(viewedPosts).toHaveBeenCalledWith(PAGE, result.data.window.start, POST);
+    expect(result.data.window.start).toBe("2026-09-01");
+    expect(result.data.pages.map((p) => p.label)).toEqual([
+      "All pages",
+      "Home",
+      "Items for sale",
+      "A viewed post",
+      "Deleted page",
+    ]);
+  });
+
+  it("M4-30 a range past the plan's history never asks which posts were viewed", async () => {
+    const { source } = makeSource();
+    const viewedPosts = vi.fn(async () => []);
+    const historicPageIds = vi.fn(async () => []);
+    const free: StatsSource = {
+      ...source,
+      viewedPosts,
+      historicPageIds,
+      resolvePage: async () => ({ plan: "free", published: PUBLISHED_HOME, subPages: [] }),
+    };
+    const result = await loadStats({ ...input(), range: 90 }, free);
+    expect(result).toMatchObject({ ok: false, error: "plan_required" });
+    expect(viewedPosts).not.toHaveBeenCalled();
+    expect(historicPageIds).not.toHaveBeenCalled();
+  });
+});

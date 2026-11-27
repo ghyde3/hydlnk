@@ -236,9 +236,11 @@ export const config = {
   // checks that every file in public/ is covered. There is deliberately no /marketing/ prefix
   // rule: a path that is not a file must still get its host's routing and 404. robots.txt and
   // sitemap.xml are route handlers that read the Host header themselves
-  // (src/lib/marketing/seo.ts), so they stay unmatched. The pattern has to be a literal so
-  // Next.js can analyse it at build time.
+  // (src/lib/marketing/seo.ts), so they stay unmatched. `/{segment}/feed.xml` (a blog's feed, Wave
+  // B, M16-03) is the one `.xml` path routed by host: the same lookahead sends it through the proxy,
+  // and no file in public/ has that shape. The pattern has to be a literal so Next.js can analyse it
+  // at build time.
   matcher: [
-    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|(?!(?:app|t|sites|r|c)/).*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm|mov)$).*)",
+    "/((?!_next|__nextjs|favicon\\.ico|robots\\.txt|sitemap\\.xml|(?!(?:app|t|sites|r|c)/|[a-z0-9-]+/feed\\.xml$).*\\.(?:svg|png|jpe?g|gif|webp|avif|ico|css|js|map|txt|xml|webmanifest|woff2?|mp4|webm|mov)$).*)",
   ],
 };

@@ -48,3 +48,52 @@ function clean<T>(value: T): T {
   }
   return value;
 }
+
+/** Control characters a Markdown body may not show: all but the line feed and the tab (indented code). */
+const BODY_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
+const BODY_BIDI = /[\u202a-\u202e\u2066-\u2069]/g;
+
+/** The texts of a post draft as the share preview draws them. */
+export interface SharedPostText {
+  title: string;
+  excerpt: string;
+  body: string;
+  seo: { title?: string; description?: string; noindex?: boolean };
+}
+
+/**
+ * A post's saved draft without hidden characters (M16-16), for the same reason as
+ * `sanitizeSharedDoc`: the share link draws a draft that never met the Publish gate, on the app
+ * host. The title and the SEO fields follow the single-line rule, the excerpt keeps its line
+ * breaks, and the Markdown body keeps line breaks and tabs (an indented code block) and loses every
+ * other control character and the bidi overrides and isolates. The body's HTML, links and images
+ * are not this function's business: `PostBody` draws raw HTML as text and vets every `href` and
+ * `src` itself. Pure; the input is not changed; a missing text is "".
+ */
+export function sanitizeSharedPost(draft: {
+  title?: string | undefined;
+  excerpt?: string | undefined;
+  body?: string | undefined;
+  seo?:
+    | {
+        title?: string | undefined;
+        description?: string | undefined;
+        noindex?: boolean | undefined;
+      }
+    | undefined;
+}): SharedPostText {
+  const line = (value: string | undefined) => stripHiddenCharacters(value ?? "");
+  const seo: SharedPostText["seo"] = {};
+  if (draft.seo?.title !== undefined) seo.title = line(draft.seo.title);
+  if (draft.seo?.description !== undefined) seo.description = line(draft.seo.description);
+  if (draft.seo?.noindex !== undefined) seo.noindex = draft.seo.noindex;
+  return {
+    title: line(draft.title),
+    excerpt: stripHiddenCharacters(draft.excerpt ?? "", { multiline: true }),
+    body: (draft.body ?? "")
+      .replace(/\r\n?/g, "\n")
+      .replace(BODY_CONTROL, "")
+      .replace(BODY_BIDI, ""),
+    seo,
+  };
+}

@@ -1,8 +1,10 @@
 import "server-only";
-import { marked, type Token, type Tokens } from "marked";
+import type { Token, Tokens } from "marked";
+import { walkBody } from "@/lib/blog/markdown";
 import { findBlockedLinks, type BlocklistRpc } from "@/lib/blocklist/check";
 import { MAX_URL_LENGTH } from "@/lib/document/url";
 import { failure } from "./errors";
+import { uploadPathOf } from "./images";
 import type { ContentFailure } from "./types";
 
 const HTML_URL =
@@ -58,10 +60,14 @@ function normalizeUrl(raw: string): string {
   }
 }
 
-/** Every link and image address in a Markdown body, including `href`/`src` in raw HTML. */
+/**
+ * Every link and image address in a Markdown body, including `href`/`src` in raw HTML. Read with the
+ * one bounded lexer; a body it refuses holds no addresses here, because the save and publish gates
+ * refuse that body first (`bodyShapeIssue`).
+ */
 export function markdownUrls(body: string): string[] {
   const urls: string[] = [];
-  marked.walkTokens(marked.lexer(body), (token: Token) => {
+  walkBody(body, (token: Token) => {
     if (token.type === "link" || token.type === "image") {
       urls.push((token as Tokens.Link | Tokens.Image).href);
     }
@@ -145,7 +151,9 @@ export async function blockedBodyLinks(
 ): Promise<ContentFailure | null> {
   const body = (draft as { body?: unknown } | null)?.body;
   if (typeof body !== "string" || body === "") return null;
-  const urls = markdownUrls(body);
+  // An upload's stored address is this project's own Storage and nothing else (`uploadPathOf`), so its
+  // host is not a link to judge. Locally that host is a loopback address, which the blocklist refuses.
+  const urls = markdownUrls(body).filter((url) => uploadPathOf(url) === null);
   // The database judges no host in an address over the cap, so a longer one cannot be judged: refuse it.
   if (urls.some((url) => url.length > MAX_URL_LENGTH)) {
     return { ...failure("blocked_link"), hosts: [] };

@@ -19,7 +19,7 @@ import type { SaveHold } from "@/lib/editor/autosave";
 import type { HomeEntryRef } from "@/lib/editor/save-client";
 import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { useUndoRedo } from "@/components/editor/use-undo-redo";
-import { useSitePages, type SubPageInit } from "@/components/site/use-site-pages";
+import { useSitePages, type SiteArchive, type SubPageInit } from "@/components/site/use-site-pages";
 import { useThemeLibrary, useThemePreview } from "@/components/themes";
 import { toPublishForm, type DraftDoc, type PublishDoc, type PublishError } from "@/lib/document";
 import {
@@ -102,6 +102,8 @@ export interface WorkspaceProviderProps {
   subPages: SubPageInit[];
   /** Page entries in the trash: they still count toward the plan's pages per site (1b1-18). */
   trashedPages?: number;
+  /** The site's types with an archive (the blog), on or off: what the menu may name besides pages (M16-08). */
+  archives?: SiteArchive[];
 
   children: ReactNode;
 }
@@ -180,8 +182,10 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     plan,
     initial: props.subPages,
     trashedPages: props.trashedPages ?? 0,
+    initialArchives: props.archives ?? [],
     homeTitle: "Home",
     nav: draft.nav,
+    homeBlocks: draft.blocks,
     editDraft,
   });
   const {
@@ -281,9 +285,11 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
   const [publishedToken, setPublishedToken] = useState<number | null>(null);
   // Publish stores Home's menu without entries for pages no longer in the site (`homeForSite`), so
   // the chip compares that stored shape, not a draft menu that still names a removed page.
+  // A menu item that names one of the site's archives (the blog) is stored too (M16-08).
   const siteIds = site.titles.map((page) => page.id);
-  const storedForm = homeForSite(form, siteIds);
-  const storedPublished = published.doc ? homeForSite(published.doc, siteIds) : null;
+  const archiveIds = site.archives.map((archive) => archive.typeId);
+  const storedForm = homeForSite(form, siteIds, archiveIds);
+  const storedPublished = published.doc ? homeForSite(published.doc, siteIds, archiveIds) : null;
   // The site publishes in parts (M15-10): the design, Home's blocks and each page have their own state.
   const split = splitPublishState({
     hasPublished: published.has,

@@ -151,6 +151,13 @@ export const blockDefaults: Record<BlockType, () => Block> = {
     label: "New page link",
     target: "home",
   }),
+  // The three newest posts, with no heading and no category (M16-07).
+  latest_posts: () => ({
+    id: newBlockId(),
+    type: "latest_posts",
+    visible: true,
+    count: 3,
+  }),
   // Two sample items to overwrite (M12-01).
   items: () => ({
     id: newBlockId(),

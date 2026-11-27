@@ -1,4 +1,5 @@
 import { isValidSubPagePath } from "@/lib/document/path";
+import { archiveInternalSuffix, archiveRoute } from "./archive-paths";
 
 /**
  * Internal route prefixes. The proxy rewrites a request into one of these segments by host:
@@ -63,7 +64,9 @@ export function appRewritePath(pathname: string): string {
  * What a handle host's request is rewritten to: ("mara", "/") -> "/t/mara", ("mara", "/og") ->
  * "/t/mara/og", with `testHooks` the two hook paths under the handle, and ("mara", "/items") ->
  * "/t/mara/p/items" for one valid sub-page segment (`subPageSegment`: a DYNAMIC route, so an invented
- * path makes no cache entry). Every other path is `PLAIN_404_PATH`.
+ * path makes no cache entry), and one of the fixed shapes under an archive (`archiveRoute`, Wave B:
+ * ("mara", "/blog/my-post") -> "/t/mara/a/blog/e/my-post") to its own dynamic route. Every other
+ * path is `PLAIN_404_PATH`.
  */
 export function tenantRewritePath(handle: string, pathname: string, testHooks = false): string {
   if (pathname === "/" || pathname === "") return `/t/${handle}`;
@@ -72,13 +75,16 @@ export function tenantRewritePath(handle: string, pathname: string, testHooks = 
   }
   const subPage = subPageSegment(pathname);
   if (subPage !== null) return `/t/${handle}/p/${subPage}`;
+  const archive = archiveRoute(pathname);
+  if (archive !== null) return `/t/${handle}${archiveInternalSuffix(archive)}`;
   return PLAIN_404_PATH;
 }
 
 /**
  * What a resolved custom host's request is rewritten to: ("<pageId>", "/") -> "/sites/<pageId>",
- * ("<pageId>", "/og") -> "/sites/<pageId>/og". Every other path, and the `unknown` sentinel of an
- * unresolved host for every path, is `PLAIN_404_PATH`.
+ * ("<pageId>", "/og") -> "/sites/<pageId>/og", a sub-page segment and the archive shapes as on a
+ * handle host. Every other path, and the `unknown` sentinel of an unresolved host for every path, is
+ * `PLAIN_404_PATH`.
  */
 export function siteRewritePath(pageId: string, pathname: string): string {
   if (pageId === UNKNOWN_SITE_ID) return PLAIN_404_PATH;
@@ -86,6 +92,8 @@ export function siteRewritePath(pageId: string, pathname: string): string {
   if (pathname === "/og") return `/sites/${pageId}/og`;
   const subPage = subPageSegment(pathname);
   if (subPage !== null) return `/sites/${pageId}/p/${subPage}`;
+  const archive = archiveRoute(pathname);
+  if (archive !== null) return `/sites/${pageId}${archiveInternalSuffix(archive)}`;
   return PLAIN_404_PATH;
 }
 

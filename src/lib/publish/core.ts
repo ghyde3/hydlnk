@@ -26,6 +26,7 @@ import { mapPublishIssues } from "@/lib/document/publish";
 import {
   getHomeDraftWithClient,
   getPublishedHomeWithClient,
+  listArchiveTypesWithClient,
   listDraftPagesWithClient,
   type DraftPage,
   type HomeDraft,
@@ -331,9 +332,21 @@ export async function publishPageCore(
 
   // The rules that span documents (paths, block ids, page links). Home's menu drops entries that
   // point at a page no longer in the site, before anything else reads it.
+  // A menu item may also name one of this site's types that has an archive (M16-08, the blog): it
+  // is kept, on or off, and the live site hides it while the type is off. A failed read refuses.
+  let archiveTypeIds: string[];
+  try {
+    archiveTypeIds = (await listArchiveTypesWithClient(admin, pageId.data)).map(
+      (type) => type.typeId,
+    );
+  } catch (error) {
+    console.error("[publish] reading the site's archives failed", error);
+    return refuse("error");
+  }
   const home = homeForSite(
     checked.data,
     subPages.map((page) => page.id),
+    archiveTypeIds,
   );
   const crossErrors = siteErrors(home, subPages);
   if (crossErrors.length > 0) return refuse("invalid", crossErrors);
@@ -999,9 +1012,19 @@ export async function publishDesignCore(
   }
   // The menu keeps every page of the site, drafts included: an item to a page that is not live is
   // hidden on the live site and comes back when that page is published.
+  // So does an item that names one of this site's types with an archive (M16-08, the blog), on or
+  // off: Publish design is never blocked by it. A failed read refuses (closed).
+  let archiveTypeIds: string[];
+  try {
+    archiveTypeIds = (await listArchiveTypesWithClient(admin, pageId)).map((type) => type.typeId);
+  } catch (error) {
+    console.error("[publish] reading the site's archives failed", error);
+    return refuse("error");
+  }
   const form = homeForSite(
     checked.data,
     subDrafts.map((other) => other.id),
+    archiveTypeIds,
   );
 
   // Redirect mode (M9-31): the plan, and a target among Home's LIVE blocks.

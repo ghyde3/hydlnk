@@ -4,16 +4,12 @@ import type { Database } from "@/lib/supabase/database.types";
 import { canonical, updateEntryWithClient } from "./entries-core";
 import { failure } from "./errors";
 import { activeAccount, ownedEntry } from "./guards";
+import type { RevisionSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult, ContentSource } from "./types";
 
 type Admin = SupabaseClient<Database>;
 
-export type RevisionSummary = {
-  rev: number;
-  wasPublished: boolean;
-  source: ContentSource;
-  createdAt: string;
-};
+export type { RevisionSummary };
 
 /** An entry's revisions, newest first, without snapshots. Reads check ownership only. */
 export async function listRevisionsWithClient(

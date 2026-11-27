@@ -22,6 +22,10 @@ export type EntrySaveBody =
   | { kind: "storage-full" }
   | { kind: "blocked"; hosts: string[]; blockIds: string[] }
   | { kind: "path"; message: string }
+  /** A post's slug is taken or reserved (HL012, the live-slug index): a message for the slug field. */
+  | { kind: "slug"; message: string }
+  /** A plan limit or a cap refused the write (HL010 posts per plan, HL015 terms per type). */
+  | { kind: "limit"; message: string }
   | { kind: "suspended"; code: string; message: string }
   | { kind: "invalid"; message: string; issues?: ContentFailure["issues"] }
   | { kind: "error" };
@@ -56,6 +60,12 @@ export function fromFailure(f: ContentFailure): EntrySaveResponse {
       };
     case "path_taken":
       return { status, body: { kind: "path", message: f.message } };
+    case "slug_taken":
+    case "slug_reserved":
+      return { status, body: { kind: "slug", message: f.message } };
+    case "entry_limit":
+    case "term_limit":
+      return { status, body: { kind: "limit", message: f.message } };
     case "account_suspended":
       return {
         status,

@@ -248,6 +248,19 @@ export const BLOCK_CATALOG: readonly BlockInfo[] = [
       </Icon>
     ),
   },
+  {
+    id: "latest_posts",
+    name: "Latest posts",
+    short: "Your newest blog posts as links, on Home or any page.",
+    detail:
+      "Show 1 to 6 of your newest posts, all of them or one category. A new post appears on its own: there is nothing to republish.",
+    icon: (
+      <Icon>
+        <rect x="4" y="4.5" width="16" height="15" rx="2" />
+        <path d="M7.5 9h9M7.5 12.5h9M7.5 16h5" />
+      </Icon>
+    ),
+  },
 ];
 
 const NUMBER_WORDS = [

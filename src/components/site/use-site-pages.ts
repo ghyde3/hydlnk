@@ -51,7 +51,9 @@ import {
   type SiteTemplateId,
 } from "@/lib/site-templates/catalog";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
+import { latestPostsCategories, usesLatestPosts } from "@/lib/site/live";
 import type { WorkspaceAction } from "@/components/workspace/workspace-reducer";
+import { useLatestPosts } from "@/components/blocks/use-latest-posts";
 import { docOf, initSiteState, siteReducer, type SubPageSettings } from "./site-state";
 
 /** One sub-page as the workspace opens it (the layout's read of the site's page entries). */
@@ -63,6 +65,19 @@ export interface SubPageInit {
   createdAt: string;
   /** The page entry's `rev`: the revision this page's saves are checked against (M15-01). */
   rev: number;
+}
+
+/**
+ * A type of the site that has an archive (the blog), as the menu needs it (M16-08): its id is what a
+ * menu item stores, and the live site links it to `/{path}` under the type's plural label while it
+ * is on. Structurally the server's `ArchiveType` (`src/lib/site/page-entries-core.ts`).
+ */
+export interface SiteArchive {
+  typeId: string;
+  key: string;
+  path: string;
+  labelPlural: string;
+  enabled: boolean;
 }
 
 export type SiteAddResult = { ok: true; id: string } | { ok: false; message: string };
@@ -111,7 +126,12 @@ export interface SiteValue {
   duplicate: (id: string) => Promise<SiteAddResult>;
   /** Each sub-page's state against the live site (M12-08). */
   pageStates: Readonly<Record<string, PageState>>;
+  /** Adds a page's id, or an archive's type id (M16-08), to the draft menu, or takes it out. */
   toggleMenu: (id: string) => void;
+  /** The site's types with an archive, on or off: Publish keeps a menu item that names one. */
+  archives: readonly SiteArchive[];
+  /** Called when the blog is turned on or off, or its address changes, in this session. */
+  setArchive: (archive: SiteArchive) => void;
   moveInMenu: (id: string, direction: -1 | 1) => void;
   /** Drag and drop: put a menu page where another one is. */
   reorderMenu: (id: string, overId: string) => void;
@@ -188,14 +208,30 @@ export function useSitePages(args: {
   initial: readonly SubPageInit[];
   /** Page entries in the trash when the editor opened: they still count toward the limit. */
   trashedPages?: number;
+  /** The site's types with an archive as the editor opened (M16-08). */
+  initialArchives?: readonly SiteArchive[];
   homeTitle: string;
   nav: DraftDoc["nav"];
+  /** Home's blocks: a latest-posts block there needs the posts too. */
+  homeBlocks: DraftDoc["blocks"];
   editDraft: (update: (draft: DraftDoc) => DraftDoc, group?: string) => void;
 }): SiteValue {
-  const { siteId, plan, homeTitle, nav, editDraft } = args;
+  const { siteId, plan, homeTitle, nav, homeBlocks, editDraft } = args;
   const [initial] = useState(() => args.initial);
   // Trashed pages keep a place in the limit until they are purged; a delete here adds one.
   const [trashed, setTrashed] = useState(() => args.trashedPages ?? 0);
+  const [archives, setArchives] = useState<readonly SiteArchive[]>(
+    () => args.initialArchives ?? [],
+  );
+  const setArchive = useCallback(
+    (archive: SiteArchive) =>
+      setArchives((current) =>
+        current.some((held) => held.typeId === archive.typeId)
+          ? current.map((held) => (held.typeId === archive.typeId ? archive : held))
+          : [...current, archive],
+      ),
+    [],
+  );
   const [state, dispatch] = useReducer(siteReducer, initial, initSiteState);
   const [activeId, setActiveId] = useState<string>(HOME_PAGE_ID);
 
@@ -628,14 +664,43 @@ export function useSitePages(args: {
     setLivePaths(new Map());
   }, []);
 
+  // The categories the latest-posts blocks of every page filter by: their older posts are read too.
+  // The posts are read only while some page holds such a block (a site without one never asks).
+  const allBlocks = useMemo(
+    () => [...homeBlocks, ...[...forms.values()].flatMap((form) => form.blocks)],
+    [homeBlocks, forms],
+  );
+  const latestCategories = useMemo(() => latestPostsCategories(allBlocks), [allBlocks]);
+  const { latest: latestPosts } = useLatestPosts(
+    siteId,
+    latestCategories,
+    usesLatestPosts(allBlocks),
+  );
   const preview = useMemo<PreviewSite>(() => {
     const live: SitePageSummary[] = state.ids.map((id) => ({
       id,
       path: state.settings[id]!.path.trim(),
       title: titleOf({ title: state.settings[id]!.title }),
     }));
-    const menu = buildMenu(nav, live, effectiveId, "links");
-    const site: SiteContext = { hrefs: hrefsOf(live), menu };
+    // The archives that are on join the menu as the live site draws them (M16-08): the type's id,
+    // its path and its plural label. One that is off is skipped, as on the live site.
+    const menu = buildMenu(
+      nav,
+      [
+        ...live,
+        ...archives
+          .filter((archive) => archive.enabled)
+          .map((archive) => ({
+            id: archive.typeId,
+            path: archive.path,
+            title: archive.labelPlural,
+          })),
+      ],
+      effectiveId,
+      "links",
+    );
+    // What a latest-posts block draws (M16-07): the site's published posts, null while the blog is off.
+    const site: SiteContext = { hrefs: hrefsOf(live), menu, latestPosts };
     if (isHome) return { site };
     return {
       site,
@@ -644,7 +709,7 @@ export function useSitePages(args: {
         blocks: forms.get(effectiveId)?.blocks ?? [],
       },
     };
-  }, [state.ids, state.settings, nav, effectiveId, isHome, forms]);
+  }, [state.ids, state.settings, nav, effectiveId, isHome, forms, latestPosts, archives]);
 
   const hrefToId = useCallback(
     (href: string) => {
@@ -678,6 +743,8 @@ export function useSitePages(args: {
     duplicate,
     pageStates,
     toggleMenu,
+    archives,
+    setArchive,
     moveInMenu,
     reorderMenu,
     menuShown: resolvedNav.show,

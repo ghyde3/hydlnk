@@ -9,8 +9,9 @@ import { makeOwner, removeOwners, stackIsUp, type TestOwner } from "./publish-su
 import { enablePost } from "./content-support";
 
 const invalidatePage = vi.hoisted(() => vi.fn());
+const invalidateEntry = vi.hoisted(() => vi.fn());
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/publish/invalidate", () => ({ invalidatePage }));
+vi.mock("@/lib/publish/invalidate", () => ({ invalidatePage, invalidateEntry }));
 const adminMock = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminSupabase: () => adminMock.current }));
 
@@ -35,7 +36,10 @@ describe.skipIf(!run)("publish and unpublish an entry", () => {
     owners.push(a, b);
     await enablePost(admin, a.pageId);
   });
-  beforeEach(() => invalidatePage.mockReset());
+  beforeEach(() => {
+    invalidatePage.mockReset();
+    invalidateEntry.mockReset();
+  });
   afterAll(async () => removeOwners(admin as never, owners));
 
   const post = async (draft: unknown, o = a) => {
@@ -193,23 +197,34 @@ describe.skipIf(!run)("publish and unpublish an entry", () => {
   });
 
   describe("the wrapper", () => {
-    it("expires the site tag once after ok publish and unpublish, never after a refusal, and swallows a throw", async () => {
+    // M16-09: a post expires its own entry and its type, not the site (a page entry still does:
+    // tests/unit/m16-content-expire.test.ts).
+    it("expires the post's entry and type once after ok publish and unpublish, never after a refusal, and swallows a throw", async () => {
       const { publishEntry, unpublishEntry } = await import("@/lib/content");
       const made = await post({ title: "Wrap", slug: "wrap" });
       expect(
         await publishEntry({ actor: actor(b), entryId: made.id, expectedRev: 1 }),
       ).toMatchObject({ ok: false });
-      expect(invalidatePage).not.toHaveBeenCalled();
-      invalidatePage.mockImplementationOnce(() => {
+      expect(invalidateEntry).not.toHaveBeenCalled();
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
+      invalidateEntry.mockImplementationOnce(() => {
         throw new Error("boom");
       });
       const out = await publishEntry({ actor: actor(a), entryId: made.id, expectedRev: 1 });
+      log.mockRestore();
       expect(out).toMatchObject({ ok: true });
-      expect(invalidatePage).toHaveBeenCalledTimes(1);
-      expect(invalidatePage).toHaveBeenCalledWith(a.pageId);
+      const typeId = (await row(made.id)).type_id;
+      const place = { siteId: a.pageId, typeId, typeKey: "post", entryId: made.id };
+      // The throw is tried once more at once (the security pass, finding 13): two calls, the second
+      // went through, so the answer is not flagged.
+      expect(invalidateEntry).toHaveBeenCalledTimes(2);
+      expect(invalidateEntry).toHaveBeenCalledWith(place);
+      expect(out).not.toHaveProperty("cacheStale");
       const down = await unpublishEntry({ actor: actor(a), entryId: made.id, expectedRev: 2 });
       expect(down).toMatchObject({ ok: true });
-      expect(invalidatePage).toHaveBeenCalledTimes(2);
+      expect(invalidateEntry).toHaveBeenCalledTimes(3);
+      expect(invalidateEntry).toHaveBeenLastCalledWith(place);
+      expect(invalidatePage).not.toHaveBeenCalled();
     });
   });
 });

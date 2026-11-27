@@ -8,6 +8,7 @@ import {
   subPageSegment,
   tenantRewritePath,
 } from "@/lib/routing/paths";
+import { archiveInternalSuffix, archiveRoute } from "@/lib/routing/archive-paths";
 import { TENANT_CONTENT_SECURITY_POLICY } from "@/lib/routing/tenant-headers";
 
 /**
@@ -23,6 +24,11 @@ import { TENANT_CONTENT_SECURITY_POLICY } from "@/lib/routing/tenant-headers";
  * Next.js stores nothing for it, and the route answers the 404 of a path that is not a live page
  * from the site's cached index), so the invariant moved: no path a visitor invents ever reaches a
  * STATIC route other than `/sites/unknown`. Everything else is still the one plain 404.
+ *
+ * Wave B (M16-03) adds a fixed set of deeper shapes under an archive (`archiveRoute`:
+ * `/{archive}/{slug}`, `/{archive}/page/{n}`, the two term shapes and `/{archive}/feed.xml`), each
+ * rewritten to its own explicit DYNAMIC route under `/a/`. The invariant is the same: a path of
+ * one of those shapes stores nothing, and every other deeper path is the one plain 404.
  */
 
 vi.mock("@/lib/env/client", () => ({
@@ -76,20 +82,34 @@ const SPECIAL_PATHS = [
   "/with space",
   "/ü",
 ];
-const INVENTED = [...SPECIAL_PATHS, ...Array.from({ length: 60 }, (_, i) => randomPath(i))];
+/** Deeper invented paths of no shape (three plain segments, four, uppercase under an archive). */
+const deepPath = (i: number) =>
+  `/${Math.random().toString(36).slice(2)}/x${i}/${i % 2 === 0 ? "y" : "y/z"}`;
+const INVENTED = [
+  ...SPECIAL_PATHS,
+  ...Array.from({ length: 60 }, (_, i) => randomPath(i)),
+  ...Array.from({ length: 20 }, (_, i) => deepPath(i)),
+];
 /** The path the proxy sees: a request URL is normalized first (`/%2e%2e/x` is `/x`). */
 const seen = (path: string) => new URL(path, "http://x.test").pathname;
-/** Where a handle host sends an invented path: the dynamic sub-page route for one valid segment, else the one 404. */
-const tenantTarget = (path: string) => {
+/** The dynamic route a path of a known shape goes to (a sub-page segment, or a shape under an archive), or null. */
+const dynamicSuffix = (path: string) => {
   const segment = subPageSegment(seen(path));
-  return segment === null ? PLAIN_404_PATH : `/t/mara/p/${segment}`;
+  if (segment !== null) return `/p/${segment}`;
+  const archive = archiveRoute(seen(path));
+  return archive === null ? null : archiveInternalSuffix(archive);
+};
+/** Where a handle host sends an invented path: a dynamic route for a known shape, else the one 404. */
+const tenantTarget = (path: string) => {
+  const suffix = dynamicSuffix(path);
+  return suffix === null ? PLAIN_404_PATH : `/t/mara${suffix}`;
 };
 const siteTarget = (path: string) => {
-  const segment = subPageSegment(seen(path));
-  return segment === null ? PLAIN_404_PATH : `/sites/${PAGE}/p/${segment}`;
+  const suffix = dynamicSuffix(path);
+  return suffix === null ? PLAIN_404_PATH : `/sites/${PAGE}${suffix}`;
 };
-/** The paths that are not a sub-page shape: one plain 404 entry whatever was asked. */
-const NOT_A_PAGE = INVENTED.filter((path) => subPageSegment(seen(path)) === null);
+/** The paths of no known shape: one plain 404 entry whatever was asked. */
+const NOT_A_PAGE = INVENTED.filter((path) => dynamicSuffix(path) === null);
 
 beforeEach(() => {
   resolveCustomDomain.mockReset();
@@ -109,8 +129,13 @@ describe("the pure rewrite paths", () => {
     expect(tenantRewritePath("mara", "/og")).toBe("/t/mara/og");
     for (const path of INVENTED) {
       const segment = subPageSegment(path);
+      const archive = archiveRoute(path);
       expect(tenantRewritePath("mara", path), path).toBe(
-        segment === null ? PLAIN_404_PATH : `/t/mara/p/${segment}`,
+        segment !== null
+          ? `/t/mara/p/${segment}`
+          : archive !== null
+            ? `/t/mara${archiveInternalSuffix(archive)}`
+            : PLAIN_404_PATH,
       );
     }
     expect(NOT_A_PAGE.length).toBeGreaterThan(25);
@@ -164,8 +189,13 @@ describe("the pure rewrite paths", () => {
     expect(siteRewritePath(PAGE, "/og")).toBe(`/sites/${PAGE}/og`);
     for (const path of INVENTED) {
       const segment = subPageSegment(path);
+      const archive = archiveRoute(path);
       expect(siteRewritePath(PAGE, path), path).toBe(
-        segment === null ? PLAIN_404_PATH : `/sites/${PAGE}/p/${segment}`,
+        segment !== null
+          ? `/sites/${PAGE}/p/${segment}`
+          : archive !== null
+            ? `/sites/${PAGE}${archiveInternalSuffix(archive)}`
+            : PLAIN_404_PATH,
       );
     }
     expect(siteRewritePath(PAGE, "/items")).toBe(`/sites/${PAGE}/p/items`);
@@ -181,7 +211,7 @@ describe("a handle host: invented paths share one cache entry", () => {
     for (const path of INVENTED) {
       const response = await proxy(request("mara.localhost:3000", path));
       expect(rewriteOf(response), path).toBe(tenantTarget(path));
-      if (subPageSegment(seen(path)) === null) targets.add(rewriteOf(response));
+      if (dynamicSuffix(path) === null) targets.add(rewriteOf(response));
       expect(response.headers.get("content-security-policy"), path).toBeTruthy();
       expect(response.headers.has("set-cookie"), path).toBe(false);
     }
@@ -193,7 +223,14 @@ describe("a handle host: invented paths share one cache entry", () => {
     expect(rewriteOf(response)).toBe("/t/mara/p/items");
     expect(response.headers.get("content-security-policy")).toBeTruthy();
     expect(rewriteOf(await proxy(request("mara.localhost:3000", "/Items")))).toBe(PLAIN_404_PATH);
-    expect(rewriteOf(await proxy(request("mara.localhost:3000", "/items/x")))).toBe(PLAIN_404_PATH);
+    // Two segments are a post's shape under an archive (Wave B): its own dynamic route, never `/p/`.
+    expect(rewriteOf(await proxy(request("mara.localhost:3000", "/items/x")))).toBe(
+      "/t/mara/a/items/e/x",
+    );
+    expect(rewriteOf(await proxy(request("mara.localhost:3000", "/items/X")))).toBe(PLAIN_404_PATH);
+    expect(rewriteOf(await proxy(request("mara.localhost:3000", "/items/x/y")))).toBe(
+      PLAIN_404_PATH,
+    );
     // The internal route is not reachable by typing it.
     expect(rewriteOf(await proxy(request("mara.localhost:3000", "/t/mara/p/items")))).toBe(
       PLAIN_404_PATH,
@@ -281,7 +318,7 @@ describe("a custom host: invented paths share the same one cache entry", () => {
     for (const path of INVENTED) {
       const response = await proxy(request("links.example.org", path));
       expect(rewriteOf(response), path).toBe(siteTarget(path));
-      if (subPageSegment(seen(path)) === null) targets.add(rewriteOf(response));
+      if (dynamicSuffix(path) === null) targets.add(rewriteOf(response));
       expect(response.headers.get("content-security-policy"), path).toBeTruthy();
       expect(response.headers.has("set-cookie"), path).toBe(false);
     }
@@ -342,7 +379,22 @@ describe("the catch-all routes are gone", () => {
   });
 
   it("the sub-page routes are dynamic: nothing is stored per path a visitor invents", () => {
-    for (const route of ["t/[handle]/p/[path]/route.ts", "sites/[pageId]/p/[path]/route.ts"]) {
+    const archiveRoutes = walk(tenantRoot)
+      .filter((path) => /\/a\/\[archive\]\/.*route\.ts$/.test(path))
+      .map((path) => path.replace(`${tenantRoot}/`, ""));
+    // The eight routes under an archive (Wave B, M16-03): four per host.
+    expect(archiveRoutes.sort()).toEqual(
+      ["sites/[pageId]", "t/[handle]"].flatMap((host) =>
+        ["e/[slug]", "feed", "n/[n]", "x/[taxonomy]/[term]/[n]"].map(
+          (tail) => `${host}/a/[archive]/${tail}/route.ts`,
+        ),
+      ),
+    );
+    for (const route of [
+      "t/[handle]/p/[path]/route.ts",
+      "sites/[pageId]/p/[path]/route.ts",
+      ...archiveRoutes,
+    ]) {
       const source = readFileSync(join(tenantRoot, route), "utf8").replace(
         /\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm,
         "$1",
@@ -355,13 +407,30 @@ describe("the catch-all routes are gone", () => {
     }
   });
 
-  it("the only dynamic segments are the handle, the page id and, under /p/, the sub-page path (a dynamic route)", () => {
+  it("the only dynamic segments are the handle, the page id, under /p/ the sub-page path and under /a/ the parts of an archive shape (dynamic routes)", () => {
     const dynamic = new Set(
       walk(tenantRoot)
         .flatMap((path) => path.match(/\[[^\]]+\]/g) ?? [])
         .map((segment) => segment),
     );
-    expect([...dynamic].sort()).toEqual(["[handle]", "[pageId]", "[path]"]);
+    expect([...dynamic].sort()).toEqual([
+      "[archive]",
+      "[handle]",
+      "[n]",
+      "[pageId]",
+      "[path]",
+      "[slug]",
+      "[taxonomy]",
+      "[term]",
+    ]);
+    // Everything but the handle and the page id sits under /p/ or /a/, never beside a static route.
+    for (const dir of walk(tenantRoot).filter((path) =>
+      /\[(?!handle|pageId)[^\]]+\]$/.test(path),
+    )) {
+      expect(dir.replace(`${tenantRoot}/`, ""), dir).toMatch(
+        /^(?:t\/\[handle\]|sites\/\[pageId\])\/(?:p\/\[path\]$|a\/\[archive\])/,
+      );
+    }
     // [path] exists only under /p/ and its route is the dynamic one checked above.
     const pathDirs = walk(tenantRoot).filter((path) => path.endsWith("[path]"));
     expect(pathDirs.map((dir) => dir.replace(`${tenantRoot}/`, "")).sort()).toEqual([

@@ -1,5 +1,5 @@
 import { formatUploadUsage } from "./format";
-import { OVER_LIMIT_NOTE } from "./messages";
+import { OVER_LIMIT_NOTE, postsUsageText } from "./messages";
 import { PLAN_LIMITS, type PlanId } from "./table";
 
 /**
@@ -90,4 +90,37 @@ export function buildMeters(plan: PlanId, usage: AccountUsage): Meter[] {
       : counted("themes", "Saved themes", usage.savedThemes, limits.savedThemes);
 
   return [pages, domains, uploads, themes];
+}
+
+/** The posts meter of one site (M16-12): how many posts it holds against the plan's entries per type. */
+export interface PostsMeter {
+  /** Posts of the site, the trash included (as HL010 counts). */
+  used: number;
+  /** The plan's limit (Studio's is a fair-use cap that copy shows as "Unlimited"). */
+  limit: number;
+  /** "3 of 25 posts", or "40 posts · Unlimited" on Studio. */
+  text: string;
+  /** Fill width as a percent, 0 to 100. */
+  percent: number;
+  /** A dashed, empty track: the plan shows no limit. */
+  dashed: boolean;
+  /** No new post fits: the server refuses the next insert with HL010. */
+  atLimit: boolean;
+  /** More posts than the plan allows (after a downgrade). Nothing is deleted. */
+  over: boolean;
+}
+
+export function buildPostsMeter(plan: PlanId, used: number): PostsMeter {
+  const limit = PLAN_LIMITS[plan].entriesPerType;
+  const count = Math.max(0, Math.trunc(Number.isFinite(used) ? used : 0));
+  const unlimited = plan === "studio";
+  return {
+    used: count,
+    limit,
+    text: postsUsageText(plan, count),
+    percent: unlimited ? 0 : Math.min(100, (count / limit) * 100),
+    dashed: unlimited,
+    atLimit: count >= limit,
+    over: count > limit,
+  };
 }

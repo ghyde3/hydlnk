@@ -344,7 +344,12 @@ test.describe("M4-18 New page screen and the page switcher", () => {
   }) => {
     const user = await signedInUser(context, { label: "nl" });
     const calls: string[] = [];
+    // The editor's own reads of the open site's blog (Wave B: the Pages panel's Blog row and the
+    // latest-posts preview) are GETs under /api/pages/{id}/ and are not what this watches for: a
+    // request that would create a site, or a move to the New site screen.
+    const blogRead = /\/api\/pages\/[0-9a-f-]{36}\/(?:types|posts\/latest)$/;
     page.on("request", (request) => {
+      if (request.method() === "GET" && blogRead.test(request.url())) return;
       if (/\/api\/pages|\/pages\/new/.test(request.url()))
         calls.push(request.method() + request.url());
     });

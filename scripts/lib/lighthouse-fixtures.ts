@@ -6,12 +6,15 @@
  *   lh-smoke  Smoke theme, Pro (no badge)
  *   lh-free   Noir theme, Free ("Made with HYDLNK" badge)
  *   lh-media  Ivory theme, Free, with a profile photo and a background image in Storage
+ *   lh-blog   Ivory theme, Pro, with the blog on (Wave B, M16-04, M16-05): audited at `/blog` (an
+ *             archive of 12 posts, the first with a featured image) and at `/blog/lh-post-1` (a post
+ *             with a featured image, an image in its body, a list, a quote, code and a table)
  *
  * Each gets its own user (the Free plan allows one page). Everything is made with the secret key
  * against the local stack and removed again by `removeFixtures`. Never run against production.
  */
 import sharp from "sharp";
-import { adminClient, deleteUser, supabaseUrl } from "../../tests/e2e/fixtures/auth";
+import { adminClient, deleteUser, moveSite, supabaseUrl } from "../../tests/e2e/fixtures/auth";
 
 const IVORY = "00000000-0000-4000-8000-000000000002";
 const SMOKE = "00000000-0000-4000-8000-000000000003";
@@ -20,13 +23,19 @@ const BUCKET = "page-media";
 export interface Fixture {
   name: string;
   handle: string;
+  /** The path audited on the handle's host; "/" when absent. */
+  path?: string;
 }
+
+const BLOG_HANDLE = "lh-blog";
 
 export const FIXTURES: Fixture[] = [
   { name: "ivory", handle: "lh-ivory" },
   { name: "smoke", handle: "lh-smoke" },
   { name: "free-badge", handle: "lh-free" },
   { name: "avatar-bg", handle: "lh-media" },
+  { name: "blog-archive", handle: BLOG_HANDLE, path: "/blog" },
+  { name: "blog-post", handle: BLOG_HANDLE, path: "/blog/lh-post-1" },
 ];
 
 type Doc = Record<string, unknown> & { profile: Record<string, unknown> };
@@ -92,6 +101,8 @@ export async function createFixtures(): Promise<Fixture[]> {
     { f: FIXTURES[3]!, plan: "free", theme: IVORY },
   ];
 
+  specs.push({ f: FIXTURES[4]!, plan: "pro", theme: IVORY });
+
   for (const { f, plan, theme } of specs) {
     const owner = await makeOwner(f.handle, plan);
     const tokens = { ...(await themeTokens(theme)) };
@@ -121,26 +132,98 @@ export async function createFixtures(): Promise<Fixture[]> {
       tokens,
     };
     const draft = { ...withoutNav(mara.draft), profile, theme: { ref: theme, overrides: {} } };
-    must(
+    const page = must(
       await admin
         .from("pages")
-        .insert({
-          owner_id: owner,
-          handle: f.handle,
-          draft,
-          published,
-          published_at: new Date().toISOString(),
-        })
+        .insert({ owner_id: owner, handle: f.handle, draft })
         .select("id")
         .single(),
       `insert ${f.handle}`,
-    );
+    ) as { id: string };
+    // A site is live through its Home entry (M15): move the draft's blocks into the '/' entry, then
+    // publish the way Publish does. A `pages` row with `published` alone is an unpublished site,
+    // and the audit would measure the placeholder.
+    await moveSite(page.id);
+    const live = await admin.rpc("publish_site", {
+      p_page_id: page.id,
+      p_owner_id: owner,
+      p_home: published as never,
+      p_sub_pages: [] as never,
+      p_published_at: new Date().toISOString(),
+    });
+    if (live.error) throw new Error(`publish ${f.handle}: ${live.error.message}`);
+    if (f.handle === BLOG_HANDLE) await makeBlog(page.id, owner);
   }
   return FIXTURES;
 }
 
+const POST_BODY = (image: string) =>
+  [
+    "The first paragraph of the post, long enough to wrap over a few lines on a phone so the audit measures real reading text and not a single short line.",
+    "## A heading in the body",
+    "- one thing\n- another thing\n- a third thing",
+    "> A short quote from somebody.",
+    `![A photo from the studio](${image})`,
+    '```\nconst greeting = "hello";\n```',
+    "| Day | Hours |\n|---|---|\n| Monday | 9 to 5 |\n| Tuesday | 9 to 5 |",
+    "A closing paragraph with a [link](https://example.com/) in it.",
+  ].join("\n\n");
+
+/**
+ * Turns the fixture site's blog on and publishes 12 posts through the real `publish_entry` (the
+ * writer's own path): post 1 is the newest and has a featured image and an image in its body.
+ */
+async function makeBlog(siteId: string, owner: string): Promise<void> {
+  const admin = adminClient();
+  const type = must(
+    await admin
+      .from("content_types")
+      .update({ enabled: true })
+      .eq("site_id", siteId)
+      .eq("key", "post")
+      .select("id")
+      .single(),
+    "turning the blog on",
+  ) as { id: string };
+  const featured = `${owner}/lh-featured-01.webp`;
+  const inline = `${owner}/lh-inline-0001.webp`;
+  const picture = (color: string) =>
+    sharp({ create: { width: 1200, height: 675, channels: 3, background: color } })
+      .webp({ quality: 60 })
+      .toBuffer();
+  await upload(featured, await picture("#c9b08a"));
+  await upload(inline, await picture("#8a9cb0"));
+  const stored = (path: string) => `${supabaseUrl()}/storage/v1/object/public/${BUCKET}/${path}`;
+  for (let n = 12; n >= 1; n -= 1) {
+    const document = {
+      title: `Notes from the studio, part ${n}`,
+      slug: `lh-post-${n}`,
+      excerpt: `A short summary of part ${n}, as an archive card shows it.`,
+      body: n === 1 ? POST_BODY(stored(inline)) : `Part ${n} of the notes.`,
+      ...(n === 1 ? { featuredImage: { path: featured, width: 1200, height: 675 } } : {}),
+    };
+    const entry = must(
+      await admin
+        .from("content_entries")
+        .insert({ site_id: siteId, type_id: type.id, draft: document as never })
+        .select("id, rev")
+        .single(),
+      `insert post ${n}`,
+    ) as { id: string; rev: number };
+    const published = await admin.rpc("publish_entry", {
+      p_entry_id: entry.id,
+      p_owner_id: owner,
+      p_expected_rev: Number(entry.rev),
+      p_published: document as never,
+      p_published_at: new Date(Date.now() - n * 86_400_000).toISOString(),
+    });
+    if (published.error) throw new Error(`publish post ${n}: ${published.error.message}`);
+  }
+}
+
 async function removeStale(): Promise<void> {
   const admin = adminClient();
+  // One user per handle (the two blog targets share a site).
   const wanted = new Set(FIXTURES.map((f) => `zq-${f.handle}@example.com`));
   for (let page = 1; page <= 20; page++) {
     const { data } = await admin.auth.admin.listUsers({ page, perPage: 200 });

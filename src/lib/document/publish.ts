@@ -302,6 +302,17 @@ export function publishBlock(block: Block): Block | null {
         target: block.target.trim(),
         ...cleanOverrides(block.overrides),
       };
+    case "latest_posts": {
+      const heading = block.heading?.trim() ?? "";
+      return {
+        ...base,
+        type: "latest_posts",
+        ...(heading ? { heading } : {}),
+        count: block.count,
+        ...(block.categoryId ? { categoryId: block.categoryId.toLowerCase() } : {}),
+        ...cleanOverrides(block.overrides),
+      };
+    }
     case "items": {
       const heading = block.heading?.trim() ?? "";
       return {

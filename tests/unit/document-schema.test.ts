@@ -50,13 +50,18 @@ describe("block types (M2-01)", () => {
       "page_link",
       "items",
       "hours",
+      "latest_posts",
     ];
     expect(BLOCK_TYPES.length).toBeGreaterThanOrEqual(12);
     expect([...BLOCK_TYPES]).toEqual(order.slice(0, BLOCK_TYPES.length));
   });
 
   it("the full fixture covers every type and passes both schemas", () => {
-    expect(new Set(fullDraft.blocks.map((b) => b.type))).toEqual(new Set(BLOCK_TYPES));
+    // latest_posts (M16-07) is left out of the full page on purpose: it draws from the site's
+    // posts, not from the document, so a page alone cannot show it (its own test file covers it).
+    expect(new Set(fullDraft.blocks.map((b) => b.type))).toEqual(
+      new Set(BLOCK_TYPES.filter((type) => type !== "latest_posts")),
+    );
     expect(both(fullDraft)).toEqual([true, true]);
   });
 

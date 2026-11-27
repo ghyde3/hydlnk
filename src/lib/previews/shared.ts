@@ -15,8 +15,11 @@ import { homeUsesSiteIndex } from "@/lib/site/live";
 import { getHomeDraftWithClient, listDraftPagesWithClient } from "@/lib/site/page-entries";
 import { buildMenu, hrefsOf, type SiteContext, type SitePageSummary } from "@/lib/site/menu";
 import { tokenSetSchema, type TokenSet } from "@/lib/theme";
-import { sanitizeSharedDoc } from "./sanitize";
+import { postDraftSchema } from "@/lib/content/schemas/post";
+import type { TermView } from "@/lib/blog/types";
+import { sanitizeSharedDoc, sanitizeSharedPost } from "./sanitize";
 import { hashPreviewToken, isPreviewTokenShape } from "./token";
+import type { SharedPost } from "./types";
 
 /**
  * What a share link shows (M6-10): the page's saved draft, read at the moment of the request, by the
@@ -28,7 +31,12 @@ import { hashPreviewToken, isPreviewTokenShape } from "./token";
  * set, `expires_at` passed, the owner's account suspended. A deleted page takes its links with it
  * (cascade), so it reads as no such hash.
  *
- * What it shows has the hidden characters the Publish gate refuses removed (`sanitizeSharedDoc`).
+ * What it shows has the hidden characters the Publish gate refuses removed (`sanitizeSharedDoc`,
+ * and `sanitizeSharedPost` for a post).
+ *
+ * `/share/{token}/entry/{entryId}` (M16-16) shows one post's saved draft: the share preview is the
+ * only place a post draft is ever shown to someone who is not its owner. The entry is looked up
+ * inside the link's own site (`loadDraftPost`), after every token check.
  *
  * The one query selects named columns only and reads nothing of the owner's account but the plan (the
  * footer badge) and the suspension state. The token's hash is the only key: the page comes from the
@@ -52,20 +60,38 @@ export type SharedPreview =
       site?: SiteContext;
       /** The page being previewed when the address named one (M12-06): its title and blocks. Absent for Home. */
       subPage?: { title: string; blocks: readonly Block[] };
+      /**
+       * The post being previewed when the address is `/share/{token}/entry/{entryId}` (M16-16): an
+       * untrashed post of this link's own site, its saved draft. Absent for Home and for a page.
+       */
+      post?: SharedPost;
       /** When the link stops working (ISO, UTC). */
       expiresAt: string;
     };
+
+/** The one address form of a post preview: `entry/` and a canonical (lower-case) UUID, nothing else. */
+const ENTRY_TAIL = /^entry\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+
+/** The entry id when `path` is exactly `entry/{uuid}`, else null. */
+export function sharedEntryId(path: string): string | null {
+  return ENTRY_TAIL.exec(path)?.[1] ?? null;
+}
 
 export async function loadSharedPreview(
   admin: SupabaseClient<Database>,
   token: unknown,
   now: Date = new Date(),
-  /** What follows the token in the address ("" for Home, one valid path segment for a page, M12-06). */
+  /**
+   * What follows the token in the address: "" for Home, one valid path segment for a page (M12-06),
+   * or exactly `entry/{uuid}` for a post (M16-16).
+   */
   path: string = "",
 ): Promise<SharedPreview> {
   if (!isPreviewTokenShape(token)) return { kind: "inactive" };
-  // A path that cannot be a page's (nested, reserved, odd characters) is the one 404 and never a query.
-  if (path !== "" && !isValidSubPagePath(path)) return { kind: "inactive" };
+  // A tail that is neither a post's address nor a path a page could have (nested, reserved, odd
+  // characters) is the one 404 and never a query.
+  const entryId = typeof path === "string" ? sharedEntryId(path) : null;
+  if (entryId === null && path !== "" && !isValidSubPagePath(path)) return { kind: "inactive" };
 
   const { data, error } = await admin
     .from("preview_links")
@@ -83,17 +109,122 @@ export async function loadSharedPreview(
   const page = data.pages;
   if (page.accounts.suspended_at !== null) return { kind: "inactive" };
 
-  return loadDraftPreview(
-    admin,
-    {
-      id: page.id,
-      handle: page.handle,
-      ownerId: page.owner_id,
-      draft: page.draft,
-      plan: page.accounts.plan,
+  const site: DraftPreviewPage = {
+    id: page.id,
+    handle: page.handle,
+    ownerId: page.owner_id,
+    draft: page.draft,
+    plan: page.accounts.plan,
+  };
+  const base = `/share/${token as string}`;
+  if (entryId === null) {
+    return loadDraftPreview(admin, site, { path, base, expiresAt: data.expires_at });
+  }
+
+  // A post (M16-16). The site is the link row's and nothing else: the entry is looked up inside it,
+  // so a token of one site can never draw an entry of another, whatever id the address carries.
+  const post = await loadDraftPost(admin, { siteId: site.id, ownerId: site.ownerId }, entryId);
+  if (!post) return { kind: "inactive" };
+  // The design, the cleaned site document and the menu, as for Home; nothing is marked current.
+  const preview = await loadDraftPreview(admin, site, {
+    path: "",
+    base,
+    expiresAt: data.expires_at,
+    currentId: entryId,
+  });
+  return preview.kind === "active" ? { ...preview, post } : preview;
+}
+
+/**
+ * One post's saved draft for a preview (M16-16), or null. `site` is the page the caller already
+ * resolved (the share link's own row); the entry must be an untrashed entry of THAT site's built-in
+ * Post type. Another site's entry, a page entry, a trashed post, an unknown id and a stored draft
+ * that is not a post's shape are all null. Named columns only: the draft and the first publish
+ * date, never the published copy. Its terms are read inside the same site and type, so an id of
+ * another site's term in the draft names nothing. Every text has the hidden characters removed.
+ */
+export async function loadDraftPost(
+  admin: SupabaseClient<Database>,
+  site: { siteId: string; ownerId: string },
+  entryId: string,
+): Promise<SharedPost | null> {
+  if (sharedEntryId(`entry/${entryId}`) === null) return null;
+  const type = await admin
+    .from("content_types")
+    .select("id, archive_path")
+    .eq("site_id", site.siteId)
+    .eq("key", "post")
+    .maybeSingle();
+  if (type.error) throw new Error(`Loading the post type failed: ${type.error.message}`);
+  if (!type.data) return null;
+
+  const entry = await admin
+    .from("content_entries")
+    .select("id, draft, first_published_at")
+    .eq("id", entryId)
+    .eq("site_id", site.siteId)
+    .eq("type_id", type.data.id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (entry.error) throw new Error(`Loading a post draft failed: ${entry.error.message}`);
+  if (!entry.data) return null;
+  const parsed = postDraftSchema.safeParse(entry.data.draft);
+  if (!parsed.success) return null;
+  const draft = parsed.data;
+  const text = sanitizeSharedPost(draft);
+
+  // The terms the draft names, categories first, each in the draft's order; at most the schema's 50.
+  const wanted = [...(draft.terms?.categories ?? []), ...(draft.terms?.tags ?? [])];
+  const terms: TermView[] = [];
+  if (wanted.length > 0) {
+    const found = await admin
+      .from("content_terms")
+      .select("id, taxonomy, slug, name")
+      .eq("site_id", site.siteId)
+      .eq("type_id", type.data.id)
+      .in("id", wanted);
+    if (found.error) throw new Error(`Loading a post's terms failed: ${found.error.message}`);
+    const byId = new Map((found.data ?? []).map((term) => [term.id, term]));
+    const seen = new Set<string>();
+    for (const id of wanted) {
+      const term = byId.get(id);
+      if (!term || seen.has(id)) continue;
+      if (term.taxonomy !== "category" && term.taxonomy !== "tag") continue;
+      seen.add(id);
+      terms.push({
+        id: term.id,
+        taxonomy: term.taxonomy,
+        slug: term.slug,
+        name: stripHiddenCharacters(term.name),
+      });
+    }
+  }
+
+  // A draft image may be half-saved (an upload in progress): drawn only when it is whole. The
+  // article component checks again that it is a file of this owner's own folder.
+  const image = draft.featuredImage as
+    { path?: unknown; width?: unknown; height?: unknown } | null | undefined;
+  const featuredImage =
+    image &&
+    typeof image.path === "string" &&
+    typeof image.width === "number" &&
+    typeof image.height === "number"
+      ? { path: image.path, width: image.width, height: image.height }
+      : null;
+
+  return {
+    entryId: entry.data.id,
+    view: {
+      title: text.title,
+      body: text.body,
+      excerpt: text.excerpt,
+      publishedAt: entry.data.first_published_at,
+      featuredImage,
     },
-    { path, base: `/share/${token as string}`, expiresAt: data.expires_at },
-  );
+    terms,
+    ownerId: site.ownerId,
+    archivePath: type.data.archive_path ?? "",
+  };
 }
 
 /** A page row as `loadDraftPreview` needs it. */
@@ -115,7 +246,16 @@ export interface DraftPreviewPage {
 export async function loadDraftPreview(
   admin: SupabaseClient<Database>,
   page: DraftPreviewPage,
-  options: { path: string; base: string; expiresAt: string },
+  options: {
+    path: string;
+    base: string;
+    expiresAt: string;
+    /**
+     * Set when what is drawn is neither Home nor a page (a post, M16-16): the menu is always built
+     * and the entry with this id is the current one (none, for a post).
+     */
+    currentId?: string;
+  },
 ): Promise<SharedPreview> {
   const { path, base, expiresAt } = options;
   // The design is the site row's; Home's blocks are its page entry's draft (the blocks frozen in
@@ -123,9 +263,7 @@ export async function loadDraftPreview(
   // `pages.draft` is the whole document, as the editor reads it.
   const home = await getHomeDraftWithClient(admin, page.id);
   const { draft } = loadDraft(
-    home
-      ? { ...(page.draft as Record<string, unknown>), blocks: home.draft.blocks }
-      : page.draft,
+    home ? { ...(page.draft as Record<string, unknown>), blocks: home.draft.blocks } : page.draft,
     page.handle,
   );
 
@@ -153,7 +291,7 @@ export async function loadDraftPreview(
   // the address names a page, or Home draws a menu or a page link: named columns, never whole drafts.
   let site: SiteContext | undefined;
   let subPage: { title: string; blocks: readonly Block[] } | undefined;
-  if (path !== "" || homeUsesSiteIndex(doc)) {
+  if (path !== "" || options.currentId !== undefined || homeUsesSiteIndex(doc)) {
     const entries = await listDraftPagesWithClient(admin, page.id);
     const listed = entries.map((entry) => ({
       id: entry.id,
@@ -165,7 +303,7 @@ export async function loadDraftPreview(
       const title = stripHiddenCharacters(row.title).trim();
       return title === "" ? [] : [{ id: row.id, path: row.path, title }];
     });
-    let currentId = HOME_TARGET;
+    let currentId = options.currentId ?? HOME_TARGET;
     if (path !== "") {
       const match = summaries.find((entry) => entry.path.trim() === path);
       // No page of this site at that path: the same 404 as an inactive link.
@@ -183,16 +321,39 @@ export async function loadDraftPreview(
         blocks: cleaned.blocks,
       };
     }
+    // The site's archives that are on (the Blog, M16-08) join the menu as on the live site: the type's
+    // id, its path and its plural label. The preview has no archive of its own, so such an item keeps
+    // the live address, which the preview frame does not follow.
+    const types = await admin
+      .from("content_types")
+      .select("id, archive_path, label_plural")
+      .eq("site_id", page.id)
+      .eq("enabled", true);
+    if (types.error) throw new Error(`Loading the site's archives failed: ${types.error.message}`);
+    const archives = (types.data ?? []).flatMap((type): SitePageSummary[] => {
+      const archivePath = type.archive_path;
+      const title = stripHiddenCharacters(type.label_plural ?? "").trim();
+      if (typeof archivePath !== "string" || !isValidSubPagePath(archivePath) || title === "") {
+        return [];
+      }
+      return [{ id: type.id, path: archivePath, title }];
+    });
+    const archiveHrefs = new Set(archives.map((archive) => `/${archive.path}`));
     // The menu is the draft's: Home and the sub-pages in Home's order, the current one marked, every
-    // entry a link to this same preview. Page links resolve to the same addresses.
+    // page entry a link to this same preview. Page links resolve to the same addresses.
     const toShare = (href: string) => (href === "/" ? base : `${base}${href}`);
-    const menu = buildMenu(doc.nav, summaries, currentId, "links");
+    const menu = buildMenu(doc.nav, [...summaries, ...archives], currentId, "links");
     const hrefs: Record<string, string> = { [HOME_TARGET]: base };
     for (const [id, href] of Object.entries(hrefsOf(summaries))) hrefs[id] = toShare(href);
     site = {
       hrefs,
       menu: menu
-        ? { ...menu, items: menu.items.map((item) => ({ ...item, href: toShare(item.href) })) }
+        ? {
+            ...menu,
+            items: menu.items.map((item) =>
+              archiveHrefs.has(item.href) ? item : { ...item, href: toShare(item.href) },
+            ),
+          }
         : null,
     };
   }
