@@ -173,7 +173,8 @@ select tests.authenticate_as('x');
 select matches((select pg_temp.reads227()), '^pages:0,types:0,entries:0,revisions:0,terms:0,entry_terms:0,paths:0,redirects:0,versions:0,schedules:0$',
   'a stranger reads nothing of S');
 reset role;
-select is((select count(*)::int from public.form_submissions), 1, 'the member''s delete removed no submission');
+select is((select count(*)::int from public.form_submissions where site_id = '00000000-0000-4000-8000-000000227a01'), 1,
+  'the member''s delete removed no submission');
 
 -- Versions only while the owner's plan keeps them.
 update public.accounts set paid_plan = 'free', gift_plan = 'studio', gift_until = null where id = tests.get_supabase_uid('o');
