@@ -2,6 +2,45 @@
 
 Session log, newest first. Every session reads the top entry before starting and adds one at the end. Keep entries short: the date and title, the feature ids touched, what changed, the evidence (commands and results, test names, screenshot paths), the next step, and known issues. Evidence for a feature's `passes: true` lives here, not in `docs/features.json`. Do not rewrite old entries; add a new one.
 
+## 2026-11-27 — Final audit, fixes and flips on `m22-integration` (M16 to M20)
+
+On `m22-integration` (draft PR #40, label `full-ci`). Flipped 48 rows to `passes: true`; features: 382 of 427. Nothing merged or released.
+
+- **Flipped:** M16-01, 02, 03, 06, 07, 09, 10, 11, 12, 14, 15, 16; M17-03, 04, 05, 07, 09, 10; M18-01 to M18-11, M18-13; M19-01 to 06, 08, 12, 13, 16, 17; M20-01, 02, 03, 05, 07, 09, 10.
+- **How:** a strict step-by-step audit (reviewer) of b304ce0 proved 40. A fix pass (cb23068, a391ba6, 65244f6) closed the gaps the audit named, and a re-audit at a391ba6 proved 6 more. M19-04 (probes of all 11 member-readable tables plus `pages.published`, now in the CI integration step, 38653ef) and M20-07 (a page row's Schedule shows the full PublishAlert list, `tests/e2e/scheduling/schedule-issues.spec.ts`, 65244f6) were fixed exactly as the re-audit asked.
+- **Security, from the final review and the attack on the combined line:**
+  - L1: the scheduled fire now re-checks the creator under locks. HL022, migration `20261127004800_fire_rechecks_creator.sql`, pgTAP 240.
+  - L2: the CSV formula guard normalises with NFKC (`m9-analytics-export-csv.test.ts:110`).
+  - Six surviving mutations now fail tests (`m19t-mcp-owner-only.test.ts:166,:220`, `m19-owner-only-routes.test.ts`, `m20-worker.test.ts:172`).
+  - Volatile `get_supabase_uid` in WHERE clauses was fixed in 76 pgTAP files. 060 and 135 are now scoped to their own rows.
+- **CI run 45951613816 on 65244f6:**
+  - Verify (typecheck, lint, unit, db, integration) passed.
+  - Browser suite: 8 shards, 3,013 passed, 3 flaky (`m5/images-api:460`, `m15/publish-races:137` phone, `:194` desktop; each passed on retry).
+  - Hard failures are only the by-design conflicts with older rows:
+    - `m1/shell.spec.ts:74, :192, :254, :460` (M1-16 steps 1 and 4, M1-17 step 1 and M1-18 step 2 against M17-08 step 4 and M19-09 step 9)
+    - `m2/blocks-forms:178` (M2-16)
+    - `m3/themes-overrides:113` (M3-17)
+    - `m7/workspace-share:257` (M7-04 step 7)
+    - `m9/app-shell-icons:115` and `m9/proving-app-shell:134` (M9-02, phone)
+- **Local at 65244f6:** unit 599 files and 13,317+ tests; pgTAP 109 files and 3,710 tests on a reset database.
+- **Still `passes: false` in M16 to M20, and why:**
+  - **Need records or runs Gary owns:**
+    - M16-04 and M16-05 (`pnpm lighthouse`)
+    - M16-17, M17-12, M18-14, M19-14, M19-15, M20-12 (the security and adversarial records cover the code, but some listed tries were not attempted; see the attack report summary in PLAN)
+    - M20-04 and M20-08 (production cache, pg_cron, Vault)
+  - **Need Gary's decision or a superseding row:**
+    - M16-08 (the menu says "Posts", the step says "Blog")
+    - M16-13 (the lexer refuses some bodies under 512 KiB)
+    - M17-01, 02, 06, 08, 11
+    - M18-12 (`rename_term`, `delete_term` and `update_content_type` take no ifRev)
+    - M20-06, M20-11
+  - **Not yet built or tested in the browser:**
+    - M19-07, 09, 10, 11
+- **Known:**
+  - CI builds sometimes fail to download Google fonts, so shards never run. Re-run, or vendor the app fonts.
+  - About 90 unit files with stack suites are not in the CI integration step. They ran locally with `REQUIRE_SUPABASE=1`.
+  - The fire's lock order (entry, schedule, accounts) can deadlock with a member removal (accounts, schedules). That surfaces as a database error, and the worker retries.
+
 ## 2026-11-27 — Integration of the six items on `m22-integration` (M15 to M20)
 
 On `m22-integration` (worktree `/home/user/hydlnk-team`, stack `hydlnk-team`, server :3400), from `origin/m21-team-access` @1fa0d35 (content model, blog to 9ff5c56, forms, scheduling, team) plus `origin/m17-blog` @aa8ee5e (the lexer) and `origin/m18-mcp-content` @34b2ff7 (the MCP content tools). Nothing flipped (the orchestrator flips after CI). No PR.
