@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seeded } from "./support/random";
 
 /**
  * M16-04: a post body is Markdown drawn as React elements. Tenant content is untrusted, so the
@@ -436,8 +437,7 @@ describe("PostBody: the node limit bounds what is drawn (M16-13)", () => {
 
   it(`random bodies draw at most ${PER_NODE} elements per node`, () => {
     const PIECES = ["a ", "*b* ", "**c** ", "~~d~~ ", "`e` ", "[f](https://x.co) ", "<https://y.co> ", "www.z.co ", "m@n.co ", `![g](${OWN_IMAGE}) `, "\n", "\n\n", "- ", "1. ", "> ", "## ", "- [ ] ", "|a|b|\n|-|-|\n", "|\n", "|1|2|\n", "---\n", "```\nh\n```\n", "a  \nb", "\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\n\n", "<b>i</b>"];
-    let seed = 13;
-    const random = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const random = seeded(13);
     for (let sample = 0; sample < 400; sample += 1) {
       let body = "";
       for (let k = 1 + Math.floor(random() * 30); k > 0; k -= 1) body += PIECES[Math.floor(random() * PIECES.length)];

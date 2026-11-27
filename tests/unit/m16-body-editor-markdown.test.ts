@@ -9,6 +9,7 @@ import {
   toMarkdown,
 } from "@/components/posts/body-editor/markdown";
 import { LOSSY, SUPPORTED } from "./support/body-editor-corpus";
+import { seeded } from "./support/random";
 
 /**
  * The post body is Markdown, edited in Tiptap (M16-13). What the rich editor can hold it must give
@@ -346,11 +347,7 @@ describe("typed text never becomes a link or emphasis it did not say (adversaria
       "amp;",
       "#38;",
     ];
-    let seed = 0x5eed;
-    const random = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x80000000;
-    };
+    const random = seeded(0x5eed);
     for (let i = 0; i < 2000; i += 1) {
       let text = "";
       const length = 1 + Math.floor(random() * 24);

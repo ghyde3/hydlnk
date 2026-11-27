@@ -6,6 +6,7 @@ import {
   isAddressEnd,
   type AddressStop,
 } from "@/lib/blog/markdown/address";
+import { seeded } from "./support/random";
 
 /**
  * The link address index (M16-04, M16-13) answers what the scan it replaced answered: the scan
@@ -51,17 +52,7 @@ function starts(s: string): number[] {
   return out;
 }
 
-function rng(seed: number): () => number {
-  let x = seed >>> 0;
-  return () => {
-    x ^= x << 13;
-    x >>>= 0;
-    x ^= x >>> 17;
-    x ^= x << 5;
-    x >>>= 0;
-    return x / 4294967296;
-  };
-}
+
 
 describe("the link address index agrees with a scan from every start", () => {
   const PIECES = [
@@ -84,7 +75,7 @@ describe("the link address index agrees with a scan from every start", () => {
   ];
 
   it("random bodies, every start, several ends", () => {
-    const random = rng(11);
+    const random = seeded(11);
     for (let sample = 0; sample < 400; sample += 1) {
       const parts = Array.from(
         { length: 1 + Math.floor(random() * 80) },

@@ -18,6 +18,7 @@ import { LexRefused } from "@/lib/blog/markdown/limits";
 import { canEditRich } from "@/components/posts/body-editor/markdown";
 import { ATTACKS, BODY_CAP, REALISTIC, atCap, fit } from "./support/markdown-families";
 import { stopTiming, timeLex, type LexTiming } from "./support/markdown-timing";
+import { pick, seeded } from "./support/random";
 
 /**
  * The bound on post bodies (M16-04, M16-13): the lexer is linear in the body, its two limits are
@@ -292,18 +293,6 @@ describe("the limits and their messages", () => {
 
 // (c) ------------------------------------------------------------------------------------------------
 
-function rng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s ^= s << 13;
-    s >>>= 0;
-    s ^= s >>> 17;
-    s ^= s << 5;
-    s >>>= 0;
-    return s / 4294967296;
-  };
-}
-const pick = <T,>(random: () => number, list: readonly T[]): T => list[Math.floor(random() * list.length)]!;
 
 async function expectBounded(body: string, label: string): Promise<number> {
   let result: LexTiming | undefined;
@@ -326,7 +315,7 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
 
   it(`repetition fuzzer: prefix + piece x k + suffix at 512 KiB (${FUZZ_SAMPLES} bodies)`, async () => {
     const ALPHA = [...SPECIAL, "**", "__", "~~", "``", "\n\n", "[a](", "](", "<!--", "<a ", "&amp;", "---", "===", "|-", "- ", "> ", "```", "~~~", "a@b.c", "[a]: b\n", "[a]", "![", "http://", "www.", "1.", "    ", "x_y", '"', ":", "/", "@", "."];
-    const random = rng(1);
+    const random = seeded(1);
     for (let sample = 0; sample < FUZZ_SAMPLES; sample += 1) {
       const part = (max: number) => Array.from({ length: Math.floor(random() * (max + 1)) }, () => pick(random, ALPHA)).join("");
       const seed = Array.from({ length: 1 + Math.floor(random() * 5) }, () => pick(random, ALPHA)).join("");
@@ -339,7 +328,7 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
   }, 120_000);
 
   it(`random-mix fuzzer: random sub-alphabets of the special characters, 4 to 512 KiB (${FUZZ_SAMPLES} bodies)`, async () => {
-    const random = rng(7);
+    const random = seeded(7);
     for (let sample = 0; sample < FUZZ_SAMPLES; sample += 1) {
       const length = sample % 4 === 0 ? BODY_CAP : 4096 + Math.floor(random() * (BODY_CAP - 4096));
       const alphabet: string[] = [];
@@ -471,77 +460,156 @@ describe("(f) a search for super-linear shapes", () => {
     expect(alphabet).toEqual(expect.arrayContaining(["www.", "://"]));
   });
 
-  // Shapes: a prefix and a unit repeated to the size. Each is scored by t(64 KiB) / t(32 KiB); the
-  // worst are kept and mutated. Then each kept shape is grown by doubling until its time is past
-  // the noise (from 16 to 512 KiB): one that more than doubles (t(2n)/t(n) > 2.4) across two
-  // doublings there fails the test.
-  it("finds no shape that stays super-linear across two doublings (fixed seed, bounded time)", async () => {
-    const SEARCH_MS = 12_000;
+  // Shapes: a prefix, a unit repeated, and optionally a middle and a second unit repeated as often
+  // (two phases: `x` + `www..` x k + `@` + `b` x k). Each is scored in the timing worker by CPU time
+  // at 32 and 64 KiB (t(64) / t(32): about 2 when linear, 4 when quadratic), so a few hundred shapes
+  // fit in the budget. The population starts from the attack families themselves, then the worst
+  // are mutated (as one unit or two phases) from a small weighted alphabet (the pieces that found
+  // the reported shapes) and the characters the scanners branch on. A shape that scores high or is
+  // slow at 64 KiB is grown by doubling at once, and at the end the eight worst and the six slowest
+  // (a shape can be linear to 64 KiB and quadratic past it): one whose time more than doubles
+  // (t(2n)/t(n) > 2.4) across two doublings, past the noise, fails the test. With a memo of the
+  // lexer taken out (`domainAt`, `NextWhere`, `NextRun`, `openers_bottom`), it fails within its
+  // budget, naming the shape (measured in the third pass).
+  it("finds no shape that stays super-linear across two doublings (fixed seed, at most 20 s)", async () => {
+    const SEARCH_MS = 13_000;
+    /** Confirmations stop here: the whole search takes at most about 20 s. */
+    const DEADLINE_MS = 19_000;
     const RATIO = 2.4;
     /** Times below this are noise, whatever the shape. */
     const NOISE_MS = 10;
+    /** A shape being grown stops here: past it a quadratic shape has shown itself. */
+    const SLOW_MS = 400;
+    /** A 64 KiB body slower than this is confirmed whatever its ratio. */
+    const SLOW_64K_MS = 30;
     const started = performance.now();
-    const random = rng(0x5ea7c4);
-    type Shape = { prefix: string; unit: string; score: number };
-    const piece = () => pick(random, alphabet);
+    const random = seeded(0x5ea7c4);
+    type Shape = { prefix: string; unit: string; middle: string; second: string; score: number; family?: string };
+    // The weighted alphabet: the pieces the attacker's search found productive, then the source's.
+    const WEIGHTED = ["a", " ", "*", "**", "_", "~", "~~", "www.", "http://", "@", ".", "(", ")", "[", "](", "`", "<", "\\", "\n", "&", ";", "x.co"];
+    const piece = () => (random() < 0.7 ? pick(random, WEIGHTED) : pick(random, alphabet));
     const pieces = (max: number) => Array.from({ length: 1 + Math.floor(random() * max) }, piece).join("");
-    const bodyOf = (shape: Shape, n: number) => (shape.prefix + shape.unit.repeat(Math.ceil(n / shape.unit.length))).slice(0, n);
-    const label = (shape: Shape) => `${JSON.stringify(shape.prefix)} + ${JSON.stringify(shape.unit)} x k`;
+    const bodyOf = (shape: Shape, n: number) => {
+      if (shape.family !== undefined) return fit(ATTACKS[shape.family]!(n), n);
+      const repeat = (unit: string, size: number) => (unit === "" ? "" : unit.repeat(Math.ceil(size / unit.length)).slice(0, size));
+      if (shape.second === "") return (shape.prefix + repeat(shape.unit, n)).slice(0, n);
+      return (shape.prefix + repeat(shape.unit, n / 2) + shape.middle + repeat(shape.second, n / 2)).slice(0, n);
+    };
+    const label = (shape: Shape) =>
+      shape.family !== undefined ? `the family ${JSON.stringify(shape.family)}` : `${JSON.stringify(shape.prefix)} + ${JSON.stringify(shape.unit)} x k${shape.second ? ` + ${JSON.stringify(shape.middle)} + ${JSON.stringify(shape.second)} x k` : ""}`;
     /** CPU times at each size (fastest of 3); null when the worker was killed (far past linear). */
-    const times = async (shape: Shape, sizes: number[]): Promise<number[] | null> => {
+    const times = async (shape: Shape, sizes: number[], runs = 3): Promise<number[] | null> => {
       try {
-        const timings = await timeLex(label(shape), { bodies: sizes.map((n) => bodyOf(shape, n)), runs: 3 });
+        const timings = await timeLex(label(shape), { bodies: sizes.map((n) => bodyOf(shape, n)), runs }, 3_000);
         return timings.map((timing) => timing.cpu);
       } catch {
         return null;
       }
     };
-    const score = async (shape: Shape): Promise<number> => {
-      const t = await times(shape, [32_768, 65_536]);
-      if (t === null) return Infinity;
-      return t[1]! < 2 ? 0 : t[1]! / Math.max(t[0]!, 0.05);
+    /** t(64 KiB) / t(32 KiB), and t(64 KiB) itself (a quadratic shape is slow there already). */
+    const score = async (shape: Shape): Promise<{ ratio: number; ms: number }> => {
+      // 16 KiB first, untimed: it warms the scanners up (a cold first body reads slow).
+      const t = await times(shape, [16_384, 32_768, 65_536], 2);
+      if (t === null) return { ratio: Infinity, ms: Infinity };
+      return { ratio: t[2]! < 2 ? 0 : t[2]! / Math.max(t[1]!, 0.05), ms: t[2]! };
     };
-    const mutate = (shape: Shape): Shape => {
-      const units = [...shape.unit];
-      const at = Math.floor(random() * (units.length + 1));
+    const mutate = (from: Shape): Shape => {
+      let shape = from;
+      if (from.family !== undefined) {
+        const sample = ATTACKS[from.family]!(4096);
+        const two = random() < 0.5;
+        shape = { prefix: "", unit: sample.slice(0, two ? 24 : 48), middle: "", second: two ? sample.slice(-24) : "", score: 0 };
+      }
       const roll = random();
-      if (roll < 0.35 && units.length > 1) units.splice(Math.min(at, units.length - 1), 1);
-      else if (roll < 0.75) units.splice(at, 0, piece());
-      else return { prefix: random() < 0.5 ? "" : pieces(3), unit: shape.unit, score: 0 };
-      return { prefix: shape.prefix, unit: units.join(""), score: 0 };
+      const edit = (text: string) => {
+        const chars = [...text];
+        const at = Math.floor(random() * (chars.length + 1));
+        if (random() < 0.4 && chars.length > 1) chars.splice(Math.min(at, chars.length - 1), 1);
+        else chars.splice(at, 0, piece());
+        return chars.join("");
+      };
+      if (roll < 0.45) return { ...shape, unit: edit(shape.unit), score: 0 };
+      if (roll < 0.7) return { ...shape, second: edit(shape.second), score: 0 };
+      if (roll < 0.85) return { ...shape, middle: random() < 0.5 ? "" : pieces(2), score: 0 };
+      return { ...shape, prefix: random() < 0.5 ? "" : pieces(3), score: 0 };
     };
-
-    let kept: Shape[] = [];
-    const consider = async (shape: Shape) => {
-      shape.score = await score(shape);
-      kept = [...kept, shape].sort((p, q) => q.score - p.score).slice(0, 8);
-    };
-    for (let k = 0; k < 120 && performance.now() - started < SEARCH_MS / 2; k += 1) {
-      await consider({ prefix: random() < 0.4 ? pieces(3) : "", unit: pieces(6), score: 0 });
-    }
-    while (performance.now() - started < SEARCH_MS) await consider(mutate(kept[Math.floor(random() * 3)]!));
 
     const failing: string[] = [];
     let worst = { shape: "", ratio: 0 };
-    for (const shape of kept) {
+    /** Grows a shape by doubling until its time is past the noise: the smaller of two ratios. */
+    const confirm = async (shape: Shape) => {
+      if (performance.now() - started > DEADLINE_MS) return;
       const sizes: number[] = [];
       const seen: number[] = [];
       let verdict: number[] | null = null;
-      for (let n = 16_384; n <= BODY_CAP && verdict === null; n *= 2) {
-        const t = await times(shape, [n]);
+      /** Slower below 512 KiB than the slowest linear family is at 512 KiB, or killed. */
+      let slow = false;
+      // Grown until it is slow (a quadratic shape can look linear for its first doublings): the
+      // verdict is the last two doublings, past the noise, and the shape must have been slow (a
+      // linear shape's last doublings can read high from the collector alone).
+      for (let n = 16_384; n <= BODY_CAP; n *= 2) {
+        if (performance.now() - started > DEADLINE_MS) return;
+        // A smaller body first, untimed, warms the scanners up.
+        const t = await times(shape, [n / 4, n]);
         if (t === null) {
           verdict = [Infinity, Infinity];
+          slow = true;
           break;
         }
         sizes.push(n);
-        seen.push(t[0]!);
+        seen.push(t[1]!);
         const k = seen.length;
         if (k >= 3 && seen[k - 3]! >= NOISE_MS) verdict = [seen[k - 2]! / seen[k - 3]!, seen[k - 1]! / seen[k - 2]!];
+        if (t[1]! > SLOW_MS) {
+          slow = n < BODY_CAP;
+          // Slow before three sizes were past the noise: slower at 16 KiB than the slowest linear
+          // family at 512 KiB is not linear; after two sizes, their one ratio decides.
+          if (k === 1) verdict = [Infinity, Infinity];
+          else if (verdict === null) verdict = [seen[1]! / Math.max(seen[0]!, 0.5), seen[1]! / Math.max(seen[0]!, 0.5)];
+          break;
+        }
       }
-      if (verdict === null) continue;
+      if (verdict === null) return;
       const ratio = Math.min(...verdict);
       if (ratio > worst.ratio) worst = { shape: label(shape), ratio };
-      if (ratio > RATIO) failing.push(`${label(shape)}: ${seen.map((t, k) => `${sizes[k]! / 1024} KiB ${t.toFixed(1)} ms`).join(", ")}`);
+      if (ratio > RATIO && slow) failing.push(`${label(shape)}: ${seen.map((t, k) => `${sizes[k]! / 1024} KiB ${t.toFixed(1)} ms`).join(", ")}`);
+    };
+
+    // A shape that scores high is confirmed at once (a later, noisier one cannot push it out);
+    // the eight worst are the parents of the mutations, and are confirmed at the end.
+    let kept: Shape[] = [];
+    /** The six slowest at 64 KiB: a shape can be linear to 64 KiB and quadratic past it. */
+    let slowest: Array<{ shape: Shape; ms: number }> = [];
+    const confirmed = new Set<Shape>();
+    const consider = async (shape: Shape) => {
+      if (shape.unit === "") return;
+      const { ratio, ms } = await score(shape);
+      shape.score = ratio;
+      // The slowest linear families take about 25 ms at 64 KiB.
+      if (ratio > RATIO || ms > SLOW_64K_MS) {
+        confirmed.add(shape);
+        await confirm(shape);
+      }
+      kept = [...kept, shape].sort((p, q) => q.score - p.score).slice(0, 8);
+      slowest = [...slowest, { shape, ms }].sort((p, q) => q.ms - p.ms).slice(0, 6);
+    };
+    // The attack families themselves (those whose body grows with n); a mutation of one starts from
+    // its first and last characters (one unit, or two phases).
+    for (const [family, make] of Object.entries(ATTACKS)) {
+      if (performance.now() - started > SEARCH_MS) break;
+      if (make(4096).length > 3 * 4096) continue;
+      await consider({ prefix: "", unit: "-", middle: "", second: "", score: 0, family });
+    }
+    while (performance.now() - started < SEARCH_MS) {
+      const fresh = random() < 0.3;
+      const shape: Shape = fresh
+        ? { prefix: random() < 0.4 ? pieces(3) : "", unit: pieces(6), middle: random() < 0.3 ? pieces(2) : "", second: random() < 0.4 ? pieces(4) : "", score: 0 }
+        : mutate(kept[Math.floor(random() * Math.min(3, kept.length))]!);
+      await consider(shape);
+    }
+    for (const shape of [...kept, ...slowest.map((entry) => entry.shape)]) {
+      if (!confirmed.has(shape)) await confirm(shape);
+      confirmed.add(shape);
     }
     console.info(`(f) worst surviving shape: ${worst.shape}, t(2n)/t(n) = ${worst.ratio.toFixed(2)} (the smaller of two doublings)`);
     expect(failing, failing.join("\n")).toEqual([]);
