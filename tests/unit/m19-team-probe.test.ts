@@ -11,7 +11,10 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 120_000 });
  * M19-04 (T1, T3, T5, T6, T17): the publishable-key probe over PostgREST, the path curl takes. With
  * owner O, editor E and publisher P of S, stranger X, anon, and O's second site S2:
  *   * X and anon read and write nothing of S;
- *   * E and P read S and write only pages.draft of S (never name, handle or S2);
+ *   * E and P read S and write only pages.draft of S (never name, handle, published, published_at
+ *     or S2); of S's revisions, terms, entry terms, versions, old slugs and schedules and O's saved
+ *     themes they read exactly what the site access policies open (S's rows, O's themes), and X,
+ *     anon and the removed E read none of them;
  *   * X, anon, E and P insert, update and delete nothing in S's entries, terms, paths and versions
  *     or O's saved themes (each probe touches no row, and the rows are unchanged afterwards);
  *   * nobody but service_role touches the team tables or functions;
@@ -114,8 +117,10 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
 
   /** Set by the steps 2, 3 probe: every write probe as `client`, touching nothing (also step 5's). */
   let writeProbe: ((who: string, client: SupabaseClient) => Promise<void>) | null = null;
+  /** Set by the steps 2, 3 probe: `client` reads no row of the member-readable tables (also step 5's). */
+  let readProbe: ((who: string, client: SupabaseClient) => Promise<void>) | null = null;
 
-  it("M19-04 steps 2, 3: X, anon, E and P insert, update and delete nothing in entries, terms, paths, versions and themes", async () => {
+  it("M19-04 steps 2, 3: E and P read exactly S's revisions, terms, versions, old slugs, schedules and O's themes, X and anon none; nobody but O writes them or S's live copy", async () => {
     const S = f.owner.pageId;
     await enablePost(admin as never, S);
     const postType = (await admin.from("content_types").select("id").eq("site_id", S).eq("key", "post").single()).data!.id as string;
@@ -133,20 +138,100 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
     expect(theme.error).toBeNull();
     const paths = await admin.from("site_paths").select("path").eq("site_id", S);
     expect(paths.data!.length).toBeGreaterThan(0);
+    // A row in each of the other site-scoped tables the members' policies open (the site access
+    // policies migration, 20261126220200): a revision, an entry's term, an old slug and a schedule.
+    // An old slug is written only by its trigger: a published post whose slug changes leaves one.
+    for (const slug of ["old-probe", "probe"]) {
+      const live = await admin
+        .from("content_entries")
+        .update({ published: { title: "Probe", slug }, published_at: new Date().toISOString() })
+        .eq("id", post.data!.id);
+      expect(live.error).toBeNull();
+    }
+    const seeded = await Promise.all([
+      admin.from("content_entry_revisions").insert({ entry_id: post.data!.id, site_id: S, rev: 1, snapshot: { title: "Probe" }, source: "editor" }),
+      admin.from("content_entry_terms").insert({ entry_id: post.data!.id, term_id: term.data!.id }),
+      admin.from("content_schedules").insert({
+        site_id: S,
+        entry_id: post.data!.id,
+        action: "unpublish",
+        run_at: new Date(Math.ceil(Date.now() / 60_000) * 60_000 + 86_400_000).toISOString(),
+        source: "editor",
+        created_by: f.owner.userId,
+      }),
+    ]);
+    for (const res of seeded) expect(res.error).toBeNull();
+    // S2 (no member) gets an entry, a revision and a published version, so "nothing of S2" is a real read.
+    await enablePost(admin as never, f.s2);
+    const s2Type = (await admin.from("content_types").select("id").eq("site_id", f.s2).eq("key", "post").single()).data!.id as string;
+    const s2Post = await admin.from("content_entries").insert({ site_id: f.s2, type_id: s2Type, draft: { title: "S2", slug: "s2" } }).select("id").single();
+    expect(s2Post.error).toBeNull();
+    const s2Seeded = await Promise.all([
+      admin.from("content_entry_revisions").insert({ entry_id: s2Post.data!.id, site_id: f.s2, rev: 1, snapshot: { title: "S2" }, source: "editor" }),
+      admin.from("pages").update({ published: { version: 1, blocks: [] } as never, published_at: new Date().toISOString() }).eq("id", f.s2),
+    ]);
+    for (const res of s2Seeded) expect(res.error).toBeNull();
+
+    /**
+     * Every row of these tables `client` can read, unfiltered (so a row of S2 or of another owner
+     * would show), sorted. Members may read S's rows and the owner's saved themes, nothing more.
+     */
+    const READABLE = [
+      ["content_entry_revisions", "id, site_id"],
+      ["content_terms", "id, site_id"],
+      ["content_entry_terms", "entry_id, term_id"],
+      ["page_versions", "id, page_id"],
+      ["content_slug_redirects", "type_id, from_slug, site_id"],
+      ["content_schedules", "id, site_id"],
+    ] as const;
+    const sorted = (rows: unknown[] | null) => (rows ?? []).map((row) => JSON.stringify(row)).sort();
+    const readable = async (client: SupabaseClient) => {
+      const out: Record<string, string[]> = {};
+      for (const [table, columns] of READABLE) {
+        const res = await client.from(table).select(columns);
+        out[table] = res.error ? [] : sorted(res.data);
+      }
+      const themes = await client.from("themes").select("id, owner_id").not("owner_id", "is", null);
+      out["owner's themes"] = themes.error ? [] : sorted(themes.data);
+      return out;
+    };
+    const entryIds = (await admin.from("content_entries").select("id").eq("site_id", S)).data!.map((row) => row.id as string);
+    const membersRead: Record<string, string[]> = {};
+    for (const [table, columns] of READABLE) {
+      const scoped =
+        table === "content_entry_terms"
+          ? admin.from(table).select(columns).in("entry_id", entryIds)
+          : admin.from(table).select(columns).eq(table === "page_versions" ? "page_id" : "site_id", S);
+      membersRead[table] = sorted((await scoped).data);
+    }
+    membersRead["owner's themes"] = sorted((await admin.from("themes").select("id, owner_id").eq("owner_id", f.owner.userId)).data);
+    for (const [table, rows] of Object.entries(membersRead)) expect(rows.length, table).toBeGreaterThan(0);
+    const nothing = Object.fromEntries(Object.keys(membersRead).map((table) => [table, []]));
+
+    for (const [who, client] of [["editor", asE], ["publisher", asP]] as const) {
+      expect(await readable(client), who).toEqual(membersRead);
+    }
+    readProbe = async (who, client) => {
+      expect(await readable(client), who).toEqual(nothing);
+    };
+    for (const [who, client] of [["stranger", asX], ["anon", anon]] as const) await readProbe(who, client);
 
     const snapshot = async () => {
-      const [entries, terms, sitePaths, versions, themes] = await Promise.all([
+      const [entries, terms, sitePaths, versions, themes, live] = await Promise.all([
         admin.from("content_entries").select("id, rev, draft, deleted_at, published").eq("site_id", S).order("id"),
         admin.from("content_terms").select("id, name, slug").eq("site_id", S).order("id"),
         admin.from("site_paths").select("path, entry_id, type_id").eq("site_id", S).order("path"),
         admin.from("page_versions").select("id, version_no, document").eq("page_id", S).order("id"),
         admin.from("themes").select("id, name, tokens").eq("owner_id", f.owner.userId).order("id"),
+        admin.from("pages").select("published, published_at").eq("id", S).single(),
       ]);
-      return { entries: entries.data, terms: terms.data, sitePaths: sitePaths.data, versions: versions.data, themes: themes.data };
+      return { entries: entries.data, terms: terms.data, sitePaths: sitePaths.data, versions: versions.data, themes: themes.data, live: live.data };
     };
     const before = await snapshot();
     expect(before.entries!.length).toBeGreaterThan(0);
     expect(before.versions).toHaveLength(1);
+    expect(before.live!.published).not.toBeNull();
+    expect(before.live!.published_at).not.toBeNull();
     /** Rows a write touched: an error (no grant, a policy) touches none. */
     const touched = (res: { error: unknown; data: unknown[] | null }) => (res.error ? 0 : (res.data?.length ?? 0));
 
@@ -167,6 +252,14 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
         "themes insert": await client.from("themes").insert({ owner_id: f.owner.userId, name: "Planted", tokens }).select("id"),
         "themes update": await client.from("themes").update({ name: "Taken over" }).eq("id", theme.data!.id).select("id"),
         "themes delete": await client.from("themes").delete().eq("id", theme.data!.id).select("id"),
+        // Step 3, "write only pages.draft": the live copy of S is not a member's to change.
+        "pages published": await client.from("pages").update({ published: { version: 1, blocks: [], planted: true } as never }).eq("id", S).select("id"),
+        "pages published_at": await client.from("pages").update({ published_at: new Date(0).toISOString() }).eq("id", S).select("id"),
+        "pages published and published_at": await client
+          .from("pages")
+          .update({ published: { version: 1, blocks: [], planted: true } as never, published_at: new Date(0).toISOString() })
+          .eq("id", S)
+          .select("id"),
       };
       for (const [probe, res] of Object.entries(probes)) expect(touched(res), `${who}: ${probe}`).toBe(0);
       expect(await snapshot(), who).toEqual(before);
@@ -192,5 +285,9 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
     // Step 5 for every other table: the removed editor's client writes nothing either.
     expect(writeProbe).not.toBeNull();
     await writeProbe!("removed editor", asE);
+    // ...and reads none of the member-readable tables: no revision, term, version, old slug,
+    // schedule, and none of the owner's saved themes.
+    expect(readProbe).not.toBeNull();
+    await readProbe!("removed editor", asE);
   });
 });

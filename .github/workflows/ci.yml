@@ -155,6 +155,7 @@ jobs:
           tests/unit/m19t-posts-access.test.ts
           tests/unit/m19t-trash-never-live.test.ts
           tests/unit/m19t-cleanup-entry.test.ts
+          tests/unit/m19-team-probe.test.ts
 
       - name: Supabase diagnostics
         if: failure()
