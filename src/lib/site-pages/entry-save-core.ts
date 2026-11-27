@@ -27,6 +27,8 @@ export type EntrySaveBody =
   /** A plan limit or a cap refused the write (HL010 posts per plan, HL015 terms per type). */
   | { kind: "limit"; message: string }
   | { kind: "suspended"; code: string; message: string }
+  /** A member's role does not allow it (an editor asked to publish, Wave F). */
+  | { kind: "forbidden"; message: string }
   | { kind: "invalid"; message: string; issues?: ContentFailure["issues"] }
   | { kind: "error" };
 
@@ -65,12 +67,15 @@ export function fromFailure(f: ContentFailure): EntrySaveResponse {
       return { status, body: { kind: "slug", message: f.message } };
     case "entry_limit":
     case "term_limit":
+    case "rate_limited":
       return { status, body: { kind: "limit", message: f.message } };
     case "account_suspended":
       return {
         status,
         body: { kind: "suspended", code: ACCOUNT_SUSPENDED_CODE, message: f.message },
       };
+    case "forbidden":
+      return { status, body: { kind: "forbidden", message: f.message } };
     case "invalid":
     case "type_disabled":
       return {

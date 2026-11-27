@@ -7,6 +7,25 @@ import { ensureAccount } from "./accounts";
 export interface SessionUser {
   id: string;
   email: string;
+  /**
+   * How this session was signed in: the JWT's `amr` methods ("otp", "oauth", "password", ...).
+   * Accepting an invite needs one that proved the inbox (S1: never a password alone).
+   */
+  methods: string[];
+}
+
+/** The `amr` claim's method names (Supabase writes `[{ method, timestamp }]`; plain strings too). */
+export function authMethods(amr: unknown): string[] {
+  if (!Array.isArray(amr)) return [];
+  return amr.flatMap((entry: unknown) => {
+    const method =
+      typeof entry === "string"
+        ? entry
+        : entry && typeof entry === "object"
+          ? (entry as { method?: unknown }).method
+          : undefined;
+    return typeof method === "string" && method !== "" ? [method] : [];
+  });
 }
 
 /**
@@ -21,9 +40,9 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     const supabase = await createServerSupabase();
     const { data, error } = await supabase.auth.getClaims();
     if (error || !data) return null;
-    const { sub, email } = data.claims;
+    const { sub, email, amr } = data.claims as { sub?: unknown; email?: unknown; amr?: unknown };
     if (typeof sub !== "string" || sub === "") return null;
-    return { id: sub, email: typeof email === "string" ? email : "" };
+    return { id: sub, email: typeof email === "string" ? email : "", methods: authMethods(amr) };
   } catch {
     return null;
   }

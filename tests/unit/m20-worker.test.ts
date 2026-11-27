@@ -17,6 +17,7 @@ const { WORKER_BUDGET_MS, WORKER_MAX_ROWS } = await import("@/lib/schedule/types
 
 const NOW = Date.parse("2026-12-01T09:00:30Z");
 const OWNER = "11111111-1111-4111-8111-111111111111";
+const SITE = "33333333-3333-4333-8333-333333333333";
 
 type Raw = Record<string, unknown>;
 const row = (over: Raw = {}): Raw => ({
@@ -24,7 +25,7 @@ const row = (over: Raw = {}): Raw => ({
   claim: "claim-token",
   action: "publish",
   entry_id: "e1",
-  site_id: "s1",
+  site_id: SITE,
   owner_id: OWNER,
   created_by: OWNER,
   type_id: "t1",
@@ -51,6 +52,21 @@ function setup(
   const db = {
     rpc: vi.fn(async (name: string, args: Raw) => {
       if (name === "claim_due_schedules") return { data: batches[claims++] ?? [], error: null };
+      // Wave F: the one access rule decides the creator; here the owner (OPTS.account) owns SITE.
+      if (name === "site_access") {
+        if (opts.accountError) return { data: null, error: { message: "down" } };
+        const account = opts.account === undefined ? { plan: "pro", suspended_at: null } : opts.account;
+        const active = account?.suspended_at === null;
+        return {
+          data:
+            account && args.p_user === OWNER && args.p_site === SITE
+              ? [{ site_id: SITE, owner_id: OWNER, role: "owner", is_owner: true, can_read: true,
+                  can_edit: active, can_publish: active, owner_plan: account.plan,
+                  state: active ? "active" : "suspended_self" }]
+              : [],
+          error: null,
+        };
+      }
       if (name === "finish_schedule") {
         finished.push(args as never);
         return { data: opts.finishStatus ?? (args.p_failed ? "failed" : "pending"), error: null };
@@ -77,7 +93,7 @@ function setup(
       return chain;
     },
   };
-  const place = { siteId: "s1", typeId: "t1", typeKey: "post" };
+  const place = { siteId: SITE, typeId: "t1", typeKey: "post" };
   const deps = {
     db: db as never,
     now: opts.now ?? (() => NOW),
@@ -114,12 +130,12 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     const { deps } = setup([[row({ type_key: "page" })]]);
     await runScheduleWorker(deps);
     expect(deps.publishPage).toHaveBeenCalledWith(
-      { siteId: "s1", entryId: "e1", userId: OWNER },
+      { siteId: SITE, entryId: "e1", userId: OWNER },
       expect.objectContaining({ kind: "fire" }),
     );
     expect(deps.expire).toHaveBeenCalledWith(
       expect.objectContaining({ entryId: "e1", ownerId: OWNER }),
-      { siteId: "s1", typeId: "t1", typeKey: "page" },
+      { siteId: SITE, typeId: "t1", typeKey: "page" },
     );
   });
 
@@ -141,13 +157,16 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     expect(finished[0]).toMatchObject({ p_failed: true, p_code: "plan" });
   });
 
-  it("M20-08 a row scheduled by someone who is not the owner never fires (the one actor check)", async () => {
-    const { deps, finished } = setup([
-      [row({ created_by: "22222222-2222-4222-8222-222222222222" })],
-    ]);
+  it("M20-08 a row scheduled by someone who may not publish the site never fires (the one actor check)", async () => {
+    const { deps, finished } = setup([[row({ created_by: "22222222-2222-4222-8222-222222222222" })]]);
     await runScheduleWorker(deps);
     expect(deps.publishPost).not.toHaveBeenCalled();
-    expect(finished[0]).toMatchObject({ p_failed: true, p_code: "not_permitted" });
+    // Wave F: the creator is asked through the access rule; one with no publish access is access_lost.
+    expect(finished[0]).toMatchObject({ p_failed: true, p_code: "access_lost" });
+    // M19-16 step 5, directly: it publishes nothing (no post, no page, no unpublish) and expires nothing.
+    expect(deps.publishPage).not.toHaveBeenCalled();
+    expect(deps.unpublish).not.toHaveBeenCalled();
+    expect(deps.expire).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -248,7 +267,7 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     const { deps, db } = setup([[row()], [row()], [row()]], { now: () => clock });
     deps.publishPost.mockImplementation(async () => {
       clock += WORKER_BUDGET_MS / 2 + 1;
-      return { ok: true as const, siteId: "s1", typeId: "t1", typeKey: "post" };
+      return { ok: true as const, siteId: SITE, typeId: "t1", typeKey: "post" };
     });
     const out = await runScheduleWorker(deps);
     expect(out.published).toBe(2);
@@ -265,7 +284,7 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     );
     deps.publishPost.mockImplementation(async () => {
       clock += WORKER_BUDGET_MS + 1; // one slow fire spends the whole budget
-      return { ok: true as const, siteId: "s1", typeId: "t1", typeKey: "post" };
+      return { ok: true as const, siteId: SITE, typeId: "t1", typeKey: "post" };
     });
     const out = await runScheduleWorker(deps);
     expect(out).toMatchObject({ published: 1, retried: 0, failed: 0 });
@@ -297,7 +316,7 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     expect(finished).toEqual([expect.objectContaining({ p_id: "a", p_failed: false })]);
     expect(out).toMatchObject({ published: 1, retried: 0, expiryFailed: 0 });
     expect(deps.expire).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), {
-      siteId: "s1",
+      siteId: SITE,
       typeId: "t1",
       typeKey: "post",
     });
@@ -337,7 +356,7 @@ describe("M20-09 scheduled unpublish", () => {
     deps.unpublish.mockResolvedValueOnce({
       ok: true,
       changed: false,
-      siteId: "s1",
+      siteId: SITE,
       typeId: "t1",
       typeKey: "post",
     });
@@ -353,7 +372,7 @@ describe("M20-09 scheduled unpublish", () => {
     expect(
       await scheduleActorRefusal(
         setup([], { account: { plan: "pro", suspended_at: "x" } }).deps.db,
-        { action: "unpublish", ownerId: OWNER, createdBy: OWNER },
+        { action: "unpublish", siteId: SITE, ownerId: OWNER, createdBy: OWNER },
       ),
     ).toBe("account_suspended");
   });

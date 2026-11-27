@@ -756,19 +756,28 @@ export type Database = {
       }
       form_submission_usage: {
         Row: {
+          accepted: number
           month: string
+          notify_skipped: number
+          notify_skipped_day: string | null
           owner_id: string
           refused: number
           refused_daily: number
         }
         Insert: {
+          accepted?: number
           month: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
           owner_id: string
           refused?: number
           refused_daily?: number
         }
         Update: {
+          accepted?: number
           month?: string
+          notify_skipped?: number
+          notify_skipped_day?: string | null
           owner_id?: string
           refused?: number
           refused_daily?: number
@@ -839,16 +848,19 @@ export type Database = {
           owner_id: string
           path: string
           queued_at: string
+          site_id: string | null
         }
         Insert: {
           owner_id: string
           path: string
           queued_at?: string
+          site_id?: string | null
         }
         Update: {
           owner_id?: string
           path?: string
           queued_at?: string
+          site_id?: string | null
         }
         Relationships: []
       }
@@ -1616,6 +1628,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_site_invite: {
+        Args: { p_methods: string[]; p_token_hash: string; p_user: string }
+        Returns: string
+      }
       account_upload_bytes: { Args: { p_uid: string }; Returns: number }
       account_usage: {
         Args: { p_uid: string }
@@ -1826,6 +1842,17 @@ export type Database = {
           signups: number
         }[]
       }
+      admin_site_team: {
+        Args: { p_account: string }
+        Returns: {
+          direction: string
+          email: string
+          handle: string
+          role: string
+          site_id: string
+          user_id: string
+        }[]
+      }
       admin_traffic_flags: {
         Args: { p_limit?: number; p_offset?: number; p_reviewed?: boolean }
         Returns: {
@@ -1924,8 +1951,27 @@ export type Database = {
       content_move_active: { Args: never; Returns: boolean }
       convert_all_versions: { Args: never; Returns: Json }
       convert_site_versions: { Args: { p_site: string }; Returns: Json }
+      create_site_invite: {
+        Args: {
+          p_actor: string
+          p_email: string
+          p_role: string
+          p_site: string
+          p_token_hash: string
+        }
+        Returns: string
+      }
       delete_page_entry: {
         Args: { p_entry_id: string; p_owner_id: string; p_site_id: string }
+        Returns: string
+      }
+      delete_page_entry_as: {
+        Args: {
+          p_actor: string
+          p_entry_id: string
+          p_owner_id: string
+          p_site_id: string
+        }
         Returns: string
       }
       due_block_boundaries: { Args: { p_limit?: number }; Returns: string[] }
@@ -1974,6 +2020,7 @@ export type Database = {
         Args: { p_uid: string }
         Returns: {
           month: string
+          notify_skipped_today: number
           refused: number
           refused_daily: number
           stored: number
@@ -1982,6 +2029,26 @@ export type Database = {
       form_usage_month: { Args: never; Returns: string }
       is_reserved_entry_slug: { Args: { p_slug: string }; Returns: boolean }
       is_reserved_site_path: { Args: { p_path: string }; Returns: boolean }
+      leave_site: {
+        Args: { p_site: string; p_user: string }
+        Returns: undefined
+      }
+      list_shared_sites: {
+        Args: { p_user: string }
+        Returns: {
+          handle: string
+          name: string
+          owner_email: string
+          owner_id: string
+          role: string
+          site_id: string
+          state: string
+        }[]
+      }
+      list_site_team: {
+        Args: { p_actor: string; p_site: string }
+        Returns: Json
+      }
       live_term_counts: {
         Args: { p_site: string; p_type: string }
         Returns: {
@@ -2028,6 +2095,10 @@ export type Database = {
         Args: { p_paths: string[]; p_uid: string }
         Returns: string[]
       }
+      media_queue_paths: {
+        Args: { p_owner: string; p_paths: string[]; p_site: string }
+        Returns: undefined
+      }
       media_upload_rate_hit: {
         Args: { p_limit: number; p_uid: string; p_window_seconds: number }
         Returns: {
@@ -2037,6 +2108,10 @@ export type Database = {
       }
       move_all_content: { Args: never; Returns: Json }
       move_site_content: { Args: { p_site: string }; Returns: Json }
+      note_entry_creator: {
+        Args: { p_actor: string; p_entry: string }
+        Returns: undefined
+      }
       oauth_bind_request: {
         Args: { p_csrf_hash: string; p_id: string; p_user: string }
         Returns: {
@@ -2192,6 +2267,7 @@ export type Database = {
           versions_kept: number
         }[]
       }
+      plan_site_members: { Args: { p_plan: string }; Returns: number }
       publish_design: {
         Args: {
           p_design: Json
@@ -2257,12 +2333,34 @@ export type Database = {
         Returns: Json
       }
       purge_old_events: { Args: never; Returns: number }
+      purge_site_team: { Args: never; Returns: undefined }
       purge_trashed_entries: { Args: never; Returns: number }
+      queue_new_upload:
+        | {
+            Args: { p_grace_seconds: number; p_owner: string; p_path: string }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_grace_seconds: number
+              p_owner: string
+              p_path: string
+              p_site: string
+            }
+            Returns: undefined
+          }
       rate_limit_age: {
         Args: { p_bucket: string; p_window_seconds: number }
         Returns: number
       }
       rate_limit_hit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
+        Returns: {
+          allowed: boolean
+          retry_after: number
+        }[]
+      }
+      rate_limit_peek: {
         Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
         Returns: {
           allowed: boolean
@@ -2277,6 +2375,10 @@ export type Database = {
           p_was_published?: boolean
         }
         Returns: boolean
+      }
+      record_form_notify_skipped: {
+        Args: { p_owner: string }
+        Returns: undefined
       }
       record_form_submission: {
         Args: {
@@ -2293,9 +2395,22 @@ export type Database = {
           status: string
         }[]
       }
+      record_site_activity: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_entry?: string
+          p_site: string
+        }
+        Returns: undefined
+      }
       release_schedule_claim: {
         Args: { p_claim: string; p_id: string }
         Returns: boolean
+      }
+      remove_site_member: {
+        Args: { p_actor: string; p_site: string; p_user: string }
+        Returns: undefined
       }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
@@ -2305,12 +2420,20 @@ export type Database = {
         Args: { p_owner: string; p_paths: string[] }
         Returns: number
       }
+      require_site_access: {
+        Args: { p_need: string; p_site: string; p_user: string }
+        Returns: string
+      }
       restore_entry: {
         Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
         Returns: number
       }
       reverse_all_content: { Args: never; Returns: Json }
       reverse_site_content: { Args: { p_site: string }; Returns: Json }
+      revoke_site_invite: {
+        Args: { p_actor: string; p_invite: string }
+        Returns: undefined
+      }
       rollup_daily_stats: { Args: { p_day: string }; Returns: number }
       rollup_recent_days: { Args: { n: number }; Returns: number }
       run_domain_verification_sweep: { Args: never; Returns: undefined }
@@ -2327,6 +2450,41 @@ export type Database = {
           p_source?: string
         }
         Returns: string
+      }
+      schedule_entry_as: {
+        Args: {
+          p_action: string
+          p_actor: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_run_at: string
+          p_source?: string
+        }
+        Returns: string
+      }
+      set_site_member_role: {
+        Args: {
+          p_actor: string
+          p_role: string
+          p_site: string
+          p_user: string
+        }
+        Returns: undefined
+      }
+      site_access: {
+        Args: { p_site: string; p_user: string }
+        Returns: {
+          can_edit: boolean
+          can_publish: boolean
+          can_read: boolean
+          is_owner: boolean
+          owner_id: string
+          owner_plan: string
+          role: string
+          site_id: string
+          state: string
+        }[]
       }
       site_click_pairs: {
         Args: { p_page_id: string }
@@ -2358,6 +2516,15 @@ export type Database = {
       }
       trash_entry: {
         Args: { p_entry_id: string; p_expected_rev: number; p_owner_id: string }
+        Returns: number
+      }
+      trash_entry_as: {
+        Args: {
+          p_actor: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+        }
         Returns: number
       }
       unpublish_entry: {

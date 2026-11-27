@@ -1,9 +1,9 @@
 import { getAppContext } from "@/lib/pages/context";
 import { SUSPENDED_REASON } from "@/components/admin/suspension-context";
 import { PLAN_LIMITS, pageLimitMessage } from "@/lib/limits";
-import { PageSwitcherMenu, type SwitcherPage } from "./page-switcher-menu";
+import { PageSwitcherMenu, type SwitcherPage, type SwitcherShared } from "./page-switcher-menu";
 
-export type { SwitcherPage } from "./page-switcher-menu";
+export type { SwitcherPage, SwitcherShared } from "./page-switcher-menu";
 
 /**
  * The page switcher (M1-18, M4-18). A server component wrapped around the client menu so the menu
@@ -15,10 +15,12 @@ export type { SwitcherPage } from "./page-switcher-menu";
  */
 export async function PageSwitcher({
   pages,
+  shared = [],
   currentId,
   variant,
 }: {
   pages: SwitcherPage[];
+  shared?: SwitcherShared[];
   currentId: string;
   variant: "sidebar" | "chip";
 }) {
@@ -33,6 +35,7 @@ export async function PageSwitcher({
   return (
     <PageSwitcherMenu
       pages={pages}
+      shared={shared}
       currentId={currentId}
       variant={variant}
       limitMessage={limitMessage}

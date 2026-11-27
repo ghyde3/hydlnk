@@ -16,7 +16,7 @@ export function createSubPage(
   siteId: string,
   body: { title?: unknown; path?: unknown; description?: unknown; blocks?: unknown },
 ): Promise<CreateSubPageResult> {
-  return createSubPageWithClient(createAdminSupabase(), { userId, siteId, ...body });
+  return createSubPageWithClient(createAdminSupabase(), { ...body, userId, siteId, source: "editor" });
 }
 
 /**

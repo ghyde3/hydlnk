@@ -42,6 +42,8 @@ describe("M4-02 the TypeScript limits table", () => {
       formSubmissionsPerSiteDay: 20,
       scheduling: false,
       scheduledPerSite: 0,
+      // Wave F: team access is part of Studio.
+      siteMembers: 0,
       scheduledPerAccount: 0,
     });
     expect(PLAN_LIMITS.pro).toEqual({
@@ -62,6 +64,7 @@ describe("M4-02 the TypeScript limits table", () => {
       formSubmissionsPerSiteDay: 500,
       scheduling: true,
       scheduledPerSite: 50,
+      siteMembers: 0,
       scheduledPerAccount: 100,
     });
     expect(PLAN_LIMITS.studio).toEqual({
@@ -82,6 +85,7 @@ describe("M4-02 the TypeScript limits table", () => {
       formSubmissionsPerSiteDay: 5000,
       scheduling: true,
       scheduledPerSite: 500,
+      siteMembers: 10,
       scheduledPerAccount: 1000,
     });
     // The exact figures the acceptance names.

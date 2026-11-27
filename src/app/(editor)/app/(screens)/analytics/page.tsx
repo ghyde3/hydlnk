@@ -3,6 +3,7 @@ import { AnalyticsScreen } from "@/components/analytics/analytics-screen";
 import { loadStatsResponse } from "@/lib/analytics/dashboard/load";
 import { parsePageFilter } from "@/lib/analytics/dashboard/page-filter";
 import { parseRange, rangeWindow } from "@/lib/analytics/dashboard/range";
+import { notFound } from "next/navigation";
 import { getAppContext } from "@/lib/pages/context";
 
 export const metadata: Metadata = { title: "Analytics" };
@@ -19,6 +20,8 @@ export const metadata: Metadata = { title: "Analytics" };
  */
 export default async function AnalyticsPage({ searchParams }: PageProps<"/app/analytics">) {
   const { user, current, plan } = await getAppContext();
+  // Owner-only (Wave F, G3): a member's request answers like a missing page.
+  if (!current.access.isOwner) notFound();
   const params = await searchParams;
   const range = parseRange(params.range);
   const page = parsePageFilter(params.filter);

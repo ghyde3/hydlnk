@@ -5,6 +5,14 @@
 
 export const MEDIA_BUCKET = "page-media";
 
+/**
+ * How long a new upload is out of the cleanup's sight (S3, Wave F): far past the editor's Undo window
+ * (UNDO_WINDOW_MS, 10 seconds), so a save that is retried (a slow or offline phone) still finds its
+ * image. An upload that no draft, published page or theme names by then is deleted by the next
+ * cleanup run, so a member's unused uploads never fill the owner's quota for good.
+ */
+export const UPLOAD_UNUSED_GRACE_SECONDS = 15 * 60;
+
 /** 4 MiB: below Vercel's 4.5 MB request-body cap, equal to the bucket's `file_size_limit`. */
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 

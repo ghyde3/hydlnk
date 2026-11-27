@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { LIMITS } from "@/lib/document";
+import { siteAccessAnswer } from "./access-fake";
 import { fullPublished } from "./fixtures/page-document";
 
 vi.mock("server-only", () => ({}));
@@ -36,7 +37,9 @@ const actions = await import("@/lib/versions/actions");
 /**
  * M6-49: the two actions take two ids and no document, and check in this order, reading and writing
  * nothing before the previous check passes: no session, a page that is not the user's, a suspended
- * owner, a plan that keeps no versions, a version id that is not this page's, then the work. A table
+ * owner, a plan that keeps no versions, a version id that is not this page's, then the work. Since
+ * Wave F the page, the suspension and the plan come from the one access rule (`site_access`), asked
+ * before any table is read. A table
  * runs every branch against a recording stand-in for the secret-key client and shows that none of
  * the failing ones writes (and that a failing early check reads nothing that comes after it).
  */
@@ -176,6 +179,8 @@ function fakeAdmin(world: World) {
       from,
       rpc(fn: string, args: unknown) {
         calls.push({ kind: "rpc", table: fn, filters: [], payload: args });
+        // Wave F: the one access rule (public.site_access), answered from the world's rows.
+        if (fn === "site_access") return Promise.resolve(siteAccessAnswer(world.pages, world.accounts, args));
         const rows = world.blockedHosts.map((host) => ({
           block_id: "link-portraits",
           item_id: null,
@@ -258,7 +263,7 @@ const FAILING: Case[] = [
     name: "a page that does not exist",
     input: { pageId: "00000000-0000-4000-8000-00000000ffff", versionId: VERSION, userId: OWNER },
     reason: "forbidden",
-    reads: ["pages"],
+    reads: [],
   },
   {
     name: "another user's page (the version id is not looked at)",
@@ -268,77 +273,77 @@ const FAILING: Case[] = [
       userId: OWNER,
     },
     reason: "forbidden",
-    reads: ["pages"],
+    reads: [],
   },
   {
     name: "a suspended owner",
     world: { accounts: [{ id: OWNER, plan: "pro", suspended_at: "2026-10-01T00:00:00Z" }] },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "account_suspended",
-    reads: ["pages", "accounts"],
+    reads: [],
   },
   {
     name: "a Free plan (no version row is read)",
     world: { accounts: [{ id: OWNER, plan: "free", suspended_at: null }] },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "plan_required",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "a Free plan with a garbage version id still says plan_required",
     world: { accounts: [{ id: OWNER, plan: "free", suspended_at: null }] },
     input: { pageId: PAGE, versionId: "' or 1=1 --", userId: OWNER },
     reason: "plan_required",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "an unknown plan name reads as Free",
     world: { accounts: [{ id: OWNER, plan: "enterprise", suspended_at: null }] },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "plan_required",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "a version id that is not a uuid",
     input: { pageId: PAGE, versionId: "x", userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "an empty version id",
     input: { pageId: PAGE, versionId: "", userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "a 10,000 character version id",
     input: { pageId: PAGE, versionId: "9".repeat(10_000), userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "SQL in the version id",
     input: { pageId: PAGE, versionId: "1; drop table pages", userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts"],
+    reads: ["pages"],
   },
   {
     name: "an unknown version id",
     input: { pageId: PAGE, versionId: UNKNOWN_VERSION, userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
   {
     name: "a version of the owner's other page given with this page's id",
     input: { pageId: PAGE, versionId: FOREIGN_VERSION, userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
   {
     name: "another user's version id with this page's id",
     input: { pageId: PAGE, versionId: THEIR_VERSION, userId: OWNER },
     reason: "not_found",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
   {
     name: "a stored document that does not parse (the raw JSON is never returned)",
@@ -354,7 +359,7 @@ const FAILING: Case[] = [
     },
     input: { pageId: PAGE, versionId: VERSION, userId: OWNER },
     reason: "error",
-    reads: ["pages", "accounts", "page_versions"],
+    reads: ["pages", "page_versions"],
   },
 ];
 
@@ -377,8 +382,14 @@ describe("M6-49 the order of the checks, and no failing branch writes", () => {
         ) {
           expect(tablesRead(calls)).not.toContain("page_versions");
         }
-        // No cache call exists in this module at all (see the static test below); no rpc ran either.
-        expect(calls.some((c) => c.kind === "rpc")).toBe(false);
+        // No cache call exists in this module at all (see the static test below); no rpc ran but
+        // the access rule (Wave F: public.site_access, before anything is read).
+        expect(calls.filter((c) => c.kind === "rpc").map((c) => c.table)).toEqual(
+          kase.input.userId && /^[0-9a-f-]{36}$/.test(String(kase.input.userId)) &&
+            typeof kase.input.pageId === "string" && /^[0-9a-f-]{36}$/.test(kase.input.pageId)
+            ? ["site_access"]
+            : [],
+        );
       });
     }
   }
@@ -396,7 +407,8 @@ describe("M6-49 the work", () => {
     if (!result.ok) throw new Error("unreachable");
     expect(result.doc.profile.name).toBe(fullPublished.profile.name);
     expect(writes(calls)).toEqual([]);
-    expect(calls.some((c) => c.kind === "rpc")).toBe(false);
+    // The only rpc is the access rule (Wave F).
+    expect(calls.filter((c) => c.kind === "rpc").map((c) => c.table)).toEqual(["site_access"]);
     // it never asks for another page's version, whatever the id says
     const versionReads = calls.filter((c) => c.table === "page_versions");
     expect(versionReads).toHaveLength(1);

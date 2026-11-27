@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { UPLOAD_SITE_HEADER } from "@/lib/media/upload-site";
 import { clientEnv } from "@/lib/env/client";
+import type { CleanupAccess } from "@/lib/media/cleanup";
 import { cleanupMediaFor } from "@/lib/media/cleanup-admin";
 import {
   CLEANUP_RATE_LIMIT,
@@ -16,9 +18,13 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 
 /**
  * POST /api/media/cleanup on the app host (M5-14): works off the signed-in user's queue of replaced
- * and removed images (see src/lib/media/cleanup.ts). No body, no parameters: the only input is the
- * verified session user, so a caller can neither name a path nor another owner; the worst a forged
- * call does is delete the caller's own images that no draft, published page or saved theme uses.
+ * and removed images (see src/lib/media/cleanup.ts). With the `x-hl-site` header naming a site the
+ * user may edit (Wave F) it works that site OWNER's queue: all of it when the user is the owner; for a
+ * member only the rows that site's writes queued (team attack pass finding 1). Every call, the owner's
+ * too, sees only rows queued more than the Undo window ago (re-review finding 1; `cleanupMediaFor`
+ * derives the scope), so no call deletes what someone removed a moment ago and may bring back with Undo. No body: the input is the verified session user (and a site they
+ * may edit), so a caller can neither name a path nor another owner; the worst a forged call does is
+ * delete images of the queue it may work that no draft, published page or saved theme uses.
  *
  * The editor calls it a few seconds after a draft save (past the Undo window) and the Publish action
  * calls the same function after `updateTag`. The upload route also runs it before refusing an
@@ -50,7 +56,27 @@ export async function POST(request: NextRequest) {
     );
   }
   try {
-    const result = await cleanupMediaFor(user.id);
+    // Wave F (A32): the `x-hl-site` header works off that site OWNER's queue when the user may edit the
+    // site (a member: only that site's rows past the Undo window); a site they may not edit is 404 and
+    // nothing runs.
+    const site = request.headers.get(UPLOAD_SITE_HEADER);
+    // No site: the user's own account-wide queue.
+    let access: CleanupAccess = { actorId: user.id, ownerId: user.id, siteId: null };
+    if (site !== null) {
+      // Loaded on use: a request without a site never touches the access module.
+      const { siteAccessFor } = await import("@/lib/access/server");
+      const allowed = await siteAccessFor({
+        actorId: user.id,
+        siteId: site.toLowerCase(),
+        need: "edit",
+        source: "editor",
+      });
+      if (!allowed.ok) {
+        return NextResponse.json({ error: "not_found" }, { status: 404, headers: NO_STORE });
+      }
+      access = allowed.access;
+    }
+    const result = await cleanupMediaFor(access);
     return NextResponse.json(
       { deleted: result.deleted.length, kept: result.kept.length },
       { status: 200, headers: NO_STORE },

@@ -113,7 +113,7 @@ describe.skipIf(!run)("editor loaders on page entries", () => {
 
   it("Home's blocks come from the '/' entry, with its id and rev; the design from pages.draft", async () => {
     const { loadEditorPageData } = await import("@/lib/editor/page-data");
-    const data = await loadEditorPageData({ id: owner.pageId, handle: owner.handle }, owner.userId);
+    const data = await loadEditorPageData({ id: owner.pageId, handle: owner.handle });
     expect(frozen[0]!.id).not.toBe(live[0]!.id);
     expect(data.draft.blocks.map((b) => b.id)).toEqual(["lnk-bbbbbbbb"]);
     expect(data.draft.profile.name).toBe(owner.handle);
@@ -140,7 +140,7 @@ describe.skipIf(!run)("editor loaders on page entries", () => {
     mocks.client = client;
     try {
       const { loadEditorPageData } = await import("@/lib/editor/page-data");
-      const data = await loadEditorPageData({ id: bare.pageId, handle: bare.handle }, bare.userId);
+      const data = await loadEditorPageData({ id: bare.pageId, handle: bare.handle });
       expect(data.home).toBeNull();
       expect(data.draft.blocks.map((b) => b.id)).toEqual(frozen.map((b) => b.id));
     } finally {

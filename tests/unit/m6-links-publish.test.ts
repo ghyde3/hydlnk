@@ -12,6 +12,8 @@ import {
   type TestOwner,
   setPageDraft,
   moveHome,
+  ownerRun,
+  pastUndo,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -297,7 +299,7 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
       expect(await publishedOf(admin, o.pageId)).toEqual(published);
       expect(JSON.stringify(await homePublished(o))).toContain(first.path);
       expect(await exists(first.path)).toBe(true);
-      let result = await cleanup.cleanupMediaFor(o.userId, admin);
+      let result = await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin));
       expect(result.deleted).not.toContain(first.path);
       expect(await exists(first.path)).toBe(true);
       expect(await exists(second.path)).toBe(true);
@@ -306,7 +308,7 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
       // dropped, so the cleanup may take it, but the first is still held by the published page.
       await writeDraft(o, [link("lnk-swap-00001")]);
       expect(await queued(o)).not.toContain(first.path);
-      result = await cleanup.cleanupMediaFor(o.userId, admin);
+      result = await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin));
       expect(result.deleted).not.toContain(first.path);
       expect(await exists(first.path)).toBe(true);
 
@@ -315,7 +317,7 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
       expect((await publish(o)).ok).toBe(true);
       expect(JSON.stringify(await homePublished(o))).not.toContain(first.path);
       expect(await queued(o)).toContain(first.path);
-      result = await cleanup.cleanupMediaFor(o.userId, admin);
+      result = await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin));
       expect(result.deleted).not.toContain(first.path);
       expect(await exists(first.path)).toBe(true);
 
@@ -331,7 +333,7 @@ describe.skipIf(!run)("M6-20 and M6-22 publish gate (local Supabase)", () => {
       expect(holders.length).toBeGreaterThan(0);
       const gone = await admin.from("content_entry_revisions").delete().in("id", holders);
       expect(gone.error).toBeNull();
-      result = await cleanup.cleanupMediaFor(o.userId, admin);
+      result = await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin));
       expect(result.deleted).toContain(first.path);
       expect(await exists(first.path)).toBe(false);
     });

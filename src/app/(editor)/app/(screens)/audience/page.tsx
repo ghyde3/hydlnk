@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AudienceScreen } from "@/components/audience/audience-screen";
 import { loadAudience, type AudienceData } from "@/lib/forms/audience";
 import { parseFormFilter, parsePageNumber, AUDIENCE_ALL_FORMS } from "@/lib/forms/contract";
+import { notFound } from "next/navigation";
 import { getAppContext } from "@/lib/pages/context";
 
 export const metadata: Metadata = { title: "Audience" };
@@ -14,6 +15,8 @@ export const metadata: Metadata = { title: "Audience" };
  */
 export default async function AudiencePage({ searchParams }: PageProps<"/app/audience">) {
   const { user, current, plan } = await getAppContext();
+  // Owner-only (Wave F, G3): a member never reads the site's submissions.
+  if (!current.access.isOwner) notFound();
   const params = await searchParams;
   const form = parseFormFilter(params.form) ?? AUDIENCE_ALL_FORMS;
   const page = parsePageNumber(params.page);

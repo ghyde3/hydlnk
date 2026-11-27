@@ -15,6 +15,7 @@ import {
 } from "../m2/publish-helpers";
 import { makeJpeg } from "../m5/images-fixtures";
 import { setOverrides } from "./design-helpers";
+import { uploadSiteHeader } from "../fixtures/upload-site";
 
 /**
  * M3-15 (security): the background image can only ever be one of the owner's own uploads, and an
@@ -64,7 +65,7 @@ async function upload(cookie: string | undefined, parts: Part[]) {
   return rawBuffer(APP_HOST, "/api/media", {
     method: "POST",
     cookie,
-    headers: { "content-type": contentType },
+    headers: { ...(await uploadSiteHeader(cookie)), "content-type": contentType },
     body,
   });
 }

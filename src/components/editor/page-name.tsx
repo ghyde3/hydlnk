@@ -1,5 +1,6 @@
 "use client";
 
+import { useOptionalWorkspace } from "@/components/workspace/workspace-context";
 import { Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -35,6 +36,7 @@ export const RENAME_SIGNED_OUT_MESSAGE = "You’re signed out. Sign in again, th
 export function PageName({ pageId, name }: { pageId: string; name: string }) {
   const router = useRouter();
   const suspended = useAccountSuspended();
+  const canRename = (useOptionalWorkspace()?.role ?? "owner") === "owner";
   const inputId = useId();
   const errorId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +126,18 @@ export function PageName({ pageId, name }: { pageId: string; name: string }) {
     // Only the rename field closes: nothing else listening for Escape (the preview tab) reacts.
     event.stopPropagation();
     stopEditing();
+  }
+
+  // Renaming the site is the owner's (Wave F, G14; a trigger refuses anyone else): no pencil.
+  if (!canRename) {
+    return (
+      <h1
+        data-page-name=""
+        className="mt-0.5 min-w-0 pt-0.5 text-[22px] leading-[1.2] font-bold tracking-[-0.01em] [overflow-wrap:anywhere]"
+      >
+        {shown}
+      </h1>
+    );
   }
 
   if (!editing) {

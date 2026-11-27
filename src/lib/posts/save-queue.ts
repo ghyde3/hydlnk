@@ -207,7 +207,9 @@ export class PostSaveQueue<Draft> {
       this.set({
         state: "error",
         problem: answer.kind,
-        ...(answer.kind === "invalid" && answer.message ? { message: answer.message } : {}),
+        ...((answer.kind === "invalid" || answer.kind === "forbidden") && answer.message
+          ? { message: answer.message }
+          : {}),
       });
       if (answer.kind === "error" && this.timer === null) this.schedule(RETRY_MS);
     })();

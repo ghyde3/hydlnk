@@ -13,7 +13,9 @@ import {
 } from "@/lib/schedule/types";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, ownedEntry, ownedSite, siteType } from "./guards";
+import { recordSiteActivity } from "@/lib/access";
+import { activityLimited } from "./activity";
+import { entryFor, siteFor, siteType } from "./guards";
 import { publishEntryWithClient, type EntryPlace } from "./publish-core";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
 
@@ -104,13 +106,14 @@ type ScheduleInput = {
   runAt: string;
 };
 
-/** The checks every operation shares: the owner, an untrashed entry, an active account, a page or a post. */
+/**
+ * The checks every operation shares: publish access (scheduling and cancelling are publish-class,
+ * G21), an untrashed entry, a page or a post. `plan` is the site OWNER's.
+ */
 async function prepare(admin: Admin, input: { actor: ContentActor; entryId: string }) {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  const owned = await entryFor(admin, input.actor, input.entryId, "publish");
   if (!owned.ok) return owned;
   if (owned.entry.deleted_at !== null) return failure("not_found");
-  const account = await activeAccount(admin, input.actor.userId);
-  if (!account.ok) return account;
   const type = await siteType(admin, owned.entry.site_id, owned.entry.type_id);
   if (!type.ok) return type;
   if (type.type.key !== "page" && type.type.key !== "post") {
@@ -121,7 +124,7 @@ async function prepare(admin: Admin, input: { actor: ContentActor; entryId: stri
     typeId: type.type.id,
     typeKey: type.type.key,
   };
-  return { ok: true as const, entry: owned.entry, plan: account.plan, place };
+  return { ok: true as const, entry: owned.entry, access: owned.access, plan: owned.access.plan, place };
 }
 
 /**
@@ -195,9 +198,13 @@ export async function scheduleEntryWithClient(
     const refused = await publishCheck(admin, input, ready.place, deps);
     if (refused) return refused;
   }
-  const { data, error } = await admin.rpc("schedule_entry", {
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
+  // schedule_entry_as re-checks publish access under the owner's lock and records the actor.
+  const { data, error } = await admin.rpc("schedule_entry_as", {
     p_entry_id: input.entryId,
-    p_owner_id: input.actor.userId,
+    p_owner_id: ready.access.ownerId,
+    p_actor: ready.access.actorId,
     p_expected_rev: input.expectedRev,
     p_action: input.action,
     p_run_at: input.runAt,
@@ -213,6 +220,7 @@ export async function scheduleEntryWithClient(
     console.error("[content] reading the new schedule failed", row.error?.message);
     return failure("error");
   }
+  await recordSiteActivity(admin, ready.access, "schedule_set", input.entryId);
   return { ok: true, schedule: toSchedule(row.data), ...ready.place };
 }
 
@@ -227,13 +235,16 @@ export async function cancelScheduleWithClient(
   }
   const ready = await prepare(admin, input);
   if (!ready.ok) return ready;
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   const { data, error } = await admin.rpc("cancel_schedule", {
     p_entry_id: input.entryId,
-    p_owner_id: input.actor.userId,
+    p_owner_id: ready.access.ownerId,
     p_expected_rev: input.expectedRev,
     p_action: input.action,
   });
   if (error) return refusedSchedule(admin, input.entryId, ready.plan, error);
+  if (Number(data) > 0) await recordSiteActivity(admin, ready.access, "schedule_canceled", input.entryId);
   return { ok: true, canceled: Number(data) > 0, ...ready.place };
 }
 
@@ -245,7 +256,7 @@ export async function listSchedulesWithClient(
   admin: Admin,
   input: { actor: ContentActor; entryId: string },
 ): Promise<ContentResult<{ rev: number; schedules: EntrySchedule[] }>> {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  const owned = await entryFor(admin, input.actor, input.entryId, "read");
   if (!owned.ok) return owned;
   const rows = await admin
     .from("content_schedules")
@@ -278,7 +289,7 @@ export async function siteScheduleSummariesWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string },
 ): Promise<ContentResult<{ entries: Record<string, EntryScheduleSummary> }>> {
-  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  const site = await siteFor(admin, input.actor, input.siteId, "read");
   if (!site.ok) return site;
   const rows = await admin
     .from("content_schedules")

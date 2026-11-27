@@ -112,8 +112,13 @@ export interface UploadOptions {
   transform?: ImageTransform;
   /** The per-account request limit (M5-13). Without one nothing is counted. */
   rateLimit?: UploadRateLimit;
-  /** Takes a path off the cleanup queue when bytes already stored are uploaded again (M5-14). */
-  unqueue?: (path: string) => Promise<void>;
+  /**
+   * Puts the path on the owner's cleanup queue, out of the cleanup's sight for a grace period (S3):
+   * an upload no document ever names is deleted once the grace is over; one a draft names leaves the
+   * queue by the draft trigger (M5-14). Called before the store, so bytes uploaded again are safe from
+   * a cleanup that runs in between.
+   */
+  queue?: (path: string) => Promise<void>;
 }
 
 function adminStorage(): MediaStorage {
@@ -278,12 +283,12 @@ export async function processUpload(
   }
   const stored: UploadResult = { ok: true, image: { ...image.data, url: storageUrl(path) } };
 
-  /** True when this exact image is already in the bucket (and takes it off the cleanup queue). */
+  /** True when this exact image is already in the bucket (the path is queued first, see `queue`). */
   const alreadyStored = async (): Promise<boolean> => {
     try {
-      await options.unqueue?.(path);
+      await options.queue?.(path);
     } catch (error) {
-      console.error("[media] clearing the cleanup queue failed", path, error);
+      console.error("[media] queueing the upload for the cleanup failed", path, error);
     }
     if (!storage.exists) return false;
     try {

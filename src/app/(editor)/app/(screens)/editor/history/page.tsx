@@ -27,7 +27,8 @@ export const metadata: Metadata = { title: "Version history" };
  * again (M6-49), so editing them in the browser changes nothing.
  */
 export default async function HistoryPage() {
-  const { user, current, plan } = await getAppContext();
+  // The site OWNER's plan decides version history (a member works under it).
+  const { current, sitePlan: plan } = await getAppContext();
   const breadcrumb = `${handleAddress(current.handle)} / history`;
   const header = <HistoryHeader breadcrumb={breadcrumb} />;
   const body = (children: React.ReactNode) => (
@@ -48,7 +49,7 @@ export default async function HistoryPage() {
   let data: HistoryData;
   try {
     await failIfInjected("versions-load");
-    data = await loadHistory(current, user.id, kept);
+    data = await loadHistory(current, kept);
   } catch (error) {
     console.error("[history] loading the versions failed", error);
     return body(

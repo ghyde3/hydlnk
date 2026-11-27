@@ -9,7 +9,7 @@ import { publishedDocSchema, toPublishForm } from "@/lib/document";
 import { loadEditorPageData } from "@/lib/editor/page-data";
 import { loadDraft } from "@/lib/editor/load";
 import { computePublishStatus } from "@/lib/editor/status";
-import { toPlan } from "@/lib/pages/plans";
+import { siteAccessFor } from "@/lib/access/server";
 import { pageChrome } from "@/lib/publish/chrome";
 import {
   getHomeDraftWithClient,
@@ -31,32 +31,33 @@ const PAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * "Preview" button. The saved draft, drawn by the same renderer as the live page in `mode="preview"`
  * at full width, under a slim bar with the publish status and a link back to the editor.
  *
- * Gated and owner-only: signed out goes to /login before anything of the draft is read. The page is
- * read with the signed-in user's own session under RLS, and ownership is checked from
- * `pages.owner_id`, never from the `hl-page` cookie, so another account's page id (or a malformed
- * one) answers the app's 404 with none of the page's text. This module imports no secret-key client.
- * A suspended owner can still open it: reads are never blocked.
+ * Gated: signed out goes to /login before anything of the draft is read. Access is the one helper's
+ * (Wave F: the owner or a member may read; C14), never the `hl-page` cookie, so another account's
+ * page id (or a malformed one) answers the app's 404 with none of the page's text. The draft itself
+ * is read with the signed-in user's own session under RLS. A suspended owner can still open it:
+ * reads are never blocked. The badge and chrome follow the site OWNER's plan.
  */
 export default async function DraftPreviewPage({ params }: PageProps<"/app/preview/[pageId]">) {
   const user = await requireUser();
   const { pageId } = await params;
   if (!PAGE_ID.test(pageId)) notFound();
 
+  const allowed = await siteAccessFor({
+    actorId: user.id,
+    siteId: pageId.toLowerCase(),
+    need: "read",
+    source: "editor",
+  });
+  if (!allowed.ok) {
+    if (allowed.reason === "error") throw new Error("Loading the page's access for a preview failed");
+    notFound();
+  }
   const supabase = await createServerSupabase();
-  const owned = await supabase
-    .from("pages")
-    .select("id, handle")
-    .eq("id", pageId)
-    .eq("owner_id", user.id)
-    .maybeSingle();
+  const owned = await supabase.from("pages").select("id, handle").eq("id", allowed.access.siteId).maybeSingle();
   if (owned.error) throw new Error(`Loading the page for a preview failed: ${owned.error.message}`);
   if (!owned.data) notFound();
 
-  const [data, account] = await Promise.all([
-    loadEditorPageData(owned.data, user.id),
-    supabase.from("accounts").select("plan").eq("id", user.id).maybeSingle(),
-  ]);
-  if (account.error) throw new Error(`Loading the account failed: ${account.error.message}`);
+  const data = await loadEditorPageData(owned.data);
 
   // Home's blocks are its page entry's (the copies in pages.draft and pages.published are frozen),
   // read with the same signed-in session under RLS.
@@ -88,7 +89,7 @@ export default async function DraftPreviewPage({ params }: PageProps<"/app/previ
           doc={doc}
           pageId={owned.data.id}
           mode="preview"
-          chrome={pageChrome(toPlan(account.data?.plan), owned.data.id)}
+          chrome={pageChrome(allowed.access.plan, owned.data.id)}
         />
       </PreviewFrame>
     </>

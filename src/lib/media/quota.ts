@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { toPlanId } from "@/lib/limits";
 import { createAdminSupabase } from "@/lib/supabase/admin";
+import type { CleanupAccess } from "./cleanup";
 import { cleanupMediaFor } from "./cleanup-admin";
 import { MEDIA_BUCKET } from "./limits";
 import type { UploadQuota } from "./upload";
@@ -9,16 +10,19 @@ import type { UploadQuota } from "./upload";
 /**
  * The real upload quota (M4-31): the plan and the suspension flag come from `accounts` (secret key,
  * never from the request), the stored bytes from `account_upload_bytes(uid)`, which sums the objects
- * actually in the `page-media` bucket under `{uid}/`. `userId` must be the verified session user.
+ * actually in the `page-media` bucket under `{uid}/`. `access` is the verified uploader acting on the
+ * site OWNER's account (the access helper's answer): the quota, the plan and the folder are the owner's.
  *
  * A database error throws: the route answers 500 and nothing is stored, so the cap never fails open.
- * `reclaim` runs the M5-14 cleanup for the account, so bytes held by images that nothing uses any
- * more are freed before an upload is refused for lack of room.
+ * `reclaim` runs the M5-14 cleanup as the uploader (the one entry point derives what that may delete),
+ * so bytes held by images that nothing uses any more are freed before an upload is refused for lack of
+ * room.
  */
 export function adminUploadQuota(
-  userId: string,
+  access: CleanupAccess,
   admin: SupabaseClient = createAdminSupabase() as unknown as SupabaseClient,
 ): UploadQuota {
+  const userId = access.ownerId;
   return {
     async read() {
       const [account, bytes] = await Promise.all([
@@ -41,7 +45,7 @@ export function adminUploadQuota(
     // M5-14: an upload that would not fit first lets go of what the account replaced or removed
     // (and nothing it still uses), then the total is read again.
     async reclaim() {
-      await cleanupMediaFor(userId, admin);
+      await cleanupMediaFor(access, { admin });
     },
   };
 }

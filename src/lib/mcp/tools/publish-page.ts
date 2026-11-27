@@ -28,7 +28,7 @@ export const publishPage: ToolDefinition<typeof input> = {
   async handler(_args, call) {
     const page = call.page!;
     const result = await publishPageCore(
-      { pageId: page.id, userId: call.userId },
+      { pageId: page.id, userId: call.userId, source: "mcp" },
       { admin: call.admin },
     );
     if (!result.ok) {
@@ -85,7 +85,13 @@ export const publishPage: ToolDefinition<typeof input> = {
     // What the Server Action does, in the form a route handler may use: `updateTag` works in Server
     // Actions only, so the cache is expired with `revalidateTag(..., { expire: 0 })`.
     invalidatePage(page.id.toLowerCase());
-    call.defer(() => cleanupMediaQuietly(call.userId, call.admin as never));
+    // MCP reaches only the token user's own sites (decide rule 2): the owner acting.
+    call.defer(() =>
+      cleanupMediaQuietly(
+        { actorId: call.userId, ownerId: call.userId, siteId: page.id },
+        { admin: call.admin as never },
+      ),
+    );
 
     const url = tenantOrigin(page.handle);
     let custom: string[] = [];

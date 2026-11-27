@@ -22,6 +22,7 @@ const KEPT: Array<[string, string, string]> = [
   ["the same host in capitals and with a trailing dot", "https://APP.HYDLNK.COM./editor", ROOT],
   ["local development", "http://app.localhost:3000/editor", LOCAL],
   ["local sign-in", "http://app.localhost:3000/login?next=/editor", LOCAL],
+  ["the token-free invite page (S6)", "https://app.hydlnk.com/invite", ROOT],
 ];
 
 const DROPPED: Array<[string, string, string]> = [
@@ -42,6 +43,8 @@ const DROPPED: Array<[string, string, string]> = [
   ["/api/e/ with more", "https://app.hydlnk.com/api/e/x", ROOT],
   ["/media/", "https://app.hydlnk.com/media/u/f.webp", ROOT],
   ["/_t/ the tenant assets", "https://app.hydlnk.com/_t/p.abc.js", ROOT],
+  ["S6: an invite link, whose address is the token", "https://app.hydlnk.com/invite/AbC_dEf-0123456789abcdefghijklmnopqrstuvwxy", ROOT],
+  ["S6: an invite link on the local app host", "http://app.localhost:3000/invite/AbC_dEf-0123456789abcdefghijklmnopqrstuvwxy", LOCAL],
   ["the local marketing site", "http://localhost:3000/", LOCAL],
   ["the local tenant", "http://mara.localhost:3000/", LOCAL],
   ["the local app host with a wrong port", "http://app.localhost:3001/editor", LOCAL],

@@ -50,6 +50,8 @@ const EXPECTED: Record<string, NavKey | null> = {
   "/audience": "audience",
   "/domains": "domains",
   "/settings": "settings",
+  // Wave F (M19-09): who works on the current site, under Settings.
+  "/members": "settings",
   "/pages/new": null,
 };
 

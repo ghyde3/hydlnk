@@ -1,5 +1,6 @@
 "use client";
 
+import { UploadSiteContext } from "@/components/media/upload-site";
 import { useRouter, useSelectedLayoutSegment } from "next/navigation";
 import {
   useCallback,
@@ -56,6 +57,7 @@ import { splitPublishState, type ItemPublishState } from "@/lib/publish/status";
 import { restorePageRevision } from "@/lib/site-pages/entry-revisions-client";
 import { HOME_PAGE_ID, itemStateOf } from "@/lib/site-pages/pages";
 import type { PlanId } from "@/lib/limits/table";
+import { scheduleMediaCleanup } from "@/lib/media/cleanup-client";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { TokenSet } from "@/lib/theme";
 import { fetchThemeLibrary, themeById, type ThemeRow } from "@/lib/themes";
@@ -70,6 +72,8 @@ import {
   type WorkspaceTab,
   type WorkspaceValue,
 } from "./workspace-context";
+import type { SiteRole } from "@/lib/team/constants";
+import { PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import { failureTab } from "./failure-tab";
 import {
   PUBLISH_CONFLICT_MESSAGE,
@@ -83,9 +87,16 @@ import { workspaceReducer, type WorkspaceAction } from "./workspace-reducer";
 export interface WorkspaceProviderProps {
   // Page identity: live, the layout passes them on every render (a rename refreshes the route).
   pageId: string;
+  /** The site's OWNER (Wave F): the first path segment of its uploads and the saved-themes scope. */
   ownerId: string;
+  /** The signed-in user (the actor). Equals `ownerId` on an own site. */
+  userId: string;
+  /** The user's role on this site: the owner, or a member (editor, publisher). */
+  role: SiteRole;
+  /** The owner, or a publisher: Publish and the other publish-class controls show. */
+  canPublish: boolean;
   /** The signed-in user's sign-in address (the form block's "Email me each message" helper line). */
-  accountEmail?: string;
+  ownerEmail?: string;
   plan: PlanId;
   handle: string;
   address: string;
@@ -240,7 +251,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     setRetryingThemes(true);
     void (async () => {
       try {
-        const result = await fetchThemeLibrary(createBrowserSupabase());
+        const result = await fetchThemeLibrary(createBrowserSupabase(), ownerId);
         if (result.ok) {
           replaceThemes(result.themes);
           setThemesFailed(false);
@@ -249,7 +260,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         setRetryingThemes(false);
       }
     })();
-  }, [replaceThemes]);
+  }, [replaceThemes, ownerId]);
   const themesLoad = useMemo(
     () => ({ failed: themesFailed, retrying: retryingThemes, retry: retryThemes }),
     [themesFailed, retryingThemes, retryThemes],
@@ -462,7 +473,12 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
           () => undefined,
           () => undefined,
         );
-        return await run;
+        const ok = await run;
+        // The publish may have dropped what the live page showed (M5-14). Its own cleanup sees only
+        // rows past the Undo window (re-review finding 1), so the one that runs past it is scheduled
+        // here, as after a save.
+        if (ok) scheduleMediaCleanup(pageId);
+        return ok;
       } catch {
         // Nothing was published, the draft is stored, the status keeps saying "Unpublished changes".
         setPublishNote({ message: PUBLISH_FAILED_MESSAGE, retry: true });
@@ -472,7 +488,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         setPublishingItem(null);
       }
     },
-    [],
+    [pageId],
   );
   /** Publish all changes: the design and every page that changed, in one transaction. */
   const publishAll = useCallback(
@@ -779,11 +795,14 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       ? null
       : publishNote;
 
-  const publishDisabledReason = suspended
-    ? SUSPENDED_REASON
-    : blocked !== null
-      ? BLOCKED_PUBLISH_DISABLED_REASON
-      : null;
+  // Wave F (M19-10): an editor sees why instead of a working Publish (the server refuses anyway).
+  const publishDisabledReason = !props.canPublish
+    ? PUBLISH_FORBIDDEN_MESSAGE
+    : suspended
+      ? SUSPENDED_REASON
+      : blocked !== null
+        ? BLOCKED_PUBLISH_DISABLED_REASON
+        : null;
 
   // The page's current social image, as the live page's metadata names it (M2-30).
   const publishedMs = publishedAt ? Date.parse(publishedAt) : Number.NaN;
@@ -850,7 +869,10 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     () => ({
       pageId,
       ownerId,
-      ...(props.accountEmail ? { accountEmail: props.accountEmail } : {}),
+      userId: props.userId,
+      role: props.role,
+      canPublish: props.canPublish,
+      ...(props.ownerEmail ? { ownerEmail: props.ownerEmail } : {}),
       plan,
       handle: props.handle,
       address: props.address,
@@ -910,7 +932,10 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [
       pageId,
       ownerId,
-      props.accountEmail,
+      props.userId,
+      props.role,
+      props.canPublish,
+      props.ownerEmail,
       plan,
       props.handle,
       props.address,
@@ -967,5 +992,9 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     ],
   );
 
-  return <WorkspaceContextProvider value={value}>{children}</WorkspaceContextProvider>;
+  return (
+    <WorkspaceContextProvider value={value}>
+      <UploadSiteContext.Provider value={pageId}>{children}</UploadSiteContext.Provider>
+    </WorkspaceContextProvider>
+  );
 }

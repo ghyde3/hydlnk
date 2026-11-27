@@ -54,7 +54,13 @@ describe.skipIf(!run)("M17-08 / M17-09 the Audience loaders (local Supabase)", (
   let audience: typeof import("@/lib/forms/audience");
   let contract: typeof import("@/lib/forms/contract");
   const owners: TestOwner[] = [];
-  const usage = async () => ({ stored: 0, refused: 0, refusedDaily: 0, limit: 100 });
+  const usage = async () => ({
+    stored: 0,
+    refused: 0,
+    refusedDaily: 0,
+    notifySkippedToday: 0,
+    limit: 100,
+  });
 
   beforeAll(async () => {
     admin = adminClient();
@@ -183,3 +189,30 @@ describe.skipIf(!run)("M17-08 / M17-09 the Audience loaders (local Supabase)", (
     expect(all.rows[0]!.email).toBe("exp7@example.test");
   }, 60_000);
 });
+
+describe.skipIf(!run)(
+  "forms attack pass finding 6: today's skipped owner emails (local Supabase)",
+  () => {
+    const owners: TestOwner[] = [];
+    afterAll(async () => {
+      await removeOwners(adminClient(), owners);
+    });
+
+    it("loadFormUsage reads the emails skipped today from form_usage", async () => {
+      const admin = adminClient();
+      const owner = await makeOwner(admin, "fskip");
+      owners.push(owner);
+      const { loadFormUsage } = await import("@/lib/forms/usage");
+      expect((await loadFormUsage(owner.userId, "free", admin)).notifySkippedToday).toBe(0);
+      for (let i = 0; i < 3; i++) {
+        const { error } = await admin.rpc("record_form_notify_skipped", { p_owner: owner.userId });
+        expect(error).toBeNull();
+      }
+      expect(await loadFormUsage(owner.userId, "free", admin)).toMatchObject({
+        notifySkippedToday: 3,
+        stored: 0,
+        limit: 100,
+      });
+    }, 60_000);
+  },
+);

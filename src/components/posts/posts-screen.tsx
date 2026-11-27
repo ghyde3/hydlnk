@@ -44,11 +44,20 @@ export interface PostsScreenProps {
   items: EntrySummary[];
   nextCursor: string | null;
   terms: TermSummary[];
+  /** False on a site shared with the user (Wave F, G14): the blog's settings are the owner's. */
+  isOwner?: boolean;
 }
 
 export function PostsScreen(props: PostsScreenProps) {
   const [type, setType] = useState(props.type);
   if (!type?.enabled) {
+    if (props.isOwner === false) {
+      return (
+        <p className="text-[15px] leading-relaxed text-text-2">
+          This site’s blog is off. Only the site’s owner can turn it on.
+        </p>
+      );
+    }
     return <BlogOff siteId={props.siteId} onEnabled={setType} />;
   }
   return <BlogOn {...props} type={type} onType={setType} />;
@@ -155,6 +164,7 @@ function BlogOn({
   items: firstItems,
   nextCursor: firstCursor,
   terms,
+  isOwner,
 }: PostsScreenProps & { type: TypeSummary; onType: (type: TypeSummary) => void }) {
   const suspended = useAccountSuspended();
   const router = useRouter();
@@ -285,7 +295,7 @@ function BlogOn({
           trashed.
         </p>
       </section>
-      <BlogSettings siteId={siteId} type={type} onType={onType} />
+      {isOwner === false ? null : <BlogSettings siteId={siteId} type={type} onType={onType} />}
     </div>
   );
 }

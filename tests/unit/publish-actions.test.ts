@@ -21,6 +21,18 @@ vi.mock("@/lib/media/cleanup-admin", () => ({ cleanupMediaQuietly }));
 
 const rateLimit = vi.fn();
 vi.mock("@/lib/rate-limit", () => ({ rateLimit }));
+// Wave F: the actions ask the access helper for the site's owner (rate keys, the media queue). Here
+// the session user owns the page, so the owner key and the user key are one.
+vi.mock("@/lib/access/server", () => ({
+  siteAccessFor: async ({ siteId }: { siteId: string }) => ({
+    ok: true,
+    access: {
+      actorId: "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01",
+      ownerId: "6f1c2a52-3a1e-4c0b-9d57-0b8f2f7a1e01",
+      siteId,
+    },
+  }),
+}));
 
 const { publishPage, publishSitePage, publishDesign } = await import("@/lib/publish/actions");
 type PublishExpected = import("@/lib/publish/core").PublishExpected;
@@ -103,7 +115,11 @@ describe("M2-26 Publish calls updateTag, inside the action, on success only", ()
     publishPageCore.mockResolvedValue({ ok: true, publishedAt: "2026-10-02T01:00:00.000Z" });
     await publishPage(PAGE);
     expect(cleanupMediaQuietly).toHaveBeenCalledTimes(1);
-    expect(cleanupMediaQuietly).toHaveBeenCalledWith(USER);
+    // Re-review finding 1: as the publisher's access (the one entry point derives the scope).
+    expect(cleanupMediaQuietly).toHaveBeenCalledWith(
+      { actorId: USER, ownerId: USER, siteId: PAGE.toLowerCase() },
+      {},
+    );
     expect(updateTag.mock.invocationCallOrder[0]!).toBeLessThan(
       cleanupMediaQuietly.mock.invocationCallOrder[0]!,
     );

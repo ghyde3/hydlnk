@@ -9,6 +9,7 @@
  *                              Pages panel, with no item of its own)
  *   /analytics, /domains, /settings, /pages/new     "analytics", "domains", "settings", "pages"
  *   /audience                  "audience" (the forms' submissions, Wave D, M17-08)
+ *   /members                   "members" (who works on the current site, Wave F): under Settings
  *
  * All of the first three belong to the one Editor item. `tests/unit/m7-nav-segments.test.ts` walks the
  * real src/app tree and checks every route against this function.
@@ -29,6 +30,8 @@ export function navKeyForSegment(segment: string | null): NavKey | null {
     case "domains":
     case "settings":
       return segment;
+    case "members":
+      return "settings";
     default:
       return null;
   }

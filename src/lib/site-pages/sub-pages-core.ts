@@ -10,8 +10,17 @@ import {
   listPagePathsWithClient,
 } from "@/lib/site/page-entries-core";
 import { createEntryWithClient } from "@/lib/content";
+import {
+  needForEntryWrite,
+  recordSiteActivity,
+  requireEntryAccess,
+  requireSiteAccess,
+  type AccessRefusal,
+} from "@/lib/access";
+import { activityAllowed } from "@/lib/team/activity-limit";
+import { ACTIVITY_RATE_LIMITED_MESSAGE, PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
 import type { ContentActor } from "@/lib/content";
-import { pagesPerSiteMessage, toPlanId } from "@/lib/limits";
+import { pagesPerSiteMessage } from "@/lib/limits";
 import { normalizePageName } from "@/lib/pages/name";
 import type { Database } from "@/lib/supabase/database.types";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
@@ -35,6 +44,7 @@ import { pathProblem } from "./pages";
 
 export type SubPageError =
   | "not_found"
+  | "forbidden"
   | "account_suspended"
   | "page_limit"
   | "storage_full"
@@ -42,7 +52,9 @@ export type SubPageError =
   | "path_taken"
   | "doc_invalid"
   | "create_failed"
-  | "delete_failed";
+  | "delete_failed"
+  /** Past the activity limit (team attack pass, finding 2). */
+  | "rate_limited";
 
 export type CreateSubPageResult =
   | {
@@ -62,6 +74,7 @@ export type DeleteSubPageResult =
 
 export const SUB_PAGE_STATUS: Record<SubPageError, number> = {
   not_found: 404,
+  forbidden: 403,
   account_suspended: 403,
   page_limit: 403,
   storage_full: 403,
@@ -70,10 +83,12 @@ export const SUB_PAGE_STATUS: Record<SubPageError, number> = {
   doc_invalid: 422,
   create_failed: 500,
   delete_failed: 500,
+  rate_limited: 429,
 };
 
 export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
   not_found: "That page doesn’t exist.",
+  forbidden: PUBLISH_FORBIDDEN_MESSAGE,
   account_suspended:
     "Your account is suspended, so its pages can’t be changed. Contact support to appeal.",
   page_limit: "This site is at its limit of pages.",
@@ -83,11 +98,11 @@ export const SUB_PAGE_MESSAGES: Record<SubPageError, string> = {
   doc_invalid: "That page’s content isn’t valid.",
   create_failed: "Couldn’t add the page. Try again.",
   delete_failed: "Couldn’t delete the page. Try again.",
+  rate_limited: ACTIVITY_RATE_LIMITED_MESSAGE,
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const actorOf = (userId: string): ContentActor => ({ userId, source: "editor" });
 
 const failure = (error: SubPageError, message?: string) => ({
   ok: false as const,
@@ -98,37 +113,17 @@ const failure = (error: SubPageError, message?: string) => ({
 
 type Admin = SupabaseClient<Database>;
 
-/** The account's plan, or null when it is suspended or unreadable (the write is refused). */
-async function activeAccountPlan(admin: Admin, userId: string) {
-  const account = await admin
-    .from("accounts")
-    .select("plan, suspended_at")
-    .eq("id", userId)
-    .maybeSingle();
-  if (account.error) {
-    console.error("[site-pages] reading the account failed", account.error.message);
-    return { kind: "error" as const };
-  }
-  if (!account.data || account.data.suspended_at !== null) return { kind: "suspended" as const };
-  return { kind: "ok" as const, plan: toPlanId(account.data.plan) };
-}
-
-async function ownedSite(admin: Admin, userId: string, siteId: unknown) {
-  if (typeof siteId !== "string" || !UUID.test(siteId)) return null;
-  const site = await admin
-    .from("pages")
-    .select("id, handle")
-    .eq("id", siteId)
-    .eq("owner_id", userId)
-    .maybeSingle();
-  if (site.error) throw new Error(`Site lookup failed: ${site.error.message}`);
-  return site.data;
+/** A refusal of the access helper in this layer's words (`unexpected`: a failed read). */
+function refusalOf(refusal: AccessRefusal, unexpected: SubPageError) {
+  return failure(refusal.reason === "error" ? unexpected : refusal.reason);
 }
 
 export async function createSubPageWithClient(
   admin: Admin,
   input: {
     userId: string;
+    /** Where the call came from (S4): the MCP tool says "mcp", so decide() applies its owner-only rule. */
+    source: ContentActor["source"];
     siteId: unknown;
     title?: unknown;
     path?: unknown;
@@ -137,11 +132,16 @@ export async function createSubPageWithClient(
     blocks?: unknown;
   },
 ): Promise<CreateSubPageResult> {
-  const account = await activeAccountPlan(admin, input.userId);
-  if (account.kind === "error") return failure("create_failed");
-  if (account.kind === "suspended") return failure("account_suspended");
-  const site = await ownedSite(admin, input.userId, input.siteId);
-  if (!site) return failure("not_found");
+  // Adding a draft page is an edit: an editor may; the owner's plan is the limit (access.plan).
+  const found = await requireSiteAccess(admin, {
+    actorId: input.userId,
+    siteId: input.siteId,
+    need: "edit",
+    source: input.source,
+  });
+  if (!found.ok) return refusalOf(found, "create_failed");
+  const { access } = found;
+  const site = { id: access.siteId };
 
   // A title that is not given, or is blank, is "New page" (the page can be renamed at once).
   const named = typeof input.title === "string" ? normalizePageName(input.title) : null;
@@ -177,8 +177,9 @@ export async function createSubPageWithClient(
     if (!parsed.success) return failure("doc_invalid");
     draft = parsed.data;
   }
+  if (!(await activityAllowed(access.actorId))) return failure("rate_limited");
   const made = await createEntryWithClient(admin, {
-    actor: actorOf(input.userId),
+    actor: { userId: input.userId, source: input.source },
     siteId: site.id,
     typeKey: "page",
     draft,
@@ -188,7 +189,7 @@ export async function createSubPageWithClient(
       case "page_limit": {
         // Home plus every sub-page entry, trash included: what the trigger counted.
         const count = await countSubPageEntriesWithClient(admin, site.id);
-        return failure("page_limit", pagesPerSiteMessage(account.plan, count + 1));
+        return failure("page_limit", pagesPerSiteMessage(access.plan, count + 1));
       }
       case "path_taken":
         return failure("path_taken");
@@ -201,6 +202,8 @@ export async function createSubPageWithClient(
         return failure("account_suspended");
       case "not_found":
         return failure("not_found");
+      case "forbidden":
+        return failure("forbidden");
       case "invalid":
       case "blocked_link":
       case "too_large":
@@ -210,6 +213,7 @@ export async function createSubPageWithClient(
         return failure("create_failed");
     }
   }
+  await recordSiteActivity(admin, access, "page_created", made.id);
   return {
     ok: true,
     id: made.id,
@@ -225,16 +229,25 @@ export async function deleteSubPageWithClient(
   admin: Admin,
   input: { userId: string; siteId: unknown; subPageId: unknown; purge?: boolean },
 ): Promise<DeleteSubPageResult> {
-  const { userId } = input;
-  const account = await activeAccountPlan(admin, userId);
-  if (account.kind === "error") return failure("delete_failed");
-  if (account.kind === "suspended") return failure("account_suspended");
-  const site = await ownedSite(admin, userId, input.siteId);
-  if (!site) return failure("not_found");
+  if (typeof input.siteId !== "string" || !UUID.test(input.siteId)) return failure("not_found");
   if (typeof input.subPageId !== "string" || !UUID.test(input.subPageId)) {
     return failure("not_found");
   }
   const subPageId = input.subPageId.toLowerCase();
+  // Access on the entry's own site, which must be the URL's: deleting a live page is publish-class,
+  // a draft-only page an edit (needForEntryWrite).
+  const found = await requireEntryAccess(admin, {
+    actorId: input.userId,
+    entryId: subPageId,
+    siteId: input.siteId.toLowerCase(),
+    need: (entry) => needForEntryWrite(entry, "delete"),
+    source: "editor",
+  });
+  if (!found.ok) return refusalOf(found, "delete_failed");
+  const { access } = found;
+  const handle = await admin.from("pages").select("handle").eq("id", access.siteId).maybeSingle();
+  if (handle.error || !handle.data) return failure("delete_failed");
+  const site = { id: access.siteId, handle: handle.data.handle };
 
   // One transaction (delete_page_entry): the entry, its revisions, its links, its path claims and
   // its item in the site's draft menu (pages.draft nav.items, `draft.rev` untouched, so the owner's
@@ -242,15 +255,21 @@ export async function deleteSubPageWithClient(
   // and a failure leaves the page fully in place, still listed, still live and still in the menu.
   // It takes a live page and one already in the trash; Home, another site's entry and an unknown id
   // are all P0002. (Posts keep the 30-day trash; this door is for pages only.)
-  const deleted = await admin.rpc("delete_page_entry", {
+  // R8: decided again under the entry row's lock, through the rule (a page that went live since the
+  // read above needs publish: 42501).
+  if (!(await activityAllowed(access.actorId))) return failure("rate_limited");
+  const deleted = await admin.rpc("delete_page_entry_as", {
     p_entry_id: subPageId,
     p_site_id: site.id,
-    p_owner_id: userId,
+    p_owner_id: access.ownerId,
+    p_actor: access.actorId,
   });
   if (deleted.error) {
     if (deleted.error.code === "P0002") return failure("not_found");
+    if (deleted.error.code === "42501") return failure("forbidden");
     console.error("[site-pages] delete failed", deleted.error.code, deleted.error.message);
     return failure("delete_failed");
   }
+  await recordSiteActivity(admin, access, "entry_deleted", subPageId);
   return { ok: true, id: subPageId, siteId: site.id, handle: site.handle, purged: true };
 }

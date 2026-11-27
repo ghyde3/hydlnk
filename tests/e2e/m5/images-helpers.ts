@@ -2,6 +2,7 @@ import type { BrowserContext } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { authCookies, cookieHeader } from "../fixtures/http";
 import { multipart, rawBuffer, SERVER_PORT, type RawBufferResponse } from "../m2/publish-helpers";
+import { uploadSiteHeader } from "../fixtures/upload-site";
 
 /**
  * Helpers for the Wave D image specs (M5-11 to M5-14): real images made with sharp (the upload
@@ -32,7 +33,7 @@ export interface UploadOptions {
 }
 
 /** POST /api/media on the app host. `cookie` is the sb- session cookie header, or none for 401. */
-export function uploadMedia(data: Buffer, opts: UploadOptions = {}): Promise<RawBufferResponse> {
+export async function uploadMedia(data: Buffer, opts: UploadOptions = {}): Promise<RawBufferResponse> {
   const { body, contentType } = multipart([
     {
       name: "file",
@@ -48,7 +49,11 @@ export function uploadMedia(data: Buffer, opts: UploadOptions = {}): Promise<Raw
   return rawBuffer(APP_HOST, "/api/media", {
     method: "POST",
     cookie: opts.cookie,
-    headers: { "content-type": contentType, ...(opts.origin ? { origin: opts.origin } : {}) },
+    headers: {
+      ...(await uploadSiteHeader(opts.cookie)),
+      "content-type": contentType,
+      ...(opts.origin ? { origin: opts.origin } : {}),
+    },
     body,
   });
 }

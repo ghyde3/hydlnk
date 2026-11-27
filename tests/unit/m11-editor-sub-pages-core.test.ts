@@ -50,7 +50,7 @@ describe.skipIf(!run)("M11-04 sub-page create and delete (local Supabase)", () =
     o: TestOwner,
     body: { title?: unknown; path?: unknown; description?: unknown; blocks?: unknown } = {},
     siteId = o.pageId,
-  ) => core.createSubPageWithClient(admin as never, { userId: o.userId, siteId, ...body });
+  ) => core.createSubPageWithClient(admin as never, { userId: o.userId, source: "editor", siteId, ...body });
   /** Sub-page entries of the site, trash included. */
   const count = async (siteId: string) => {
     const { count: n } = await admin

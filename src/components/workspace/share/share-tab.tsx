@@ -74,7 +74,7 @@ const SECTIONS = ["preview-links", "qr"] as const;
  * a page load with that hash.
  */
 export function ShareTab() {
-  const { state, dispatch, primaryDomain, address, liveOgUrl, shareFocus, clearShareFocus } =
+  const { state, dispatch, primaryDomain, address, liveOgUrl, shareFocus, clearShareFocus, role } =
     useWorkspace();
   const { draft } = state;
 
@@ -105,7 +105,7 @@ export function ShareTab() {
       />
       <LinkTrackingCard />
       <QrCard />
-      <PreviewLinksCard />
+      {role === "owner" ? <PreviewLinksCard /> : null}
       <HistoryCard />
       <ConnectCard />
     </>

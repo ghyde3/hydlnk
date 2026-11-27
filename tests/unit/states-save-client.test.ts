@@ -15,8 +15,24 @@ type Answer = {
 let answer: Answer;
 const select = vi.fn(async () => answer);
 const builder: Record<string, unknown> = {};
-for (const name of ["update", "eq", "is"]) builder[name] = vi.fn(() => builder);
-builder.select = select;
+for (const name of ["eq", "is"]) builder[name] = vi.fn(() => builder);
+// Wave F (M19-11): after a write that matched no row the saver reads the site once: readable is a
+// conflict (another tab), unreadable is lost access.
+let writing = false;
+let readable = true;
+const read: Record<string, unknown> = {
+  eq: () => read,
+  maybeSingle: async () => ({ data: readable ? { id: "x" } : null, error: null }),
+};
+builder.update = vi.fn(() => {
+  writing = true;
+  return builder;
+});
+builder.select = vi.fn(() => {
+  if (!writing) return read;
+  writing = false;
+  return select();
+});
 
 vi.mock("@/lib/supabase/browser", () => ({
   createBrowserSupabase: () => ({ from: () => builder }),
@@ -62,5 +78,12 @@ describe("M5-15 createDraftSaver maps the answer", () => {
     expect(await save(doc, "3")).toEqual({ kind: "conflict" });
     answer = { data: [{ id: "x" }], error: null, status: 200 };
     expect(await save(doc, "3")).toEqual({ kind: "ok" });
+  });
+
+  it("M19-11 no row matched and the site no longer readable is lost-access, not a conflict", async () => {
+    answer = { data: [], error: null, status: 200 };
+    readable = false;
+    expect(await save(doc, "3")).toEqual({ kind: "lost-access" });
+    readable = true;
   });
 });

@@ -66,6 +66,12 @@ export const SCOPE_LABELS: Readonly<Record<OauthScope, { title: string; hint: st
   },
 };
 
+/**
+ * Wave F (G10, M19-13): a token reaches only its user's own sites; sites shared with them are not
+ * part of any connection. On the consent screen and the Connected apps card.
+ */
+export const SHARED_SITES_NOT_INCLUDED = "Sites shared with you aren’t included.";
+
 export const STAYS_CONNECTED =
   "It stays connected while you use it. You can remove it any time in Settings.";
 export const CONNECTED_BEFORE =

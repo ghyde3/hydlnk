@@ -142,7 +142,7 @@ describe.skipIf(!run)("cutover review 2 (local Supabase)", () => {
       const { loadEditorPageData } = await import("@/lib/editor/page-data");
       const { computePublishStatus } = await import("@/lib/editor/status");
       const { toPublishForm } = await import("@/lib/document");
-      const data = await loadEditorPageData({ id: o.pageId, handle: o.handle }, o.userId);
+      const data = await loadEditorPageData({ id: o.pageId, handle: o.handle });
       expect((data.published as any).blocks[0].label).toBe("Two");
       expect(
         computePublishStatus({

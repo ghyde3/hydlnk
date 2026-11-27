@@ -30,7 +30,7 @@ describe("M11-12 POST /api/media/cleanup is rate limited per account", () => {
     const response = await POST(request());
     expect(response.status).toBe(200);
     expect(rateLimit).toHaveBeenCalledWith(`media-cleanup:${USER}`, 20, 60);
-    expect(cleanupMediaFor).toHaveBeenCalledWith(USER);
+    expect(cleanupMediaFor).toHaveBeenCalledWith({ actorId: USER, ownerId: USER, siteId: null });
   });
 
   it("past the limit it answers 429 rate_limited with Retry-After and does not touch the queue", async () => {

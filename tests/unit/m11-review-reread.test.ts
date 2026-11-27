@@ -92,8 +92,15 @@ describe("HL009 creating a page", () => {
       chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: [], error: null });
       return chain;
     };
-    const result = await createSubPageWithClient({ from: table } as never, {
+    // Wave F: access comes from the one helper's RPC (here, the site's owner).
+    const rpc = async () => ({
+      data: [{ site_id: SITE, owner_id: "00000000-0000-4000-8000-0000000000a1", role: "owner", is_owner: true,
+        can_read: true, can_edit: true, can_publish: true, owner_plan: "pro", state: "active" }],
+      error: null,
+    });
+    const result = await createSubPageWithClient({ from: table, rpc } as never, {
       userId: "00000000-0000-4000-8000-0000000000a1",
+      source: "editor",
       siteId: SITE,
     });
     expect(result).toEqual({

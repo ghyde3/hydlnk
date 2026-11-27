@@ -2,7 +2,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
 import { failure, mapDbError } from "./errors";
-import { activeAccount, ownedEntry, siteType } from "./guards";
+import { needForEntryWrite, recordSiteActivity, type EntryWriteOp } from "@/lib/access";
+import { activityLimited } from "./activity";
+import { entryFor, siteType } from "./guards";
 import type { EntryPlace } from "./publish-core";
 import type { ContentActor, ContentFailure, ContentResult } from "./types";
 
@@ -23,12 +25,13 @@ async function refused(
   return failure("conflict", undefined, Number(reread.data.rev));
 }
 
-/** Ownership (trashed rows included) and a live account, then a well-formed rev. */
-async function prepare(admin: Admin, input: Input) {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+/**
+ * Access to the entry (trashed rows included) for `op`: trashing a live entry is publish-class,
+ * restoring into the drafts is an edit (needForEntryWrite). Then a well-formed rev.
+ */
+async function prepare(admin: Admin, input: Input, op: EntryWriteOp) {
+  const owned = await entryFor(admin, input.actor, input.entryId, (e) => needForEntryWrite(e, op));
   if (!owned.ok) return owned;
-  const account = await activeAccount(admin, input.actor.userId);
-  if (!account.ok) return account;
   if (!Number.isSafeInteger(input.expectedRev) || input.expectedRev < 1) {
     return failure("invalid", "Send the revision you are editing.");
   }
@@ -40,7 +43,7 @@ async function prepare(admin: Admin, input: Input) {
     typeId: type.type.id,
     typeKey: type.type.key,
   };
-  return { ok: true as const, entry: owned.entry, place };
+  return { ok: true as const, entry: owned.entry, access: owned.access, place };
 }
 
 /** Move the entry to the trash: the live copy goes at once, the draft stays for 30 days. */
@@ -48,16 +51,22 @@ export async function trashEntryWithClient(
   admin: Admin,
   input: Input,
 ): Promise<ContentResult<{ rev: number } & EntryPlace>> {
-  const ready = await prepare(admin, input);
+  const ready = await prepare(admin, input, "trash");
   if (!ready.ok) return ready;
   const { entry } = ready;
   if (entry.deleted_at !== null) return failure("not_found");
-  const { data, error } = await admin.rpc("trash_entry", {
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
+  // R8: the database decides again on the LOCKED row (live: publish, draft: edit), through the rule,
+  // so an editor never trashes an entry a publisher has just published (42501: forbidden).
+  const { data, error } = await admin.rpc("trash_entry_as", {
     p_entry_id: entry.id,
-    p_owner_id: input.actor.userId,
+    p_owner_id: ready.access.ownerId,
+    p_actor: ready.access.actorId,
     p_expected_rev: input.expectedRev,
   });
   if (error) return refused(admin, entry.id, error);
+  await recordSiteActivity(admin, ready.access, "entry_trashed", entry.id);
   return { ok: true, rev: Number(data), ...ready.place };
 }
 
@@ -66,16 +75,19 @@ export async function restoreEntryWithClient(
   admin: Admin,
   input: Input,
 ): Promise<ContentResult<{ rev: number } & EntryPlace>> {
-  const ready = await prepare(admin, input);
+  const ready = await prepare(admin, input, "restore");
   if (!ready.ok) return ready;
   const { entry } = ready;
   if (entry.deleted_at === null) return failure("not_found");
+  const limited = await activityLimited(ready.access);
+  if (limited) return limited;
   const { data, error } = await admin.rpc("restore_entry", {
     p_entry_id: entry.id,
-    p_owner_id: input.actor.userId,
+    p_owner_id: ready.access.ownerId,
     p_expected_rev: input.expectedRev,
   });
   if (error) return refused(admin, entry.id, error);
+  await recordSiteActivity(admin, ready.access, "entry_restored", entry.id);
   return { ok: true, rev: Number(data), ...ready.place };
 }
 
@@ -89,10 +101,9 @@ export async function purgeEntryWithClient(
   admin: Admin,
   input: { actor: ContentActor; entryId: string; includePublished?: boolean },
 ): Promise<ContentResult<{ siteId: string }>> {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  // Deleting for good is publish-class (G17).
+  const owned = await entryFor(admin, input.actor, input.entryId, (e) => needForEntryWrite(e, "purge"));
   if (!owned.ok) return owned;
-  const account = await activeAccount(admin, input.actor.userId);
-  if (!account.ok) return account;
   const { entry } = owned;
   // trash_entry clears `published`, so "never published" is first_published_at, which is never cleared.
   const anyHistory = input.includePublished === true;
@@ -103,6 +114,8 @@ export async function purgeEntryWithClient(
   ) {
     return failure("not_found");
   }
+  const limited = await activityLimited(owned.access);
+  if (limited) return limited;
   let query = admin
     .from("content_entries")
     .delete()
@@ -114,5 +127,6 @@ export async function purgeEntryWithClient(
   const deleted = await query.select("id");
   if (deleted.error) return mapDbError(deleted.error);
   if (deleted.data.length === 0) return failure("not_found");
+  await recordSiteActivity(admin, owned.access, "entry_purged", null);
   return { ok: true, siteId: entry.site_id };
 }

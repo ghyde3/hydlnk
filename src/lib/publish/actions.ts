@@ -1,6 +1,8 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import type { SiteAccess } from "@/lib/access/decide";
+import { siteAccessFor } from "@/lib/access/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { rateLimit } from "@/lib/rate-limit";
 import { afterPagePublished } from "./after-publish";
@@ -34,37 +36,57 @@ import { PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS, publishRateKey } from 
  * what the editor holds (the design's rev key and each page entry's rev); when any of them moved the
  * answer is `conflict` and nothing is written. Unchanged pages keep their publish date.
  */
-/** The session user and the shared publish rate limit (M11-12): 60 an hour per account, all three actions together. */
-async function publisher(): Promise<
-  { userId: string | null; limited: false } | { userId: string; limited: true }
-> {
+/**
+ * The session user and the shared publish rate limit (M11-12): 60 an hour per account, all three
+ * actions together. Wave F (G18): a publish by someone who MAY publish the site counts on their own
+ * key AND on the site owner's, so publishers cannot spend more than the owner's budget between them;
+ * the owner counts once. Anyone else (an editor, a stranger) is asked with need `publish`, refused,
+ * and counts on their own key only (S2): they can never spend the owner's budget. The core decides
+ * publish access itself again.
+ */
+async function publisher(pageId: string): Promise<{
+  userId: string | null;
+  /** The publisher's access to the site (null: may not publish it; the core refuses). */
+  access: SiteAccess | null;
+  limited: boolean;
+}> {
   const user = await getSessionUser();
-  if (!user) return { userId: null, limited: false };
-  const limit = await rateLimit(
-    publishRateKey(user.id),
-    PUBLISH_RATE_LIMIT,
-    PUBLISH_RATE_WINDOW_SECONDS,
-  );
-  return { userId: user.id, limited: !limit.allowed };
+  if (!user) return { userId: null, access: null, limited: false };
+  const site = await siteAccessFor({
+    actorId: user.id,
+    siteId: typeof pageId === "string" ? pageId.toLowerCase() : pageId,
+    need: "publish",
+    source: "editor",
+  });
+  const access = site.ok ? site.access : null;
+  for (const id of new Set([user.id, access?.ownerId ?? user.id])) {
+    const limit = await rateLimit(publishRateKey(id), PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS);
+    if (!limit.allowed) return { userId: user.id, access, limited: true };
+  }
+  return { userId: user.id, access, limited: false };
 }
 
-/** After a publish that stands: the shared step (the site's tag with `updateTag`, then the media queue). */
-async function published(pageId: string, userId: string | null): Promise<void> {
-  await afterPagePublished({ siteId: pageId, ownerId: userId }, updateTag);
+/**
+ * After a publish that stands: the shared step (the site's tag with `updateTag`, then the media
+ * cleanup AS the publisher: a member's works only this site's rows, and every one only rows past the
+ * Undo window, team access re-review finding 1).
+ */
+async function published(pageId: string, access: SiteAccess | null): Promise<void> {
+  await afterPagePublished({ siteId: pageId, cleanup: access }, updateTag);
 }
 
 export async function publishPage(
   pageId: string,
   expected?: PublishExpected,
 ): Promise<SitePublishResult> {
-  const who = await publisher();
+  const who = await publisher(pageId);
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishPageCore({
     pageId,
     userId: who.userId,
     ...(expected === undefined ? {} : { expected }),
   });
-  if (result.ok) await published(pageId, who.userId);
+  if (result.ok) await published(pageId, who.access);
   return result;
 }
 
@@ -80,7 +102,7 @@ export async function publishSitePage(
   entryId: string,
   expectedRev: number,
 ): Promise<PagePublishResult> {
-  const who = await publisher();
+  const who = await publisher(pageId);
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishSitePageCore({
     pageId,
@@ -89,7 +111,7 @@ export async function publishSitePage(
     userId: who.userId,
     source: "editor",
   });
-  if (result.ok) await published(pageId, who.userId);
+  if (result.ok) await published(pageId, who.access);
   return result;
 }
 
@@ -102,9 +124,9 @@ export async function publishDesign(
   pageId: string,
   expectedRev: string | null,
 ): Promise<PublishResult> {
-  const who = await publisher();
+  const who = await publisher(pageId);
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishDesignCore({ pageId, expectedRev, userId: who.userId });
-  if (result.ok) await published(pageId, who.userId);
+  if (result.ok) await published(pageId, who.access);
   return result;
 }

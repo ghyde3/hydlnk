@@ -36,7 +36,7 @@ const ROW = "00000000-0000-4000-8000-0000000000aa";
 beforeEach(() => {
   mocks.calls.length = 0;
   mocks.result = { data: [{ id: ROW }], error: null };
-  mocks.context.mockResolvedValue({ user: { id: "user-a" }, current: { id: SITE } });
+  mocks.context.mockResolvedValue({ user: { id: "user-a" }, current: { id: SITE, access: { isOwner: true } } });
   mocks.rateLimit.mockResolvedValue({ allowed: true, retryAfter: 0 });
 });
 afterEach(() => vi.clearAllMocks());

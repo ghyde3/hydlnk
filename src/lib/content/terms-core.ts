@@ -4,7 +4,9 @@ import type { Database } from "@/lib/supabase/database.types";
 import { updateEntryWithClient } from "./entries-core";
 import { failure, mapDbError } from "./errors";
 import { TERMS_PER_TYPE } from "@/lib/blog/types";
-import { activeAccount, enabledType, ownedEntry, ownedSite, siteType } from "./guards";
+import { recordSiteActivity } from "@/lib/access";
+import { activityLimited } from "./activity";
+import { enabledType, entryFor, siteFor, siteType, termFor } from "./guards";
 import type { TermSummary } from "./schemas/summaries";
 import type { ContentActor, ContentResult } from "./types";
 
@@ -45,30 +47,6 @@ const nameIssue = (name: unknown) =>
   /[\u0000-\u001f\u007f]/.test(name);
 const slugIssue = (slug: unknown) => typeof slug !== "string" || !SLUG.test(slug);
 
-/** Ownership, then a live account. Term writes are refused for a suspended account. */
-async function writableSite(admin: Admin, actor: ContentActor, siteId: string) {
-  const site = await ownedSite(admin, actor.userId, siteId);
-  if (!site.ok) return site;
-  const account = await activeAccount(admin, actor.userId);
-  if (!account.ok) return account;
-  return { ok: true as const, siteId: site.site.id };
-}
-
-/** A term of this site, or `not_found`. */
-async function siteTerm(admin: Admin, siteId: string, termId: unknown) {
-  if (typeof termId !== "string" || !UUID.test(termId)) return failure("not_found");
-  const found = await admin
-    .from("content_terms")
-    .select(COLUMNS)
-    .eq("id", termId)
-    .eq("site_id", siteId)
-    .maybeSingle();
-  if (found.error) {
-    console.error("[content] reading the term failed", found.error.message);
-    return failure("error");
-  }
-  return found.data ? { ok: true as const, term: found.data } : failure("not_found");
-}
 
 /** Add a category (one level deep) or a flat tag to an enabled type. */
 export async function createTermWithClient(
@@ -83,9 +61,10 @@ export async function createTermWithClient(
     parentId?: string;
   },
 ): Promise<ContentResult<TermSummary>> {
-  const site = await writableSite(admin, input.actor, input.siteId);
+  // Adding a term is an edit; renaming or deleting one changes the live site at once (publish).
+  const site = await siteFor(admin, input.actor, input.siteId, "edit");
   if (!site.ok) return site;
-  const type = await enabledType(admin, site.siteId, input.typeKey);
+  const type = await enabledType(admin, site.site.id, input.typeKey);
   if (!type.ok) return type;
   if (type.type.body_format !== "markdown") {
     return failure("invalid", "That content type has no categories or tags.");
@@ -105,7 +84,7 @@ export async function createTermWithClient(
       .from("content_terms")
       .select("id, parent_id")
       .eq("id", input.parentId)
-      .eq("site_id", site.siteId)
+      .eq("site_id", site.site.id)
       .eq("type_id", type.type.id)
       .eq("taxonomy", "category")
       .maybeSingle();
@@ -122,7 +101,7 @@ export async function createTermWithClient(
   const inserted = await admin
     .from("content_terms")
     .insert({
-      site_id: site.siteId,
+      site_id: site.site.id,
       type_id: type.type.id,
       taxonomy: input.taxonomy,
       name: input.name,
@@ -140,9 +119,7 @@ export async function renameTermWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string; termId: string; name?: string; slug?: string },
 ): Promise<ContentResult<TermSummary>> {
-  const site = await writableSite(admin, input.actor, input.siteId);
-  if (!site.ok) return site;
-  const found = await siteTerm(admin, site.siteId, input.termId);
+  const found = await termFor(admin, input.actor, input.siteId, input.termId, "publish");
   if (!found.ok) return found;
   const patch: Database["public"]["Tables"]["content_terms"]["Update"] = {};
   if (input.name !== undefined) {
@@ -156,15 +133,18 @@ export async function renameTermWithClient(
     patch.slug = input.slug;
   }
   if (Object.keys(patch).length === 0) return failure("invalid", "Nothing to change.");
+  const limited = await activityLimited(found.access);
+  if (limited) return limited;
   const updated = await admin
     .from("content_terms")
     .update(patch)
     .eq("id", found.term.id)
-    .eq("site_id", site.siteId)
+    .eq("site_id", found.term.site_id)
     .select(COLUMNS)
     .maybeSingle();
   if (updated.error) return mapDbError(updated.error);
   if (!updated.data) return failure("not_found");
+  await recordSiteActivity(admin, found.access, "term_renamed");
   return { ok: true, ...summary(updated.data) };
 }
 
@@ -173,18 +153,19 @@ export async function deleteTermWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string; termId: string },
 ): Promise<ContentResult<{ id: string; typeId: string }>> {
-  const site = await writableSite(admin, input.actor, input.siteId);
-  if (!site.ok) return site;
-  const found = await siteTerm(admin, site.siteId, input.termId);
+  const found = await termFor(admin, input.actor, input.siteId, input.termId, "publish");
   if (!found.ok) return found;
+  const limited = await activityLimited(found.access);
+  if (limited) return limited;
   const deleted = await admin
     .from("content_terms")
     .delete()
     .eq("id", found.term.id)
-    .eq("site_id", site.siteId)
+    .eq("site_id", found.term.site_id)
     .select("id");
   if (deleted.error) return mapDbError(deleted.error);
   if (deleted.data.length === 0) return failure("not_found");
+  await recordSiteActivity(admin, found.access, "term_deleted");
   return { ok: true, id: found.term.id, typeId: found.term.type_id };
 }
 
@@ -202,10 +183,8 @@ export async function setEntryTermsWithClient(
     tags: string[];
   },
 ): Promise<ContentResult<{ rev: number; unchanged: boolean }>> {
-  const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
+  const owned = await entryFor(admin, input.actor, input.entryId, "edit");
   if (!owned.ok) return owned;
-  const account = await activeAccount(admin, input.actor.userId);
-  if (!account.ok) return account;
   const { entry } = owned;
   if (entry.deleted_at !== null) return failure("not_found");
   const lists = [input.categories, input.tags];
@@ -257,7 +236,7 @@ export async function listTermsWithClient(
   admin: Admin,
   input: { actor: ContentActor; siteId: string; typeKey: string },
 ): Promise<ContentResult<{ terms: TermSummary[] }>> {
-  const site = await ownedSite(admin, input.actor.userId, input.siteId);
+  const site = await siteFor(admin, input.actor, input.siteId, "read");
   if (!site.ok) return site;
   const type = await siteType(admin, site.site.id, input.typeKey);
   if (!type.ok) return type;

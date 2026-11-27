@@ -1,12 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSessionUser } from "@/lib/auth/session";
+import { siteAccessFor } from "@/lib/access/server";
+import { UPLOAD_SITE_HEADER, UPLOAD_SITE_REQUIRED_MESSAGE } from "@/lib/media/upload-site";
 import { isAccountSuspended, suspendedBody } from "@/lib/admin/suspension";
 import { clientEnv } from "@/lib/env/client";
-import { unqueueMediaPath } from "@/lib/media/cleanup-admin";
+import { queueNewUpload } from "@/lib/media/cleanup-admin";
 import { adminUploadQuota } from "@/lib/media/quota";
 import { adminUploadRateLimit } from "@/lib/media/rate-limit";
 import { processUpload } from "@/lib/media/upload";
 import { appOrigin } from "@/lib/routing/urls";
+import { ACCESS_LOST_MESSAGE } from "@/lib/team/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +20,17 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
  * `file`, optional field `kind` (avatar, background or content). Answers `{path, width, height,
  * url}`; `path` is the image reference the draft stores.
  *
- * The owner folder is always the verified session user (`getSessionUser`): any owner or folder
- * field in the form is ignored, and a caller without a session gets a 401 and nothing is stored.
+ * The folder (Wave F, A31): the `x-hl-site` header names the site the image is for; the access helper must say
+ * the verified session user may edit it, and the file is stored in, counted on and queued for that
+ * site OWNER's folder (so a member's upload is usable on the shared site and the owner's quota and
+ * plan apply, T15). A site the user may not edit stores nothing (404, the one answer for a missing
+ * one). Without it (an old bundle) nothing is stored: 400 `site_required` with a message to reload
+ * (G22, S3: every upload belongs to a site, so it lands in, and is cleaned from, that owner's folder).
+ * Every stored path is queued for the cleanup with a grace and its site (`queueNewUpload`, S3), so an
+ * upload that no document ever names does not stay in the owner's folder. A member's upload that
+ * needs room reclaims only that site's rows past the Undo window (`cleanupMediaFor` derives it). Any owner or folder
+ * field in the form is ignored; a caller without a session gets a 401 and nothing is stored. The
+ * rate limit and the suspension check stay the uploader's (T16).
  * A cross-origin Origin header is refused, so a cross-site form cannot upload as the signed-in
  * user. Everything else (size cap, magic bytes, dimensions, storage) is `processUpload`.
  *
@@ -47,9 +59,35 @@ export async function POST(request: NextRequest) {
     if (await isAccountSuspended(user.id)) {
       return NextResponse.json(suspendedBody("forbidden"), { status: 403, headers: NO_STORE });
     }
-    const result = await processUpload(request, user.id, undefined, adminUploadQuota(user.id), {
+    const site = request.headers.get(UPLOAD_SITE_HEADER);
+    if (site === null) {
+      return NextResponse.json(
+        { error: "site_required", message: UPLOAD_SITE_REQUIRED_MESSAGE },
+        { status: 400, headers: NO_STORE },
+      );
+    }
+    const allowed = await siteAccessFor({
+      actorId: user.id,
+      siteId: site.toLowerCase(),
+      need: "edit",
+      source: "editor",
+    });
+    if (!allowed.ok) {
+      if (allowed.reason === "error") throw new Error("reading the site's access failed");
+      if (allowed.reason === "account_suspended") {
+        return NextResponse.json(suspendedBody("forbidden"), { status: 403, headers: NO_STORE });
+      }
+      return NextResponse.json(
+        { error: "not_found", message: ACCESS_LOST_MESSAGE },
+        { status: 404, headers: NO_STORE },
+      );
+    }
+    const { ownerId, siteId } = allowed.access;
+    // An upload that needs room reclaims only what the cleanup route would let this user (finding 1).
+    const quota = adminUploadQuota(allowed.access);
+    const result = await processUpload(request, ownerId, undefined, quota, {
       rateLimit: adminUploadRateLimit(user.id),
-      unqueue: (path) => unqueueMediaPath(user.id, path),
+      queue: (path) => queueNewUpload(ownerId, path, undefined, siteId),
     });
     if (!result.ok) {
       return NextResponse.json(

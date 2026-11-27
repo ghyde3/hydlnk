@@ -8,6 +8,13 @@ import { EMAIL_FONT_STACK, EMAIL_TEXT_COLOR } from "./domain-live";
  * src/lib/forms/email-content.ts. Written with `createElement` (see domain-live.tsx).
  */
 
+/**
+ * What happens next (forms attack pass, nit): the caps count what the forms hold, so deleting makes
+ * room, and the month's intake ceiling ends with the month.
+ */
+export const FORM_LIMIT_NEXT_STEP =
+  "New submissions are not saved until there is room: delete the ones you don’t need, or wait until the 1st of next month. Visitors still see your success message.";
+
 export interface FormLimitProps {
   /** "You’ve reached this month’s limit of 100 form submissions on Free." */
   sentence: string;
@@ -38,7 +45,7 @@ export function FormLimit({ sentence, audienceUrl }: FormLimitProps) {
         h(
           Text,
           { style: { fontSize: "16px", lineHeight: "24px", margin: "0 0 8px" } },
-          "New submissions are not saved until the 1st of next month. Visitors still see your success message.",
+          FORM_LIMIT_NEXT_STEP,
         ),
         h(
           Link,

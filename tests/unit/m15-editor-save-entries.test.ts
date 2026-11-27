@@ -28,6 +28,7 @@ vi.mock("@/lib/supabase/browser", () => ({
   createBrowserSupabase: () => ({
     from: (table: string) => {
       expect(table).toBe("pages");
+      let updated = false;
       const entry = {
         draft: {} as Record<string, unknown>,
         eqs: [] as unknown[][],
@@ -36,6 +37,7 @@ vi.mock("@/lib/supabase/browser", () => ({
       const builder: Record<string, unknown> = {
         update: (patch: { draft: Record<string, unknown> }) => {
           entry.draft = patch.draft;
+          updated = true;
           return builder;
         },
         eq: (...args: unknown[]) => {
@@ -46,9 +48,13 @@ vi.mock("@/lib/supabase/browser", () => ({
           entry.isNull.push(args);
           return builder;
         },
-        select: async () => {
+        select: () => {
+          // Wave F (M19-11): a read of the site after a 0-row write (no update before it): readable.
+          if (!updated) {
+            return { eq: () => ({ maybeSingle: async () => ({ data: { id: "x" }, error: null }) }) };
+          }
           patches.push(entry);
-          return answer;
+          return Promise.resolve(answer);
         },
       };
       return builder;

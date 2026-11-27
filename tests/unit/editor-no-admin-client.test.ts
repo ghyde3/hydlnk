@@ -39,6 +39,20 @@ const GATE_ACCOUNT_REPAIR = "src/lib/auth/accounts.ts";
  * user. Not editor code; named here so a second path to the admin client cannot appear unnoticed.
  */
 const GATE_OAUTH_RESUME = "src/lib/oauth/resume.ts";
+/**
+ * Wave F (team access): the gate asks the one access helper which sites the verified session user
+ * may work on (own and shared) and what they may do on the current one. It answers the rule's
+ * booleans and the shared sites' names only. Not editor code; named here so a second path to the
+ * admin client cannot appear unnoticed.
+ */
+const GATE_ACCESS = "src/lib/access/server.ts";
+/**
+ * Wave F (C18, R10): a member's Share tab names the shared site's custom domain. Domains are
+ * owner-only under RLS, so after the access helper said the member may read the site, the page's own
+ * cached rule (getPrimaryDomain, secret key) answers. Read-only; the owner's own read stays on their
+ * session (src/lib/editor/page-address.ts).
+ */
+const SHARED_DOMAIN = "src/lib/team/shared-domain.ts";
 
 const FORBIDDEN: [RegExp, string][] = [
   [/@\/lib\/supabase\/admin/, "the secret-key Supabase client"],
@@ -121,6 +135,14 @@ describe("M2-03: the editor never uses the secret-key client", () => {
         boundaries.add(GATE_OAUTH_RESUME);
         continue;
       }
+      if (relative(ROOT, file) === GATE_ACCESS) {
+        boundaries.add(GATE_ACCESS);
+        continue;
+      }
+      if (relative(ROOT, file) === SHARED_DOMAIN) {
+        boundaries.add(SHARED_DOMAIN);
+        continue;
+      }
       // Comments may mention the server env ("for the secret key use ..."): only code counts.
       const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
       for (const [pattern, what] of FORBIDDEN) {
@@ -139,6 +161,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
     // `hashLinkCode` (M9-30) is the third: the link form's 'Set code' button (the limiter behind it
     // reads the counter store with the secret key), loaded with a dynamic import when a code is set.
     expect([...boundaries].sort()).toEqual([
+      GATE_ACCESS,
       GATE_ACCOUNT_REPAIR,
       "src/lib/links/actions.ts",
       GATE_OAUTH_RESUME,
@@ -146,6 +169,7 @@ describe("M2-03: the editor never uses the secret-key client", () => {
       "src/lib/publish/actions.ts",
       // Unpublish (M14-02) is the fourth: the More actions menu and the Share tab call it.
       "src/lib/publish/unpublish-action.ts",
+      SHARED_DOMAIN,
     ]);
   });
 

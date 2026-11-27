@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { clearInviteCookie } from "@/lib/team/resume";
 import { sendSignInLink, type SendLinkResult } from "./magic-link";
 
 /** Log in: email me a sign-in link. Validates on the server too; see sendSignInLink. */
@@ -14,7 +15,8 @@ export async function requestSignInLink(email: string): Promise<SendLinkResult> 
  * trigger it. `scope: "local"` revokes this device's session server-side (its refresh token stops
  * working) without signing the user out of their other devices. Signed-out callers just land on
  * /login. Next.js 16 attaches no cookies to the redirect itself, so the cleared auth cookies set
- * by the Supabase client ride on this action's response.
+ * by the Supabase client ride on this action's response. A pending invite cookie goes too (S7): it
+ * belongs to whoever opened the link on this device, not to the next person who signs in here.
  */
 export async function signOut(): Promise<void> {
   const supabase = await createServerSupabase();
@@ -24,5 +26,6 @@ export async function signOut(): Promise<void> {
     // The cookies are cleared by the client even when the revoke call fails.
     console.error("[auth] sign out failed", error);
   }
+  await clearInviteCookie();
   redirect("/login");
 }

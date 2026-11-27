@@ -32,7 +32,8 @@ async function expireNow(tags: readonly string[]): Promise<boolean> {
 
 /**
  * After a fire: a page publish takes the hand publish's own step (`afterPagePublished`: the site's
- * tag, then the owner's media queue); anything else expires the entry's tags, as the writer does.
+ * tag, then the media cleanup as the system, so only the fired site's rows past the Undo window, team
+ * access re-review finding 1); anything else expires the entry's tags, as the writer does.
  */
 async function expireFired(
   db: SupabaseClient,
@@ -42,7 +43,11 @@ async function expireFired(
   if (place.typeKey === "page" && row.action === "publish") {
     try {
       await afterPagePublished(
-        { siteId: place.siteId, ownerId: row.ownerId, admin: db },
+        {
+          siteId: place.siteId,
+          cleanup: { actorId: null, ownerId: row.ownerId, siteId: place.siteId },
+          admin: db,
+        },
         async (tag) => {
           if (!(await expireNow([tag]))) throw new Error("expiry failed");
         },

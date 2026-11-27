@@ -37,8 +37,11 @@ export function SavedThemesCard({
   previewingId = null,
   onBeforeSave,
   deletedNotice = false,
+  canWrite = true,
 }: {
   library: ThemeLibrary;
+  /** False on a site shared with the user (Wave F, G6): the owner's themes apply, nothing is written. */
+  canWrite?: boolean;
   /**
    * M6-44: every card's menu gets a Preview item that calls this with the theme's id and the card's
    * More button (the focus to come back to). Without it there is no Preview item, and a system
@@ -93,6 +96,7 @@ export function SavedThemesCard({
       onApply={() => library.apply(theme.id)}
       onPreview={onPreview ? (button) => onPreview(theme.id, button) : undefined}
       previewing={previewingId === theme.id}
+      canWrite={canWrite}
       onRename={(button) => {
         trigger.current = button;
         setRenaming({ id: theme.id, name: theme.name });
@@ -147,7 +151,7 @@ export function SavedThemesCard({
         </div>
       ) : null}
 
-      {!loadFailed && applied && !applied.system && edited ? (
+      {canWrite && !loadFailed && applied && !applied.system && edited ? (
         <div className="mb-3">
           <button
             type="button"
@@ -170,7 +174,9 @@ export function SavedThemesCard({
             testId="own-themes"
             appliedId={appliedIsOwn ? applied.id : null}
             syncKey={syncKey}
-            action={<SaveAsThemeButton library={library} onBefore={onBeforeSave} />}
+            action={
+              canWrite ? <SaveAsThemeButton library={library} onBefore={onBeforeSave} /> : null
+            }
             empty={
               own.length === 0 ? (
                 <p

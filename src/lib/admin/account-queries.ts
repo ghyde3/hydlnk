@@ -225,3 +225,32 @@ export async function logDraftView(
   });
   if (error) throw new Error(`Writing the audit log failed: ${error.message}`);
 }
+
+/** One row of the account's team (Wave F, M19-10): a member of one of its sites, or a site it works on. */
+export interface AccountTeamRow {
+  direction: "owned" | "shared";
+  siteId: string;
+  handle: string;
+  /** The member (owned) or the site's owner (shared). */
+  userId: string;
+  email: string | null;
+  role: string;
+}
+
+/** The account's team for the admin page: its sites' members and the sites shared with it. */
+export async function getAccountTeam(
+  id: string,
+  db: Db = createAdminSupabase(),
+): Promise<AccountTeamRow[]> {
+  if (!isUuid(id)) return [];
+  const { data, error } = await db.rpc("admin_site_team", { p_account: id.toLowerCase() });
+  if (error) throw new Error(`Reading the account's team failed: ${error.code}`);
+  return (data ?? []).map((row) => ({
+    direction: row.direction === "shared" ? "shared" : "owned",
+    siteId: row.site_id,
+    handle: row.handle,
+    userId: row.user_id,
+    email: row.email ?? null,
+    role: row.role,
+  }));
+}

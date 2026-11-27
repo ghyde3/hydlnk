@@ -301,6 +301,8 @@ describe.skipIf(!run || !dockerDb())(
         get(target, prop, receiver) {
           if (prop !== "rpc") return Reflect.get(target, prop, receiver);
           return async (...args: Parameters<typeof admin.rpc>) => {
+          // Wave F: the access rule's rpc runs first, before the reads the race must follow.
+          if (args[0] === "site_access") return target.rpc(...args);
             const out = await target.rpc(...args);
             if (!bumped) {
               bumped = true;

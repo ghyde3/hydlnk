@@ -27,20 +27,21 @@ export interface EditorPageData extends LoadedDraft {
 /**
  * Everything the editor screen needs about one page, read with the signed-in user's own session
  * and the publishable key (never the secret key: RLS decides what is readable). The caller has
- * already picked the page from the user's own pages; the owner filter below is a second guard.
+ * already picked the page through the access helper (own or shared, Wave F); RLS is the second
+ * guard (a site the session may not read is no row, and `.single()` throws).
  *
  *   draft         the design from `pages.draft` plus Home's blocks from the '/' page entry (the
  *                 frozen `blocks` in `pages.draft` are never read), repaired to a valid document
  *                 when it is not one (see loadDraft)
- *   theme         `themes.tokens` for `draft.theme.ref`: system themes and the owner's own are
- *                 readable, anything else (or a deleted row) reads as no theme
+ *   theme         `themes.tokens` for `draft.theme.ref`: system themes and the site owner's are
+ *                 readable (themes_select_shared for a member), anything else reads as no theme
  *   published     `pages.published` parsed with the strict schema; unreadable reads as null while
  *                 `hasPublished` (from `published_at`) still says the page was published
  */
-export async function loadEditorPageData(
-  page: { id: string; handle: string },
-  ownerId: string,
-): Promise<EditorPageData> {
+export async function loadEditorPageData(page: {
+  id: string;
+  handle: string;
+}): Promise<EditorPageData> {
   const supabase = await createServerSupabase();
   const { data, error } = await supabase
     .from("pages")
@@ -48,7 +49,6 @@ export async function loadEditorPageData(
     // so it is read from the database rather than re-derived (an object or 1.50 as rev would differ).
     .select("draft, published, published_at, draft_rev:draft->>rev")
     .eq("id", page.id)
-    .eq("owner_id", ownerId)
     .single();
   if (error) throw new Error(`Loading the draft for page ${page.id} failed: ${error.message}`);
 

@@ -75,6 +75,8 @@ export type RestoreResult =
       notRestored: NotRestoredPage[];
     }
   | { ok: false; reason: VersionFailureReason | "conflict" }
+  /** Past the activity limit (team attack pass, finding 2). */
+  | { ok: false; reason: "rate_limited" }
   | { ok: false; reason: "blocked_link"; hosts: string[] };
 
 export type PreviewFailure = Extract<PreviewResult, { ok: false }>;

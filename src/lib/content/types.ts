@@ -11,6 +11,8 @@ export interface ContentActor {
 export type ContentErrorCode =
   | "not_found"
   | "conflict"
+  /** A member whose role does not allow it (an editor asked to publish; Wave F). */
+  | "forbidden"
   | "account_suspended"
   | "type_disabled"
   | "invalid"
@@ -30,6 +32,8 @@ export type ContentErrorCode =
   | "schedule_limit"
   /** A scheduled time that is past, too soon, too far ahead or not on a minute (M20-01). */
   | "schedule_time"
+  /** Past the activity limit (30 recorded changes a minute per actor; team attack pass, finding 2). */
+  | "rate_limited"
   | "error";
 
 export interface ContentFailure {
