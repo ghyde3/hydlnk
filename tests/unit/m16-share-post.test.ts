@@ -324,6 +324,37 @@ describe("M16-16 loadSharedPreview of a post", () => {
     ]);
   });
 
+  it("draws the post with the site's DRAFT theme, never the published one (step 1)", async () => {
+    const { loadSharedPreview } = await import("@/lib/previews/shared");
+    const DRAFT_THEME = "40000000-0000-4000-8000-000000000001";
+    const LIVE_THEME = "40000000-0000-4000-8000-000000000002";
+    const data = tables();
+    data.themes = [
+      { id: DRAFT_THEME, owner_id: OWNER, tokens: { accent: "#11AA22", bg: "#0A0B0C" } },
+      { id: LIVE_THEME, owner_id: OWNER, tokens: { accent: "#EE3344", bg: "#FAFAFA" } },
+    ];
+    // The site is live with another theme: its published copy has the live theme and its frozen
+    // tokens. The draft has moved on to the draft theme with an override.
+    const pages = data.preview_links![0]!.pages as Row;
+    pages.draft = { ...design, theme: { ref: DRAFT_THEME, overrides: { buttonBg: "#123456" } } };
+    pages.published = {
+      ...design,
+      theme: { ref: LIVE_THEME, overrides: {} },
+      tokens: { accent: "#EE3344", bg: "#FAFAFA", buttonBg: "#EE3344" },
+    };
+    pages.published_at = "2026-11-01T00:00:00Z";
+    const result = await loadSharedPreview(fakeAdmin(data).client, TOKEN, new Date(), `entry/${POST}`);
+    expect(result.kind).toBe("active");
+    if (result.kind !== "active") return;
+    expect(result.post).toBeDefined();
+    expect(result.doc.theme.ref).toBe(DRAFT_THEME);
+    const tokens = (result.doc as unknown as { tokens: Record<string, unknown> }).tokens;
+    expect(tokens.accent).toBe("#11AA22");
+    expect(tokens.bg).toBe("#0A0B0C");
+    expect(tokens.buttonBg).toBe("#123456");
+    expect(JSON.stringify(result.doc)).not.toContain("#EE3344");
+  });
+
   it("a published post shows its first publish date", async () => {
     const { loadSharedPreview } = await import("@/lib/previews/shared");
     const data = tables();
