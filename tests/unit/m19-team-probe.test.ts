@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { removeOwners, stackIsUp } from "./publish-support";
 import { adminClient, publishableClient, signIn } from "./m17f-forms-db-support";
 import { fixtureUsers, teamFixture, tokenHash, type TeamFixture } from "./m19t-team-support";
+import { enablePost } from "./content-support";
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 120_000 });
 
@@ -11,6 +12,8 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 120_000 });
  * owner O, editor E and publisher P of S, stranger X, anon, and O's second site S2:
  *   * X and anon read and write nothing of S;
  *   * E and P read S and write only pages.draft of S (never name, handle or S2);
+ *   * X, anon, E and P insert, update and delete nothing in S's entries, terms, paths and versions
+ *     or O's saved themes (each probe touches no row, and the rows are unchanged afterwards);
  *   * nobody but service_role touches the team tables or functions;
  *   * after E's row is deleted, the same client with the same access token reads and writes nothing.
  */
@@ -107,6 +110,64 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
     }
     const role = await admin.rpc("site_access", { p_site: f.owner.pageId, p_user: f.editor.userId });
     expect((role.data as { role: string }[])[0]!.role).toBe("editor");
+  });
+
+  it("M19-04 steps 2, 3: X, anon, E and P insert, update and delete nothing in entries, terms, paths, versions and themes", async () => {
+    const S = f.owner.pageId;
+    await enablePost(admin as never, S);
+    const postType = (await admin.from("content_types").select("id").eq("site_id", S).eq("key", "post").single()).data!.id as string;
+    const post = await admin.from("content_entries").insert({ site_id: S, type_id: postType, draft: { title: "Probe", slug: "probe" } }).select("id").single();
+    expect(post.error).toBeNull();
+    const term = await admin.from("content_terms").insert({ site_id: S, type_id: postType, taxonomy: "tag", slug: "probe-tag", name: "Probe tag" }).select("id").single();
+    expect(term.error).toBeNull();
+    // page_versions is written only by the publish trigger: a publish of S (a Studio site) records one.
+    const published = await admin.from("pages").update({ published: { version: 1, blocks: [] } as never, published_at: new Date().toISOString() }).eq("id", S);
+    expect(published.error).toBeNull();
+    const version = await admin.from("page_versions").select("id").eq("page_id", S).order("version_no", { ascending: false }).limit(1).single();
+    expect(version.error).toBeNull();
+    const tokens = (await admin.from("themes").select("tokens").is("owner_id", null).limit(1).single()).data!.tokens;
+    const theme = await admin.from("themes").insert({ owner_id: f.owner.userId, name: "Owner's probe theme", tokens }).select("id").single();
+    expect(theme.error).toBeNull();
+    const paths = await admin.from("site_paths").select("path").eq("site_id", S);
+    expect(paths.data!.length).toBeGreaterThan(0);
+
+    const snapshot = async () => {
+      const [entries, terms, sitePaths, versions, themes] = await Promise.all([
+        admin.from("content_entries").select("id, rev, draft, deleted_at, published").eq("site_id", S).order("id"),
+        admin.from("content_terms").select("id, name, slug").eq("site_id", S).order("id"),
+        admin.from("site_paths").select("path, entry_id, type_id").eq("site_id", S).order("path"),
+        admin.from("page_versions").select("id, version_no, document").eq("page_id", S).order("id"),
+        admin.from("themes").select("id, name, tokens").eq("owner_id", f.owner.userId).order("id"),
+      ]);
+      return { entries: entries.data, terms: terms.data, sitePaths: sitePaths.data, versions: versions.data, themes: themes.data };
+    };
+    const before = await snapshot();
+    expect(before.entries!.length).toBeGreaterThan(0);
+    expect(before.versions).toHaveLength(1);
+    /** Rows a write touched: an error (no grant, a policy) touches none. */
+    const touched = (res: { error: unknown; data: unknown[] | null }) => (res.error ? 0 : (res.data?.length ?? 0));
+
+    for (const [who, client] of [["stranger", asX], ["anon", anon], ["editor", asE], ["publisher", asP]] as const) {
+      const probes: Record<string, { error: unknown; data: unknown[] | null }> = {
+        "entries insert": await client.from("content_entries").insert({ site_id: S, type_id: postType, draft: { title: "Planted" } }).select("id"),
+        "entries update": await client.from("content_entries").update({ draft: { title: "Taken over" } }).eq("id", post.data!.id).select("id"),
+        "entries delete": await client.from("content_entries").delete().eq("id", post.data!.id).select("id"),
+        "terms insert": await client.from("content_terms").insert({ site_id: S, type_id: postType, taxonomy: "tag", slug: "planted", name: "Planted" }).select("id"),
+        "terms update": await client.from("content_terms").update({ name: "Taken over" }).eq("id", term.data!.id).select("id"),
+        "terms delete": await client.from("content_terms").delete().eq("id", term.data!.id).select("id"),
+        "paths insert": await client.from("site_paths").insert({ site_id: S, path: "planted" }).select("path"),
+        "paths update": await client.from("site_paths").update({ path: "taken-over" }).eq("site_id", S).select("path"),
+        "paths delete": await client.from("site_paths").delete().eq("site_id", S).select("path"),
+        "versions insert": await client.from("page_versions").insert({ page_id: S, version_no: 2, document: { version: 1, blocks: [] }, published_at: new Date().toISOString() }).select("id"),
+        "versions update": await client.from("page_versions").update({ document: { version: 1, blocks: [], planted: true } }).eq("id", version.data!.id).select("id"),
+        "versions delete": await client.from("page_versions").delete().eq("id", version.data!.id).select("id"),
+        "themes insert": await client.from("themes").insert({ owner_id: f.owner.userId, name: "Planted", tokens }).select("id"),
+        "themes update": await client.from("themes").update({ name: "Taken over" }).eq("id", theme.data!.id).select("id"),
+        "themes delete": await client.from("themes").delete().eq("id", theme.data!.id).select("id"),
+      };
+      for (const [probe, res] of Object.entries(probes)) expect(touched(res), `${who}: ${probe}`).toBe(0);
+      expect(await snapshot(), who).toEqual(before);
+    }
   });
 
   it("M19-04 after the editor's row is deleted, the same client and token read and write nothing", async () => {
