@@ -509,12 +509,80 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Forms and email capture (Gary, 2026-11-26; Wave D, M17-01 to M17-12): moved from Deferred into scope. One `form` block (sign-up, contact); plain HTML with no script (M8-05 stays as it is); the tenant policy's form-action becomes 'self'; submissions per month Free 100, Pro 5,000, Studio 50,000, counted on intake and not given back by deleting; over the limit the visitor still sees the success page and the owner sees a notice; CSV on every plan; message emails only to the account's own address.
 - Team access (Gary, Wave F, M19-01 to M19-17): v1 rules. The unit is the site; roles editor and publisher; analytics, CSV, Audience and form submissions are owner-only (G3); share links owner-only (G4); members read and restore versions into the draft (G5) and read and apply the owner's saved themes without writing them (G6); MCP and connected apps stay owner-only, and the consent screen says "Sites shared with you aren’t included." (G10); an account with no site of its own may work on a shared one (G11); rename and blog settings are the owner's (G14); term rename and delete, and purging a trashed post, are publisher actions (G16, G17); publish counts on the actor and on the owner (G18); a removed or demoted publisher's pending schedules are canceled, and each fire re-checks the creator (G19). Downgrading deletes nothing: access pauses and resumes with the plan. The kill switch is a forward migration making `plan_site_members` return 0.
 
+## Decisions waiting for Gary (2026-11-27)
+
+One list of every default the six items were built on (blog M16, the Markdown lexer M16-04/M16-13, MCP content tools M18, forms M17, scheduling M20, team access M19) that Gary has not confirmed, with where each lives. To change one: edit the named constant, or add a forward migration (a named migration is never edited). The integration of the six on `m22-integration` chose nothing new beyond the two marked "integration".
+
+**Blog (M16, #35)**
+- A type holds at most 500 categories and tags (HL015, not a plan limit): `20261126095510_blog_stage_2.sql`.
+- Old slugs redirect (301), the newest 200 per type, the live slug always wins; a changed archive path or page path does not redirect: same migration, `content_slug_redirects`.
+- Body images only as the exact stored address of an upload in the site owner's folder, at most 50 per body (`BODY_IMAGES_MAX`, `src/lib/content/images.ts`); checked at Publish (and by MCP at save), not by the editor's draft save.
+- A share link previews every post draft of its own site at `/share/{token}/entry/{entryId}` (`src/lib/previews/shared.ts`).
+
+**Markdown lexer (M16-04, M16-13, #35)**
+- Our own linear-time lexer (`src/lib/blog/markdown/`) reads every body at save, publish, render and in the editor; `marked` is no longer reached at run time (only its types and `@tiptap/markdown`'s parser use it).
+- Limits, counted, no clock: 150,000 pieces (`MARKDOWN_MAX_NODES`) and 23 nesting levels (`MARKDOWN_MAX_NESTING`, depth 24), in `src/lib/blog/markdown/limits.ts`, whose header holds the measured realistic refusal sizes (a 6-column table from about 370 KiB, a one-word bullet list from about 326 KiB, a one-word checklist from about 391 KiB, one-word paragraphs from about 277 KiB). Whether such bodies should be accepted is Gary's call.
+- A body stored before the bound that the lexer refuses is drawn as plain text (`src/lib/blog/markdown/index.ts` header).
+- Heading levels: the editor writes `##` to `####`, drawn as h2 to h4; a `#` is drawn as h2 and levels 5 and 6 as h4 (the title is the one h1): `src/components/post/post-body.tsx`.
+- CLAUDE.md's dependency line for `marked` ("renders post bodies from Markdown to static HTML at publish, server only") is no longer accurate; its wording is Gary's (CLAUDE.md is not edited by agents). `tests/unit/dependencies-policy.test.ts` pins that marked is not reached at run time.
+
+**MCP content tools (M18, #36)**
+- The twelve Wave C defaults, listed under "Stage 4: the MCP content tools" above: no new scope; everything live behind `hydlnk.publish` (term rename and delete, the blog switch and its address included); a read-only connection reads post drafts and trashed posts; request size 1 MiB (`MCP_MAX_BODY_BYTES`); content results never shortened, a body in ranges of 12,000 characters, at most 30,000 (`MCP_BODY_RANGE_CHARS`, `MCP_BODY_RANGE_MAX_CHARS`); 60 per-item live changes an hour per person (`MCP_ITEM_PUBLISH_PER_HOUR`), all in `src/lib/mcp/constants.ts`; pages take `publish_entry` and the revision tools but are never trashed or unpublished one by one; `publish_page` publishes no post; guides, `llms.txt` and resources are a later wave; the body checks run at save (`checkPostBody`); no rev in a `conflict` answer; no revision content in v1. Trashing a live post asks for `hydlnk.publish` at run time.
+- Integration: `list_entries` filters by the writer's one status list, which scheduling extended with `scheduled` (`LIST_STATUSES`, `src/lib/content/schemas/enums.ts`); a content write past the team activity limit answers the connector's `rate_limited` with a 60-second retry (`src/lib/mcp/content-failure.ts`).
+- Team access keeps MCP owner-only (G10): a member's token reaches none of the 31 tools on a shared site (`decide()` rule 2, `src/lib/access/decide.ts`).
+
+**Forms (M17, #37)**
+- Caps on what a site holds: per site and UTC day Free 20, Pro 500, Studio 5,000 (`form_submissions_per_site_day`, `20261126185204_form_submissions_stored_cap.sql`); per site an hour a quarter of that, 5 / 125 / 1,250 (`FORM_SITE_HOURLY_SHARE` = 4, `src/lib/forms/submit.ts`); deleting a submission gives its place back. Supersedes M17-02 step 2, M17-06 step 6 (600 an hour) and M17-08 step 2 (see "Superseding rows needed").
+- A monthly intake ceiling of five times the monthly cap (500 / 25,000 / 250,000) that deleting never gives back, refused as the monthly cap is: `20261126200100_form_intake_ceiling.sql`.
+- The owner's message email at most 30 an hour; skipped emails are counted per UTC day and shown on Audience: same migration (`form-notify`).
+- Every POST answer waits at least 400 ms plus up to 10 ms of jitter, whatever the outcome (`FORM_POST_FLOOR_MS`, `FORM_POST_JITTER_MS`, `src/lib/forms/contract.ts`).
+- `visitor_hash` dropped (M17-01 steps 1 and 2 name it); over a cap the visitor still sees the sent page and nothing is stored; submissions kept until the owner or the account deletes them; Audience a fourth sidebar item and fifth phone tab; no inline success (M8-05); no double opt-in and no email to visitors (the Open items below say more).
+
+**Scheduling (M20, #38)**
+- Pending schedules per site Pro 50, Studio 500, Free none (`plan_limits`, `20261126193000_scheduling.sql`); per account Pro 100, Studio 1,000 (`scheduled_per_account`, `20261126210000_scheduling_review_fixes.sql`).
+- A failed fire is retried after min(2^attempts, 30) minutes, at most 5 attempts (`finish_schedule` and `claim_due_schedules`, same migration).
+- 30 schedule writes a minute per account (`SCHEDULE_RATE_LIMIT`, `src/lib/schedule/routes-core.ts`).
+- The newest 20 finished schedule rows kept per entry (`schedule_entry`, `20261126210000`).
+- A site's `schedule_clock` is read capped at now() + 1 minute (same migration).
+- The rest of the planner's defaults (a publish over 24 hours late is "Didn't publish", Pro and Studio only, browser time zone, no email on failure, single pages and posts only, suspension or downgrade at fire time fails the row) are the Scheduling item under Open. Once confirmed, "Scheduled links are out of v1" (Decided), the Monetization row "Scheduled links (not in v1)" and the MVP scope's "scheduled links" are edited.
+- M3-17 step 4 (`passes: true`: "no 'Schedule' field") against M20-06 (a Schedule section in every block's editor): `tests/e2e/m3/themes-overrides.spec.ts:129` fails by design until Gary chooses.
+
+**Team access (M19, #39)**
+- 30 recorded site-activity changes a minute per actor, any site (`SITE_ACTIVITY_RATE_LIMIT`, `src/lib/team/activity-limit.ts`).
+- The Members screen lists the newest 25 rows of each activity kind; repeats by the same actor within a minute collapse into one row: `20261126220700_site_activity_bounds.sql`; takedowns and overwrites are their own kind (`20261127004600_activity_destructive_kind.sql`); a never-live entry's trash is skipped only when the actor is its owner or creator (`20261127004700_activity_trash_never_live.sql`).
+- 30 invite-link opens a minute per client address, in the proxy (`INVITE_LINK_LIMIT`, `src/lib/routing/invite-limit.ts`); accepting at most 10 in 10 minutes per user (`src/lib/team/actions.ts`); 20 invites a day per owner, 50 shared sites per account, invite links last 7 days (`src/lib/team/constants.ts`, `20261126220300_site_team_functions.sql`).
+- A new upload is out of the cleanup's sight for 15 minutes (`UPLOAD_UNUSED_GRACE_SECONDS`, `src/lib/media/limits.ts`; `20261126220500_upload_cleanup_queue.sql`).
+- An upload without the site header (`x-hl-site`, `UPLOAD_SITE_HEADER`, `src/lib/media/upload-site.ts`) is refused: "The editor was updated. Reload the page, then add the image again." (G22: an editor tab from before the wave).
+- Every media cleanup, by any caller, takes only rows queued more than the 10-second Undo window ago (`UNDO_WINDOW_MS`, `src/lib/media/cleanup-client.ts`; `cleanupScopeFor`, `src/lib/media/cleanup.ts`).
+- The G7 Privacy and Terms sentences (PROGRESS, Wave F fixes entry) are proposed, not edited; M19-17 waits on them.
+
+**Superseding rows needed** (features.json rows are never reworded, so each needs a new row; verified against the merged `docs/features.json` and the code on 2026-11-27)
+- M3-17 step 4 (true): "renders no 'Schedule' field (scheduled links are out of v1)". Every block's editor has a Schedule section (M20-06). #38.
+- M8-07 step 1 (true): the exact tenant policy string ends "form-action 'none'; frame-ancestors 'none'". `TENANT_PAGE_CSP` has `form-action 'self'` (M17-05). #37.
+- M9-29 step 3 (true): "the tenant page's CSP, `form-action 'none'`, ... are unchanged". Same change. #37.
+- M4-09 step 5 (true): "On a custom host only the page, its OG image, /r/*, /api/e and static assets are served". `/f/*` (the form POST, its result pages and the open marker) is served too, and `/c` since M9-18. #37.
+- M9-09 step 6 (true): "`src/emails/` is imported by `src/lib/domains/*` server code and nowhere else". The forms email (`src/lib/forms/email-content.ts`) and the team invite email (`src/lib/team/invite-email.ts`) import it. #37, #39.
+- M7-01 steps 1, 5 and 9 (true): the sidebar "holds exactly three links" (Editor, Analytics, Domains) and the phone bar "four tabs". Audience is a fourth sidebar item and a fifth phone tab (Forms, Open). #37.
+- M4-10 step 7 (true): the phone tab bar "Editor, Design, Stats, Domains, Account". Already not the case since M7-01 (Design is a workspace tab), and Audience is added. #37.
+- M9-02 step 1 (true): the scope lists "the sidebar and the phone tab bar (Editor, Analytics, Domains, Account)". The bar now holds Audience, and the Posts, Audience, Members and Schedule screens add icons. #35, #37, #38, #39.
+- M17-01 steps 1 and 2: `visitor_hash` in the table and "never `visitor_hash`" in the grant. Dropped by `20261126185204`. #37.
+- M17-02 step 2: "Deleting a row does not lower the count." M17-08 step 2: "The month's count does not change." Deleting gives places back (with the intake ceiling that it never gives back). #37.
+- M17-06 step 6: "600 per site in an hour". Per plan 5 / 125 / 1,250. #37.
+- M1-02 step 6 (true): "GET /rest/v1/pages?select=handle returns only the caller's own rows". A member also reads the sites shared with them (`pages_select_own` now uses `access.accessible_site_ids('read')`). #39.
+- M6-48 step 5 (true): page_versions "allows select only to the page's owner". Members read versions (G5). #39.
+- M6-11 step 2 (true): the preview is "owner-only ... ownership is checked from `pages.owner_id`". The access rule decides, and a member may preview. #39.
+- M6-13 step 2 (true): "the existing `pages_update_own` policy (owner, not suspended) governs it". `pages_update_own` is now the access rule's edit check; renaming stays owner-only through the `guard_site_owner_columns` trigger (G14). #39.
+- M6-31 and M6-33 (true; the `m6-share-static` pin that the editor reads the domain with the owner's session): a member's Share tab reads it through `src/lib/team/shared-domain.ts`. #39.
+- M15-10 (true; the `m15-mcp-publish-scope` pin of `publish_page`'s exact gate input): it now carries `source: "mcp"`, and `publish_design` passes it too (integration). #39.
+- M15-07 step 4: "version restore writes design to pages.draft and blocks to entries". History is design-only since M15-10 (ed05938). #32.
+- M15-06 step 5: "site_click_pairs returns the same set with Home at null". pgTAP 207 asserts the opposite; needs two releases or a superseding row. #32.
+- M15-05 step 5: "refused with HL013 for every role". RLS refuses an authenticated write first (0 rows or 42501), so HL013 never runs for that role. #32.
+- Holding today, but their stated reason is no longer true: M1-26 step 3 ("removed because scheduled links, team access and exports are out of v1") and M4-05 step 5 ("nothing on the screen mentions ... team access, CSV export or scheduled links (all deferred from v1)"). The marketing pages and the plan cards still mention none of them; a superseding row is needed the day they do.
+- Checked and not contradicted: M8-09 step 3 (its fixture page holds no form, so no open marker loads); M4-10 step 6 (the Studio upsell copy).
+
 ## Open
 
-- Final prices for Pro and Studio.
-- Auth email provider. Supabase's built-in email only reaches the team's own addresses (about 2 per hour), which is fine while Gary is the only user. Custom SMTP (Resend recommended) must be in place before signup opens.
 - Custom domain for Supabase Auth (a paid Supabase add-on). Until then, sign-in emails and Google's consent screen show the `supabase.co` address.
-- Publish the Google OAuth app before signup opens. It's in Testing, so only listed test users can sign in with Google.
 - Forms (Wave D), for Gary before release: the Privacy Policy sentence about form submissions and the open marker (blocks the release; the wave does not edit the policy), and whether the Terms need a line that owners must have a lawful reason to contact people.
 - Forms (Wave D): over the month's limit the visitor still sees the success page (their message is lost without their knowing); confirm, or show "This form isn’t taking responses right now."
 - Forms (Wave D): deleting a submission now gives the month's allowance back (the cap counts rows stored this month), with a per-site daily cap of 20 / 500 / 5,000 and a per-site hourly rate of a quarter of that: the orchestrator's decision after the security review (2026-11-26), superseding "not given back by deleting" in Decided and M17-02 step 2, M17-06 step 6 (600 per site an hour) and M17-08 step 2 ("The month's count does not change"); for Gary to confirm. The `visitor_hash` column of M17-01 steps 1 and 2 was dropped too; confirm.
@@ -523,3 +591,11 @@ Design control is free; pay starts where HYDLNK carries real cost or the user is
 - Forms (Wave D): inline success without leaving the page is not built (M8-05 forbids `fetch` in the tenant script); it needs a row that supersedes M8-05 and a larger size cap.
 - Scheduling (Wave E, 2026-11-26, built on the planner's defaults; Gary to confirm, and this supersedes "Scheduled links are out of v1" and the Monetization row "Scheduled links (not in v1)" once confirmed): every block type can carry a time window; the cached page changes at a boundary by a one-minute sweep that expires the site (no visitor-side script); a scheduled publish makes live the version scheduled (a snapshot); Pro and Studio only (Pro 50, Studio 500 pending per site); a publish over 24 hours late is skipped as "Didn't publish"; times shown in the browser's zone, none stored; a link outside its window answers the same 404 as an unknown link; a failed schedule shows in the editor and the Posts list only (no email); single pages and posts only; a suspension or downgrade at fire time fails the row for good.
 - Forms (Wave D): message emails stay off in production until `SMTP_HOST` is set (M5-22 is open); the pricing table, FAQ and features page do not mention forms yet.
+
+## Closed (moved from Open, 2026-11-27)
+
+These were still under Open after Decided recorded them; moved here word for word so the history stays.
+
+- "Final prices for Pro and Studio." Closed by Decided: Prices (2026-10-02), Stripe live (Gary, 2026-10-06), and the live upgrade Gary confirmed on production (Proving pass decisions, production evidence, 2026-10-11).
+- "Auth email provider. Supabase's built-in email only reaches the team's own addresses (about 2 per hour), which is fine while Gary is the only user. Custom SMTP (Resend recommended) must be in place before signup opens." Closed by Decided: Proving pass decisions, production evidence (Gary, 2026-10-11): custom SMTP configured and delivering to a non-team address. (Message emails for forms and team invites still wait on `SMTP_HOST` in the app's own environment, M5-22: see Open.)
+- "Publish the Google OAuth app before signup opens. It's in Testing, so only listed test users can sign in with Google." Closed by Decided: Proving pass decisions, production evidence (Gary, 2026-10-11): the Google app published.
