@@ -163,6 +163,67 @@ describe.skipIf(!run)("M19-13 a member's MCP token reaches no shared site (local
     expect(codeOf(edit)).toBe("ok");
   });
 
+  it("M19-13 every content tool, past the page door, is refused by the core itself for a member (source mcp, decide rule 2)", async () => {
+    // The runner's page door already refuses the member (the test above). Here it is taken as if it
+    // had let the member through: each handler gets S's page as the owner's call would, with the
+    // MEMBER's user id. What refuses now is the core: the entry door reads through getEntry with
+    // source "mcp" (entry-access.ts), every content writer call carries source "mcp" (mcpActor,
+    // publish_design's own), and decide() rule 2 maps a non-owner to not_found. A tool that passed
+    // "editor", or a rule 2 that was gone, reads or writes S here.
+    const { ToolFailure } = await import("@/lib/mcp/errors");
+    const args = CONTENT_ARGS(o.pageId, postId, trashedId, termId);
+    const contentTools = tools.TOOLS.filter((tool) => args[tool.name]);
+    expect(contentTools.length).toBe(17);
+    const ownersPage = await deps.loadPage(o.userId, o.pageId, { withDraft: true });
+    if (!ownersPage.ok) throw new Error("the owner's page");
+    const before = await admin.from("content_entries").select("id, rev, draft, deleted_at, published").eq("site_id", o.pageId).order("id");
+    const design = await admin.from("pages").select("draft, published").eq("id", o.pageId).single();
+    const refusedBy = async (tool: (typeof contentTools)[number]): Promise<string> => {
+      const parsed = tool.input.safeParse(args[tool.name]);
+      if (!parsed.success) return "invalid_input";
+      const input = parsed.data as Record<string, unknown>;
+      let entry = null;
+      if (tool.page === "entry") {
+        // The entry door itself, for the member (it is part of the core's reading path).
+        const found = await deps.loadEntry(p.userId, String(input.entryId), {
+          types: tool.entryTypes ?? [],
+          trashed: tool.entryTrash ?? "no",
+          allowDisabledType: tool.allowDisabledType === true,
+          withDraft: tool.needsDraft === true,
+        });
+        if (!found.ok) return found.failure.code;
+        entry = found.entry;
+      }
+      const call = {
+        ...identity(p.userId),
+        admin: deps.admin,
+        page: ownersPage.page,
+        subPage: null,
+        entry,
+        deps,
+        defer: deps.defer,
+        now: deps.now,
+      } as import("@/lib/mcp/types").ToolCall;
+      return tool.handler(input as never, call).then(
+        () => "ok",
+        (error: unknown) => (error instanceof ToolFailure ? error.code : String(error)),
+      );
+    };
+    for (const tool of contentTools) expect(await refusedBy(tool), tool.name).toBe("not_found");
+    // Nothing on S changed: no entry, no design.
+    const after = await admin.from("content_entries").select("id, rev, draft, deleted_at, published").eq("site_id", o.pageId).order("id");
+    expect(after.data).toEqual(before.data);
+    const designAfter = await admin.from("pages").select("draft, published").eq("id", o.pageId).single();
+    expect(designAfter.data).toEqual(design.data);
+  });
+
+  it("M19-13 the entry door reads with source mcp: a member's id loads no entry of S, the owner's does", async () => {
+    const { loadOwnedEntry } = await import("@/lib/mcp/entry-access");
+    const opts = { types: ["post" as const], trashed: "no" as const };
+    expect(await loadOwnedEntry(p.userId, postId, opts)).toMatchObject({ ok: false, failure: { code: "not_found" } });
+    expect(await loadOwnedEntry(o.userId, postId, opts)).toMatchObject({ ok: true, entry: { id: postId } });
+  });
+
   it("M19-13 all 31 tools are covered: 14 page tools and 17 content tools", () => {
     const pageArgs = ARGS(o.pageId);
     const contentArgs = CONTENT_ARGS(o.pageId, postId, trashedId, termId);
