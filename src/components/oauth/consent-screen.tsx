@@ -33,7 +33,7 @@ import {
 
 /**
  * Whether an optional scope starts ticked (Gary, 2026-10-04, M10-37). Edit your drafts always does;
- * Publish your pages starts unticked, unless this person already holds an active grant to the same
+ * Publish your pages and posts starts unticked, unless this person already holds an active grant to the same
  * app that includes it, so a reconnect does not quietly take publish away. The server still grants
  * only what the posted ticks name.
  */

@@ -19,7 +19,7 @@ import type { ToolDeps } from "./types";
  *
  *   OPTIONS            answered here: no token, no database
  *   Origin             an `Origin` that is not allowed is a 403 before anything else (DNS rebinding)
- *   declared length    over 256 KB is 413
+ *   declared length    over 1 MiB is 413
  *   no Authorization   a bare 401 whose challenge names only the metadata URL (RFC 6750: no error
  *                      code without credentials); counted against the client address
  *   withMcpAuth        a credential that fails is the library's 401 `invalid_token`, the same for

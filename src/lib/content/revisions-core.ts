@@ -5,7 +5,7 @@ import { canonical, updateEntryWithClient } from "./entries-core";
 import { failure } from "./errors";
 import { activeAccount, ownedEntry } from "./guards";
 import type { RevisionSummary } from "./schemas/summaries";
-import type { ContentActor, ContentResult, ContentSource } from "./types";
+import type { ContentActor, ContentFailure, ContentResult, ContentSource } from "./types";
 
 type Admin = SupabaseClient<Database>;
 
@@ -55,7 +55,18 @@ export async function listRevisionsWithClient(
  */
 export async function restoreRevisionWithClient(
   admin: Admin,
-  input: { actor: ContentActor; entryId: string; rev: number; expectedRev: number },
+  input: {
+    actor: ContentActor;
+    entryId: string;
+    rev: number;
+    expectedRev: number;
+    /**
+     * Run on the snapshot before anything is written (a tool save runs Publish's body checks,
+     * `checkPostBody`, on what it would store). A failure it answers is the answer, and nothing
+     * is written.
+     */
+    check?: (snapshot: unknown) => Promise<ContentFailure | null>;
+  },
 ): Promise<ContentResult<{ rev: number; unchanged: boolean }>> {
   const owned = await ownedEntry(admin, input.actor.userId, input.entryId);
   if (!owned.ok) return owned;
@@ -73,6 +84,10 @@ export async function restoreRevisionWithClient(
   }
   if (!found.data) return failure("not_found");
   const snapshot = found.data.snapshot;
+  if (input.check) {
+    const refused = await input.check(snapshot);
+    if (refused) return refused;
+  }
 
   let expectedRev = input.expectedRev;
   const replaces =

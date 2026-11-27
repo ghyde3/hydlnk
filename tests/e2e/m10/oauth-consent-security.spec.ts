@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type BrowserContext, type TestInfo } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { cleanupUsers, desktopOnly, signedInUser } from "../fixtures/data";
+import { DEV_PORT } from "../helpers";
 import { appRaw, authCookies, cookieHeader, type RawResponse } from "../fixtures/http";
 import {
   APP_ORIGIN,
@@ -106,7 +107,7 @@ test.describe("M10-14 CSRF", () => {
     const before = await issuedCodesCount(client.client_id);
     for (const origin of [
       "https://evil.example",
-      "http://app.localhost:3000.evil.example",
+      `http://app.localhost:${DEV_PORT}.evil.example`,
       "http://app.localhost:3001",
     ]) {
       const res = await post(context, allowFields(screen), { origin });

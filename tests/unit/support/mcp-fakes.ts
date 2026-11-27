@@ -1,4 +1,4 @@
-import type { ActivityRow, OwnedPage, ToolDeps, ToolIdentity } from "@/lib/mcp/types";
+import type { ActivityRow, OwnedEntry, OwnedPage, ToolDeps, ToolIdentity } from "@/lib/mcp/types";
 
 /**
  * Fakes for the MCP tests (Wave L): dependencies with spies, so a test can prove the ORDER of the
@@ -39,6 +39,28 @@ export function ownedPage(over: Partial<OwnedPage> = {}): OwnedPage {
   };
 }
 
+export const ENTRY_A = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+export const TYPE_A = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+export function ownedEntry(over: Partial<OwnedEntry> = {}): OwnedEntry {
+  return {
+    id: ENTRY_A,
+    siteId: PAGE_A,
+    typeId: TYPE_A,
+    typeKey: "post",
+    rev: 3,
+    status: "draft",
+    hasUnpublishedChanges: false,
+    publishedAt: null,
+    firstPublishedAt: null,
+    createdAt: "2026-10-01T00:00:00Z",
+    updatedAt: "2026-10-01T00:00:00Z",
+    deletedAt: null,
+    liveSlug: null,
+    ...over,
+  };
+}
+
 export function makeDeps(over: Partial<ToolDeps> = {}) {
   const calls: string[] = [];
   const logs: string[] = [];
@@ -72,6 +94,10 @@ export function makeDeps(over: Partial<ToolDeps> = {}) {
           livePath: null,
         },
       };
+    },
+    loadEntry: async (_userId, entryId, options) => {
+      calls.push("entry");
+      return { ok: true, entry: ownedEntry({ id: entryId, typeKey: options.types[0] ?? "post" }) };
     },
     recordActivity: async (row) => {
       calls.push("activity");

@@ -2,7 +2,13 @@ import type { z } from "zod";
 import { pageDraftSchema, pagePublishSchema } from "./page";
 import { postDraftSchema, postPublishSchema } from "./post";
 
-export { postDraftSchema, postPublishSchema, POST_LIMITS } from "./post";
+export {
+  postDraftSchema,
+  postPublishSchema,
+  POST_BODY_TOO_LARGE,
+  POST_LIMITS,
+  postBodyTooLarge,
+} from "./post";
 export type { PostDraft, PostPublish } from "./post";
 export {
   designDraftSchema,

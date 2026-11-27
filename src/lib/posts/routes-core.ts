@@ -9,7 +9,6 @@ import {
   expireEntryAgain,
   getEntry,
   listTermsWithClient,
-  listTypes,
   listTypesWithClient,
   publishEntry,
   renameTerm,
@@ -17,6 +16,7 @@ import {
   trashEntry,
   unpublishEntry,
   updateType,
+  updateTypeAndSwitch,
   listEntries,
   type ContentActor,
   type ContentFailure,
@@ -134,15 +134,19 @@ export async function setPostTypeCore(input: {
   if (!UUID.test(input.siteId)) return MISSING;
   const who = actor(input.userId);
   let type: TypeSummary | null = null;
-  // Turning on at an address moves the path first; if the turn on is then refused, the path the
-  // type had is put back, so a refusal changes nothing.
-  let previousPath: string | null = null;
   if (archivePath !== undefined && enabled !== undefined) {
-    const types = await listTypes({ actor: who, siteId: input.siteId });
-    if (!types.ok) return refused(types);
-    previousPath = types.types.find((t) => t.key === POST_KEY)?.archivePath ?? null;
-  }
-  if (archivePath !== undefined) {
+    // Turning on at an address moves the path first; if the turn on is then refused, the path the
+    // type had is put back, so a refusal changes nothing (the content layer's one implementation).
+    const both = await updateTypeAndSwitch({
+      actor: who,
+      siteId: input.siteId,
+      typeKey: POST_KEY,
+      settings: { archivePath },
+      enabled,
+    });
+    if (!both.ok) return refused(both);
+    type = both;
+  } else if (archivePath !== undefined) {
     const moved = await updateType({
       actor: who,
       siteId: input.siteId,
@@ -151,26 +155,14 @@ export async function setPostTypeCore(input: {
     });
     if (!moved.ok) return refused(moved);
     type = moved;
-  }
-  if (enabled !== undefined) {
+  } else if (enabled !== undefined) {
     const switched = await enableType({
       actor: who,
       siteId: input.siteId,
       typeKey: POST_KEY,
       enabled,
     });
-    if (!switched.ok) {
-      if (previousPath !== null && previousPath !== archivePath) {
-        const back = await updateType({
-          actor: who,
-          siteId: input.siteId,
-          typeKey: POST_KEY,
-          archivePath: previousPath,
-        });
-        if (!back.ok) console.error("[posts] restoring the archive path failed", back.error);
-      }
-      return refused(switched);
-    }
+    if (!switched.ok) return refused(switched);
     type = switched;
   }
   if (!type) return invalid("Nothing to change.");

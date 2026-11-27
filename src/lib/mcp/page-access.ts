@@ -74,27 +74,32 @@ function toOwnedPage(row: PageRow, withDraft: boolean, home: HomeEntryRow | unde
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
-    ...(home ? { homeRev: Number(home.rev) } : {}),
+    ...(home ? { homeRev: Number(home.rev), homeEntryId: home.id } : {}),
     ...(withDraft ? { draft, published } : {}),
   };
 }
 
-/** The `page` content type of each site: site id to type id. */
-async function pageTypeIdsOf(
+/** The content type `key` of each site: site id to type id. */
+async function typeIdsOf(
   admin: AdminClient,
   siteIds: readonly string[],
+  key: "page" | "post",
 ): Promise<Map<string, string>> {
   const types = new Map<string, string>();
   if (siteIds.length === 0) return types;
   const { data, error } = await admin
     .from("content_types")
     .select("id, site_id")
-    .eq("key", "page")
+    .eq("key", key)
     .in("site_id", [...siteIds]);
-  if (error) throw new PageReadError("reading the page type failed");
+  if (error) throw new PageReadError("reading the content type failed");
   for (const row of data ?? []) types.set(row.site_id, row.id);
   return types;
 }
+
+/** The `page` content type of each site: site id to type id. */
+const pageTypeIdsOf = (admin: AdminClient, siteIds: readonly string[]) =>
+  typeIdsOf(admin, siteIds, "page");
 
 /** Home's entry of each site that has one, by site id. */
 async function loadHomeEntries(
@@ -455,4 +460,40 @@ export async function listOwnedSubPageDocs(
   return rows
     .filter((row) => types.get(row.site_id) === row.type_id)
     .map((row) => ({ draft: row.draft, published: row.published ?? null }));
+}
+
+/** The two image references of a post draft, and nothing else of it. */
+export const POST_IMAGE_FIELDS =
+  "featured_image:draft->featuredImage, og_image:draft->seo->ogImage";
+
+/**
+ * The image fields of the drafts of the caller's posts (trash excluded), `size` rows from `offset`,
+ * in id order (M18-05). The image resolver reads them after the pages, so a featured image set in
+ * the post editor can be reused by its `imageId`. Only the two image references of each draft are
+ * selected (`draft->featuredImage`, `draft->seo->ogImage`), never a whole draft with its body, and
+ * never a post's published copy.
+ */
+export async function listOwnedPostImageDocs(
+  admin: AdminClient,
+  userId: string,
+  offset: number,
+  size: number,
+): Promise<Array<{ draft: unknown }>> {
+  const { data, error } = await admin
+    .from("content_entries")
+    .select(`site_id, type_id, ${POST_IMAGE_FIELDS}, ${SITE_JOIN}`)
+    .is("deleted_at", null)
+    .is("draft->>path", null)
+    .eq("site.owner_id", userId)
+    .order("id", { ascending: true })
+    .range(offset, offset + size - 1);
+  if (error) throw new PageReadError("reading the posts of a site failed");
+  type ImageRow = EntryRow & { featured_image?: unknown; og_image?: unknown };
+  const rows = ((data ?? []) as unknown as ImageRow[]).filter((row) => siteOwnerOf(row) === userId);
+  const types = await typeIdsOf(admin, [...new Set(rows.map((row) => row.site_id))], "post");
+  return rows
+    .filter((row) => types.get(row.site_id) === row.type_id)
+    .map((row) => ({
+      draft: { featuredImage: row.featured_image ?? null, seo: { ogImage: row.og_image ?? null } },
+    }));
 }

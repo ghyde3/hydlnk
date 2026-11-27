@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { desktopOnly } from "../fixtures/data";
+import { DEV_PORT } from "../helpers";
 import { appRaw } from "../fixtures/http";
 import {
   CLIENT_REDIRECT,
@@ -221,7 +222,7 @@ test.describe("M10-11 authorize over HTTP", () => {
     const before = await codesCount(client.client_id);
     const ok = await authorizeRaw(client.client_id, pair.challenge);
     expect(ok.status).toBe(303);
-    expect(ok.location).toBe("http://app.localhost:3000/login");
+    expect(ok.location).toBe(`http://app.localhost:${DEV_PORT}/login`);
     expect(ok.setCookies).toHaveLength(1);
     expect(ok.setCookies[0]).toMatch(
       /^hl_oauth_resume=[0-9a-f-]{36}; Path=\/; Max-Age=600; HttpOnly; SameSite=Lax$/,
@@ -283,7 +284,7 @@ test.describe("M10-11 authorize over HTTP", () => {
       expect(`${back.origin}${back.pathname}`, name).toBe(KNOWN_CLIENT_REDIRECT);
       expect(back.searchParams.get("error"), name).toBe(error);
       expect(back.searchParams.get("state"), name).toBe("keep");
-      expect(back.searchParams.get("iss"), name).toBe("http://app.localhost:3000");
+      expect(back.searchParams.get("iss"), name).toBe(`http://app.localhost:${DEV_PORT}`);
       expect(res.headers["cache-control"], name).toBe("no-store");
       expect(res.headers["referrer-policy"], name).toBe("no-referrer");
     }
@@ -304,7 +305,10 @@ test.describe("M10-11 authorize over HTTP", () => {
       ["prompt=none", { extra: { prompt: "none" } }],
       ["a request object", { extra: { request: "abc" } }],
     ] as const) {
-      const res = await authorizeRaw(client.client_id, pair.challenge, { state: "keep", ...options });
+      const res = await authorizeRaw(client.client_id, pair.challenge, {
+        state: "keep",
+        ...options,
+      });
       expect(res.status, name).toBe(400);
       expect(res.location, name).toBeNull();
       expect(res.setCookies, name).toEqual([]);

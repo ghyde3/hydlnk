@@ -57,8 +57,32 @@ function code(file: string): string {
 }
 
 describe("the tools share code and never reach the database client themselves", () => {
-  it("scans the fourteen tools and the registry", () => {
-    expect(toolFiles.length).toBeGreaterThanOrEqual(16);
+  it("scans the thirty-one tools, their shared modules and the registry", () => {
+    expect(toolFiles.length).toBeGreaterThanOrEqual(35);
+    // Every content tool of M18 is among the files scanned below.
+    for (const name of [
+      "list-content-types",
+      "list-entries",
+      "get-entry",
+      "list-terms",
+      "list-revisions",
+      "create-entry",
+      "update-entry",
+      "delete-entry",
+      "restore-entry",
+      "create-term",
+      "restore-revision",
+      "rename-term",
+      "delete-term",
+      "publish-entry",
+      "unpublish-entry",
+      "publish-design",
+      "update-content-type",
+      "content-common",
+      "publish-common",
+    ]) {
+      expect(toolFiles, name).toContain(`${MCP_DIR}/tools/${name}.ts`);
+    }
   });
 
   it("no module under tools/ imports the secret-key client or supabase-js", () => {
@@ -82,6 +106,84 @@ describe("the tools share code and never reach the database client themselves", 
       expect(source, file).not.toMatch(/\.handler\(/);
     }
     expect(code(`${MCP_DIR}/server.ts`)).toContain("runTool(tool, identity");
+  });
+});
+
+describe("the content tools write through the one writer, as the token's user (M18-12)", () => {
+  const CONTENT = [
+    "list-content-types",
+    "list-entries",
+    "get-entry",
+    "list-terms",
+    "list-revisions",
+    "create-entry",
+    "update-entry",
+    "delete-entry",
+    "restore-entry",
+    "create-term",
+    "restore-revision",
+    "rename-term",
+    "delete-term",
+    "publish-entry",
+    "unpublish-entry",
+    "publish-design",
+    "update-content-type",
+  ].map((name) => `${MCP_DIR}/tools/${name}.ts`);
+
+  it("no file under src/lib/mcp imports past the writer's index, the Posts route cores or a client", () => {
+    for (const file of mcpFiles) {
+      const source = code(file);
+      expect(source, file).not.toMatch(/from "@\/lib\/content\/(?!schemas(?:\/|"))/);
+      expect(source, file).not.toMatch(/@\/lib\/posts\/(routes-core|client|routes)/);
+      expect(source, file).not.toMatch(/@\/lib\/supabase\/(server|browser)/);
+    }
+  });
+
+  it("no content tool names a content table, calls an rpc or builds a query: the writer does", () => {
+    for (const file of CONTENT) {
+      const source = code(file);
+      expect(source, file).not.toMatch(
+        /\.from\(|\.rpc\(|["'`]content_(types|entries|terms|entry_terms|entry_revisions)["'`]/,
+      );
+      expect(source, file).not.toMatch(/call\.admin\s*\.\s*(from|rpc)/);
+    }
+  });
+
+  it("the actor is built in one place from the call: the token's user and the source mcp", () => {
+    const common = code(`${MCP_DIR}/tools/content-common.ts`);
+    expect(common).toMatch(
+      /mcpActor = \(call: ToolCall\): ContentActor => \(\{\s*userId: call\.userId,\s*source: "mcp",?\s*\}\)/,
+    );
+    for (const file of [...CONTENT, `${MCP_DIR}/post-write.ts`, `${MCP_DIR}/entry-access.ts`]) {
+      const source = code(file);
+      // No other actor literal, and never a source but mcp.
+      expect(source, file).not.toMatch(/source: "(editor|builder|system)"/);
+      for (const match of source.matchAll(/actor: ([^,}\n]+)/g)) {
+        expect(match[1]!.trim(), file).toMatch(/^(mcpActor\(call\)|actor)$/);
+      }
+    }
+    expect(code(`${MCP_DIR}/entry-access.ts`)).toMatch(
+      /const actor = \{ userId, source: "mcp" as const \};/,
+    );
+  });
+
+  it("the entry lookup is the only reader of an entry's documents outside page-access, and drops the published copy", () => {
+    const access = code(`${MCP_DIR}/entry-access.ts`);
+    expect(access).toMatch(/getEntry\(\{ actor, entryId \}\)/);
+    // Of `published` it keeps the slug and nothing else.
+    expect(access.match(/found\.published\b/g)).toHaveLength(1);
+    expect(access).toMatch(
+      /liveSlug: found\.status === "published" \? slugOf\(found\.published\) : null/,
+    );
+    for (const file of mcpFiles.filter((name) => !name.endsWith("entry-access.ts"))) {
+      expect(code(file), file).not.toMatch(/\bgetEntry\(/);
+    }
+  });
+
+  it("every content tool that changes the live site expires the cache inside its handler, never deferred", () => {
+    for (const file of CONTENT) {
+      expect(code(file), file).not.toMatch(/defer\([^)]*invalidate/);
+    }
   });
 });
 
