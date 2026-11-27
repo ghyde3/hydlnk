@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { expect, test, type BrowserContext } from "@playwright/test";
 import { UNDO_WINDOW_MS } from "@/lib/media/cleanup-client";
+import { UPLOAD_UNUSED_GRACE_SECONDS } from "@/lib/media/limits";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import {
   accessTokenFor,
@@ -131,6 +132,30 @@ async function queued(userId: string): Promise<string[]> {
     .eq("owner_id", userId);
   if (error) throw new Error(error.message);
   return (data ?? []).map((row: { path: string }) => row.path);
+}
+
+/** The user's queue rows as stored (path, site and date), oldest first. */
+async function queueRows(
+  userId: string,
+): Promise<{ path: string; site_id: string | null; queued_at: string }[]> {
+  const { data, error } = await adminClient()
+    .from("image_cleanup_queue")
+    .select("path, site_id, queued_at")
+    .eq("owner_id", userId)
+    .order("queued_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * A new upload's grace row (S3, migration 20261126220500): queued UPLOAD_UNUSED_GRACE_SECONDS ahead of
+ * the upload, so no cleanup sees it until then. `after` is a moment just before the upload.
+ */
+function expectGraceRow(row: { queued_at: string } | undefined, after: number): void {
+  expect(row, "the new upload has its grace row").toBeDefined();
+  const due = Date.parse(row!.queued_at) - after;
+  expect(due).toBeGreaterThanOrEqual(UPLOAD_UNUSED_GRACE_SECONDS * 1000 - 5_000);
+  expect(due).toBeLessThanOrEqual(UPLOAD_UNUSED_GRACE_SECONDS * 1000 + 60_000);
 }
 
 const publicUrl = (path: string) => `${supabaseUrl()}/storage/v1/object/public/${BUCKET}/${path}`;
@@ -542,15 +567,21 @@ test.describe("M5-14 freed bytes lower the stored total (M4-31)", () => {
     expect(early.status, early.text).toBe(413);
     expect(await objectExists(big)).toBe(true);
     await waitOutUndo(me.userId);
+    const before = Date.now();
     const res = await uploadMedia(image, {
       kind: "content",
       cookie: me.cookie,
       contentType: "image/png",
     });
     expect(res.status, res.text).toBe(200);
+    const fresh = uploaded(res);
     expect(await objectExists(big)).toBe(false);
     expect(await usedBytes(me.userId)).toBe(cap - room - 3 * MIB + stored); // the total dropped by 3 MB, then took the upload
-    expect(await queued(me.userId)).toEqual([]);
+    // The replaced image's row went with it; what is queued is only the new upload's grace row,
+    // dated 15 minutes ahead, so no cleanup can take it before a draft names it.
+    const rows = await queueRows(me.userId);
+    expect(rows.map((row) => row.path)).toEqual([fresh.path]);
+    expectGraceRow(rows[0], before);
     await probeContext.close();
     await context.close();
   });
@@ -603,7 +634,12 @@ test.describe("M5-14 no client can delete, replace or call anything of this", ()
     test.skip(!desktopOnly(info), "not viewport dependent");
     const context = await browser.newContext();
     const me = await user(context, "ca");
+    const uploadedAt = Date.now();
     const mine = await put(me, "avatar", 16);
+    // The upload's own grace row is the queue's only row; nothing below may add to it or change it.
+    const queueBefore = await queueRows(me.userId);
+    expect(queueBefore.map((row) => row.path)).toEqual([mine.path]);
+    expectGraceRow(queueBefore[0], uploadedAt);
     const objectUrl = `${supabaseUrl()}/storage/v1/object/${BUCKET}/${mine.path}`;
     const headers = { apikey: publishableKey(), Authorization: `Bearer ${me.token}` };
     const bytes = new Uint8Array(randomBytes(64));
@@ -660,7 +696,8 @@ test.describe("M5-14 no client can delete, replace or call anything of this", ()
         expect(call.status, fn).toBeGreaterThanOrEqual(400);
       }
     }
-    expect(await queued(me.userId)).toEqual([]);
+    // The refused client insert (the same path, a client's date) left the queue as the server wrote it.
+    expect(await queueRows(me.userId)).toEqual(queueBefore);
     await context.close();
   });
 });
