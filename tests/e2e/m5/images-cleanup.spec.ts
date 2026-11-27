@@ -535,7 +535,13 @@ test.describe("M5-14 freed bytes lower the stored total (M4-31)", () => {
     expect(await queued(me.userId)).toEqual([big]);
     expect(await usedBytes(me.userId)).toBe(cap - room);
 
-    // The upload would not fit; the route lets go of the replaced image first, then stores it.
+    // The upload would not fit; the route lets go of the replaced image first (once the Undo window
+    // has passed, as for every cleanup run since the team re-review), then stores it. Inside the
+    // window the replaced image may still come back with Undo, so it is kept and the upload refused.
+    const early = await uploadMedia(image, { kind: "content", cookie: me.cookie, contentType: "image/png" });
+    expect(early.status, early.text).toBe(413);
+    expect(await objectExists(big)).toBe(true);
+    await waitOutUndo(me.userId);
     const res = await uploadMedia(image, {
       kind: "content",
       cookie: me.cookie,
