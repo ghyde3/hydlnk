@@ -37,10 +37,18 @@ export function unwrap(node: ts.Expression): ts.Expression {
 }
 
 /**
- * A named function: a declaration or method with a name, or an arrow / function expression assigned
- * to a variable or an object property. An anonymous callback (`.map(async (x) => ...)`) belongs to
- * the named function around it.
+ * A named function: a declaration or method with a name, an arrow / function expression assigned to
+ * a variable or an object property, or one passed straight to a call that initializes a variable
+ * (`const suspendAccount = defineAction("x", async () => ...)`, named suspendAccount). Any other
+ * anonymous callback (`.map(async (x) => ...)`) belongs to the named function around it.
  */
+function wrapperVariable(node: ts.Node): ts.VariableDeclaration | null {
+  const call = node.parent;
+  if (!call || !ts.isCallExpression(call) || !call.arguments.includes(node as ts.Expression)) return null;
+  const decl = call.parent;
+  return decl && ts.isVariableDeclaration(decl) && decl.initializer === call ? decl : null;
+}
+
 function isNamedFunction(node: ts.Node): boolean {
   if (ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) {
     return node.name !== undefined;
@@ -48,6 +56,7 @@ function isNamedFunction(node: ts.Node): boolean {
   if (ts.isConstructorDeclaration(node)) return true;
   if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
     const parent = node.parent;
+    if (wrapperVariable(node)) return true;
     return (ts.isVariableDeclaration(parent) || ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) && parent.name !== undefined;
   }
   return false;
@@ -56,6 +65,8 @@ function isNamedFunction(node: ts.Node): boolean {
 function ownName(node: ts.Node, sf: ts.SourceFile): string {
   if (ts.isConstructorDeclaration(node)) return "constructor";
   if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
+    const wrapper = wrapperVariable(node);
+    if (wrapper) return wrapper.name.getText(sf);
     return (node.parent as ts.VariableDeclaration | ts.PropertyAssignment).name.getText(sf);
   }
   return (node as ts.FunctionDeclaration).name!.getText(sf);
