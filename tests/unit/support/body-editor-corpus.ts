@@ -72,3 +72,60 @@ export const LOSSY: Record<string, string> = {
   "escaped characters the editor would rewrite": "Escapes 1\\. and \\<b>",
   "bold around a link, the other way round": "A **[bold link](https://example.com)** here.",
 };
+
+/** The editor's document pieces, as `fromMarkdown` builds them (marks in the order it gives). */
+type Doc = { type: "doc"; content: unknown[] };
+const doc = (...content: unknown[]): Doc => ({ type: "doc", content });
+const para = (...content: unknown[]) => ({ type: "paragraph", content });
+const text = (value: string, ...marks: string[]) =>
+  marks.length > 0 ? { type: "text", text: value, marks: marks.map((type) => ({ type })) } : { type: "text", text: value };
+const link = (value: string, href: string) => ({ type: "text", text: value, marks: [{ type: "link", attrs: { href, title: null } }] });
+const hardBreak = { type: "hardBreak" };
+const item = (...content: unknown[]) => ({ type: "listItem", content });
+const emptyItem = item({ type: "paragraph", content: [] });
+const bullets = (...items: unknown[]) => ({ type: "bulletList", content: items });
+const numbers = (...items: unknown[]) => ({ type: "orderedList", content: items });
+
+/**
+ * Documents the rich editor can hold whose Markdown the live page used to read differently (third
+ * adversarial pass, findings 4 and 5): each is written, lexed and read back as `reads` (itself
+ * unless given), and written again to the same bytes.
+ */
+export const DOCUMENTS: Record<string, { doc: Doc; reads?: Doc }> = {
+  // Overlapping marks: nested Markdown, never HTML (the page draws HTML as text).
+  "bold a, bold and italic b, italic c": { doc: doc(para(text("a", "bold"), text("b", "italic", "bold"), text("c", "italic"))) },
+  "the same, then a letter": { doc: doc(para(text("x "), text("a", "bold"), text("b", "italic", "bold"), text("c", "italic"), text("d"))) },
+  "strike a, strike and bold b, bold c": { doc: doc(para(text("a", "strike"), text("b", "bold", "strike"), text("c", "bold"))) },
+  "italic a, italic and strike b, strike c": { doc: doc(para(text("a", "italic"), text("b", "strike", "italic"), text("c", "strike"))) },
+  "italic a, bold and italic b, bold c, a full stop": { doc: doc(para(text("a", "italic"), text("b", "bold", "italic"), text("c", "bold"), text("."))) },
+  // A line after a hard break that is a setext underline, "--" included, stays text.
+  "a signature: Thanks, / -- / Gary": { doc: doc(para(text("Thanks,"), hardBreak, text("--"), hardBreak, text("Gary"))) },
+  "a line of = after a hard break": { doc: doc(para(text("Title"), hardBreak, text("=="))) },
+  "a paragraph of two dashes": { doc: doc(para(text("--"))) },
+  // Empty list items are dropped on save, in both kinds of list: Markdown cannot say one under an
+  // item's text, nor as a first numbered item, and the library's writer threw on an empty numbered one.
+  "a nested empty bullet": {
+    doc: doc(bullets(item(para(text("a")), bullets(emptyItem)))),
+    reads: doc(bullets(item(para(text("a"))))),
+  },
+  "an empty first numbered item": {
+    doc: doc(numbers(emptyItem, item(para(text("b"))))),
+    reads: doc(numbers(item(para(text("b"))))),
+  },
+  "an empty last numbered item": {
+    doc: doc(numbers(item(para(text("a"))), emptyItem)),
+    reads: doc(numbers(item(para(text("a"))))),
+  },
+  "an empty middle bullet": {
+    doc: doc(bullets(item(para(text("a"))), emptyItem, item(para(text("c"))))),
+    reads: doc(bullets(item(para(text("a"))), item(para(text("c"))))),
+  },
+  "a list of only empty items": { doc: doc(para(text("x")), bullets(emptyItem, emptyItem)), reads: doc(para(text("x"))) },
+  // Bare links followed by text keep their address (finding 4).
+  "a bare link, then text that would lengthen it": { doc: doc(para(link("http://x.co", "http://x.co"), text(".evil.example/path"))) },
+  "a www link, then a letter": { doc: doc(para(link("www.x.co", "http://www.x.co"), text("m"))) },
+  "two bare links side by side": { doc: doc(para(link("http://a.co", "http://a.co"), link("http://b.co", "http://b.co"))) },
+  "a bare link, then an @ and a domain": { doc: doc(para(link("http://a.co", "http://a.co"), text("@b.co"))) },
+  "a link whose address has an unbalanced )": { doc: doc(para(link("t", "http://x.co/a)b"), text(" after"))) },
+  "a link whose address has an unbalanced (": { doc: doc(para(link("t", "http://x.co/a(b"), text(" and "), link("u", "https://x.co/(c)d)"))) },
+};
