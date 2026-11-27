@@ -20,9 +20,14 @@ const TIMEOUT_MS = 2000;
 /** The same fixed local stand-in `visitorHashSecret()` uses off Vercel; it protects nothing. */
 const LOCAL_DEV_SECRET = "hydlnk-local-development-visitor-hash-secret";
 
-/** The bucket of a caller's key: 64 lowercase hex characters, the same value `rateLimitBucket` gives. */
+/** The bucket of a limiter key: 64 lowercase hex characters, the same value `rateLimitBucket` gives. */
+export function proxyBucket(key: string, secret: string): string {
+  return createHmac("sha256", secret).update(`rate-limit\n${key}`).digest("hex");
+}
+
+/** The bucket of a share caller's key (`share:{clientKey}`). */
 export function shareBucket(clientKey: string, secret: string): string {
-  return createHmac("sha256", secret).update(`rate-limit\nshare:${clientKey}`).digest("hex");
+  return proxyBucket(`share:${clientKey}`, secret);
 }
 
 function secretFromEnv(): string | null {
@@ -67,10 +72,22 @@ function supabaseStore(): ShareLimitStore | null {
   };
 }
 
-/** Counts one request of `clientKey` (an IPv4 address, an IPv6 /64 or "unknown"). Never throws. */
-export async function shareRateLimit(
-  clientKey: string,
-  options: { store?: ShareLimitStore | null; secret?: string | null; timeoutMs?: number } = {},
+export type ProxyLimitOptions = { store?: ShareLimitStore | null; secret?: string | null; timeoutMs?: number };
+
+/** Counts one request of `clientKey` (an IPv4 address, an IPv6 /64 or "unknown") on /share/*. Never throws. */
+export function shareRateLimit(clientKey: string, options: ProxyLimitOptions = {}): Promise<ShareLimitResult> {
+  return proxyRateLimit(`share:${clientKey}`, SHARE_LIMIT, SHARE_WINDOW_SECONDS, options);
+}
+
+/**
+ * One request counted on `key` (namespaced by the caller, "share:{ip}", "invite-link:{ip}") in the
+ * form the proxy can run (team attack pass, note 4b: the invite link uses it too). Never throws.
+ */
+export async function proxyRateLimit(
+  key: string,
+  limit: number,
+  windowSeconds: number,
+  options: ProxyLimitOptions = {},
 ): Promise<ShareLimitResult> {
   const allow = { allowed: true, retryAfter: 0 };
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -85,12 +102,12 @@ export async function shareRateLimit(
       );
     });
     return await Promise.race([
-      store.hit(shareBucket(clientKey, secret), SHARE_LIMIT, SHARE_WINDOW_SECONDS),
+      store.hit(proxyBucket(key, secret), limit, windowSeconds),
       timeout,
     ]);
   } catch (error) {
     console.error(
-      "[share] the rate limiter failed; allowing the request:",
+      `[${key.slice(0, key.indexOf(":"))}] the rate limiter failed; allowing the request:`,
       error instanceof Error ? error.message : "unknown error",
     );
     return allow;

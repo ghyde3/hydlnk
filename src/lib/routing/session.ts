@@ -9,6 +9,15 @@ import { hostOnlyCookie } from "./cookies";
 const OAUTH_DECISION_PATHS: ReadonlySet<string> = new Set(["/oauth/authorize", "/oauth/consent"]);
 
 /**
+ * Session paths that never send a Referer: the two OAuth decisions (a one-time code in the address)
+ * and the invite link `/invite/{token}` (M19-08; its address IS the token). The proxy's headers
+ * replace a route's own, so the route's `no-referrer` alone would be overwritten by setAppHeaders.
+ */
+export function sendsNoReferrer(pathname: string): boolean {
+  return OAUTH_DECISION_PATHS.has(pathname) || pathname.startsWith("/invite/");
+}
+
+/**
  * Rewrites `request` to `destination` and refreshes the Supabase session on the way through.
  * Used for the app host only: it is the only host that carries auth cookies.
  *
@@ -65,10 +74,10 @@ export async function rewriteWithSession(
   }
 
   setAppHeaders(response.headers);
-  // Wave L (M10-13): the OAuth consent screen and its answer are the two session paths that send a
-  // person back to another site with a one-time code in the address, so they never send a Referer.
-  // The proxy's headers replace a route's own, so the policy has to be set here.
-  if (OAUTH_DECISION_PATHS.has(request.nextUrl.pathname)) {
+  // Wave L (M10-13): the OAuth consent screen and its answer send a person back to another site with
+  // a one-time code in the address, and an invite link's address is its token (M19-08), so they never
+  // send a Referer. The proxy's headers replace a route's own, so the policy has to be set here.
+  if (sendsNoReferrer(request.nextUrl.pathname)) {
     response.headers.set("Referrer-Policy", "no-referrer");
   }
   return response;

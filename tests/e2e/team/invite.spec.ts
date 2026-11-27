@@ -29,6 +29,13 @@ test("M19-08 invite, sign in from the link, accept once; another account and a u
   const linkBox = page.getByLabel("Invite link");
   await expect(linkBox).toHaveValue(/\/invite\/[A-Za-z0-9_-]{43}$/);
   const link = await linkBox.inputValue();
+  // Note 4a: the link's real response sends no Referer (the proxy's app headers used to replace the
+  // route's no-referrer). A fresh context, so the owner's session gets no invite cookie.
+  const probe = await browser.newContext();
+  const raw = await probe.request.get(link, { maxRedirects: 0 });
+  expect(raw.status()).toBe(303);
+  expect(raw.headers()["referrer-policy"]).toBe("no-referrer");
+  await probe.close();
   await expect(page.getByTestId("invites-list")).toContainText(invited.email.toLowerCase());
   await expect(page.getByTestId("invites-list")).toContainText("Publisher · Expires");
   await expectNoHorizontalScroll(page);

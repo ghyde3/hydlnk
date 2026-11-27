@@ -27,6 +27,7 @@ import {
 } from "@/lib/previews/admin-draft-proxy";
 import { classifyAppPath } from "@/lib/routing/app-paths";
 import { bearerPathProxy } from "@/lib/routing/bearer-proxy";
+import { inviteLinkLimited, isInviteLinkPath } from "@/lib/routing/invite-limit";
 import { rewriteWithSession } from "@/lib/routing/session";
 import { setTenantHeaders } from "@/lib/routing/tenant-headers";
 import { appOrigin, protocolFor } from "@/lib/routing/urls";
@@ -155,6 +156,12 @@ export async function proxy(request: NextRequest) {
       // the client chose, so it is the app's plain 404 like any other unknown path.
       if (isShareInternalPath(pathname)) {
         return rewriteWithSession(request, rewriteTo(appRewritePath(NOT_FOUND_PATH)));
+      }
+      // The invite link (M19-08) is limited per client address before the session is read, like
+      // /share/* (team attack pass, note 4b); its no-referrer is set by rewriteWithSession.
+      if (isInviteLinkPath(pathname)) {
+        const limited = await inviteLinkLimited(request);
+        if (limited) return limited;
       }
       return rewriteWithSession(request, rewriteTo(appRewritePath(pathname)));
     }
