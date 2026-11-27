@@ -51,6 +51,24 @@ describe("M13-06 the late rule", () => {
     ).toBe("late");
   });
 
+  it("Wave E: run-schedules without its Vault secrets is a failed job whose message says it cannot reach the app", () => {
+    const health = classifyJob(
+      job({
+        jobname: "run-schedules",
+        last_status: "failed",
+        last_message:
+          "ERROR:  run-schedules cannot reach the app: set the Vault secrets hydlnk_cron_secret and hydlnk_app_base_url",
+      }),
+      NOW,
+    );
+    expect(health.state).toBe("failed");
+    expect(health.message).toContain("run-schedules cannot reach the app");
+    expect(
+      healthTile(summarizeHealth([job({ jobname: "run-schedules", last_status: "failed" })], NOW))
+        .state,
+    ).toBe("bad");
+  });
+
   it("a failed newest run is failed, even when recent; failure wins over late", () => {
     expect(classifyJob(job({ last_status: "failed" }), NOW).state).toBe("failed");
     expect(classifyJob(job({ last_status: "failed", last_run_at: ago(9999) }), NOW).state).toBe(

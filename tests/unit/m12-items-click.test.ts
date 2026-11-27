@@ -89,8 +89,8 @@ describe("M12-01 the site index", () => {
     const { read } = site();
     expect(read.index[HOME_ITEM]).toBe("");
     expect(read.index[SUB_ITEM]).toBe(SUB_ID);
-    expect(documentForBlock(read, HOME_ITEM)?.subPageId).toBeUndefined();
-    expect(documentForBlock(read, SUB_ITEM)?.subPageId).toBe(SUB_ID);
+    expect(documentForBlock(read, HOME_ITEM, Date.now())?.subPageId).toBeUndefined();
+    expect(documentForBlock(read, SUB_ITEM, Date.now())?.subPageId).toBe(SUB_ID);
   });
 
   it("the pair path (site_click_pairs) gives the same answer for a sub-page's item", () => {
@@ -105,7 +105,7 @@ describe("M12-01 the site index", () => {
 
   it("resolves a sub-page item against the sub-page's blocks with the site's tags", () => {
     const { read } = site({ source: "hydlnk", medium: "link-in-bio", campaign: "sale" });
-    const holder = documentForBlock(read, SUB_ITEM)!;
+    const holder = documentForBlock(read, SUB_ITEM, Date.now())!;
     const link = resolveLink(holder.doc, SUB_ITEM)!;
     const url = new URL(link.url);
     expect(url.origin + url.pathname).toBe(`https://shop.example/${SUB_ITEM}`);
@@ -121,7 +121,7 @@ describe("M12-01 the click", () => {
     const { read } = site(utm);
     const spies = makeDeps({
       resolveClickTarget: async (pageId, blockId) => {
-        const holder = pageId === PAGE_ID ? documentForBlock(read, blockId) : null;
+        const holder = pageId === PAGE_ID ? documentForBlock(read, blockId, Date.now()) : null;
         const link = holder ? resolveLink(holder.doc, blockId) : null;
         return holder && link
           ? {

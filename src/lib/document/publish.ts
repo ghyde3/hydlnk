@@ -7,6 +7,7 @@ import {
 import { pickShape, publishFocus } from "./focus";
 import { publishTextAndMarks } from "./marks";
 import { publishLock } from "./lock";
+import { publishWindow } from "./schedule";
 import { publishNav } from "./nav";
 import { publishBanner, publishNameStyle } from "./page-extras";
 import { resolveProfileOptions } from "./profile-options";
@@ -153,7 +154,8 @@ function publishStoreLink<L extends { id: string; store: string; url: string }>(
 }
 
 export function publishBlock(block: Block): Block | null {
-  const base = { id: block.id, visible: true } as const;
+  // A block's time window (M20-02) rides on the base, so every type keeps it the same way.
+  const base = { id: block.id, visible: true as const, ...publishWindow(block.schedule) };
   switch (block.type) {
     case "link":
       return {

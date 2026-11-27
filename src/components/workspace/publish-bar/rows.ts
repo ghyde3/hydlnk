@@ -1,4 +1,5 @@
 import type { ItemPublishState } from "@/lib/publish/status";
+import type { EntryScheduleSummary } from "@/lib/schedule/types";
 import type { SitePageItem } from "@/lib/site-pages/pages";
 
 /** One row of the publish bar: the design, Home or a sub-page. */
@@ -10,6 +11,22 @@ export interface PublishRow {
   /** What the row covers: the design's parts, or a page's path in mono. */
   detail: string;
   state: ItemPublishState;
+  /** A page's pending schedules and newest failure (Wave E, M20-10), when it has any. */
+  schedule?: EntryScheduleSummary;
+}
+
+/** A row's chip: its publish state, or Scheduled / Didn't publish, which win over Draft and Unpublished changes. */
+export type RowChipState = ItemPublishState | "scheduled" | "failed";
+
+export function rowChipState(row: Pick<PublishRow, "state" | "schedule">): RowChipState {
+  if (row.schedule?.publishAt) return "scheduled";
+  if (row.schedule?.failed && row.state !== "live") return "failed";
+  return row.state;
+}
+
+/** How many pending scheduled publishes Publish all changes would cancel (it publishes those pages now). */
+export function scheduledToCancel(rows: readonly PublishRow[]): number {
+  return rows.filter((row) => row.schedule?.publishAt && row.state !== "live").length;
 }
 
 export const DESIGN_ROW_KEY = "design";
@@ -25,6 +42,9 @@ export function publishRows(input: {
   design: ItemPublishState;
   home: ItemPublishState;
   pages: Readonly<Record<string, ItemPublishState>>;
+  /** Schedule summaries by entry id (Home's under its entry id), from the site's schedules read. */
+  schedules?: Readonly<Record<string, EntryScheduleSummary>>;
+  homeEntryId?: string | null;
 }): PublishRow[] {
   const rows: PublishRow[] = [
     {
@@ -36,12 +56,15 @@ export function publishRows(input: {
     },
   ];
   for (const item of input.items) {
+    const entryId = item.home ? input.homeEntryId : item.id;
+    const schedule = entryId ? input.schedules?.[entryId] : undefined;
     rows.push({
       key: item.id,
       kind: "page",
       title: item.title,
       detail: item.path,
       state: item.home ? input.home : (input.pages[item.id] ?? "draft"),
+      ...(schedule ? { schedule } : {}),
     });
   }
   return rows;

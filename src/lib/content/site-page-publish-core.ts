@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/lib/supabase/database.types";
-import type { ContentSource } from "./types";
+import type { ContentSource, PublishRun } from "./types";
 
 type Admin = SupabaseClient<Database>;
 
@@ -18,6 +18,10 @@ export type SitePagePublishWrite =
  * id of the copy is used by another page's live copy (HL014, under the site's lock). It
  * writes that entry and its revision and nothing else: no other entry, not `pages`, not a version.
  * It lives here because only the content writer calls the functions that write entries.
+ *
+ * `fire` (Wave E): a claimed schedule's validated copy goes live through `fire_scheduled_publish`
+ * instead, which takes the same locks, marks the schedule done in the same transaction and calls
+ * `publish_site_page` at the entry's current rev with the scheduled time and source `system`.
  */
 export async function publishSitePageWithClient(
   admin: Admin,
@@ -29,17 +33,42 @@ export async function publishSitePageWithClient(
     published: unknown;
     publishedAt: string;
     source: ContentSource;
+    fire?: Extract<PublishRun, { kind: "fire" }>;
+    /** Schedule (Wave E): the same write in `publish_dry_run`, rolled back; the same refusals. */
+    dryRun?: boolean;
   },
 ): Promise<SitePagePublishWrite> {
-  const { data, error } = await admin.rpc("publish_site_page", {
-    p_site_id: input.siteId,
-    p_owner_id: input.ownerId,
-    p_entry_id: input.entryId,
-    p_expected_rev: input.expectedRev,
-    p_published: input.published as Json,
-    p_published_at: input.publishedAt,
-    p_source: input.source,
-  });
+  if (input.dryRun) {
+    const dry = await admin.rpc("publish_dry_run", {
+      p_entry_id: input.entryId,
+      p_owner_id: input.ownerId,
+      p_expected_rev: input.expectedRev,
+      p_published: input.published as Json,
+    });
+    return dry.error
+      ? {
+          ok: false,
+          code: dry.error.code ?? null,
+          message: dry.error.message ?? null,
+          detail: dry.error.details ?? null,
+        }
+      : { ok: true, rev: input.expectedRev, publishedAt: input.publishedAt, unchanged: false };
+  }
+  const { data, error } = input.fire
+    ? await admin.rpc("fire_scheduled_publish", {
+        p_id: input.fire.scheduleId,
+        p_claim: input.fire.claim,
+        p_published: input.published as Json,
+      })
+    : await admin.rpc("publish_site_page", {
+        p_site_id: input.siteId,
+        p_owner_id: input.ownerId,
+        p_entry_id: input.entryId,
+        p_expected_rev: input.expectedRev,
+        p_published: input.published as Json,
+        p_published_at: input.publishedAt,
+        p_source: input.source,
+      });
   if (error) {
     return {
       ok: false,

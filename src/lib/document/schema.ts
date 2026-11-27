@@ -10,6 +10,7 @@ import { IMAGE_SHAPES, IMAGE_SHAPE_MESSAGE, focusSchema, type Focus } from "./fo
 import { BLOCK_ID_PATTERN } from "./ids";
 import { FORM_KINDS, FORM_KIND_MESSAGE } from "./form";
 import { LIMITS, codePointLength } from "./limits";
+import { SCHEDULE_MESSAGES, scheduleInstant } from "./schedule";
 import { linkUtmSchema, lockSchema, pageUtmSchema, redirectSchema } from "./link-fields";
 import {
   ALIGN_VALUES,
@@ -397,9 +398,37 @@ const draftBlockImageRef = imageRefSchema.extend({ focus: z.custom<Focus>().opti
  */
 const blockOverrides = z.object(blockOverridesSchema.shape);
 
+/**
+ * A block's time window (M20-02), on every block type: two optional UTC instants. A draft keeps any
+ * short string in either (the editor writes the canonical form; a half-typed or foreign value waits
+ * for Publish); Publish wants each set time canonical (`YYYY-MM-DDTHH:MM:00Z`, a real instant) and
+ * `from` before `until`. Top-level blocks only: icons, cells and items follow their block.
+ */
+function scheduleSchema(mode: Mode) {
+  if (mode !== "publish") {
+    const time = z.string().max(40).optional();
+    return z.object({ from: time, until: time });
+  }
+  const time = z
+    .string()
+    .refine((value) => scheduleInstant(value) !== null, { error: SCHEDULE_MESSAGES.time })
+    .optional();
+  return z.object({ from: time, until: time }).superRefine((value, ctx) => {
+    const from = scheduleInstant(value.from);
+    const until = scheduleInstant(value.until);
+    if (from !== null && until !== null && from >= until) {
+      ctx.addIssue({ code: "custom", path: ["until"], message: SCHEDULE_MESSAGES.order });
+    }
+  });
+}
+
 function buildBlocks(mode: Mode) {
   const publish = mode === "publish";
-  const common = { id: idSchema, visible: z.boolean().default(true) };
+  const common = {
+    id: idSchema,
+    visible: z.boolean().default(true),
+    schedule: scheduleSchema(mode).optional(),
+  };
 
   const link = z.object({
     ...common,

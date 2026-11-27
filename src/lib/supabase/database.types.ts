@@ -182,6 +182,7 @@ export type Database = {
           id: string
           live_path: string | null
           live_slug: string | null
+          next_boundary_at: string | null
           published: Json | null
           published_at: string | null
           rev: number
@@ -198,6 +199,7 @@ export type Database = {
           id?: string
           live_path?: string | null
           live_slug?: string | null
+          next_boundary_at?: string | null
           published?: Json | null
           published_at?: string | null
           rev?: number
@@ -214,6 +216,7 @@ export type Database = {
           id?: string
           live_path?: string | null
           live_slug?: string | null
+          next_boundary_at?: string | null
           published?: Json | null
           published_at?: string | null
           rev?: number
@@ -313,6 +316,84 @@ export type Database = {
             columns: ["term_id"]
             isOneToOne: false
             referencedRelation: "content_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_schedules: {
+        Row: {
+          action: string
+          attempts: number
+          claim: string | null
+          created_at: string
+          created_by: string
+          entry_id: string
+          finished_at: string | null
+          fired_from_rev: number | null
+          fired_rev: number | null
+          id: string
+          locked_until: string | null
+          result_code: string | null
+          run_at: string
+          scheduled_rev: number | null
+          site_id: string
+          snapshot: Json | null
+          source: string
+          status: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          claim?: string | null
+          created_at?: string
+          created_by: string
+          entry_id: string
+          finished_at?: string | null
+          fired_from_rev?: number | null
+          fired_rev?: number | null
+          id?: string
+          locked_until?: string | null
+          result_code?: string | null
+          run_at: string
+          scheduled_rev?: number | null
+          site_id: string
+          snapshot?: Json | null
+          source: string
+          status?: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          claim?: string | null
+          created_at?: string
+          created_by?: string
+          entry_id?: string
+          finished_at?: string | null
+          fired_from_rev?: number | null
+          fired_rev?: number | null
+          id?: string
+          locked_until?: string | null
+          result_code?: string | null
+          run_at?: string
+          scheduled_rev?: number | null
+          site_id?: string
+          snapshot?: Json | null
+          source?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_schedules_entry_site_fkey"
+            columns: ["entry_id", "site_id"]
+            isOneToOne: false
+            referencedRelation: "content_entries"
+            referencedColumns: ["id", "site_id"]
+          },
+          {
+            foreignKeyName: "content_schedules_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
             referencedColumns: ["id"]
           },
         ]
@@ -1167,6 +1248,7 @@ export type Database = {
           owner_id: string
           published: Json | null
           published_at: string | null
+          schedule_clock: string | null
           updated_at: string
         }
         Insert: {
@@ -1178,6 +1260,7 @@ export type Database = {
           owner_id: string
           published?: Json | null
           published_at?: string | null
+          schedule_clock?: string | null
           updated_at?: string
         }
         Update: {
@@ -1189,6 +1272,7 @@ export type Database = {
           owner_id?: string
           published?: Json | null
           published_at?: string | null
+          schedule_clock?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1773,6 +1857,7 @@ export type Database = {
         Args: { p_client_id: string }
         Returns: string
       }
+      advance_block_boundaries: { Args: { p_sites: string[] }; Returns: number }
       apply_subscription_state: {
         Args: {
           p_account_id: string
@@ -1797,6 +1882,19 @@ export type Database = {
       }
       blocklist_pct_decode: { Args: { p_text: string }; Returns: string }
       blocklist_url_host: { Args: { p_url: string }; Returns: string }
+      cancel_pending_schedules: {
+        Args: { p_action: string; p_code: string; p_entry_id: string }
+        Returns: number
+      }
+      cancel_schedule: {
+        Args: {
+          p_action: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+        }
+        Returns: number
+      }
       charge_account_bytes: {
         Args: { p_delta: number; p_owner: string }
         Returns: undefined
@@ -1806,6 +1904,23 @@ export type Database = {
         Returns: boolean
       }
       claim_domain_live_email: { Args: { p_id: string }; Returns: boolean }
+      claim_due_schedules: {
+        Args: { p_lease?: string; p_limit?: number }
+        Returns: {
+          action: string
+          attempts: number
+          claim: string
+          created_by: string
+          entry_id: string
+          id: string
+          owner_id: string
+          run_at: string
+          site_id: string
+          snapshot: Json
+          type_id: string
+          type_key: string
+        }[]
+      }
       claim_site_path: {
         Args: {
           p_entry: string
@@ -1822,11 +1937,33 @@ export type Database = {
         Args: { p_entry_id: string; p_owner_id: string; p_site_id: string }
         Returns: string
       }
+      due_block_boundaries: { Args: { p_limit?: number }; Returns: string[] }
       end_expired_gifts: {
         Args: never
         Returns: {
           account_id: string
         }[]
+      }
+      entry_next_boundary: {
+        Args: { p_after: string; p_published: Json }
+        Returns: string
+      }
+      finish_schedule: {
+        Args: {
+          p_claim: string
+          p_code: string
+          p_failed: boolean
+          p_id: string
+        }
+        Returns: string
+      }
+      fire_scheduled_publish: {
+        Args: { p_claim: string; p_id: string; p_published: Json }
+        Returns: Json
+      }
+      fire_scheduled_unpublish: {
+        Args: { p_claim: string; p_id: string }
+        Returns: Json
       }
       flag_high_traffic_pages: { Args: { threshold?: number }; Returns: number }
       form_month_stored: {
@@ -1865,6 +2002,35 @@ export type Database = {
           slug: string
           taxonomy: string
         }[]
+      }
+      lock_claimed_schedule: {
+        Args: { p_action: string; p_claim: string; p_id: string }
+        Returns: {
+          action: string
+          attempts: number
+          claim: string | null
+          created_at: string
+          created_by: string
+          entry_id: string
+          finished_at: string | null
+          fired_from_rev: number | null
+          fired_rev: number | null
+          id: string
+          locked_until: string | null
+          result_code: string | null
+          run_at: string
+          scheduled_rev: number | null
+          site_id: string
+          snapshot: Json | null
+          source: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "content_schedules"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       mark_domain_verified: { Args: { p_id: string }; Returns: boolean }
       media_image_paths: { Args: { p_doc: Json }; Returns: string[] }
@@ -2030,6 +2196,9 @@ export type Database = {
           pages_per_site: number
           redirect_mode: boolean
           revisions_kept: number
+          scheduled_per_account: number
+          scheduled_per_site: number
+          scheduling: boolean
           versions_kept: number
         }[]
       }
@@ -2042,6 +2211,15 @@ export type Database = {
           p_published_at?: string
         }
         Returns: string
+      }
+      publish_dry_run: {
+        Args: {
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_published: Json
+        }
+        Returns: undefined
       }
       publish_entry: {
         Args: {
@@ -2136,6 +2314,10 @@ export type Database = {
           status: string
         }[]
       }
+      release_schedule_claim: {
+        Args: { p_claim: string; p_id: string }
+        Returns: boolean
+      }
       report_rate_limit_hit: {
         Args: { p_keys: string[]; p_limit: number; p_window_seconds: number }
         Returns: Json
@@ -2155,6 +2337,18 @@ export type Database = {
       run_domain_verification_sweep: { Args: never; Returns: undefined }
       run_gift_expiry_sweep: { Args: never; Returns: undefined }
       run_nightly_maintenance: { Args: never; Returns: undefined }
+      run_schedule_sweep: { Args: never; Returns: undefined }
+      schedule_entry: {
+        Args: {
+          p_action: string
+          p_entry_id: string
+          p_expected_rev: number
+          p_owner_id: string
+          p_run_at: string
+          p_source?: string
+        }
+        Returns: string
+      }
       site_click_pairs: {
         Args: { p_page_id: string }
         Returns: {

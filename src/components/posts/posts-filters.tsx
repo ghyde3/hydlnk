@@ -5,6 +5,7 @@ import { controlClass } from "@/components/blocks/field";
 import type { TermSummary } from "@/lib/content/schemas/summaries";
 import { POSTS_TEST_IDS } from "@/lib/blog/test-ids";
 import { POST_FILTERS } from "@/lib/posts/status";
+import { SCHEDULE_TEST_IDS } from "@/lib/schedule/test-ids";
 
 /**
  * The Posts list's filters (M16-12): status, category, a title search and the sort. They only choose
@@ -64,7 +65,13 @@ export function PostsFilters({
           className={controlClass(false)}
         >
           {POST_FILTERS.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option
+              key={option.value}
+              value={option.value}
+              {...(option.value === "scheduled"
+                ? { "data-testid": SCHEDULE_TEST_IDS.postsFilterScheduled }
+                : {})}
+            >
               {option.label}
             </option>
           ))}

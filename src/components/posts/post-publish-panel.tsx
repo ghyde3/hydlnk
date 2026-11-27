@@ -6,7 +6,7 @@ import { POST_TEST_IDS } from "@/lib/blog/test-ids";
 import type { FieldIssue } from "@/lib/posts/client";
 import { POST_FIELD_LABEL, fieldOfIssue, postFieldId } from "@/lib/posts/draft";
 import type { PostSaveView } from "@/lib/posts/save-queue";
-import type { PostState } from "@/lib/posts/status";
+import type { PostState, PublishedState } from "@/lib/posts/status";
 import { PostChip } from "./post-chip";
 
 /**
@@ -33,6 +33,7 @@ export type PostBusy =
 
 export function PostPublishPanel({
   state,
+  chipState,
   save,
   busy,
   disabled,
@@ -42,7 +43,9 @@ export function PostPublishPanel({
   onUnpublish,
   onPreview,
 }: {
-  state: PostState;
+  state: PublishedState;
+  /** The chip's word, when a schedule changes it (Scheduled, Didn't publish); else `state`. */
+  chipState?: PostState;
   save: PostSaveView;
   busy: PostBusy;
   /** Nothing can be done (the account is suspended, or the post changed somewhere else). */
@@ -71,7 +74,7 @@ export function PostPublishPanel({
         >
           All posts
         </Link>
-        <PostChip state={state} live />
+        <PostChip state={chipState ?? state} live />
         <span
           data-testid={POST_TEST_IDS.saveState}
           data-save-state={save.state}

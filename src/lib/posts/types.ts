@@ -5,6 +5,8 @@
  * type in a module of its own, so the browser side (`client.ts`, the post editor) can name it
  * without importing the routes' server module, which reaches the writer and the secret-key client.
  */
+import type { EntryScheduleSummary } from "@/lib/content/schemas/summaries";
+
 export interface PostEntry {
   id: string;
   rev: number;
@@ -17,4 +19,6 @@ export interface PostEntry {
   firstPublishedAt: string | null;
   updatedAt: string;
   deletedAt: string | null;
+  /** Its pending schedules and the newest failure (Wave E, M20-10). */
+  schedule: EntryScheduleSummary;
 }

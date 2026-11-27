@@ -10,6 +10,9 @@ const COLORS: Record<PostState, { chip: string; dot: string }> = {
   live: CHIP_COLORS.live,
   changes: CHIP_COLORS.changed,
   trashed: { chip: "bg-track text-text-2", dot: "bg-bad" },
+  // Wave E (M20-10): Scheduled is the neutral chip with an ink dot; Didn't publish the alarm red.
+  scheduled: { chip: "bg-track text-ink", dot: "bg-ink" },
+  failed: { chip: "bg-track text-bad", dot: "bg-bad" },
 };
 
 export function PostChip({ state, live = false }: { state: PostState; live?: boolean }) {

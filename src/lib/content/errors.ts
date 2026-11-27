@@ -1,6 +1,6 @@
 import { readBlockedLinkError } from "@/lib/blocklist/error";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
-import { TERM_LIMIT_MESSAGE } from "@/lib/limits/messages";
+import { SCHEDULING_PLAN_MESSAGE, TERM_LIMIT_MESSAGE } from "@/lib/limits/messages";
 import type { ContentErrorCode, ContentFailure } from "./types";
 
 export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
@@ -19,6 +19,9 @@ export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
   slug_taken: 409,
   slug_reserved: 409,
   too_large: 413,
+  schedule_plan: 403,
+  schedule_limit: 403,
+  schedule_time: 400,
   error: 500,
 };
 
@@ -39,6 +42,9 @@ export const CONTENT_MESSAGES: Record<ContentErrorCode, string> = {
   slug_taken: "Another entry of this type already uses that slug.",
   slug_reserved: "That address is reserved. Try another.",
   too_large: "That is too large to save. Shorten it and try again.",
+  schedule_plan: SCHEDULING_PLAN_MESSAGE,
+  schedule_limit: "This site has as many scheduled changes as its plan allows. Cancel one first.",
+  schedule_time: "Choose a time at least a minute from now and within a year.",
   error: "Something went wrong. Try again.",
 };
 
@@ -61,6 +67,8 @@ const BY_CODE: Record<string, ContentErrorCode> = {
   HL010: "entry_limit",
   HL011: "type_limit",
   HL015: "term_limit",
+  HL017: "schedule_plan",
+  HL018: "schedule_limit",
   HL008: "page_limit",
   HL005: "blocked_link",
   HL012: "path_taken",

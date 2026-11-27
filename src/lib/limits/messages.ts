@@ -82,6 +82,25 @@ export function planBlurb(plan: PlanId): string {
 /** Why a Free account cannot publish redirect mode (M9-31): the sentence the Publish gate and the Share tab use. */
 export const REDIRECT_MODE_MESSAGE = "Redirect mode is part of Pro. Upgrade to use it.";
 
+/**
+ * Why a Free account cannot schedule (Wave E, M20-11, HL017): the block Schedule section, the
+ * schedule dialog and a Publish refused for a copy that still holds a block time.
+ */
+export const SCHEDULING_PLAN_MESSAGE =
+  "Scheduling is part of Pro. Upgrade to schedule, or remove the block times to publish.";
+
+/**
+ * HL018 (M20-11): a site holds `scheduledPerSite` pending schedules already, or the account holds
+ * `scheduledPerAccount` across its sites.
+ */
+export function scheduleLimitMessage(plan: PlanId, scope: "site" | "account" = "site"): string {
+  const limits = PLAN_LIMITS[plan];
+  if (scope === "account") {
+    return `Your sites already have ${limits.scheduledPerAccount.toLocaleString("en-US")} scheduled changes, the most ${PLAN_LABELS[plan]} allows. Cancel one or let one run first.`;
+  }
+  return `This site already has ${limits.scheduledPerSite.toLocaleString("en-US")} scheduled changes, the most ${PLAN_LABELS[plan]} allows. Cancel one or let one run first.`;
+}
+
 const grouped = (count: number) => count.toLocaleString("en-US");
 const postNoun = (count: number) => (count === 1 ? "post" : "posts");
 

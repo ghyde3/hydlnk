@@ -99,7 +99,8 @@ export interface IngestDeps {
   insertEvent: (row: EventRow) => Promise<void>;
   lookupBeaconPage: (pageId: string) => Promise<BeaconPage | null>;
   /** The link (block, icon or cell) in the page's published document with the hosts that serve it, or null. */
-  resolveClickTarget: (pageId: string, id: string) => Promise<ClickTarget | null>;
+  /** `now`: the server clock (never the request's), for the link's time window (M20-05). */
+  resolveClickTarget: (pageId: string, id: string, now: number) => Promise<ClickTarget | null>;
   /**
    * Does `code` open this code lock (scrypt, constant-time compare)? Defaults to the real one
    * (`verifyLockCode`); the unit tests pass a spy to prove it runs only after the limiter.

@@ -21,7 +21,18 @@ import { useIsDesktop } from "@/components/editor/use-is-desktop";
 import { useUndoRedo } from "@/components/editor/use-undo-redo";
 import { useSitePages, type SiteArchive, type SubPageInit } from "@/components/site/use-site-pages";
 import { useThemeLibrary, useThemePreview } from "@/components/themes";
-import { toPublishForm, type DraftDoc, type PublishDoc, type PublishError } from "@/lib/document";
+import {
+  previewBlocks,
+  toPublishForm,
+  type DraftDoc,
+  type PublishDoc,
+  type PublishError,
+} from "@/lib/document";
+import { useMinuteClock } from "@/lib/schedule/use-minute-clock";
+import { firedRevToAdopt, nextFireOf } from "@/lib/schedule/adopt";
+import { useFireWatch } from "@/lib/schedule/use-fire-watch";
+import type { EntryScheduleSummary } from "@/lib/schedule/types";
+import { fetchSiteSchedules } from "@/lib/posts/client";
 import {
   publishDesign,
   publishPage,
@@ -272,7 +283,13 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     showPreview: () => {},
     showStyle: () => {},
   });
-  const shownForm = preview.form ?? form;
+  // The preview draws every block that has not ended (Wave E, M20-06): the owner is still editing
+  // the upcoming ones; an ended one is gone from the live page, so it is gone here too.
+  const minute = useMinuteClock();
+  const shownForm = useMemo(() => {
+    const shown = preview.form ?? form;
+    return { ...shown, blocks: previewBlocks(shown.blocks, minute) };
+  }, [preview.form, form, minute]);
 
   // Publish ---------------------------------------------------------------------------------------
   const [published, setPublished] = useState({
@@ -642,6 +659,83 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
     [flush, flushSite, homeEntryId, homeRev, siteRevisions, pageId],
   );
 
+  /**
+   * A schedule that fires while the workspace is open (Wave E, M20-10 step 3): the site's schedules are
+   * read on open, after a publish and after a Schedule; once a pending time has passed the shared
+   * watch reads them again, and every page that still holds the rev its fire found takes the rev the
+   * fire left (`firedRevToAdopt`: the draft is the server's), so its next save is no false conflict.
+   * Home's rev goes to Home's queue, a sub-page's to the sub-pages' queue (each adopts only while it
+   * still holds the rev sent, as after a publish).
+   */
+  const [siteSchedules, setSiteSchedules] = useState<Record<string, EntryScheduleSummary>>({});
+  const takeSiteSchedules = useCallback(
+    (entries: Record<string, EntryScheduleSummary>) => {
+      setSiteSchedules(entries);
+      const revs = siteRevisions();
+      for (const [entryId, summary] of Object.entries(entries)) {
+        const isHome = entryId === homeEntryId;
+        const held = isHome ? homeRev() : revs[entryId];
+        const rev = firedRevToAdopt(held, summary.fired);
+        if (rev === null || held === null || held === undefined) continue;
+        if (isHome) adoptHomeRev(rev, held);
+        else markSitePagePublished(entryId, { rev, sent: held, form: undefined });
+      }
+    },
+    [homeEntryId, homeRev, siteRevisions, adoptHomeRev, markSitePagePublished],
+  );
+  const readSiteSchedules = useCallback(async () => {
+    const out = await fetchSiteSchedules(pageId);
+    if (out.kind === "ok") takeSiteSchedules(out.entries);
+  }, [pageId, takeSiteSchedules]);
+  useEffect(() => {
+    let current = true;
+    void fetchSiteSchedules(pageId).then((out) => {
+      if (current && out.kind === "ok") takeSiteSchedules(out.entries);
+    });
+    return () => {
+      current = false;
+    };
+  }, [pageId, takeSiteSchedules, publishedToken]);
+  useFireWatch(nextFireOf(Object.values(siteSchedules)), readSiteSchedules);
+
+  /**
+   * Schedule or cancel for one page (Wave E, M20-07): Home ("home") or a sub-page. Both queues write
+   * first (the schedule snapshots the stored draft, at the rev this tab holds), then `send` runs with
+   * the page's entry id and that rev. Scheduling changes no rev and nothing live. Null when the page's
+   * rev is not known here (its first save has not answered).
+   */
+  const schedulePage = useCallback(
+    async <T,>(
+      id: string,
+      send: (entryId: string, rev: number) => Promise<T>,
+    ): Promise<{ ok: true; value: T } | { ok: false; message: string }> => {
+      await publishInFlight.current;
+      const stored = (await flush()) && (await flushSite());
+      if (!stored) {
+        return {
+          ok: false,
+          message: "Your latest changes aren’t saved yet, so nothing was scheduled.",
+        };
+      }
+      const isHome = id === HOME_PAGE_ID;
+      const entryId = isHome ? homeEntryId : id;
+      const held = isHome ? homeRev() : siteRevisions()[id];
+      if (entryId === null || held === null || held === undefined) {
+        return { ok: false, message: PUBLISH_CONFLICT_MESSAGE };
+      }
+      const value = await send(entryId, held);
+      // The open workspace watches the new time for its fire (below).
+      void readSiteSchedules();
+      return { ok: true, value };
+    },
+    [flush, flushSite, homeEntryId, homeRev, siteRevisions, readSiteSchedules],
+  );
+  /** The rev this tab holds for a page's entry, or null. */
+  const pageRev = useCallback(
+    (id: string): number | null => (id === HOME_PAGE_ID ? homeRev() : siteRevisions()[id]) ?? null,
+    [homeRev, siteRevisions],
+  );
+
   // Unpublish (M14-02): the site goes back to its placeholder, the draft stays. Nothing here
   // flushes: the draft is untouched by it, so edits in flight keep saving as they do.
   const [unpublishing, setUnpublishing] = useState(false);
@@ -788,6 +882,8 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       publishDesignOnly,
       retryPublish,
       restoreRevision,
+      schedulePage,
+      pageRev,
       homeEntryId,
       unpublish,
       unpublishing,
@@ -844,6 +940,8 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       publishDesignOnly,
       retryPublish,
       restoreRevision,
+      schedulePage,
+      pageRev,
       homeEntryId,
       unpublish,
       unpublishing,

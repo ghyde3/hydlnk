@@ -8,7 +8,7 @@ import {
 } from "@/lib/document";
 import { normalizeRequestHost } from "@/lib/analytics/ingest/host";
 import { clientEnv } from "@/lib/env/client";
-import { REDIRECT_MODE_MESSAGE, toPlanId, PLAN_LIMITS } from "@/lib/limits";
+import { REDIRECT_MODE_MESSAGE, SCHEDULING_PLAN_MESSAGE, toPlanId, PLAN_LIMITS } from "@/lib/limits";
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
@@ -43,6 +43,27 @@ export function misplacedLockErrors(raw: unknown): PublishError[] {
     });
   }
   return errors;
+}
+
+/**
+ * One error per block of a publish form that carries a time window (M20-11), for a refusal with
+ * HL017: the database refuses a copy with windows on a plan without scheduling (the
+ * `enforce_entry_schedule` trigger is the authority, whatever the client sends); this names the
+ * blocks the owner has to change.
+ */
+export function scheduledBlockErrors(doc: {
+  blocks: ReadonlyArray<{ id: string; schedule?: unknown }>;
+}): PublishError[] {
+  return doc.blocks
+    .filter((block) => isRecord(block.schedule))
+    .map((block) => ({ blockId: block.id, field: "schedule", message: SCHEDULING_PLAN_MESSAGE }));
+}
+
+/** The errors of an HL017 refusal: the named blocks, or the plain notice when none can be named. */
+export function schedulePlanErrors(named: PublishError[]): PublishError[] {
+  return named.length > 0
+    ? named
+    : [{ blockId: null, field: "document", message: SCHEDULING_PLAN_MESSAGE }];
 }
 
 /** The hostnames the page answers on: its handle host and its verified custom domains. */

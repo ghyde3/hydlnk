@@ -118,14 +118,23 @@ export async function lookupBeaconPage(
  * A click reads the core, one shard and, for a sub-page block, that page's document.
  */
 type CoreRead =
-  | { found: true; handle: string; customHosts: string[]; home: unknown; plan: PlanId }
+  | {
+      found: true;
+      handle: string;
+      customHosts: string[];
+      home: unknown;
+      plan: PlanId;
+      clock?: string | null;
+    }
   | { found: false };
 
 async function readCore(pageId: string): Promise<CoreRead> {
   const admin = createAdminSupabase();
   const { data, error } = await admin
     .from("pages")
-    .select("published, handle, accounts!inner(suspended_at, plan), domains(hostname, status)")
+    .select(
+      "published, handle, schedule_clock, accounts!inner(suspended_at, plan), domains(hostname, status)",
+    )
     .eq("id", pageId)
     .maybeSingle();
   // A database failure is an error, not a "not found": nobody should be told a link is gone
@@ -141,6 +150,7 @@ async function readCore(pageId: string): Promise<CoreRead> {
   return {
     found: true,
     home,
+    clock: data.schedule_clock ?? null,
     handle: data.handle,
     plan: toPlanId(data.accounts.plan),
     customHosts: (data.domains ?? [])
@@ -267,6 +277,7 @@ async function readPublishedCached(
     customHosts: core.customHosts,
     plan: core.plan,
     home: core.home,
+    clock: core.clock ?? null,
     subPages,
     index: owner === null ? {} : { [blockId]: owner },
   };
@@ -279,10 +290,14 @@ async function readPublishedCached(
  * unknown site, nothing published, suspended owner, a document that fails the published schema, an id
  * that is not a link, or a URL that is not plain http(s).
  */
-export async function resolveClickTarget(pageId: string, id: string): Promise<ClickTarget | null> {
+export async function resolveClickTarget(
+  pageId: string,
+  id: string,
+  now: number = Date.now(),
+): Promise<ClickTarget | null> {
   const read = await readPublishedCached(pageId, id);
   if (!read.found) return null;
-  const holder = documentForBlock(read, id);
+  const holder = documentForBlock(read, id, now);
   if (!holder) return null;
   const link = resolveLink(holder.doc, id);
   return link === null
@@ -307,10 +322,11 @@ export async function resolveClickTarget(pageId: string, id: string): Promise<Cl
 export async function resolveContactCard(
   pageId: string,
   blockId: string,
+  now: number = Date.now(),
 ): Promise<ContactCard | null> {
   const read = await readPublishedCached(pageId, blockId);
   if (!read.found) return null;
-  const holder = documentForBlock(read, blockId);
+  const holder = documentForBlock(read, blockId, now);
   if (!holder) return null;
   const block = holder.doc.blocks.find(
     (candidate) => candidate.id === blockId && candidate.type === "contact",
@@ -342,10 +358,11 @@ export async function resolveContactCard(
 export async function resolveFormBlock(
   pageId: string,
   blockId: string,
+  now: number = Date.now(),
 ): Promise<FormTarget | null> {
   const read = await readPublishedCached(pageId, blockId, { cacheMisses: false });
   if (!read.found) return null;
-  const holder = documentForBlock(read, blockId);
+  const holder = documentForBlock(read, blockId, now);
   if (!holder) return null;
   const block = holder.doc.blocks.find((candidate) => candidate.id === blockId);
   if (!block || block.type !== "form" || block.visible === false) return null;

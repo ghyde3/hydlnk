@@ -11,6 +11,7 @@ export type {
   ContentFailure,
   ContentResult,
   ContentSource,
+  PublishRun,
 } from "./types";
 
 /**
@@ -21,6 +22,14 @@ export { createEntryWithClient, updateEntryWithClient } from "./entries-core";
 export { purgeEntryWithClient, restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
 export { listRevisionsWithClient, restoreRevisionWithClient } from "./revisions-core";
 export type { RevisionSummary } from "./revisions-core";
+/** Scheduling (Wave E), for callers that hold their own client (the worker, tests). */
+export {
+  cancelScheduleWithClient,
+  listSchedulesWithClient,
+  scheduleEntryWithClient,
+} from "./schedule-core";
+export type { ScheduleFailure, ScheduleResult } from "./schedule-core";
+export { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 /** Publish page (M15-10): the one call of `publish_site_page`, for the Publish gate. */
 export { publishSitePageWithClient } from "./site-page-publish-core";
 export type { SitePagePublishWrite } from "./site-page-publish-core";
@@ -32,6 +41,12 @@ import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } fro
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
 import type { EntryPlace } from "./publish-core";
 import { restoreEntryWithClient, trashEntryWithClient } from "./trash-core";
+import {
+  cancelScheduleWithClient,
+  listSchedulesWithClient,
+  scheduleEntryWithClient,
+  siteScheduleSummariesWithClient,
+} from "./schedule-core";
 import {
   createTermWithClient,
   deleteTermWithClient,
@@ -71,7 +86,7 @@ type EntryWrite = { actor: ContentActor; entryId: string; expectedRev: number };
  * The write already stands: a failure is tried once more at once, then logged, and the answer is
  * false so the caller can say the live copy may take a moment (`cacheStale`) and offer a retry.
  */
-function expireEntry(entryId: string, place: EntryPlace): boolean {
+export function expireEntry(entryId: string, place: EntryPlace): boolean {
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       if (place.typeKey === "page") invalidatePage(place.siteId);
@@ -126,6 +141,32 @@ export async function trashEntry(input: EntryWrite) {
 export async function restoreEntry(input: EntryWrite) {
   const out = await restoreEntryWithClient(createAdminSupabase(), input);
   return out.ok ? expired(input.entryId, out) : out;
+}
+
+/**
+ * Schedule a publish (the draft at `expectedRev`, checked now as Publish would) or an unpublish
+ * (Wave E). Nothing live changes, so nothing expires.
+ */
+export function scheduleEntry(
+  input: Parameters<typeof scheduleEntryWithClient>[1],
+  deps?: Parameters<typeof scheduleEntryWithClient>[2],
+) {
+  return scheduleEntryWithClient(createAdminSupabase(), input, deps);
+}
+
+/** Cancel an entry's pending scheduled publish or unpublish at `expectedRev`. */
+export function cancelSchedule(input: Parameters<typeof cancelScheduleWithClient>[1]) {
+  return cancelScheduleWithClient(createAdminSupabase(), input);
+}
+
+/** The site's entries that have a pending or a failed schedule, with their summaries (the publish bar). */
+export function listSiteSchedules(input: Parameters<typeof siteScheduleSummariesWithClient>[1]) {
+  return siteScheduleSummariesWithClient(createAdminSupabase(), input);
+}
+
+/** An entry's pending schedules and the newest finished one of each action. */
+export function listSchedules(input: Parameters<typeof listSchedulesWithClient>[1]) {
+  return listSchedulesWithClient(createAdminSupabase(), input);
 }
 
 /**

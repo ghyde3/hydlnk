@@ -56,7 +56,8 @@ export type VcardDeps = Pick<
   "rateLimit" | "now" | "visitorHash" | "insertEvent" | "schedule" | "rootDomain"
 > & {
   /** The visible contact block `blockId` of the page's published document, or null. */
-  resolveContactCard: (pageId: string, blockId: string) => Promise<ContactCard | null>;
+  /** `now`: the request's instant (the server clock, never the request), for the block's time window (M20-05). */
+  resolveContactCard: (pageId: string, blockId: string, now: number) => Promise<ContactCard | null>;
   homeHref: string;
 };
 
@@ -127,7 +128,7 @@ export async function handleVcard(
   const pageId = params.pageId.toLowerCase();
   let card: ContactCard | null;
   try {
-    card = await deps.resolveContactCard(pageId, params.blockId);
+    card = await deps.resolveContactCard(pageId, params.blockId, deps.now().getTime());
   } catch (error) {
     console.error("[vcard] loading the contact block failed:", errorMessage(error));
     return notice(

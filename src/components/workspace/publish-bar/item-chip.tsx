@@ -1,4 +1,5 @@
 import { ITEM_STATE_LABEL, type ItemPublishState } from "@/lib/publish/status";
+import type { RowChipState } from "./rows";
 
 /**
  * The one chip of the publish bar: 4px radius, 12px/500 on a 16px line, 8px side and 4px top and
@@ -19,13 +20,22 @@ export const CHIP_COLORS: Record<ItemPublishState, { chip: string; dot: string }
   live: { chip: "bg-good-bg text-good-text", dot: "bg-good" },
 };
 
-/** One item's state in the publish bar: "Live", "Unpublished changes" or "Draft", with a 6px dot. */
-export function ItemChip({ state }: { state: ItemPublishState }) {
-  const colors = CHIP_COLORS[state];
+/** Wave E (M20-10): Scheduled (neutral, an ink dot) and Didn't publish (red text), the posts' pair. */
+const SCHEDULE_CHIPS: Record<"scheduled" | "failed", { chip: string; dot: string; label: string }> = {
+  scheduled: { chip: "bg-track text-ink", dot: "bg-ink", label: "Scheduled" },
+  failed: { chip: "bg-track text-bad", dot: "bg-bad", label: "Didn’t publish" },
+};
+
+/** One item's state in the publish bar: "Live", "Unpublished changes", "Draft", "Scheduled" or "Didn't publish", with a 6px dot. */
+export function ItemChip({ state }: { state: RowChipState }) {
+  const colors =
+    state === "scheduled" || state === "failed" ? SCHEDULE_CHIPS[state] : CHIP_COLORS[state];
+  const label =
+    state === "scheduled" || state === "failed" ? SCHEDULE_CHIPS[state].label : ITEM_STATE_LABEL[state];
   return (
     <span data-item-state={state} className={`${CHIP} ${colors.chip}`}>
       <span aria-hidden="true" className={`inline-block size-1.5 rounded-full ${colors.dot}`} />
-      {ITEM_STATE_LABEL[state]}
+      {label}
     </span>
   );
 }

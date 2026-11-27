@@ -1,6 +1,6 @@
 /**
  * The plan limits, in one table (M4-02). Postgres holds the same numbers in `public.plan_limits(p_plan)`
- * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql and 20261011000001_site_pages.sql and 20261014000003_content_limits.sql and 20261126162408_form_submissions.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
+ * (migrations 20261002100003_plan_limits_v2.sql, 20261006000002_page_versions.sql and 20261009000031_redirect_mode.sql and 20261011000001_site_pages.sql and 20261014000003_content_limits.sql and 20261126162408_form_submissions.sql and 20261126185204_form_submissions_stored_cap.sql and 20261126193000_scheduling.sql and 20261126210000_scheduling_review_fixes.sql, where the three BEFORE INSERT triggers and the page_versions policy read them);
  * tests/unit/limits-parity.test.ts calls that function for every plan and column and fails when the
  * two differ. Change a number here and in the migration (a new one) together.
  *
@@ -53,6 +53,18 @@ export interface PlanLimits {
    * today, well under the month, so a burst of junk cannot take the month in an hour.
    */
   formSubmissionsPerSiteDay: number;
+  /**
+   * Scheduling (Wave E, M20-11): block time windows and scheduled publish and unpublish. Enforced on
+   * write: `schedule_entry` and the published-copy trigger raise HL017 when false.
+   */
+  scheduling: boolean;
+  /** Pending schedules (publish and unpublish rows) a site may hold at once (HL018). */
+  scheduledPerSite: number;
+  /**
+   * Pending schedules an account may hold across all its sites (HL018, detail `account`): so a few
+   * large accounts cannot fill the worker's runs. Pro 100, Studio 1,000 (Wave E review; Gary to confirm).
+   */
+  scheduledPerAccount: number;
 }
 
 export type LimitKey = keyof PlanLimits;
@@ -74,6 +86,9 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     contentBytes: 67108864,
     formSubmissionsPerMonth: 100,
     formSubmissionsPerSiteDay: 20,
+    scheduling: false,
+    scheduledPerSite: 0,
+    scheduledPerAccount: 0,
   },
   pro: {
     pages: 3,
@@ -91,6 +106,9 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     contentBytes: 1073741824,
     formSubmissionsPerMonth: 5000,
     formSubmissionsPerSiteDay: 500,
+    scheduling: true,
+    scheduledPerSite: 50,
+    scheduledPerAccount: 100,
   },
   studio: {
     pages: 15,
@@ -108,6 +126,9 @@ export const PLAN_LIMITS: Readonly<Record<PlanId, Readonly<PlanLimits>>> = {
     contentBytes: 5368709120,
     formSubmissionsPerMonth: 50000,
     formSubmissionsPerSiteDay: 5000,
+    scheduling: true,
+    scheduledPerSite: 500,
+    scheduledPerAccount: 1000,
   },
 };
 
@@ -128,6 +149,9 @@ export const SQL_COLUMNS: Readonly<Record<LimitKey, string>> = {
   contentBytes: "content_bytes",
   formSubmissionsPerMonth: "form_submissions_per_month",
   formSubmissionsPerSiteDay: "form_submissions_per_site_day",
+  scheduling: "scheduling",
+  scheduledPerSite: "scheduled_per_site",
+  scheduledPerAccount: "scheduled_per_account",
 };
 
 export const PLAN_LABELS: Readonly<Record<PlanId, string>> = {

@@ -1,6 +1,6 @@
 import { PLAN_LIMITS, toPlanId } from "@/lib/limits/table";
 import { findLinkUrl } from "@/lib/analytics/ingest/target";
-import type { PublishDoc } from "@/lib/document";
+import { hasWindow, type PublishDoc } from "@/lib/document";
 
 /**
  * Redirect mode (M9-31): a published page whose document has `redirect: {linkId}`, owned by an
@@ -26,7 +26,10 @@ export function redirectTargetId(document: PublishDoc, plan: string): string | n
   // A downgraded account never redirects: the draft keeps the key, the live page shows the page.
   if (!PLAN_LIMITS[toPlanId(plan)].redirectMode) return null;
   const block = document.blocks.find((candidate) => candidate.id === redirect.linkId);
-  if (!block || block.type !== "link" || block.lock !== undefined) return null;
+  // A scheduled link is never the target (M20-02): one planted past Publish renders the page.
+  if (!block || block.type !== "link" || block.lock !== undefined || hasWindow(block.schedule)) {
+    return null;
+  }
   return findLinkUrl(document, block.id) === null ? null : block.id;
 }
 

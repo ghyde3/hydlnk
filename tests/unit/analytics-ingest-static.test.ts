@@ -206,8 +206,8 @@ describe("M4-20, M4-21, M4-22 static rules for the tracking routes", () => {
     const selects = [...source.matchAll(/\.select\(\s*"([^"]*)",?\s*\)/g)].map((m) => m[1]!);
     expect(selects).toEqual([
       "handle, accounts!inner(suspended_at), domains(hostname, status)",
-      // The owner's plan too (Wave D fixes): the form routes' per-site rate follows its daily cap.
-      "published, handle, accounts!inner(suspended_at, plan), domains(hostname, status)",
+      // Wave D fixes: the owner's plan; Wave E (M20-05): the site's schedule clock, in the click core.
+      "published, handle, schedule_clock, accounts!inner(suspended_at, plan), domains(hostname, status)",
       // Home's document only: a sub-page's block ids come from the site_click_pairs RPC (M11-12).
       "published, accounts!inner(suspended_at)",
     ]);

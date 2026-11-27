@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { TAB_BAR_TOP_CLASS } from "@/components/app/app-nav";
 import { HOME_PAGE_ID } from "@/lib/site-pages/pages";
+import { fetchSiteSchedules } from "@/lib/posts/client";
+import type { EntryScheduleSummary } from "@/lib/schedule/types";
+import { PageSchedule } from "./page-schedule";
 import { useWorkspace } from "../workspace-context";
 import { PageRevisions } from "./page-revisions";
 import { PublishBarView } from "./publish-bar-view";
@@ -34,6 +37,22 @@ export function PublishBar({
   const { site, publishState, publishingItem, pageId } = workspace;
   const panelRef = useRef<HTMLDivElement>(null);
   const [revisionsOf, setRevisionsOf] = useState<PublishRow | null>(null);
+  const [scheduleOf, setScheduleOf] = useState<PublishRow | null>(null);
+  // The site's pending and failed schedules (Wave E, M20-10), read when the bar opens and after a change.
+  const [schedules, setSchedules] = useState<Record<string, EntryScheduleSummary>>({});
+  const loadSchedules = useCallback(async () => {
+    const out = await fetchSiteSchedules(pageId);
+    if (out.kind === "ok") setSchedules(out.entries);
+  }, [pageId]);
+  useEffect(() => {
+    let current = true;
+    void fetchSiteSchedules(pageId).then((out) => {
+      if (current && out.kind === "ok") setSchedules(out.entries);
+    });
+    return () => {
+      current = false;
+    };
+  }, [pageId, workspace.publishedToken]);
 
   // Focus moves into the bar when it opens.
   useEffect(() => {
@@ -71,6 +90,8 @@ export function PublishBar({
     design: publishState.design,
     home: publishState.home,
     pages: publishState.pages,
+    schedules,
+    homeEntryId: workspace.homeEntryId,
   });
   const run = (action: Promise<boolean>) =>
     void action.then((ok) => {
@@ -93,7 +114,13 @@ export function PublishBar({
       tabIndex={-1}
       className={`fixed inset-x-0 ${TAB_BAR_TOP_CLASS} z-40 flex max-h-[min(70dvh,calc(100dvh-180px))] flex-col border-t border-line bg-surface text-ink outline-none hl:absolute hl:inset-x-auto hl:top-full hl:right-8 hl:bottom-auto hl:mt-1.5 hl:max-h-[calc(100dvh-160px)] hl:w-[380px] hl:rounded-md hl:border`}
     >
-      {revisionsOf !== null && revisionsEntry !== null ? (
+      {scheduleOf !== null ? (
+        <PageSchedule
+          row={rows.find((row) => row.key === scheduleOf.key) ?? scheduleOf}
+          onBack={() => setScheduleOf(null)}
+          onChanged={loadSchedules}
+        />
+      ) : revisionsOf !== null && revisionsEntry !== null ? (
         <PageRevisions
           siteId={pageId}
           entryId={revisionsEntry}
@@ -111,6 +138,7 @@ export function PublishBar({
           onPublishPage={(key) => run(workspace.publishPageById(key))}
           onPublishAll={() => run(workspace.publishAll())}
           onRevisions={setRevisionsOf}
+          onSchedule={setScheduleOf}
         />
       )}
     </div>

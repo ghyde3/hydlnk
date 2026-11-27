@@ -34,7 +34,7 @@ describe("M4-22 the click redirect", () => {
     expect(response.headers.get("location")).toBe("https://example.com/book");
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("set-cookie")).toBeNull();
-    expect(s.resolveClickTarget).toHaveBeenCalledWith(PAGE_ID, BLOCK_ID);
+    expect(s.resolveClickTarget).toHaveBeenCalledWith(PAGE_ID, BLOCK_ID, Date.parse("2026-10-03T12:00:00Z"));
   });
 
   it("is never a 301, 307 or 308", async () => {
@@ -92,7 +92,7 @@ describe("M4-22 the click redirect", () => {
   it("the uppercase form of the page id is looked up lower-case", async () => {
     const s = makeDeps();
     await handleClick(click(), { pageId: PAGE_ID.toUpperCase(), blockId: BLOCK_ID }, s.deps);
-    expect(s.resolveClickTarget).toHaveBeenCalledWith(PAGE_ID, BLOCK_ID);
+    expect(s.resolveClickTarget).toHaveBeenCalledWith(PAGE_ID, BLOCK_ID, Date.parse("2026-10-03T12:00:00Z"));
   });
 });
 
@@ -107,7 +107,7 @@ describe("M4-22 open redirect and unknown targets", () => {
     const s = makeDeps();
     const response = await handleClick(click({}, "GET", query), params, s.deps);
     expect(response.headers.get("location")).toBe("https://example.com/book");
-    expect(s.resolveClickTarget).toHaveBeenCalledWith(PAGE_ID, BLOCK_ID);
+    expect(s.resolveClickTarget).toHaveBeenCalledWith(PAGE_ID, BLOCK_ID, Date.parse("2026-10-03T12:00:00Z"));
   });
 
   it("X-Forwarded-Host and Referer never change Location or the host that is checked", async () => {

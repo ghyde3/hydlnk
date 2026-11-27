@@ -119,7 +119,8 @@ export interface FormDeps {
   visitorHash: (input: VisitorHashInput) => string;
   /** The token's HMAC key (the visitor-hash secret). */
   tokenSecret: () => string;
-  resolveFormBlock: (pageId: string, blockId: string) => Promise<FormTarget | null>;
+  /** `now`: the server clock, for the block's time window (M20-05). */
+  resolveFormBlock: (pageId: string, blockId: string, now: number) => Promise<FormTarget | null>;
   /** The handle and verified hosts of a published site, for the open marker's host check. */
   lookupSite: (pageId: string) => Promise<Pick<FormTarget, "handle" | "customHosts"> | null>;
   renderFormPage: (input: {
@@ -218,7 +219,7 @@ async function openForm(
   const pageId = params.pageId.toLowerCase();
   let target: FormTarget | null;
   try {
-    target = await deps.resolveFormBlock(pageId, params.blockId);
+    target = await deps.resolveFormBlock(pageId, params.blockId, deps.now().getTime());
   } catch (error) {
     console.error("[forms] loading the form failed:", logReason(error));
     return notice(503, FORM_NOTICES.unavailable, deps.homeHref, head);
