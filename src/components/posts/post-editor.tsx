@@ -107,6 +107,9 @@ export function PostEditor({
   terms: firstTerms,
 }: PostEditorProps) {
   const suspended = useAccountSuspended();
+  // A member's role, not a suspension: a suspended owner cannot publish either, and is told why with
+  // SUSPENDED_REASON (M5-09), never the member's sentence (Wave F, M19-10).
+  const memberCannotPublish = !canPublish && !suspended;
   const bodyLabelId = useId();
   const { view: save, queue } = usePostAutosave(siteId, entry.id, entry.rev);
 
@@ -419,7 +422,7 @@ export function PostEditor({
           busy={busy}
           disabled={suspended || conflict}
           publishOff={publishOff}
-          publishForbidden={canPublish ? null : PUBLISH_FORBIDDEN_MESSAGE}
+          publishForbidden={memberCannotPublish ? PUBLISH_FORBIDDEN_MESSAGE : null}
           previewUrl={previewUrl}
           onPublish={() => void run("publish")}
           onUnpublish={() => void run("unpublish")}
@@ -598,7 +601,7 @@ export function PostEditor({
               onRestore={restoreFrom}
             />
             {/* Trashing a live post takes it off the site: publish-class (G17). */}
-            {canPublish || meta.status !== "published" ? (
+            {!memberCannotPublish || meta.status !== "published" ? (
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
               <button
                 type="button"

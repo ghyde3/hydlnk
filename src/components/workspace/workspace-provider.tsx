@@ -795,11 +795,12 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
       ? null
       : publishNote;
 
-  // Wave F (M19-10): an editor sees why instead of a working Publish (the server refuses anyway).
-  const publishDisabledReason = !props.canPublish
-    ? PUBLISH_FORBIDDEN_MESSAGE
-    : suspended
-      ? SUSPENDED_REASON
+  // A suspension first (M5-09): a suspended owner cannot publish either, and is told why. Then, Wave F
+  // (M19-10): an editor sees why instead of a working Publish (the server refuses anyway).
+  const publishDisabledReason = suspended
+    ? SUSPENDED_REASON
+    : !props.canPublish
+      ? PUBLISH_FORBIDDEN_MESSAGE
       : blocked !== null
         ? BLOCKED_PUBLISH_DISABLED_REASON
         : null;
