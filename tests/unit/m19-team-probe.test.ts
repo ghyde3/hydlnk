@@ -112,6 +112,9 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
     expect((role.data as { role: string }[])[0]!.role).toBe("editor");
   });
 
+  /** Set by the steps 2, 3 probe: every write probe as `client`, touching nothing (also step 5's). */
+  let writeProbe: ((who: string, client: SupabaseClient) => Promise<void>) | null = null;
+
   it("M19-04 steps 2, 3: X, anon, E and P insert, update and delete nothing in entries, terms, paths, versions and themes", async () => {
     const S = f.owner.pageId;
     await enablePost(admin as never, S);
@@ -147,7 +150,7 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
     /** Rows a write touched: an error (no grant, a policy) touches none. */
     const touched = (res: { error: unknown; data: unknown[] | null }) => (res.error ? 0 : (res.data?.length ?? 0));
 
-    for (const [who, client] of [["stranger", asX], ["anon", anon], ["editor", asE], ["publisher", asP]] as const) {
+    writeProbe = async (who, client) => {
       const probes: Record<string, { error: unknown; data: unknown[] | null }> = {
         "entries insert": await client.from("content_entries").insert({ site_id: S, type_id: postType, draft: { title: "Planted" } }).select("id"),
         "entries update": await client.from("content_entries").update({ draft: { title: "Taken over" } }).eq("id", post.data!.id).select("id"),
@@ -167,6 +170,9 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
       };
       for (const [probe, res] of Object.entries(probes)) expect(touched(res), `${who}: ${probe}`).toBe(0);
       expect(await snapshot(), who).toEqual(before);
+    };
+    for (const [who, client] of [["stranger", asX], ["anon", anon], ["editor", asE], ["publisher", asP]] as const) {
+      await writeProbe(who, client);
     }
   });
 
@@ -183,5 +189,8 @@ describe.skipIf(!run)("M19-04 the publishable-key probe (local Supabase)", () =>
     expect((await writeDraft(asE, f.owner.pageId, "after removal")).rows).toBe(0);
     const saved = await admin.from("pages").select("draft").eq("id", f.owner.pageId).single();
     expect((saved.data!.draft as { profile: { bio: string } }).profile.bio).not.toBe("after removal");
+    // Step 5 for every other table: the removed editor's client writes nothing either.
+    expect(writeProbe).not.toBeNull();
+    await writeProbe!("removed editor", asE);
   });
 });
