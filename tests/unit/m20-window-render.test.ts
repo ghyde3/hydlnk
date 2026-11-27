@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, PublishDoc, SubPagePublish } from "@/lib/document";
 import { PAGE_ID, waveGPublished } from "./fixtures/m8-render-docs";
+import { bannerRef } from "./fixtures/page-document";
 
 /**
  * M20-03, M20-04 (render side): a block outside its time window is absent from the live HTML of
@@ -176,6 +177,25 @@ describe("M20-03 the live HTML holds a block only inside its window", () => {
     const sub = await siteSubPageResponse(PAGE_ID, "events");
     expect(sub.status).toBe(200);
     expectBlocks(await sub.text(), ["lnk-showing01"]);
+  });
+
+  it("M20-03 an out-of-window image block or card leaves no image address in the response", async () => {
+    vi.setSystemTime(T0);
+    const img = (name: string) => ({ ...bannerRef, path: bannerRef.path.replace("night-market-banner", name) });
+    state.homeBlocks = [
+      { id: "img-ended-001", type: "image", visible: true, image: img("ended-image-addr"), alt: "Ended", shape: "wide", url: "", schedule: { until: iso(T0 - 60 * MIN) } },
+      { id: "crd-upcoming1", type: "card", visible: true, title: "Soon", caption: "", url: "https://shop.example/soon", image: img("upcoming-card-addr"), schedule: { from: iso(T0 + 60 * MIN) } },
+      { id: "img-showing1", type: "image", visible: true, image: img("showing-image-addr"), alt: "Showing", shape: "wide", url: "", schedule: { from: iso(T0 - 60 * MIN) } },
+    ];
+    for (const response of [await handleResponse("mara"), await siteResponse(PAGE_ID)]) {
+      const html = await response.text();
+      // The control: an image inside its window is drawn with its address.
+      expect(html).toContain("showing-image-addr");
+      expect(html).not.toContain("ended-image-addr");
+      expect(html).not.toContain("upcoming-card-addr");
+      expect(html).not.toContain("img-ended-001");
+      expect(html).not.toContain("crd-upcoming1");
+    }
   });
 
   it("M20-03 no script or CSS hides anything: the one tenant script is the only script", async () => {
