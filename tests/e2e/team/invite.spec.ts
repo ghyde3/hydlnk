@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { cleanupUsers, makeUser, signIn } from "../fixtures/data";
+import { cleanupUsers, desktopOnly, makeUser, signIn } from "../fixtures/data";
 import { messagesTo, getMessage } from "../fixtures/mailpit";
-import { expectNoHorizontalScroll, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, url } from "../helpers";
+import { rawBuffer } from "../m2/publish-helpers";
 import { openApp, studioOwner } from "./team-helpers";
 
 /**
@@ -95,4 +96,32 @@ test("M19-08 a pending invite is revoked from the members screen", async ({ cont
   await page.getByTestId("invites-list").getByRole("button", { name: "Revoke" }).click();
   await expect(page.getByTestId("invites-list")).toHaveCount(0);
   await expect(page.getByTestId("members-meter")).toHaveText("0 of 10 members and invites");
+});
+
+/**
+ * Re-review note 4: the proxy finds the invite link with `startsWith("/invite/")` (its rate limit and
+ * no-referrer). Pinned here, on whatever server the suite runs against (a production build in CI):
+ * Next routes no other spelling (percent-encoded letters, a double encoding, another case, an encoded
+ * slash) to the invite route, so none of them can reach it without the proxy's limit and header. The
+ * real path, signed out, is the route's own 303 to sign-in with no Referer; every other is the app's 404.
+ */
+test("M19-08 only the exact /invite/ spelling reaches the invite route", async ({}, info) => {
+  test.skip(!desktopOnly(info), "raw HTTP, not viewport dependent");
+  // Raw HTTP to the server under test, so no client normalizes the spelling on the way.
+  const get = (path: string) => rawBuffer(`app.localhost:${DEV_PORT}`, path, { port: DEV_PORT });
+  const real = await get("/invite/zq-pin-token");
+  expect(real.status).toBe(303);
+  expect(real.headers["referrer-policy"]).toBe("no-referrer");
+  const lookalikes = [
+    "/%69nvite/zq-pin-token",
+    "/i%6Evite/zq-pin-token",
+    "/%2569nvite/zq-pin-token",
+    "/Invite/zq-pin-token",
+    "/invite%2Fzq-pin-token",
+  ];
+  for (const path of lookalikes) {
+    const res = await get(path);
+    expect(res.status, path).toBe(404);
+    expect(res.headers.location, path).toBeUndefined();
+  }
 });
