@@ -15,7 +15,7 @@ On `m22-integration` (draft PR #40, label `full-ci`). Flipped 48 rows to `passes
   - Volatile `get_supabase_uid` in WHERE clauses was fixed in 76 pgTAP files. 060 and 135 are now scoped to their own rows.
 - **CI run 45951613816 on 65244f6:**
   - Verify (typecheck, lint, unit, db, integration) passed.
-  - Browser suite: 8 shards, 3,013 passed, 3 flaky (`m5/images-api:460`, `m15/publish-races:137` phone, `:194` desktop; each passed on retry).
+  - Browser suite: shards 3 and 7 fully green; the other six passed 3,013 tests with 3 flaky (`m5/images-api:460`, `m15/publish-races:137` phone, `:194` desktop; each passed on retry).
   - Hard failures are only the by-design conflicts with older rows:
     - `m1/shell.spec.ts:74, :192, :254, :460` (M1-16 steps 1 and 4, M1-17 step 1 and M1-18 step 2 against M17-08 step 4 and M19-09 step 9)
     - `m2/blocks-forms:178` (M2-16)
