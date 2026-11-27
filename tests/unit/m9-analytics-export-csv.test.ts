@@ -107,6 +107,22 @@ describe("M9-26 csvCell: characters that never belong in a label", () => {
     expect(csvCell("\u200F@x")).toBe("'@x");
   });
 
+  it("M9-26 a full-width or a whitespace-led formula is text too (NFKC, leading space and line feed: L2)", () => {
+    // Full-width equals: NFKC reads it as "=", and so may a spreadsheet.
+    expect(csvCell("\uFF1D1+1")).toBe("'\uFF1D1+1");
+    expect(csvCell("\uFF20SUM(1)")).toBe("'\uFF20SUM(1)");
+    // A leading line feed or space before the formula character.
+    expect(csvCell("\n=cmd()")).toBe(`"'\n=cmd()"`);
+    expect(csvCell(" =cmd()")).toBe("' =cmd()");
+    expect(csvCell("\u3000\u00A0+1")).toBe("'\u3000\u00A0+1");
+    expect(csvCell("\u200B-1")).toBe("'\u200B-1");
+    // Read back, the apostrophe is the only difference.
+    expect(parseCsv(`${csvCell("\n=cmd()")}\r\n`)[0]![0]).toBe("'\n=cmd()");
+    // White space alone, or before ordinary text, is left as it is.
+    expect(csvCell("  Shop")).toBe("  Shop");
+    expect(csvCell(" ")).toBe(" ");
+  });
+
   it("M9-26 keeps tab, line feed and carriage return: they are the file's own characters", () => {
     expect(csvCell("a\tb")).toBe("a\tb");
     expect(csvCell("a\nb")).toBe('"a\nb"');
