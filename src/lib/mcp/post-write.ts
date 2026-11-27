@@ -17,7 +17,7 @@ import type { ToolCall } from "./types";
  *   - an image comes only by `imageId`, resolved in the folder of the token's user;
  *   - category and tag ids must be terms of that site's blog;
  *   - the body is stored as sent, and the whole next body goes through the checks Publish runs
- *     (`checkPostBody`): allowed schemes, uploads only, the caller's own existing files.
+ *     (`checkPostBody`): allowed schemes, uploads only, the site owner's own existing files.
  *
  * Nothing here writes. The link blocklist runs inside the writer's create and update.
  */
@@ -84,7 +84,7 @@ export async function preparePostDraft(
   }
 
   const draft = buildPostDraft(current, changes, images);
-  const refused = await checkPostBody({ actor: mcpActor(call), draft });
+  const refused = await checkPostBody({ actor: mcpActor(call), siteId, draft });
   if (refused) throw await refusal(call, refused);
   return draft;
 }

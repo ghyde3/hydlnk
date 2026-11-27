@@ -49,6 +49,7 @@ export function ownedEntry(over: Partial<OwnedEntry> = {}): OwnedEntry {
   return {
     id: ENTRY_A,
     siteId: PAGE_A,
+    ownerId: USER_A,
     typeId: TYPE_A,
     typeKey: "post",
     rev: 3,

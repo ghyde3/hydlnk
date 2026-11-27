@@ -5,8 +5,8 @@ import type { LoadEntryOptions, LoadEntryResult, OwnedEntry } from "./types";
 
 /**
  * The one place the connector reads an entry (M18-01). It reads through the content writer
- * (`getEntry` joins the site and filters on its owner IN THE QUERY), with the user of the verified
- * token and nothing else. Another account's entry, a random id, a malformed id, a type the tool does
+ * (`getEntry` decides access with the one helper; source `mcp` is owner-only, decide rule 2, M19-13),
+ * with the user of the verified token and nothing else. Another account's entry, a random id, a malformed id, a type the tool does
  * not take and the wrong side of the trash are one answer: `not_found`, the same object each time.
  *
  * The published copy never leaves this function: only the slug the live copy is at is kept (the
@@ -60,6 +60,7 @@ export async function loadOwnedEntry(
   const entry: OwnedEntry = {
     id: found.id,
     siteId: found.siteId,
+    ownerId: found.ownerId,
     typeId: found.typeId,
     typeKey,
     rev: found.rev,

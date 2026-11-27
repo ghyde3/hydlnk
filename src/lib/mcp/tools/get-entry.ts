@@ -53,12 +53,12 @@ export const getEntryTool: ToolDefinition<typeof input> = {
       entry,
       { offset: args.offset ?? 0, length: args.length ?? MCP_BODY_RANGE_CHARS },
       {
-        imageUrlPrefix: storageUrl(`${call.userId}/`),
+        imageUrlPrefix: storageUrl(`${entry.ownerId}/`),
         liveUrl: await liveUrlOf(call),
         draftIssues:
           entry.status === "trashed"
             ? []
-            : postDraftIssues({ actor: mcpActor(call), draft: entry.draft }),
+            : postDraftIssues({ ownerId: entry.ownerId, draft: entry.draft }),
       },
     );
     const more =

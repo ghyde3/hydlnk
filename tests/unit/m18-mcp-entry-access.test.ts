@@ -75,6 +75,7 @@ describe.skipIf(!run)("loadOwnedEntry (local Supabase)", () => {
         "hasUnpublishedChanges",
         "id",
         "liveSlug",
+        "ownerId",
         "publishedAt",
         "rev",
         "siteId",

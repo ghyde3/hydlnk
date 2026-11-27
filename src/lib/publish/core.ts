@@ -993,7 +993,13 @@ const HOME_KEY = "home";
  *   7. both blocklist checks, then `publish_design` with the form, which holds no `blocks` key.
  */
 export async function publishDesignCore(
-  input: { pageId: unknown; expectedRev: string | null; userId: string | null },
+  input: {
+    pageId: unknown;
+    expectedRev: string | null;
+    userId: string | null;
+    /** Who calls: the connector passes "mcp", so the access helper keeps it owner-only (M19-13). */
+    source?: AccessSource;
+  },
   deps: PublishDeps = {},
 ): Promise<PublishResult> {
   const opened = await openOwnedSite(input, deps);

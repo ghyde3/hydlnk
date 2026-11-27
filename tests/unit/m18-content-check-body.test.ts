@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { stackIsUp } from "./publish-support";
 import { contentHarness, type BlogOwner, type ContentHarness } from "./support/mcp-content-db";
+import { join } from "./m19t-team-support";
 
 const mocks = vi.hoisted(() => ({ admin: undefined as unknown }));
 vi.mock("server-only", () => ({}));
@@ -22,7 +23,11 @@ describe.skipIf(!run)("checkPostBody (local Supabase and Storage)", () => {
   let checkPostBody: typeof import("@/lib/content").checkPostBody;
   let storageUrl: (path: string) => string;
   const check = (o: BlogOwner, body: unknown) =>
-    checkPostBody({ actor: { userId: o.userId, source: "mcp" }, draft: { title: "T", body } });
+    checkPostBody({
+      actor: { userId: o.userId, source: "mcp" },
+      siteId: o.pageId,
+      draft: { title: "T", body },
+    });
 
   beforeAll(async () => {
     h = await contentHarness();
@@ -43,10 +48,10 @@ describe.skipIf(!run)("checkPostBody (local Supabase and Storage)", () => {
     ).toBeNull();
     expect(await check(a, "")).toBeNull();
     expect(
-      await checkPostBody({ actor: { userId: a.userId, source: "mcp" }, draft: {} }),
+      await checkPostBody({ actor: { userId: a.userId, source: "mcp" }, siteId: a.pageId, draft: {} }),
     ).toBeNull();
     expect(
-      await checkPostBody({ actor: { userId: a.userId, source: "mcp" }, draft: null }),
+      await checkPostBody({ actor: { userId: a.userId, source: "mcp" }, siteId: a.pageId, draft: null }),
     ).toBeNull();
   });
 
@@ -139,9 +144,37 @@ describe.skipIf(!run)("checkPostBody (local Supabase and Storage)", () => {
     const before = await h.row(made.id);
     const out = await checkPostBody({
       actor: { userId: a.userId, source: "mcp" },
+      siteId: a.pageId,
       draft: { ...before.draft, body: "[x](javascript:alert(1))" },
     });
     expect(out).not.toBeNull();
     expect(await h.row(made.id)).toEqual(before);
+  });
+
+  it("Wave F: the images must be in the site OWNER's folder, whoever writes (a member's own upload is refused)", async () => {
+    const owners = await h.upload(a, "img-0000000cb0f1");
+    const members = await h.upload(b, "img-0000000cb0f2");
+    // Sharing a site is a Studio feature: the owner gets Studio for this case.
+    const plan = await h.admin.from("accounts").update({ paid_plan: "studio" }).eq("id", a.userId);
+    if (plan.error) throw new Error(plan.error.message);
+    await join(h.admin as never, a, a.pageId, b, "editor");
+    const asMember = (body: string) =>
+      checkPostBody({
+        actor: { userId: b.userId, source: "editor" },
+        siteId: a.pageId,
+        draft: { title: "T", body },
+      });
+    expect(await asMember(`![x](${storageUrl(owners)})`)).toBeNull();
+    expect((await asMember(`![x](${storageUrl(members)})`))!.issues).toEqual([
+      { path: "body", message: "That image isn’t in your uploads. Upload it again." },
+    ]);
+    // Through the connector the same member reaches nothing of the shared site (decide rule 2).
+    expect(
+      await checkPostBody({
+        actor: { userId: b.userId, source: "mcp" },
+        siteId: a.pageId,
+        draft: { title: "T", body: `![x](${storageUrl(owners)})` },
+      }),
+    ).toMatchObject({ ok: false, error: "not_found" });
   });
 });

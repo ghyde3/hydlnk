@@ -52,7 +52,7 @@ export const restoreRevisionTool: ToolDefinition<typeof input> = {
       // A tool save runs the body checks on what it would store (plan 3.5): the version's body
       // must pass them as a body sent to update_entry would, or nothing is written.
       ...(isPost
-        ? { check: (snapshot: unknown) => checkPostBody({ actor, draft: snapshot }) }
+        ? { check: (snapshot: unknown) => checkPostBody({ actor, siteId: entry.siteId, draft: snapshot }) }
         : {}),
     });
     if (!out.ok) {

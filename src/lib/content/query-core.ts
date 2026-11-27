@@ -42,6 +42,8 @@ export async function getEntryWithClient(
     schedule: schedules.get(e.id) ?? { ...NO_SCHEDULE },
     id: e.id,
     siteId: e.site_id,
+    /** The site's owner, from the access helper: the account, plan and media folder of the entry. */
+    ownerId: owned.access.ownerId,
     typeId: e.type_id,
     typeKey: type.type.key,
     hasUnpublishedChanges:

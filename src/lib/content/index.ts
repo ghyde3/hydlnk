@@ -41,6 +41,7 @@ import { countEntriesWithClient, getEntryWithClient, listEntriesWithClient } fro
 import { unsafeBodySchemes } from "./blocklist";
 import { bodyShapeIssue } from "./body-shape";
 import { failure } from "./errors";
+import { siteFor } from "./guards";
 import { POST_BODY_TOO_LARGE, postBodyTooLarge } from "./schemas";
 import { bodyImageIssue, bodyImages, checkOwnImages, postImages } from "./images";
 import { publishEntryWithClient, unpublishEntryWithClient } from "./publish-core";
@@ -67,12 +68,14 @@ import type { TypeSummary as TypeSummaryOf } from "./types-core";
 /**
  * What Publish checks on a post body, for a caller that wants it at save (the MCP tools, M18-05):
  * a body the bounded lexer reads (`bodyShapeIssue`), only http, https, mailto and tel addresses,
- * every image an upload, at most `BODY_IMAGES_MAX` of them, each in the actor's own folder and
+ * every image an upload, at most `BODY_IMAGES_MAX` of them, each in the site owner's folder and
  * present in Storage. Reads only; it stores nothing. The
  * editor's lenient draft save does not call it, and Publish runs every check again.
  */
 export async function checkPostBody(input: {
   actor: ContentActor;
+  /** The entry's site: its OWNER's folder is the one the images must be in (the access helper's). */
+  siteId: string;
   draft: unknown;
 }): Promise<ContentFailure | null> {
   // The size first: nothing over the limit is ever lexed (three scans of a huge body otherwise).
@@ -93,7 +96,11 @@ export async function checkPostBody(input: {
   const body = (input.draft as { body?: unknown } | null)?.body;
   const uses = typeof body === "string" ? bodyImages(body) : [];
   if (uses.length === 0) return null;
-  return checkOwnImages(createAdminSupabase(), input.actor.userId, uses);
+  const admin = createAdminSupabase();
+  // The site owner's folder, never the actor's (a member writes into the owner's site; Wave F).
+  const site = await siteFor(admin, input.actor, input.siteId, "read");
+  if (!site.ok) return site;
+  return checkOwnImages(admin, site.access.ownerId, uses);
 }
 
 /**
@@ -105,7 +112,8 @@ export async function checkPostBody(input: {
  * another post uses. Pure; it stores and reads nothing.
  */
 export function postDraftIssues(input: {
-  actor: ContentActor;
+  /** The entry's site owner (`access.ownerId` of the access helper): the folder images must be in. */
+  ownerId: string;
   draft: unknown;
 }): Array<{ path: string; message: string }> {
   const raw = (input.draft as { body?: unknown } | null)?.body;
@@ -117,7 +125,7 @@ export function postDraftIssues(input: {
   issues.push(...(unsafeBodySchemes(input.draft)?.issues ?? []));
   issues.push(...(bodyImageIssue(input.draft)?.issues ?? []));
   for (const use of postImages(input.draft)) {
-    if (!use.path.startsWith(`${input.actor.userId}/`)) {
+    if (!use.path.startsWith(`${input.ownerId}/`)) {
       issues.push({
         path: use.field,
         message: "That image isn’t in your uploads. Upload it again.",

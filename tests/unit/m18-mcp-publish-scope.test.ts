@@ -466,6 +466,8 @@ describe("what the writer is handed", () => {
           ok: true,
           entry: ownedEntry({
             id,
+            // The door's entry: its owner is the token user (MCP is owner-only, M19-13).
+            ownerId: USER_B,
             typeKey: "post",
             status: options.trashed === "yes" ? "trashed" : "draft",
             draft: { title: "T", slug: "t", body: "Body" },
@@ -484,6 +486,11 @@ describe("what the writer is handed", () => {
       ).toBeUndefined();
       for (const [fn, spy] of Object.entries(writer)) {
         for (const [input] of spy.mock.calls) {
+          // The pure draft check takes the site owner (the access helper's), never an actor.
+          if (fn === "postDraftIssues") {
+            expect(input.ownerId, `${name} -> ${fn}`).toBe(USER_B);
+            continue;
+          }
           expect(input.actor, `${name} -> ${fn}`).toEqual({ userId: USER_B, source: "mcp" });
           if ("expectedRev" in input) expect(input.expectedRev, `${name} -> ${fn}`).toBe(3);
           if ("siteId" in input) expect(input.siteId, `${name} -> ${fn}`).toBe(PAGE_A);

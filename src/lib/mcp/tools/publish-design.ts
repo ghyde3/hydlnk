@@ -41,6 +41,7 @@ export const publishDesignTool: ToolDefinition<typeof input> = {
         pageId: site.id,
         expectedRev: String(args.ifDesignRev),
         userId: call.userId,
+        source: "mcp",
       },
       { admin: call.admin },
     );

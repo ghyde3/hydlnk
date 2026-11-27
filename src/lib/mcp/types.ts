@@ -76,6 +76,8 @@ export type LoadSubPageResult =
 export interface OwnedEntry {
   id: string;
   siteId: string;
+  /** The site's owner, from the access helper (the token user: MCP is owner-only, M19-13). */
+  ownerId: string;
   typeId: string;
   typeKey: "post" | "page";
   rev: number;

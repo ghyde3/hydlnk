@@ -175,6 +175,7 @@ describe("an oversized body on create_entry and update_entry never reaches the l
   it("checkPostBody refuses the bytes before it lexes", async () => {
     const out = await checkPostBody({
       actor: { userId: identity().userId, source: "mcp" },
+      siteId: PAGE_A,
       draft: { title: "T", body: twoByte },
     });
     expect(out).toMatchObject({ ok: false, error: "invalid" });
@@ -184,6 +185,7 @@ describe("an oversized body on create_entry and update_entry never reaches the l
     expect(
       await checkPostBody({
         actor: { userId: identity().userId, source: "mcp" },
+      siteId: PAGE_A,
         draft: { title: "T", body: "😀".repeat(KIB_512 / 4) },
       }),
     ).toBeNull();
