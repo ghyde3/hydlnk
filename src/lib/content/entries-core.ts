@@ -85,6 +85,16 @@ export async function createEntryWithClient(
     .select("id, rev, updated_at")
     .single();
   if (inserted.error) return mapDbError(inserted.error);
+  // Re-review finding 3: who made a NEW entry, so a never-live draft trashed by anyone else (an
+  // editor trashing the owner's draft) is recorded. An entry brought back under its old id keeps no
+  // maker (it counts as nobody's). A failed note is logged: the trash is then recorded, never hidden.
+  if (input.id === undefined) {
+    const noted = await admin.rpc("note_entry_creator", {
+      p_entry: inserted.data.id,
+      p_actor: actor.userId,
+    });
+    if (noted.error) console.error("[content] noting the entry's maker failed", noted.error.code);
+  }
   return {
     ok: true,
     id: inserted.data.id,

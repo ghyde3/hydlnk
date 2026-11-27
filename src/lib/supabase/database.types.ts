@@ -2108,6 +2108,10 @@ export type Database = {
       }
       move_all_content: { Args: never; Returns: Json }
       move_site_content: { Args: { p_site: string }; Returns: Json }
+      note_entry_creator: {
+        Args: { p_actor: string; p_entry: string }
+        Returns: undefined
+      }
       oauth_bind_request: {
         Args: { p_csrf_hash: string; p_id: string; p_user: string }
         Returns: {

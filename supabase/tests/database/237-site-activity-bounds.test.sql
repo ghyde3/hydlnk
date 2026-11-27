@@ -29,7 +29,9 @@ create function pg_temp.rows237(p_action text) returns int language sql as $$
   select count(*)::int from team.site_activity
    where site_id = '00000000-0000-4000-8000-000000237a01' and action = p_action $$;
 
--- Never live: trash and restore leave no row.
+-- Never live: trash and restore leave no row. (The editor made e01: since 20261127004700 a
+-- never-live draft trashed by someone other than its maker or the owner is recorded, test 239.)
+select public.note_entry_creator('00000000-0000-4000-8000-000000237e01', tests.get_supabase_uid('e'));
 select public.record_site_activity('00000000-0000-4000-8000-000000237a01', tests.get_supabase_uid('e'),
   'entry_trashed', '00000000-0000-4000-8000-000000237e01');
 select public.record_site_activity('00000000-0000-4000-8000-000000237a01', tests.get_supabase_uid('e'),
