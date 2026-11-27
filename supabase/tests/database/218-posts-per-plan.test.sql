@@ -11,7 +11,7 @@ select plan(13);
 
 select tests.create_supabase_user('f', 'f-218@example.test');
 select tests.create_supabase_user('p', 'p-218@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000218f001', tests.get_supabase_uid('f'), 'zq218-f',
@@ -84,7 +84,7 @@ select lives_ok(
   'pro: a page is still accepted when posts are full');
 
 -- A downgrade deletes nothing and refuses the next insert, also after one post is purged.
-update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'free' where id = (select tests.get_supabase_uid('p'));
 select is((select count(*)::int from public.content_entries where type_id = (select p_post from t218)), 1000,
   'a downgrade deletes no posts');
 select throws_ok(

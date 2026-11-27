@@ -19,7 +19,7 @@ select tests.create_supabase_user('a', 'a-204@example.test');   -- pro: versions
 select tests.create_supabase_user('b', 'b-204@example.test');   -- free, downgraded: Home + 5 pages
 select tests.create_supabase_user('c', 'c-204@example.test');   -- free: plain, blocklisted draft
 select tests.create_supabase_user('d', 'd-204@example.test');   -- free: nothing but Home
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000204a001', tests.get_supabase_uid('a'), 'zq204-a',
@@ -108,8 +108,8 @@ select
   (select md5(string_agg(v::text, '|' order by v.id))
      from public.page_versions v where v.page_id = '00000000-0000-4000-8000-00000204a001') as pv,
   (select count(*) from public.image_cleanup_queue) as queue,
-  (select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('a')) as bytes_a,
-  coalesce((select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('d')), 0) as bytes_d,
+  (select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('a'))) as bytes_a,
+  coalesce((select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('d'))), 0) as bytes_d,
   (select sum(public.site_page_doc_bytes(draft, published)) from public.site_pages
      where page_id = '00000000-0000-4000-8000-00000204a001') as sp_bytes_a;
 grant select on before204 to public;
@@ -215,12 +215,12 @@ select is((select count(*) from public.image_cleanup_queue), (select queue from 
   'the media cleanup queue is unchanged');
 
 select is(
-  (select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('d')) - (select bytes_d from before204),
+  (select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('d'))) - (select bytes_d from before204),
   (select public.site_page_doc_bytes(e.draft, e.published) from public.content_entries e
      where e.site_id = '00000000-0000-4000-8000-00000204d001'),
   'account_site_bytes grows by exactly Home''s entry for a site without sub-pages');
 select is(
-  (select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('a')) - (select bytes_a from before204),
+  (select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('a'))) - (select bytes_a from before204),
   (select sum(public.site_page_doc_bytes(e.draft, e.published))::bigint from public.content_entries e
      where e.site_id = '00000000-0000-4000-8000-00000204a001') - (select sp_bytes_a from before204)::bigint,
   'account_site_bytes changes by the entries minus the moved rows');

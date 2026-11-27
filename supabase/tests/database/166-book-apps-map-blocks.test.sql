@@ -216,7 +216,7 @@ update public.pages
    set draft = pg_temp.draft_of(jsonb_build_array(pg_temp.book('[]'::jsonb, (select c2 from p))))
  where id = '00000000-0000-4000-8000-0000000166a1';
 select results_eq(
-  $$ select path from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') $$,
+  $$ select path from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) $$,
   $$ select c1 from p $$,
   'replacing a cover in the draft queues the old object, and only it'
 );

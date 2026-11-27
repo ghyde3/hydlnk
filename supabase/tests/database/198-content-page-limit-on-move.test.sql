@@ -36,7 +36,7 @@ select lives_ok(
   $$update public.content_entries set draft = jsonb_set(draft, '{title}', '"Renamed"')
     where site_id = '00000000-0000-4000-8000-00000198f001' and draft ->> 'path' = 'zq-p1'$$,
   'an edit of a page that is already a counted page is not counted again');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('f');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('f'));
 -- Home's path is pinned since the cutover review (migration 20261015000010): the plan no longer
 -- stops the move, the pinned path does.
 select throws_ok(

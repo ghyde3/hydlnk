@@ -16,7 +16,7 @@ select * from no_plan();
 select tests.create_supabase_user('o', 'o-224@example.test');
 select tests.create_supabase_user('m', 'm-224@example.test');
 select tests.create_supabase_user('x', 'x-224@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000224a01', tests.get_supabase_uid('o'), 'zq224-a',
@@ -68,8 +68,8 @@ select throws_ok(
      values ('00000000-0000-4000-8000-000000224a01', tests.get_supabase_uid('o'), 'editor') $$,
   '23514', 'owner_is_not_a_member', 'the owner cannot be a member of their own site');
 select throws_ok(
-  $$ update team.site_members set user_id = tests.get_supabase_uid('o')
-     where user_id = tests.get_supabase_uid('m') $$,
+  $$ update team.site_members set user_id = (select tests.get_supabase_uid('o'))
+     where user_id = (select tests.get_supabase_uid('m')) $$,
   '23514', 'owner_is_not_a_member', 'nor become one by an update');
 select throws_ok(
   $$ insert into team.site_members (site_id, user_id, role)
@@ -141,20 +141,20 @@ select is((select count(*)::int from team.site_activity where site_id = '0000000
   0, 'deleting the site deletes its activity');
 
 -- The inviter's account: their invites go, a member they invited stays.
-update team.site_members set invited_by = tests.get_supabase_uid('x')
+update team.site_members set invited_by = (select tests.get_supabase_uid('x'))
   where site_id = '00000000-0000-4000-8000-000000224a01';
 insert into team.site_invites (site_id, email, token_hash, role, invited_by, expires_at) values
   ('00000000-0000-4000-8000-000000224a01', 'r-224@example.test', repeat('c', 64), 'editor',
    tests.get_supabase_uid('x'), now() + interval '7 days');
 insert into team.site_activity (site_id, actor_id, role, action) values
   ('00000000-0000-4000-8000-000000224a01', tests.get_supabase_uid('m'), 'editor', 'post_created');
-delete from auth.users where id = tests.get_supabase_uid('x');
+delete from auth.users where id = (select tests.get_supabase_uid('x'));
 select is((select count(*)::int from team.site_invites where token_hash = repeat('c', 64)),
   0, 'deleting the inviter''s account deletes the invites they sent');
 select is((select invited_by from team.site_members where site_id = '00000000-0000-4000-8000-000000224a01'),
   null::uuid, 'and leaves the member they invited, with invited_by cleared');
 
-delete from auth.users where id = tests.get_supabase_uid('m');
+delete from auth.users where id = (select tests.get_supabase_uid('m'));
 select is((select count(*)::int from team.site_members where site_id = '00000000-0000-4000-8000-000000224a01'), 0,
   'deleting the member''s account deletes their member rows');
 select is((select actor_id from team.site_activity where site_id = '00000000-0000-4000-8000-000000224a01'),

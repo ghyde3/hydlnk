@@ -17,7 +17,7 @@ select plan(46);
 select tests.create_supabase_user('f', 'f-221@example.test');
 select tests.create_supabase_user('p', 'p-221@example.test');
 select tests.create_supabase_user('o', 'o-221@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000221f01', tests.get_supabase_uid('f'), 'zq221-f',
@@ -123,7 +123,7 @@ select lives_ok(
   $$select public.schedule_entry('00000000-0000-4000-8000-000000221e01', tests.get_supabase_uid('p'), 1, 'publish', (select soon from t221))$$,
   'Pro: a post is scheduled to publish');
 select is(
-  (select row(status, scheduled_rev, snapshot ->> 'title', created_by = tests.get_supabase_uid('p'), source)::text
+  (select row(status, scheduled_rev, snapshot ->> 'title', created_by = (select tests.get_supabase_uid('p')), source)::text
      from public.content_schedules where entry_id = '00000000-0000-4000-8000-000000221e01'),
   row('pending', 1::bigint, 'Post', true, 'editor')::text,
   'the row holds the draft at that rev, the acting user and the source');

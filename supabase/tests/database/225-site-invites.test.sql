@@ -22,9 +22,9 @@ select tests.create_supabase_user('p', 'p-225@example.test');
 select tests.create_supabase_user('x', 'x-225@example.test');
 select tests.create_supabase_user('u', 'u-225@example.test');
 update auth.users set email_confirmed_at = now()
-  where id in (tests.get_supabase_uid('o'), tests.get_supabase_uid('e'), tests.get_supabase_uid('p'),
-               tests.get_supabase_uid('x'));
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+  where id in ((select tests.get_supabase_uid('o')), (select tests.get_supabase_uid('e')), (select tests.get_supabase_uid('p')),
+               (select tests.get_supabase_uid('x')));
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000225a01', tests.get_supabase_uid('o'), 'zq225-a',
@@ -157,7 +157,7 @@ select throws_ok(
 select lives_ok(
   $$ select public.accept_site_invite((select h from h225 where k = 'e'), tests.get_supabase_uid('e'), array['otp']) $$,
   'the invited address accepts');
-select is((select role from team.site_members where user_id = tests.get_supabase_uid('e')), 'editor',
+select is((select role from team.site_members where user_id = (select tests.get_supabase_uid('e'))), 'editor',
   'the member gets the invite''s role');
 select is((select accepted_by from team.site_invites where token_hash = (select h from h225 where k = 'e')),
   tests.get_supabase_uid('e'), 'the invite is marked used by the acceptor');
@@ -195,7 +195,7 @@ select throws_ok(
 -- Expired.
 update team.site_invites set created_at = now() - interval '7 days 1 minute', expires_at = now() - interval '1 minute'
   where token_hash = (select h from h225 where k = 'u');
-update auth.users set email_confirmed_at = now() where id = tests.get_supabase_uid('u');
+update auth.users set email_confirmed_at = now() where id = (select tests.get_supabase_uid('u'));
 select throws_ok(
   $$ select public.accept_site_invite((select h from h225 where k = 'u'), tests.get_supabase_uid('u'), array['otp']) $$,
   'P0002', 'invite_not_found', 'an expired invite answers the same as an unknown one');
@@ -246,7 +246,7 @@ select lives_ok(
   $$ select public.set_site_member_role('00000000-0000-4000-8000-000000225a01', tests.get_supabase_uid('o'),
        tests.get_supabase_uid('e'), 'publisher') $$,
   'the owner makes the editor a publisher');
-select is((select role from team.site_members where user_id = tests.get_supabase_uid('e')), 'publisher',
+select is((select role from team.site_members where user_id = (select tests.get_supabase_uid('e'))), 'publisher',
   'the role changed');
 
 select throws_ok(

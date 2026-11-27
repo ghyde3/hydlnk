@@ -14,7 +14,7 @@ select plan(15);
 select tests.create_supabase_user('a', 'a-205@example.test');   -- pro: 50 revisions kept
 select tests.create_supabase_user('f', 'f-205@example.test');   -- free: 10 revisions kept
 select tests.create_supabase_user('g', 'g-205@example.test');   -- free, never moved
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000205a001', tests.get_supabase_uid('a'), 'zq205-a',

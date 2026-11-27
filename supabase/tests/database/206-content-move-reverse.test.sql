@@ -18,7 +18,7 @@ select plan(27);
 
 select tests.create_supabase_user('a', 'a-206@example.test');   -- pro
 select tests.create_supabase_user('b', 'b-206@example.test');   -- free, never moved
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000206a001', tests.get_supabase_uid('a'), 'zq206-a',
@@ -48,7 +48,7 @@ insert into public.site_pages (id, page_id, draft) values
 
 create temp table before206 as
 select
-  coalesce((select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('a')), 0) as bytes_a,
+  coalesce((select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('a'))), 0) as bytes_a,
   (select sum(public.site_page_doc_bytes(draft, published)) from public.site_pages
      where page_id = '00000000-0000-4000-8000-00000206a001')::bigint as rows_a,
   (select count(*) from public.page_versions where page_id = '00000000-0000-4000-8000-00000206a001') as versions_a;
@@ -191,7 +191,7 @@ select is((select count(*) from public.page_versions where page_id = '00000000-0
   (select n from versions206), 'the reverse records no page version');
 
 select is(
-  (select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('a')),
+  (select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('a'))),
   (select bytes_a from before206)
     + (select sum(public.site_page_doc_bytes(draft, published)) from public.site_pages
          where page_id = '00000000-0000-4000-8000-00000206a001')::bigint - (select rows_a from before206),

@@ -13,7 +13,7 @@ select tests.create_supabase_user('d',    'd-bl140@example.test');   -- unpublis
 select tests.create_supabase_user('e',    'e-bl140@example.test');   -- suspended owner: published page, draft links to it
 select tests.create_supabase_user('f',    'f-bl140@example.test');   -- a signed-in user, no page of interest
 
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('e');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('e'));
 
 -- The pages come first: a draft that links to a listed domain cannot be saved, so the domain is listed after.
 insert into public.pages (id, owner_id, handle, draft, published, published_at) values

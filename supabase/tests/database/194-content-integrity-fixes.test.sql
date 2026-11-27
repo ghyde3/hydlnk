@@ -6,8 +6,8 @@ select plan(30);
 
 select tests.create_supabase_user('a', 'a-194@example.test');
 select tests.create_supabase_user('b', 'b-194@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('b');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('b'));
 
 insert into public.blocked_domains (domain, reason) values ('blocked194.example', 'test');
 

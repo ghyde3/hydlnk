@@ -174,19 +174,19 @@ select is_empty(
 
 -- The guard skips only a deleted account: deleting one site of a live account still frees its bytes.
 select tests.create_supabase_user('keeps', 'keeps-229@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('keeps');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('keeps'));
 select pg_temp.zz229_site(tests.get_supabase_uid('keeps'), '00000000-0000-4000-8000-0000022905a1', 'zq229-keeps-a');
 select pg_temp.zz229_site(tests.get_supabase_uid('keeps'), '00000000-0000-4000-8000-0000022905a2', 'zq229-keeps-b');
 create temp table zz229_keeps as
-  select bytes as before from public.account_site_bytes where owner_id = tests.get_supabase_uid('keeps');
+  select bytes as before from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('keeps'));
 delete from public.pages where id = '00000000-0000-4000-8000-0000022905a2';
 select cmp_ok(
-  (select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('keeps')),
+  (select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('keeps'))),
   '<', (select before from zz229_keeps),
   'deleting a site of a live account still releases its bytes'
 );
 select is(
-  (select count(*)::int from public.accounts where id = tests.get_supabase_uid('keeps')),
+  (select count(*)::int from public.accounts where id = (select tests.get_supabase_uid('keeps'))),
   1,
   'and the live account is untouched'
 );
@@ -195,7 +195,7 @@ select is(
 update public.pages set draft = jsonb_set(draft, '{profile,photo}', 'null')
   where id = '00000000-0000-4000-8000-0000022905a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('keeps')),
+  (select count(*)::int from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('keeps'))),
   0,
   'the live owner had no image to drop'
 );
@@ -205,7 +205,7 @@ update public.pages set draft = jsonb_set(draft, '{profile,photo}', 'null')
   where id = '00000000-0000-4000-8000-0000022905a3';
 delete from public.content_entries where site_id = '00000000-0000-4000-8000-0000022905a3';
 select is(
-  (select array_agg(path)::text from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('keeps')),
+  (select array_agg(path)::text from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('keeps'))),
   format('{%s/photo-229-keep.webp}', tests.get_supabase_uid('keeps')),
   'a live owner''s dropped image is still queued for the cleanup'
 );

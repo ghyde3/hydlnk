@@ -75,7 +75,7 @@ select is((pg_temp.usage(tests.get_supabase_uid('i'))).accepted, 1, 'which is no
 
 -- The account took in 499 this month and deleted everything.
 update public.form_submission_usage set accepted = 499
-  where owner_id = tests.get_supabase_uid('i') and month = public.form_usage_month();
+  where owner_id = (select tests.get_supabase_uid('i')) and month = public.form_usage_month();
 delete from public.form_submissions where site_id = '00000000-0000-4000-8000-0000220c0001';
 select is(pg_temp.rec('00000000-0000-4000-8000-0000220c0001', 'two@example.test'), 'stored', 'the 500th of the month is stored');
 delete from public.form_submissions where site_id = '00000000-0000-4000-8000-0000220c0001';
@@ -106,7 +106,7 @@ select is((select notify_skipped_today from public.form_usage(tests.get_supabase
   'form_usage shows the emails skipped today');
 reset role;
 update public.form_submission_usage set notify_skipped_day = timezone('utc', now())::date - 1
-  where owner_id = tests.get_supabase_uid('i') and month = public.form_usage_month();
+  where owner_id = (select tests.get_supabase_uid('i')) and month = public.form_usage_month();
 set local role service_role;
 select is((select notify_skipped_today from public.form_usage(tests.get_supabase_uid('i'))), 0,
   'a count from another day reads 0');

@@ -34,7 +34,7 @@ select is(
   'the seven system themes that existed before carry the defaults: 180 degrees, no custom colors'
 );
 select is(
-  (select tokens ->> 'accent' || '/' || (tokens ->> 'bgType') from public.themes where name = 'Smoke'),
+  (select tokens ->> 'accent' || '/' || (tokens ->> 'bgType') from public.themes where name = 'Smoke' and owner_id is null),
   '#9DB3C4/gradient',
   'a system theme keeps its other values (Smoke accent and gradient background)'
 );
@@ -65,7 +65,7 @@ insert into public.pages (id, owner_id, handle, draft, published, published_at) 
    '2026-09-30 12:00:00+00');
 
 select is(
-  (select tokens ?| array['gradientAngle', 'gradientFrom', 'gradientTo'] from public.themes where name = 'Old complete'),
+  (select tokens ?| array['gradientAngle', 'gradientFrom', 'gradientTo'] from public.themes where id = '00000000-0000-4000-8000-0000000000e1'),
   false,
   'precondition: the test theme has no gradient keys'
 );
@@ -101,29 +101,29 @@ update public.pages
 
 select is(
   (select tokens ->> 'gradientAngle' || '/' || (tokens -> 'gradientFrom')::text || '/' || (tokens -> 'gradientTo')::text
-     from public.themes where name = 'Old complete'),
+     from public.themes where id = '00000000-0000-4000-8000-0000000000e1'),
   '180/null/null',
   'a complete saved theme gets 180 degrees and no custom colors'
 );
 select is(
   (select tokens ->> 'accent' || '/' || (tokens ->> 'bgType') || '/' || (tokens ->> 'radius')
-     from public.themes where name = 'Old complete'),
+     from public.themes where id = '00000000-0000-4000-8000-0000000000e1'),
   '#C46A4F/gradient/12',
   'a completed theme keeps its other values'
 );
 select is(
-  (select count(*)::int from public.themes t, jsonb_object_keys(t.tokens) where t.name = 'Old complete'),
+  (select count(*)::int from public.themes t, jsonb_object_keys(t.tokens) where t.id = '00000000-0000-4000-8000-0000000000e1'),
   26,
   'a completed theme has all 26 keys'
 );
 select is(
   (select tokens ->> 'gradientAngle' || '/' || (tokens ->> 'gradientFrom') || '/' || (tokens ->> 'gradientTo')
-     from public.themes where name = 'Already set'),
+     from public.themes where id = '00000000-0000-4000-8000-0000000000e2'),
   '135/#C46A4F/#1B1814',
   'a theme that already has gradient values keeps them'
 );
 select is(
-  (select tokens::text from public.themes where name = 'Partial'),
+  (select tokens::text from public.themes where id = '00000000-0000-4000-8000-0000000000e3'),
   '{"accent": "#112233", "radius": 20}',
   'a partial theme row is not completed'
 );

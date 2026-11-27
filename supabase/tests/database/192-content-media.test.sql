@@ -43,13 +43,13 @@ insert into public.image_cleanup_queue (path, owner_id)
   select draft_img, tests.get_supabase_uid('a') from t192;
 select is(
   (select array_agg(q.path) from public.image_cleanup_queue q
-    where q.owner_id = tests.get_supabase_uid('a')
+    where q.owner_id = (select tests.get_supabase_uid('a'))
       and q.path = any (public.media_paths_in_use(tests.get_supabase_uid('a'), (select array[draft_img] from t192)))),
   (select array[draft_img] from t192),
   'a queued image used only by an entry is reported in use, so the cleanup keeps it');
 select is(
   (select count(*)::int from public.image_cleanup_queue q
-    where q.owner_id = tests.get_supabase_uid('a')
+    where q.owner_id = (select tests.get_supabase_uid('a'))
       and not (q.path = any (public.media_paths_in_use(tests.get_supabase_uid('a'), array[q.path])))),
   0, 'no queued path of the owner is deletable while the entry names it');
 

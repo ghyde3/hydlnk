@@ -14,8 +14,8 @@ select plan(40);
 select tests.create_supabase_user('f', 'f-191@example.test');
 select tests.create_supabase_user('p', 'p-191@example.test');
 select tests.create_supabase_user('s', 's-191@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('s');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('s'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000191f001', tests.get_supabase_uid('f'), 'zq191-f',
@@ -97,14 +97,14 @@ select throws_ok(
   'HL010', null, 'pro: the 1,001st post is refused');
 
 -- A downgrade deletes nothing; new rows are refused.
-update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'free' where id = (select tests.get_supabase_uid('p'));
 select is((select count(*)::int from public.content_entries where type_id = (select p_post from t191)), 1000,
   'a downgrade deletes no entries');
 select throws_ok(
   $$insert into public.content_entries (site_id, type_id, draft)
     select '00000000-0000-4000-8000-00000191a001', p_post, '{"title":"after downgrade"}' from t191$$,
   'HL010', null, 'and a new entry over the free limit is refused');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
 
 -- Moving an entry into a full type counts as a new entry there.
 select lives_ok(
@@ -166,7 +166,7 @@ delete from public.content_entries where id = '00000000-0000-4000-8000-00000191f
 select is(pg_temp.total('s'), pg_temp.actual('s'), 'a delete frees the bytes');
 
 -- Free is held to 64 MiB.
-update public.account_site_bytes set bytes = 67108864 - 400 where owner_id = tests.get_supabase_uid('f');
+update public.account_site_bytes set bytes = 67108864 - 400 where owner_id = (select tests.get_supabase_uid('f'));
 select throws_ok(
   $$insert into public.content_entries (site_id, type_id, draft)
     select '00000000-0000-4000-8000-00000191f001', f_page, jsonb_build_object('title', repeat('y', 1000), 'path', '/') from t191$$,
@@ -174,12 +174,12 @@ select throws_ok(
 select is(pg_temp.total('f'), 67108864::bigint - 400, 'and the total did not move');
 
 -- Pro may hold more than 64 MiB, up to 1 GiB.
-update public.account_site_bytes set bytes = 67108864 + 1000 where owner_id = tests.get_supabase_uid('p');
+update public.account_site_bytes set bytes = 67108864 + 1000 where owner_id = (select tests.get_supabase_uid('p'));
 select lives_ok(
   $$insert into public.content_entries (site_id, type_id, draft)
     select '00000000-0000-4000-8000-00000191a001', p_page, jsonb_build_object('title', repeat('y', 1000)) from t191$$,
   'pro: more than 64 MiB is allowed');
-update public.account_site_bytes set bytes = 1073741824 - 400 where owner_id = tests.get_supabase_uid('p');
+update public.account_site_bytes set bytes = 1073741824 - 400 where owner_id = (select tests.get_supabase_uid('p'));
 select throws_ok(
   $$insert into public.content_entries (site_id, type_id, draft)
     select '00000000-0000-4000-8000-00000191a001', p_page, jsonb_build_object('title', repeat('z', 1000)) from t191$$,
@@ -192,7 +192,7 @@ insert into public.site_pages (id, page_id, draft)
   values ('00000000-0000-4000-8000-00000191f0a1', '00000000-0000-4000-8000-00000191f001', '{"path":"menu","title":"m"}');
 select is(pg_temp.total('f'), 67108864::bigint - 400 + public.site_page_doc_bytes('{"path":"menu","title":"m"}', null),
   'a sub-page is added to the same total');
-update public.account_site_bytes set bytes = 67108864 - 40 where owner_id = tests.get_supabase_uid('f');
+update public.account_site_bytes set bytes = 67108864 - 40 where owner_id = (select tests.get_supabase_uid('f'));
 select throws_ok(
   $$insert into public.site_pages (id, page_id, draft)
     values ('00000000-0000-4000-8000-00000191f0a2', '00000000-0000-4000-8000-00000191f001',
@@ -203,8 +203,8 @@ alter table public.site_pages enable trigger enforce_content_moved;
 -- Deleting a site frees what its entries hold.
 update public.account_site_bytes set bytes = pg_temp.actual('p')
   + (select coalesce(sum(public.site_page_doc_bytes(s.draft, s.published)), 0) from public.site_pages s
-     join public.pages p on p.id = s.page_id where p.owner_id = tests.get_supabase_uid('p'))
-  where owner_id = tests.get_supabase_uid('p');
+     join public.pages p on p.id = s.page_id where p.owner_id = (select tests.get_supabase_uid('p')))
+  where owner_id = (select tests.get_supabase_uid('p'));
 delete from public.pages where id = '00000000-0000-4000-8000-00000191a001';
 select is(pg_temp.total('p'), pg_temp.actual('p'), 'deleting a site frees its entries'' bytes');
 
@@ -217,7 +217,7 @@ insert into public.content_entries (id, site_id, type_id, draft)
   select '00000000-0000-4000-8000-00000191f0e2'::uuid, '00000000-0000-4000-8000-00000191f001'::uuid, f_page, '{"title":"rev"}'::jsonb from t191
   union all
   select '00000000-0000-4000-8000-00000191f0e3'::uuid, '00000000-0000-4000-8000-00000191f001'::uuid, f_page, '{"title":"other"}'::jsonb from t191;
-update public.account_site_bytes set bytes = 0 where owner_id = tests.get_supabase_uid('f');
+update public.account_site_bytes set bytes = 0 where owner_id = (select tests.get_supabase_uid('f'));
 
 insert into public.content_entry_revisions (entry_id, site_id, rev, snapshot, source)
   select '00000000-0000-4000-8000-00000191f0e2'::uuid, '00000000-0000-4000-8000-00000191f001'::uuid, g * 3, '{"title":"r"}', 'system'
@@ -246,7 +246,7 @@ select is((select count(*)::int from public.content_entry_revisions where entry_
   'pruning is per entry: another entry''s revision is untouched');
 
 -- Pro keeps 50.
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('f');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('f'));
 insert into public.content_entry_revisions (entry_id, site_id, rev, snapshot, source)
   select '00000000-0000-4000-8000-00000191f0e2'::uuid, '00000000-0000-4000-8000-00000191f001'::uuid, 200 + g, '{"title":"r"}', 'system'
   from generate_series(1, 60) g;

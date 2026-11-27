@@ -16,8 +16,8 @@ select plan(22);
 select tests.create_supabase_user('a', 'a-188@example.test');   -- pro, versions kept
 select tests.create_supabase_user('b', 'b-188@example.test');
 select tests.create_supabase_user('s', 's-188@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('s');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('s'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000188a001', tests.get_supabase_uid('a'), 'zq188-a',
@@ -181,7 +181,7 @@ select throws_ok(
   $$ select public.unpublish_site('00000000-0000-4000-8000-00000188ffff', tests.get_supabase_uid('a')) $$,
   'P0002', 'site_not_found', 'a site that does not exist is refused'
 );
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('s');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('s'));
 select throws_ok(
   $$ select public.unpublish_site('00000000-0000-4000-8000-00000188c001', tests.get_supabase_uid('s')) $$,
   'P0001', 'account_suspended', 'a suspended owner is refused'

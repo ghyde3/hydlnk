@@ -158,7 +158,7 @@ update public.pages
      'theme', jsonb_build_object('ref', null, 'overrides', '{}'::jsonb), 'blocks', '[]'::jsonb)
  where id = '00000000-0000-4000-8000-0000000168a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a')),
+  (select count(*)::int from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a'))),
   0, 'a draft that names a logo queues nothing'
 );
 
@@ -170,7 +170,7 @@ update public.pages
      'theme', jsonb_build_object('ref', null, 'overrides', '{}'::jsonb), 'blocks', '[]'::jsonb)
  where id = '00000000-0000-4000-8000-0000000168a1';
 select results_eq(
-  $$ select path from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') $$,
+  $$ select path from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) $$,
   $$ select logo1 from p $$,
   'replacing the logo in the draft queues the old object'
 );
@@ -183,14 +183,14 @@ update public.pages
      'blocks', '[]'::jsonb),
      published_at = now()
  where id = '00000000-0000-4000-8000-0000000168a1';
-delete from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a');
+delete from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a'));
 update public.pages
    set draft = jsonb_build_object('version', 1, 'rev', 4,
      'profile', jsonb_build_object('name', 'A', 'bio', '', 'photo', null),
      'theme', jsonb_build_object('ref', null, 'overrides', '{}'::jsonb), 'blocks', '[]'::jsonb)
  where id = '00000000-0000-4000-8000-0000000168a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') and path = (select logo2 from p)),
+  (select count(*)::int from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) and path = (select logo2 from p)),
   0, 'a logo the live page still names is not queued when the draft drops it'
 );
 

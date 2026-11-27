@@ -16,7 +16,7 @@ select plan(30);
 
 select tests.create_supabase_user('f', 'f-222@example.test');
 select tests.create_supabase_user('p', 'p-222@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000222f01', tests.get_supabase_uid('f'), 'zq222-f',
@@ -169,7 +169,7 @@ select lives_ok(
       pg_temp.copy('/', '[{"id":"blk-free-1"}]'))$$,
   'Free: a copy without windows publishes');
 
-update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'free' where id = (select tests.get_supabase_uid('p'));
 select is(pg_temp.boundary('00000000-0000-4000-8000-000000222e01'), pg_temp.ts(45),
   'a downgrade deletes nothing: the live copy keeps its window and boundary');
 update public.content_entries set next_boundary_at = pg_temp.ts(-1) where id = '00000000-0000-4000-8000-000000222e01';

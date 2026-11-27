@@ -17,7 +17,7 @@ select tests.create_supabase_user('e', 'e-226@example.test');
 select tests.create_supabase_user('p', 'p-226@example.test');
 select tests.create_supabase_user('x', 'x-226@example.test');
 select tests.create_supabase_user('b', 'b-226@example.test');
-update public.accounts set paid_plan = 'studio' where id in (tests.get_supabase_uid('o'), tests.get_supabase_uid('b'));
+update public.accounts set paid_plan = 'studio' where id in ((select tests.get_supabase_uid('o')), (select tests.get_supabase_uid('b')));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000226a01', tests.get_supabase_uid('o'), 'zq226-a',
@@ -115,42 +115,42 @@ reset role;
 -- ---------------------------------------------------------------------------
 
 -- The owner leaves Studio.
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('o'));
 select is(pg_temp.row226('p', '00000000-0000-4000-8000-000000226a01'), 'publisher|false|false|false|paused_plan',
   'owner on Pro: the publisher reads nothing (paused_plan)');
 select is(pg_temp.row226('o', '00000000-0000-4000-8000-000000226a01'), 'owner|true|true|true|active', 'the owner is unaffected');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 select is(pg_temp.row226('p', '00000000-0000-4000-8000-000000226a01'), 'publisher|true|true|true|active',
   'back on Studio: access returns');
 
 -- A gift ending.
 update public.accounts set paid_plan = 'free', gift_plan = 'studio', gift_until = now() + interval '1 day'
-  where id = tests.get_supabase_uid('o');
+  where id = (select tests.get_supabase_uid('o'));
 select is(pg_temp.row226('e', '00000000-0000-4000-8000-000000226a01'), 'editor|true|true|false|active',
   'a Studio gift gives team access');
-update public.accounts set gift_until = now() - interval '1 second' where id = tests.get_supabase_uid('o');
+update public.accounts set gift_until = now() - interval '1 second' where id = (select tests.get_supabase_uid('o'));
 select public.end_expired_gifts();
 select is(pg_temp.row226('e', '00000000-0000-4000-8000-000000226a01'), 'editor|false|false|false|paused_plan',
   'the gift ending pauses access');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 select is(pg_temp.row226('e', '00000000-0000-4000-8000-000000226a01'), 'editor|true|true|false|active',
   'a paid Studio plan restores it');
 
 -- The owner's suspension.
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('o');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('o'));
 select is(pg_temp.row226('p', '00000000-0000-4000-8000-000000226a01'), 'publisher|false|false|false|paused_owner',
   'the owner suspended: the publisher reads nothing (paused_owner)');
 select is(pg_temp.row226('o', '00000000-0000-4000-8000-000000226a01'), 'owner|true|false|false|suspended_self',
   'the suspended owner reads but cannot edit or publish');
-update public.accounts set suspended_at = null where id = tests.get_supabase_uid('o');
+update public.accounts set suspended_at = null where id = (select tests.get_supabase_uid('o'));
 select is(pg_temp.row226('p', '00000000-0000-4000-8000-000000226a01'), 'publisher|true|true|true|active',
   'unsuspending the owner restores it');
 
 -- The member's suspension.
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('p');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('p'));
 select is(pg_temp.row226('p', '00000000-0000-4000-8000-000000226a01'), 'publisher|false|false|false|suspended_self',
   'the member suspended: nothing');
-update public.accounts set suspended_at = null where id = tests.get_supabase_uid('p');
+update public.accounts set suspended_at = null where id = (select tests.get_supabase_uid('p'));
 select is(pg_temp.row226('p', '00000000-0000-4000-8000-000000226a01'), 'publisher|true|true|true|active',
   'unsuspending the member restores it');
 
@@ -162,7 +162,7 @@ select tests.authenticate_as('e');
 select is((select count(*)::int from public.pages where id = '00000000-0000-4000-8000-000000226a01'), 1,
   'before removal the editor reads A');
 reset role;
-delete from team.site_members where user_id = tests.get_supabase_uid('e');
+delete from team.site_members where user_id = (select tests.get_supabase_uid('e'));
 select tests.authenticate_as('e');
 select is((select count(*)::int from public.pages where id = '00000000-0000-4000-8000-000000226a01'), 0,
   'the next statement after removal reads nothing (same session, same claims)');

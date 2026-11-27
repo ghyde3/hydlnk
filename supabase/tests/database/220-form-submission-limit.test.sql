@@ -25,7 +25,7 @@ select plan(36);
 select tests.create_supabase_user('f', 'f-220@example.test');
 select tests.create_supabase_user('g', 'g-220@example.test');
 select tests.create_supabase_user('s', 's-220@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('s');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('s'));
 
 insert into public.pages (id, owner_id, handle, draft, published, published_at) values
   ('00000000-0000-4000-8000-00000220f001', tests.get_supabase_uid('f'), 'zq220-f',
@@ -115,7 +115,7 @@ select is(pg_temp.rec('00000000-0000-4000-8000-00000220f001', 'four@example.test
 select is(pg_temp.rec('00000000-0000-4000-8000-00000220f001', 'five@example.test'), 'over_limit',
   'until the cap is reached again');
 
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('f');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('f'));
 select is(pg_temp.rec('00000000-0000-4000-8000-00000220f001', 'six@example.test'), 'stored',
   'after the plan changes to Pro the next one is stored');
 select is((select stored from public.form_usage(tests.get_supabase_uid('f'))), 101, 'and counted');
@@ -135,7 +135,7 @@ select is(pg_temp.rec('00000000-0000-4000-8000-00000220b001', 's1@example.test')
   'pro at 4,999: the 5,000th on the first site is stored');
 select is(pg_temp.rec('00000000-0000-4000-8000-00000220b002', 's2@example.test'), 'over_limit_first',
   'the next one, on the account''s second site, is refused: the cap is per account');
-select is((select count(*)::int from public.form_submission_usage where owner_id = tests.get_supabase_uid('s')), 1,
+select is((select count(*)::int from public.form_submission_usage where owner_id = (select tests.get_supabase_uid('s'))), 1,
   'one usage row for the account and month');
 
 -- ---------------------------------------------------------------------------

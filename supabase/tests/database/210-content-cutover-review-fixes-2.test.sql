@@ -11,7 +11,7 @@ begin;
 select plan(16);
 
 select tests.create_supabase_user('a', 'a-210@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('a'));
 
 create function pg_temp.err(p_sql text) returns text
 language plpgsql as $$

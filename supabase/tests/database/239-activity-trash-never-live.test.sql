@@ -12,7 +12,7 @@ select plan(11);
 select tests.create_supabase_user('o', 'o-239@example.test');
 select tests.create_supabase_user('e', 'e-239@example.test');
 select tests.create_supabase_user('p', 'p-239@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000239a01', tests.get_supabase_uid('o'), 'zq239-s',
    '{"version":1,"rev":1,"profile":{"name":"S","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');
@@ -63,7 +63,7 @@ select is(pg_temp.rows239('entry_trashed', '00000000-0000-4000-8000-000000239e03
   'an editor trashing their own never-live draft records nothing');
 select pg_temp.act239('o', 'entry_trashed', '2');
 select is((select count(*)::int from team.site_activity where site_id = '00000000-0000-4000-8000-000000239a01'
-            and actor_id = tests.get_supabase_uid('o')), 0,
+            and actor_id = (select tests.get_supabase_uid('o'))), 0,
   'the owner trashing a never-live draft records nothing');
 select pg_temp.act239('p', 'entry_trashed', '3');
 select is(pg_temp.rows239('entry_trashed', '00000000-0000-4000-8000-000000239e03'), 1,

@@ -26,8 +26,8 @@ select plan(41);
 select tests.create_supabase_user('p', 'p-224@example.test');
 select tests.create_supabase_user('o', 'o-224@example.test');
 select tests.create_supabase_user('s', 's-224@example.test');
-update public.accounts set paid_plan = 'pro' where id in (tests.get_supabase_uid('p'), tests.get_supabase_uid('o'));
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('s');
+update public.accounts set paid_plan = 'pro' where id in ((select tests.get_supabase_uid('p')), (select tests.get_supabase_uid('o')));
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('s'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000224a01', tests.get_supabase_uid('p'), 'zq224-p',
@@ -252,7 +252,7 @@ create function pg_temp.spare(p_site uuid) returns text language sql as $$
 $$;
 
 select tests.create_supabase_user('q', 'q-224@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('q');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('q'));
 insert into ids values
   ('q1', pg_temp.fill(tests.get_supabase_uid('q'), 'zq224-q1', 50)),
   ('q2', pg_temp.fill(tests.get_supabase_uid('q'), 'zq224-q2', 50)),
@@ -343,19 +343,19 @@ select is(public.entry_next_boundary('{"blocks":[{"schedule":{"from":"2099-01-02
 -- 11. Snapshot bytes, and the finished rows kept
 -- ---------------------------------------------------------------------------
 
-create temp table bytes0 as select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('p');
+create temp table bytes0 as select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('p'));
 grant all on bytes0 to public;
 insert into ids values ('seven_again', pg_temp.sched('00000000-0000-4000-8000-000000224e07'));
-select is((select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('p')),
+select is((select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('p'))),
   (select bytes from bytes0) + octet_length((select draft::text from public.content_entries where id = '00000000-0000-4000-8000-000000224e07')),
   'a pending snapshot is charged to the account''s content bytes');
 select public.cancel_schedule('00000000-0000-4000-8000-000000224e07', tests.get_supabase_uid('p'), 3, 'publish');
-select is((select bytes from public.account_site_bytes where owner_id = tests.get_supabase_uid('p')), (select bytes from bytes0),
+select is((select bytes from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('p'))), (select bytes from bytes0),
   'and released when it is canceled');
-update public.account_site_bytes set bytes = 1073741824 - 5 where owner_id = tests.get_supabase_uid('p');
+update public.account_site_bytes set bytes = 1073741824 - 5 where owner_id = (select tests.get_supabase_uid('p'));
 select is(pg_temp.err($$select pg_temp.sched('00000000-0000-4000-8000-000000224e07')$$), 'HL009:',
   'a snapshot past the plan''s content bytes raises HL009');
-update public.account_site_bytes set bytes = (select bytes from bytes0) where owner_id = tests.get_supabase_uid('p');
+update public.account_site_bytes set bytes = (select bytes from bytes0) where owner_id = (select tests.get_supabase_uid('p'));
 
 insert into public.content_schedules (site_id, entry_id, action, run_at, status, finished_at, result_code, source, created_by)
   select '00000000-0000-4000-8000-000000224a01', '00000000-0000-4000-8000-000000224e07', 'unpublish',

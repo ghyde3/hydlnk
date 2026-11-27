@@ -16,7 +16,7 @@ select plan(23);
 
 select tests.create_supabase_user('a', 'a-207@example.test');   -- pro
 select tests.create_supabase_user('b', 'b-207@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000207a001', tests.get_supabase_uid('a'), 'zq207-a',
@@ -63,9 +63,9 @@ create temp table overview_before207 as
   from public.admin_overview_numbers() o;
 create temp table detail_before207 as
   select (select count(*) from public.site_pages s join public.pages p on p.id = s.page_id
-            where p.owner_id = tests.get_supabase_uid('a')) as sub_pages,
-         (select count(*) from public.pages p where p.owner_id = tests.get_supabase_uid('a')) as sites,
-         (select count(*) from public.pages p where p.owner_id = tests.get_supabase_uid('a') and p.published is not null) as live_sites;
+            where p.owner_id = (select tests.get_supabase_uid('a'))) as sub_pages,
+         (select count(*) from public.pages p where p.owner_id = (select tests.get_supabase_uid('a'))) as sites,
+         (select count(*) from public.pages p where p.owner_id = (select tests.get_supabase_uid('a')) and p.published is not null) as live_sites;
 grant select on pairs_before207, overview_before207, detail_before207 to public;
 
 select ok(

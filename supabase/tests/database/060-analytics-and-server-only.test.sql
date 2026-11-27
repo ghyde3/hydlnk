@@ -164,7 +164,9 @@ select results_eq(
   'yesterday''s events are rolled up per page and block: counts and distinct visitors'
 );
 select is(
-  (select count(*)::int from public.daily_stats where day = (now() at time zone 'utc')::date),
+  (select count(*)::int from public.daily_stats
+     where day = (now() at time zone 'utc')::date
+       and page_id in ('00000000-0000-4000-8000-0000000000f1', '00000000-0000-4000-8000-0000000000f2')),
   0,
   'today is not rolled up'
 );

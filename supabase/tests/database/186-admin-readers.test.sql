@@ -46,13 +46,13 @@ select is(
   public.apply_subscription_state(tests.get_supabase_uid('x'), now(), 'sub_186_x', 'studio', 'month', now() + interval '30 days', false),
   'applied', 'x pays for Studio'
 );
-update public.accounts set stripe_customer_id = 'cus_186x' where id = tests.get_supabase_uid('x');
+update public.accounts set stripe_customer_id = 'cus_186x' where id = (select tests.get_supabase_uid('x'));
 select is(
   public.admin_set_gift(tests.get_supabase_uid('y'), 'pro', null, 'press', '00000000-0000-4000-8000-000000000099'),
   'ok', 'y is gifted Pro'
 );
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('z');
-update auth.users set last_sign_in_at = timestamptz '2026-09-30 12:00:00+00' where id = tests.get_supabase_uid('x');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('z'));
+update auth.users set last_sign_in_at = timestamptz '2026-09-30 12:00:00+00' where id = (select tests.get_supabase_uid('x'));
 
 insert into public.pages (id, owner_id, handle, draft, published, published_at) values
   ('00000000-0000-4000-8000-000000186a01', tests.get_supabase_uid('x'), 'zq-186-live', '{"version":1,"rev":0}', '{"version":1}', now()),

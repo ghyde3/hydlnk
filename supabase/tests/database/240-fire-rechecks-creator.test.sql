@@ -14,7 +14,7 @@ select plan(16);
 
 select tests.create_supabase_user('o', 'o-240@example.test');
 select tests.create_supabase_user('p', 'p-240@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 
 insert into public.pages (id, owner_id, handle, draft, published, published_at) values
   ('00000000-0000-4000-8000-000000240a01', tests.get_supabase_uid('o'), 'zq240-o',
@@ -79,12 +79,12 @@ $$;
 select pg_temp.sched(1, 'p');
 select pg_temp.claim();
 select is((select count(*)::int from claimed), 1, 'the publisher''s row is claimed');
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('p');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('p'));
 select throws_ok($$ select pg_temp.fire(1) $$, 'HL022', 'access_lost',
   'a creator suspended after the claim: the fire refuses inside its own transaction');
 select ok(not pg_temp.live(1), 'and the entry stays unpublished');
 select is(pg_temp.status(1), 'pending', 'and the row is not marked done');
-update public.accounts set suspended_at = null where id = tests.get_supabase_uid('p');
+update public.accounts set suspended_at = null where id = (select tests.get_supabase_uid('p'));
 
 -- ---------------------------------------------------------------------------
 -- The owner moves to Pro after the claim (team access paused)
@@ -99,8 +99,8 @@ update public.content_schedules set run_at = date_trunc('minute', now() - interv
   where entry_id = '00000000-0000-4000-8000-000000240e05' and status = 'pending';
 select pg_temp.claim();
 select is((select count(*)::int from claimed), 3, 'three rows are claimed');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('o');
-select is((select plan from public.accounts where id = tests.get_supabase_uid('o')), 'pro',
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('o'));
+select is((select plan from public.accounts where id = (select tests.get_supabase_uid('o'))), 'pro',
   'the owner is on Pro now');
 select throws_ok($$ select pg_temp.fire(2) $$, 'HL022', 'access_lost',
   'the publisher''s publish refuses once the owner left Studio');
@@ -118,7 +118,7 @@ select ok(pg_temp.live(3), 'and that entry is live');
 delete from claimed;
 select pg_temp.sched(4, 'o');
 select pg_temp.claim();
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('o');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('o'));
 select throws_ok($$ select pg_temp.fire(4) $$, 'HL022', 'account_suspended',
   'the owner suspended after the claim: account_suspended');
 select ok(not pg_temp.live(4), 'and the entry stays unpublished');

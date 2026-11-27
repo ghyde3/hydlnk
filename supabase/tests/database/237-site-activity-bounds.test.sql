@@ -11,7 +11,7 @@ select plan(9);
 
 select tests.create_supabase_user('o', 'o-237@example.test');
 select tests.create_supabase_user('e', 'e-237@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000237a01', tests.get_supabase_uid('o'), 'zq237-s',
    '{"version":1,"rev":1,"profile":{"name":"S","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');

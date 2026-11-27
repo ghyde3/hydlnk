@@ -13,7 +13,7 @@ select plan(11);
 
 select tests.create_supabase_user('a', 'a-215@example.test');
 select tests.create_supabase_user('b', 'b-215@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('a'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000215001', tests.get_supabase_uid('a'), 'zq215-a',

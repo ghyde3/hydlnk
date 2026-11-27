@@ -21,7 +21,7 @@ select tests.create_supabase_user('x', 'x-234@example.test');
 select tests.create_supabase_user('u', 'u-234@example.test');
 update auth.users set email_confirmed_at = now()
   where email like '%-234@example.test' and email <> 'u-234@example.test';
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000234a01', tests.get_supabase_uid('o'), 'zq234-a',
@@ -50,7 +50,7 @@ select throws_ok(
 select throws_ok(
   $$ select public.accept_site_invite(pg_temp.h(1), tests.get_supabase_uid('e'), null) $$,
   'HL021', 'invite_session', 'a null method list cannot');
-select is((select count(*)::int from team.site_members where user_id = tests.get_supabase_uid('e')), 0,
+select is((select count(*)::int from team.site_members where user_id = (select tests.get_supabase_uid('e'))), 0,
   'and nothing was joined');
 select lives_ok(
   $$ select public.accept_site_invite(pg_temp.h(1), tests.get_supabase_uid('e'), array['password', 'otp']) $$,

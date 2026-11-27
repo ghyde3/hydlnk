@@ -19,7 +19,7 @@ select tests.create_supabase_user('o', 'o-227@example.test');
 select tests.create_supabase_user('e', 'e-227@example.test');
 select tests.create_supabase_user('p', 'p-227@example.test');
 select tests.create_supabase_user('x', 'x-227@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000227a01', tests.get_supabase_uid('o'), 'zq227-s',
@@ -105,7 +105,7 @@ create function pg_temp.owner_only227() returns bigint language sql as $$
        + (select count(*) from public.daily_site_stats)
        + (select count(*) from public.site_pages)
        + (select count(*) from public.form_submissions)
-       + (select count(*) from public.accounts where id = tests.get_supabase_uid('o'))
+       + (select count(*) from public.accounts where id = (select tests.get_supabase_uid('o')))
 $$;
 grant execute on function pg_temp.reads227() to authenticated;
 grant execute on function pg_temp.reads227_s2() to authenticated;
@@ -149,16 +149,16 @@ select tests.authenticate_as('o');
 select is((select s from want227), (select pg_temp.reads227()), 'the owner''s reads are unchanged');
 select matches((select pg_temp.reads227()), '^pages:1,types:[1-9][0-9]*,entries:1,revisions:1,terms:1,entry_terms:1,paths:[1-9][0-9]*,redirects:1,versions:1,schedules:1$',
   'the owner reads one of everything on S');
-select is((select count(*)::int from public.themes where owner_id = tests.get_supabase_uid('o')), 1, 'the owner reads their theme');
+select is((select count(*)::int from public.themes where owner_id = (select tests.get_supabase_uid('o'))), 1, 'the owner reads their theme');
 
 select tests.authenticate_as('e');
 select is((select pg_temp.reads227()), (select s from want227), 'the editor reads all of S that the owner reads');
 select is((select pg_temp.reads227_s2()), 0::bigint, 'the editor reads nothing of the owner''s other site S2');
 select is((select pg_temp.owner_only227()), 0::bigint,
   'the editor reads no domain, daily stats, site_pages, form submission, nor the owner''s account');
-select is((select count(*)::int from public.themes where owner_id = tests.get_supabase_uid('o')), 1,
+select is((select count(*)::int from public.themes where owner_id = (select tests.get_supabase_uid('o'))), 1,
   'the editor reads the owner''s saved theme');
-select is((select count(*)::int from public.themes where owner_id = tests.get_supabase_uid('x')), 0,
+select is((select count(*)::int from public.themes where owner_id = (select tests.get_supabase_uid('x'))), 0,
   'and no other user''s');
 select is((select count(*)::int from public.form_submission_counts('00000000-0000-4000-8000-000000227a01')), 0,
   'form_submission_counts returns nothing for a member');
@@ -177,12 +177,12 @@ select is((select count(*)::int from public.form_submissions where site_id = '00
   'the member''s delete removed no submission');
 
 -- Versions only while the owner's plan keeps them.
-update public.accounts set paid_plan = 'free', gift_plan = 'studio', gift_until = null where id = tests.get_supabase_uid('o');
-update public.accounts set gift_plan = null where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'free', gift_plan = 'studio', gift_until = null where id = (select tests.get_supabase_uid('o'));
+update public.accounts set gift_plan = null where id = (select tests.get_supabase_uid('o'));
 select tests.authenticate_as('e');
 select is((select count(*)::int from public.page_versions), 0, 'owner on Free: no versions for the member (nor anything else)');
 reset role;
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 
 -- ---------------------------------------------------------------------------
 -- Writes: pages.draft only
@@ -196,7 +196,7 @@ select throws_ok($$ update public.pages set name = 'Renamed' where id = '0000000
   '42501', null, 'the editor cannot rename the site');
 select throws_ok($$ update public.pages set handle = 'zq227-taken' where id = '00000000-0000-4000-8000-000000227a01' $$,
   '42501', null, 'nor change the handle');
-select throws_ok($$ update public.pages set owner_id = tests.get_supabase_uid('e') where id = '00000000-0000-4000-8000-000000227a01' $$,
+select throws_ok($$ update public.pages set owner_id = (select tests.get_supabase_uid('e')) where id = '00000000-0000-4000-8000-000000227a01' $$,
   '42501', null, 'nor take ownership');
 select throws_ok($$ update public.pages set published = draft where id = '00000000-0000-4000-8000-000000227a01' $$,
   '42501', null, 'nor publish');
@@ -208,14 +208,14 @@ select is_empty(
 select throws_ok($$ insert into public.content_entries (site_id, type_id, draft)
     values ('00000000-0000-4000-8000-000000227a01', (select s_post from t227), '{}') $$,
   '42501', null, 'nor insert an entry directly');
-select is_empty($$ update public.themes set name = 'Mine' where owner_id = tests.get_supabase_uid('o') returning id $$,
+select is_empty($$ update public.themes set name = 'Mine' where owner_id = (select tests.get_supabase_uid('o')) returning id $$,
   'nor rename the owner''s saved theme (the update policy stays owner-only)');
 reset role;
 select is((select draft #>> '{profile,bio}' from public.pages where id = '00000000-0000-4000-8000-000000227a01'),
   'by editor', 'the draft write landed');
 select is((select name from public.pages where id = '00000000-0000-4000-8000-000000227a01'), 'Main page',
   'the name did not change');
-select is((select name from public.themes where owner_id = tests.get_supabase_uid('o')), 'Owner theme',
+select is((select name from public.themes where owner_id = (select tests.get_supabase_uid('o'))), 'Owner theme',
   'the owner''s theme is unchanged');
 
 select tests.authenticate_as('p');
@@ -231,7 +231,7 @@ select is_empty(
 reset role;
 
 -- A removed member writes nothing with the same session.
-delete from team.site_members where user_id = tests.get_supabase_uid('e');
+delete from team.site_members where user_id = (select tests.get_supabase_uid('e'));
 select tests.authenticate_as('e');
 select is_empty(
   $$ update public.pages set draft = '{}' where id = '00000000-0000-4000-8000-000000227a01' returning id $$,

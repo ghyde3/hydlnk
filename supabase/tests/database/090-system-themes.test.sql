@@ -11,8 +11,8 @@ select tests.create_supabase_user('b', 'b@example.test');   -- free
 select tests.create_supabase_user('c', 'c@example.test');   -- pro
 select tests.create_supabase_user('d', 'd@example.test');   -- studio
 
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('c');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('d');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('c'));
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('d'));
 
 insert into public.themes (id, owner_id, name, tokens) values
   ('00000000-0000-4000-8000-0000000009e1', tests.get_supabase_uid('b'), 'B private', '{"accent":"#FF00AA"}'),
@@ -302,11 +302,11 @@ select is(
 reset role;
 select tests.authenticate_as('b');
 select is_empty(
-  $$ with u as (update public.themes set name = 'Hijacked', tokens = '{}' where owner_id = tests.get_supabase_uid('a') returning id) select * from u $$,
+  $$ with u as (update public.themes set name = 'Hijacked', tokens = '{}' where owner_id = (select tests.get_supabase_uid('a')) returning id) select * from u $$,
   'B''s PATCH on A''s saved themes updates no row'
 );
 select is_empty(
-  $$ with d as (delete from public.themes where owner_id = tests.get_supabase_uid('a') returning id) select * from d $$,
+  $$ with d as (delete from public.themes where owner_id = (select tests.get_supabase_uid('a')) returning id) select * from d $$,
   'B''s DELETE on A''s saved themes removes no row (M3-24)'
 );
 select throws_ok(
@@ -336,7 +336,7 @@ select is(
   'and it is gone'
 );
 select is(
-  (select count(*)::int from public.themes where owner_id = tests.get_supabase_uid('a')),
+  (select count(*)::int from public.themes where owner_id = (select tests.get_supabase_uid('a'))),
   2,
   'the count Free sees is back to 2, so the next save fits'
 );
@@ -349,7 +349,7 @@ insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000009f1', tests.get_supabase_uid('a'), 'themes-dangling',
    '{"version":1,"rev":0,"profile":{"name":"A","bio":"","photo":null},"theme":{"ref":"00000000-0000-4000-8000-0000000009e2","overrides":{}},"blocks":[]}');
 select lives_ok(
-  $$ delete from public.themes where owner_id = tests.get_supabase_uid('a') $$,
+  $$ delete from public.themes where owner_id = (select tests.get_supabase_uid('a')) $$,
   'deleting every saved theme of a user whose draft references one does not fail'
 );
 select is(

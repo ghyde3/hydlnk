@@ -10,8 +10,8 @@ select tests.create_supabase_user('p', 'p@example.test');   -- pro
 select tests.create_supabase_user('s', 's@example.test');   -- studio
 select tests.create_supabase_user('z', 'z@example.test');   -- free, no page at all
 
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('s');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('s'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-0000000092a1', tests.get_supabase_uid('a'), 'lim-alpha', '{"version":1}'),
@@ -58,17 +58,17 @@ select throws_ok(
 -- ---------------------------------------------------------------------------
 
 select throws_ok(
-  $$ update public.accounts set paid_plan = 'enterprise' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = 'enterprise' where id = (select tests.get_supabase_uid('a')) $$,
   '23514', null,
   'accounts.plan rejects ''enterprise'''
 );
 select throws_ok(
-  $$ update public.accounts set paid_plan = 'Pro' where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = 'Pro' where id = (select tests.get_supabase_uid('a')) $$,
   '23514', null,
   'accounts.plan rejects ''Pro'' (case matters)'
 );
 select throws_ok(
-  $$ update public.accounts set paid_plan = null where id = tests.get_supabase_uid('a') $$,
+  $$ update public.accounts set paid_plan = null where id = (select tests.get_supabase_uid('a')) $$,
   '23502', null,
   'accounts.plan is never null'
 );
@@ -304,24 +304,24 @@ select is(
 -- ---------------------------------------------------------------------------
 
 select is(
-  (select count(*)::int from public.pages where owner_id = tests.get_supabase_uid('p')),
+  (select count(*)::int from public.pages where owner_id = (select tests.get_supabase_uid('p'))),
   3,
   'setup: the Pro account holds 3 pages'
 );
-update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'free' where id = (select tests.get_supabase_uid('p'));
 select is(
-  (select count(*)::int from public.pages where owner_id = tests.get_supabase_uid('p')),
+  (select count(*)::int from public.pages where owner_id = (select tests.get_supabase_uid('p'))),
   3,
   'a downgrade to Free keeps all 3 pages (3 of 1)'
 );
 select is(
   (select count(*)::int from public.domains d join public.pages pg on pg.id = d.page_id
-     where pg.owner_id = tests.get_supabase_uid('p')),
+     where pg.owner_id = (select tests.get_supabase_uid('p'))),
   1,
   'and the domain'
 );
 select is(
-  (select count(*)::int from public.themes where owner_id = tests.get_supabase_uid('p')),
+  (select count(*)::int from public.themes where owner_id = (select tests.get_supabase_uid('p'))),
   5,
   'and the 5 saved themes (Free allows 3)'
 );

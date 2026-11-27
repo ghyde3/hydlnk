@@ -15,7 +15,7 @@ select plan(31);
 
 select tests.create_supabase_user('a', 'a-201@example.test');   -- pro, versions kept
 select tests.create_supabase_user('b', 'b-201@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000201a001', tests.get_supabase_uid('a'), 'zq201-a',

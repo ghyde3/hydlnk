@@ -18,7 +18,7 @@ select tests.create_supabase_user('c', 'c-175@example.test');   -- pro, downgrad
 select tests.create_supabase_user('d', 'd-175@example.test');   -- free, no sub-pages
 
 update public.accounts set paid_plan = 'pro'
-  where id in (tests.get_supabase_uid('b'), tests.get_supabase_uid('c'));
+  where id in ((select tests.get_supabase_uid('b')), (select tests.get_supabase_uid('c')));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000175a001', tests.get_supabase_uid('a'), 'zq175-a',
@@ -224,7 +224,7 @@ select throws_ok(
 reset role;
 
 -- suspended owner
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('a');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('a'));
 select tests.authenticate_as('a');
 select is(
   pg_temp.n($q$ update public.site_pages set draft = '{"path":"one","title":"Suspended","description":"","blocks":[]}' where id = '00000000-0000-4000-8000-00000175a0a1' $q$),
@@ -238,7 +238,7 @@ select is(
 );
 select tests.clear_authentication();
 reset role;
-update public.accounts set suspended_at = null where id = tests.get_supabase_uid('a');
+update public.accounts set suspended_at = null where id = (select tests.get_supabase_uid('a'));
 select is(
   (select draft ->> 'title' from public.site_pages where id = '00000000-0000-4000-8000-00000175a0a1'),
   'Edited',
@@ -304,7 +304,7 @@ select throws_ok(
   'HL008', null, 'pro: the tenth sub-page is refused'
 );
 select lives_ok(
-  $$ update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('b') $$,
+  $$ update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('b')) $$,
   'b upgrades to studio'
 );
 select lives_ok(
@@ -325,7 +325,7 @@ insert into public.site_pages (page_id, draft)
 select '00000000-0000-4000-8000-00000175c001',
        jsonb_build_object('path', 'c' || g, 'title', 'C', 'description', '', 'blocks', '[]'::jsonb)
 from generate_series(1, 4) g;
-update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('c');
+update public.accounts set paid_plan = 'free' where id = (select tests.get_supabase_uid('c'));
 select is(
   (select count(*)::int from public.site_pages where page_id = '00000000-0000-4000-8000-00000175c001'),
   4,
@@ -384,7 +384,7 @@ update public.site_pages
   set draft = '{"path":"one","title":"One","description":"","blocks":[]}'
   where id = '00000000-0000-4000-8000-00000175a0a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where path = tests.get_supabase_uid('a')::text || '/aaaaaaaa-img1.png'),
+  (select count(*)::int from public.image_cleanup_queue where path = (select tests.get_supabase_uid('a'))::text || '/aaaaaaaa-img1.png'),
   0,
   'a draft that drops an image the published copy still names queues nothing'
 );
@@ -398,7 +398,7 @@ update public.site_pages
   set published = '{"path":"one","title":"One","description":"","blocks":[]}', published_at = now()
   where id = '00000000-0000-4000-8000-00000175a0a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where path = tests.get_supabase_uid('a')::text || '/aaaaaaaa-img1.png'),
+  (select count(*)::int from public.image_cleanup_queue where path = (select tests.get_supabase_uid('a'))::text || '/aaaaaaaa-img1.png'),
   1,
   'a publish that drops the last reference queues the image'
 );
@@ -414,7 +414,7 @@ update public.site_pages
           'image', jsonb_build_object('path', tests.get_supabase_uid('a')::text || '/aaaaaaaa-img1.png'))))
   where id = '00000000-0000-4000-8000-00000175a0a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where path = tests.get_supabase_uid('a')::text || '/aaaaaaaa-img1.png'),
+  (select count(*)::int from public.image_cleanup_queue where path = (select tests.get_supabase_uid('a'))::text || '/aaaaaaaa-img1.png'),
   0,
   'an image that comes back into a draft leaves the queue'
 );
@@ -425,7 +425,7 @@ update public.site_pages
   where id = '00000000-0000-4000-8000-00000175a0a2';
 delete from public.site_pages where id = '00000000-0000-4000-8000-00000175a0a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where path = tests.get_supabase_uid('a')::text || '/aaaaaaaa-img1.png'),
+  (select count(*)::int from public.image_cleanup_queue where path = (select tests.get_supabase_uid('a'))::text || '/aaaaaaaa-img1.png'),
   1,
   'deleting a sub-page queues the images it named'
 );
@@ -439,7 +439,7 @@ select is(
 delete from public.image_cleanup_queue;
 delete from public.pages where id = '00000000-0000-4000-8000-00000175a001';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where path = tests.get_supabase_uid('a')::text || '/aaaaaaaa-img1.png'),
+  (select count(*)::int from public.image_cleanup_queue where path = (select tests.get_supabase_uid('a'))::text || '/aaaaaaaa-img1.png'),
   1,
   'deleting the site queues its sub-pages'' images'
 );

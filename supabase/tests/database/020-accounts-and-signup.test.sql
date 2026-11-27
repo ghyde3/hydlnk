@@ -11,13 +11,13 @@ select tests.create_supabase_user('b', 'b@example.test');
 -- ---------------------------------------------------------------------------
 
 select is(
-  (select plan from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'free',
   'signing up creates an account on the free plan'
 );
 select ok(
   (select stripe_customer_id is null and suspended_at is null
-     from public.accounts where id = tests.get_supabase_uid('a')),
+     from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'a new account has no Stripe customer and is not suspended'
 );
 
@@ -123,12 +123,12 @@ select throws_ok(
 
 reset role;
 select is(
-  (select plan from public.accounts where id = tests.get_supabase_uid('a')),
+  (select plan from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'free',
   'tenant A''s plan is still free after every attempt'
 );
 select is(
-  (select plan from public.accounts where id = tests.get_supabase_uid('b')),
+  (select plan from public.accounts where id = (select tests.get_supabase_uid('b'))),
   'free',
   'tenant B''s plan is still free'
 );
@@ -155,7 +155,7 @@ select throws_ok(
 
 reset role;
 select ok(
-  (select updated_at > created_at from public.accounts where id = tests.get_supabase_uid('a')),
+  (select updated_at > created_at from public.accounts where id = (select tests.get_supabase_uid('a'))),
   'updated_at moves when the account changes'
 );
 

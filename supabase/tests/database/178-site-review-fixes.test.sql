@@ -23,7 +23,7 @@ select plan(44);
 
 select tests.create_supabase_user('a', 'a-178@example.test');   -- pro
 select tests.create_supabase_user('b', 'b-178@example.test');   -- pro
-update public.accounts set paid_plan = 'pro' where id in (tests.get_supabase_uid('a'), tests.get_supabase_uid('b'));
+update public.accounts set paid_plan = 'pro' where id in ((select tests.get_supabase_uid('a')), (select tests.get_supabase_uid('b')));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000178a001', tests.get_supabase_uid('a'), 'zq178-a',
@@ -88,7 +88,7 @@ select is(pg_temp.total('a'), pg_temp.actual('a'), 'a shrinking update lowers it
 -- ---------------------------------------------------------------------------
 
 -- Park the total 400 bytes under the cap (the test runs as the table owner, the only way in).
-update public.account_site_bytes set bytes = 1073741824 - 400 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 - 400 where owner_id = (select tests.get_supabase_uid('a'));
 
 select throws_ok(
   $$ insert into public.site_pages (id, page_id, draft)
@@ -124,7 +124,7 @@ select lives_ok(
              pg_temp.doc('fits', 50)) $$,
   'a small page that fits is still accepted'
 );
-update public.account_site_bytes set bytes = 1073741824 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 where owner_id = (select tests.get_supabase_uid('a'));
 select lives_ok(
   $$ update public.site_pages set draft = pg_temp.doc('one', 1)
        where id = '00000000-0000-4000-8000-00000178a0a1' $$,
@@ -146,7 +146,7 @@ select lives_ok(
 );
 
 -- Delete frees room
-update public.account_site_bytes set bytes = 1073741824 - 100 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 - 100 where owner_id = (select tests.get_supabase_uid('a'));
 delete from public.site_pages where id = '00000000-0000-4000-8000-00000178a0a2';
 select ok(pg_temp.total('a') < 1073741824 - 100 - 200, 'deleting a sub-page frees its bytes');
 select lives_ok(
@@ -157,7 +157,7 @@ select lives_ok(
 );
 
 -- The total accumulates across statements: each write fits alone, the pair does not.
-update public.account_site_bytes set bytes = 1073741824 - 600 where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = 1073741824 - 600 where owner_id = (select tests.get_supabase_uid('a'));
 select lives_ok(
   $$ insert into public.site_pages (id, page_id, draft)
      values ('00000000-0000-4000-8000-00000178a0a7', '00000000-0000-4000-8000-00000178a001',
@@ -172,7 +172,7 @@ select throws_ok(
 );
 
 -- Deleting the whole site frees what its sub-pages held
-update public.account_site_bytes set bytes = pg_temp.actual('b') where owner_id = tests.get_supabase_uid('b');
+update public.account_site_bytes set bytes = pg_temp.actual('b') where owner_id = (select tests.get_supabase_uid('b'));
 delete from public.pages where id = '00000000-0000-4000-8000-00000178b001';
 select is(pg_temp.total('b'), 0::bigint, 'deleting the site frees all of its sub-page bytes');
 
@@ -181,7 +181,7 @@ select is(pg_temp.total('b'), 0::bigint, 'deleting the site frees all of its sub
 -- ---------------------------------------------------------------------------
 
 delete from public.site_pages where page_id = '00000000-0000-4000-8000-00000178a001';
-update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = tests.get_supabase_uid('a'); -- unpark
+update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = (select tests.get_supabase_uid('a')); -- unpark
 insert into public.site_pages (id, page_id, draft) values
   ('00000000-0000-4000-8000-00000178a0b1', '00000000-0000-4000-8000-00000178a002', pg_temp.doc('items', 10));
 select public.publish_site(
@@ -254,11 +254,11 @@ select is(
 -- AFTER ROW accounting: skipped rows count nothing; page_id is immutable
 -- ---------------------------------------------------------------------------
 
-update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = (select tests.get_supabase_uid('a'));
 -- (site a001 is not moved: its rows are still counted as site_pages)
 insert into public.site_pages (id, page_id, draft)
   values ('00000000-0000-4000-8000-00000178a0d1', '00000000-0000-4000-8000-00000178a001', pg_temp.doc('one', 20));
-update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = tests.get_supabase_uid('a');
+update public.account_site_bytes set bytes = pg_temp.actual('a') where owner_id = (select tests.get_supabase_uid('a'));
 insert into public.site_pages (id, page_id, draft)
   values ('00000000-0000-4000-8000-00000178a0d1', '00000000-0000-4000-8000-00000178a001', pg_temp.doc('dup', 9000))
   on conflict (id) do nothing;
@@ -288,12 +288,12 @@ select is(
   1, 'requeue_media touches only the named paths of that owner'
 );
 select ok(
-  (select queued_at > now() - interval '1 hour' from public.image_cleanup_queue where path = tests.get_supabase_uid('a')::text || '/rq-1.webp'),
+  (select queued_at > now() - interval '1 hour' from public.image_cleanup_queue where path = (select tests.get_supabase_uid('a'))::text || '/rq-1.webp'),
   'the row moved to the back'
 );
 select ok(
   (select count(*) = 2 from public.image_cleanup_queue where queued_at < now() - interval '1 day'
-     and path in (tests.get_supabase_uid('a')::text || '/rq-2.webp', tests.get_supabase_uid('b')::text || '/rq-3.webp')),
+     and path in ((select tests.get_supabase_uid('a'))::text || '/rq-2.webp', (select tests.get_supabase_uid('b'))::text || '/rq-3.webp')),
   'the other rows (the same owner''s unnamed one, another owner''s) were left alone'
 );
 select ok(

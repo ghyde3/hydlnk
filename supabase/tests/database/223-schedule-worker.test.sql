@@ -20,7 +20,7 @@ select plan(42);
 
 select tests.create_supabase_user('p', 'p-223@example.test');
 select tests.create_supabase_user('o', 'o-223@example.test');
-update public.accounts set paid_plan = 'pro' where id in (tests.get_supabase_uid('p'), tests.get_supabase_uid('o'));
+update public.accounts set paid_plan = 'pro' where id in ((select tests.get_supabase_uid('p')), (select tests.get_supabase_uid('o')));
 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-000000223a01', tests.get_supabase_uid('p'), 'zq223-p',
@@ -234,13 +234,13 @@ select is((pg_temp.entry('00000000-0000-4000-8000-000000223e11')).published ->> 
 create temp table late as select pg_temp.sched('00000000-0000-4000-8000-000000223e09') as id;
 grant all on late to public;
 select pg_temp.claim();
-update public.accounts set paid_plan = 'free' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'free' where id = (select tests.get_supabase_uid('p'));
 select throws_ok(
   $$select public.fire_scheduled_publish((select id from late), pg_temp.token((select id from late)), '{"title":"Nine","slug":"nine"}')$$,
   'HL017', null, 'after a downgrade the fire raises HL017');
 select is((select status from public.content_schedules where id = (select id from late)), 'pending',
   'and the row is not marked done (the worker then ends it as failed plan)');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('p');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('p'));
 
 -- ---------------------------------------------------------------------------
 -- Fairness and the claim size
@@ -256,7 +256,7 @@ select pg_temp.sched('00000000-0000-4000-8000-000000223e07');
 select pg_temp.sched('00000000-0000-4000-8000-000000223f01');
 select pg_temp.sched('00000000-0000-4000-8000-000000223f02');
 select is(pg_temp.claim(), 7, 'one claim takes 5 rows of one owner and the 2 of another');
-select is((select count(*)::int from claimed where owner_id = tests.get_supabase_uid('p')), 5,
+select is((select count(*)::int from claimed where owner_id = (select tests.get_supabase_uid('p'))), 5,
   'at most 5 rows of one owner are in a claim');
 
 -- 30 more due rows over six owners: a claim never returns more than 25, whatever it asks for.

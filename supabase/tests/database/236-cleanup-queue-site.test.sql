@@ -8,7 +8,7 @@ begin;
 select plan(10);
 
 select tests.create_supabase_user('o', 'o-236@example.test');
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
 create temp table t236 as select
   tests.get_supabase_uid('o')::text || '/img-0236000000a1.webp' as a,
   tests.get_supabase_uid('o')::text || '/img-0236000000b2.webp' as b,

@@ -21,8 +21,8 @@ select tests.create_supabase_user('pro', 'pro-228@example.test');
 select tests.create_supabase_user('e', 'e-228@example.test');
 select tests.create_supabase_user('p', 'p-228@example.test');
 update auth.users set email_confirmed_at = now() where email like '%-228@example.test';
-update public.accounts set paid_plan = 'studio' where id = tests.get_supabase_uid('o');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('pro');
+update public.accounts set paid_plan = 'studio' where id = (select tests.get_supabase_uid('o'));
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('pro'));
 
 insert into public.pages (id, owner_id, handle, draft)
 select ('00000000-0000-4000-8000-000000228a0' || n)::uuid, tests.get_supabase_uid('o'), 'zq228-s' || n,
@@ -119,7 +119,7 @@ select throws_ok(
        's2-228@example.test', pg_temp.h(302), 'editor') $$,
   'HL020', 'invite_limit', 'revoking one does not give the day''s place back');
 update team.site_invites set created_at = created_at - interval '25 hours', expires_at = expires_at - interval '25 hours'
-  where invited_by = tests.get_supabase_uid('o') and email like 'r_-228@example.test';
+  where invited_by = (select tests.get_supabase_uid('o')) and email like 'r_-228@example.test';
 select lives_ok(
   $$ select public.create_site_invite('00000000-0000-4000-8000-000000228a03', tests.get_supabase_uid('o'),
        's2-228@example.test', pg_temp.h(302), 'editor') $$,
@@ -154,7 +154,7 @@ insert into team.site_members (site_id, user_id, role)
 select public.create_site_invite(
   (select id from public.pages where handle = 'zq228-o4-9'), tests.get_supabase_uid('own4'),
   'q1-228@example.test', pg_temp.h(400), 'editor');
-select is((select count(*)::int from team.site_members where user_id = tests.get_supabase_uid('q1')), 50,
+select is((select count(*)::int from team.site_members where user_id = (select tests.get_supabase_uid('q1'))), 50,
   'the member is in 50 shared sites');
 select throws_ok(
   $$ select public.accept_site_invite(pg_temp.h(400), tests.get_supabase_uid('q1'), array['otp']) $$,
@@ -208,17 +208,17 @@ select throws_ok(
   'HL015', null, 'the 501st is refused');
 
 -- HL009: the owner's byte total, never the member's.
-select is((select count(*)::int from public.account_site_bytes where owner_id = tests.get_supabase_uid('e')), 0,
+select is((select count(*)::int from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('e'))), 0,
   'nothing was charged to the member''s account');
-select ok((select bytes > 0 from public.account_site_bytes where owner_id = tests.get_supabase_uid('o')),
+select ok((select bytes > 0 from public.account_site_bytes where owner_id = (select tests.get_supabase_uid('o'))),
   'the entries were charged to the owner''s account');
 update public.account_site_bytes set bytes = (select l.content_bytes from public.plan_limits('studio') l) - 10
-  where owner_id = tests.get_supabase_uid('o');
+  where owner_id = (select tests.get_supabase_uid('o'));
 select throws_ok(
   $$ insert into public.content_entries (site_id, type_id, draft)
      values ('00000000-0000-4000-8000-000000228a01', (select s_post from t228), '{"title":"one more"}') $$,
   'HL009', null, 'HL009: a write past the owner''s content bytes is refused');
-update public.account_site_bytes set bytes = 0 where owner_id = tests.get_supabase_uid('o');
+update public.account_site_bytes set bytes = 0 where owner_id = (select tests.get_supabase_uid('o'));
 
 -- HL016: the recorder answers with (and counts on) the site's owner.
 update public.pages set published = draft, published_at = now() where id = '00000000-0000-4000-8000-000000228a01';
@@ -271,11 +271,11 @@ select throws_ok(
 -- Demotion cancels the publisher's rows, never the owner's.
 select public.set_site_member_role('00000000-0000-4000-8000-000000228a01', tests.get_supabase_uid('o'),
   tests.get_supabase_uid('p'), 'editor');
-select is((select count(*)::int from public.content_schedules where created_by = tests.get_supabase_uid('p') and status = 'pending'),
+select is((select count(*)::int from public.content_schedules where created_by = (select tests.get_supabase_uid('p')) and status = 'pending'),
   0, 'demoting the publisher cancels their pending rows');
 select ok((select bool_and(status = 'canceled' and result_code = 'canceled') from public.content_schedules
-  where created_by = tests.get_supabase_uid('p')), 'each ends canceled with result_code canceled');
-select is((select status from public.content_schedules where created_by = tests.get_supabase_uid('o')), 'pending',
+  where created_by = (select tests.get_supabase_uid('p'))), 'each ends canceled with result_code canceled');
+select is((select status from public.content_schedules where created_by = (select tests.get_supabase_uid('o'))), 'pending',
   'the owner''s own schedule is untouched');
 
 -- Removal and leaving cancel too.
@@ -285,7 +285,7 @@ select public.schedule_entry_as((select id from e228 order by id offset 2 limit 
   tests.get_supabase_uid('p'), (select rev from e228 order by id offset 2 limit 1), 'publish', (select later from t228));
 select public.remove_site_member('00000000-0000-4000-8000-000000228a01', tests.get_supabase_uid('o'),
   tests.get_supabase_uid('p'));
-select is((select count(*)::int from public.content_schedules where created_by = tests.get_supabase_uid('p') and status = 'pending'),
+select is((select count(*)::int from public.content_schedules where created_by = (select tests.get_supabase_uid('p')) and status = 'pending'),
   0, 'removing the publisher cancels their pending rows');
 select throws_ok(
   $$ select public.schedule_entry_as((select id from e228 order by id offset 2 limit 1), tests.get_supabase_uid('o'),
@@ -302,7 +302,7 @@ select public.schedule_entry_as('00000000-0000-4000-8000-000000228e21', tests.ge
 select public.leave_site('00000000-0000-4000-8000-000000228a02', tests.get_supabase_uid('p'));
 select is((select status || '|' || result_code from public.content_schedules where entry_id = '00000000-0000-4000-8000-000000228e21'),
   'canceled|canceled', 'leaving cancels the leaver''s pending rows');
-select is((select status from public.content_schedules where created_by = tests.get_supabase_uid('o')), 'pending',
+select is((select status from public.content_schedules where created_by = (select tests.get_supabase_uid('o'))), 'pending',
   'the owner''s schedule is still pending');
 
 select * from finish();

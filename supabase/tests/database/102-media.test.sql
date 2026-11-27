@@ -8,7 +8,7 @@ select plan(56);
 
 select tests.create_supabase_user('a', 'a@example.test');
 select tests.create_supabase_user('b', 'b@example.test');
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 
 -- Paths of the shape the pipeline stores: {uid}/{avatar|bg|img}-{hash}.webp.
 create temp table p as
@@ -140,7 +140,7 @@ insert into public.pages (id, owner_id, handle, draft) values
    )));
 
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id in (tests.get_supabase_uid('a'), tests.get_supabase_uid('b'))),
+  (select count(*)::int from public.image_cleanup_queue where owner_id in ((select tests.get_supabase_uid('a')), (select tests.get_supabase_uid('b')))),
   0,
   'inserting a page queues nothing'
 );
@@ -151,12 +151,12 @@ update public.pages
      jsonb_build_object('type', 'image', 'image', jsonb_build_object('path', (select a_img from p)))))
  where id = '00000000-0000-4000-8000-0000000102a1';
 select results_eq(
-  $$ select path from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') order by path $$,
+  $$ select path from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) order by path $$,
   $$ select a_avatar from p $$,
   'dropping an image from the draft queues that path (and only it)'
 );
 select is(
-  (select owner_id from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') limit 1),
+  (select owner_id from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) limit 1),
   tests.get_supabase_uid('a'),
   'the queue row carries the page owner'
 );
@@ -168,7 +168,7 @@ update public.pages
      jsonb_build_object('type', 'image', 'image', jsonb_build_object('path', (select a_avatar from p)))))
  where id = '00000000-0000-4000-8000-0000000102a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id in (tests.get_supabase_uid('a'), tests.get_supabase_uid('b'))),
+  (select count(*)::int from public.image_cleanup_queue where owner_id in ((select tests.get_supabase_uid('a')), (select tests.get_supabase_uid('b')))),
   0,
   're-adding the path removes it from the queue'
 );
@@ -184,7 +184,7 @@ update public.pages
      jsonb_build_object('type', 'image', 'image', jsonb_build_object('path', (select a_img from p)))))
  where id = '00000000-0000-4000-8000-0000000102a1';
 select is(
-  (select count(*)::int from public.image_cleanup_queue where owner_id in (tests.get_supabase_uid('a'), tests.get_supabase_uid('b'))),
+  (select count(*)::int from public.image_cleanup_queue where owner_id in ((select tests.get_supabase_uid('a')), (select tests.get_supabase_uid('b')))),
   0,
   'a path the published document still names is not queued when the draft drops it'
 );
@@ -201,7 +201,7 @@ update public.pages
        published_at = now()
  where id = '00000000-0000-4000-8000-0000000102a1';
 select results_eq(
-  $$ select path from public.image_cleanup_queue where owner_id = tests.get_supabase_uid('a') $$,
+  $$ select path from public.image_cleanup_queue where owner_id = (select tests.get_supabase_uid('a')) $$,
   $$ select a_avatar from p $$,
   'the publish that drops the last reference queues the path'
 );
@@ -447,19 +447,19 @@ select results_eq(
   'another account is unaffected'
 );
 select is(
-  (select count(*)::int from public.image_upload_hits where owner_id = tests.get_supabase_uid('a')),
+  (select count(*)::int from public.image_upload_hits where owner_id = (select tests.get_supabase_uid('a'))),
   20,
   'a refused request is not counted'
 );
 update public.image_upload_hits set hit_at = now() - interval '2 hours'
- where owner_id = tests.get_supabase_uid('a');
+ where owner_id = (select tests.get_supabase_uid('a'));
 select results_eq(
   format($$ select allowed from public.media_upload_rate_hit(%L, 20, 3600) $$, tests.get_supabase_uid('a')),
   $$ values (true) $$,
   'after the window passes the account may upload again'
 );
 select is(
-  (select count(*)::int from public.image_upload_hits where owner_id = tests.get_supabase_uid('a')),
+  (select count(*)::int from public.image_upload_hits where owner_id = (select tests.get_supabase_uid('a'))),
   1,
   'and the old rows were pruned'
 );

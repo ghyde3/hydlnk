@@ -15,7 +15,7 @@ select plan(28);
 select tests.create_supabase_user('a', 'a-202@example.test');   -- pro
 select tests.create_supabase_user('b', 'b-202@example.test');
 select tests.create_supabase_user('c', 'c-202@example.test');   -- free: Home plus 2 pages
-update public.accounts set paid_plan = 'pro' where id = tests.get_supabase_uid('a');
+update public.accounts set paid_plan = 'pro' where id = (select tests.get_supabase_uid('a'));
 
 insert into public.blocked_domains (domain) values ('blocked.example') on conflict do nothing;
 

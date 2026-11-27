@@ -37,7 +37,7 @@ insert into public.pages (id, owner_id, handle, draft, published, published_at) 
 insert into public.pages (id, owner_id, handle, draft) values
   ('00000000-0000-4000-8000-00000219c001', tests.get_supabase_uid('c'), 'zq219-c',
    '{"version":1,"rev":1,"profile":{"name":"C","bio":"","photo":null},"theme":{"ref":null,"overrides":{}},"blocks":[]}');
-update public.accounts set suspended_at = now() where id = tests.get_supabase_uid('d');
+update public.accounts set suspended_at = now() where id = (select tests.get_supabase_uid('d'));
 create temp table zz219 as select tests.get_supabase_uid('a') as a;
 
 -- A sub-page of site a, and one of site b.
@@ -268,7 +268,7 @@ select is((select count(*)::int from public.form_submissions where site_id = '00
   'a deleted site removes its submissions');
 
 -- A deleted account (as src/lib/pages/delete-account.ts deletes one) leaves nothing of its forms.
-select isnt_empty($$select 1 from public.form_submission_usage where owner_id = tests.get_supabase_uid('a')$$,
+select isnt_empty($$select 1 from public.form_submission_usage where owner_id = (select tests.get_supabase_uid('a'))$$,
   'account a holds a usage row before it is deleted');
 delete from auth.users where id = (select a from zz219);
 select is((select count(*)::int from public.form_submissions where site_id = '00000000-0000-4000-8000-00000219a001'), 0,
