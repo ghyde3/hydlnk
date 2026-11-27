@@ -4,6 +4,7 @@ import { MarkdownManager } from "@tiptap/markdown";
 import type { JSONContent } from "@tiptap/core";
 import { bodySchema } from "@/components/posts/body-editor/extensions";
 import { canEditRich, fromMarkdown, toMarkdown } from "@/components/posts/body-editor/markdown";
+import { lexBounded } from "@/lib/blog/markdown";
 import { LOSSY, SUPPORTED } from "./support/body-editor-corpus";
 import { ATTACKS, REALISTIC, fit, reseed } from "./support/markdown-families";
 
@@ -55,6 +56,27 @@ describe("the editor's document from our tokens equals the one marked's tokens g
       }
     });
   }
+
+  it("a tight numbered item's text is a paragraph of its inline tokens (marks, links, breaks)", () => {
+    const item = (body: string) => (fromMarkdown(body).content![0]!.content![0]!.content![0] as JSONContent).content;
+    expect(item("1. **a** [l](https://a.co)")).toEqual([
+      { type: "text", text: "a", marks: [{ type: "bold" }] },
+      { type: "text", text: " " },
+      { type: "text", text: "l", marks: [{ type: "link", attrs: { href: "https://a.co", title: null } }] },
+    ]);
+    // Tiptap's own ordered-list tokenizer keeps the continuation line's indent (" b"); the lexer, as
+    // marked and CommonMark do, does not. The body is not held rich either way (the serializer drops
+    // the indent, for bullet lists too).
+    expect(item("1. a  \n   b")).toEqual([{ type: "text", text: "a" }, { type: "hardBreak" }, { type: "text", text: "b" }]);
+    expect(canEditRich("1. a  \n   b")).toBe(canEditRich("- a  \n  b"));
+  });
+
+  it("the lexer's tokens are not changed by building a document", () => {
+    const body = "1. *a*\n2. b";
+    const before = JSON.stringify(lexBounded(body));
+    fromMarkdown(body);
+    expect(JSON.stringify(lexBounded(body))).toBe(before);
+  });
 
   it("a body the lexer refuses is never built into a document (it would be saved empty)", () => {
     const deep = "> ".repeat(200) + "a";
@@ -116,6 +138,12 @@ describe("writing text is fast: the serializer reads a URL back over a bounded w
       const ms = elapsed(() => toMarkdown(paragraph(text)));
       expect(ms, `${name}: ${ms.toFixed(0)} ms`).toBeLessThan(1000);
     }
+  });
+
+  it("URL runs of entities are trimmed in one pass (marked's trim, repeated, was quadratic in each run)", () => {
+    const text = `${"http://a" + "&a;".repeat(1360)} `.repeat(128);
+    const ms = elapsed(() => toMarkdown(paragraph(text)));
+    expect(ms, `${ms.toFixed(0)} ms`).toBeLessThan(1000);
   });
 
   it("a URL after a long paragraph of ordinary text is still written as typed", () => {

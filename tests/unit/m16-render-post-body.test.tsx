@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { seeded } from "./support/random";
 
 /**
  * M16-04: a post body is Markdown drawn as React elements. Tenant content is untrusted, so the
@@ -17,6 +18,7 @@ vi.mock("@/lib/env/client", () => ({
 
 const { PostBody, ownMediaSrc } = await import("@/components/post/post-body");
 const { PostArticle } = await import("@/components/post/post-article");
+const { lexBounded, MARKDOWN_MAX_NODES } = await import("@/lib/blog/markdown");
 
 const OWNER = "0a0a0a0a-0000-4000-8000-000000000001";
 const OTHER = "0b0b0b0b-0000-4000-8000-000000000002";
@@ -407,5 +409,54 @@ describe("PostArticle", () => {
     );
     expect(html).not.toContain("evil.example");
     expect(html).not.toMatch(/href="\/\//);
+  });
+});
+
+describe("PostBody: the node limit bounds what is drawn (M16-13)", () => {
+  // Every element the renderer draws is paid for by a node the lexer charged, so the 150,000-node
+  // limit bounds the page: a row with no cells, an autolink's text and a token of every kind.
+  /** Elements drawn per node, at most: an embed draws six for a paragraph, its link and the link's text. */
+  const PER_NODE = 2;
+  const elements = (markdown: string) => tags(draw(markdown)).length - 1;
+
+  it("an embed is three nodes for its six elements (the autolink's text is charged)", () => {
+    const url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    expect(lexBounded(url)).toMatchObject({ ok: true, nodes: 3 });
+    expect(elements(url)).toBe(6);
+  });
+
+  it("a table of rows with no cells is charged a node per row, and refused past the limit", () => {
+    const rows = (n: number) => `|a|\n|-|\n${"|\n".repeat(n)}`;
+    const small = rows(1000);
+    const lexed = lexBounded(small);
+    expect(lexed.ok && lexed.nodes).toBeGreaterThan(1000);
+    expect(elements(small)).toBeLessThanOrEqual(PER_NODE * lexed.nodes);
+    expect(lexBounded(rows(262_000))).toMatchObject({ ok: false, reason: "size" });
+    expect(tags(draw(rows(262_000))).filter((tag) => tag === "tr")).toHaveLength(0);
+  });
+
+  it("a table's frame is charged: tables of one empty header cell draw at most two elements per node", () => {
+    // Before: the table and its cell were charged (2 nodes) for 6 elements; 131,072 nodes drew
+    // 393,216 elements for this body at 512 KiB.
+    for (const count of [1, 2, 1000]) {
+      const body = "||\n|-|\n\n".repeat(count);
+      const lexed = lexBounded(body);
+      expect(lexed.ok && lexed.nodes).toBe(4 * count);
+      expect(elements(body)).toBeLessThanOrEqual(PER_NODE * 4 * count);
+    }
+    expect(lexBounded("||\n|-|\n\n".repeat(65_536))).toMatchObject({ ok: false, reason: "size" });
+  });
+
+  it(`random bodies draw at most ${PER_NODE} elements per node`, () => {
+    const PIECES = ["a ", "*b* ", "**c** ", "~~d~~ ", "`e` ", "[f](https://x.co) ", "<https://y.co> ", "www.z.co ", "m@n.co ", `![g](${OWN_IMAGE}) `, "\n", "\n\n", "- ", "1. ", "> ", "## ", "- [ ] ", "|a|b|\n|-|-|\n", "||\n|-|\n\n", "|\n", "|1|2|\n", "---\n", "```\nh\n```\n", "a  \nb", "\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\n\n", "<b>i</b>"];
+    const random = seeded(13);
+    for (let sample = 0; sample < 400; sample += 1) {
+      let body = "";
+      for (let k = 1 + Math.floor(random() * 30); k > 0; k -= 1) body += PIECES[Math.floor(random() * PIECES.length)];
+      const lexed = lexBounded(body);
+      if (!lexed.ok || lexed.nodes > MARKDOWN_MAX_NODES) continue;
+      const drawn = elements(body);
+      expect(drawn, JSON.stringify(body)).toBeLessThanOrEqual(PER_NODE * Math.max(lexed.nodes, 1));
+    }
   });
 });

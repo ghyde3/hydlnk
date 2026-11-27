@@ -12,7 +12,7 @@ import {
   isAsciiLetter,
   isJsSpace,
 } from "./chars";
-import type { NextIndex, NextWhere } from "./finder";
+import { NextIndex, type NextWhere } from "./finder";
 
 /**
  * Links without brackets, as marked 17 reads them: GFM's bare URLs and emails (its `url` rule) and
@@ -42,8 +42,8 @@ export function urlPrefixLength(text: string, at: number): number {
   return text.startsWith("://", k) ? k + 3 - at : 0;
 }
 
-/** `[a-zA-Z0-9-]`: what must follow a URL's prefix. */
-function isHostChar(code: number): boolean {
+/** `[a-zA-Z0-9-]`: what must follow a URL's prefix (checked by the caller before `bareUrlEnd`). */
+export function isHostChar(code: number): boolean {
   return isAsciiAlnum(code) || code === 0x2d;
 }
 
@@ -66,8 +66,9 @@ function isTrimmed(code: number): boolean {
 }
 
 /**
- * The end of a bare URL starting at `at` (after its prefix), or -1: up to the first space or `<`,
- * then trimmed as marked's `_backpedal` loop leaves it. `closeParen` finds the next `)`.
+ * The end of a bare URL starting at `at`, whose prefix is followed by a host character: up to the
+ * first space or `<` (or `end`), then trimmed as marked's `_backpedal` loop leaves it. `closeParen`
+ * finds the next `)`.
  */
 export function bareUrlEnd(
   text: string,
@@ -77,10 +78,17 @@ export function bareUrlEnd(
   closeParen: NextIndex,
   urlStop: NextWhere,
 ): number {
-  if (!isHostChar(text.charCodeAt(at + prefix))) return -1;
   // Every URL that starts inside one run without spaces ends where that run does: asked once.
   const stop = Math.min(urlStop.at(at + prefix), end);
   return trimUrl(text, at, stop, closeParen);
+}
+
+/**
+ * A URL run (up to its first space or `<`) cut where marked's `_backpedal` loop leaves it, in one
+ * linear pass: what the body editor's serializer asks of a run it may leave as typed.
+ */
+export function backpedal(run: string): string {
+  return run.slice(0, trimUrl(run, 0, run.length, new NextIndex(run, ")")));
 }
 
 /** What ends a bare URL before its trim: a space (JavaScript's `\s`) or `<`. */

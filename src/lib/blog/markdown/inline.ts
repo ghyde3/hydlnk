@@ -1,10 +1,12 @@
 import type { Token, Tokens } from "marked";
+import { AddressIndex } from "./address";
 import {
   angleAutolink,
   bareUrlEnd,
   emailDomainEnd,
   endsUrl,
   isEmailLocalChar,
+  isHostChar,
   urlPrefixLength,
 } from "./autolink";
 import {
@@ -27,19 +29,20 @@ import {
   isJsSpace,
 } from "./chars";
 import {
-  CLOSES,
   DelimiterStack,
+  RunsAhead,
   OPENS,
   flanking,
-  processEmphasis,
+  matchCloser,
   type Delimiter,
   type EmphasisSink,
   type InlineNode,
   type NodeList,
   type TextNode,
   type TokenNode,
+  type UrlCuts,
 } from "./emphasis";
-import { NextIndex, NextUnescaped, NextWhere } from "./finder";
+import { NextIndex, NextUnescaped, NextWhere, lowerBound } from "./finder";
 import { TagFinders, inlineTagEnd } from "./html";
 import type { Budget } from "./limits";
 import { normalizeLabel, unescapePunctuation, type LinkDefinitions } from "./text-utils";
@@ -56,8 +59,9 @@ import { normalizeLabel, unescapePunctuation, type LinkDefinitions } from "./tex
  *   - a code span's closing run is found in an index of backtick runs by length, built once;
  *   - comments, titles and other terminators come from memoised forward searches (`finder.ts`);
  *   - a link label is read to its `]` (it holds one level of brackets at most, as marked's does),
- *     a link address stops at a space or at 32 open parentheses, and on success the cursor jumps
- *     past the link: its label is lexed once, as its own range;
+ *     a link address (to a space, an unbalanced `)` or 33 open parentheses) is read from an index
+ *     of the text built once (`address.ts`), and on success the cursor jumps past the link: its
+ *     label is lexed once, as its own range;
  *   - a bare URL is read to its first space once, and its trim is computed, not repeated;
  *   - every `raw` and `text` is a slice of the source.
  */
@@ -76,9 +80,6 @@ export interface InlineContext {
 /** The characters the cursor stops at; everything else is plain text. */
 const STOP = new Uint8Array(128);
 for (const char of "\\`<[!*_~\n@hHfFw") STOP[char.charCodeAt(0)] = 1;
-
-/** A bracket-free opener depth past which a link address is not read (CommonMark's own limit). */
-const MAX_PARENS = 32;
 
 /** The backtick runs of one text, by length (sorted starts), and all of them in order. */
 class BacktickRuns {
@@ -114,17 +115,6 @@ class BacktickRuns {
   }
 }
 
-function lowerBound(list: readonly number[], value: number): number {
-  let lo = 0;
-  let hi = list.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (list[mid]! < value) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
 /** What `[` or `![` turned out to be. */
 type LinkAttempt =
   | { kind: "link"; node: TokenNode; end: number }
@@ -135,12 +125,19 @@ export function lexInline(text: string, depth: number, ctx: InlineContext): Toke
   return new InlineRun(text, ctx).tokens(depth);
 }
 
-class InlineRun implements EmphasisSink {
+class InlineRun {
   private readonly finders: TagFinders;
   private readonly closeParen: NextIndex;
   private readonly urlStop: NextWhere;
+  /** The end of a run of email local-part characters (`[A-Za-z0-9._+-]`). */
+  private readonly localRunEnd: NextWhere;
+  /** The last `@` whose domain was read, the bound it was read to, and where it ends (-1: none). */
+  private domainAt = -1;
+  private domainBound = -1;
+  private domainEnd = -1;
   private readonly titleEnds: { quote: NextUnescaped; apos: NextUnescaped; paren: NextUnescaped };
   private ticks: BacktickRuns | null = null;
+  private addressIndex: AddressIndex | null = null;
   /** The last index that is not a space: a hard break needs text after it (`(?!\s*$)`). */
   private readonly lastText: number;
 
@@ -151,6 +148,7 @@ class InlineRun implements EmphasisSink {
     this.finders = new TagFinders(src);
     this.closeParen = new NextIndex(src, ")");
     this.urlStop = new NextWhere(src, endsUrl);
+    this.localRunEnd = new NextWhere(src, (code) => !isEmailLocalChar(code));
     this.titleEnds = {
       quote: new NextUnescaped(src, '"'),
       apos: new NextUnescaped(src, "'"),
@@ -175,7 +173,7 @@ class InlineRun implements EmphasisSink {
   /** The nodes of `[from, to)`, emphasis matched. */
   private range(from: number, to: number): NodeList {
     const s = this.src;
-    const c = new Cursor(from, to);
+    const c = new Cursor(s, from, to, this.ctx.budget);
     while (c.i < to) {
       const i = c.i;
       const code = s.charCodeAt(i);
@@ -230,9 +228,12 @@ class InlineRun implements EmphasisSink {
           const sides = flanking(s, i, end, code, from, to, c.afterToken());
           c.flush(i);
           const node = c.text(i, end);
-          if (sides !== 0) node.delimiter = c.push(node, code, end - i, sides);
           c.i = end;
           c.pend = end;
+          if (sides !== 0) {
+            node.delimiter = c.push(node, code, end - i, sides);
+            matchCloser(c.stack, node.delimiter, c);
+          }
           break;
         }
         case BACKTICK: {
@@ -245,7 +246,7 @@ class InlineRun implements EmphasisSink {
           break;
         }
         case AT:
-          if (!this.ctx.state.inLink && this.email(c, this.localPartStart(i, c), i)) break;
+          if (!this.ctx.state.inLink && this.email(c, i)) break;
           c.i = i + 1;
           break;
         default:
@@ -255,7 +256,6 @@ class InlineRun implements EmphasisSink {
       }
     }
     c.flush(to);
-    processEmphasis(c.stack, this);
     return c.list;
   }
 
@@ -279,18 +279,25 @@ class InlineRun implements EmphasisSink {
     c.emit(autolinkToken(s.slice(i, auto.end), inner, auto.email ? `mailto:${inner}` : inner), i, auto.end);
   }
 
-  /** A URL prefix at `i`: an email that runs through it, else a bare URL. False when neither. */
+  /**
+   * A URL prefix at `i`: an email that runs through it, else a bare URL. False when neither.
+   *
+   * LINEAR: the local-part run's end comes from a memoised forward search (`localRunEnd`) and its
+   * `@`'s domain is read once (`domainAt`), so every prefix of one run costs O(1); a prefix not
+   * followed by a host character is refused before anything is scanned; a URL that is read is
+   * emitted and the cursor jumps past it.
+   */
   private bareUrl(c: Cursor, i: number, to: number): boolean {
     const s = this.src;
     const prefix = urlPrefixLength(s, i);
     if (prefix === 0) return false;
     // marked tries an email from the start of the local-part run first, when the run reaches `@`.
     if (i > c.pend && isEmailLocalChar(s.charCodeAt(i - 1))) {
-      let at = i;
-      while (at < to && isEmailLocalChar(s.charCodeAt(at))) at += 1;
-      if (at < to && s.charCodeAt(at) === AT && this.email(c, this.localPartStart(i, c), at)) return true;
+      const at = this.localRunEnd.at(i);
+      if (at < to && s.charCodeAt(at) === AT && this.email(c, at)) return true;
     }
-    const end = bareUrlEnd(s, i, prefix, this.closingRunIn(c, i + prefix, to), this.closeParen, this.urlStop);
+    if (!isHostChar(s.charCodeAt(i + prefix))) return false;
+    const end = bareUrlEnd(s, i, prefix, this.closingRunIn(c, c.urlCuts(), i + prefix, to), this.closeParen, this.urlStop);
     if (end <= i) return false;
     const url = s.slice(i, end);
     c.emit(autolinkToken(url, url, s.charCodeAt(i) === 0x77 ? `http://${url}` : url), i, end);
@@ -318,39 +325,6 @@ class InlineRun implements EmphasisSink {
     const lower = raw.slice(0, 4).toLowerCase();
     if (!state.inLink && lower.startsWith("<a ")) state.inLink = true;
     else if (state.inLink && lower === "</a>") state.inLink = false;
-  }
-
-  // Emphasis -----------------------------------------------------------------------------------------
-
-  /** A match: the nodes between the two runs become the children of a new token node. */
-  emphasize(opener: Delimiter, closer: Delimiter, use: number): void {
-    const s = this.src;
-    const on = opener.node;
-    const cn = closer.node;
-    const first = on.next === cn ? null : on.next;
-    const last = on.next === cn ? null : cn.prev;
-    if (first && last) {
-      first.prev = null;
-      last.next = null;
-    }
-    const a = on.b - use;
-    const b = cn.a + use;
-    on.b -= use;
-    cn.a += use;
-    const type = closer.char === TILDE ? "del" : use === 2 ? "strong" : "em";
-    const token = { type, raw: s.slice(a, b), text: s.slice(a + use, b - use), tokens: [] } as
-      | Tokens.Em
-      | Tokens.Strong
-      | Tokens.Del;
-    const node: TokenNode = {
-      kind: "token",
-      token,
-      children: { head: first, tail: last },
-      prev: on,
-      next: cn,
-    };
-    on.next = node;
-    cn.prev = node;
   }
 
   // Links --------------------------------------------------------------------------------------------
@@ -465,27 +439,14 @@ class InlineRun implements EmphasisSink {
       if (angle !== null) return angle;
       // marked then reads it as a plain address, which must still be `<...>` (see `address`).
     }
-    // `[^ \t\n\x00-\x1f]*`, with marked's check of its parentheses (`findClosingBracket`).
-    let q = p;
-    let depth = 0;
-    let closes = 0;
-    let lastClose = -1;
-    for (; q < to; q += 1) {
-      const code = s.charCodeAt(q);
-      if (isAddressEnd(code)) break;
-      if (code === BACKSLASH) {
-        if (q + 1 < to && !isAddressEnd(s.charCodeAt(q + 1))) q += 1;
-      } else if (code === OPEN_PAREN) {
-        depth += 1;
-        if (depth > MAX_PARENS) return null;
-      } else if (code === CLOSE_PAREN) {
-        // The first unbalanced `)` ends the address, and the link: nothing after it is read.
-        if (depth === 0) return this.address(s.slice(p, q), null, q + 1);
-        depth -= 1;
-        closes += 1;
-        lastClose = q;
-      }
-    }
+    // `[^ \t\n\x00-\x1f]*`, with marked's check of its parentheses (`findClosingBracket`), read
+    // from an index of the whole text: no address is scanned again by a later `[`.
+    this.addressIndex ??= new AddressIndex(s);
+    const read = this.addressIndex.read(p, to);
+    if (read.stop === "deep") return null;
+    // The first unbalanced `)` ends the address, and the link: nothing after it is read.
+    if (read.stop === "close") return this.address(s.slice(p, read.at), null, read.at + 1);
+    const { end: q, depth, closes, lastClose } = read;
     const tail = this.titleAndClose(q, to);
     if (tail !== null) {
       // An address that opens more than it closes, and closes at least once, is refused.
@@ -563,38 +524,45 @@ class InlineRun implements EmphasisSink {
   }
 
   /**
-   * Where a bare URL from `from` must stop for emphasis: marked fixes an emphasis's extent before it
-   * reads a URL inside it, so a URL does not run over a `*`, `_` or `~` run that closes an open
-   * opener (`**http://x.co**'s`). The URL's own run is scanned once; what follows the cut is
-   * scanned again by the cursor, so each character at most twice. `to` when nothing cuts it.
+   * Where a bare URL (or an email's domain) from `from` must stop for emphasis: at the first run of
+   * `*`, `_` or `~` ahead that would close an opener still open (`UrlCuts`), before the first space
+   * or `<`. `to` when nothing cuts it.
+   *
+   * LINEAR: `UrlCuts` answers in O(1) amortised per question for one stream of forward-moving
+   * positions (`cuts`), and the space is found by a memoised forward search (`urlStop`).
    */
-  private closingRunIn(c: Cursor, from: number, to: number): number {
-    if (c.openers === 0) return to;
-    const s = this.src;
+  private closingRunIn(c: Cursor, cuts: UrlCuts, from: number, to: number): number {
+    if (!c.stack.hasOpeners()) return to;
     const stop = Math.min(this.urlStop.at(from), to);
-    for (let k = from; k < stop; k += 1) {
-      const code = s.charCodeAt(k);
-      if (code !== STAR && code !== UNDERSCORE && code !== TILDE) continue;
-      let end = k;
-      while (end < stop && s.charCodeAt(end) === code) end += 1;
-      // An escaped mark (`\*`) is text to marked's emphasis rules.
-      const escaped = s.charCodeAt(k - 1) === BACKSLASH;
-      if (!escaped && c.opensFor(code) && (flanking(s, k, end, code, c.from, c.to, false) & CLOSES) !== 0) return k;
-      k = end - 1;
-    }
-    return to;
+    const cut = cuts.cut(c.stack, from, stop);
+    return cut < stop ? cut : to;
   }
 
   // Emails -------------------------------------------------------------------------------------------
 
   /**
-   * A bare email from `start` with its `@` at `at` (marked's GFM `url` rule, email form): emitted
-   * when the domain after the `@` is one. False otherwise.
+   * A bare email with its `@` at `at` (marked's GFM `url` rule, email form): emitted when the domain
+   * after the `@` is one and a local part precedes it. False otherwise.
+   *
+   * Inside an emphasis the domain stops at the run that closes it (`_me@example.com_`: the closing
+   * `_` is not a domain character), and the local part does not reach back over an opener.
+   *
+   * LINEAR: the domain of one `@` is read once however many URL prefixes before it ask
+   * (`domainAt`, with the bound it was read to); the bound is one `UrlCuts` question in the stream
+   * of `@`s (forward-moving); the local part is walked back only once the domain is good, and then
+   * the email takes everything walked.
    */
-  private email(c: Cursor, start: number, at: number): boolean {
-    if (start === at) return false;
-    const end = emailDomainEnd(this.src, at, c.to);
+  private email(c: Cursor, at: number): boolean {
+    const bound = this.closingRunIn(c, c.emailCuts(), at + 1, c.to);
+    if (this.domainAt !== at || this.domainBound !== bound) {
+      this.domainAt = at;
+      this.domainBound = bound;
+      this.domainEnd = emailDomainEnd(this.src, at, bound);
+    }
+    const end = this.domainEnd;
     if (end === -1) return false;
+    const start = this.localPartStart(at, c, bound < c.to);
+    if (start === at) return false;
     c.dropFrom(start);
     const address = this.src.slice(start, end);
     c.emit(autolinkToken(address, address, `mailto:${address}`), start, end);
@@ -604,15 +572,19 @@ class InlineRun implements EmphasisSink {
   /**
    * Where the local part ending at `at` starts: the run of `[A-Za-z0-9._+-]` before it (marked tries
    * every position of that run, and the first wins), reaching back over pending text and over the
-   * text and `_` nodes before it, but not over a `_` run that may close emphasis.
+   * text and `_` nodes before it, but not over a `_` run that may close emphasis, nor over one that
+   * opens the emphasis the email's domain stops for (`inside`).
+   *
+   * LINEAR: called only for an `@` whose domain is good, and then the email swallows everything
+   * walked (`dropFrom`), so no character is walked back twice.
    */
-  private localPartStart(at: number, c: Cursor): number {
+  private localPartStart(at: number, c: Cursor, inside: boolean): number {
     const s = this.src;
     let k = at;
     while (k > c.pend && isEmailLocalChar(s.charCodeAt(k - 1))) k -= 1;
     if (k > c.pend) return k;
     for (let node = c.list.tail; node !== null && node.kind === "text"; node = node.prev) {
-      if (node.b !== k || node.delimiter?.close) return k;
+      if (node.b !== k || node.delimiter?.close || (inside && node.delimiter?.open)) return k;
       let j = node.b;
       while (j > node.a && isEmailLocalChar(s.charCodeAt(j - 1))) j -= 1;
       k = j;
@@ -623,7 +595,10 @@ class InlineRun implements EmphasisSink {
 
   // Building -----------------------------------------------------------------------------------------
 
-  /** The node list as tokens: adjacent text merged, children built one level deeper. */
+  /**
+   * The node list as tokens: adjacent text merged, children built one level deeper. Every token of
+   * the result is charged once: text here, the others when the cursor made them.
+   */
   private build(list: NodeList, depth: number): Token[] {
     const budget = this.ctx.budget;
     budget.depth(depth);
@@ -653,16 +628,24 @@ class InlineRun implements EmphasisSink {
         parts = null;
       }
       if (node === null) return out;
+      // The token itself was charged when the cursor made it; its children are charged here.
       const token = node.token as Token & { tokens?: Token[] };
       if (node.children) token.tokens = this.build(node.children, depth + 1);
-      budget.node();
+      else if (token.tokens !== undefined && token.tokens.length > 0) {
+        // An autolink's text, made with the token: one level deeper, one node each.
+        budget.depth(depth + 1);
+        for (let k = 0; k < token.tokens.length; k += 1) budget.node();
+      }
       out.push(token);
     }
   }
 }
 
-/** The state of one range's pass: its nodes, its delimiters, the cursor and the pending text. */
-class Cursor {
+/**
+ * The state of one range's pass: its nodes, its delimiters (matched as they are pushed), the cursor
+ * and the pending text.
+ */
+class Cursor implements EmphasisSink {
   readonly list: NodeList = { head: null, tail: null };
   readonly stack = new DelimiterStack();
   /** Where the text not yet in a node starts. */
@@ -670,11 +653,50 @@ class Cursor {
   i: number;
 
   constructor(
+    private readonly src: string,
     readonly from: number,
     readonly to: number,
+    private readonly budget: Budget,
   ) {
     this.pend = from;
     this.i = from;
+  }
+
+  /** A match: the nodes between the two runs become the children of a new token node. */
+  emphasize(opener: Delimiter, closer: Delimiter, use: number): void {
+    const s = this.src;
+    const on = opener.node;
+    const cn = closer.node;
+    const first = on.next === cn ? null : on.next;
+    const last = on.next === cn ? null : cn.prev;
+    if (first && last) {
+      first.prev = null;
+      last.next = null;
+    }
+    const a = on.b - use;
+    const b = cn.a + use;
+    on.b -= use;
+    cn.a += use;
+    this.budget.node();
+    const type = closer.char === TILDE ? "del" : use === 2 ? "strong" : "em";
+    const token = { type, raw: s.slice(a, b), text: s.slice(a + use, b - use), tokens: [] } as
+      | Tokens.Em
+      | Tokens.Strong
+      | Tokens.Del;
+    const node: TokenNode = {
+      kind: "token",
+      token,
+      children: { head: first, tail: last },
+      prev: on,
+      next: cn,
+    };
+    on.next = node;
+    cn.prev = node;
+  }
+
+  leftOpens(closer: Delimiter): boolean {
+    const { node, char } = closer;
+    return (flanking(this.src, node.a, node.b, char, this.from, this.to, true) & OPENS) !== 0;
   }
 
   append(node: InlineNode): void {
@@ -701,35 +723,45 @@ class Cursor {
     this.place({ kind: "token", token, children: null, prev: null, next: null }, at, end);
   }
 
+  /** Every token is charged when it is made, so a body past the limit stops at once. */
   place(node: TokenNode, at: number, end: number): void {
+    this.budget.node();
     this.flush(at);
     this.append(node);
     this.i = end;
     this.pend = end;
   }
 
-  /** Openers on the stack, by character (`*`, `_`, `~`): what may cut a bare URL short. */
-  openers = 0;
-  private readonly openersBy = [0, 0, 0];
-
   push(node: TextNode, char: number, length: number, sides: number): Delimiter {
-    const entry = this.stack.push(node, char, length, sides);
-    if ((sides & OPENS) !== 0) this.count(char, 1);
-    return entry;
+    return this.stack.push(node, char, length, sides);
   }
 
-  opensFor(char: number): boolean {
-    return this.openersBy[slotOf(char)]! > 0;
+  /**
+   * The runs ahead of the cursor (`RunsAhead`, read lazily) and two streams of questions about them,
+   * each asked at forward-moving positions: bare URL starts, and the `@`s of emails.
+   */
+  private runs: RunsAhead | null = null;
+  private urls: UrlCuts | null = null;
+  private emails: UrlCuts | null = null;
+  private ahead(): RunsAhead {
+    return (this.runs ??= new RunsAhead(this.src, this.from, this.to));
+  }
+  urlCuts(): UrlCuts {
+    return (this.urls ??= this.ahead().cuts());
+  }
+  emailCuts(): UrlCuts {
+    return (this.emails ??= this.ahead().cuts());
   }
 
-  private count(char: number, delta: number): void {
-    this.openersBy[slotOf(char)]! += delta;
-    this.openers += delta;
-  }
-
-  /** marked has no `prevChar` after a token. */
+  /**
+   * marked has no `prevChar` after a token. A closer used up by a match is left as an empty node
+   * right after the emphasis token it made: the run after it follows that token.
+   */
   afterToken(): boolean {
-    return this.pend === this.i && this.list.tail?.kind === "token";
+    if (this.pend !== this.i) return false;
+    let tail = this.list.tail;
+    if (tail?.kind === "text" && tail.a === tail.b) tail = tail.prev;
+    return tail?.kind === "token";
   }
 
   /** An email starting at `start` swallows the pending text and text nodes back to there. */
@@ -737,10 +769,7 @@ class Cursor {
     if (start >= this.pend) return;
     this.pend = start;
     for (let node = this.list.tail; node !== null && node.kind === "text"; node = this.list.tail) {
-      if (node.delimiter) {
-        this.stack.remove(node.delimiter);
-        if (node.delimiter.open) this.count(node.delimiter.char, -1);
-      }
+      if (node.delimiter) this.stack.remove(node.delimiter);
       node.delimiter = undefined;
       if (node.a < start) {
         node.b = start;
@@ -753,8 +782,6 @@ class Cursor {
     }
   }
 }
-
-const slotOf = (char: number) => (char === STAR ? 0 : char === UNDERSCORE ? 1 : 2);
 
 // Small token makers ---------------------------------------------------------------------------------
 
@@ -777,11 +804,6 @@ function codespan(s: string, at: number, end: number, close: number): Tokens.Cod
 /** `[ \t\n]`: the only whitespace before a link address (marked's `\s` also takes NBSP; see tests). */
 function isAsciiSpace(code: number): boolean {
   return code === SPACE || code === TAB || code === NEWLINE;
-}
-
-/** What ends a plain link address: a space, tab, newline or control character. */
-function isAddressEnd(code: number): boolean {
-  return code <= SPACE && (code === SPACE || code === TAB || code === NEWLINE || code < 0x20);
 }
 
 /** marked's link text: `\[` and `\]` read as brackets (`outputLinkReplace`). */

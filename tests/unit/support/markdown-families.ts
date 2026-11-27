@@ -5,15 +5,16 @@
  * probes). `atCap` grows a family to the largest body within 512 KiB.
  */
 
+import { seeded } from "./random";
+
 export const BODY_CAP = 512 * 1024;
 const bytes = (s: string) => Buffer.byteLength(s);
 const W =
   "the quick brown fox jumps over a lazy dog in the garden one morning with coffee and notes about what came next".split(" ");
-let seed = 7;
+let rnd = seeded(7);
 export const reseed = () => {
-  seed = 7;
+  rnd = seeded(7);
 };
-const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
 const words = (n: number) => Array.from({ length: n }, () => W[Math.floor(rnd() * W.length)]).join(" ");
 const sentence = (n: number) => {
   const w = words(n);
@@ -96,7 +97,7 @@ export const REALISTIC: Record<string, { unit: string; gen: (n: number) => strin
  */
 export function atCap(gen: (n: number) => string, cap = BODY_CAP): string {
   const make = (n: number) => {
-    seed = 7;
+    reseed();
     return gen(n);
   };
   const sample = 64;
@@ -117,6 +118,16 @@ export function fit(body: string, cap = BODY_CAP): string {
 
 const NBSP = "\u00a0";
 const IDEO = "\u3000";
+
+/** Each unit repeated in one word after "x", and the same after an open `*` ("*x "). */
+function urlPrefixFamilies(units: Record<string, string>): Record<string, (n: number) => string> {
+  const out: Record<string, (n: number) => string> = {};
+  for (const [name, unit] of Object.entries(units)) {
+    out[name] = (n) => `x${unit.repeat(n / unit.length)}`;
+    out[`*x ${name}`] = (n) => `*x x${unit.repeat(n / unit.length)}`;
+  }
+  return out;
+}
 
 /**
  * The attack families: each makes a body of about `n` characters (cut to the cap by `fit`). From the
@@ -139,6 +150,7 @@ export const ATTACKS: Record<string, (n: number) => string> = {
   "table rows": (n) => `|a|b|\n|-|-|\n${"a\n".repeat(n / 2)}`,
   "wide header": (n) => `${"|a".repeat(n / 4)}|\n${"|-".repeat(n / 4)}|\n`,
   "pipes": (n) => "|".repeat(n),
+  "table rows with no cells": (n) => `|a|\n|-|\n${"|\n".repeat(n / 2)}`,
   // Emphasis and strikethrough.
   "*a ": (n) => "*a ".repeat(n / 3),
   "*a **b ": (n) => "*a **b ".repeat(n / 7),
@@ -195,6 +207,35 @@ export const ATTACKS: Record<string, (n: number) => string> = {
   "a@b.c repeated": (n) => "a@b.c ".repeat(n / 6),
   "a@b.b.b...": (n) => `a@${"b.".repeat(n / 2)}`,
   "a_a_..@b.co": (n) => `${"a_".repeat(n / 2)}@b.co`,
+  // URL prefixes inside one word, each with and without an opener before it (finding 1): a prefix
+  // after a local-part character asked for the run's `@` again, a prefix with no host character
+  // after it scanned for a closing run first, and a URL that ends at an unclosed `(` left its tail
+  // to be scanned again by the next prefix.
+  ...urlPrefixFamilies({
+    "x + www.. (a local part, no host character)": "www..",
+    "x + www.._ (no host character, a `_` run)": "www._",
+    "x + ftp://* (no host character, a `*` run)": "ftp://*",
+    "x + www.a( (ends at an unclosed `(`)": "www.a(",
+    "x + www.a(* (ends at an unclosed `(`, then a `*` that opens)": "www.a(*",
+  }),
+  // One family per memo of the lexer (third pass, finding 7a): each is quadratic when its memo is
+  // taken out. The domain of one `@` is read once however many URL prefixes before it ask
+  // (`domainAt`).
+  "x + www.. + @ + b (one @'s domain, read once)": (n) => `x${"www..".repeat(n / 10)}@${"b".repeat(n / 2)}`,
+  // The closer finders (`NextRun`) walk on from their last answer: many runs before many URL starts.
+  "*a then www.a( (the closer finders walk on)": (n) => `${"*a ".repeat(n / 6)}x${"www.a(".repeat(n / 12)}`,
+  // The stack's "yes" is kept (`wouldMatch`): many openers above the one a closer far ahead matches.
+  "*x, _a openers, www.a( up to a closer (the stack's yes, kept)": (n) =>
+    `*x ${"_a ".repeat(n / 6)}x${"www.a(".repeat(n / 12)}b*`,
+  // The forward searches (`NextIndex`, `NextUnescaped`) answer again from their last answer: inline
+  // tags that never end (after text, so not an HTML block), and `(` titles whose end is searched for
+  // past every escaped `)` after them.
+  "a + <!-- repeated (inline, never closed)": (n) => `a${"<!--".repeat(n / 4)}`,
+  "a + <? repeated (inline, never closed)": (n) => `a${"<?".repeat(n / 2)}`,
+  "a + <![CDATA[ repeated (inline, never closed)": (n) => `a${"<![CDATA[".repeat(n / 9)}`,
+  "[a](b (\\) repeated (escaped title ends)": (n) => "[a](b (\\)".repeat(n / 9),
+  // The email bound's stream: many `@`s whose domains stop at a `_` that closes.
+  "_x then a@b repeated (an email's bound)": (n) => `_x ${"a@b".repeat(n / 3)}_`,
   // Blocks: nesting, lazy lines, setext lookahead, lists.
   "> deep (262,144)": () => "> ".repeat(262144),
   "> x 31 deep, repeated": (n) => `${"> ".repeat(31)}a\n`.repeat(n / 64),

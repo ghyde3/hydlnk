@@ -1,10 +1,8 @@
 // @vitest-environment node
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { setFlagsFromString } from "node:v8";
-import { runInNewContext } from "node:vm";
 import type { Token } from "marked";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   BODY_SHAPE_MESSAGES,
   MARKDOWN_MAX_DEPTH,
@@ -19,6 +17,8 @@ import { lexTokens } from "@/lib/blog/markdown/lex";
 import { LexRefused } from "@/lib/blog/markdown/limits";
 import { canEditRich } from "@/components/posts/body-editor/markdown";
 import { ATTACKS, BODY_CAP, REALISTIC, atCap, fit } from "./support/markdown-families";
+import { stopTiming, timeLex, type LexTiming } from "./support/markdown-timing";
+import { pick, seeded } from "./support/random";
 
 /**
  * The bound on post bodies (M16-04, M16-13): the lexer is linear in the body, its two limits are
@@ -31,7 +31,12 @@ import { ATTACKS, BODY_CAP, REALISTIC, atCap, fit } from "./support/markdown-fam
  *       a loose ceiling of 1 s at 512 KiB (the worst family takes about 0.2 s on the dev box). The
  *       ratio is measured for each family whose 512 KiB body takes 20 ms or more;
  *   (d) the 47 realistic families at 512 KiB are accepted;
- *   (e) memory: the wide table and bodies at the node limit stay within a sane heap delta.
+ *   (e) memory: the wide table and bodies at the node limit stay within a sane heap delta;
+ *   (f) a search for super-linear shapes: candidate bodies grown by doubling, the worst mutated.
+ *
+ * Every timed lex runs in a worker thread (`support/markdown-timing.ts`) that is killed after
+ * `LIMIT_MS`: a regression to quadratic time fails its own test in seconds instead of hanging the
+ * suite. Ratios read the worker's CPU time (the machine may be shared); the ceiling reads wall time.
  *
  * The fuzzers run `MARKDOWN_FUZZ_SAMPLES` bodies each (default 24, a few seconds); set it higher
  * for a longer run (the advisor's run used 400).
@@ -52,53 +57,26 @@ function lexOnce(body: string): { ok: boolean; reason?: string; nodes: number; t
   }
 }
 
-/**
- * A full garbage collection before each timed run, so a timing measures the lexer and not the
- * previous run's garbage (an accepted body's tree holds up to 150,000 tokens). Node exposes `gc`
- * to a new context once the flag is set; where it does not, timing just runs without it.
- */
-const collectGarbage: () => void = (() => {
-  try {
-    setFlagsFromString("--expose-gc");
-    return runInNewContext("gc") as () => void;
-  } catch {
-    return () => {};
-  }
-})();
+afterAll(stopTiming);
 
-function timed(body: string): number {
-  const start = performance.now();
-  lexOnce(body);
-  return performance.now() - start;
-}
-
-/** The fastest of `runs` timings of each body, interleaved so both see the same heap. */
-function fastest(bodies: string[], runs = 5): number[] {
-  const best = bodies.map(() => Infinity);
-  for (let run = 0; run < runs; run += 1) {
-    collectGarbage();
-    bodies.forEach((body, k) => {
-      best[k] = Math.min(best[k]!, timed(body));
-    });
-  }
-  return best;
-}
+/** The fastest of `runs` lexes of each body (interleaved), in the worker. */
+const fastest = (label: string, bodies: string[], runs = 5): Promise<LexTiming[]> => timeLex(label, { bodies, runs });
 
 /**
  * t(2n) / t(n) below 3 for n = 64 KiB (a quadratic shape reads about 4 there; marked took seconds),
  * measured again (up to five times) when noise makes one reading high.
  */
-function expectLinear(name: string, make: (n: number) => string): void {
+async function expectLinear(name: string, make: (n: number) => string): Promise<void> {
   // Uncut: cutting a body mid-pattern would compare two different shapes.
   const small = make(BODY_CAP / 8);
   const large = make(BODY_CAP / 4);
   let ratio = Infinity;
   let times: number[] = [];
+  await fastest(name, [small, large], 1);
   // A garbage collection inside every one of five runs can still lift one reading; a quadratic
   // shape reads 4 or more on every attempt, so five attempts tell the two apart.
-  fastest([small, large], 1);
   for (let attempt = 0; attempt < 5 && ratio >= 3; attempt += 1) {
-    times = fastest([small, large]);
+    times = (await fastest(name, [small, large])).map((timing) => timing.cpu);
     // Below a few milliseconds a ratio is noise: the body is cheap whatever its shape.
     ratio = times[1]! < 4 ? 0 : times[1]! / Math.max(times[0]!, 0.5);
   }
@@ -224,9 +202,10 @@ describe("(b) determinism", () => {
       body: "## Heading\n\nA paragraph with **bold**, *italic*, ~~strike~~ and a [link](https://example.com).\n\n- one\n- two\n\n> quoted\n\n```\ncode\n```",
       nodes: 30,
     },
-    "a table": { body: "| a | b |\n|---|:-:|\n| 1 | *2* |\n| 3 |", nodes: 12 },
+    // The table's frame is charged 3 (finding 6 of the third pass), its cells and their text one each.
+    "a table": { body: "| a | b |\n|---|:-:|\n| 1 | *2* |\n| 3 |\n|", nodes: 15 },
     "a task list in a quote": { body: "> - [ ] a\n> - [x] b\n>\n> c", nodes: 13 },
-    "links and references": { body: "[a][r], [b](u \"t\"), <http://x.co>, www.y.co and z@w.co\n\n[r]: v", nodes: 14 },
+    "links and references": { body: "[a][r], [b](u \"t\"), <http://x.co>, www.y.co and z@w.co\n\n[r]: v", nodes: 17 },
   };
 
   for (const [name, { body, nodes }] of Object.entries(BODIES)) {
@@ -283,6 +262,8 @@ describe("the limits and their messages", () => {
       quotes: (k: number) => `${"> ".repeat(k)}a`,
       lists: (k: number) => Array.from({ length: k }, (_, d) => `${"  ".repeat(d)}- a`).join("\n"),
       emphasis: (k: number) => `${"*a ".repeat(k)}b${" c*".repeat(k)}`,
+      // An autolink's text is one level below the link, like any other children.
+      "emphasis around an autolink": (k: number) => `${"*a ".repeat(k)}http://x.co${" c*".repeat(k)}`,
       "lists in quotes": (k: number) => `${"> - ".repeat(Math.ceil(k / 2)).slice(0, k * 2)}a`,
     })) {
       let k = 1;
@@ -297,45 +278,32 @@ describe("the limits and their messages", () => {
     expect(lexOnce(`${"> ".repeat(MARKDOWN_MAX_NESTING + 1)}a`).ok).toBe(false);
   });
 
-  it("size: a body past the node limit is refused with the size message, below it accepted", () => {
+  it("size: a body past the node limit is refused with the size message, below it accepted", async () => {
     const at = (n: number) => "*a* ".repeat(n);
-    expect(lexOnce(at(40_000))).toMatchObject({ ok: true, nodes: 120_001 });
-    expect(lexOnce(at(60_000))).toMatchObject({ ok: false, reason: "size" });
+    const [below, past] = await timeLex("size", { bodies: [at(40_000), at(60_000)], runs: 1 });
+    expect(below).toMatchObject({ ok: true, nodes: 120_001 });
+    expect(past).toMatchObject({ ok: false, reason: "size" });
     expect(bodyShapeMessage(at(60_000))).toBe(BODY_SHAPE_MESSAGES.size);
   });
 
-  it("the reported refusals of the old meter are accepted now (they lex in linear time)", () => {
-    for (const body of ["*a ".repeat(32_000), "*a **b ".repeat(8000), `[a](${" ".repeat(4800)}`]) {
-      expect(lexOnce(body).ok).toBe(true);
-    }
+  it("the reported refusals of the old meter are accepted now (they lex in linear time)", async () => {
+    const bodies = ["*a ".repeat(32_000), "*a **b ".repeat(8000), `[a](${"\u00a0".repeat(4800)}`];
+    for (const result of await timeLex("old meter", { bodies, runs: 1 })) expect(result.ok).toBe(true);
   });
 });
 
 // (c) ------------------------------------------------------------------------------------------------
 
-function rng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s ^= s << 13;
-    s >>>= 0;
-    s ^= s >>> 17;
-    s ^= s << 5;
-    s >>>= 0;
-    return s / 4294967296;
-  };
-}
-const pick = <T,>(random: () => number, list: readonly T[]): T => list[Math.floor(random() * list.length)]!;
 
-function expectBounded(body: string, label: string): number {
-  let result: ReturnType<typeof lexOnce> | undefined;
+async function expectBounded(body: string, label: string): Promise<number> {
+  let result: LexTiming | undefined;
   let ms = Infinity;
   for (let run = 0; run < 2 && ms >= CEILING_MS; run += 1) {
-    const start = performance.now();
-    result = lexOnce(body);
-    ms = Math.min(ms, performance.now() - start);
+    [result] = await timeLex(label, { bodies: [body], runs: 1 });
+    ms = Math.min(ms, result!.ms);
   }
-  expect(result!.reason, label).not.toBe("error");
-  expect(result!.nodes, label).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
+  expect(result!.reason, `${label}: ${result!.message ?? ""}`).not.toBe("error");
+  expect(result!.ok ? result!.nodes : MARKDOWN_MAX_NODES, label).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
   expect(ms, `${label}: ${ms.toFixed(0)} ms`).toBeLessThan(CEILING_MS);
   return ms;
 }
@@ -346,9 +314,9 @@ const RATIO_FLOOR_MS = 20;
 describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
   const SPECIAL = ["*", "_", "~", "[", "]", "(", ")", "<", ">", "!", "`", "|", "#", "-", "+", "\\", "&", " ", "\t", "\n", "\r\n", " ", "　", "a"];
 
-  it(`repetition fuzzer: prefix + piece x k + suffix at 512 KiB (${FUZZ_SAMPLES} bodies)`, () => {
+  it(`repetition fuzzer: prefix + piece x k + suffix at 512 KiB (${FUZZ_SAMPLES} bodies)`, async () => {
     const ALPHA = [...SPECIAL, "**", "__", "~~", "``", "\n\n", "[a](", "](", "<!--", "<a ", "&amp;", "---", "===", "|-", "- ", "> ", "```", "~~~", "a@b.c", "[a]: b\n", "[a]", "![", "http://", "www.", "1.", "    ", "x_y", '"', ":", "/", "@", "."];
-    const random = rng(1);
+    const random = seeded(1);
     for (let sample = 0; sample < FUZZ_SAMPLES; sample += 1) {
       const part = (max: number) => Array.from({ length: Math.floor(random() * (max + 1)) }, () => pick(random, ALPHA)).join("");
       const seed = Array.from({ length: 1 + Math.floor(random() * 5) }, () => pick(random, ALPHA)).join("");
@@ -356,12 +324,12 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
       const unit = seed.length + second.length || 1;
       const k = Math.floor(500_000 / unit);
       const body = fit(part(4) + seed.repeat(k) + second.repeat(second ? k : 0) + part(4));
-      expectBounded(body, JSON.stringify(seed + "|" + second).slice(0, 60));
+      await expectBounded(body, JSON.stringify(seed + "|" + second).slice(0, 60));
     }
   }, 120_000);
 
-  it(`random-mix fuzzer: random sub-alphabets of the special characters, 4 to 512 KiB (${FUZZ_SAMPLES} bodies)`, () => {
-    const random = rng(7);
+  it(`random-mix fuzzer: random sub-alphabets of the special characters, 4 to 512 KiB (${FUZZ_SAMPLES} bodies)`, async () => {
+    const random = seeded(7);
     for (let sample = 0; sample < FUZZ_SAMPLES; sample += 1) {
       const length = sample % 4 === 0 ? BODY_CAP : 4096 + Math.floor(random() * (BODY_CAP - 4096));
       const alphabet: string[] = [];
@@ -384,13 +352,36 @@ describe("(c) fuzzers up to 512 KiB, and every attack family", () => {
           size += 1;
         }
       }
-      expectBounded(fit(parts.join("")), `mix ${sample}: ${JSON.stringify(alphabet.join("").slice(0, 30))}`);
+      await expectBounded(fit(parts.join("")), `mix ${sample}: ${JSON.stringify(alphabet.join("").slice(0, 30))}`);
     }
   }, 120_000);
 
+  // Linear is not enough when the constant is 33: each `[` used to rescan its address up to the
+  // 33rd open parenthesis, so `[a](` repeated read every character 33 times (1.3 s on CI). Each
+  // family is timed against a body with the same `[`s whose address ends at a space.
+  it("a link address is read once, not again for each `[` that precedes it", async () => {
+    const pairs: [string, string, string][] = [
+      [
+        "[a]( repeated",
+        fit(ATTACKS["[a]( repeated"]!(BODY_CAP)),
+        fit("[a]( ".repeat(BODY_CAP / 5)),
+      ],
+      [
+        "[a]( + long address, repeated",
+        fit(ATTACKS["[a]( + long address, repeated"]!(BODY_CAP)),
+        fit(`[a]( ${"b".repeat(995)}`.repeat(BODY_CAP / 1000)),
+      ],
+    ];
+    for (const [name, body, control] of pairs) {
+      const [cost, base] = (await fastest(name, [body, control])).map((timing) => timing.cpu);
+      const label = `${name}: ${cost!.toFixed(0)} ms, control ${base!.toFixed(0)} ms`;
+      expect(cost! / Math.max(base!, 1), label).toBeLessThan(3);
+    }
+  }, 60_000);
+
   for (const [name, make] of Object.entries(ATTACKS)) {
-    it(`${name}: linear (t(2n)/t(n) < 3), and within the ceiling at 512 KiB`, () => {
-      if (expectBounded(fit(make(BODY_CAP)), name) >= RATIO_FLOOR_MS) expectLinear(name, make);
+    it(`${name}: linear (t(2n)/t(n) < 3), and within the ceiling at 512 KiB`, async () => {
+      if ((await expectBounded(fit(make(BODY_CAP)), name)) >= RATIO_FLOOR_MS) await expectLinear(name, make);
     }, 60_000);
   }
 });
@@ -403,12 +394,11 @@ describe("(d) the 47 realistic families at 512 KiB are accepted", () => {
   });
 
   for (const [name, { gen }] of Object.entries(REALISTIC)) {
-    it(name, () => {
+    it(name, async () => {
       const body = atCap(gen);
       expect(Buffer.byteLength(body)).toBeGreaterThan(BODY_CAP * 0.9);
-      const start = performance.now();
-      const result = lexOnce(body);
-      expect(performance.now() - start).toBeLessThan(CEILING_MS);
+      const [result] = await timeLex(name, { bodies: [body], runs: 1 });
+      expect(result!.ms).toBeLessThan(CEILING_MS);
       expect(result, name).toMatchObject({ ok: true });
     }, 60_000);
   }
@@ -418,23 +408,211 @@ describe("(d) the 47 realistic families at 512 KiB are accepted", () => {
 
 describe("(e) memory", () => {
   const MB = 1024 * 1024;
-  const heapDelta = (body: string): { delta: number; result: ReturnType<typeof lexOnce> } => {
-    const before = process.memoryUsage().heapUsed;
-    const result = lexOnce(body);
-    return { delta: process.memoryUsage().heapUsed - before, result };
+  const heapDelta = async (body: string): Promise<{ delta: number; result: LexTiming }> => {
+    const [result] = await timeLex("heap", { bodies: [body], runs: 1, heap: true });
+    return { delta: result!.heap, result: result! };
   };
 
-  it("the wide table (6,000 columns, 3,000 rows) is accepted without growing with rows x columns", () => {
-    const { delta, result } = heapDelta(ATTACKS["wide table 6,000 x 3,000"]!(0));
+  it("the wide table (6,000 columns, 3,000 rows) is accepted without growing with rows x columns", async () => {
+    const { delta, result } = await heapDelta(ATTACKS["wide table 6,000 x 3,000"]!(0));
     expect(result.ok).toBe(true);
     expect(delta).toBeLessThan(128 * MB);
   });
 
-  it("bodies at the node limit, accepted and refused, stay within a sane heap delta", () => {
+  it("bodies at the node limit, accepted and refused, stay within a sane heap delta", async () => {
     for (const body of ["*a* ".repeat(40_000), "- a\n".repeat(130_000), `|a|b|\n|-|-|\n${"a|b\n".repeat(120_000)}`]) {
-      const { delta, result } = heapDelta(fit(body));
-      expect(result.nodes).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
+      const { delta, result } = await heapDelta(fit(body));
+      expect(result.ok ? result.nodes : MARKDOWN_MAX_NODES).toBeLessThanOrEqual(MARKDOWN_MAX_NODES);
       expect(delta, JSON.stringify(body.slice(0, 20))).toBeLessThan(256 * MB);
     }
   });
+});
+
+// (f) ------------------------------------------------------------------------------------------------
+
+/**
+ * Every character a scanner of the lexer branches on, read from its source (the character codes it
+ * compares, `0x..`, and the characters of its short string literals), and every short literal
+ * itself (`www.`, `://`, `<!--`...): a new branch character joins the search without a test edit.
+ */
+function scannerAlphabet(): string[] {
+  const pieces = new Set<string>(["a", "x", "1", " ", "\n", "\t", "\u00a0", "\u3000", "字"]);
+  const printable = (code: number) => code === 0x09 || code === 0x0a || (code >= 0x20 && code < 0x7f);
+  for (const name of readdirSync(LEXER_DIR).filter((file) => file.endsWith(".ts"))) {
+    const source = readFileSync(join(LEXER_DIR, name), "utf8");
+    for (const match of source.matchAll(/\b0x([0-9a-fA-F]{2})\b/g)) {
+      const code = Number.parseInt(match[1]!, 16);
+      if (printable(code)) pieces.add(String.fromCharCode(code));
+    }
+    for (const match of source.matchAll(/"((?:[^"\\\n]|\\.){1,24})"|'((?:[^'\\\n]|\\.){1,24})'/g)) {
+      const literal = (match[1] ?? match[2]!).replace(/\\(.)/g, (_, c: string) => (c === "n" ? "\n" : c === "t" ? "\t" : c));
+      for (const char of literal) if (printable(char.charCodeAt(0))) pieces.add(char);
+      if (literal.length > 1 && literal.length <= 8 && /^[\x20-\x7e]+$/.test(literal)) pieces.add(literal);
+    }
+  }
+  return [...pieces].sort();
+}
+
+describe("(f) a search for super-linear shapes", () => {
+  const alphabet = scannerAlphabet();
+
+  it("its alphabet holds every character the inline cursor stops at and every named character", () => {
+    for (const char of "\\`<[!*_~\n@hHfFw|#>-+=:.()&;\"'") expect(alphabet, JSON.stringify(char)).toContain(char);
+    expect(alphabet).toEqual(expect.arrayContaining(["www.", "://"]));
+  });
+
+  // Shapes: a prefix, a unit repeated, and optionally a middle and a second unit repeated as often
+  // (two phases: `x` + `www..` x k + `@` + `b` x k). Each is scored in the timing worker by CPU time
+  // at 32 and 64 KiB (t(64) / t(32): about 2 when linear, 4 when quadratic), so a few hundred shapes
+  // fit in the budget. The population starts from the attack families themselves, then the worst
+  // are mutated (as one unit or two phases) from a small weighted alphabet (the pieces that found
+  // the reported shapes) and the characters the scanners branch on. A shape that scores high or is
+  // slow at 64 KiB is grown by doubling at once, and at the end the eight worst and the six slowest
+  // (a shape can be linear to 64 KiB and quadratic past it): one whose time more than doubles
+  // (t(2n)/t(n) > 2.4) across two doublings, past the noise, fails the test. With a memo of the
+  // lexer taken out (`domainAt`, `NextWhere`, `NextRun`, `openers_bottom`), it fails within its
+  // budget, naming the shape (measured in the third pass).
+  it("finds no shape that stays super-linear across two doublings (fixed seed, at most 20 s)", async () => {
+    const SEARCH_MS = 13_000;
+    /** Confirmations stop here: the whole search takes at most about 20 s. */
+    const DEADLINE_MS = 19_000;
+    const RATIO = 2.4;
+    /** Times below this are noise, whatever the shape. */
+    const NOISE_MS = 10;
+    /** A shape being grown stops here: past it a quadratic shape has shown itself. */
+    const SLOW_MS = 400;
+    /** A 64 KiB body slower than this is confirmed whatever its ratio. */
+    const SLOW_64K_MS = 30;
+    const started = performance.now();
+    const random = seeded(0x5ea7c4);
+    type Shape = { prefix: string; unit: string; middle: string; second: string; score: number; family?: string };
+    // The weighted alphabet: the pieces the attacker's search found productive, then the source's.
+    const WEIGHTED = ["a", " ", "*", "**", "_", "~", "~~", "www.", "http://", "@", ".", "(", ")", "[", "](", "`", "<", "\\", "\n", "&", ";", "x.co"];
+    const piece = () => (random() < 0.7 ? pick(random, WEIGHTED) : pick(random, alphabet));
+    const pieces = (max: number) => Array.from({ length: 1 + Math.floor(random() * max) }, piece).join("");
+    const bodyOf = (shape: Shape, n: number) => {
+      if (shape.family !== undefined) return fit(ATTACKS[shape.family]!(n), n);
+      const repeat = (unit: string, size: number) => (unit === "" ? "" : unit.repeat(Math.ceil(size / unit.length)).slice(0, size));
+      if (shape.second === "") return (shape.prefix + repeat(shape.unit, n)).slice(0, n);
+      return (shape.prefix + repeat(shape.unit, n / 2) + shape.middle + repeat(shape.second, n / 2)).slice(0, n);
+    };
+    const label = (shape: Shape) =>
+      shape.family !== undefined ? `the family ${JSON.stringify(shape.family)}` : `${JSON.stringify(shape.prefix)} + ${JSON.stringify(shape.unit)} x k${shape.second ? ` + ${JSON.stringify(shape.middle)} + ${JSON.stringify(shape.second)} x k` : ""}`;
+    /** CPU times at each size (fastest of 3); null when the worker was killed (far past linear). */
+    const times = async (shape: Shape, sizes: number[], runs = 3): Promise<number[] | null> => {
+      try {
+        const timings = await timeLex(label(shape), { bodies: sizes.map((n) => bodyOf(shape, n)), runs }, 3_000);
+        return timings.map((timing) => timing.cpu);
+      } catch {
+        return null;
+      }
+    };
+    /** t(64 KiB) / t(32 KiB), and t(64 KiB) itself (a quadratic shape is slow there already). */
+    const score = async (shape: Shape): Promise<{ ratio: number; ms: number }> => {
+      // 16 KiB first, untimed: it warms the scanners up (a cold first body reads slow).
+      const t = await times(shape, [16_384, 32_768, 65_536], 2);
+      if (t === null) return { ratio: Infinity, ms: Infinity };
+      return { ratio: t[2]! < 2 ? 0 : t[2]! / Math.max(t[1]!, 0.05), ms: t[2]! };
+    };
+    const mutate = (from: Shape): Shape => {
+      let shape = from;
+      if (from.family !== undefined) {
+        const sample = ATTACKS[from.family]!(4096);
+        const two = random() < 0.5;
+        shape = { prefix: "", unit: sample.slice(0, two ? 24 : 48), middle: "", second: two ? sample.slice(-24) : "", score: 0 };
+      }
+      const roll = random();
+      const edit = (text: string) => {
+        const chars = [...text];
+        const at = Math.floor(random() * (chars.length + 1));
+        if (random() < 0.4 && chars.length > 1) chars.splice(Math.min(at, chars.length - 1), 1);
+        else chars.splice(at, 0, piece());
+        return chars.join("");
+      };
+      if (roll < 0.45) return { ...shape, unit: edit(shape.unit), score: 0 };
+      if (roll < 0.7) return { ...shape, second: edit(shape.second), score: 0 };
+      if (roll < 0.85) return { ...shape, middle: random() < 0.5 ? "" : pieces(2), score: 0 };
+      return { ...shape, prefix: random() < 0.5 ? "" : pieces(3), score: 0 };
+    };
+
+    const failing: string[] = [];
+    let worst = { shape: "", ratio: 0 };
+    /** Grows a shape by doubling until its time is past the noise: the smaller of two ratios. */
+    const confirm = async (shape: Shape) => {
+      if (performance.now() - started > DEADLINE_MS) return;
+      const sizes: number[] = [];
+      const seen: number[] = [];
+      let verdict: number[] | null = null;
+      /** Slower below 512 KiB than the slowest linear family is at 512 KiB, or killed. */
+      let slow = false;
+      // Grown until it is slow (a quadratic shape can look linear for its first doublings): the
+      // verdict is the last two doublings, past the noise, and the shape must have been slow (a
+      // linear shape's last doublings can read high from the collector alone).
+      for (let n = 16_384; n <= BODY_CAP; n *= 2) {
+        if (performance.now() - started > DEADLINE_MS) return;
+        // A smaller body first, untimed, warms the scanners up.
+        const t = await times(shape, [n / 4, n]);
+        if (t === null) {
+          verdict = [Infinity, Infinity];
+          slow = true;
+          break;
+        }
+        sizes.push(n);
+        seen.push(t[1]!);
+        const k = seen.length;
+        if (k >= 3 && seen[k - 3]! >= NOISE_MS) verdict = [seen[k - 2]! / seen[k - 3]!, seen[k - 1]! / seen[k - 2]!];
+        if (t[1]! > SLOW_MS) {
+          slow = n < BODY_CAP;
+          // Slow before three sizes were past the noise: slower at 16 KiB than the slowest linear
+          // family at 512 KiB is not linear; after two sizes, their one ratio decides.
+          if (k === 1) verdict = [Infinity, Infinity];
+          else if (verdict === null) verdict = [seen[1]! / Math.max(seen[0]!, 0.5), seen[1]! / Math.max(seen[0]!, 0.5)];
+          break;
+        }
+      }
+      if (verdict === null) return;
+      const ratio = Math.min(...verdict);
+      if (ratio > worst.ratio) worst = { shape: label(shape), ratio };
+      if (ratio > RATIO && slow) failing.push(`${label(shape)}: ${seen.map((t, k) => `${sizes[k]! / 1024} KiB ${t.toFixed(1)} ms`).join(", ")}`);
+    };
+
+    // A shape that scores high is confirmed at once (a later, noisier one cannot push it out);
+    // the eight worst are the parents of the mutations, and are confirmed at the end.
+    let kept: Shape[] = [];
+    /** The six slowest at 64 KiB: a shape can be linear to 64 KiB and quadratic past it. */
+    let slowest: Array<{ shape: Shape; ms: number }> = [];
+    const confirmed = new Set<Shape>();
+    const consider = async (shape: Shape) => {
+      if (shape.unit === "") return;
+      const { ratio, ms } = await score(shape);
+      shape.score = ratio;
+      // The slowest linear families take about 25 ms at 64 KiB.
+      if (ratio > RATIO || ms > SLOW_64K_MS) {
+        confirmed.add(shape);
+        await confirm(shape);
+      }
+      kept = [...kept, shape].sort((p, q) => q.score - p.score).slice(0, 8);
+      slowest = [...slowest, { shape, ms }].sort((p, q) => q.ms - p.ms).slice(0, 6);
+    };
+    // The attack families themselves (those whose body grows with n); a mutation of one starts from
+    // its first and last characters (one unit, or two phases).
+    for (const [family, make] of Object.entries(ATTACKS)) {
+      if (performance.now() - started > SEARCH_MS) break;
+      if (make(4096).length > 3 * 4096) continue;
+      await consider({ prefix: "", unit: "-", middle: "", second: "", score: 0, family });
+    }
+    while (performance.now() - started < SEARCH_MS) {
+      const fresh = random() < 0.3;
+      const shape: Shape = fresh
+        ? { prefix: random() < 0.4 ? pieces(3) : "", unit: pieces(6), middle: random() < 0.3 ? pieces(2) : "", second: random() < 0.4 ? pieces(4) : "", score: 0 }
+        : mutate(kept[Math.floor(random() * Math.min(3, kept.length))]!);
+      await consider(shape);
+    }
+    for (const shape of [...kept, ...slowest.map((entry) => entry.shape)]) {
+      if (!confirmed.has(shape)) await confirm(shape);
+      confirmed.add(shape);
+    }
+    console.info(`(f) worst surviving shape: ${worst.shape}, t(2n)/t(n) = ${worst.ratio.toFixed(2)} (the smaller of two doublings)`);
+    expect(failing, failing.join("\n")).toEqual([]);
+  }, 60_000);
 });

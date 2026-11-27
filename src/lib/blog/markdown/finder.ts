@@ -73,3 +73,15 @@ export class NextWhere {
     return at;
   }
 }
+
+/** The first index of a sorted list whose value is at least `value` (the list's length when none). */
+export function lowerBound(list: readonly number[], value: number): number {
+  let lo = 0;
+  let hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid]! < value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}

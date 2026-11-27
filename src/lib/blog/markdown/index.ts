@@ -31,6 +31,7 @@ export {
   type LexRefusal,
 } from "./limits";
 export { WORDS_PER_MINUTE, bareUrlOf, decodeEntities, plainText, walkTokens } from "./readers";
+export { backpedal } from "./autolink";
 
 export type LexResult =
   | { ok: true; tokens: Token[]; nodes: number }
