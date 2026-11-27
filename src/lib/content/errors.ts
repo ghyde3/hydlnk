@@ -1,6 +1,10 @@
 import { readBlockedLinkError } from "@/lib/blocklist/error";
 import { STORAGE_FULL_MESSAGE } from "@/lib/editor/messages";
-import { ACTIVITY_RATE_LIMITED_MESSAGE, PUBLISH_FORBIDDEN_MESSAGE } from "@/lib/team/messages";
+import {
+  ACCESS_LOST_MESSAGE,
+  ACTIVITY_RATE_LIMITED_MESSAGE,
+  PUBLISH_FORBIDDEN_MESSAGE,
+} from "@/lib/team/messages";
 import { SCHEDULING_PLAN_MESSAGE, TERM_LIMIT_MESSAGE } from "@/lib/limits/messages";
 import type { ContentErrorCode, ContentFailure } from "./types";
 
@@ -9,6 +13,7 @@ export const CONTENT_STATUS: Record<ContentErrorCode, number> = {
   conflict: 409,
   forbidden: 403,
   account_suspended: 403,
+  access_lost: 403,
   type_disabled: 403,
   invalid: 422,
   blocked_link: 422,
@@ -34,6 +39,7 @@ export const CONTENT_MESSAGES: Record<ContentErrorCode, string> = {
   forbidden: PUBLISH_FORBIDDEN_MESSAGE,
   account_suspended:
     "Your account is suspended, so its content can’t be changed. Contact support to appeal.",
+  access_lost: ACCESS_LOST_MESSAGE,
   type_disabled: "That content type isn’t turned on for this site.",
   invalid: "That content isn’t valid.",
   blocked_link: "That content links to a site that isn’t allowed.",
@@ -88,6 +94,18 @@ const BY_CODE: Record<string, ContentErrorCode> = {
 };
 
 /**
+ * What a fire function's creator re-check raised (HL022, migration 20261127004800; T9): the row's
+ * final code, or null for any other error. The one reading of HL022, for both writers.
+ */
+export function fireAccessRefusal(err: {
+  code?: string | null;
+  message?: string | null;
+}): "account_suspended" | "access_lost" | null {
+  if (err.code !== "HL022") return null;
+  return err.message === "account_suspended" ? "account_suspended" : "access_lost";
+}
+
+/**
  * One mapping for what the database raises. 22023 (a stale rev) arrives as `conflict` without a
  * `currentRev`: the caller that knows the entry re-reads the rev and adds it.
  */
@@ -97,6 +115,8 @@ export function mapDbError(err: {
   details?: string | null;
   hint?: string | null;
 }): ContentFailure {
+  const lost = fireAccessRefusal(err);
+  if (lost) return failure(lost);
   const blocked = readBlockedLinkError(err);
   if (blocked)
     return { ...failure("blocked_link"), hosts: blocked.hosts, blockIds: blocked.blockIds };

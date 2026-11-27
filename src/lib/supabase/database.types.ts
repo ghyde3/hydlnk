@@ -2420,6 +2420,10 @@ export type Database = {
         Args: { p_owner: string; p_paths: string[] }
         Returns: number
       }
+      require_schedule_creator: {
+        Args: { p_creator: string; p_site: string }
+        Returns: string
+      }
       require_site_access: {
         Args: { p_need: string; p_site: string; p_user: string }
         Returns: string

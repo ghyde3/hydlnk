@@ -82,7 +82,9 @@ export interface WorkerResult {
  * or demoted publisher, a member whose access is paused (the owner left Studio, either suspension)
  * and anyone who never had access: `access_lost`, and the row ends without publishing (T9, G19).
  * The owner's own suspension: `account_suspended` (the row does not wait for it to end). A publish
- * whose owner's plan no longer includes scheduling: `plan`. Null when it may run.
+ * whose owner's plan no longer includes scheduling: `plan`. Null when it may run. The fire functions
+ * ask the same rule again under their own locks (`require_schedule_creator`, HL022, read by
+ * `fireAccessRefusal`), so a change that commits between this read and the fire still refuses.
  */
 export async function scheduleActorRefusal(
   db: Admin,
@@ -123,6 +125,7 @@ function pageOutcome(result: Extract<PagePublishResult, { ok: false }>): Outcome
     case "unauthorized":
       return { kind: "failed", code: "not_found" };
     case "account_suspended":
+    case "access_lost":
     case "blocked_link":
     case "storage_full":
       return { kind: "failed", code: result.reason };

@@ -72,6 +72,7 @@ export function gateFailure(
       return new ToolFailure("too_large", STORAGE_FULL_MESSAGE);
     case "not_found":
     case "forbidden":
+    case "access_lost":
     case "unauthorized":
       return new ToolFailure("not_found", words.notFound ?? MESSAGES.not_found);
     default:

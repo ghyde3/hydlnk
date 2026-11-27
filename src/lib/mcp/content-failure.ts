@@ -42,9 +42,11 @@ function issuesOf(failure: ContentFailure): ToolIssue[] {
 export function contentFailure(failure: ContentFailure, where: FailureContext = {}): ToolFailure {
   switch (failure.error) {
     // `forbidden` is a member's refusal; a token reaches only its user's own sites (decide rule 2),
-    // so it answers exactly like a missing id, as the Publish gate's mapping does.
+    // so it answers exactly like a missing id, as the Publish gate's mapping does. `access_lost`
+    // only comes from a scheduled fire (never a tool), and reads the same.
     case "not_found":
     case "forbidden":
+    case "access_lost":
       return new ToolFailure("not_found", where.notFoundMessage ?? MESSAGES.entry_not_found);
     // The writers' activity limit (team access: 30 recorded changes a minute per actor).
     case "rate_limited":

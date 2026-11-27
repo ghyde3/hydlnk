@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { blockedLinksInPublished, checkBlocklist, loadBlockedDomains } from "@/lib/blocklist";
 import { publishSitePageWithClient, type PublishRun } from "@/lib/content";
+import { fireAccessRefusal } from "@/lib/content/errors";
 import { designPublishSchema, prepareHomeEntryPublish } from "@/lib/content/schemas/page";
 import {
   PATH_MESSAGES,
@@ -63,6 +64,8 @@ export type PublishFailureReason =
   | "error"
   /** The owner's account is suspended (M5-09): nothing is published until an admin unsuspends it. */
   | "account_suspended"
+  /** A scheduled fire whose creator may no longer publish the site (HL022, T9): nothing went live. */
+  | "access_lost"
   /** A link in the saved draft points to a blocked site (M5-03); `errors` name each link and its host. */
   | "blocked_link"
   /** Too many publishes in the last hour (M11-12): nothing was read or written; try again later. */
@@ -940,6 +943,8 @@ export async function publishSitePageCore(
     };
   }
   const { code, message } = written;
+  const lost = fireAccessRefusal({ code, message });
+  if (lost) return refuse(lost);
   if (code === "P0002") return refuse("not_found");
   // The id rule again, by the function under the site's lock (M15-12): another page went live with
   // one of this page's ids after the check above. The same notice, on the block it names.

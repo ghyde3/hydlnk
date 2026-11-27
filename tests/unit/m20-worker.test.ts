@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { failure } from "@/lib/content/errors";
+import { failure, fireAccessRefusal, mapDbError } from "@/lib/content/errors";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/env/client", () => ({ clientEnv: { NEXT_PUBLIC_ROOT_DOMAIN: "localhost:3000" } }));
@@ -167,6 +167,52 @@ describe("M20-08 the worker publishes due snapshots through the gate", () => {
     expect(deps.publishPage).not.toHaveBeenCalled();
     expect(deps.unpublish).not.toHaveBeenCalled();
     expect(deps.expire).not.toHaveBeenCalled();
+  });
+
+  it("M20-08 the site's owner is no longer the row's owner: access_lost, nothing fires (S6)", async () => {
+    // The creator may publish SITE (its owner is OWNER), but the claim names another owner: the
+    // site changed hands after the row was claimed. The row must never publish as the old owner.
+    const other = "44444444-4444-4444-8444-444444444444";
+    const { deps, finished } = setup([[row({ owner_id: other })]]);
+    expect(
+      await scheduleActorRefusal(deps.db, {
+        action: "publish",
+        siteId: SITE,
+        ownerId: other,
+        createdBy: OWNER,
+      }),
+    ).toBe("access_lost");
+    await runScheduleWorker(deps);
+    expect(deps.publishPost).not.toHaveBeenCalled();
+    expect(finished[0]).toMatchObject({ p_failed: true, p_code: "access_lost" });
+  });
+
+  it.each([
+    ["access_lost", "access_lost"],
+    ["account_suspended", "account_suspended"],
+  ])(
+    "M20-08 the fire's own creator re-check (HL022 %s) ends the row with that code, never retried (L1)",
+    async (message, code) => {
+      const refusal = mapDbError({ code: "HL022", message });
+      expect(refusal.error).toBe(code);
+      for (const typeKey of ["post", "page"]) {
+        const { deps, finished } = setup([[row({ type_key: typeKey })]]);
+        deps.publishPost.mockResolvedValueOnce(refusal as never);
+        deps.publishPage.mockResolvedValueOnce({ ok: false, reason: code, errors: [] } as never);
+        const out = await runScheduleWorker(deps);
+        expect(out).toMatchObject({ published: 0, failed: 1, retried: 0 });
+        expect(finished[0]).toMatchObject({ p_failed: true, p_code: code });
+        expect(deps.expire).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("M20-08 fireAccessRefusal reads HL022 only", () => {
+    expect(fireAccessRefusal({ code: "HL022", message: "account_suspended" })).toBe(
+      "account_suspended",
+    );
+    expect(fireAccessRefusal({ code: "HL022", message: "access_lost" })).toBe("access_lost");
+    expect(fireAccessRefusal({ code: "P0002", message: "access_lost" })).toBeNull();
   });
 
   it.each([

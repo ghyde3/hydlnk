@@ -29,6 +29,8 @@ describe("contentFailure", () => {
       not_found: "not_found",
       // A member's refusal reads as a missing id (MCP is owner-only, M19-13).
       forbidden: "not_found",
+      // Only a scheduled fire's creator re-check raises it (HL022); it reads like a missing id.
+      access_lost: "not_found",
       conflict: "conflict",
       account_suspended: "account_suspended",
       type_disabled: "type_disabled",

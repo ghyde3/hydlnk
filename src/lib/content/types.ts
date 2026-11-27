@@ -14,6 +14,8 @@ export type ContentErrorCode =
   /** A member whose role does not allow it (an editor asked to publish; Wave F). */
   | "forbidden"
   | "account_suspended"
+  /** A scheduled fire whose creator may no longer publish the site (HL022 access_lost; T9). */
+  | "access_lost"
   | "type_disabled"
   | "invalid"
   | "blocked_link"
