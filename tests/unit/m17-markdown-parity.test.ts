@@ -91,6 +91,18 @@ const CORPUS: Record<string, string> = {
   "URL inside an open em still stops at its closer": "*a https://x.co/a*b c*",
   "mixed runs ***a** b ** c*": "***a** b ** c*",
   "NBSP before <address>": "[a](\u00a0<b>)",
+  // The rule of three reads each run's length as written (cmark's `origdelims`), not what an
+  // earlier match left of it (third pass, finding 1).
+  "rule of three after a closer's rest *foo***bar*": "*foo***bar*",
+  "rule of three after a closer's rest **a***b**": "**a***b**",
+  "rule of three after a closer's rest x*a***b*y": "x*a***b*y",
+  "rule of three after a closer's rest *****a*****": "*****a*****",
+  // A bare URL is cut only at a run the stack would match, and not at one that a run inside the
+  // URL opens for (finding 2); an email inside emphasis stops at its closer (finding 3).
+  "URL in em with __ inside": "_https://github.com/a/b/blob/main/__init__.py_",
+  "URL in strong with a * that closes nothing": "**see http://x.co/search?q=a*b**",
+  "email in em": "_me@example.com_",
+  "email in strong": "__me@example.com__",
   "escaped mark before a closer": "*a \\**",
   // ATX headings
   "atx 1-6": "# a\n## b\n### c\n#### d\n##### e\n###### f",
@@ -585,10 +597,29 @@ describe("what the rich editor writes goes live as the editor read it", () => {
   });
 });
 
+describe("an exhaustive differential over emphasis: every body of up to 5 pieces", () => {
+  // marked counts emphasis runs forward from each opener; this lexer matches them with CommonMark's
+  // delimiter stack (linear), so short emphasis-dense bodies disagree often. Measured on the 23,302
+  // distinct bodies: 1,880 disagreed before the third pass (8.07%), 1,873 after (8.04%), the rule of
+  // three reading the lengths as written. The bound is the count after: never worse.
+  it("disagrees with marked on at most 1,873 of the 23,302 distinct bodies", () => {
+    const PIECES = ["a", " ", "*", "**", "***", "_", "__", "."];
+    const bodies = new Set<string>();
+    const grow = (body: string, depth: number) => {
+      if (depth > 0) bodies.add(body);
+      if (depth < 5) for (const piece of PIECES) grow(body + piece, depth + 1);
+    };
+    grow("", 0);
+    const differing = [...bodies].filter((body) => JSON.stringify(ours(body)) !== JSON.stringify(marked(body)));
+    expect(bodies.size).toBe(23_302);
+    expect(differing.length, differing.slice(0, 10).map((b) => JSON.stringify(b)).join(" ")).toBeLessThanOrEqual(1_873);
+  });
+});
+
 describe("a seeded differential fuzz over small documents", () => {
   // Distinct bodies only (the shared generator draws 3,755 distinct of 4,000). Measured: 46 of them
   // differ at the start of the third pass (1.23%; the old generator cycled and drew 1,282 distinct
-  // bodies, 10 differing), 45 after it (1.20%): emphasis counting, runs of `~` and
+  // bodies, 10 differing), 45 after it (1.20%): emphasis counting (see above), runs of `~` and
   // backticks, and bare URLs and emails next to emphasis. The bound sits just above.
   it("draws as marked does on at least 98.7% of random distinct documents", () => {
     const PIECES = ["a", "b c", " ", "  ", "\n", "\n\n", "*", "**", "_", "__", "~", "~~", "`", "``", "[", "]", "(", ")", "![", "<", ">", "<b>", "</b>", '<a href="x">', "\\", "\\*", "&amp;", "&", "#", "## ", "> ", "- ", "1. ", "2) ", "    ", "\t", "|", "---", "===", "```", "~~~", "http://x.co/p", "www.x.co", "a@b.co", "[l](http://u.co)", "[l][r]", "[r]: http://d.co", "<http://x.co>", '"t"', ":", ".", ",", "!", "?", "'", "-", "+", "=", "\u00a0", "日本"];

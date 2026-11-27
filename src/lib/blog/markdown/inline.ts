@@ -30,8 +30,7 @@ import {
 } from "./chars";
 import {
   DelimiterStack,
-  NextClosingRun,
-  RUN_KINDS,
+  RunsAhead,
   OPENS,
   flanking,
   matchCloser,
@@ -41,6 +40,7 @@ import {
   type NodeList,
   type TextNode,
   type TokenNode,
+  type UrlCuts,
 } from "./emphasis";
 import { NextIndex, NextUnescaped, NextWhere, lowerBound } from "./finder";
 import { TagFinders, inlineTagEnd } from "./html";
@@ -131,8 +131,9 @@ class InlineRun {
   private readonly urlStop: NextWhere;
   /** The end of a run of email local-part characters (`[A-Za-z0-9._+-]`). */
   private readonly localRunEnd: NextWhere;
-  /** The last `@` whose domain was read, and where its domain ends (-1: none). */
+  /** The last `@` whose domain was read, the bound it was read to, and where it ends (-1: none). */
   private domainAt = -1;
+  private domainBound = -1;
   private domainEnd = -1;
   private readonly titleEnds: { quote: NextUnescaped; apos: NextUnescaped; paren: NextUnescaped };
   private ticks: BacktickRuns | null = null;
@@ -296,7 +297,7 @@ class InlineRun {
       if (at < to && s.charCodeAt(at) === AT && this.email(c, at)) return true;
     }
     if (!isHostChar(s.charCodeAt(i + prefix))) return false;
-    const end = bareUrlEnd(s, i, prefix, this.closingRunIn(c, i + prefix, to), this.closeParen, this.urlStop);
+    const end = bareUrlEnd(s, i, prefix, this.closingRunIn(c, c.urlCuts(), i + prefix, to), this.closeParen, this.urlStop);
     if (end <= i) return false;
     const url = s.slice(i, end);
     c.emit(autolinkToken(url, url, s.charCodeAt(i) === 0x77 ? `http://${url}` : url), i, end);
@@ -523,21 +524,17 @@ class InlineRun {
   }
 
   /**
-   * Where a bare URL from `from` must stop for emphasis: marked fixes an emphasis's extent before it
-   * reads a URL inside it, so a URL does not run over a `*`, `_` or `~` run that closes an open
-   * opener (`**http://x.co**'s`). `to` when nothing cuts it.
+   * Where a bare URL (or an email's domain) from `from` must stop for emphasis: at the first run of
+   * `*`, `_` or `~` ahead that would close an opener still open (`UrlCuts`), before the first space
+   * or `<`. `to` when nothing cuts it.
    *
-   * LINEAR: one memoised forward search per kind of run (`NextClosingRun`), asked only for a kind
-   * with an opener on the stack, from URL starts that only move forward: each character is scanned
-   * at most once per kind over the whole pass, however many URLs start inside one word.
+   * LINEAR: `UrlCuts` answers in O(1) amortised per question for one stream of forward-moving
+   * positions (`cuts`), and the space is found by a memoised forward search (`urlStop`).
    */
-  private closingRunIn(c: Cursor, from: number, to: number): number {
+  private closingRunIn(c: Cursor, cuts: UrlCuts, from: number, to: number): number {
     if (!c.stack.hasOpeners()) return to;
     const stop = Math.min(this.urlStop.at(from), to);
-    let cut = stop;
-    for (let kind = 0; kind < RUN_KINDS; kind += 1) {
-      if (c.stack.opens(kind)) cut = Math.min(cut, c.closingRuns(kind).at(from));
-    }
+    const cut = cuts.cut(c.stack, from, stop);
     return cut < stop ? cut : to;
   }
 
@@ -547,18 +544,24 @@ class InlineRun {
    * A bare email with its `@` at `at` (marked's GFM `url` rule, email form): emitted when the domain
    * after the `@` is one and a local part precedes it. False otherwise.
    *
+   * Inside an emphasis the domain stops at the run that closes it (`_me@example.com_`: the closing
+   * `_` is not a domain character), and the local part does not reach back over an opener.
+   *
    * LINEAR: the domain of one `@` is read once however many URL prefixes before it ask
-   * (`domainAt`); the local part is walked back only once the domain is good, and then the email
-   * takes everything walked.
+   * (`domainAt`, with the bound it was read to); the bound is one `UrlCuts` question in the stream
+   * of `@`s (forward-moving); the local part is walked back only once the domain is good, and then
+   * the email takes everything walked.
    */
   private email(c: Cursor, at: number): boolean {
-    if (this.domainAt !== at) {
+    const bound = this.closingRunIn(c, c.emailCuts(), at + 1, c.to);
+    if (this.domainAt !== at || this.domainBound !== bound) {
       this.domainAt = at;
-      this.domainEnd = emailDomainEnd(this.src, at, c.to);
+      this.domainBound = bound;
+      this.domainEnd = emailDomainEnd(this.src, at, bound);
     }
     const end = this.domainEnd;
     if (end === -1) return false;
-    const start = this.localPartStart(at, c);
+    const start = this.localPartStart(at, c, bound < c.to);
     if (start === at) return false;
     c.dropFrom(start);
     const address = this.src.slice(start, end);
@@ -569,18 +572,19 @@ class InlineRun {
   /**
    * Where the local part ending at `at` starts: the run of `[A-Za-z0-9._+-]` before it (marked tries
    * every position of that run, and the first wins), reaching back over pending text and over the
-   * text and `_` nodes before it, but not over a `_` run that may close emphasis.
+   * text and `_` nodes before it, but not over a `_` run that may close emphasis, nor over one that
+   * opens the emphasis the email's domain stops for (`inside`).
    *
    * LINEAR: called only for an `@` whose domain is good, and then the email swallows everything
    * walked (`dropFrom`), so no character is walked back twice.
    */
-  private localPartStart(at: number, c: Cursor): number {
+  private localPartStart(at: number, c: Cursor, inside: boolean): number {
     const s = this.src;
     let k = at;
     while (k > c.pend && isEmailLocalChar(s.charCodeAt(k - 1))) k -= 1;
     if (k > c.pend) return k;
     for (let node = c.list.tail; node !== null && node.kind === "text"; node = node.prev) {
-      if (node.b !== k || node.delimiter?.close) return k;
+      if (node.b !== k || node.delimiter?.close || (inside && node.delimiter?.open)) return k;
       let j = node.b;
       while (j > node.a && isEmailLocalChar(s.charCodeAt(j - 1))) j -= 1;
       k = j;
@@ -732,10 +736,21 @@ class Cursor implements EmphasisSink {
     return this.stack.push(node, char, length, sides);
   }
 
-  /** The closing runs of one kind ahead of a bare URL, searched lazily (top-level runs only). */
-  private readonly closers: Array<NextClosingRun | undefined> = [];
-  closingRuns(kind: number): NextClosingRun {
-    return (this.closers[kind] ??= new NextClosingRun(this.src, this.from, this.to, kind));
+  /**
+   * The runs ahead of the cursor (`RunsAhead`, read lazily) and two streams of questions about them,
+   * each asked at forward-moving positions: bare URL starts, and the `@`s of emails.
+   */
+  private runs: RunsAhead | null = null;
+  private urls: UrlCuts | null = null;
+  private emails: UrlCuts | null = null;
+  private ahead(): RunsAhead {
+    return (this.runs ??= new RunsAhead(this.src, this.from, this.to));
+  }
+  urlCuts(): UrlCuts {
+    return (this.urls ??= this.ahead().cuts());
+  }
+  emailCuts(): UrlCuts {
+    return (this.emails ??= this.ahead().cuts());
   }
 
   /**
