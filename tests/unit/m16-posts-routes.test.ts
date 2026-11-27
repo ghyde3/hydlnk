@@ -637,8 +637,9 @@ describe.skipIf(!run)("the Posts app routes", () => {
     try {
       const params = { id: a.pageId, entryId: post };
       const cases: Array<[string, string]> = [
-        ["*a ".repeat(32_000), BODY_SHAPE_MESSAGES.work],
-        ["*a **b ".repeat(8000), BODY_SHAPE_MESSAGES.work],
+        // Past the node limit (60,000 emphasised words: 180,000 tokens), not past a clock.
+        ["*a* ".repeat(60_000), BODY_SHAPE_MESSAGES.size],
+        [`|a|b|\n|-|-|\n${"a|b\n".repeat(80_000)}`, BODY_SHAPE_MESSAGES.size],
         [`${"> ".repeat(4000)}a`, BODY_SHAPE_MESSAGES.depth],
         [`${"- > ".repeat(2000)}a`, BODY_SHAPE_MESSAGES.depth],
         [`${"1. ".repeat(4000)}a`, BODY_SHAPE_MESSAGES.depth],

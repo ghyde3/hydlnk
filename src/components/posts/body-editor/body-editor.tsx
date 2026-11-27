@@ -10,7 +10,7 @@ import { mediaOrigin, mediaUrl, storageUrl } from "@/lib/media/url";
 import { mediaPathOf } from "@/lib/themes/bg-image";
 import { bodyExtensions } from "./extensions";
 import { cleanAlt } from "./image-node";
-import { canEditRich, toMarkdown } from "./markdown";
+import { canEditRich, fromMarkdown, toMarkdown } from "./markdown";
 import { SourceBox } from "./source-box";
 import { BodyToolbar, EMPTY_MODEL, readModel } from "./toolbar";
 
@@ -93,11 +93,12 @@ function RichBody({ initial, onChange, disabled, ownerId, labelledBy }: BodyEdit
     () => bodyExtensions({ display: (src) => displaySrc(src, ownerId) }),
     [ownerId],
   );
+  // The document `canEditRich` checked, from the same bounded lexer (never marked's), built once.
+  const [content] = useState(() => fromMarkdown(initial));
   const editor = useEditor({
     immediatelyRender: false,
     extensions,
-    content: initial.replace(/\r\n?/g, "\n"),
-    contentType: "markdown",
+    content,
     editable: !disabled,
     editorProps: {
       attributes: {

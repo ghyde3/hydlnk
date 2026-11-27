@@ -8,55 +8,30 @@ import {
   fromMarkdown,
   toMarkdown,
 } from "@/components/posts/body-editor/markdown";
+import { DOCUMENTS, LOSSY, SUPPORTED } from "./support/body-editor-corpus";
+import { pick, seeded } from "./support/random";
 
 /**
  * The post body is Markdown, edited in Tiptap (M16-13). What the rich editor can hold it must give
  * back byte for byte; everything else opens in the plain Markdown box and is never rewritten.
  */
 
-const IMAGE = "https://x.example/storage/v1/object/public/page-media/u/f.webp";
-
-const SUPPORTED: Record<string, string> = {
-  paragraph: "Just a paragraph.",
-  "two paragraphs": "One.\n\nTwo.",
-  "heading 2": "## A heading",
-  "headings 3 and 4": "### Third\n\n#### Fourth",
-  bold: "Some **bold** text.",
-  italic: "Some *italic* text.",
-  strike: "Some ~~struck~~ text.",
-  "bold and italic": "Both ***at once*** here.",
-  link: "A [link](https://example.com/a?b=1&c=2) here.",
-  "bold link": "A [**bold link**](https://example.com) here.",
-  "extra blank lines": "One.\n\n\n\nTwo.",
-  "bullet list": "- one\n- two\n- three",
-  "numbered list": "1. first\n2. second\n3. third",
-  "nested list": "- a\n  - nested\n- b",
-  quote: "> Quoted words.",
-  "code block": "```\nconst a = 1;\n```",
-  "code block with a language": "```js\nlet a = 1;\n```",
-  "inline code": "Run `pnpm verify` first.",
-  rule: "Above.\n\n---\n\nBelow.",
-  "hard break": "line one  \nline two",
-  image: `![A photo](${IMAGE})`,
-  "image in a paragraph": `Before ![alt](${IMAGE}) after.`,
-  everything: [
-    "## Heading",
-    "A paragraph with **bold**, *italic*, ~~strike~~ and a [link](https://example.com).",
-    "- one\n- two",
-    "1. first\n2. second",
-    "> quoted",
-    "```\ncode here\n```",
-    "---",
-    `![alt](${IMAGE})`,
-    "End.",
-  ].join("\n\n"),
-};
-
 describe("the Markdown round trip of the rich editor", () => {
   for (const [name, markdown] of Object.entries(SUPPORTED)) {
     it(`${name}: toMarkdown(fromMarkdown(x)) === x`, () => {
       expect(toMarkdown(fromMarkdown(markdown))).toBe(markdown);
       expect(canEditRich(markdown)).toBe(true);
+    });
+  }
+
+  for (const [name, { doc, reads }] of Object.entries(DOCUMENTS)) {
+    it(`${name}: serialise, lex and read back as the same document, and write the same bytes again`, () => {
+      const written = toMarkdown(doc as never);
+      expect(written).not.toMatch(/<\/?(?:em|strong|s|del)>/);
+      const back = fromMarkdown(written);
+      expect(back, written).toEqual(reads ?? doc);
+      expect(toMarkdown(back)).toBe(written);
+      expect(canEditRich(written), written).toBe(true);
     });
   }
 
@@ -72,27 +47,6 @@ describe("the Markdown round trip of the rich editor", () => {
 });
 
 describe("the loss guard: what the rich editor cannot hold opens as plain Markdown", () => {
-  const LOSSY: Record<string, string> = {
-    table: "| a | b |\n| - | - |\n| 1 | 2 |",
-    "block HTML": '<div class="x">raw</div>',
-    "inline HTML": "Some <b>bold</b> text.",
-    "an HTML comment": "Text\n\n<!-- note -->",
-    "heading 1": "# Title",
-    "heading 5": "##### Small",
-    "setext heading": "Title\n-----",
-    "task list": "- [ ] todo\n- [x] done",
-    footnote: "A claim.[^1]\n\n[^1]: The source.",
-    "link with a title": '[a](https://example.com "Title")',
-    "reference link": "[a][ref]\n\n[ref]: https://example.com",
-    "javascript link": "[x](javascript:alert(1))",
-    "mailto link": "[x](mailto:a@example.com)",
-    "star bullets": "* one\n* two",
-    "underscore emphasis": "__bold__ and _it_",
-    "indented code": "    code by indent",
-    "image with a title": `![a](${IMAGE} "T")`,
-    "escaped characters the editor would rewrite": "Escapes 1\\. and \\<b>",
-    "bold around a link, the other way round": "A **[bold link](https://example.com)** here.",
-  };
   for (const [name, markdown] of Object.entries(LOSSY)) {
     it(name, () => {
       expect(canEditRich(markdown)).toBe(false);
@@ -229,6 +183,20 @@ describe("a URL typed in the rich editor is stored as typed (finding 2)", () => 
       text: "www.example.com/a*b*",
       links: ["http://www.example.com/a*b"],
     });
+  });
+
+  it("a bare link after a spaceless word longer than 4,096 characters is still a link (CJK)", () => {
+    const word = "字".repeat(5000);
+    for (const [text, href, written] of [
+      ["https://a.co/x_y", "https://a.co/x_y", "<https://a.co/x_y>"],
+      ["www.a.co", "http://www.a.co", "[www.a.co](http://www.a.co)"],
+    ] as const) {
+      const link = { type: "text", text, marks: [{ type: "link", attrs: { href, title: null } }] };
+      const doc = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: word }, link, { type: "text", text: " after" }] }] };
+      const md = toMarkdown(doc);
+      expect(md).toBe(`${word}${written} after`);
+      expect(fromMarkdown(md).content![0]!.content!.slice(1)).toEqual([link, { type: "text", text: " after" }]);
+    }
   });
 
   it("a link with its own text, and code, are written as before", () => {
@@ -390,11 +358,7 @@ describe("typed text never becomes a link or emphasis it did not say (adversaria
       "amp;",
       "#38;",
     ];
-    let seed = 0x5eed;
-    const random = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x80000000;
-    };
+    const random = seeded(0x5eed);
     for (let i = 0; i < 2000; i += 1) {
       let text = "";
       const length = 1 + Math.floor(random() * 24);
@@ -404,6 +368,95 @@ describe("typed text never becomes a link or emphasis it did not say (adversaria
       // alphabetic list item (a line-start question, not a URL one; recorded for the owner).
       text = `t ${text.replace(/ +/g, " ").trim()}`.trim();
       expectTypedStaysText(text);
+    }
+  });
+});
+
+describe("a link the author made is the link the live page draws (third pass, finding 4)", () => {
+  type Inline = { type: string; text?: string; marks?: Array<{ type: string; attrs?: Record<string, unknown> }> };
+  /** Every link of a body as the live page reads it (lex + walk): its address and its visible text. */
+  const liveLinks = (markdown: string): string[] => {
+    const found: string[] = [];
+    const textOf = (tokens: readonly Token[]): string =>
+      tokens
+        .map((token) => {
+          const t = token as Token & { tokens?: Token[]; text?: string };
+          if (t.tokens && t.tokens.length > 0) return textOf(t.tokens);
+          return t.type === "text" ? decodeEntities(t.text ?? "") : (t.text ?? "");
+        })
+        .join("");
+    const walk = (tokens: readonly Token[]) => {
+      for (const token of tokens as Array<Token & { tokens?: Token[]; items?: Array<{ tokens: Token[] }> }>) {
+        if (token.type === "link") found.push(`${(token as Tokens.Link).href} ${textOf(token.tokens ?? [])}`);
+        if (token.tokens) walk(token.tokens);
+        for (const item of token.items ?? []) walk(item.tokens);
+      }
+    };
+    walk(lexMarkdown(markdown));
+    return found;
+  };
+  const link = (text: string, href: string): Inline => ({ type: "text", text, marks: [{ type: "link", attrs: { href, title: null } }] });
+
+  it("the reported repros: no link is lengthened, joined or moved", () => {
+    const cases: Array<[Inline[], string[]]> = [
+      [[link("http://x.co", "http://x.co"), { type: "text", text: ".evil.example/path" }], ["http://x.co http://x.co"]],
+      [[link("www.x.co", "http://www.x.co"), { type: "text", text: "m" }], ["http://www.x.co www.x.co"]],
+      [[link("http://a.co", "http://a.co"), link("http://b.co", "http://b.co")], ["http://a.co http://a.co", "http://b.co http://b.co"]],
+      [[link("http://a.co", "http://a.co"), { type: "text", text: "@b.co" }], ["http://a.co http://a.co"]],
+      [[link("t", "http://x.co/a)b"), { type: "text", text: "b)" }], ["http://x.co/a)b t"]],
+    ];
+    for (const [content, links] of cases) {
+      const md = toMarkdown({ type: "doc", content: [{ type: "paragraph", content }] });
+      expect(liveLinks(md), md).toEqual(links);
+    }
+  });
+
+  it("randomised: link nodes with random addresses beside random text draw exactly those links", () => {
+    const random = seeded(0x11c5);
+    const HOSTS = ["a.co", "x.example", "b-c.io", "w.org"];
+    const PATH = ["", "/", "/a", "/a_b", "/x(y)", "/q)", "/(", "/~u", "/a*b", "?q=1&r=2", "#f", "/a.b"];
+    const TEXT = [".evil.example/path", "m", "@b.co", ".", "/", ")", "(", "_", "*", "~", " ", "x", "co", "-", ")b", "&amp;", "[", "]", "!"];
+    const url = () => {
+      const www = random() < 0.3;
+      const host = `${www ? "www." : ""}${pick(random, HOSTS)}${pick(random, PATH)}${random() < 0.3 ? pick(random, PATH) : ""}`;
+      const scheme = www && random() < 0.6 ? "" : random() < 0.5 ? "https://" : "http://";
+      return { text: scheme + host, href: scheme === "" ? `http://${host}` : scheme + host };
+    };
+    for (let sample = 0; sample < 1500; sample += 1) {
+      const content: Inline[] = [];
+      const want: string[] = [];
+      for (let k = 1 + Math.floor(random() * 5); k > 0; k -= 1) {
+        if (random() < 0.5) {
+          const { text, href } = url();
+          const label = random() < 0.7 ? text : pick(random, ["t", "see it", "a_b"]);
+          content.push(link(label, href));
+          want.push(`${href} ${label}`);
+        } else {
+          let text = "";
+          for (let j = 1 + Math.floor(random() * 3); j > 0; j -= 1) text += pick(random, TEXT);
+          content.push({ type: "text", text });
+        }
+      }
+      const md = toMarkdown({ type: "doc", content: [{ type: "paragraph", content }] });
+      // Links only: a typed email (`x@b.co`) is the text's own and is not compared.
+      const drawn = liveLinks(md).filter((entry) => !entry.startsWith("mailto:"));
+      expect(drawn, `${JSON.stringify(content)}\n${md}`).toEqual(want);
+    }
+  });
+});
+
+describe("marks are written as Markdown, never as HTML the page would draw as text (third pass, finding 5)", () => {
+  it("randomised: paragraphs of runs with any of bold, italic and strike", () => {
+    const random = seeded(0xb01d);
+    const WORDS = ["a", "bc", " d", "e ", "x y", "z", "."];
+    const MARKS = ["bold", "italic", "strike"];
+    for (let sample = 0; sample < 1500; sample += 1) {
+      const content = Array.from({ length: 1 + Math.floor(random() * 6) }, () => {
+        const marks = MARKS.filter(() => random() < 0.5).map((type) => ({ type }));
+        return { type: "text", text: pick(random, WORDS), ...(marks.length > 0 ? { marks } : {}) };
+      });
+      const md = toMarkdown({ type: "doc", content: [{ type: "paragraph", content }] });
+      expect(md, JSON.stringify(content)).not.toMatch(/<\/?(?:em|strong|s|del)>/);
     }
   });
 });
