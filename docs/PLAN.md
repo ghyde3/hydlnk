@@ -89,6 +89,127 @@ Each page is one JSON document (profile + blocks + theme reference + token overr
 - **Public reads** go through a server-side query that only returns `published`, never `draft`. The one exception is the share link below.
 - **Events** are append-only. Keep 60 days raw (M8-12, was 90); `pg_cron` rolls them into `daily_stats` nightly.
 
+## Team access (Wave F)
+
+The access rule and the team tables are in the Data model above. The ownership inventory (2.4), the commands that re-run it (2.5) and the threat model of the attack pass (3, T1 to T22) are copied here word for word from the wave plan (`wave-f-team-access-v2.md`, refreshed 2026-11-26 against `m18-mcp-content` @ 11ada21); the numbers are the plan's. The verifier of M19-14 re-runs 2.5, maps every hit to a row of 2.4, and attempts every row T1 to T22.
+
+### 2.4 TypeScript ownership checks (93 grouped rows)
+
+Classes: **A** must accept members (call the helper), **A\*** also swap actor for `access.ownerId`/`access.plan`, **C** member reads, **B** owner-only (left as is, allowlisted), **D** owner-scoped data (D\* = input must be the owner; signature unchanged).
+
+A, must accept members (34 rows):
+
+| # | Where | Today | v2 need and change |
+| --- | --- | --- | --- |
+| A1 | `src/lib/content/guards.ts` `ownedSite` (~:31-49) | `.eq("owner_id", userId)` | replaced by `requireSiteAccess`; kept as a deprecated wrapper for one package, then deleted |
+| A2 | `guards.ts` `ownedEntry` (~:51-73) | `.eq("pages.owner_id", userId)` | `requireEntryAccess`: site taken from the entry row, never the URL |
+| A3\* | `guards.ts` `activeAccount` (:13-28) | actor's plan and suspension | removed from the writer path; `access.plan`, `access.ownerSuspended` |
+| A4 | `content/entries-core.ts:70-72` create | owned site + active | `edit` |
+| A5 | `entries-core.ts:103-105` update draft | owned entry | `edit` |
+| A6\* | `content/publish-core.ts:37-39,109,113-119` publish | owned entry; images in actor folder; `p_owner_id: actor` | `publish`; :109, :115 owner |
+| A7\* | `publish-core.ts:133-135` unpublish | `p_owner_id: actor` | `publish`; owner |
+| A8\* | `content/trash-core.ts:27-30,55-57` trash | owned entry | `publish` when live, else `edit`; owner |
+| A9\* | `trash-core.ts:65-75` restore | owned entry | `edit`; owner |
+| A10 | `trash-core.ts:88-94` purge | owned entry | `publish` (G17) |
+| A11 | `content/revisions-core.ts:71,99,128` restore revision | owned entry + active | `edit` |
+| A12 | `content/terms-core.ts:49-52` `writableSite` for create (:74), rename (:139), delete (:172) | owned site + active | create `edit`; rename/delete `publish` (G16) |
+| A13 | `terms-core.ts:205-207` set entry terms | owned entry | `edit` |
+| A14 | `content/types-core.ts:38-41` `ownedType` (enable :69, update :92) | owned site | `owner` (G14) |
+| A15\* | `content/site-page-publish-core.ts:26,36` | `ownerId` passed in | caller passes `access.ownerId` |
+| A16\* | `content/index.ts:81` `checkPostBody`, `:105` `postDraftIssues` | `actor.userId/` prefix | owner's prefix (MCP is owner-only, so the owner equals the actor there anyway) |
+| A17 | `site-pages/sub-pages-core.ts:102-125` private copies of `activeAccountPlan` and `ownedSite` | duplicates | deleted; helper |
+| A18\* | `sub-pages-core.ts:140-143,181` create page | own plan | `edit`; `access.plan` |
+| A19\* | `sub-pages-core.ts:226-248` delete page | `p_owner_id: userId` | `publish` when live, else `edit`; owner |
+| A20 | `site-pages/entry-save-core.ts:172`, `entry-revisions-core.ts:51-63,84,137` | actor to the writer; `isEntryOfSite` binds the entry to the URL site | no change (the writer decides; URL binding stays as a second filter) |
+| A21\* | `lib/posts/routes-core.ts:66,71-72,102,256` `planOf(userId)` | actor's plan for the limits shown | `access.plan` |
+| A22 | `api/pages/[id]/posts/latest/route.ts:28` | `ownedSite` | `read` |
+| A23\* | `publish/core.ts:169-203` `publishPageCore` | `owner_id !== userId` (:190); actor suspension (:196-203) | `publish`; owner at :222, :285, :297-298, :324, :360, :400 |
+| A24\* | `publish/link-rules.ts:70-79` | `accounts.plan` by `input.userId` | input becomes `ownerId` |
+| A25 | `publish/core.ts:647-692` `openOwnedSite` | `owner_id !== userId` (:677); suspension (:681-688) | `publish`; returns `ownerId` and `actorId` |
+| A26\* | `publish/core.ts:726-866` `publishSitePageCore` | userId at :805, :866 | owner |
+| A27\* | `publish/core.ts:931-1066` `publishDesignCore` | userId at :982, :992-996, :1042, :1066 | owner |
+| A28\* | `publish/actions.ts:40-57` | rate key and `cleanupMediaQuietly(userId)` | rate keys actor and owner; cleanup owner |
+| A29\* | `versions/core.ts:98-155` `openVersion` | `owner_id !== userId` (:121); actor plan (:125-134) | preview `read`, restore `edit`; `open.ownerId = access.ownerId`; `access.plan` |
+| A30 | `versions/core.ts:221-253,344-348,364,396` | scoped by `open.ownerId` | correct once A29 holds |
+| A31\* | `api/media/route.ts:47-52` | folder, quota, unqueue, suspension all `user.id` | form field `site`: helper `edit`; folder, quota, unqueue owner; rate limit and uploader suspension actor; a `site` the user cannot edit, or no `site` while the current site is shared, stores nothing (G22) |
+| A32\* | `api/media/cleanup/route.ts:39,53` | caller's queue | optional `site`: `edit`, owner's queue |
+| A33 | `editor/save-client.ts:95-113`, `versions/client.ts:46` (browser UPDATE of `pages.draft`) | RLS | no write change; policy 2 decides; add lost-access detection (M19-11) |
+| A34 | routes passing the session user to cores: `entries/[entryId]/{draft,revisions,revisions/[rev]/restore,publish,unpublish,trash,restore,expire}`, `entries/[entryId]` (GET), `posts`, `terms`, `terms/[termId]`, `types`, `types/post`, `sub-pages`, `sub-pages/[subId]` | auth via `gate` (`lib/posts/route-http.ts:38`) or `getSessionUser` | none (cores decide) |
+
+C, member reads (18 rows):
+
+| # | Where | Change |
+| --- | --- | --- |
+| C1 | `auth/gate.ts:23-28` `listOwnPages` | keep (own only); add `listSharedSites` (server, `list_shared_sites`) |
+| C2 | `gate.ts:45,56,69-72` | `/claim` only when own and active shared are both empty; `resumeOauthRequest` after it; `resumeInvite` added (WP2) |
+| C3 | `pages/current.ts:17-19` | choose among own and active shared |
+| C4 | `pages/context.ts:23-40` | adds `shared`, `current.access {role, ownerId, canEdit, canPublish}`, `sitePlan`; `plan` stays the user's own |
+| C5 | `pages/actions.ts:23-28` `selectPage` | helper `read` |
+| C6 | `editor/page-data.ts:42-51` | drop the owner filter (caller passes an approved site) |
+| C7 | `site-pages/load.ts:56,80,102` | none (policies 3-8) |
+| C8 | `site-pages/entry-revs-client.ts:5` | none |
+| C9 | `versions/load.ts:51-63` | drop the filter; `ownerId = access.ownerId` |
+| C10 | `versions/client.ts:27` | none |
+| C11 | `themes/load.ts:13-26`, `themes/client.ts:70`, `workspace-provider.tsx:229` | filter to system plus `access.ownerId` |
+| C12 | `(workspace)/layout.tsx:49,84` | `ownerId={access.ownerId}`, `plan={sitePlan}`, new props `role`, `canPublish`, `userId` |
+| C13 | `(screens)/editor/history/page.tsx:30-68` | `sitePlan`; `loadHistory(current, access.ownerId, kept)` |
+| C14 | `preview/[pageId]/page.tsx:45-57` | helper `read`; owner's plan |
+| C15 | `query-core.ts:29,150,266`, `revisions-core.ts:19`, `terms-core.ts:260`, `types-core.ts:143` (get/list/count) | `read` |
+| C16 | `(screens)/posts/page.tsx:18-25`, `posts/load.ts:27-67`, `posts/[entryId]/page.tsx:19,28` | `sitePlan`; `ownerId={access.ownerId}` to `post-editor.tsx:64,95,441` and on to `body-editor.tsx:43-45,93` (D9) |
+| C17 | `workspace-provider.tsx`, `workspace-context.tsx`, `design/design-screen.tsx`, `design/types.ts`, `themes/use-theme-library.ts:233-358` | split `ownerId` (site owner: media prefix, theme scope) from `userId` (theme inserts); theme writes hidden unless owner |
+| C18 | `editor/page-address.ts:13`, `domains/primary.ts` | members read no `domains` row: use the public `getPrimaryDomain(siteId)` |
+
+B, owner-only, code unchanged and allowlisted (25 rows): B1 `publish/unpublish.ts:32-62` + `unpublish-action.ts`; B2 `pages/delete-page-core.ts:69-131`, `delete-page.ts`, `api/pages/[id]/route.ts`; B3 `pages/create-page-core.ts:41-94`, `api/pages/route.ts`, `(screens)/pages/new`; B4 handles claim (`claim-core.ts`, `claim.ts`, `actions.ts`, `api/handles/claim`); B5 `components/editor/page-name.tsx:96-98` (browser rename; new SQL trigger refuses non-owners); B6 `domains/core.ts:68-399`, `domains/actions.ts`, `api/domains/[id]`, `(screens)/domains`; B7 `domains/verify.ts`; B8 `previews/core.ts:63-163` (`ownsPage`), `previews/actions.ts` (page and post share links); B9 `analytics/stats.ts:81-173`, `analytics/dashboard/source.ts:266-271` `resolvePage`; B10 `(screens)/analytics/page.tsx:27`, `analytics/stats/route.ts:50`, `analytics/export/route.ts:75` (each also refuses when `current.access.role !== "owner"`); B11 `mcp/page-access.ts:132-204`; B12 `mcp/page-access.ts:351-492`; B13 `mcp/page-access.ts:218-305` plus tools `get-domains`, `list-pages`, `list-content-types`, `get-analytics`, `get-page`, `set-theme`; B14 `mcp/entry-access.ts:31-35` (through the writer; `decide` makes `mcp` mean `owner`); B15 `mcp/run-tool.ts:241-381`, `tools/content-common.ts:158,180,201` (per-user keys are fine); B16 `editor/draft-write.ts:184-221,318` (MCP draft writer); B17 `api/pages/[id]/types/post` (`setPostTypeCore`, via A14); B18 billing (`api/billing/checkout`, `portal`, `billing/account.ts`, `gift-queries.ts`, `settings/billing-summary.ts`); B19 `limits/usage.ts:16`, `(screens)/settings/page.tsx:50-94`; B20 connected apps, `lib/oauth/**`; B21 `pages/delete-account.ts:73-92`; B22 `publish/invalidate.ts:20` (expire all of an account's sites at suspension); B23 `themes/client.ts:85-136` writes; B24 new `src/lib/team/**` (need `owner`); B25 Wave D `(screens)/audience`, `audience/export`, `lib/forms/notify.ts`.
+
+D, owner-scoped data (16 rows): D1\* `content/images.ts:102-110` `checkOwnImages`; D2\* `publish/core.ts:447-563` (`loadThemeTokens`, `checkPlaced`, `checkImages`, `checkBackground`); D3\* `versions/restore.ts:24-193`; D4\* `media/upload.ts:205,273,318`, `media/quota.ts:19-44`; D5 `media/rate-limit.ts` (uploader); D6\* `media/cleanup-admin.ts:22-98`, `media/cleanup.ts:64-96`; D7 `previews/shared.ts:99-279` (resolves by site owner; correct); D8 renderer `post-body.tsx:43-45` `ownMediaSrc`, `post-article.tsx:33-36`, `tenant-render/post-html.tsx:165`, `archive-html.tsx` (owner from the published row; correct); D9\* `posts/body-editor/body-editor.tsx:43-45,93` (needs the owner from C16; this is the only D row edited); D10 `mcp/images.ts`, `tools/get-entry.ts:56` `imageUrlPrefix` (owner-only); D11 `lib/admin/*`; D12 `analytics/admin/*`; D13 admin components, `admin-draft/[pageId]`; D14 `templates/load.ts`; D15 public reads and ingest (`(tenant)/published-page.ts`, `site/published.ts`, `site/page-entries.ts`, `blog/published.ts`, `analytics/ingest/**`); D16 `links/actions.ts`, `links/hash-code.ts`.
+
+Totals: A 34 (31 with code), C 18 (15 with code), B 25, D 16 (D9 edited; D1-D4, D6 receive the owner through callers). **47 rows edited.**
+
+**Storage keyed by `{ownerId}/`:** there is no client Storage policy; every upload goes through `POST /api/media`. The v2 rule: a member's upload to S goes under `{S.owner}/`, counts on the owner's quota and queue, and is rate-limited per uploader. This stays correct with post bodies: `uploadPathOf` (`media/upload-path.ts:19`) only parses the address and has no owner in it; `checkOwnImages`, `postDraftIssues`, `ownMediaSrc`, `ownImage`, `displaySrc`, `checkPlaced` and versions `ownedImagePaths` all compare against one owner id. So the folder must be the owner's, and every caller must pass `access.ownerId` (A6, A16, A23-A27, A29, C16/D9). An image a member uploaded to their own folder cannot be used on S (publish refuses it). That is intended: no cross-account file references. A member's images stay in the owner's folder after removal, under the owner's control. The three senders (`components/editor/image-upload-control.tsx:135`, which also serves the post body and post fields; `design/sections/background-section.tsx:53`; `blocks/forms/link-thumb-upload.tsx:86`) add `site`.
+
+### 2.5 Re-run commands
+
+```
+cd <worktree>
+P='owner_id|ownerId|ownedEntry|ownedSite|ownsPage|loadOwnedPage|loadOwnedSubPage|p_owner|activeAccount|planOf|loadAccountPlan|listOwned'
+grep -rnE "$P" src --include=*.ts --include=*.tsx | grep -v database.types   # 336 lines, 82 files at 11ada21
+grep -rlE createAdminSupabase src | wc -l                                       # 65
+grep -rnE "createBrowserSupabase\(|createServerSupabase\(" src | grep -v ^src/lib/supabase | wc -l   # 32
+grep -rnoE 'rpc\(\s*"[a-z_]+"' src                                              # every SQL writer call
+grep -nEi "^\s*(create|drop) policy" supabase/migrations/*.sql                  # walk in order; last wins
+grep -nEi "create (or replace )?function|drop function" supabase/migrations/*.sql
+grep -n "grant execute" supabase/migrations/*.sql | grep -E "authenticated|anon" # only plan_limits today
+```
+
+Every grep hit maps to a row in 2.4, or the verifier stops and reports it.
+
+### 3. Threat model and abuse cases (attack pass, M19-14)
+
+| # | Attack | Control | Proof |
+| --- | --- | --- | --- |
+| T1 | Member escalates role: writes `site_members.role`, inserts own member row, accepts an invite with `role` in the body, invites self as publisher | team tables: RLS on, no policy, no grant; role is set only by `create_site_invite` (owner) and `set_site_member_role` (owner); accept reads role from the invite row | pgTAP 224, 225; probe |
+| T2 | Member performs an owner action via server (unpublish/delete/rename site, domains, share links, analytics, CSV, Audience, blog settings, invites, member changes, billing) | B rows unchanged; team cores need `owner`; SQL team functions call `require_site_access(...,'owner')` under lock | `tests/e2e/m19/escalation.spec.ts`; unit per core |
+| T3 | Same with the publishable key | owner-only policies untouched; `pages` grants stay `draft, name`; `name` trigger; no new client-executable function except `accessible_site_ids(text)` and `shared_theme_owner_ids()` | pgTAP 227; probe |
+| T4 | Editor publishes: publish, unpublish post, trash a live entry, delete a live page, purge, rename/delete term, schedule, restore-then-publish | `decide` needs `publish`; trash/delete of a live item counts as publish; schedule routes need `publish` | unit rule table; e2e |
+| T5 | Cross-site via any id-taking route: `/api/pages/{A}/entries/{entryOfB}`, `sub-pages/{subOfB}`, `terms/{termOfB}`, `/preview/{B}`, media `site=B`, `hl-page` cookie=B, version id of B, MCP `pageId`=B | access decided on the entry's/term's own `site_id` from the database; the URL site is a second equality; cookie only picks among accessible sites | pgTAP 226 (member of A reads nothing of B in each M table); unit per route; probe |
+| T6 | Removed or paused member's cached session (open tab, JWT still valid) | access computed per statement (RLS) and per request (helper); never in a JWT claim, cookie, module variable, `unstable_cache` or `"use cache"`; React `cache()` per request only | pgTAP 226 (delete row, next statement sees nothing); e2e `removal.spec.ts`; static test |
+| T7 | Removed member's MCP token | member tokens never reach shared sites (`mcp` means `owner`); nothing to revoke | unit: shared site id is `not_found`, `list_pages` omits it |
+| T8 | Removed member and share links | members cannot create links; links the owner made stay valid until revoked (they are the owner's); removal offers "Turn off active share links" | e2e Share tab has no link card for members; action refused |
+| T9 | Removed publisher's pending schedule | `remove_site_member` and loss of publisher role cancel pending `content_schedules` rows with `created_by` = member; `fire_scheduled_publish` re-checks `site_access(created_by)` (owner rows always pass) | pgTAP 228, worker unit |
+| T10 | Invite replay, revoke, expiry, concurrent accept | `accept_site_invite` locks the row `for update`; pending, unrevoked and `expires_at > now()` required; one answer P0002 | pgTAP 225 |
+| T11 | Invite forwarded or leaked to another account | acceptor's confirmed email read from `auth.users` inside SQL, compared lowercased; HL021 | pgTAP 225; e2e |
+| T12 | Mail scanner prefetch | GET never writes; accept is a POST Server Action | e2e |
+| T13 | Token guessing | 256 random bits, SHA-256 stored, `/invite/*` rate-limited in the proxy | unit, pgTAP |
+| T14 | Invite spam | Studio only; HL020 20/day/owner; fixed copy, no `pages.name`, no free text | pgTAP 228; email unit |
+| T15 | Limit bypass through members | every enforcer keys on the site owner; TS quota and plan reads use the owner | pgTAP 228; media unit |
+| T16 | Member fills the owner's quota or publish budget | per-uploader upload rate; publish rate key per owner (G18); owner removes the member | unit |
+| T17 | Membership oracle | policy functions take no user argument; `site_access`/`require_site_access` are service_role only; no access = the same `not_found` as a missing id | pgTAP 226 |
+| T18 | Downgrade or suspension leaves access | plan and both suspensions read inside `site_access_rows` on every call | pgTAP 226 |
+| T19 | Widened `pages` select leaks shared sites into own-account lists (settings, delete account, domains, page limit) | those reads keep `.eq("owner_id")` (B3, B6, B19, B21, C1) | unit and e2e |
+| T20 | Owner invites self, duplicate member | trigger refuses owner as member; PK `(site_id, user_id)`; one pending invite per `(site, email)` | pgTAP 224 |
+| T21 | Member reads form submissions | D1/D2 policies untouched; Audience refuses non-owners; `form_submission_counts` follows D1 | probe; e2e |
+| T22 | Email change onto an invited address | `double_confirm_changes = true` (config.toml:225); G8 for production | config test |
+
 ## Tenant page design system
 
 Every visual choice on a tenant page is a token; tokens become CSS variables on the page root, and blocks only read variables.
