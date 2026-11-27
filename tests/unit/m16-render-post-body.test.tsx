@@ -435,8 +435,20 @@ describe("PostBody: the node limit bounds what is drawn (M16-13)", () => {
     expect(tags(draw(rows(262_000))).filter((tag) => tag === "tr")).toHaveLength(0);
   });
 
+  it("a table's frame is charged: tables of one empty header cell draw at most two elements per node", () => {
+    // Before: the table and its cell were charged (2 nodes) for 6 elements; 131,072 nodes drew
+    // 393,216 elements for this body at 512 KiB.
+    for (const count of [1, 2, 1000]) {
+      const body = "||\n|-|\n\n".repeat(count);
+      const lexed = lexBounded(body);
+      expect(lexed.ok && lexed.nodes).toBe(4 * count);
+      expect(elements(body)).toBeLessThanOrEqual(PER_NODE * 4 * count);
+    }
+    expect(lexBounded("||\n|-|\n\n".repeat(65_536))).toMatchObject({ ok: false, reason: "size" });
+  });
+
   it(`random bodies draw at most ${PER_NODE} elements per node`, () => {
-    const PIECES = ["a ", "*b* ", "**c** ", "~~d~~ ", "`e` ", "[f](https://x.co) ", "<https://y.co> ", "www.z.co ", "m@n.co ", `![g](${OWN_IMAGE}) `, "\n", "\n\n", "- ", "1. ", "> ", "## ", "- [ ] ", "|a|b|\n|-|-|\n", "|\n", "|1|2|\n", "---\n", "```\nh\n```\n", "a  \nb", "\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\n\n", "<b>i</b>"];
+    const PIECES = ["a ", "*b* ", "**c** ", "~~d~~ ", "`e` ", "[f](https://x.co) ", "<https://y.co> ", "www.z.co ", "m@n.co ", `![g](${OWN_IMAGE}) `, "\n", "\n\n", "- ", "1. ", "> ", "## ", "- [ ] ", "|a|b|\n|-|-|\n", "||\n|-|\n\n", "|\n", "|1|2|\n", "---\n", "```\nh\n```\n", "a  \nb", "\nhttps://www.youtube.com/watch?v=dQw4w9WgXcQ\n\n", "<b>i</b>"];
     const random = seeded(13);
     for (let sample = 0; sample < 400; sample += 1) {
       let body = "";

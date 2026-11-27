@@ -20,8 +20,12 @@ export const MARKDOWN_MAX_NESTING = MARKDOWN_MAX_DEPTH - 1;
 
 /**
  * Most tokens one body may lex to: every block, list item, table cell and inline token (text runs
- * included). It bounds the memory of the tree and the work of every reader of it. The largest
- * realistic 512 KiB body measured (a table of short cells) lexes to about 134,000.
+ * included). It bounds the memory of the tree and the work of every reader of it. The 47
+ * realistic families of the benchmark stay under it at 512 KiB, but bodies of many tiny pieces
+ * reach it first (measured 2026-11-26, short English words): a 6-column score table from about
+ * 370 KiB (12,500 rows), a one-word bullet list from about 326 KiB (50,000 items), a one-word
+ * checklist from about 391 KiB (37,500 items) and one-word paragraphs from about 277 KiB (50,000).
+ * Whether such bodies should be accepted is the owner's decision, not this constant's.
  */
 export const MARKDOWN_MAX_NODES = 150_000;
 

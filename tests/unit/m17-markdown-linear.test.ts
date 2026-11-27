@@ -202,7 +202,8 @@ describe("(b) determinism", () => {
       body: "## Heading\n\nA paragraph with **bold**, *italic*, ~~strike~~ and a [link](https://example.com).\n\n- one\n- two\n\n> quoted\n\n```\ncode\n```",
       nodes: 30,
     },
-    "a table": { body: "| a | b |\n|---|:-:|\n| 1 | *2* |\n| 3 |\n|", nodes: 13 },
+    // The table's frame is charged 3 (finding 6 of the third pass), its cells and their text one each.
+    "a table": { body: "| a | b |\n|---|:-:|\n| 1 | *2* |\n| 3 |\n|", nodes: 15 },
     "a task list in a quote": { body: "> - [ ] a\n> - [x] b\n>\n> c", nodes: 13 },
     "links and references": { body: "[a][r], [b](u \"t\"), <http://x.co>, www.y.co and z@w.co\n\n[r]: v", nodes: 17 },
   };

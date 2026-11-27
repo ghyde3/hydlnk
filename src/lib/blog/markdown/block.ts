@@ -1,6 +1,12 @@
 import type { Token, Tokens } from "marked";
 import { isJsSpace } from "./chars";
-import { htmlBegins, htmlBlockEnd, htmlBlockStart, htmlInterruptsParagraph, type HtmlStart } from "./html";
+import {
+  htmlBegins,
+  htmlBlockEnd,
+  htmlBlockStart,
+  htmlInterruptsParagraph,
+  type HtmlStart,
+} from "./html";
 import type { Budget } from "./limits";
 import {
   atxHeading,
@@ -111,7 +117,12 @@ export class BlockLexer {
     if (absorbs) this.absorbs.add(token);
   }
 
-  private queue(token: InlineJob["token"], depth: number, lines: string[] | null, text = ""): InlineJob {
+  private queue(
+    token: InlineJob["token"],
+    depth: number,
+    lines: string[] | null,
+    text = "",
+  ): InlineJob {
     const job: InlineJob = { token, lines, text, depth };
     this.ctx.jobs.push(job);
     // Only paragraphs and text are merged into later (or lose a task's `[ ]`): only they are looked up.
@@ -139,7 +150,7 @@ export class BlockLexer {
     /** A setext lookahead from below this line would fail again (see the module comment). */
     let setextFailsBefore = -1;
 
-    for (let i = 0; i < n; ) {
+    for (let i = 0; i < n;) {
       const line = lines[i]!;
       if (last !== null && out[out.length - 1] !== last.token) last = null;
 
@@ -164,7 +175,13 @@ export class BlockLexer {
 
       const heading = atxHeading(line);
       if (heading !== null) {
-        const token = { type: "heading", raw: line, depth: heading.depth, text: heading.text, tokens: [] };
+        const token = {
+          type: "heading",
+          raw: line,
+          depth: heading.depth,
+          text: heading.text,
+          tokens: [],
+        };
         this.push(out, token as Tokens.Heading, true);
         this.queue(token, depth + 1, null, heading.text);
         i = skipBlank(lines, i + 1);
@@ -262,7 +279,8 @@ export class BlockLexer {
         let k = i + 1;
         while (k < n && !paragraphStops(lines, k)) k += 1;
         const previous = out[out.length - 1];
-        const job = clipped && previous?.type === "paragraph" ? this.jobOf.get(previous) : undefined;
+        const job =
+          clipped && previous?.type === "paragraph" ? this.jobOf.get(previous) : undefined;
         if (job?.lines) {
           appendLines(job.lines, lines, i, k);
         } else {
@@ -295,7 +313,12 @@ export class BlockLexer {
     return blank.length > 1 || (blank.length === 1 && blank[0] !== "");
   }
 
-  private paragraph(out: Token[], type: "paragraph" | "text", lines: string[], depth: number): void {
+  private paragraph(
+    out: Token[],
+    type: "paragraph" | "text",
+    lines: string[],
+    depth: number,
+  ): void {
     const token = { type, raw: "", text: "", tokens: [] } as unknown as Tokens.Paragraph;
     this.push(out, token);
     this.queue(token, depth + 1, lines);
@@ -326,7 +349,12 @@ export class BlockLexer {
       // Indented code cannot interrupt a paragraph: marked appends its text.
       appendLines(this.jobOf.get(previous)?.lines, body, 0, body.length);
     } else {
-      const token = { type: "code", raw: lines.slice(i, j).join("\n"), codeBlockStyle: "indented", text };
+      const token = {
+        type: "code",
+        raw: lines.slice(i, j).join("\n"),
+        codeBlockStyle: "indented",
+        text,
+      };
       this.push(out, token as Tokens.Code, true);
     }
     return j;
@@ -372,16 +400,27 @@ export class BlockLexer {
     }
     const raw = pieces.join("\n");
     const name = start.name;
-    const token = { type: "html", block: true, raw, pre: name === "pre" || name === "script" || name === "style", text: raw };
+    const token = {
+      type: "html",
+      block: true,
+      raw,
+      pre: name === "pre" || name === "script" || name === "style",
+      text: raw,
+    };
     this.push(out, token as Tokens.HTML, true);
     return end.column !== null ? next : skipBlank(lines, next);
   }
 
   /** A GFM table at `i` (marked's `table`): header, delimiter row, rows to a blank or a block start. */
-  private table(lines: string[], i: number, depth: number): { token: Tokens.Table; next: number } | null {
+  private table(
+    lines: string[],
+    i: number,
+    depth: number,
+  ): { token: Tokens.Table; next: number } | null {
     const header = lines[i]!;
     const delimiter = lines[i + 1];
-    if (delimiter === undefined || firstNonSpace(header) === -1 || !isDelimiterRow(delimiter)) return null;
+    if (delimiter === undefined || firstNonSpace(header) === -1 || !isDelimiterRow(delimiter))
+      return null;
     const align = delimiterAligns(delimiter);
     if (align === null) return null;
     const titles = splitCells(header);
@@ -389,6 +428,11 @@ export class BlockLexer {
     const n = lines.length;
     let k = i + 2;
     while (k < n && !rowEnds(lines[k]!, k < n - 1)) k += 1;
+    // The renderer draws a frame of five elements for every table (its wrapper, `<table>`,
+    // `<thead>`, the header's `<tr>`, `<tbody>`), whatever its cells: three nodes with the table's
+    // own, so at most two elements per node even for a table of one empty header cell.
+    this.node();
+    this.node();
     const token = {
       type: "table",
       raw: lines.slice(i, k).join("\n"),
@@ -409,7 +453,12 @@ export class BlockLexer {
     return { token, next: k };
   }
 
-  private cells(texts: string[], align: Tokens.Table["align"], header: boolean, depth: number): Tokens.TableCell[] {
+  private cells(
+    texts: string[],
+    align: Tokens.Table["align"],
+    header: boolean,
+    depth: number,
+  ): Tokens.TableCell[] {
     const cells: Tokens.TableCell[] = [];
     for (let column = 0; column < texts.length; column += 1) {
       this.node();
@@ -424,7 +473,14 @@ export class BlockLexer {
   // Called by the builders -----------------------------------------------------------------------
 
   /** Lexes a quote group or a list item's content. */
-  lexContent(lines: string[], depth: number, out: Token[], top: boolean, clipped: boolean, keepOpen: boolean): LastContainer {
+  lexContent(
+    lines: string[],
+    depth: number,
+    out: Token[],
+    top: boolean,
+    clipped: boolean,
+    keepOpen: boolean,
+  ): LastContainer {
     return this.blocks(lines, depth, out, { top, clipped, keepOpen });
   }
 
@@ -446,7 +502,12 @@ export class BlockLexer {
 }
 
 /** `target.push(...lines.slice(from, to))` without spreading (a spread of many lines overflows the stack). */
-function appendLines(target: string[] | null | undefined, lines: readonly string[], from: number, to: number): void {
+function appendLines(
+  target: string[] | null | undefined,
+  lines: readonly string[],
+  from: number,
+  to: number,
+): void {
   if (!target) return;
   for (let k = from; k < to; k += 1) target.push(lines[k]!);
 }
@@ -535,7 +596,8 @@ function definitionAt(
     if (next >= lines.length) return null;
     rest = lines[next]!;
     at = 0;
-    while (at < rest.length && (rest.charCodeAt(at) === 0x20 || rest.charCodeAt(at) === 0x09)) at += 1;
+    while (at < rest.length && (rest.charCodeAt(at) === 0x20 || rest.charCodeAt(at) === 0x09))
+      at += 1;
     next += 1;
   }
   // The address: `<.*?>` or `[^<\s][^\s]*`.
@@ -563,15 +625,24 @@ function definitionAt(
   const following = lines[next];
   if (following !== undefined) {
     let p = 0;
-    while (p < following.length && (following.charCodeAt(p) === 0x20 || following.charCodeAt(p) === 0x09)) p += 1;
+    while (
+      p < following.length &&
+      (following.charCodeAt(p) === 0x20 || following.charCodeAt(p) === 0x09)
+    )
+      p += 1;
     const nextLine = titleIn(following, p, false);
-    if (nextLine !== null && !nextLine.rest) return { tag, href, title: nextLine.title, next: next + 1 };
+    if (nextLine !== null && !nextLine.rest)
+      return { tag, href, title: nextLine.title, next: next + 1 };
   }
   return { tag, href, title: undefined, next };
 }
 
 /** A definition title at `at` (after at least one space when `spaced`), and whether text follows. */
-function titleIn(line: string, at: number, spaced: boolean): { title: string; rest: boolean } | null {
+function titleIn(
+  line: string,
+  at: number,
+  spaced: boolean,
+): { title: string; rest: boolean } | null {
   let p = at;
   while (p < line.length && line.charCodeAt(p) === 0x20) p += 1;
   if (spaced && p === at) return null;
@@ -675,7 +746,8 @@ class QuoteBuilder implements OpenBlock {
     for (let k = 0; k < this.group.length; k += 1) {
       const line = this.group[k]!;
       // A lazy setext underline is not one (marked indents it into the paragraph).
-      const lifted = k > 0 && setextLevel(line) !== 0 ? `    ${line.slice(leadingSpaces(line, 3))}` : line;
+      const lifted =
+        k > 0 && setextLevel(line) !== 0 ? `    ${line.slice(leadingSpaces(line, 3))}` : line;
       lines.push(stripQuoteMarker(lifted));
     }
     this.group = [];
@@ -824,7 +896,12 @@ class ListBuilder implements OpenBlock {
       if (item.previousBlank) return false;
       const previous = item.previous;
       if (firstNonSpace(tabsToSpaces(previous)) >= 4) return false;
-      if (fenceBegins(previous, m) || hashBegins(previous, m) || isThematicBreak(previous, m, false)) return false;
+      if (
+        fenceBegins(previous, m) ||
+        hashBegins(previous, m) ||
+        isThematicBreak(previous, m, false)
+      )
+        return false;
       item.lines.push(line);
     }
     item.previousBlank = isTrimBlank(line);
@@ -838,7 +915,8 @@ class ListBuilder implements OpenBlock {
     this.current = null;
     if (!this.loose) {
       if (this.endsWithBlankLine) this.loose = true;
-      else if (item.raw.length >= 2 && isBlank(item.raw[item.raw.length - 1]!)) this.endsWithBlankLine = true;
+      else if (item.raw.length >= 2 && isBlank(item.raw[item.raw.length - 1]!))
+        this.endsWithBlankLine = true;
     }
     this.items.push(item);
   }
@@ -870,7 +948,8 @@ class ListBuilder implements OpenBlock {
       };
       if (made.task) this.checkbox(made);
       if (!this.loose) {
-        for (const token of tokens) if (token.type === "space" && twoNewlines(token.raw)) this.loose = true;
+        for (const token of tokens)
+          if (token.type === "space" && twoNewlines(token.raw)) this.loose = true;
       }
       list.items.push(made);
     }
@@ -878,7 +957,8 @@ class ListBuilder implements OpenBlock {
     if (this.loose) {
       for (const item of list.items) {
         item.loose = true;
-        for (const token of item.tokens) if (token.type === "text") (token as { type: string }).type = "paragraph";
+        for (const token of item.tokens)
+          if (token.type === "text") (token as { type: string }).type = "paragraph";
       }
     }
     const raw: string[] = [];
@@ -897,7 +977,11 @@ class ListBuilder implements OpenBlock {
     }
     const found = firstCheckbox(item.raw);
     if (found === null) return;
-    const checkbox: Tokens.Checkbox = { type: "checkbox", raw: `${found} `, checked: found !== "[ ]" };
+    const checkbox: Tokens.Checkbox = {
+      type: "checkbox",
+      raw: `${found} `,
+      checked: found !== "[ ]",
+    };
     item.checked = checkbox.checked;
     this.lexer.countNode();
     if (this.loose) {
@@ -907,7 +991,12 @@ class ListBuilder implements OpenBlock {
         return;
       }
       this.lexer.countNode();
-      item.tokens.unshift({ type: "paragraph", raw: checkbox.raw, text: checkbox.raw, tokens: [checkbox] } as Tokens.Paragraph);
+      item.tokens.unshift({
+        type: "paragraph",
+        raw: checkbox.raw,
+        text: checkbox.raw,
+        tokens: [checkbox],
+      } as Tokens.Paragraph);
       return;
     }
     item.tokens.unshift(checkbox);
@@ -938,7 +1027,8 @@ function stripTaskPrefix(text: string): string {
 function firstCheckbox(raw: string): string | null {
   for (let k = raw.indexOf("["); k !== -1; k = raw.indexOf("[", k + 1)) {
     const mark = raw[k + 1];
-    if (raw[k + 2] === "]" && (mark === " " || mark === "x" || mark === "X")) return raw.slice(k, k + 3);
+    if (raw[k + 2] === "]" && (mark === " " || mark === "x" || mark === "X"))
+      return raw.slice(k, k + 3);
   }
   return null;
 }
