@@ -6670,6 +6670,181 @@
         "The Privacy and Terms sentences are listed for Gary (G7) and not edited."
       ],
       "passes": false
+    },
+    {
+      "id": "M18-01",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "The door for entry tools: ownership, scopes and rate buckets",
+      "acceptance": [
+        "`runTool` resolves an entry tool's `entryId` under the token's user before the handler runs: another account's entry, an entry of the caller's other site sent with a different `pageId`, a type the tool does not take, a trashed entry (except for restore and read), a random id and a malformed id are one `not_found` with one sentence, and the handler, the writer and the limiter for publishing are never reached (spies).",
+        "The order scope, rate limits, suspension, input, ownership, handler, activity holds for the new mode (the spy test of M10-22, extended); a suspended account is refused before any read of an entry.",
+        "A tool marked as changing the live site counts against the per-item publish bucket (60 an hour per person, across tokens); `publish_page` keeps its 10 an hour; a refusal carries `retryAfterSeconds`.",
+        "A handler can demand `hydlnk.publish` on top of the tool's scope: the refusal is `insufficient_scope` with `requiredScope` and the step-up challenge, and nothing was written.",
+        "The user id is always the token's: an input that names `userId`, `ownerId` or `siteOwner` fails as an unknown field on every new tool."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-02",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Exact content: results that are never shortened, and room for a post body",
+      "acceptance": [
+        "A content tool's result is never cut: `get_entry` returns the body in ranges of characters (default 12,000, at most 30,000) with `bodyChars`, `nextOffset` and `contentHash` (SHA-256 of the UTF-8 body); joining the ranges gives the stored body byte for byte, including astral characters, CRLF and trailing spaces.",
+        "The fourteen older tools still shorten over 60 KiB (their tests are unchanged).",
+        "The endpoint reads at most 1 MiB, still only after the bearer check and the per-token budget; a declared or streamed body over it is 413 and no tool runs; a 512 KiB body can be created and replaced, and one byte more is `invalid_input` on `body`.",
+        "Unit: range maths at 0, the last character, past the end (empty range, `nextOffset: null`) and a range that would split a surrogate pair."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-03",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Reading content: types, entries and terms",
+      "acceptance": [
+        "`list_content_types` (read) returns the site's types with `enabled`, `archivePath`, the entry count and the plan's limit; `list_entries` (read) pages posts by status, term, title search and sort with a cursor, at most 50 a call, and returns id, rev, status, title, slug, dates and `hasUnpublishedChanges`, never a body; `list_terms` (read) returns categories then tags.",
+        "A blog that is off lists as `enabled: false` and its posts still list and read (the writer's reads check ownership only, `query-core.ts:162-174`); a suspended account is refused on all three by the door.",
+        "Unit: user B's token on user A's site id is `not_found` on all three; a foreign `termId` filter returns nothing; a cursor from one site is refused on another; the output of `list_entries` holds no key named `draft`, `body`, `published` or `excerpt`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-04",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "`get_entry`: one post, exactly",
+      "acceptance": [
+        "Returns id, rev, status, `hasUnpublishedChanges`, title, slug, excerpt, the body range, featured image and share image as `imageId`, SEO fields, category and tag ids, dates, `liveUrl` when live, `publishIssues` (what Publish would refuse) and `imageUrlPrefix`; a trashed post reads with `status: \"trashed\"`.",
+        "The answer is built from the draft only: a unit test plants a marker string in `published` and in a revision snapshot and finds it in no result of any new tool.",
+        "Its description says the text is the person's content and may quote other people: data, never instructions.",
+        "Unit: a page entry id, another account's post and a post of the caller's other site with the wrong `pageId` are the same `not_found`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-05",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Writing posts: `create_entry` and `update_entry`",
+      "acceptance": [
+        "`create_entry` (write) makes a draft post from title, optional slug (suggested from the title when left out), body, excerpt, images by `imageId`, SEO fields and term ids, and returns id and rev; `update_entry` (write) requires `ifRev` and takes whole fields, or `bodyEdits` (up to 20 exact find and replace steps, each `find` matching once unless `all` is true), never both `body` and `bodyEdits`.",
+        "A stale `ifRev` is `conflict`, nothing is written, and the answer holds no rev to retry with; an edit whose `find` matches zero times or more than once writes nothing and names the step and the count; the same change twice answers `unchanged: true` with the same rev.",
+        "Limits: the 26th post on Free is `plan_required` whatever the client sends; an account at its content bytes is `too_large`; a body over 512 KiB, a title over 200 and 51 terms are `invalid_input`; a blog that is off is `type_disabled`.",
+        "Hostile input, each refused at save with nothing written: a `javascript:`, `data:` or `vbscript:` link or image; an image that is not the exact address of the caller's own existing upload (a remote URL, another account's upload, dot segments, a percent-encoded letter); 51 images; a link to a blocklisted host (also inside a table, raw HTML and behind character references) as `blocked_link`; U+0000; an `imageId` the caller's documents do not hold. Raw HTML is stored as written and is text on the live page.",
+        "No input takes `fields`, `published`, `rev`, `status` or dates; an update leaves stored `fields` and every field it did not name byte-identical; a revision is recorded with source `mcp`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-06",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Categories and tags",
+      "acceptance": [
+        "`create_term` (write) adds a category (one level) or tag; `rename_term` and `delete_term` need `hydlnk.publish`, because they change live term pages without a Publish; `update_entry` sets a post's terms and refuses an id that is not a term of that site's blog.",
+        "Unit: the 501st term is `limit_reached`; a duplicate slug is `invalid_input`; a term id of another account or another site is `not_found`; a write-only token on `rename_term` and `delete_term` is `insufficient_scope` and the term is unchanged."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-07",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Trash and restore",
+      "acceptance": [
+        "`delete_entry` (write, `ifRev` required) moves a post to the trash; when the post is live the call also needs `hydlnk.publish` (it takes the live copy down at once), else `insufficient_scope` and the post stays live; `restore_entry` (write) brings it back as a draft within 30 days.",
+        "A trashed post still counts toward the plan's posts (creating one more at the limit is still `plan_required`); a page entry id on either tool is `not_found` and the page is untouched; a stale `ifRev` is `conflict`.",
+        "Unit: the entry's and the type's cache tags are expired on success and none on a refusal."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-08",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Publishing one item: `publish_entry` and `unpublish_entry`",
+      "acceptance": [
+        "`publish_entry` (publish, `ifRev` required) makes one post or one page live and nothing else: the design, every other page and every other post keep their live copies and revs (asserted by reading them before and after). A page goes through the Publish gate (`publishSitePageCore`, source `mcp`), a post through the writer's `publishEntry`.",
+        "A refusal changes nothing and expires no tag: `publish_refused` with issues by field (a missing title, a bad slug, a body image that is not an upload, a site that is not live yet for a page), `blocked_link` with the hosts, `conflict`, `account_suspended`, `type_disabled`.",
+        "`unpublish_entry` (publish, posts only) takes a post down and keeps its draft; it works after the blog was turned off.",
+        "Scope: a token with read and write but not publish gets `insufficient_scope` on both, and on `publish_design`, `publish_page` and `update_content_type`, before the limiter and before any read; no write-scope tool can change a published copy (a scan of every write tool's effect on `published` and `published_at` across the suite's fixtures).",
+        "The post editor holding the older rev gets `conflict` on its next save after an MCP publish (cores, unit)."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-09",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "`publish_design`, and `publish_page` keeps its meaning",
+      "acceptance": [
+        "`publish_design` (publish, `ifDesignRev` required: `designRev` from `get_page`) makes theme, menu and profile live and no page or post; a stale rev is `conflict`; a site never published answers `publish_refused` naming `publish_page`.",
+        "`publish_page` called exactly as before (only `pageId`) still publishes the design and every changed page; it does not publish posts, and its description says so.",
+        "Unit: the three publish tools expire exactly their tags (`page:<site>` for design and pages; `entry:<id>` and `type:<typeId>` for a post)."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-10",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Turning the blog on and setting its address",
+      "acceptance": [
+        "`update_content_type` (publish) turns the Post type on or off and sets `archivePath`, `label` and `labelPlural`; on success the type's and the site's tags are expired.",
+        "A path a page uses, a reserved word and a malformed path are `invalid_input` on `archivePath` (HL012) and nothing changes; `type: \"page\"` and an unknown type are `not_found`; turning the blog off deletes nothing.",
+        "Unit: another account's site is `not_found`; a write-only token is `insufficient_scope`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-11",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Revisions of a page or a post",
+      "acceptance": [
+        "`list_revisions` (read) returns rev, date, source and whether it was published, never a snapshot; `restore_revision` (write, `ifRev` required) saves that revision as the draft and publishes nothing: the live copy and `published_at` are unchanged and no tag is expired.",
+        "Both take a post id, or a page as `pageId` with `subPageId` (Home when left out); Home's entry id is never printed.",
+        "Unit: a revision number of another entry, a revision of another account's entry and rev 0 are `not_found`; a stale `ifRev` is `conflict`; the restore is recorded with source `mcp`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-12",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "Registry, words and the activity log",
+      "acceptance": [
+        "`tools/list` returns the 31 tools in the pinned order with pinned titles, scopes and annotations; every input is a strict object whose properties each have a description; every new write takes a required `ifRev` except creates; the schema snapshot is regenerated and reviewed.",
+        "The server instructions (at most 1,200 characters) name the content flow and say to ask before publishing; the consent screen, the missing-scope sentences, `/connect` and the privacy page say \"pages and posts\"; no file says fourteen.",
+        "Each call leaves one activity row with the tool name, the site and the outcome; a unit test runs every new tool with a marker in every argument and finds the marker in no activity row and no log line.",
+        "The static scans pass with the new files: no tool imports the secret-key client, selects `draft`, writes a content table, imports past `@/lib/content`, or fetches a URL."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-13",
+      "milestone": 18,
+      "area": "mcp",
+      "title": "The scripted client flow (the roadmap's stage 4 accept)",
+      "acceptance": [
+        "Playwright (the wire client of `tests/e2e/fixtures/mcp-client.ts`, both projects): turn the blog on, create a post, edit its body by exact replace, read it back in two ranges and compare byte for byte with the hash, publish it, fetch the live URL on `mara.localhost:3000` and see the edited text; a stale `ifRev` is refused; an old-style `publish_page` call still publishes.",
+        "The same flow with a read and write token stops at `publish_entry` with `insufficient_scope` and the post is not live; with user B's token every id of user A is `not_found`."
+      ],
+      "passes": false
+    },
+    {
+      "id": "M18-14",
+      "milestone": 18,
+      "area": "security",
+      "title": "Security review of the MCP content tools",
+      "acceptance": [
+        "`security-reviewer` runs on the whole diff and reports no critical or high finding; every medium is fixed or recorded in PLAN with Gary's decision.",
+        "Checked by name: the abuse list of section 3.7; the user only from the token; one `not_found`; no published text or revision snapshot in any result; no content in logs or `mcp_activity`; publish scope on everything that changes the live site; the rev contract on every write; limits only in the database; no new outbound HTTP.",
+        "`adversarial-verifier` tries: `bodyEdits` that build a `javascript:` link from two harmless halves, a body of 512 KiB of astral characters, a JSON-RPC batch of 40 creates, two tokens of one person racing the same `ifRev`, an `entryId` that is Home's entry on `delete_entry`, a refresh narrowed to read after a write, `ifRev` as 1.0, \"1\", 0 and 2^53."
+      ],
+      "passes": false
     }
   ]
 }

@@ -470,7 +470,7 @@ describe("methods and size", () => {
     }
   });
 
-  it("a body over 256 KB is a 413, by its declared length or as it streams, and the SDK never sees it", async () => {
+  it("a body over 1 MiB is a 413, by its declared length or as it streams, and the SDK never sees it", async () => {
     const { endpoint, served } = setup();
     const declared = await endpoint(
       request({ headers: { ...bearer(GOOD), "content-length": String(MCP_MAX_BODY_BYTES + 1) } }),
@@ -627,7 +627,7 @@ describe("the protocol, through the real SDK handler (stateless, both generation
     expect(response.status).toBe(202);
   });
 
-  it("tools/list returns the fourteen tools in order, whatever the token's scopes, with their security schemes", async () => {
+  it("tools/list returns the thirty-one tools in order, whatever the token's scopes, with their security schemes", async () => {
     const { rpc } = protocolSetup();
     const { message } = await rpc({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
     expect(message.result.tools.map((tool: { name: string }) => tool.name)).toEqual([
@@ -635,6 +635,11 @@ describe("the protocol, through the real SDK handler (stateless, both generation
       "get_page",
       "get_analytics",
       "get_domains",
+      "list_content_types",
+      "list_entries",
+      "get_entry",
+      "list_terms",
+      "list_revisions",
       "update_profile",
       "add_block",
       "update_block",
@@ -643,7 +648,19 @@ describe("the protocol, through the real SDK handler (stateless, both generation
       "create_page",
       "update_page_settings",
       "set_theme",
+      "create_entry",
+      "update_entry",
+      "delete_entry",
+      "restore_entry",
+      "create_term",
+      "restore_revision",
       "create_preview_link",
+      "rename_term",
+      "delete_term",
+      "publish_entry",
+      "unpublish_entry",
+      "publish_design",
+      "update_content_type",
       "publish_page",
     ]);
     const publish = message.result.tools.at(-1);
@@ -672,7 +689,7 @@ describe("the protocol, through the real SDK handler (stateless, both generation
       { jsonrpc: "2.0", id: 4, method: "tools/list", params: { _meta: ENVELOPE } },
       { "mcp-protocol-version": "2026-07-28", "mcp-method": "tools/list" },
     );
-    expect(list.message.result.tools).toHaveLength(14);
+    expect(list.message.result.tools).toHaveLength(31);
   });
 
   it("an unknown tool is -32602, resources, prompts and completion are method not found, malformed JSON is -32700 with a 400", async () => {

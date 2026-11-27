@@ -7,6 +7,7 @@ import { MarketingShell } from "@/components/marketing/shell";
 import { clientEnv } from "@/lib/env/client";
 import {
   MCP_ACTIVITY_RETENTION_DAYS,
+  MCP_ITEM_PUBLISH_PER_HOUR,
   MCP_PUBLISH_PER_HOUR,
   MCP_USER_PER_MINUTE,
 } from "@/lib/mcp/constants";
@@ -110,16 +111,26 @@ export default function ConnectPage() {
 
               <h2 id="can-do">What it can do</h2>
               <ul>
-                <li>See your pages and your numbers: views, clicks and your top links.</li>
+                <li>
+                  See your pages, your posts and your numbers: views, clicks and your top links.
+                </li>
                 <li>Edit your profile: your name, your bio and your photo options.</li>
                 <li>
                   Add, change, move and remove links and the other blocks on your pages, add pages
                   to your site, and change a page’s title, address and place in the menu.
                 </li>
+                <li>
+                  Write and edit blog posts as drafts, set their categories and tags, and bring back
+                  an earlier version of a post or a page.
+                </li>
                 <li>Change your theme, by name or one setting at a time.</li>
                 <li>Make a private preview link to your draft, good for 7 days.</li>
                 <li>List your custom domains and show their status.</li>
-                <li>Publish your page, if you allowed publishing when you connected.</li>
+                <li>
+                  Publish your pages and posts, if you allowed publishing when you connected. That
+                  permission also covers taking a post down, renaming or deleting a category or tag,
+                  turning your blog on or off, and changing your blog’s address or its name.
+                </li>
               </ul>
 
               <h2 id="cant-do">What it can’t do</h2>
@@ -129,8 +140,11 @@ export default function ConnectPage() {
                 <li>Add or remove custom domains.</li>
                 <li>Upload new images. It can reuse images that are already on your pages.</li>
                 <li>Edit your banner, your share card or your redirect settings.</li>
-                <li>Delete anything except a block.</li>
-                <li>Publish your page, unless you allowed it.</li>
+                <li>
+                  Delete a page, or delete a post for good. It can only move a post to the trash,
+                  where it stays for 30 days.
+                </li>
+                <li>Publish your pages and posts, unless you allowed it.</li>
               </ul>
 
               <h2 id="claude">Connect Claude</h2>
@@ -155,7 +169,8 @@ export default function ConnectPage() {
                 </li>
                 <li>
                   <strong>Sign in and allow.</strong> Sign in to HYDLNK, choose what to allow, and
-                  choose Allow. Tick Publish your pages only if you want the AI to publish for you.
+                  choose Allow. Tick Publish your pages and posts only if you want the AI to publish
+                  for you.
                 </li>
               </ol>
               <p>
@@ -218,7 +233,7 @@ export default function ConnectPage() {
                 <li>
                   <strong>Sign in and allow.</strong> When ChatGPT asks you to connect your account,
                   sign in on HYDLNK, choose what to allow and select Allow. Tick Publish your pages
-                  only if you want ChatGPT to publish for you.
+                  and posts only if you want ChatGPT to publish for you.
                 </li>
                 <li>
                   <strong>Install HYDLNK.</strong> Find the plugin in your personal plugins or the
@@ -281,7 +296,9 @@ export default function ConnectPage() {
                 </li>
                 <li>
                   To keep things fair, an AI app can make about {MCP_USER_PER_MINUTE} requests a
-                  minute for you, and can publish up to {MCP_PUBLISH_PER_HOUR} times an hour.
+                  minute for you. It can publish all changes of a site up to {MCP_PUBLISH_PER_HOUR}{" "}
+                  times an hour, and single posts and pages up to {MCP_ITEM_PUBLISH_PER_HOUR} times
+                  an hour.
                 </li>
                 <li>
                   Analytics follow your plan. Free covers the last {ANALYTICS_HISTORY.free}. Pro and

@@ -42,6 +42,7 @@ async function call() {
     admin: deps.admin,
     page: ownedPage(),
     subPage: null,
+    entry: null,
     deps,
     defer: deps.defer,
     now: deps.now,

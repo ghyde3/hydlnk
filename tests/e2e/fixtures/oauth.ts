@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { BrowserContext, Page, Route } from "@playwright/test";
 import { adminClient } from "./auth";
 import { appRaw, authCookies, cookieHeader, type RawResponse } from "./http";
-import { url } from "../helpers";
+import { DEV_PORT, url } from "../helpers";
 
 /**
  * Helpers of the OAuth authorization server's specs (Wave L, M10-03 to M10-19): real requests to the
@@ -16,7 +16,7 @@ import { url } from "../helpers";
  *   // captureRedirect() answers itself, so no request ever leaves the machine.
  */
 
-export const APP_ORIGIN = "http://app.localhost:3000";
+export const APP_ORIGIN = `http://app.localhost:${DEV_PORT}`;
 export const RESOURCE = `${APP_ORIGIN}/mcp`;
 export const ISSUER = APP_ORIGIN;
 export const CLIENT_REDIRECT = "https://a.example/cb";

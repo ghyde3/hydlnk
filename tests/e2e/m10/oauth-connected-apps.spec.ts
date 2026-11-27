@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { adminClient } from "../fixtures/auth";
 import { axeViolations } from "../fixtures/a11y";
 import { cleanupUsers, desktopOnly, phoneOnly, rand, signedInUser } from "../fixtures/data";
-import { expectNoHorizontalScroll, expectTapTargets } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets } from "../helpers";
 import {
   APP_ORIGIN,
   mcpAnswers,
@@ -83,7 +83,7 @@ test.describe("M10-18 the card", () => {
       "Apps you’ve let manage your pages, like Claude or ChatGPT. Remove one to cut off its access.",
     );
     const link = card(page).getByRole("link", { name: "How to connect an app" });
-    await expect(link).toHaveAttribute("href", "http://localhost:3000/connect");
+    await expect(link).toHaveAttribute("href", `http://localhost:${DEV_PORT}/connect`);
     await expect(card(page)).toContainText("No apps are connected yet.");
   });
 
@@ -100,9 +100,9 @@ test.describe("M10-18 the card", () => {
 
     const registeredRow = card(page).locator('[data-connected-app="Zq Registered App"]');
     await expect(registeredRow).toContainText("Registered automatically. Not verified.");
-    await expect(registeredRow).toContainText("Can see your pages and analytics");
+    await expect(registeredRow).toContainText("Can see your pages, posts and analytics");
     await expect(registeredRow).toContainText("Can edit your drafts");
-    await expect(registeredRow).toContainText("Can publish your pages");
+    await expect(registeredRow).toContainText("Can publish your pages and posts");
     await expect(registeredRow).toContainText(`Connected ${today()}`);
     await expect(registeredRow).toContainText("Not used yet");
     await expect(
@@ -111,9 +111,9 @@ test.describe("M10-18 the card", () => {
 
     const metadataRow = card(page).locator('[data-connected-app="Zq Metadata App"]');
     await expect(metadataRow).toContainText(/Address: zq-[a-z0-9]+\.example\.org/);
-    await expect(metadataRow).toContainText("Can see your pages and analytics");
+    await expect(metadataRow).toContainText("Can see your pages, posts and analytics");
     await expect(metadataRow).not.toContainText("Can edit your drafts");
-    await expect(metadataRow).not.toContainText("Can publish your pages");
+    await expect(metadataRow).not.toContainText("Can publish your pages and posts");
 
     // Never a token, a hash, a client id or a grant id as text.
     const text = await card(page).innerText();

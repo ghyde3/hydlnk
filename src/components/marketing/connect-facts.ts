@@ -17,7 +17,7 @@ export const CONNECTOR_ADDRESS = `https://app.${PRODUCT_DOMAIN}/mcp`;
 /*
  * The rate limits and the activity retention the page states are imported from the connector's own
  * dependency-free constants (`@/lib/mcp/constants`: `MCP_USER_PER_MINUTE`, `MCP_PUBLISH_PER_HOUR`,
- * `MCP_ACTIVITY_RETENTION_DAYS`), and the two lifetimes the privacy policy states from the
+ * `MCP_ITEM_PUBLISH_PER_HOUR`, `MCP_ACTIVITY_RETENTION_DAYS`), and the two lifetimes the privacy policy states from the
  * authorization server's (`@/lib/oauth/constants`: `ACCESS_TOKEN_SECONDS`, `REFRESH_IDLE_SECONDS`),
  * so the pages cannot say anything the server does not enforce. Both files have no imports of their
  * own, which is what lets a marketing page read them (M10-01's boundary).

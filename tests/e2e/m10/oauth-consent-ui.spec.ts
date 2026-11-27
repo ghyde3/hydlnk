@@ -157,22 +157,22 @@ test.describe("M10-13 what the screen says", () => {
     await page.goto(authorizeUrl(client.client_id, pkcePair().challenge));
     const boxes = page.getByRole("checkbox");
     await expect(boxes).toHaveCount(3);
-    await expect(boxes.nth(0)).toHaveAccessibleName(/See your sites, pages and analytics/);
+    await expect(boxes.nth(0)).toHaveAccessibleName(/See your sites, pages, posts and analytics/);
     await expect(boxes.nth(0)).toBeChecked();
     await expect(boxes.nth(0)).toBeDisabled();
     await expect(boxes.nth(1)).toHaveAccessibleName(/Edit your drafts/);
     await expect(boxes.nth(1)).toBeChecked();
     await expect(boxes.nth(1)).toBeEnabled();
-    await expect(boxes.nth(2)).toHaveAccessibleName(/Publish your pages/);
+    await expect(boxes.nth(2)).toHaveAccessibleName(/Publish your pages and posts/);
     // M10-37 (Gary, 2026-10-04): Publish your pages starts unticked.
     await expect(boxes.nth(2)).not.toBeChecked();
     await expect(boxes.nth(2)).toBeEnabled();
     await expect(page.locator("body")).toContainText("Always included");
     await expect(page.locator("body")).toContainText(
-      "Add, change and remove blocks, design choices and your profile in your drafts. Nothing goes live until you publish.",
+      "Add, change and remove blocks, blog posts, design choices and your profile in your drafts. Nothing goes live until you publish.",
     );
     await expect(page.locator("body")).toContainText(
-      "Make your draft live on your public page, the same as the Publish button.",
+      "Make your drafts live on your public site, the same as the Publish button. Also take a post down, rename or delete categories and tags, and turn your blog on or off, change its address or rename it.",
     );
   });
 

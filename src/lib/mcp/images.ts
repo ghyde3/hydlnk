@@ -1,14 +1,15 @@
 import "server-only";
 import { imageRefSchema, type ImageRef } from "@/lib/document";
 import { MESSAGES, ToolFailure } from "./errors";
-import { listOwnedPages, listOwnedSubPageDocs } from "./page-access";
+import { listOwnedPages, listOwnedPostImageDocs, listOwnedSubPageDocs } from "./page-access";
 import type { AdminClient } from "./types";
 
 /**
  * Images only by reference (M10-23). A tool never fetches a URL and never reads another person's
  * folder: an `imageId` is the file-name part of a path in the caller's own folder, and it is accepted
- * only when one of the caller's pages (draft or published) already holds a reference to it. The
- * width, height and focus come from that reference. `get_page` is the only way an AI learns an id.
+ * only when one of the caller's pages (draft or published) or post drafts already holds a reference
+ * to it. The width, height and focus come from that reference. `get_page` and `get_entry` are the
+ * only ways an AI learns an id.
  */
 
 /** A file name in an upload folder: 8 to 64 letters, digits or hyphens, and jpg, png or webp. */
@@ -48,7 +49,8 @@ const SUB_PAGE_SCAN_MAX = 1000;
  * A resolver for one tool call. It reads the caller's pages once, on first use, and answers every
  * later image from that read. The path is built from the TOKEN'S user: `{userId}/{imageId}`. An
  * image that no Home draft holds is looked for on the sub-pages (M12-05), a batch at a time and only
- * until it is found, so a site with hundreds of pages is not read whole for one image.
+ * until it is found, so a site with hundreds of pages is not read whole for one image. After the
+ * pages come the drafts of the caller's posts (M18-05), read the same way.
  */
 export function createImageResolver(admin: AdminClient, userId: string): ImageResolver {
   let known: Promise<Map<string, ImageRef>> | null = null;
@@ -78,6 +80,17 @@ export function createImageResolver(admin: AdminClient, userId: string): ImageRe
     }
     return rows.length > 0;
   };
+  let postsScanned = 0;
+  let postsExhausted = false;
+  /** The same for the drafts of the caller's posts, once the pages have run out. */
+  const scanMorePosts = async (refs: Map<string, ImageRef>): Promise<boolean> => {
+    if (postsExhausted || postsScanned >= SUB_PAGE_SCAN_MAX) return false;
+    const rows = await listOwnedPostImageDocs(admin, userId, postsScanned, SUB_PAGE_BATCH);
+    postsScanned += SUB_PAGE_BATCH;
+    if (rows.length < SUB_PAGE_BATCH) postsExhausted = true;
+    for (const row of rows) collectRefsByPath(row.draft, refs);
+    return rows.length > 0;
+  };
   return async (imageId) => {
     if (typeof imageId !== "string" || !IMAGE_ID_PATTERN.test(imageId)) {
       throw new ToolFailure("invalid_input", MESSAGES.imageIsUrl, {
@@ -88,6 +101,9 @@ export function createImageResolver(admin: AdminClient, userId: string): ImageRe
     const key = `${userId}/${imageId}`;
     while (!refs.has(key) && (await scanMore(refs))) {
       // keep reading batches of sub-pages until the image turns up or they run out
+    }
+    while (!refs.has(key) && (await scanMorePosts(refs))) {
+      // then the drafts of the posts
     }
     const ref = refs.get(key);
     if (!ref) throw new ToolFailure("image_not_found", MESSAGES.image_not_found);

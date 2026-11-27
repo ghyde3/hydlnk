@@ -359,7 +359,7 @@ test.describe("M10-13 what the person decides", () => {
     await signedInUser(context, { label: "readonly" });
     const client = await registerClient();
     await page.goto(authorizeUrl(client.client_id, pkcePair().challenge, { scope: "hydlnk.read" }));
-    const read = page.getByRole("checkbox", { name: /See your sites, pages and analytics/ });
+    const read = page.getByRole("checkbox", { name: /See your sites, pages, posts and analytics/ });
     await expect(read).toBeChecked();
     await expect(read).toBeDisabled();
     await expect(page.getByRole("checkbox")).toHaveCount(1);
@@ -389,7 +389,7 @@ test.describe("M10-13 what the person decides", () => {
       "You’ve connected this app before. Allowing again replaces what it can do now.",
     );
     await expect(page.locator("body")).toContainText(
-      "Allowed now: see your pages and analytics, edit your drafts, publish your pages.",
+      "Allowed now: see your pages, posts and analytics, edit your drafts, publish your pages and posts.",
     );
     // Publish is held, so it starts ticked again: a reconnect does not take it away unasked.
     await expect(page.getByRole("checkbox", { name: /Publish your pages/ })).toBeChecked();

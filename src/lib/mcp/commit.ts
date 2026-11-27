@@ -12,6 +12,21 @@ import { MESSAGES, ToolFailure } from "./errors";
 import type { ToolCall } from "./types";
 
 /**
+ * The media cleanup after a tool's write or publish on `siteId`, scheduled after the response (M5-14,
+ * the one cleanup entry point `cleanupMediaQuietly`). A token reaches only its user's OWN sites
+ * (decide rule 2, M19-13), so the token user is the owner acting: the account's queue, past the Undo
+ * window only. Every MCP caller schedules the cleanup through this function.
+ */
+export function deferMediaCleanup(call: ToolCall, siteId: string): void {
+  call.defer(() =>
+    cleanupMediaQuietly(
+      { actorId: call.userId, ownerId: call.userId, siteId },
+      { admin: call.admin as never },
+    ),
+  );
+}
+
+/**
  * A tool's write: `writeDraft` for the call's page, with the media cleanup scheduled after the
  * response when the change dropped an image (the same queue the editor works off, M5-14). Every
  * write tool goes through this one function, so none of them can skip the revision guard.
@@ -39,16 +54,7 @@ async function commit<T, D extends BlocksDoc>(
     ifRev,
     change,
   });
-  if (result.droppedImages) {
-    // MCP reaches only the token user's own sites (decide rule 2): the owner acting.
-    const site = call.page.id;
-    call.defer(() =>
-      cleanupMediaQuietly(
-        { actorId: call.userId, ownerId: call.userId, siteId: site },
-        { admin: call.admin as never },
-      ),
-    );
-  }
+  if (result.droppedImages) deferMediaCleanup(call, call.page.id);
   return result;
 }
 

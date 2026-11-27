@@ -103,6 +103,225 @@
     }
   },
   {
+    "name": "list_content_types",
+    "title": "List content types",
+    "scope": "hydlnk.read",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_entries",
+    "title": "List posts",
+    "scope": "hydlnk.read",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "type": {
+          "default": "post",
+          "description": "The content type. Only post exists today, and it is the default.",
+          "type": "string",
+          "enum": [
+            "post"
+          ]
+        },
+        "status": {
+          "description": "Only drafts, only live posts, only the trash, only posts with a scheduled publish waiting (scheduled; set in the app), or all. Leave it out for drafts and live posts.",
+          "type": "string",
+          "enum": [
+            "draft",
+            "published",
+            "trashed",
+            "all",
+            "scheduled"
+          ]
+        },
+        "termId": {
+          "description": "Only posts whose draft is in this category or tag (an id from list_terms).",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "q": {
+          "description": "Only posts whose title contains this text.",
+          "type": "string",
+          "maxLength": 200
+        },
+        "sort": {
+          "description": "published_at (the default), updated_at or title.",
+          "type": "string",
+          "enum": [
+            "published_at",
+            "updated_at",
+            "title"
+          ]
+        },
+        "order": {
+          "description": "asc or desc. Titles default to asc, dates to desc.",
+          "type": "string",
+          "enum": [
+            "asc",
+            "desc"
+          ]
+        },
+        "cursor": {
+          "description": "nextCursor from the call before, with the same filters and sort, to get the next posts.",
+          "type": "string",
+          "maxLength": 4100
+        },
+        "limit": {
+          "description": "How many posts to return: 20 by default, at most 50.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_entry",
+    "title": "Get a post",
+    "scope": "hydlnk.read",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The post's id from list_entries or create_entry."
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "offset": {
+          "description": "Where the body range starts, in characters. Defaults to 0; pass nextOffset to go on.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000000
+        },
+        "length": {
+          "description": "How many characters of the body to return: 12000 by default, at most 30000.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30000
+        }
+      },
+      "required": [
+        "entryId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_terms",
+    "title": "List categories and tags",
+    "scope": "hydlnk.read",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "type": {
+          "default": "post",
+          "description": "The content type. Only post exists today, and it is the default.",
+          "type": "string",
+          "enum": [
+            "post"
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_revisions",
+    "title": "List the saved versions of a post or page",
+    "scope": "hydlnk.read",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "description": "A post's id from list_entries. Leave it out to work on a page: pageId, with subPageId for a page other than Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "update_profile",
     "title": "Update the profile",
     "scope": "hydlnk.write",
@@ -793,6 +1012,456 @@
     }
   },
   {
+    "name": "create_entry",
+    "title": "Create a post",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "type": {
+          "default": "post",
+          "description": "The content type. Only post exists today, and it is the default.",
+          "type": "string",
+          "enum": [
+            "post"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The post's title, at most 200 characters."
+        },
+        "slug": {
+          "description": "The last part of the post's address: lower-case letters, digits and hyphens, at most 40.",
+          "type": "string",
+          "maxLength": 80
+        },
+        "body": {
+          "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text. A body of more than 150,000 formatted pieces (table cells, list items, links, styled runs), or with quotes, lists or emphasis nested more than 23 levels, is refused, on body.",
+          "type": "string",
+          "maxLength": 524288
+        },
+        "excerpt": {
+          "description": "A short summary for lists and feeds, at most 400 characters.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "featuredImageId": {
+          "description": "The featured image: an imageId that get_page or get_entry shows (images are reused, never uploaded or fetched). null removes it.",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ogImageId": {
+          "description": "The image for share cards: an imageId that get_page or get_entry shows (images are reused, never uploaded or fetched). null removes it.",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seoTitle": {
+          "description": "The title for search engines, at most 120 characters.",
+          "type": "string",
+          "maxLength": 120
+        },
+        "seoDescription": {
+          "description": "The description for search engines, at most 320 characters.",
+          "type": "string",
+          "maxLength": 320
+        },
+        "noindex": {
+          "description": "True asks search engines not to list the post.",
+          "type": "boolean"
+        },
+        "categories": {
+          "description": "The post's categories, as ids from list_terms. Replaces the whole list.",
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "tags": {
+          "description": "The post's tags, as ids from list_terms. Replaces the whole list.",
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_entry",
+    "title": "Update a post",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The post's id from list_entries or create_entry."
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "ifRev": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The rev you last read (get_entry, list_entries, or the rev a write returned). If the entry changed since, the call is refused with conflict and nothing is written."
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "The post's title, at most 200 characters."
+        },
+        "slug": {
+          "description": "The last part of the post's address: lower-case letters, digits and hyphens, at most 40.",
+          "type": "string",
+          "maxLength": 80
+        },
+        "body": {
+          "description": "The whole body as Markdown, at most 512 KiB, stored as sent. Links may be http, https, mailto or tel. An image must be a Markdown image whose address is imageUrlPrefix (from get_entry) followed by an imageId. Raw HTML is shown as text. A body of more than 150,000 formatted pieces (table cells, list items, links, styled runs), or with quotes, lists or emphasis nested more than 23 levels, is refused, on body.",
+          "type": "string",
+          "maxLength": 524288
+        },
+        "excerpt": {
+          "description": "A short summary for lists and feeds, at most 400 characters.",
+          "type": "string",
+          "maxLength": 400
+        },
+        "featuredImageId": {
+          "description": "The featured image: an imageId that get_page or get_entry shows (images are reused, never uploaded or fetched). null removes it.",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ogImageId": {
+          "description": "The image for share cards: an imageId that get_page or get_entry shows (images are reused, never uploaded or fetched). null removes it.",
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 80
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seoTitle": {
+          "description": "The title for search engines, at most 120 characters.",
+          "type": "string",
+          "maxLength": 120
+        },
+        "seoDescription": {
+          "description": "The description for search engines, at most 320 characters.",
+          "type": "string",
+          "maxLength": 320
+        },
+        "noindex": {
+          "description": "True asks search engines not to list the post.",
+          "type": "boolean"
+        },
+        "categories": {
+          "description": "The post's categories, as ids from list_terms. Replaces the whole list.",
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "tags": {
+          "description": "The post's tags, as ids from list_terms. Replaces the whole list.",
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "bodyEdits": {
+          "description": "Up to 20 exact find and replace steps on the body, run in order. Use them for a small change to a long body instead of sending body. If one step does not match, nothing is written.",
+          "minItems": 1,
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "find": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100000,
+                "description": "The exact text to find in the body, copied from get_entry."
+              },
+              "replace": {
+                "type": "string",
+                "maxLength": 524288,
+                "description": "What to put in its place. An empty string removes the text."
+              },
+              "all": {
+                "description": "True replaces every match. Left out, find must match exactly once.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "find",
+              "replace"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "entryId",
+        "ifRev"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_entry",
+    "title": "Move a post to the trash",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The post's id from list_entries or create_entry."
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "ifRev": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The rev you last read (get_entry, list_entries, or the rev a write returned). If the entry changed since, the call is refused with conflict and nothing is written."
+        }
+      },
+      "required": [
+        "entryId",
+        "ifRev"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "restore_entry",
+    "title": "Restore a post from the trash",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The post's id from list_entries or create_entry."
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "ifRev": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The rev you last read (get_entry, list_entries, or the rev a write returned). If the entry changed since, the call is refused with conflict and nothing is written."
+        }
+      },
+      "required": [
+        "entryId",
+        "ifRev"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "create_term",
+    "title": "Add a category or tag",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "type": {
+          "default": "post",
+          "description": "The content type. Only post exists today, and it is the default.",
+          "type": "string",
+          "enum": [
+            "post"
+          ]
+        },
+        "taxonomy": {
+          "type": "string",
+          "enum": [
+            "category",
+            "tag"
+          ],
+          "description": "category or tag."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "The name people see, 1 to 80 characters."
+        },
+        "slug": {
+          "description": "The term's part of its address: lower-case letters, digits and hyphens. Leave it out to get one made from the name.",
+          "type": "string",
+          "maxLength": 80
+        },
+        "parentId": {
+          "description": "For a category only: the id of a top-level category to put it under. One level deep.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "taxonomy",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "restore_revision",
+    "title": "Bring back a saved version",
+    "scope": "hydlnk.write",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "description": "A post's id from list_entries. Leave it out to work on a page: pageId, with subPageId for a page other than Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The number of the version to bring back, from list_revisions."
+        },
+        "ifRev": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The rev you last read (get_entry, list_entries, or the rev a write returned). If the entry changed since, the call is refused with conflict and nothing is written."
+        }
+      },
+      "required": [
+        "revision",
+        "ifRev"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "create_preview_link",
     "title": "Create a preview link",
     "scope": "hydlnk.write",
@@ -811,6 +1480,256 @@
           "type": "string",
           "maxLength": 64,
           "format": "uuid"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "rename_term",
+    "title": "Rename a category or tag",
+    "scope": "hydlnk.publish",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "termId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The category's or tag's id from list_terms."
+        },
+        "name": {
+          "description": "The new name, 1 to 80 characters.",
+          "type": "string",
+          "maxLength": 80
+        },
+        "slug": {
+          "description": "The new slug: lower-case letters, digits and hyphens. It changes the term's address.",
+          "type": "string",
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "termId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_term",
+    "title": "Delete a category or tag",
+    "scope": "hydlnk.publish",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "termId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The category's or tag's id from list_terms."
+        }
+      },
+      "required": [
+        "termId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "publish_entry",
+    "title": "Publish one post or page",
+    "scope": "hydlnk.publish",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "description": "A post's id from list_entries. Leave it out to work on a page: pageId, with subPageId for a page other than Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "subPageId": {
+          "description": "Work on this page of the site instead of Home: its id from list_pages. Leave it out, or send home, for Home.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "ifRev": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The rev you last read (get_entry, list_entries, or the rev a write returned). If the entry changed since, the call is refused with conflict and nothing is written."
+        }
+      },
+      "required": [
+        "ifRev"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "unpublish_entry",
+    "title": "Take a post off the site",
+    "scope": "hydlnk.publish",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid",
+          "description": "The post's id from list_entries or create_entry."
+        },
+        "pageId": {
+          "description": "The site's id from list_pages. Optional with entryId; it must be the entry's own site.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "ifRev": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The rev you last read (get_entry, list_entries, or the rev a write returned). If the entry changed since, the call is refused with conflict and nothing is written."
+        }
+      },
+      "required": [
+        "entryId",
+        "ifRev"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "publish_design",
+    "title": "Publish the design",
+    "scope": "hydlnk.publish",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "ifDesignRev": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 40
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          ],
+          "description": "designRev from get_page (the page object of Home). If the design changed since, the call is refused with conflict and nothing is published."
+        }
+      },
+      "required": [
+        "ifDesignRev"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "update_content_type",
+    "title": "Turn the blog on or off, or move it",
+    "scope": "hydlnk.publish",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "description": "The page's id from list_pages. Leave it out only when the account has exactly one page.",
+          "type": "string",
+          "maxLength": 64,
+          "format": "uuid"
+        },
+        "type": {
+          "description": "The content type. Only post (the blog) can be changed, and it is the default.",
+          "type": "string",
+          "maxLength": 40
+        },
+        "enabled": {
+          "description": "True turns the blog on, false turns it off.",
+          "type": "boolean"
+        },
+        "archivePath": {
+          "description": "The address of the post list on the site, one lower-case word such as blog or news (letters, digits and hyphens). Every post's address starts with it.",
+          "type": "string",
+          "maxLength": 64
+        },
+        "label": {
+          "description": "What one item is called, such as Post. 1 to 60 characters.",
+          "type": "string",
+          "maxLength": 60
+        },
+        "labelPlural": {
+          "description": "What the list is called, such as Blog or News. 1 to 60 characters.",
+          "type": "string",
+          "maxLength": 60
         }
       },
       "additionalProperties": false

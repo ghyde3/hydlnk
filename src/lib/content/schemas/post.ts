@@ -12,11 +12,35 @@ export const POST_LIMITS = {
   fields: 50,
 } as const;
 
-const encoder = new TextEncoder();
+export const POST_BODY_TOO_LARGE = "The body is over 512 KiB.";
+
+/**
+ * Whether a body is over `POST_LIMITS.bodyBytes` in UTF-8 bytes, counted without encoding it: a
+ * string longer than the limit in UTF-16 units is over it in bytes as well, so it is refused before
+ * anything is scanned. Run it before a body is lexed.
+ */
+export function postBodyTooLarge(value: string): boolean {
+  if (value.length > POST_LIMITS.bodyBytes) return true;
+  let bytes = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const unit = value.charCodeAt(i);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit >= 0xd800 && unit <= 0xdbff && i + 1 < value.length) {
+      const low = value.charCodeAt(i + 1);
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else bytes += 3;
+    } else bytes += 3;
+    if (bytes > POST_LIMITS.bodyBytes) return true;
+  }
+  return false;
+}
 
 /** The Markdown body, measured in UTF-8 bytes. */
-const body = z.string().refine((value) => encoder.encode(value).length <= POST_LIMITS.bodyBytes, {
-  error: "The body is over 512 KiB.",
+const body = z.string().refine((value) => !postBodyTooLarge(value), {
+  error: POST_BODY_TOO_LARGE,
 });
 
 const termIds = z.array(z.uuid()).max(POST_LIMITS.terms);

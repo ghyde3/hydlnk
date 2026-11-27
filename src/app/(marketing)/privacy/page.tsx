@@ -210,8 +210,8 @@ export default function PrivacyPage() {
       <h3>What an app can do</h3>
       <p>
         Only what you allowed when you connected it: read your drafts, your analytics and your
-        domain list, edit your drafts and publish your pages. Publishing is a separate permission
-        that you can leave off.
+        domain list, edit your drafts and publish your pages and posts. Publishing is a separate
+        permission that you can leave off.
       </p>
       <h3>What the AI company does with it</h3>
       <p>
