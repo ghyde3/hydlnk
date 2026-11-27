@@ -64,7 +64,8 @@ insert into team.site_activity (site_id, actor_id, role, action, at) values
   ('00000000-0000-4000-8000-000000237a01', tests.get_supabase_uid('o'), 'owner', 'site_published', now() - interval '1 hour'),
   ('00000000-0000-4000-8000-000000237a01', tests.get_supabase_uid('o'), 'owner', 'member_invited', now() - interval '2 hours');
 insert into team.site_activity (site_id, actor_id, role, action, entry_id)
-  select '00000000-0000-4000-8000-000000237a01', tests.get_supabase_uid('e'), 'editor', 'entry_deleted', gen_random_uuid()
+  -- (page_created: content noise; a deletion is its own kind since 20261127004600, test 238)
+  select '00000000-0000-4000-8000-000000237a01', tests.get_supabase_uid('e'), 'editor', 'page_created', gen_random_uuid()
     from generate_series(1, 60);
 
 create temp table l237 as
