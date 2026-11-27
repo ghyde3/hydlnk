@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { PublishAlert } from "@/components/editor/publish-alert";
 import { ScheduleControls } from "@/components/schedule/schedule-controls";
+import type { PublishError } from "@/lib/document";
 import {
   cancelScheduledChange,
   refusalMessage,
@@ -19,7 +21,8 @@ import type { PublishRow } from "./rows";
  * where it stands, Schedule (the page's stored draft, checked now as Publish page would, goes live at
  * that time), an optional scheduled unpublish (never for Home), and Cancel. The workspace stores what
  * is typed first and sends the rev this tab holds (`schedulePage`). Refusals stay here as sentences;
- * a draft Publish page would refuse lists the gate's first error.
+ * a draft Publish page would refuse says "Fix these to schedule." in the dialog and lists every gate
+ * error here with the alert Publish shows (`PublishAlert`), as the post editor does.
  */
 export function PageSchedule({
   row,
@@ -30,21 +33,25 @@ export function PageSchedule({
   onBack: () => void;
   onChanged: () => Promise<void>;
 }) {
-  const { pageId, plan, schedulePage, pageRev, publishDisabledReason } = useWorkspace();
+  const { pageId, plan, schedulePage, pageRev, publishDisabledReason, state, site } = useWorkspace();
   // Re-render after a change, so the rev this tab holds is read again.
   const [, setRevTick] = useState(0);
+  // The gate's errors of the last refused Schedule: the issues list Publish shows.
+  const [issues, setIssues] = useState<PublishError[]>([]);
   const isHome = row.key === HOME_PAGE_ID;
+  const blocks = isHome ? state.draft.blocks : (site.snapshotForms().get(row.key)?.blocks ?? []);
 
   async function send(
     request: (entryId: string, rev: number) => Promise<Answer<object>>,
   ): Promise<string | null> {
+    setIssues([]);
     const out = await schedulePage<Answer<object>>(row.key, request);
     if (!out.ok) return out.message;
     const answer = out.value;
     if (answer.kind !== "ok") {
-      if (answer.kind === "invalid") {
-        const first = answer.errors?.[0]?.message ?? answer.issues[0]?.message ?? answer.message;
-        return `Fix this page to schedule it: ${first}`;
+      if (answer.kind === "invalid" && answer.errors && answer.errors.length > 0) {
+        setIssues(answer.errors);
+        return "Fix these to schedule.";
       }
       return refusalMessage(answer);
     }
@@ -81,6 +88,7 @@ export function PageSchedule({
           onSchedule={onSchedule}
           onCancel={onCancel}
         />
+        <PublishAlert errors={issues} blocks={blocks} onDismiss={() => setIssues([])} />
       </div>
     </div>
   );
