@@ -219,7 +219,7 @@ describe.skipIf(!run)("M19-13 a member's MCP token reaches no shared site (local
 
   it("M19-13 the entry door reads with source mcp: a member's id loads no entry of S, the owner's does", async () => {
     const { loadOwnedEntry } = await import("@/lib/mcp/entry-access");
-    const opts = { types: ["post" as const], trashed: "no" as const };
+    const opts = { types: ["post" as const], trashed: "no" as const, allowDisabledType: false, withDraft: false };
     expect(await loadOwnedEntry(p.userId, postId, opts)).toMatchObject({ ok: false, failure: { code: "not_found" } });
     expect(await loadOwnedEntry(o.userId, postId, opts)).toMatchObject({ ok: true, entry: { id: postId } });
   });
