@@ -400,7 +400,7 @@ describe("M5-14 the real dependencies (secret key, server-only tables and functi
 
   it("reads the owner's queue oldest first, asks media_paths_in_use, removes through the Storage API of page-media, and dequeues by owner and path", async () => {
     const { client, calls } = stubClient({ queue: [P1, P2], used: [P2] });
-    const result = await cleanupMediaFor(A, client);
+    const result = await cleanupMediaFor({ actorId: A, ownerId: A, siteId: null }, { admin: client });
     expect(result.deleted).toEqual([P1]);
     expect(result.kept).toEqual([P2]);
     expect(calls.find((c) => c.op === "list")?.args).toMatchObject({
@@ -441,9 +441,9 @@ describe("M5-14 the real dependencies (secret key, server-only tables and functi
 
   it("a Storage error is thrown (nothing dequeued); cleanupMediaQuietly logs it and returns null", async () => {
     const { client, calls } = stubClient({ queue: [P1], removeError: "boom" });
-    await expect(cleanupMediaFor(A, client)).rejects.toThrow("Removing media failed: boom");
+    await expect(cleanupMediaFor({ actorId: A, ownerId: A, siteId: null }, { admin: client })).rejects.toThrow("Removing media failed: boom");
     expect(calls.some((c) => c.op === "delete")).toBe(false);
-    expect(await cleanupMediaQuietly(A, client)).toBeNull();
+    expect(await cleanupMediaQuietly({ actorId: A, ownerId: A, siteId: null }, { admin: client })).toBeNull();
   });
 
   it("adminCleanupDeps.remove of nothing makes no Storage call", async () => {

@@ -19,6 +19,8 @@ import {
   type TestOwner,
   setPageDraft,
   moveHome,
+  ownerRun,
+  pastUndo,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -956,7 +958,7 @@ describe.skipIf(!run)("M6-48 / M6-49 published versions (local Supabase)", () =>
         expect(JSON.stringify((await versionsOf(a))[0]!.document)).toContain(path);
 
         const { cleanupMediaFor } = await import("@/lib/media/cleanup-admin");
-        const result = await cleanupMediaFor(a.userId, admin);
+        const result = await cleanupMediaFor(ownerRun(a.userId), pastUndo(admin));
         expect(result.deleted).toContain(path);
         const gone = await bucket.exists(path);
         expect(gone.data).toBe(false);

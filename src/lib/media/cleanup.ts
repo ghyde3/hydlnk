@@ -29,32 +29,43 @@ import { UNDO_WINDOW_MS } from "./cleanup-client";
  */
 
 /**
- * A member's cleanup call (team attack pass, finding 1): only the rows the named site's writes queued,
- * and only those queued before `before` (past the editor's Undo window), so a member never deletes
- * what the owner dropped on another site, or what anyone dropped a moment ago. The owner's own calls
- * pass no scope and work the whole queue.
+ * What one cleanup run may see (team access): the rows queued before `before` (past the editor's Undo
+ * window, for EVERY run, the owner's included, so no run deletes what anyone dropped a moment ago and
+ * may still bring back with Undo), and, when `siteId` is set, only the rows that site's writes queued.
+ * `siteId` null is the owner's whole queue. Never built by a caller: `cleanupScopeFor` derives it from
+ * who is acting, inside the one entry point (`cleanupMediaFor` in "./cleanup-admin").
  */
 export interface CleanupScope {
-  siteId: string;
+  siteId: string | null;
   before: Date;
 }
 
 /**
- * The scope of a cleanup run for `actorId` acting on `siteId` of `ownerId` (team attack pass,
- * finding 1): none for the owner (the whole queue, as before), and for a member only the site's own
- * rows queued more than UNDO_WINDOW_MS ago, so a member's call never deletes what the owner removed on
- * another site, nor anything still inside someone's Undo.
+ * Who runs a cleanup and on what (team access re-review, finding 1): the acting user (`actorId`, null
+ * for the system: a scheduled publish), the site OWNER whose folder and queue it is, and the site the
+ * call is about (null: the owner's own account-wide call, such as the cleanup route without a site).
+ * Every caller passes this, never a bare owner id, so none can forget the scope.
  */
-export function cleanupScopeFor(
-  access: { actorId: string; ownerId: string; siteId: string },
-  now: Date = new Date(),
-): CleanupScope | undefined {
-  if (access.actorId === access.ownerId) return undefined;
-  return { siteId: access.siteId, before: new Date(now.getTime() - UNDO_WINDOW_MS) };
+export interface CleanupAccess {
+  actorId: string | null;
+  ownerId: string;
+  siteId: string | null;
+}
+
+/**
+ * The scope of a run (finding 1): the owner acting works the whole queue, a member or the system only
+ * the named site's rows; either way only rows queued more than UNDO_WINDOW_MS before `now`. A call
+ * that is not the owner's and names no site may see nothing (null).
+ */
+export function cleanupScopeFor(access: CleanupAccess, now: Date = new Date()): CleanupScope | null {
+  const before = new Date(now.getTime() - UNDO_WINDOW_MS);
+  if (access.actorId !== null && access.actorId === access.ownerId) return { siteId: null, before };
+  if (access.siteId === null) return null;
+  return { siteId: access.siteId, before };
 }
 
 export interface CleanupDeps {
-  /** The owner's queued paths (of `scope` when given), oldest first, at most `limit`. */
+  /** The owner's queued paths (only those `scope` allows, when given), oldest first, at most `limit`. */
   listQueue(ownerId: string, limit: number, scope?: CleanupScope): Promise<string[]>;
   /** The subset of `paths` that any draft, published document or saved theme of the owner names. */
   inUse(ownerId: string, paths: string[]): Promise<string[]>;

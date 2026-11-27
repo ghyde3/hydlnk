@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emptyDraft, type Block, type DraftDoc } from "@/lib/document";
+import { UNDO_WINDOW_MS } from "@/lib/media/cleanup-client";
 
 /**
  * Shared setup for the publishing integration tests (M2-23, M2-25, M2-26...): they run against the
@@ -200,3 +201,15 @@ export async function publishedOf(admin: SupabaseClient, pageId: string) {
   if (error) throw new Error(error.message);
   return data as { published: unknown; published_at: string | null };
 }
+
+/** The owner's own media cleanup run (`cleanupMediaFor`'s access): the owner acting on their whole queue. */
+export const ownerRun = (userId: string) => ({ actorId: userId, ownerId: userId, siteId: null });
+
+/**
+ * A cleanup run's options as the editor makes it, past the Undo window (every run sees only rows queued
+ * more than UNDO_WINDOW_MS ago, team access re-review finding 1).
+ */
+export const pastUndo = (admin: SupabaseClient) => ({
+  admin,
+  now: new Date(Date.now() + UNDO_WINDOW_MS + 1_000),
+});

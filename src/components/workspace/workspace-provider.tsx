@@ -57,6 +57,7 @@ import { splitPublishState, type ItemPublishState } from "@/lib/publish/status";
 import { restorePageRevision } from "@/lib/site-pages/entry-revisions-client";
 import { HOME_PAGE_ID, itemStateOf } from "@/lib/site-pages/pages";
 import type { PlanId } from "@/lib/limits/table";
+import { scheduleMediaCleanup } from "@/lib/media/cleanup-client";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { TokenSet } from "@/lib/theme";
 import { fetchThemeLibrary, themeById, type ThemeRow } from "@/lib/themes";
@@ -472,7 +473,12 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
           () => undefined,
           () => undefined,
         );
-        return await run;
+        const ok = await run;
+        // The publish may have dropped what the live page showed (M5-14). Its own cleanup sees only
+        // rows past the Undo window (re-review finding 1), so the one that runs past it is scheduled
+        // here, as after a save.
+        if (ok) scheduleMediaCleanup(pageId);
+        return ok;
       } catch {
         // Nothing was published, the draft is stored, the status keeps saying "Unpublished changes".
         setPublishNote({ message: PUBLISH_FAILED_MESSAGE, retry: true });
@@ -482,7 +488,7 @@ export function WorkspaceProvider(props: WorkspaceProviderProps) {
         setPublishingItem(null);
       }
     },
-    [],
+    [pageId],
   );
   /** Publish all changes: the design and every page that changed, in one transaction. */
   const publishAll = useCallback(

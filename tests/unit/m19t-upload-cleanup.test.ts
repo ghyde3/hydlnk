@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { makePng } from "../e2e/m2/publish-helpers";
-import { draftOf, makeOwner, rand, removeOwners, stackIsUp, type TestOwner } from "./publish-support";
+import {
+  draftOf,
+  makeOwner,
+  rand,
+  removeOwners,
+  stackIsUp,
+  type TestOwner,
+  ownerRun,
+  pastUndo,
+} from "./publish-support";
 
 vi.mock("server-only", () => ({}));
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
@@ -62,7 +71,7 @@ describe.skipIf(!run)("S3 every new upload is queued for the cleanup (local Supa
     expect((await queued(o)).sort()).toEqual([unused, used].sort());
 
     // In the grace: a cleanup run (a save, a Publish, a full quota) sees neither.
-    expect(await cleanup.cleanupMediaFor(o.userId, admin)).toEqual({ deleted: [], kept: [], discarded: [] });
+    expect(await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin))).toEqual({ deleted: [], kept: [], discarded: [] });
     expect(await exists(unused)).toBe(true);
 
     // The editor saves the reference: the draft trigger takes `used` off the queue.
@@ -82,7 +91,7 @@ describe.skipIf(!run)("S3 every new upload is queued for the cleanup (local Supa
 
     // The grace is over: the unused upload goes, the used one stays.
     await endGrace(o, [unused]);
-    expect(await cleanup.cleanupMediaFor(o.userId, admin)).toMatchObject({ deleted: [unused], kept: [] });
+    expect(await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin))).toMatchObject({ deleted: [unused], kept: [] });
     expect(await exists(unused)).toBe(false);
     expect(await exists(used)).toBe(true);
     expect(await queued(o)).toEqual([]);
@@ -95,7 +104,7 @@ describe.skipIf(!run)("S3 every new upload is queued for the cleanup (local Supa
     await endGrace(o, [path]);
     // Uploaded again (the route queues before it answers): the grace starts over.
     await cleanup.queueNewUpload(o.userId, path, admin);
-    expect(await cleanup.cleanupMediaFor(o.userId, admin)).toEqual({ deleted: [], kept: [], discarded: [] });
+    expect(await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin))).toEqual({ deleted: [], kept: [], discarded: [] });
     expect(await exists(path)).toBe(true);
   });
 

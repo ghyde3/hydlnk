@@ -16,7 +16,7 @@ const m = vi.hoisted(() => ({
   access: vi.fn(),
   suspended: vi.fn(async () => false),
   process: vi.fn(async () => ({ ok: true, image: { path: "p", width: 1, height: 1, url: "u" } })),
-  quota: vi.fn((owner: string) => ({ quotaOf: owner })),
+  quota: vi.fn((access: { ownerId: string }) => ({ quotaOf: access.ownerId })),
   rate: vi.fn((uploader: string) => ({ rateOf: uploader })),
   queue: vi.fn(async () => undefined),
   cleanup: vi.fn(async () => ({ deleted: [], kept: [] })),
@@ -76,8 +76,8 @@ describe("M19-06 uploads on a shared site", () => {
     // S3: every stored path goes on the OWNER's cleanup queue (with its grace), as the site's row.
     await options.queue(`${OWNER}/img-x.webp`);
     expect(m.queue).toHaveBeenCalledWith(OWNER, `${OWNER}/img-x.webp`, undefined, SITE);
-    // Finding 1: a member's reclaim for room is scoped to the site, past the Undo window.
-    expect(m.quota).toHaveBeenCalledWith(OWNER, undefined, { siteId: SITE, before: expect.any(Date) });
+    // Finding 1: a member's reclaim for room runs as the member on the site (the cleanup derives the scope).
+    expect(m.quota).toHaveBeenCalledWith({ ownerId: OWNER, actorId: MEMBER, siteId: SITE });
     expect(m.suspended).toHaveBeenCalledWith(MEMBER);
   });
 
@@ -115,11 +115,9 @@ describe("M19-06 uploads on a shared site", () => {
   it("M19-06 cleanup with site works off the OWNER's queue; a site the user may not edit runs nothing", async () => {
     m.access.mockResolvedValueOnce({ ok: true, access: { ownerId: OWNER, actorId: MEMBER, siteId: SITE } });
     expect((await cleanup.POST(post("/api/media/cleanup", SITE))).status).toBe(200);
-    // Finding 1: a member works only the site's rows queued before the Undo window.
-    const [owner, , scope] = m.cleanup.mock.calls[0] as unknown as [string, unknown, { siteId: string; before: Date }];
-    expect(owner).toBe(OWNER);
-    expect(scope.siteId).toBe(SITE);
-    expect(Date.now() - scope.before.getTime()).toBeGreaterThanOrEqual(10_000);
+    // Finding 1: the run is the member's on the site; the one entry point derives the scope from it
+    // (the site's rows past the Undo window: tests/unit/m19t-cleanup-entry.test.ts).
+    expect(m.cleanup).toHaveBeenCalledWith({ ownerId: OWNER, actorId: MEMBER, siteId: SITE });
     m.access.mockResolvedValueOnce({ ok: false, reason: "not_found" });
     expect((await cleanup.POST(post("/api/media/cleanup", SITE))).status).toBe(404);
     expect(m.cleanup).toHaveBeenCalledTimes(1);
@@ -129,6 +127,6 @@ describe("M19-06 uploads on a shared site", () => {
     m.user = { id: OWNER };
     m.access.mockResolvedValueOnce({ ok: true, access: { ownerId: OWNER, actorId: OWNER, siteId: SITE } });
     expect((await cleanup.POST(post("/api/media/cleanup", SITE))).status).toBe(200);
-    expect(m.cleanup).toHaveBeenCalledWith(OWNER);
+    expect(m.cleanup).toHaveBeenCalledWith({ ownerId: OWNER, actorId: OWNER, siteId: SITE });
   });
 });

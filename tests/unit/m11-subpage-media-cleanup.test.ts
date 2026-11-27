@@ -8,6 +8,8 @@ import {
   removeOwners,
   stackIsUp,
   type TestOwner,
+  ownerRun,
+  pastUndo,
 } from "./publish-support";
 
 vi.mock("server-only", () => ({}));
@@ -102,7 +104,7 @@ describe.skipIf(!run)("M11-04 deleting a sub-page and the media cleanup (local S
     // Both images the page named are queued by the delete.
     expect(await queued(o)).toEqual([onlyHere, shared].sort());
 
-    const result = await cleanup.cleanupMediaFor(o.userId, admin);
+    const result = await cleanup.cleanupMediaFor(ownerRun(o.userId), pastUndo(admin));
     expect(result.deleted).toEqual([onlyHere]);
     expect(result.kept).toEqual([shared]);
     expect(await exists(onlyHere)).toBe(false);

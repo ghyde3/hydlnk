@@ -3,10 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminSupabase } from "@/lib/supabase/admin";
 import {
   cleanupOwnerMedia,
+  cleanupScopeFor,
   isOwnedMediaPath,
+  type CleanupAccess,
   type CleanupDeps,
   type CleanupResult,
-  type CleanupScope,
 } from "./cleanup";
 import { MEDIA_BUCKET, UPLOAD_UNUSED_GRACE_SECONDS } from "./limits";
 
@@ -27,8 +28,8 @@ export function adminCleanupDeps(
         .eq("owner_id", ownerId)
         // A new upload waits out its grace (queue_new_upload, S3) before the cleanup may see it.
         .lte("queued_at", (scope?.before ?? new Date()).toISOString());
-      // A member's call: only what this site's writes queued (cleanupScopeFor).
-      if (scope) query = query.eq("site_id", scope.siteId);
+      // A member's or the system's call: only what this site's writes queued (cleanupScopeFor).
+      if (scope?.siteId) query = query.eq("site_id", scope.siteId);
       const { data, error } = await query.order("queued_at", { ascending: true }).limit(limit);
       if (error) throw new Error(`Reading the media queue failed: ${error.message}`);
       return (data ?? []).map((row: { path: string }) => row.path);
@@ -66,29 +67,32 @@ export function adminCleanupDeps(
 }
 
 /**
- * Works the owner's queue off. `userId` must be the verified session user (or the page owner); a
- * member's call passes its `scope` (cleanupScopeFor).
+ * THE entry point of the media cleanup (team access re-review, finding 1): every caller (the cleanup
+ * route, an upload that needs room, a Publish by hand or by schedule, an MCP write) passes who is
+ * acting on which owner's site, and the scope is derived here, never by the caller: the owner's own
+ * call works the whole queue, a member's or a scheduled one only the site's rows, and every one only
+ * rows queued more than the Undo window ago. `access` must come from the verified session user (or
+ * token user) and the access helper. `now` exists for tests (a static test keeps src/ from passing it).
  */
 export function cleanupMediaFor(
-  userId: string,
-  admin?: SupabaseClient,
-  scope?: CleanupScope,
+  access: CleanupAccess,
+  options: { admin?: SupabaseClient; now?: Date } = {},
 ): Promise<CleanupResult> {
-  return scope
-    ? cleanupOwnerMedia(userId, adminCleanupDeps(admin), scope)
-    : cleanupOwnerMedia(userId, adminCleanupDeps(admin));
+  const scope = cleanupScopeFor(access, options.now);
+  if (!scope) return Promise.resolve({ deleted: [], kept: [], discarded: [] });
+  return cleanupOwnerMedia(access.ownerId, adminCleanupDeps(options.admin), scope);
 }
 
 /**
- * `cleanupMediaFor` for callers that must not fail because of it (the Publish action, an upload
- * that is being refused for lack of room): a failure is logged and the queue stays for the next run.
+ * `cleanupMediaFor` for callers that must not fail because of it (a Publish, an MCP write): a failure
+ * is logged and the queue stays for the next run.
  */
 export async function cleanupMediaQuietly(
-  userId: string,
-  admin?: SupabaseClient,
+  access: CleanupAccess,
+  options: { admin?: SupabaseClient } = {},
 ): Promise<CleanupResult | null> {
   try {
-    return await cleanupMediaFor(userId, admin);
+    return await cleanupMediaFor(access, options);
   } catch (error) {
     console.error("[media] cleanup failed", error);
     return null;

@@ -1,6 +1,7 @@
 "use server";
 
 import { updateTag } from "next/cache";
+import type { SiteAccess } from "@/lib/access/decide";
 import { siteAccessFor } from "@/lib/access/server";
 import { getSessionUser } from "@/lib/auth/session";
 import { rateLimit } from "@/lib/rate-limit";
@@ -45,28 +46,33 @@ import { PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS, publishRateKey } from 
  */
 async function publisher(pageId: string): Promise<{
   userId: string | null;
-  ownerId: string | null;
+  /** The publisher's access to the site (null: may not publish it; the core refuses). */
+  access: SiteAccess | null;
   limited: boolean;
 }> {
   const user = await getSessionUser();
-  if (!user) return { userId: null, ownerId: null, limited: false };
+  if (!user) return { userId: null, access: null, limited: false };
   const site = await siteAccessFor({
     actorId: user.id,
     siteId: typeof pageId === "string" ? pageId.toLowerCase() : pageId,
     need: "publish",
     source: "editor",
   });
-  const ownerId = site.ok ? site.access.ownerId : null;
-  for (const id of new Set([user.id, ownerId ?? user.id])) {
+  const access = site.ok ? site.access : null;
+  for (const id of new Set([user.id, access?.ownerId ?? user.id])) {
     const limit = await rateLimit(publishRateKey(id), PUBLISH_RATE_LIMIT, PUBLISH_RATE_WINDOW_SECONDS);
-    if (!limit.allowed) return { userId: user.id, ownerId, limited: true };
+    if (!limit.allowed) return { userId: user.id, access, limited: true };
   }
-  return { userId: user.id, ownerId, limited: false };
+  return { userId: user.id, access, limited: false };
 }
 
-/** After a publish that stands: the shared step (the site's tag with `updateTag`, then the OWNER's media queue). */
-async function published(pageId: string, ownerId: string | null): Promise<void> {
-  await afterPagePublished({ siteId: pageId, ownerId }, updateTag);
+/**
+ * After a publish that stands: the shared step (the site's tag with `updateTag`, then the media
+ * cleanup AS the publisher: a member's works only this site's rows, and every one only rows past the
+ * Undo window, team access re-review finding 1).
+ */
+async function published(pageId: string, access: SiteAccess | null): Promise<void> {
+  await afterPagePublished({ siteId: pageId, cleanup: access }, updateTag);
 }
 
 export async function publishPage(
@@ -80,7 +86,7 @@ export async function publishPage(
     userId: who.userId,
     ...(expected === undefined ? {} : { expected }),
   });
-  if (result.ok) await published(pageId, who.ownerId);
+  if (result.ok) await published(pageId, who.access);
   return result;
 }
 
@@ -105,7 +111,7 @@ export async function publishSitePage(
     userId: who.userId,
     source: "editor",
   });
-  if (result.ok) await published(pageId, who.ownerId);
+  if (result.ok) await published(pageId, who.access);
   return result;
 }
 
@@ -121,6 +127,6 @@ export async function publishDesign(
   const who = await publisher(pageId);
   if (who.limited) return { ok: false, errors: [], reason: "rate_limited" };
   const result = await publishDesignCore({ pageId, expectedRev, userId: who.userId });
-  if (result.ok) await published(pageId, who.ownerId);
+  if (result.ok) await published(pageId, who.access);
   return result;
 }

@@ -40,7 +40,14 @@ async function commit<T, D extends BlocksDoc>(
     change,
   });
   if (result.droppedImages) {
-    call.defer(() => cleanupMediaQuietly(call.userId, call.admin as never));
+    // MCP reaches only the token user's own sites (decide rule 2): the owner acting.
+    const site = call.page.id;
+    call.defer(() =>
+      cleanupMediaQuietly(
+        { actorId: call.userId, ownerId: call.userId, siteId: site },
+        { admin: call.admin as never },
+      ),
+    );
   }
   return result;
 }

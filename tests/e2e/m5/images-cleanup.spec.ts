@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { expect, test, type BrowserContext } from "@playwright/test";
+import { UNDO_WINDOW_MS } from "@/lib/media/cleanup-client";
 import { adminClient, publishableKey, supabaseUrl } from "../fixtures/auth";
 import {
   accessTokenFor,
@@ -135,7 +136,32 @@ async function queued(userId: string): Promise<string[]> {
 const publicUrl = (path: string) => `${supabaseUrl()}/storage/v1/object/public/${BUCKET}/${path}`;
 const live = async (path: string) => (await fetch(publicUrl(path))).status === 200;
 
+/**
+ * The Undo window passing (the editor calls the cleanup UNDO_WINDOW_MS after the last save, and every
+ * run sees only rows queued before that, team access re-review finding 1): the user's due queue rows
+ * move back by the window and a second, in the same order (service_role may insert, not update).
+ */
+async function waitOutUndo(userId: string): Promise<void> {
+  const db = adminClient();
+  const { data, error } = await db
+    .from("image_cleanup_queue")
+    .select("path, owner_id, site_id, queued_at")
+    .eq("owner_id", userId)
+    .lte("queued_at", new Date().toISOString());
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as { path: string; owner_id: string; site_id: string | null; queued_at: string }[];
+  if (rows.length === 0) return;
+  const gone = await db.from("image_cleanup_queue").delete().in("path", rows.map((r) => r.path));
+  if (gone.error) throw new Error(gone.error.message);
+  const back = UNDO_WINDOW_MS + 1_000;
+  const again = await db.from("image_cleanup_queue").insert(
+    rows.map((r) => ({ ...r, queued_at: new Date(Date.parse(r.queued_at) - back).toISOString() })),
+  );
+  if (again.error) throw new Error(again.error.message);
+}
+
 async function runCleanup(me: Me): Promise<{ deleted: number; kept: number }> {
+  await waitOutUndo(me.userId);
   const res = await cleanup(me.cookie);
   expect(res.status, res.text).toBe(200);
   return JSON.parse(res.text) as { deleted: number; kept: number };

@@ -110,7 +110,11 @@ describe("a fire's cache expiry", () => {
     const expire = await expireOf();
     expect(await expire(row(), { siteId: "S1", typeId: "t1", typeKey: "page" })).toBe(true);
     expect(expireTagsNow).toHaveBeenCalledWith(["page:s1"]);
-    expect(cleanupMediaQuietly).toHaveBeenCalledWith("owner-1", db);
+    // Re-review finding 1: as the system on the fired site (only its rows, past the Undo window).
+    expect(cleanupMediaQuietly).toHaveBeenCalledWith(
+      { actorId: null, ownerId: "owner-1", siteId: "S1" },
+      { admin: db },
+    );
     expect(expireTagsNow.mock.invocationCallOrder[0]!).toBeLessThan(
       cleanupMediaQuietly.mock.invocationCallOrder[0]!,
     );
