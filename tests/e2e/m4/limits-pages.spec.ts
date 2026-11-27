@@ -18,7 +18,7 @@ import {
   restAs,
   type RawResponse,
 } from "../fixtures/http";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 
 /**
  * M4-18 (create another page within the plan's limit) and M4-19 (delete a page).
@@ -41,7 +41,7 @@ const box = async (locator: Locator) => (await locator.boundingBox())!;
 const switcher = (page: Page) => page.getByRole("button", { name: /^Switch site, current:/ });
 const switcherName = (handle: string) => `Switch site, current: ${handle}.hydlnk.com`;
 const tenantStatus = async (handle: string) =>
-  (await rawRequest(`${handle}.localhost:3000`, "/")).status;
+  (await rawRequest(`${handle}.localhost:${DEV_PORT}`, "/")).status;
 
 /** One request to the app host as the signed-in context (cookie header) or with no session. */
 async function api(
@@ -322,6 +322,9 @@ test.describe("M4-18 New page screen and the page switcher", () => {
     await expect(radios.nth(0)).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(radios.nth(1)).toBeFocused();
+    // Team access (M19-09): the owner's Members item sits between the sites and New site.
+    await page.keyboard.press("ArrowDown");
+    await expect(menu.getByRole("menuitem", { name: "Members" })).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await expect(newItem).toBeFocused();
     await page.keyboard.press("ArrowDown");
@@ -345,9 +348,10 @@ test.describe("M4-18 New page screen and the page switcher", () => {
     const user = await signedInUser(context, { label: "nl" });
     const calls: string[] = [];
     // The editor's own reads of the open site's blog (Wave B: the Pages panel's Blog row and the
-    // latest-posts preview) are GETs under /api/pages/{id}/ and are not what this watches for: a
+    // latest-posts preview) and the publish bar's read of the site's schedules (Wave E, M20-10) are
+    // GETs under /api/pages/{id}/ and are not what this watches for: a
     // request that would create a site, or a move to the New site screen.
-    const blogRead = /\/api\/pages\/[0-9a-f-]{36}\/(?:types|posts\/latest)$/;
+    const blogRead = /\/api\/pages\/[0-9a-f-]{36}\/(?:types|posts\/latest|schedules)$/;
     page.on("request", (request) => {
       if (request.method() === "GET" && blogRead.test(request.url())) return;
       if (/\/api\/pages|\/pages\/new/.test(request.url()))

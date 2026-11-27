@@ -11,9 +11,10 @@ import {
 } from "../fixtures/data";
 import { appRaw, authCookies, cookieHeader, restAs } from "../fixtures/http";
 import { deliver, priceIds, subscriptionEvent } from "../fixtures/stripe-stub";
-import { expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
+import { DEV_PORT, expectNoHorizontalScroll, expectTapTargets, url } from "../helpers";
 import { openEditor, statusChip } from "../m2/editor-helpers";
 import { makePng, multipart, padTo, rawBuffer, tenantGet } from "../m2/publish-helpers";
+import { uploadSiteHeader } from "../fixtures/upload-site";
 
 /**
  * M4-33: a Pro account with 3 pages, 4 saved themes and 50 MiB uploaded receives a signed
@@ -144,10 +145,12 @@ async function uploadImage(context: BrowserContext, size: number) {
       file: { filename: "p.png", contentType: "image/png", data: padTo(makePng(8, 8), size) },
     },
   ]);
-  const res = await rawBuffer("app.localhost:3000", "/api/media", {
+  const cookie = cookieHeader(await authCookies(context));
+  const res = await rawBuffer(`app.localhost:${DEV_PORT}`, "/api/media", {
     method: "POST",
-    cookie: cookieHeader(await authCookies(context)),
-    headers: { "content-type": contentType },
+    cookie,
+    // The site the upload is for (team access, G22): the account's own first site.
+    headers: { ...(await uploadSiteHeader(cookie)), "content-type": contentType },
     body,
   });
   if (res.status === 200) stored.push((JSON.parse(res.text) as { path: string }).path);

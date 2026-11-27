@@ -117,19 +117,21 @@ test.describe("M6-46 the controls in every block's panel", () => {
       // Under the block's own fields: no field of the block sits below the group's top. A link's
       // own tags and its lock (M9-28, M9-30) are groups of their own that follow it.
       const groupTop = (await group.boundingBox())!.y;
-      const fieldBottoms = await panel
-        .locator("input, select, textarea")
-        .evaluateAll(
-          (els, groupEl) =>
-            els
-              .filter(
-                (el) =>
-                  !(groupEl as Element).contains(el) &&
-                  !el.closest('[data-testid="link-tags-field"], [data-testid="link-lock-field"]'),
-              )
-              .map((el) => el.getBoundingClientRect().bottom),
-          await group.elementHandle(),
-        );
+      const fieldBottoms = await panel.locator("input, select, textarea").evaluateAll(
+        (els, groupEl) =>
+          els
+            .filter(
+              (el) =>
+                !(groupEl as Element).contains(el) &&
+                !el.closest('[data-testid="link-tags-field"], [data-testid="link-lock-field"]'),
+            )
+            .map((el) => el.getBoundingClientRect())
+            // A hidden input (a file picker) has no box: its 0 is no position on the page, and
+            // reads as "below" once the panel has scrolled the group above the viewport (phone).
+            .filter((box) => box.width > 0 || box.height > 0)
+            .map((box) => box.bottom),
+        await group.elementHandle(),
+      );
       for (const bottom of fieldBottoms) expect(bottom, pair).toBeLessThanOrEqual(groupTop + 1);
 
       const text = (await group.textContent()) ?? "";

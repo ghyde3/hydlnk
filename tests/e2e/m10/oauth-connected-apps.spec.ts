@@ -74,7 +74,8 @@ test.describe("M10-18 the card", () => {
   }) => {
     await user(context, "ca1");
     await page.goto(SETTINGS);
-    const titles = await page.locator("main section > h2").allInnerTexts();
+    // The cards' own headings, in page order (the Sites card's sits in a header row with Members, M19-09).
+    const titles = await page.getByRole("main").getByRole("heading", { level: 2 }).allInnerTexts();
     const at = titles.indexOf("Connected apps");
     expect(at).toBeGreaterThan(0);
     expect(titles[at - 1]).toBe("Sites");
